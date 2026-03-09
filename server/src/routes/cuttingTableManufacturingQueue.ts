@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs } from '../../schema';
-import { eq, and, or } from 'drizzle-orm';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory } from '../../schema';
+import { eq, and, or, asc, inArray, like } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -719,6 +719,434 @@ router.post('/sync-p2-demands', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error syncing P2 demands:', error);
     res.status(500).json({ error: 'Failed to sync P2 demands to cutting table' });
+  }
+});
+
+// Bulk print barcodes for scheduled packet queue items
+router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
+  try {
+    const { queueIds } = req.body;
+    
+    if (!queueIds || !Array.isArray(queueIds) || queueIds.length === 0) {
+      return res.status(400).json({ error: 'At least one queue ID is required' });
+    }
+    
+    const queueItems = await db
+      .select({
+        queue: manufacturingQueue,
+        item: inventoryItems,
+      })
+      .from(manufacturingQueue)
+      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .where(inArray(manufacturingQueue.id, queueIds));
+    
+    if (queueItems.length === 0) {
+      return res.status(404).json({ error: 'No matching queue items found' });
+    }
+    
+    const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
+    
+    const labels = await Promise.all(
+      queueItems.map(async (row) => {
+        const barcodeValue = `MFG-${row.queue.id}-${row.item?.agPartNumber || 'UNK'}`;
+        
+        let barcodeImage;
+        try {
+          barcodeImage = await generateBarcodeImage(barcodeValue, {
+            width: 2,
+            height: 50,
+            displayValue: true,
+            fontSize: 10,
+            margin: 5,
+          });
+        } catch (err) {
+          console.error(`Error generating barcode for ${barcodeValue}:`, err);
+          barcodeImage = null;
+        }
+        
+        return {
+          queueId: row.queue.id,
+          barcodeValue,
+          barcodeImage,
+          partNumber: row.item?.agPartNumber || 'Unknown',
+          partName: row.item?.name || 'Unknown',
+          quantityRequested: row.queue.quantityRequested,
+          quantityCompleted: row.queue.quantityCompleted || 0,
+          priority: row.queue.priority,
+          dueDate: row.queue.dueDate,
+          status: row.queue.status,
+        };
+      })
+    );
+    
+    res.json({ labels, count: labels.length });
+  } catch (error) {
+    console.error('Error generating bulk barcodes:', error);
+    res.status(500).json({ error: 'Failed to generate bulk barcodes' });
+  }
+});
+
+// Scan a packet barcode to start working on it - returns BOM details, FIFO inventory, ply schedule, cuts
+router.post('/scan-start', async (req: Request, res: Response) => {
+  try {
+    const { barcode, username } = req.body;
+    
+    if (!barcode) {
+      return res.status(400).json({ error: 'Barcode is required' });
+    }
+    
+    // Parse the barcode format: MFG-{id}-{partNumber}
+    const match = barcode.match(/^MFG-(\d+)-(.+)$/);
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber}' });
+    }
+    
+    const queueId = parseInt(match[1]);
+    
+    if (isNaN(queueId)) {
+      return res.status(400).json({ error: 'Invalid queue ID in barcode' });
+    }
+    
+    // Get the queue item - enforce Cutting Table department
+    const queueItem = await db.query.manufacturingQueue.findFirst({
+      where: and(
+        eq(manufacturingQueue.id, queueId),
+        eq(manufacturingQueue.department, 'Cutting Table')
+      ),
+    });
+    
+    if (!queueItem) {
+      return res.status(404).json({ error: 'Cutting table queue item not found' });
+    }
+    
+    if (queueItem.status === 'COMPLETED') {
+      return res.status(400).json({ error: 'This packet has already been completed' });
+    }
+    
+    if (queueItem.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'This packet has been cancelled' });
+    }
+    
+    // Get inventory item
+    const inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, queueItem.inventoryItemId),
+    });
+    
+    // Transition to IN_PROGRESS if PENDING
+    if (queueItem.status === 'PENDING') {
+      await db
+        .update(manufacturingQueue)
+        .set({
+          status: 'IN_PROGRESS',
+          startedAt: new Date(),
+          assignedTo: username || 'scanner',
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, queueId));
+    }
+    
+    // Find matching BOM
+    let bomId: string | null = null;
+    try {
+      if (queueItem.notes) {
+        const parsedNotes = JSON.parse(queueItem.notes);
+        bomId = parsedNotes.bomId || null;
+      }
+    } catch {}
+    
+    let packetBom = null;
+    if (bomId) {
+      packetBom = await db.query.cuttingPacketBOMs.findFirst({
+        where: eq(cuttingPacketBOMs.id, bomId),
+      });
+    }
+    if (!packetBom && inventoryItem) {
+      packetBom = await db.query.cuttingPacketBOMs.findFirst({
+        where: eq(cuttingPacketBOMs.partNumber, inventoryItem.agPartNumber),
+      });
+    }
+    
+    // Get BOM materials and parts
+    let bomMaterials: any[] = [];
+    let bomParts: any[] = [];
+    if (packetBom) {
+      bomMaterials = await db
+        .select()
+        .from(cuttingPacketBOMMaterials)
+        .where(eq(cuttingPacketBOMMaterials.packetBomId, packetBom.id));
+      
+      bomParts = await db
+        .select()
+        .from(cuttingPacketBOMParts)
+        .where(eq(cuttingPacketBOMParts.packetBomId, packetBom.id))
+        .orderBy(asc(cuttingPacketBOMParts.sortOrder));
+    }
+    
+    // Get FIFO-ordered fabric inventory matching BOM materials
+    const fabricMaterialNames = bomMaterials.map(m => m.fabricType.toLowerCase()).filter(t => t.length > 0);
+    const bomPartFabricTypes = bomParts.map(p => p.fabricType.toLowerCase()).filter(t => t.length > 0);
+    const allRequiredFabricTypes = [...new Set([...fabricMaterialNames, ...bomPartFabricTypes])];
+    
+    let fifoInventory: any[] = [];
+    const activeFabric = await db
+      .select()
+      .from(cuttingFabricInventory)
+      .where(eq(cuttingFabricInventory.status, 'active'))
+      .orderBy(asc(cuttingFabricInventory.receivedDate), asc(cuttingFabricInventory.expirationDate));
+    
+    const strictFabricMatch = (fabricFields: string[], requiredTypes: string[]): boolean => {
+      const validFields = fabricFields.filter(f => f.length > 0);
+      if (validFields.length === 0) return false;
+      return requiredTypes.some(req => 
+        validFields.some(field => field.includes(req) || req.includes(field))
+      );
+    };
+    
+    if (allRequiredFabricTypes.length > 0) {
+      fifoInventory = activeFabric.filter(f => {
+        const ft = (f.fabric || '').toLowerCase();
+        const nickname = (f.nickname || '').toLowerCase();
+        const partNum = (f.fabricPartNumber || '').toLowerCase();
+        return strictFabricMatch([ft, nickname, partNum], allRequiredFabricTypes);
+      });
+    } else {
+      fifoInventory = activeFabric.filter(f => {
+        const sqm = parseFloat(String(f.squareMeters || '0'));
+        return sqm > 0;
+      }).slice(0, 10);
+    }
+    
+    // Parse ply schedule and cuts config from BOM
+    let plySchedule = null;
+    let cutsConfig = null;
+    if (packetBom) {
+      plySchedule = packetBom.plyScheduleConfig || null;
+      cutsConfig = packetBom.cutsConfig || null;
+    }
+    
+    const remaining = queueItem.quantityRequested - (queueItem.quantityCompleted || 0);
+    const yieldPerCut = packetBom?.yieldPerCut || 4;
+    const estimatedCuts = Math.ceil(remaining / yieldPerCut);
+    
+    res.json({
+      queueItem: {
+        ...queueItem,
+        status: queueItem.status === 'PENDING' ? 'IN_PROGRESS' : queueItem.status,
+        partNumber: inventoryItem?.agPartNumber,
+        partName: inventoryItem?.name,
+        remaining,
+        estimatedCuts,
+      },
+      bom: packetBom ? {
+        id: packetBom.id,
+        packetType: packetBom.packetType,
+        partNumber: packetBom.partNumber,
+        yieldPerCut: packetBom.yieldPerCut,
+        squareMetersPerCut: packetBom.squareMetersPerCut,
+        wasteFactor: packetBom.wasteFactor,
+        noPlySchedule: packetBom.noPlySchedule,
+      } : null,
+      bomMaterials,
+      bomParts,
+      plySchedule,
+      cutsConfig,
+      fifoInventory: fifoInventory.map(f => ({
+        id: f.id,
+        fabric: f.fabric,
+        fabricPartNumber: f.fabricPartNumber,
+        nickname: f.nickname,
+        lotNumber: f.lotNumber,
+        batchNumber: f.batchNumber,
+        rollNumber: f.rollNumber,
+        internalControlNumber: f.internalControlNumber,
+        squareMeters: f.squareMeters,
+        receivedDate: f.receivedDate,
+        expirationDate: f.expirationDate,
+        location: f.location,
+        freezerNumber: f.freezerNumber,
+        barcode: f.barcode,
+        status: f.status,
+      })),
+    });
+  } catch (error) {
+    console.error('Error processing scan-start:', error);
+    res.status(500).json({ error: 'Failed to process packet scan' });
+  }
+});
+
+// Validate a scanned material roll against the BOM for the active queue item
+router.post('/:id/validate-material', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { barcode } = req.body;
+    
+    if (!barcode) {
+      return res.status(400).json({ error: 'Material barcode is required' });
+    }
+    
+    const parsedId = parseInt(id);
+    if (isNaN(parsedId)) {
+      return res.status(400).json({ error: 'Invalid queue item ID' });
+    }
+    
+    // Get the queue item - enforce Cutting Table department
+    const queueItem = await db.query.manufacturingQueue.findFirst({
+      where: and(
+        eq(manufacturingQueue.id, parsedId),
+        eq(manufacturingQueue.department, 'Cutting Table')
+      ),
+    });
+    
+    if (!queueItem) {
+      return res.status(404).json({ error: 'Cutting table queue item not found' });
+    }
+    
+    // Get inventory item for part number
+    const inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, queueItem.inventoryItemId),
+    });
+    
+    // Find the fabric roll by barcode, ICN, or roll number
+    const allFabric = await db
+      .select()
+      .from(cuttingFabricInventory)
+      .where(eq(cuttingFabricInventory.status, 'active'));
+    
+    const matchedRoll = allFabric.find(f => 
+      f.barcode === barcode ||
+      f.internalControlNumber === barcode ||
+      f.rollNumber === barcode
+    );
+    
+    if (!matchedRoll) {
+      return res.status(404).json({ 
+        valid: false,
+        error: 'Material roll not found in inventory',
+        scannedBarcode: barcode,
+      });
+    }
+    
+    // Find matching BOM to validate material
+    let bomId: string | null = null;
+    try {
+      if (queueItem.notes) {
+        const parsedNotes = JSON.parse(queueItem.notes);
+        bomId = parsedNotes.bomId || null;
+      }
+    } catch {}
+    
+    let packetBom = null;
+    if (bomId) {
+      packetBom = await db.query.cuttingPacketBOMs.findFirst({
+        where: eq(cuttingPacketBOMs.id, bomId),
+      });
+    }
+    if (!packetBom && inventoryItem) {
+      packetBom = await db.query.cuttingPacketBOMs.findFirst({
+        where: eq(cuttingPacketBOMs.partNumber, inventoryItem.agPartNumber),
+      });
+    }
+    
+    // If no BOM exists, allow any material (no validation possible)
+    if (!packetBom) {
+      return res.json({
+        valid: true,
+        warning: 'No BOM configured for this packet - material accepted without validation',
+        roll: {
+          id: matchedRoll.id,
+          fabric: matchedRoll.fabric,
+          fabricPartNumber: matchedRoll.fabricPartNumber,
+          nickname: matchedRoll.nickname,
+          lotNumber: matchedRoll.lotNumber,
+          batchNumber: matchedRoll.batchNumber,
+          rollNumber: matchedRoll.rollNumber,
+          internalControlNumber: matchedRoll.internalControlNumber,
+          squareMeters: matchedRoll.squareMeters,
+          expirationDate: matchedRoll.expirationDate,
+          location: matchedRoll.location,
+          freezerNumber: matchedRoll.freezerNumber,
+          barcode: matchedRoll.barcode,
+        },
+      });
+    }
+    
+    // Get BOM materials and parts to check fabric types
+    const bomMaterials = await db
+      .select()
+      .from(cuttingPacketBOMMaterials)
+      .where(eq(cuttingPacketBOMMaterials.packetBomId, packetBom.id));
+    
+    const bomParts = await db
+      .select()
+      .from(cuttingPacketBOMParts)
+      .where(eq(cuttingPacketBOMParts.packetBomId, packetBom.id));
+    
+    // Collect all allowed fabric types from BOM (filter out empty strings)
+    const allowedFabricTypes = new Set<string>();
+    bomMaterials.forEach(m => {
+      if (m.fabricType?.trim()) allowedFabricTypes.add(m.fabricType.trim().toLowerCase());
+      if (m.commonName?.trim()) allowedFabricTypes.add(m.commonName.trim().toLowerCase());
+    });
+    bomParts.forEach(p => {
+      if (p.fabricType?.trim()) allowedFabricTypes.add(p.fabricType.trim().toLowerCase());
+      if (p.commonName?.trim()) allowedFabricTypes.add(p.commonName.trim().toLowerCase());
+    });
+    
+    // Check if the scanned roll's fabric type matches any allowed type
+    // Only compare non-empty fields to prevent false matches
+    const rollFields = [
+      (matchedRoll.fabric || '').trim().toLowerCase(),
+      (matchedRoll.nickname || '').trim().toLowerCase(),
+      (matchedRoll.fabricPartNumber || '').trim().toLowerCase(),
+    ].filter(f => f.length > 0);
+    
+    if (rollFields.length === 0) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Scanned roll has no identifiable fabric type',
+        scannedBarcode: barcode,
+      });
+    }
+    
+    const isMatch = Array.from(allowedFabricTypes).some(allowed => 
+      rollFields.some(field => field.includes(allowed) || allowed.includes(field))
+    );
+    
+    if (!isMatch) {
+      return res.status(400).json({
+        valid: false,
+        error: `Material "${matchedRoll.fabric || matchedRoll.nickname || barcode}" does not match the BOM requirements for this packet`,
+        scannedFabric: matchedRoll.fabric || matchedRoll.nickname,
+        allowedTypes: Array.from(allowedFabricTypes),
+        roll: {
+          id: matchedRoll.id,
+          fabric: matchedRoll.fabric,
+          rollNumber: matchedRoll.rollNumber,
+        },
+      });
+    }
+    
+    res.json({
+      valid: true,
+      roll: {
+        id: matchedRoll.id,
+        fabric: matchedRoll.fabric,
+        fabricPartNumber: matchedRoll.fabricPartNumber,
+        nickname: matchedRoll.nickname,
+        lotNumber: matchedRoll.lotNumber,
+        batchNumber: matchedRoll.batchNumber,
+        rollNumber: matchedRoll.rollNumber,
+        internalControlNumber: matchedRoll.internalControlNumber,
+        squareMeters: matchedRoll.squareMeters,
+        expirationDate: matchedRoll.expirationDate,
+        location: matchedRoll.location,
+        freezerNumber: matchedRoll.freezerNumber,
+        barcode: matchedRoll.barcode,
+      },
+    });
+  } catch (error) {
+    console.error('Error validating material:', error);
+    res.status(500).json({ error: 'Failed to validate material' });
   }
 });
 

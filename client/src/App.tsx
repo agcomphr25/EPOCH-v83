@@ -30,6 +30,8 @@ import InventoryDashboardPage from './pages/InventoryDashboardPage';
 import InventoryManagerPage from './pages/InventoryManagerPage';
 import InventoryReceivingPage from './pages/InventoryReceivingPage';
 import EnhancedInventoryMRPPage from './pages/EnhancedInventoryMRPPage';
+import MaterialReadinessDashboard from './pages/MaterialReadinessDashboard';
+import MaterialIntelligenceDashboard from './pages/MaterialIntelligenceDashboard';
 import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
 import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
@@ -103,11 +105,14 @@ import BarcodeScannerPage from './pages/BarcodeScannerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
 import ProductionOrderInspector from './pages/ProductionOrderInspector';
+import DomainTruthInspector from './pages/DomainTruthInspector';
+import QueueIntegrityMonitor from './pages/admin/QueueIntegrityMonitor';
 import LinkGroupsReport from './pages/LinkGroupsReport';
 import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
+import ProductionCommandCenter from './pages/ProductionCommandCenter';
 import JOHNLTestDashboard from './pages/JOHNLTestDashboard';
 import JENSTestDashboard from './pages/JENSTestDashboard';
 import STACIWTestDashboard from './pages/STACIWTestDashboard';
@@ -221,6 +226,7 @@ import FillablePdfTemplatesAdmin from './pages/FillablePdfTemplatesAdmin';
 import VisualFieldEditor from './pages/VisualFieldEditor';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
+import MetricsSandbox from './pages/MetricsSandbox';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
@@ -439,6 +445,8 @@ function App() {
                   <Route path="/production-forecast/settings" component={ForecastSettings} />
                   <Route path="/admin/attention" component={AttentionDashboard} />
                   <Route path="/admin/inspector/production-order" component={ProductionOrderInspector} />
+                  <Route path="/admin/domain-truth" component={DomainTruthInspector} />
+                  <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
@@ -536,8 +544,16 @@ function App() {
                     component={InventoryReceivingPage}
                   />
                   <Route
+                    path="/inventory/material-intelligence"
+                    component={MaterialIntelligenceDashboard}
+                  />
+                  <Route
                     path="/inventory/enhanced-mrp"
                     component={EnhancedInventoryMRPPage}
+                  />
+                  <Route
+                    path="/production/material-readiness"
+                    component={MaterialReadinessDashboard}
                   />
                   <Route
                     path="/inventory/parts-request"
@@ -608,6 +624,7 @@ function App() {
                   <Route path="/email-inbox" component={EmailInbox} />
 
                   {/* User Dashboard Routes */}
+                  <Route path="/production-command-center" component={ProductionCommandCenter} />
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
                   <Route
                     path="/admin-dashboard"
@@ -912,6 +929,7 @@ function App() {
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
                   <Route path="/gateway-reports" component={GatewayReports} />
+                  <Route path="/metrics-sandbox" component={MetricsSandbox} />
 
                   {/* Department Queue Management Routes */}
                   <Route

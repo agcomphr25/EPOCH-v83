@@ -3,6 +3,13 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 import { sql, eq } from 'drizzle-orm';
+import { validateSameFamily } from '../utils/unitConversionService';
+import {
+  calculateMaterialDemand,
+  calculateMaterialShortages,
+  calculateBuildCapacity,
+  runMrp,
+} from '../services/mrpMaterialPlanning';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
@@ -200,6 +207,15 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
       updates.hasOtherDocs = true;
     }
     
+    if (updates.purchaseUnitId && updates.usageUnitId) {
+      const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+      if (!familyCheck.valid) {
+        return res.status(400).json({
+          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+        });
+      }
+    }
+
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
@@ -281,6 +297,15 @@ router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'td
       itemData.hasOtherDocs = true;
     }
     
+    if (itemData.purchaseUnitId && itemData.usageUnitId) {
+      const familyCheck = await validateSameFamily(itemData.purchaseUnitId, itemData.usageUnitId);
+      if (!familyCheck.valid) {
+        return res.status(400).json({
+          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+        });
+      }
+    }
+
     const newItem = await storage.createInventoryItem(itemData);
     res.status(201).json(newItem);
   } catch (error) {
@@ -485,6 +510,15 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
       updates.hasOtherDocs = true;
     }
     
+    if (updates.purchaseUnitId && updates.usageUnitId) {
+      const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+      if (!familyCheck.valid) {
+        return res.status(400).json({
+          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+        });
+      }
+    }
+
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
@@ -621,19 +655,53 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
   }
 });
 
+// Resolve a free-text source string to a vendors.id via case-insensitive name match.
+// Future improvement: replace with inventory_items.source_vendor_id (FK) once schema migration is done.
+async function resolveSourceVendorId(sourceText: string | null | undefined, db: any): Promise<number | null> {
+  if (!sourceText?.trim()) return null;
+  const normalized = sourceText.trim().toLowerCase();
+  const { vendors } = await import('../../schema');
+  const { sql: sqlFn } = await import('drizzle-orm');
+  const [vendor] = await db
+    .select({ id: vendors.id })
+    .from(vendors)
+    .where(sqlFn`LOWER(${vendors.name}) = ${normalized}`)
+    .limit(1);
+  return vendor?.id ?? null;
+}
+
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
 
-    if (!requestData.orderMethod && requestData.agPartNumber) {
+    if (requestData.agPartNumber) {
       const { inventoryItems } = await import('../../schema');
       const [item] = await db
-        .select({ defaultOrderMethod: inventoryItems.defaultOrderMethod })
+        .select({
+          vendorId: inventoryItems.vendorId,
+          source: inventoryItems.source,
+          defaultOrderMethod: inventoryItems.defaultOrderMethod,
+        })
         .from(inventoryItems)
         .where(eq(inventoryItems.agPartNumber, requestData.agPartNumber))
         .limit(1);
-      if (item?.defaultOrderMethod) {
-        requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+
+      if (item) {
+        // Auto-set orderMethod from item default if not provided
+        if (!requestData.orderMethod && item.defaultOrderMethod) {
+          requestData.orderMethod = item.defaultOrderMethod as 'PO' | 'WEBSITE';
+        }
+
+        // Auto-assign vendor from source or item vendor if not provided.
+        // Future improvement: a supplier_items table or source_vendor_id FK would replace this lookup.
+        if (!requestData.vendorId) {
+          const sourceVendorId = await resolveSourceVendorId(item.source, db);
+          if (sourceVendorId) {
+            requestData.vendorId = sourceVendorId;
+          } else if (item.vendorId) {
+            requestData.vendorId = item.vendorId;
+          }
+        }
       }
     }
 
@@ -709,7 +777,7 @@ router.delete('/parts-requests/:id', async (req: Request, res: Response) => {
 // Get parts requests by the current user (all departments)
 router.get('/parts-requests/my', async (req: Request, res: Response) => {
   try {
-    const username = (req as any).session?.user?.username;
+    const username = req.user?.username;
     if (!username) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -1725,9 +1793,11 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
             case 'usage quantity per unit':
             case 'usageqtyperunit':
             case 'usagequantityperunit':
-              // Issue #2: Add Usage Quantity Per Unit support
+            case 'consumption rate':
+            case 'consumptionrate':
+              // Maps CSV "Usage Quantity Per Unit" column to consumptionRate (the real DB column)
               const usageQty = parseFloat(value);
-              itemData.usageQuantityPerUnit = !isNaN(usageQty) ? usageQty : null;
+              itemData.consumptionRate = !isNaN(usageQty) ? usageQty : null;
               break;
             case 'usage unit':
             case 'usageunit':
@@ -1963,7 +2033,7 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
         escapeCSV(item.secondarySupplierPartNumber),
         escapeCSV(item.costPer),
         escapeCSV(item.purchaseUnit),
-        escapeCSV(item.usageQuantityPerUnit),
+        escapeCSV(item.consumptionRate),
         escapeCSV(item.usageUnit),
         escapeCSV(item.cogsPerUnit),
         escapeCSV(item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : ''),
@@ -2503,7 +2573,7 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
         agPartNumber: inventoryItems.agPartNumber,
         usageUnit: inventoryItems.usageUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        consumptionRate: inventoryItems.consumptionRate,
       })
       .from(inventoryItems);
 
@@ -2548,7 +2618,7 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
             
             const usageUom = itemData?.usageUnit || 'EA';
             const purchaseUom = itemData?.purchaseUnit || 'EA';
-            const conversionFactor = itemData?.usageQuantityPerUnit || 1;
+            const conversionFactor = itemData?.consumptionRate || 1;
 
             // Validate conversion factor to prevent divide-by-zero
             if (conversionFactor <= 0) {
@@ -2816,6 +2886,59 @@ router.get('/fabric/:id', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching fabric inventory item:', error);
     res.status(500).json({ error: 'Failed to fetch fabric inventory item' });
+  }
+});
+
+// ── MRP / Material Planning Engine ────────────────────────────────────────────
+
+router.get('/mrp/demand', async (req: Request, res: Response) => {
+  try {
+    const sku = req.query.sku as string | undefined;
+    const demand = await calculateMaterialDemand(sku);
+    res.json({ demand, count: demand.length, generatedAt: new Date().toISOString() });
+  } catch (error: any) {
+    console.error('MRP demand error:', error);
+    res.status(500).json({ error: 'Failed to calculate material demand', message: error.message });
+  }
+});
+
+router.get('/mrp/shortages', async (req: Request, res: Response) => {
+  try {
+    const sku = req.query.sku as string | undefined;
+    const shortages = await calculateMaterialShortages(undefined, sku);
+    const onlyShort = shortages.filter((s) => s.isShort);
+    res.json({
+      shortages,
+      shortCount: onlyShort.length,
+      allClear: onlyShort.length === 0,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error('MRP shortages error:', error);
+    res.status(500).json({ error: 'Failed to calculate material shortages', message: error.message });
+  }
+});
+
+router.get('/mrp/capacity/:sku', async (req: Request, res: Response) => {
+  try {
+    const { sku } = req.params;
+    const capacity = await calculateBuildCapacity(sku);
+    res.json({ ...capacity, generatedAt: new Date().toISOString() });
+  } catch (error: any) {
+    console.error('MRP capacity error:', error);
+    res.status(500).json({ error: 'Failed to calculate build capacity', message: error.message });
+  }
+});
+
+router.get('/mrp/run', async (req: Request, res: Response) => {
+  try {
+    const skuFilter = req.query.sku as string | undefined;
+    const capacitySku = req.query.capacitySku as string | undefined;
+    const result = await runMrp({ skuFilter, capacitySku });
+    res.json(result);
+  } catch (error: any) {
+    console.error('MRP run error:', error);
+    res.status(500).json({ error: 'Failed to run MRP', message: error.message });
   }
 });
 

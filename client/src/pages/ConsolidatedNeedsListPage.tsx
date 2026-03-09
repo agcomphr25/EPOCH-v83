@@ -46,6 +46,8 @@ type InventoryItem = {
   id: number;
   agPartNumber: string;
   name: string;
+  source?: string | null;
+  vendorId?: number | null;
   currentBalance?: number;
   minStock?: number;
   maxStock?: number;
@@ -97,6 +99,7 @@ type PartsRequest = {
 };
 
 type VendorGroup = {
+  key: string;
   vendorId: number | null;
   vendorName: string;
   orderMethod: string | null;
@@ -397,6 +400,7 @@ export default function ConsolidatedNeedsListPage() {
     const groups: Record<string, VendorGroup> = {};
 
     groups['unassigned'] = {
+      key: 'unassigned',
       vendorId: null,
       vendorName: 'Unassigned',
       orderMethod: null,
@@ -407,14 +411,19 @@ export default function ConsolidatedNeedsListPage() {
     };
 
     for (const request of activeRequests) {
-      if (request.orderMethod === 'WEBSITE') {
-        const key = 'WEBSITE';
+      const vendorId = request.vendorId;
+
+      if (vendorId && vendorMap.has(vendorId)) {
+        // Has a resolved vendor record — group under that vendor regardless of order method
+        const vendor = vendorMap.get(vendorId)!;
+        const key = `vendor-${vendorId}`;
         if (!groups[key]) {
           groups[key] = {
-            vendorId: null,
-            vendorName: 'Website Orders',
-            orderMethod: 'WEBSITE',
-            websiteUrl: null,
+            key,
+            vendorId: vendor.id,
+            vendorName: vendor.name,
+            orderMethod: request.orderMethod || null,
+            websiteUrl: vendor.website || null,
             requests: [],
             totalQuantity: 0,
             totalEstimatedCost: 0,
@@ -423,19 +432,19 @@ export default function ConsolidatedNeedsListPage() {
         groups[key].requests.push(request);
         groups[key].totalQuantity += request.quantity;
         groups[key].totalEstimatedCost += request.estimatedCost || 0;
-        continue;
-      }
-
-      const vendorId = request.vendorId;
-      if (vendorId && vendorMap.has(vendorId)) {
-        const vendor = vendorMap.get(vendorId)!;
-        const key = `vendor-${vendorId}`;
+      } else if (request.orderMethod === 'WEBSITE') {
+        // WEBSITE order with no resolved vendor — group by source text so buyers see per-site buckets.
+        // Future improvement: once source_vendor_id FK exists, all WEBSITE items will resolve to a vendor and this fallback will be rarely needed.
+        const source = request.inventoryItem?.source?.trim();
+        const key = source ? `website-${source.toLowerCase()}` : 'website-unresolved';
+        const groupName = source || 'Website Orders';
         if (!groups[key]) {
           groups[key] = {
-            vendorId: vendor.id,
-            vendorName: vendor.name,
-            orderMethod: request.orderMethod || null,
-            websiteUrl: vendor.website || null,
+            key,
+            vendorId: null,
+            vendorName: groupName,
+            orderMethod: 'WEBSITE',
+            websiteUrl: null,
             requests: [],
             totalQuantity: 0,
             totalEstimatedCost: 0,
@@ -456,6 +465,8 @@ export default function ConsolidatedNeedsListPage() {
       .sort((a, b) => {
         if (a.vendorName === 'Unassigned') return 1;
         if (b.vendorName === 'Unassigned') return -1;
+        if (a.vendorName === 'Website Orders') return 1;
+        if (b.vendorName === 'Website Orders') return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
   }, [filteredRequests, vendorMap]);
@@ -908,7 +919,7 @@ export default function ConsolidatedNeedsListPage() {
 
         {/* Vendor Cards */}
         {filteredVendorGroups.map((vendorGroup) => {
-          const vendorKey = vendorGroup.vendorId ? `vendor-${vendorGroup.vendorId}` : 'unassigned';
+          const vendorKey = vendorGroup.key;
           const isExpanded = expandedVendors.has(vendorKey);
           const approvedCount = vendorGroup.requests.filter(r => r.status === 'APPROVED').length;
           const hasHighUrgency = vendorGroup.requests.some(r => r.urgency === 'HIGH' || r.urgency === 'CRITICAL');
@@ -919,7 +930,9 @@ export default function ConsolidatedNeedsListPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                      {vendorGroup.vendorId ? (
+                      {vendorGroup.orderMethod === 'WEBSITE' ? (
+                        <Globe className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+                      ) : vendorGroup.vendorId ? (
                         <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                       ) : (
                         <Users className="w-5 h-5 text-gray-400" />
@@ -1025,6 +1038,16 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-3 py-2">
                             <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{request.partName}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">{request.partNumber}</div>
+                            {request.inventoryItem?.source && (
+                              <div className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                                Source: {request.inventoryItem.source}
+                              </div>
+                            )}
+                            {request.inventoryItem?.vendorId && vendorMap.has(request.inventoryItem.vendorId) && (
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                Mfr: {vendorMap.get(request.inventoryItem.vendorId)!.name}
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
                             {request.vendorPartNumber || '-'}

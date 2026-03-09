@@ -796,7 +796,7 @@ export interface IStorage {
   removeGroupFromVendorScope(vendorId: number, groupId: number): Promise<void>;
 
   // Parts Requests CRUD
-  getAllPartsRequests(): Promise<PartsRequest[]>;
+  getAllPartsRequests(): Promise<any[]>;
   getPartsRequest(id: number): Promise<PartsRequest | undefined>;
   createPartsRequest(data: InsertPartsRequest): Promise<PartsRequest>;
   updatePartsRequest(
@@ -5686,12 +5686,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Parts Requests CRUD
-  async getAllPartsRequests(): Promise<PartsRequest[]> {
-    return await db
-      .select()
+  async getAllPartsRequests(): Promise<any[]> {
+    const results = await db
+      .select({
+        request: partsRequests,
+        invId: inventoryItems.id,
+        invName: inventoryItems.name,
+        invSource: inventoryItems.source,
+        invVendorId: inventoryItems.vendorId,
+        invUsageUnit: inventoryItems.usageUnit,
+      })
       .from(partsRequests)
+      .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
       .where(eq(partsRequests.isActive, true))
       .orderBy(desc(partsRequests.requestDate));
+
+    return results.map(r => ({
+      ...r.request,
+      inventoryItem: r.invId ? {
+        id: r.invId,
+        agPartNumber: r.request.agPartNumber,
+        name: r.invName,
+        source: r.invSource,
+        vendorId: r.invVendorId,
+        usageUnit: r.invUsageUnit,
+      } : undefined,
+    }));
   }
 
   async getPartsRequest(id: number): Promise<PartsRequest | undefined> {
@@ -8422,11 +8442,10 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Cannot calculate COGS for ad-hoc items without AG Part Number');
     }
 
-    // Validate unit price
-    if (!poLineItem.unitPrice || poLineItem.unitPrice <= 0) {
-      throw new Error(
-        `Invalid unit price ${poLineItem.unitPrice} for PO line item ${poLineItemId}. Must be positive.`
-      );
+    // Validate unit price — soft check only; $0 items skip COGS but still get received
+    const hasValidPrice = !!(poLineItem.unitPrice && poLineItem.unitPrice > 0);
+    if (!hasValidPrice) {
+      console.warn(`⚠️ PO line item ${poLineItemId} has no unit price — COGS calculation will be skipped.`);
     }
 
     // Get the vendor PO to get vendorId
@@ -8461,6 +8480,7 @@ export class DatabaseStorage implements IStorage {
 
     // Check if we have full COGS configuration
     const hasFullCogsConfig = 
+      hasValidPrice &&
       inventoryItem &&
       inventoryItem.purchaseQuantity && 
       inventoryItem.purchaseQuantity > 0 &&
@@ -8556,6 +8576,27 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(vendorPOItems.id, poLineItemId));
+
+    // Record inventory event — receipt_pending lands in RECEIVING location
+    // and does NOT update inventory_balances until put-away
+    try {
+      const { createInventoryEvent } = await import('./src/services/inventoryEventService.js');
+      await createInventoryEvent({
+        agPartNumber: poLineItem.agPartNumber,
+        eventType: 'receipt_pending',
+        quantity: receivedQuantity,
+        unitOfMeasure: inventoryItem?.purchaseUnit ?? undefined,
+        toLocation: 'RECEIVING',
+        referenceType: 'VENDOR_PO',
+        referenceId: poLineItem.vendorPoId,
+        costPerUnit: hasValidPrice ? poLineItem.unitPrice : undefined,
+        performedBy: createdBy != null ? String(createdBy) : 'system',
+        transactionDate: receivedDate,
+        notes: notes ?? undefined,
+      });
+    } catch (eventErr) {
+      console.error('Inventory event recording failed (non-fatal):', eventErr);
+    }
 
     // If this is a FABRIC item for Cutting Table (must be marked as fabric AND used in PL1 or PL2), create fabric inventory records
     let fabricInventoryRecords: any[] = [];

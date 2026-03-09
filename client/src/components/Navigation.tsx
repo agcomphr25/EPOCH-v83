@@ -70,6 +70,7 @@ import {
   AlertTriangle,
   CalendarDays,
   Mic,
+  ShieldCheck,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -116,8 +117,7 @@ export default function Navigation() {
     const hostname = window.location.hostname;
     const isLocalhost =
       hostname.includes('localhost') || hostname.includes('127.0.0.1');
-    const isReplitEditor =
-      hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+    const isReplitEditor = hostname.includes('replit.dev');
     return !isLocalhost && !isReplitEditor;
   };
 
@@ -129,18 +129,25 @@ export default function Navigation() {
         localStorage.getItem('sessionToken') ||
         localStorage.getItem('jwtToken');
 
-      // In development, check localStorage for a stored username
       if (!isDeploymentEnvironment()) {
         const storedUsername = localStorage.getItem('dev_username');
         if (storedUsername) {
           return { username: storedUsername };
         }
-        return null;
+        try {
+          const response = await fetch('/api/auth/session', {
+            credentials: 'include',
+          });
+          if (response.ok) {
+            return await response.json();
+          }
+        } catch (error) {
+          // Fall through to default
+        }
+        return { username: 'admin', role: 'ADMIN' };
       }
 
       try {
-        // Use credentials: 'include' to support cookie-based auth (Microsoft login)
-        // Also send Authorization header for token-based auth
         const response = await fetch('/api/auth/session', {
           credentials: 'include',
           headers: token
@@ -329,6 +336,18 @@ export default function Navigation() {
       label: 'System Health Checks',
       icon: Activity,
       description: 'Monitor and test critical system components daily',
+    },
+    {
+      path: '/admin/domain-truth',
+      label: 'Domain Truth Inspector',
+      icon: Database,
+      description: 'Read-only diagnostic tool — inspect true system state and queue eligibility for any order',
+    },
+    {
+      path: '/admin/queue-integrity',
+      label: 'Queue Integrity Monitor',
+      icon: ShieldCheck,
+      description: 'Detect mismatches between expected and actual department queue membership',
     },
     {
       path: '/pdf-templates',
@@ -921,6 +940,12 @@ export default function Navigation() {
       label: 'JOEYB Dashboard',
       icon: Settings,
       description: 'Cutting Table, CNC & Gunsmith Operations dashboard',
+    },
+    {
+      path: '/production-command-center',
+      label: 'Production Command Center',
+      icon: Activity,
+      description: "Matt's production-focused operational awareness dashboard",
     },
   ];
 

@@ -49,6 +49,7 @@ import {
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
+import SystemHealthWidget from '@/components/admin/SystemHealthWidget';
 
 export default function GLENNTestDashboard() {
   const [isPremiumMode, setIsPremiumMode] = useState(() => {
@@ -462,6 +463,9 @@ export default function GLENNTestDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Queue Integrity Widget */}
+          <SystemHealthWidget variant="premium" />
         </div>
 
         {/* My Tasks Control Center */}
@@ -626,6 +630,7 @@ function LightModeDashboard({
         {renderSectionCard('Finance', financeItems, 'bg-red-100', 'text-red-600', DollarSign)}
         {renderSectionCard('Forms & Reports', formsReportsItems, 'bg-indigo-100', 'text-indigo-600', FormInput)}
         <WeeklyShippingWidget />
+        <SystemHealthWidget />
       </div>
 
       {/* Customer Watch Rules Section - For staciw */}

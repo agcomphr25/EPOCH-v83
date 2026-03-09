@@ -1,0 +1,215 @@
+COPY-PASTE PROMPT
+Queue Integrity Monitor Improvements
+We are enhancing the Queue Integrity Monitor to make it more useful for detecting workflow bugs automatically and improving debugging efficiency.
+
+This change must NOT modify production workflow logic.
+
+Only add diagnostics, severity classification, navigation improvements, and a shared department constant.
+
+------------------------------------------------
+PART 1 — CREATE SHARED DEPARTMENT CONSTANT
+------------------------------------------------
+
+Create a shared constant file:
+
+server/src/constants/departments.ts
+
+Export:
+
+export const DEPARTMENTS = [
+ "Production Queue",
+ "Layup/Plugging",
+ "Barcode",
+ "CNC",
+ "Gunsmith",
+ "Finish",
+ "Finish QC",
+ "Paint",
+ "Shipping QC",
+ "Shipping"
+] as const;
+
+Also export a helper:
+
+export const VALID_DEPARTMENTS = new Set(DEPARTMENTS);
+
+This constant will be used by:
+
+• Queue queries
+• Department dropdowns
+• State machine map
+• Queue Integrity Monitor
+
+Replace any duplicated department arrays in the codebase with this shared constant.
+
+------------------------------------------------
+PART 2 — ADD SEVERITY CLASSIFICATION
+------------------------------------------------
+
+Update the Queue Integrity Monitor backend response to classify each finding.
+
+Severity rules:
+
+CRITICAL
+• expectedOrders missing from queue
+• orphaned orders (current_department NULL but active)
+
+WARNING
+• unexpectedOrders appearing in queue
+• department mismatch between expected and actual
+
+INFO
+• invalid department strings not in DEPARTMENTS
+
+Example response structure:
+
+{
+  department: "Finish",
+  expectedCount: 14,
+  actualCount: 13,
+  delta: -1,
+  severity: "CRITICAL",
+  missingOrders: ["EI185"],
+  unexpectedOrders: []
+}
+
+------------------------------------------------
+PART 3 — AUTO DETECT WORKFLOW BUGS
+------------------------------------------------
+
+Add a lightweight background integrity check.
+
+Create a small service:
+
+server/src/services/queueIntegrityService.ts
+
+This service runs the same integrity checks used by the API endpoint.
+
+Schedule it using setInterval every 5 minutes.
+
+If CRITICAL findings exist:
+
+store a summary in memory:
+
+{
+  lastCheckTime,
+  criticalCount,
+  warningCount,
+  affectedDepartments
+}
+
+Expose a new endpoint:
+
+GET /api/admin/queue-integrity/status
+
+Example response:
+
+{
+  healthy: false,
+  criticalCount: 2,
+  warningCount: 5,
+  lastCheckTime: timestamp
+}
+
+This allows the UI to show system health without loading the full report.
+
+------------------------------------------------
+PART 4 — ADD ADMIN SYSTEM HEALTH WIDGET
+------------------------------------------------
+
+Add a small widget to the Admin dashboard.
+
+Location:
+
+client/src/components/admin/SystemHealthWidget.tsx
+
+It should call:
+
+GET /api/admin/queue-integrity/status
+
+Display:
+
+Queue Integrity Status
+
+Healthy:
+✔ No critical mismatches
+
+If problems exist:
+
+⚠ 2 Critical Queue Issues
+⚠ 5 Warnings
+
+Add button:
+
+"Open Queue Integrity Monitor"
+
+which navigates to:
+
+/admin/queue-integrity
+
+------------------------------------------------
+PART 5 — LINK ORDER IDS TO DOMAIN TRUTH INSPECTOR
+------------------------------------------------
+
+Update Queue Integrity Monitor UI.
+
+Whenever an order ID appears in:
+
+missingOrders
+unexpectedOrders
+orphanedOrders
+
+render it as a clickable link.
+
+Example:
+
+EI185  →  [Inspect]
+
+Link target:
+
+/admin/domain-truth?orderId=EI185
+
+Use router navigation instead of full page reload.
+
+------------------------------------------------
+PART 6 — IMPROVE QUEUE INTEGRITY UI
+------------------------------------------------
+
+Add Severity column to the table:
+
+Department | Expected | Actual | Delta | Severity | Status
+
+Severity colors:
+
+CRITICAL → red
+WARNING → orange
+INFO → blue
+OK → green
+
+Rows should visually highlight based on severity.
+
+------------------------------------------------
+PART 7 — ENSURE BACKWARD COMPATIBILITY
+------------------------------------------------
+
+Do NOT modify:
+
+queue logic
+order.current_department
+department transition code
+
+Only add diagnostics and shared constants.
+
+------------------------------------------------
+PART 8 — TESTING
+------------------------------------------------
+
+Verify:
+
+1. Queue Integrity Monitor still loads normally
+2. SystemHealthWidget shows health status
+3. Clicking order IDs opens Domain Truth Inspector
+4. Department list comes from shared constant
+5. Background integrity check runs every 5 minutes
+
+Ensure no TypeScript or runtime errors.

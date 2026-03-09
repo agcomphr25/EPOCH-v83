@@ -1,0 +1,183 @@
+COPY-PASTE PROMPT
+Queue Integrity Monitor (Forensic Audit + Implementation)
+
+Give this directly to your agent.
+
+We are implementing a Queue Integrity Monitor for EPOCH.
+
+Purpose:
+Detect mismatches between expected queue membership and actual queue results so we can identify workflow bugs or hidden filters.
+
+This is an INTERNAL ADMIN TOOL.
+
+Do NOT modify production workflow logic.
+Only analyze and report inconsistencies.
+
+------------------------------------------------
+STEP 1 — CREATE ADMIN API
+------------------------------------------------
+
+Create endpoint:
+
+GET /api/admin/queue-integrity
+
+Location:
+
+server/src/routes/admin/queueIntegrity.ts
+
+Register it in the admin router.
+
+------------------------------------------------
+STEP 2 — DEFINE DEPARTMENTS
+------------------------------------------------
+
+Monitor the following departments:
+
+P1 Production Queue
+Layup/Plugging
+Barcode
+CNC
+Gunsmith
+Finish
+Finish QC
+Paint
+Shipping QC
+Shipping
+
+Store them in an array.
+
+------------------------------------------------
+STEP 3 — COMPUTE EXPECTED QUEUE MEMBERSHIP
+------------------------------------------------
+
+For each department, compute the expected orders using the same rules used by the system.
+
+Query:
+
+SELECT order_id
+FROM all_orders
+WHERE current_department = :department
+AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+AND scrap_date IS NULL
+AND is_cancelled != true
+
+Return:
+
+expectedOrders[]
+
+------------------------------------------------
+STEP 4 — FETCH ACTUAL QUEUE DATA
+------------------------------------------------
+
+Use the existing queue query used by the UI.
+
+Call:
+
+storage.getOrdersByDepartment(department)
+
+This represents what the UI actually displays.
+
+Return:
+
+actualOrders[]
+
+------------------------------------------------
+STEP 5 — COMPARE RESULTS
+------------------------------------------------
+
+Compute differences.
+
+missingOrders =
+expectedOrders NOT IN actualOrders
+
+unexpectedOrders =
+actualOrders NOT IN expectedOrders
+
+Example output:
+
+{
+  department: "Finish",
+  expectedCount: 14,
+  actualCount: 13,
+  missingOrders: ["EI185"],
+  unexpectedOrders: []
+}
+
+------------------------------------------------
+STEP 6 — DETECT INVALID DEPARTMENTS
+------------------------------------------------
+
+Scan for orders where:
+
+current_department NOT IN known departments
+
+Return:
+
+{
+  order_id,
+  invalid_department
+}
+
+------------------------------------------------
+STEP 7 — DETECT NULL DEPARTMENTS
+------------------------------------------------
+
+Find orders where:
+
+current_department IS NULL
+AND status NOT IN ('SCRAPPED','CANCELLED','FULFILLED')
+
+These are orphaned orders.
+
+------------------------------------------------
+STEP 8 — RESPONSE STRUCTURE
+------------------------------------------------
+
+Return:
+
+{
+  departments: [
+    {
+      department,
+      expectedCount,
+      actualCount,
+      missingOrders,
+      unexpectedOrders
+    }
+  ],
+  invalidDepartments: [],
+  orphanedOrders: []
+}
+
+------------------------------------------------
+STEP 9 — CREATE ADMIN UI PAGE
+------------------------------------------------
+
+Create page:
+
+client/src/pages/admin/QueueIntegrityMonitor.tsx
+
+Route:
+
+/admin/queue-integrity
+
+Display table:
+
+Department | Expected | Actual | Status
+
+If mismatch:
+
+highlight row in red.
+
+Clicking a department expands:
+
+missingOrders
+unexpectedOrders
+
+------------------------------------------------
+STEP 10 — ADD NAVIGATION
+------------------------------------------------
+
+Add to admin menu:
+
+Admin → System Tools → Queue Integrity Monitor

@@ -19,6 +19,7 @@ import {
   insertPaymentSchema,
 } from '@shared/schema';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { allocateForOrder } from '../services/productionOrderAllocationService';
 import { 
   adminFieldUpdateSchema, 
   adminBulkUpdateSchema,
@@ -3073,6 +3074,49 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
 
     console.log(`📋 PATCH /${orderId} - Department progression update`);
     console.log('📋 Update data:', updates);
+
+    // ── FINALIZED → IN_PROGRESS: run inventory allocation before allowing transition ──
+    if (updates.status === 'IN_PROGRESS') {
+      // Fetch the current order to confirm it is transitioning from FINALIZED
+      const [currentOrder] = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
+
+      if (currentOrder && currentOrder.status === 'FINALIZED') {
+        console.log(`🔒 Order ${orderId}: FINALIZED → IN_PROGRESS — running inventory allocation`);
+
+        const performedBy = (req as any).user?.username ?? 'system';
+        const allocationResult = await allocateForOrder(
+          orderId,
+          (currentOrder as any).bomDefinitionId ?? null,
+          (currentOrder as any).modelId ?? null,
+          1,
+          performedBy
+        );
+
+        if (!allocationResult.success) {
+          const shortageDetails = allocationResult.shortages.map(
+            (s) => `${s.agPartNumber} (need ${s.required}, available ${s.available})`
+          );
+          console.warn(
+            `⛔ Order ${orderId}: MATERIAL_SHORTAGE — status transition blocked. Shortages: ${shortageDetails.join(', ')}`
+          );
+          return res.status(409).json({
+            error: 'MATERIAL_SHORTAGE',
+            message: 'Insufficient inventory to start production. Status transition blocked.',
+            shortages: allocationResult.shortages,
+          });
+        }
+
+        if (allocationResult.allocated.length > 0) {
+          console.log(
+            `✅ Order ${orderId}: Allocated ${allocationResult.allocated.length} material(s) — proceeding to IN_PROGRESS`
+          );
+        }
+      }
+    }
 
     // Try to find and update the order in finalized orders first
     let updatedOrder;

@@ -1,0 +1,184 @@
+COPY-PASTE PROMPT
+Flight Recorder Timeline Upgrade
+We are upgrading the Order Flight Recorder UI in the Domain Truth Inspector.
+
+The backend API remains unchanged.
+
+Only the frontend rendering will be modified to display events as a timeline instead of a simple list.
+
+------------------------------------------------
+PART 1 — CREATE TIMELINE LAYOUT
+------------------------------------------------
+
+Replace the current list layout in the Flight Recorder section with a vertical timeline.
+
+Layout structure:
+
+Timeline container
+│
+├─ left vertical spine line
+│
+├─ timeline event nodes
+│
+└─ event content panels
+
+Each event should render as:
+
+[dot] —— event card
+
+Example visual:
+
+●  Entered Layup/Plugging
+   Mar 4 09:39 AM
+   Actor: staciw
+
+●  Department moved → Barcode
+   Mar 4 09:39 AM
+
+●  Status changed → Finalized
+   Mar 4 15:14 PM
+
+------------------------------------------------
+PART 2 — EVENT DOT COLORS
+------------------------------------------------
+
+Use color-coded dots to represent event types.
+
+Mapping:
+
+DEPARTMENT_CHANGE → blue
+STATUS_CHANGE → cyan
+ENTERED_DEPARTMENT → green
+EXITED_DEPARTMENT → purple
+BADGE_SCAN → orange
+AUDIT_EVENT → gray
+
+Define color classes in a map:
+
+const EVENT_COLORS = {
+  DEPARTMENT_CHANGE: "bg-blue-500",
+  STATUS_CHANGE: "bg-cyan-500",
+  ENTERED_DEPARTMENT: "bg-green-500",
+  EXITED_DEPARTMENT: "bg-purple-500",
+  BADGE_SCAN: "bg-orange-500",
+  AUDIT_EVENT: "bg-gray-400"
+}
+
+------------------------------------------------
+PART 3 — DRAW TIMELINE SPINE
+------------------------------------------------
+
+Render a vertical line behind the event nodes.
+
+Example Tailwind structure:
+
+<div class="relative">
+  <div class="absolute left-4 top-0 bottom-0 w-px bg-gray-300"></div>
+</div>
+
+Each event dot sits on this spine.
+
+------------------------------------------------
+PART 4 — EVENT CARD
+------------------------------------------------
+
+Each event should display:
+
+Title
+Timestamp
+Actor (if present)
+Description
+
+Example card:
+
+Department moved → Barcode
+Mar 4 09:39 AM
+Actor: staciw
+
+------------------------------------------------
+PART 5 — GROUP SIMILAR EVENTS
+------------------------------------------------
+
+If two events occur within the same minute and have the same type, group them visually.
+
+Example:
+
+Entered Layup/Plugging
+Exited Layup/Plugging after 0m
+
+Render them close together.
+
+------------------------------------------------
+PART 6 — ADD EVENT ICONS
+------------------------------------------------
+
+Add icons next to the event titles.
+
+Example mapping:
+
+Department change → arrows-right-left
+Status change → flag
+Entered department → arrow-right
+Exited department → arrow-left
+Badge scan → barcode
+Audit → shield-check
+
+Use the existing icon library already used in the admin UI.
+
+------------------------------------------------
+PART 7 — ADD TIME DELTAS
+------------------------------------------------
+
+Show time elapsed between events.
+
+Example:
+
+Entered Layup/Plugging
+09:39 AM
+
+↓ 0m
+
+Exited Layup/Plugging
+
+This makes bottlenecks obvious.
+
+------------------------------------------------
+PART 8 — ADD EVENT COUNT SUMMARY
+------------------------------------------------
+
+At the top of the Flight Recorder display:
+
+Order Flight Recorder
+
+7 events recorded
+Across 4 systems
+
+Sources:
+
+audit_events
+department_transitions
+badge_scan_log
+admin_audit_log
+
+------------------------------------------------
+PART 9 — PERFORMANCE
+------------------------------------------------
+
+Do not add new API calls.
+
+Use the existing flight recorder data.
+
+Sorting should remain chronological.
+
+------------------------------------------------
+PART 10 — TESTING
+------------------------------------------------
+
+Verify timeline renders correctly for:
+
+short order history
+long order history
+badge scan events
+department transitions
+
+Ensure styling remains responsive.

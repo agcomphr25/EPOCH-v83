@@ -626,6 +626,8 @@ export const inventoryItems = pgTable('inventory_items', {
   otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
   assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
   defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
+  purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK → units (measurement unit for purchasing)
+  usageUnitId: integer('usage_unit_id').references(() => units.id), // FK → units (measurement unit for consumption)
 });
 
 // Inventory Item Cost History - Tracks price changes over time
@@ -2125,7 +2127,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     secondarySupplierPartNumber: z.string().optional().nullable(),
     costPer: z.number().min(0).optional().nullable(),
     purchaseUnit: z.string().optional().nullable(),
-    usageQuantityPerUnit: z.number().min(0).optional().nullable(),
+    consumptionRate: z.number().min(0).optional().nullable(),
     usageUnit: z.string().optional().nullable(),
     cogsPerUnit: z.number().min(0).optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),
@@ -13239,3 +13241,65 @@ export const insertSignOrderPageSettingsSchema = createInsertSchema(signOrderPag
 });
 export type SignOrderPageSettings = typeof signOrderPageSettings.$inferSelect;
 export type InsertSignOrderPageSettings = z.infer<typeof insertSignOrderPageSettingsSchema>;
+
+// ─── Metrics Registry ─────────────────────────────────────────────────────────
+export const metricsRegistry = pgTable('metrics_registry', {
+  id: serial('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description'),
+  category: text('category').notNull().default('general'),
+  unit: text('unit').notNull().default('count'),
+  calculationFunction: text('calculation_function').notNull(),
+  defaultVisual: text('default_visual').notNull().default('stat_card'),
+  isLive: boolean('is_live').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertMetricsRegistrySchema = createInsertSchema(metricsRegistry).omit({
+  id: true,
+  createdAt: true,
+});
+export type MetricsRegistry = typeof metricsRegistry.$inferSelect;
+export type InsertMetricsRegistry = z.infer<typeof insertMetricsRegistrySchema>;
+
+// ─── Metric Snapshots ──────────────────────────────────────────────────────────
+export const metricSnapshots = pgTable('metric_snapshots', {
+  id: serial('id').primaryKey(),
+  metricSlug: text('metric_slug').notNull(),
+  period: text('period').notNull().default('live'),
+  valueJson: jsonb('value_json').notNull(),
+  computedAt: timestamp('computed_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+});
+
+export const insertMetricSnapshotsSchema = createInsertSchema(metricSnapshots).omit({
+  id: true,
+  computedAt: true,
+});
+export type MetricSnapshotRow = typeof metricSnapshots.$inferSelect;
+export type InsertMetricSnapshot = z.infer<typeof insertMetricSnapshotsSchema>;
+
+// ─── Unit Families ──────────────────────────────────────────────────────────
+export const unitFamilies = pgTable('unit_families', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertUnitFamilySchema = createInsertSchema(unitFamilies).omit({ id: true, createdAt: true });
+export type UnitFamily = typeof unitFamilies.$inferSelect;
+export type InsertUnitFamily = z.infer<typeof insertUnitFamilySchema>;
+
+// ─── Units ──────────────────────────────────────────────────────────────────
+export const units = pgTable('units', {
+  id: serial('id').primaryKey(),
+  symbol: text('symbol').notNull().unique(),
+  familyId: integer('family_id').notNull().references(() => unitFamilies.id),
+  conversionToBase: real('conversion_to_base').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertUnitSchema = createInsertSchema(units).omit({ id: true, createdAt: true });
+export type Unit = typeof units.$inferSelect;
+export type InsertUnit = z.infer<typeof insertUnitSchema>;

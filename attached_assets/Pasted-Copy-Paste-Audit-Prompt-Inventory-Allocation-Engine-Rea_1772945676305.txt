@@ -1,0 +1,305 @@
+Copy-Paste Audit Prompt
+
+(Inventory Allocation Engine Read-Only Audit)
+
+READ-ONLY ARCHITECTURE AUDIT — INVENTORY ALLOCATION ENGINE
+
+Goal:
+Gather the complete technical context required to safely implement the Inventory Allocation Engine for EPOCH.
+
+Do NOT modify any code.
+Do NOT insert or update any database records.
+
+This audit must analyze the full inventory system, demand sources, and location architecture.
+
+The objective is to determine how inventory can move through the lifecycle:
+
+Available → Allocated → Committed → Consumed
+
+without breaking existing systems such as:
+
+vendor PO receiving
+parts request receiving
+cutting table modules
+material lot traceability
+inventory scans
+manual adjustments
+
+--------------------------------
+
+SECTION 1 — INVENTORY_BALANCES STRUCTURE
+
+Locate the schema definition for:
+
+inventory_balances
+
+Report:
+
+Columns
+Primary key
+Foreign keys
+Indexes
+
+Specifically confirm whether the following columns exist:
+
+ag_part_number
+location_id
+quantity_on_hand
+quantity_available
+quantity_allocated
+quantity_committed
+created_at
+updated_at
+
+If quantity_allocated or quantity_committed do NOT exist,
+identify where they should be added.
+
+Also determine whether quantity_available is:
+
+stored
+or computed
+
+--------------------------------
+
+SECTION 2 — INVENTORY LOCATIONS
+
+Identify how inventory locations are defined.
+
+Look for:
+
+locations table
+warehouse_locations
+location enums
+constants in code
+
+Also search for references such as:
+
+WAREHOUSE-MAIN
+RECEIVING
+P1-CNC
+P1-LAYUP
+CUTTING
+QC
+STAGING
+
+Determine whether locations are:
+
+database-driven
+hard-coded constants
+derived from department mappings
+
+Provide a list of all known inventory locations.
+
+--------------------------------
+
+SECTION 3 — CURRENT INVENTORY EVENT FLOW
+
+Trace every place where inventory changes.
+
+Search the codebase for:
+
+createInventoryEvent
+inventory_transactions inserts
+inventory_balances updates
+material_lot_transactions writes
+
+Identify each route or service that causes inventory movement.
+
+Examples to check:
+
+vendor PO receiving
+parts request receiving
+material lot receive
+cutting consumption
+manual transaction entry
+inventory transfers
+
+For each route report:
+
+route path
+function name
+tables written
+whether inventory_balances changes
+
+--------------------------------
+
+SECTION 4 — DEMAND SOURCES
+
+Identify all system components that create demand for inventory.
+
+Search for references to inventory_items or ag_part_number in:
+
+parts_requests
+bom_items
+production orders
+cutting modules
+maintenance modules
+work orders
+
+For each demand source report:
+
+table name
+key fields
+quantity field
+status fields
+whether demand currently affects inventory availability
+
+--------------------------------
+
+SECTION 5 — PARTS REQUEST ALLOCATION
+
+Analyze:
+
+parts_requests
+parts_request_order_lines
+parts_request_order_allocations
+
+Determine whether parts requests currently reserve inventory.
+
+If not, identify where allocation should logically occur:
+
+request approval
+PO creation
+receiving
+or manual allocation
+
+--------------------------------
+
+SECTION 6 — PRODUCTION DEMAND (BOM)
+
+Analyze:
+
+bom_definitions
+bom_items
+
+Determine whether BOM items reference inventory using:
+
+ag_part_number
+part name
+or another identifier
+
+If BOM demand exists, determine:
+
+how required quantities are calculated
+whether they interact with inventory_balances
+whether any allocation logic already exists
+
+--------------------------------
+
+SECTION 7 — CUTTING TABLE SYSTEM
+
+Locate modules related to:
+
+cutting_fabric_inventory
+material_lot_transactions
+cut plans
+packets
+roll splits
+
+Determine how material consumption is currently recorded.
+
+Specifically confirm:
+
+whether the cutting system modifies inventory_balances
+or only its own traceability tables.
+
+This system must remain untouched during allocation engine development.
+
+--------------------------------
+
+SECTION 8 — EXISTING ALLOCATION UI
+
+Locate the Progressive Allocation module referenced in:
+
+/inventory/enhanced-mrp
+
+Search for routes:
+
+/api/inventory/allocate
+/api/inventory/commit
+/api/inventory/consume
+
+Determine:
+
+whether these routes exist
+whether they are implemented
+whether they currently affect inventory_balances
+
+--------------------------------
+
+SECTION 9 — INVENTORY_TRANSACTION TYPES
+
+Report all values currently used in:
+
+inventory_transactions.transaction_type
+
+Confirm the enum includes:
+
+receipt
+receipt_pending
+putaway
+consumption
+issue
+transfer
+adjustment
+return
+
+List any additional types discovered.
+
+--------------------------------
+
+SECTION 10 — ALLOCATION ENGINE DESIGN CONSTRAINTS
+
+Based on the codebase findings, identify constraints for the allocation engine.
+
+Examples:
+
+location-specific balances
+department-specific inventory
+lot-tracked materials
+items that cannot be auto-allocated
+traceability requirements
+
+--------------------------------
+
+SECTION 11 — REQUIRED DATABASE CHANGES
+
+Based on the audit, propose minimal schema changes needed for allocation.
+
+Examples:
+
+quantity_allocated column
+quantity_committed column
+allocation reference fields
+
+Do NOT implement changes.
+
+--------------------------------
+
+SECTION 12 — QUESTIONS FOR THE USER
+
+After completing the audit, ask clarifying questions needed to design the allocation engine.
+
+Examples:
+
+1. Should parts requests automatically allocate inventory when approved?
+2. Should production orders allocate inventory immediately?
+3. Should allocations be location-specific?
+4. Should traceable materials be excluded from allocation?
+5. Should the system support partial allocations?
+
+--------------------------------
+
+DELIVERABLE
+
+Produce a structured report with sections:
+
+1. Inventory balance architecture
+2. Inventory locations map
+3. Inventory event sources
+4. Demand sources
+5. Allocation candidates
+6. Traceability system boundaries
+7. Required schema changes
+8. Implementation recommendations
+9. Clarifying questions

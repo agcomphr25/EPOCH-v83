@@ -1,0 +1,200 @@
+COPY-PASTE PROMPT
+Add Flow Pressure Indicators to Production Pipeline Dashboard
+We are enhancing the Production Pipeline dashboard with Flow Pressure Indicators.
+
+Purpose:
+Predict department bottlenecks by comparing upstream queue size vs downstream capacity.
+
+This is a visualization and analytics improvement only.
+
+Do NOT modify production workflow logic.
+Do NOT modify department transitions.
+
+------------------------------------------------
+PART 1 — DEFINE PIPELINE ORDER
+------------------------------------------------
+
+Create a shared constant:
+
+client/src/constants/pipelineDepartments.ts
+
+Export:
+
+export const PIPELINE_DEPARTMENTS = [
+ "Production Queue",
+ "Layup/Plugging",
+ "Barcode",
+ "CNC",
+ "Gunsmith",
+ "Finish",
+ "Finish QC",
+ "Paint",
+ "Shipping QC",
+ "Shipping"
+] as const;
+
+------------------------------------------------
+PART 2 — FETCH QUEUE COUNTS
+------------------------------------------------
+
+Use the existing Production Pipeline API data.
+
+For each department obtain:
+
+department
+orderCount
+
+Example:
+
+[
+ { department: "Barcode", count: 105 },
+ { department: "CNC", count: 63 }
+]
+
+------------------------------------------------
+PART 3 — CALCULATE FLOW PRESSURE
+------------------------------------------------
+
+Create utility:
+
+client/src/utils/calculateFlowPressure.ts
+
+Function:
+
+calculateFlowPressure(upstreamCount, downstreamCount)
+
+Rules:
+
+ratio = upstreamCount / max(downstreamCount, 1)
+
+Return:
+
+{
+  ratio,
+  pressureLevel
+}
+
+Pressure levels:
+
+ratio < 1.2 → "LOW"
+ratio >= 1.2 and < 2 → "MEDIUM"
+ratio >= 2 → "HIGH"
+
+Example:
+
+105 upstream → 63 downstream
+ratio = 1.66 → MEDIUM pressure
+
+------------------------------------------------
+PART 4 — CALCULATE TIME-TO-CLEAR
+------------------------------------------------
+
+Estimate downstream clearance time.
+
+Formula:
+
+timeToClearDays = upstreamCount / max(downstreamCount, 1)
+
+Return rounded estimate.
+
+Example:
+
+105 orders upstream
+63 downstream
+
+timeToClear ≈ 1.7 days
+
+------------------------------------------------
+PART 5 — RENDER FLOW PRESSURE INDICATORS
+------------------------------------------------
+
+In the Production Pipeline dashboard:
+
+Between each department column render a pressure indicator.
+
+Example visual:
+
+Barcode (105)  →  CNC (63)
+
+Indicator:
+
+LOW pressure → green arrow
+MEDIUM pressure → yellow arrow
+HIGH pressure → red arrow
+
+Display tooltip:
+
+"Flow Pressure: HIGH
+105 orders upstream
+63 orders downstream
+Estimated clearance: 1.7 days"
+
+------------------------------------------------
+PART 6 — ADD PRESSURE BADGE TO DEPARTMENT TILE
+------------------------------------------------
+
+Each department card should display:
+
+Orders
+Pressure from upstream
+
+Example:
+
+CNC
+63 Orders
+
+Pressure: MEDIUM
+Upstream: 105
+
+------------------------------------------------
+PART 7 — OPTIONAL VISUALIZATION
+------------------------------------------------
+
+Render arrows between columns.
+
+Example:
+
+[Barcode 105] → [CNC 63]
+
+Arrow color based on pressure.
+
+------------------------------------------------
+PART 8 — ADD BOTTLENECK HIGHLIGHTING
+------------------------------------------------
+
+If pressureLevel === "HIGH":
+
+highlight downstream department tile with red border.
+
+This indicates a likely bottleneck.
+
+------------------------------------------------
+PART 9 — ADD EXPLANATION TOOLTIP
+------------------------------------------------
+
+Hovering on a pressure indicator shows:
+
+Flow Pressure Explanation
+
+"More work is arriving from Barcode than CNC is currently processing.
+This may create a backlog."
+
+------------------------------------------------
+PART 10 — PERFORMANCE
+------------------------------------------------
+
+All calculations must occur client-side.
+
+No new backend queries.
+
+------------------------------------------------
+PART 11 — TESTING
+------------------------------------------------
+
+Verify:
+
+1. Pipeline renders normally
+2. Pressure arrows appear between departments
+3. High pressure highlights downstream department
+4. Tooltips display correct ratio and estimate
+5. No production logic is changed

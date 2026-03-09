@@ -1,0 +1,337 @@
+Copy-Paste Prompt for Replit Agent
+FULL SYSTEM AUDIT — INVENTORY + MRP + PURCHASING ARCHITECTURE
+
+This is a READ-ONLY forensic audit.
+
+Do NOT modify any code.
+
+Goal:
+Deeply understand the current EPOCH purchasing and inventory architecture in order to design a complete integrated purchasing system and dashboard.
+
+You must explore the entire codebase related to:
+
+• Inventory Items
+• Inventory On Hand
+• MRP logic
+• Vendor Management
+• Purchase Orders
+• Parts Requests
+• Consolidated Needs UI
+
+The objective is to identify how these pieces connect today and how to transform them into a powerful integrated purchasing dashboard.
+
+--------------------------------
+
+SECTION 1 — DATABASE SCHEMA DISCOVERY
+
+Locate and report all database tables related to inventory and purchasing.
+
+Expected areas include:
+
+inventory_items
+inventory_locations
+inventory_quantities
+inventory_transactions
+inventory_movements
+vendors
+vendor_contacts
+vendor_pricing
+purchase_orders
+purchase_order_items
+parts_requests
+mrp tables
+production tables
+bom tables
+
+For each table provide:
+
+Table name
+Columns
+Relationships
+Foreign keys
+Indexes
+
+Also identify:
+
+How inventory quantities are stored
+How inventory is reserved or allocated
+How on-hand quantities are calculated
+
+--------------------------------
+
+SECTION 2 — INVENTORY ITEM MODEL
+
+Locate the inventory item schema and explain all fields.
+
+Example fields to identify:
+
+agPartNumber
+name
+vendorId
+source
+secondarySource
+supplierPartNumber
+usageUnit
+reorderPoint
+reorderQuantity
+defaultOrderMethod
+cost
+leadTimeDays
+
+Explain how inventory items connect to:
+
+vendors
+purchase orders
+inventory movements
+parts requests
+production
+
+--------------------------------
+
+SECTION 3 — INVENTORY ON HAND
+
+Identify how the system determines:
+
+On Hand
+Allocated
+Available
+
+Locate code that calculates or retrieves inventory balances.
+
+Examples:
+
+SELECT SUM(quantity)
+FROM inventory_transactions
+
+or
+
+inventory_quantities table
+
+Explain:
+
+How stock levels update
+How receiving affects inventory
+How consumption affects inventory
+
+--------------------------------
+
+SECTION 4 — MRP / DEMAND SIGNALS
+
+Identify all sources of demand that could drive purchasing:
+
+Parts Requests
+Production Orders
+Low Stock / Reorder Points
+MRP calculations
+Manual purchasing
+
+Locate code for:
+
+MRP logic
+Reorder triggers
+Inventory projections
+
+Explain how the system determines:
+
+what needs to be ordered
+when it needs to be ordered
+
+--------------------------------
+
+SECTION 5 — PARTS REQUEST SYSTEM
+
+Trace the full lifecycle of a parts request:
+
+Employee submits request
+↓
+Request stored in parts_requests
+↓
+Appears on Consolidated Needs
+↓
+Assigned to vendor
+↓
+Converted to PO
+↓
+Received
+
+Identify:
+
+all routes
+all UI components
+all database fields
+all status transitions
+
+--------------------------------
+
+SECTION 6 — CONSOLIDATED NEEDS PAGE
+
+File likely:
+
+client/src/pages/ConsolidatedNeedsListPage.tsx
+
+Explain:
+
+How requests are grouped
+How vendor grouping works
+How filters work
+
+Also identify:
+
+PO Orders tab
+Website Orders tab
+Bulk ordering logic
+
+--------------------------------
+
+SECTION 7 — VENDOR MANAGEMENT
+
+Locate vendor architecture.
+
+Tables:
+
+vendors
+vendor_contacts
+vendor_addresses
+vendor_payment_terms
+
+Explain how vendors connect to:
+
+inventory items
+purchase orders
+parts requests
+
+Also determine whether the system supports:
+
+multiple suppliers per item
+supplier pricing
+lead times
+
+--------------------------------
+
+SECTION 8 — PURCHASE ORDER SYSTEM
+
+Locate:
+
+Purchase Order pages
+Purchase Order routes
+Purchase Order database tables
+
+Explain the lifecycle:
+
+Draft PO
+Submitted PO
+Ordered
+Received
+Closed
+
+Identify:
+
+how PO items are generated
+how requests link to POs
+how receiving updates inventory
+
+--------------------------------
+
+SECTION 9 — CURRENT UX CAPABILITIES
+
+Analyze the current purchasing workflow.
+
+Example:
+
+Employee requests part
+↓
+Purchasing reviews Consolidated Needs
+↓
+Buyer creates PO manually
+↓
+Inventory updated after receiving
+
+Identify friction points:
+
+manual routing
+duplicate steps
+missing automation
+
+--------------------------------
+
+SECTION 10 — PURCHASING DASHBOARD DESIGN
+
+Based on the findings propose an architecture for:
+
+EPOCH Purchasing Dashboard
+
+Key capabilities should include:
+
+Vendor demand overview
+Create PO from requests
+Batch vendor ordering
+Inventory shortage detection
+Demand by department
+Urgent requests
+Receiving status
+Vendor workload indicators
+
+Provide UI concepts such as:
+
+Vendor cards
+Purchasing queue
+Low stock alerts
+Demand heatmaps
+
+--------------------------------
+
+SECTION 11 — DATA MODEL IMPROVEMENTS
+
+Propose improvements including:
+
+supplier_items table
+normalized purchasing source
+inventory availability calculations
+request → PO linking
+vendor alias handling
+
+Do NOT implement these changes.
+
+--------------------------------
+
+SECTION 12 — CLARIFYING QUESTIONS
+
+Ask the user questions needed to design the correct purchasing architecture.
+
+Examples:
+
+1. Should production orders automatically generate purchasing demand?
+2. Should reorder points trigger automatic purchasing suggestions?
+3. Should items support multiple suppliers?
+4. Should the dashboard track vendor lead times?
+5. Should requests automatically convert into draft purchase orders?
+6. Should buyers be able to merge requests into one PO?
+
+--------------------------------
+
+SECTION 13 — SCREENSHOTS NEEDED
+
+Request any additional screenshots that would help the audit.
+
+Examples:
+
+Inventory item profile page
+Vendor management screen
+Purchase order page
+Receiving workflow
+MRP / production planning page
+Inventory on hand screen
+
+--------------------------------
+
+DELIVERABLE
+
+Produce a structured report:
+
+1. Schema map
+2. Data flow diagrams
+3. Current purchasing workflow
+4. Identified limitations
+5. Proposed purchasing architecture
+6. UI dashboard concept
+7. Clarifying questions

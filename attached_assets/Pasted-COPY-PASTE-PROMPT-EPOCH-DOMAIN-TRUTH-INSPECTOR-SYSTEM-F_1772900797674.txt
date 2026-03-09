@@ -1,0 +1,326 @@
+COPY-PASTE PROMPT
+EPOCH DOMAIN TRUTH INSPECTOR — SYSTEM FORENSIC AUDIT
+I want you to perform a FULL READ-ONLY FORENSIC ARCHITECTURE AUDIT of the EPOCH codebase in order to design a "Domain Truth Inspector".
+
+The Domain Truth Inspector will live at:
+
+/admin/domain-truth
+
+Its purpose is to allow administrators to inspect the true state of any object in the system and understand why it appears (or does not appear) in specific workflows, department queues, or dashboards.
+
+Examples:
+• Why an order is not appearing in the Finish queue
+• Why a PO receipt did not trigger an inventory event
+• Why a production order did not advance departments
+• Why an order skipped sequence numbers
+
+DO NOT modify any code.
+DO NOT implement anything.
+ONLY perform a full architecture investigation.
+
+The backend stack is:
+Node
+Express
+Drizzle ORM
+Postgres
+
+The primary order table is:
+
+all_orders
+
+This audit must map where the true state of each object lives and where state changes occur.
+
+------------------------------------------------
+SECTION 1 — DOMAIN OBJECT DISCOVERY
+------------------------------------------------
+
+Identify every major domain object in EPOCH.
+
+Expected examples may include:
+
+Orders
+Production Orders
+Purchase Orders
+Inventory Items / Parts
+Customers
+Shipments
+Receipts
+Departments
+Vendors
+Payments
+
+For each object report:
+
+Object name
+Primary database table
+Related tables
+Primary key
+Human identifier (order number, PO number, etc)
+
+------------------------------------------------
+SECTION 2 — ORDER DOMAIN TRUTH MODEL
+------------------------------------------------
+
+Perform a deep trace of the Order domain.
+
+Identify:
+
+Primary table (expected: all_orders)
+All fields representing workflow state
+
+Examples:
+
+status
+department
+stage
+workflow_state
+production_status
+shipping_status
+
+List every file that mutates these fields.
+
+For each mutation report:
+
+File path
+Function name
+API endpoint
+Fields modified
+
+Example output format:
+
+server/routes/orders.ts
+POST /api/orders/update-status
+Fields mutated:
+status
+department
+
+------------------------------------------------
+SECTION 3 — DEPARTMENT QUEUE ARCHITECTURE
+------------------------------------------------
+
+Identify how department queues are generated.
+
+Search the codebase for all department views including:
+
+CSR
+Layup
+CNC
+Finish
+Paint
+QC
+Shipping
+
+For each department queue report:
+
+UI page file
+API endpoint
+Database query used
+Filters applied
+
+Example output:
+
+Finish Queue
+client/src/pages/FinishQueue.tsx
+GET /api/orders/finish-queue
+
+Query logic:
+SELECT * FROM all_orders
+WHERE department = 'finish'
+AND status = 'ready_for_finish'
+
+Also identify any additional filters such as:
+
+tags
+feature flags
+production state
+schedule windows
+
+------------------------------------------------
+SECTION 4 — STATUS TRANSITION LOCATIONS
+------------------------------------------------
+
+Identify every place in the codebase where workflow state transitions occur.
+
+Examples may include:
+
+Department progression buttons
+Order status update APIs
+Production completion events
+Shipping completion events
+
+For each state mutation report:
+
+File path
+Function
+API endpoint
+Fields modified
+
+Example:
+
+advanceDepartment()
+server/routes/production.ts
+
+Updates:
+all_orders.department
+all_orders.status
+
+------------------------------------------------
+SECTION 5 — EVENT SYSTEMS
+------------------------------------------------
+
+Identify all event or logging systems in EPOCH.
+
+Possible examples:
+
+Inventory Event Engine
+Audit Trail
+Activity Log
+Status Change History
+Shipping Events
+Production Events
+
+For each event system report:
+
+Database table
+Trigger location
+Server file
+Event type
+
+Example:
+
+inventory_events
+Triggered from:
+server/services/inventoryEventEngine.ts
+
+Event types:
+receipt_pending
+consumption
+adjustment
+
+------------------------------------------------
+SECTION 6 — OBJECT DEPENDENCY GRAPH
+------------------------------------------------
+
+Map the dependency graph between major objects.
+
+Focus on:
+
+Orders
+Production Orders
+Purchase Orders
+Inventory
+Shipments
+
+Example output:
+
+Order
+→ production_orders
+→ inventory_allocations
+→ shipments
+→ payments
+
+Identify how these are joined in queries.
+
+------------------------------------------------
+SECTION 7 — QUEUE MEMBERSHIP LOGIC
+------------------------------------------------
+
+Identify how the system determines if an object belongs in a queue.
+
+Examples:
+
+department field
+status field
+tags
+feature flags
+schedule status
+
+For each queue determine:
+
+Required conditions
+Filters
+Hidden conditions
+
+Example:
+
+Finish Queue requires:
+department = 'finish'
+status = 'ready_for_finish'
+tag != 'paint_required'
+
+------------------------------------------------
+SECTION 8 — EXISTING OBSERVABILITY
+------------------------------------------------
+
+Identify all logging or audit visibility already present.
+
+Examples:
+
+audit_trail table
+inventory_events table
+activity_log
+status_change_history
+
+For each report:
+
+Table
+Fields recorded
+What triggers the log
+
+------------------------------------------------
+SECTION 9 — SOURCE OF TRUTH CONFLICTS
+------------------------------------------------
+
+Identify potential "multiple sources of truth".
+
+Flag cases where:
+
+The same state is stored in multiple tables
+Status is duplicated across objects
+Department is inferred rather than stored
+Queue membership depends on hidden filters
+
+Label these findings as:
+
+⚠ SOURCE OF TRUTH CONFLICT
+
+------------------------------------------------
+SECTION 10 — DOMAIN TRUTH INSPECTOR DATA REQUIREMENTS
+------------------------------------------------
+
+Based on the full audit above, determine exactly what the Domain Truth Inspector must read.
+
+For example:
+
+Order Inspector must read:
+all_orders
+production_orders
+inventory_allocations
+shipments
+audit_trail
+inventory_events
+
+------------------------------------------------
+SECTION 11 — MISSING VISIBILITY
+------------------------------------------------
+
+Identify areas where debugging is currently impossible due to missing observability.
+
+Examples:
+
+State changes with no audit entry
+Queue membership logic hidden in frontend filters
+Inventory events without logging
+
+------------------------------------------------
+SECTION 12 — FINAL SYSTEM TRUTH MAP
+------------------------------------------------
+
+Produce a final summary explaining:
+
+Where the true state of each domain object lives
+Where state transitions occur
+Where queues are derived from
+Why objects may disappear from queues
+
+This report will be used to design the Domain Truth Inspector UI.

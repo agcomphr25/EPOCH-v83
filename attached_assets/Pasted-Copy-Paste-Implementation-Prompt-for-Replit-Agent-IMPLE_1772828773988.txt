@@ -1,0 +1,220 @@
+Copy-Paste Implementation Prompt for Replit Agent
+IMPLEMENTATION TASK — FIX PURCHASING ROUTING + CONSOLIDATED NEEDS GROUPING
+
+Goal:
+Improve the EPOCH purchasing workflow so that parts requests automatically route to the correct purchasing source based on the inventory item configuration.
+
+Currently every request lands in "Unassigned" because parts_requests.vendor_id is not auto-populated.
+
+We will implement automatic routing using the inventory item's `source` field.
+
+IMPORTANT:
+Make changes carefully and keep backward compatibility with the current schema.
+Do NOT delete fields or tables.
+
+--------------------------------
+
+STEP 1 — AUTO-ASSIGN VENDOR WHEN A REQUEST IS CREATED
+
+Locate the API route that creates part requests.
+
+Expected file locations (search if needed):
+
+server/src/routes/partsRequests.ts
+server/src/routes/inventory.ts
+server/src/routes/index.ts
+
+Find the POST route that inserts into:
+
+parts_requests
+
+Before inserting the request, perform the following logic:
+
+1. If agPartNumber is provided:
+   fetch the corresponding inventory item.
+
+Example query:
+
+SELECT vendor_id, source, default_order_method
+FROM inventory_items
+WHERE ag_part_number = ?
+
+2. Determine the purchasing source.
+
+Logic:
+
+IF inventory_items.source matches an existing vendor name
+    resolve vendor_id from vendors table
+    use that as parts_requests.vendor_id
+
+ELSE IF inventory_items.vendor_id exists
+    fallback to that
+
+ELSE
+    leave vendor_id NULL
+
+Example:
+
+Inventory item:
+vendor_id = Acme Fasteners
+source = "Amazon"
+
+Look up vendor "Amazon" in vendors table.
+
+If found:
+vendor_id = Amazon vendor record
+
+3. Copy default_order_method
+
+If inventory_items.default_order_method exists
+set parts_requests.order_method to that value.
+
+4. Insert request with these fields populated.
+
+Result:
+New requests automatically appear in the correct supplier group.
+
+--------------------------------
+
+STEP 2 — NORMALIZE SOURCE STRING
+
+Because `inventory_items.source` is currently free text, normalize it before matching.
+
+Create a helper function:
+
+resolveSourceVendorId(sourceText)
+
+Logic:
+
+1. Trim whitespace
+2. Convert to lowercase
+3. Attempt exact match against vendors.name (case-insensitive)
+4. If no match return null
+
+Example:
+
+"amazon"
+"Amazon"
+"Amazon.com"
+
+should all resolve to vendor "Amazon" if that vendor exists.
+
+--------------------------------
+
+STEP 3 — UPDATE CONSOLIDATED NEEDS GROUPING
+
+File:
+
+client/src/pages/ConsolidatedNeedsListPage.tsx
+
+Current grouping logic uses:
+
+request.vendorId
+
+Keep this behavior.
+
+BUT improve display labels.
+
+When rendering groups:
+
+IF vendorId exists
+    show vendor.name
+
+ELSE IF request.orderMethod === "WEBSITE"
+    group by normalized source text if available
+
+ELSE
+    show "Unassigned"
+
+--------------------------------
+
+STEP 4 — ADD SOURCE DISPLAY TO REQUEST ROW
+
+In the Consolidated Needs UI row component add:
+
+Manufacturer (inventory_items.vendor_id)
+Source (inventory_items.source)
+
+Example row:
+
+GJ101 – Test Part
+Manufacturer: Acme Fasteners
+Source: Amazon
+Qty: 4
+
+This helps buyers understand where the item normally comes from.
+
+--------------------------------
+
+STEP 5 — BREAK OUT WEBSITE ORDERS BY SOURCE
+
+Currently:
+
+orderMethod = WEBSITE
+→ grouped under one bucket
+
+Instead:
+
+Group WEBSITE requests by their source field.
+
+Example UI grouping:
+
+Amazon
+   3 parts
+
+McMaster
+   4 parts
+
+Tekton
+   2 parts
+
+--------------------------------
+
+STEP 6 — DO NOT CHANGE DATABASE STRUCTURE
+
+Important constraints:
+
+Do NOT rename columns.
+
+Do NOT migrate source to FK yet.
+
+Do NOT modify vendors table structure.
+
+This change should work with the existing schema.
+
+--------------------------------
+
+STEP 7 — ADD SAFE FALLBACK BEHAVIOR
+
+If an item has:
+
+no source
+and no vendor_id
+
+then leave the request as:
+
+vendor_id = NULL
+
+This keeps the "Unassigned" bucket working.
+
+--------------------------------
+
+STEP 8 — ADD COMMENTS FOR FUTURE ARCHITECTURE
+
+Add comments in code noting that a future improvement would be:
+
+inventory_items.source_vendor_id (FK)
+supplier_items table
+
+But do NOT implement those changes now.
+
+--------------------------------
+
+DELIVERABLE
+
+Provide a summary of:
+
+1. files modified
+2. request creation logic added
+3. grouping logic changes
+4. example before/after request flow

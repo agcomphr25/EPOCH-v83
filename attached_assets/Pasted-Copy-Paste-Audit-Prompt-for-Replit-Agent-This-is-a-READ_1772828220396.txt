@@ -1,0 +1,238 @@
+Copy-Paste Audit Prompt for Replit Agent
+This is a READ-ONLY FORENSIC + UX ARCHITECTURE AUDIT.
+
+Do NOT modify any code.
+
+Goal:
+Understand how Vendor vs Source are modeled in inventory items and determine whether the Consolidated Needs page should group by Vendor or Source.
+
+Context:
+
+In the inventory item editor (/inventory/enhanced-mrp) we have these fields:
+
+Vendor:
+- the company that manufactures the item
+
+Source:
+- where we purchase the item
+- examples:
+    Vendor = Acme
+    Source = Amazon
+
+Sometimes Vendor == Source
+Sometimes they differ.
+
+Example:
+
+AG Part: Bolt-123
+Vendor: Acme Fasteners
+Source: Amazon
+
+The Consolidated Needs page currently groups requests by Vendor.
+
+But purchasing decisions should likely be grouped by Source instead.
+
+We need to audit how the system currently handles this.
+
+--------------------------------
+
+SECTION 1 — DATABASE SCHEMA AUDIT
+
+Locate and report the schema for:
+
+inventory_items
+parts
+inventory_parts
+purchase_order_items
+purchase_orders
+parts_requests
+inventory_requests
+or any related tables.
+
+For each table report:
+
+table name
+columns
+relationships
+foreign keys
+
+Specifically identify fields like:
+
+vendor
+vendorId
+source
+sourceName
+supplier
+supplierId
+manufacturer
+manufacturerId
+
+We need to know exactly where Vendor and Source live in the database.
+
+--------------------------------
+
+SECTION 2 — INVENTORY ITEM EDITOR
+
+Locate the code for:
+
+/inventory/enhanced-mrp
+Edit Inventory Item modal
+
+Report:
+
+component file path
+form fields
+API endpoint used to save
+API endpoint used to load item data
+
+Trace:
+
+Frontend form field
+↓
+API request payload
+↓
+Server route
+↓
+Database column
+
+Specifically show how these fields flow:
+
+Vendor
+Source
+Secondary Source
+Supplier Part #
+
+--------------------------------
+
+SECTION 3 — CONSOLIDATED NEEDS PAGE
+
+Locate code for:
+
+/inventory/consolidated-needs
+
+Report:
+
+page file
+grouping logic
+data fetching endpoint
+query or service used to generate grouped results
+
+We need to identify:
+
+Where requests are grouped
+Whether grouping key is:
+
+vendor
+vendorId
+supplier
+source
+something else
+
+Show the exact grouping code.
+
+--------------------------------
+
+SECTION 4 — PART REQUEST FLOW
+
+Trace the complete lifecycle:
+
+Employee requests a part
+↓
+Part request stored
+↓
+Request appears in Consolidated Needs
+↓
+Buyer creates PO
+
+Identify:
+
+Where vendor or source is assigned
+How the system determines which vendor group the request belongs to.
+
+--------------------------------
+
+SECTION 5 — PURCHASING MODEL ANALYSIS
+
+Based on the codebase, determine:
+
+Current conceptual model:
+
+Vendor = ?
+Source = ?
+
+Does the system treat them differently or interchangeably?
+
+Explain why items may appear under "Unassigned".
+
+--------------------------------
+
+SECTION 6 — UX / DATA MODEL PROBLEMS
+
+Identify any problems such as:
+
+Vendor used for purchasing grouping
+Source ignored
+Requests not inheriting source from inventory item
+Duplicate vendor/source fields
+Grouping mismatches
+
+--------------------------------
+
+SECTION 7 — PROPOSED MODEL (DO NOT IMPLEMENT)
+
+Propose a clean purchasing architecture for EPOCH:
+
+Inventory Item Fields
+
+Manufacturer (Vendor)
+Primary Source (Supplier)
+Secondary Source
+Supplier Part Number
+
+Consolidated Needs Grouping
+
+Group by Source (who we order from)
+
+Show example UI grouping:
+
+Amazon
+  Bolt-123
+  Nut-456
+
+McMaster-Carr
+  Washer-789
+
+Acme Fasteners
+  Custom Bolt
+
+Explain benefits for purchasing workflow.
+
+--------------------------------
+
+SECTION 8 — QUESTIONS FOR THE USER
+
+After completing the audit, ask the user clarifying questions including:
+
+1) Should Consolidated Needs group by Source instead of Vendor?
+
+2) Should each inventory item support multiple sources with priority?
+
+3) When an employee requests a part, should the system automatically assign the request to the item's primary source?
+
+4) Should buyers be able to override the source when creating a PO?
+
+5) Should the system detect when Vendor == Source and simplify the UI?
+
+--------------------------------
+
+DELIVERABLE
+
+Produce a structured forensic report with sections:
+
+1. Schema findings
+2. Data flow findings
+3. Consolidated needs grouping logic
+4. Root cause of assignment issues
+5. Recommended purchasing model
+6. UX improvements
+7. Clarifying questions

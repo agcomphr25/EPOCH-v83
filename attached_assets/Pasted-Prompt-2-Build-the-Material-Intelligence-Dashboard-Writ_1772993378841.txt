@@ -1,0 +1,181 @@
+Prompt 2 — Build the Material Intelligence Dashboard
+Writing
+
+You are implementing the Material Intelligence Dashboard in EPOCH.
+
+This dashboard uses existing systems:
+
+inventory_balances
+inventory_transactions
+allocation engine
+MRP planning engine
+
+This is a read-only analytics dashboard.
+
+Do NOT mutate any inventory data.
+
+OBJECTIVE
+
+Create a new dashboard page that answers:
+
+Can we build current orders?
+Which materials are blocking production?
+What should purchasing order next?
+
+SECTION 1 — NEW PAGE
+
+Create:
+
+client/src/pages/MaterialIntelligenceDashboard.tsx
+
+Route:
+
+/inventory/material-intelligence
+
+SECTION 2 — BUILD CAPACITY PANEL
+
+Use existing function:
+
+calculateBuildCapacity()
+
+Display:
+
+Orders queued
+Orders buildable
+Limiting material
+
+Example UI:
+
+Build Capacity
+
+Orders in Queue: 120
+Buildable With Current Inventory: 94
+Limiting Material: Resin A
+
+SECTION 3 — BLOCKING MATERIALS PANEL
+
+Call existing API:
+
+GET /api/mrp/material-readiness
+
+Display table:
+
+Material
+Required
+On Hand
+Allocated
+Available
+Shortage
+
+Highlight rows where shortage > 0.
+
+SECTION 4 — PURCHASING RADAR
+
+Create new backend service:
+
+server/src/services/materialIntelligenceService.ts
+
+Function:
+
+calculatePurchasingRadar()
+
+Logic:
+
+For each material:
+
+days_remaining =
+available_inventory / average_daily_demand
+
+average_daily_demand =
+total_required / number_of_active_orders
+
+Return:
+
+material
+days_remaining
+recommended_order_quantity
+
+SECTION 5 — INVENTORY PRESSURE PANEL
+
+Display per material:
+
+On Hand
+Allocated
+Available
+
+Use:
+
+inventory_balances
+
+Formula:
+
+available = quantity_on_hand - quantity_allocated
+
+Color rules:
+
+green > 50% available
+yellow < 50%
+red shortage
+
+SECTION 6 — API
+
+Create endpoint:
+
+GET /api/material-intelligence/dashboard
+
+Returns:
+
+{
+build_capacity,
+blocking_materials,
+purchasing_radar,
+inventory_pressure
+}
+
+SECTION 7 — UI LAYOUT
+
+Page layout:
+
+Material Intelligence
+
+[ Build Capacity ]
+
+[ Blocking Materials Table ]
+
+[ Purchasing Radar ]
+
+[ Inventory Pressure ]
+
+Use shadcn Card components.
+
+SECTION 8 — PERFORMANCE
+
+Avoid N+1 queries.
+
+Use batched queries.
+
+Cache results for 30 seconds using TanStack Query.
+
+SECTION 9 — SAFETY
+
+This dashboard must be read-only.
+
+Do not perform:
+
+INSERT
+UPDATE
+DELETE
+
+OUTPUT
+
+Return:
+
+new backend service
+
+new API route
+
+dashboard page
+
+queries used
+
+UI components

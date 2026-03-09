@@ -11,7 +11,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Calculator,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
@@ -29,7 +28,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -40,12 +41,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+
 import { Badge } from '@/components/ui/badge';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
@@ -90,6 +86,8 @@ interface InventoryFormData {
   hasOtherDocs: boolean;
   assignedToAsset: string;
   defaultOrderMethod: string;
+  purchaseUnitId: string;
+  usageUnitId: string;
 }
 
 const InventoryForm = ({
@@ -149,6 +147,16 @@ const InventoryForm = ({
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
 
+  const { data: allUnits = [] } = useQuery<Array<{ id: number; symbol: string; family: string; family_id: number }>>({
+    queryKey: ['/api/units'],
+  });
+
+  const unitsByFamily = allUnits.reduce((acc, unit) => {
+    if (!acc[unit.family]) acc[unit.family] = [];
+    acc[unit.family].push(unit);
+    return acc;
+  }, {} as Record<string, typeof allUnits>);
+
   const checkDuplicate = useCallback(async (partNumber: string) => {
     if (!partNumber.trim()) {
       setDuplicateWarning(null);
@@ -191,9 +199,9 @@ const InventoryForm = ({
     }}
     className="space-y-6 max-h-[70vh] overflow-y-auto pr-2"
   >
-    {/* Basic Information Section */}
+    {/* Section 1 — Item Identity */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">Basic Information</h4>
+      <h4 className="text-md font-semibold border-b pb-2">Item Identity</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="agPartNumber">AG Part# *</Label>
@@ -284,13 +292,135 @@ const InventoryForm = ({
           </Label>
         </div>
       </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="utilizedInPL1"
+            checked={formData.utilizedInPL1}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInPL1', checked as boolean)
+            }
+            data-testid="checkbox-utilizedInPL1"
+          />
+          <Label htmlFor="utilizedInPL1" className="cursor-pointer">PL1</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="utilizedInPL2"
+            checked={formData.utilizedInPL2}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInPL2', checked as boolean)
+            }
+            data-testid="checkbox-utilizedInPL2"
+          />
+          <Label htmlFor="utilizedInPL2" className="cursor-pointer">PL2</Label>
+        </div>
+        {formData.utilizedInPL2 && (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="traceabilityRequired"
+              checked={formData.traceabilityRequired}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  onTraceabilityClick();
+                } else {
+                  onCheckboxChange('traceabilityRequired', false);
+                  onSaveTraceabilityFields([]);
+                }
+              }}
+              data-testid="checkbox-traceabilityRequired"
+            />
+            <Label
+              htmlFor="traceabilityRequired"
+              className="cursor-pointer"
+              onClick={(e) => {
+                if (formData.traceabilityRequired) {
+                  e.preventDefault();
+                  onTraceabilityClick();
+                }
+              }}
+            >
+              Traceability Required
+              {formData.traceabilityFields.length > 0 && (
+                <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                  ({formData.traceabilityFields.length} field{formData.traceabilityFields.length !== 1 ? 's' : ''})
+                </span>
+              )}
+            </Label>
+          </div>
+        )}
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="utilizedInFacilities"
+            checked={formData.utilizedInFacilities}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInFacilities', checked as boolean)
+            }
+            data-testid="checkbox-utilizedInFacilities"
+          />
+          <Label htmlFor="utilizedInFacilities" className="cursor-pointer">Facilities</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="utilizedInAdmin"
+            checked={formData.utilizedInAdmin}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInAdmin', checked as boolean)
+            }
+            data-testid="checkbox-utilizedInAdmin"
+          />
+          <Label htmlFor="utilizedInAdmin" className="cursor-pointer">Admin</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="utilizedInServices"
+            checked={formData.utilizedInServices}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInServices', checked as boolean)
+            }
+            data-testid="checkbox-utilizedInServices"
+          />
+          <Label htmlFor="utilizedInServices" className="cursor-pointer">Services</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isPacket"
+            checked={formData.isPacket}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isPacket', checked as boolean)
+            }
+            data-testid="checkbox-isPacket"
+          />
+          <Label htmlFor="isPacket" className="cursor-pointer">Packet</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isPacketPart"
+            checked={formData.isPacketPart}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isPacketPart', checked as boolean)
+            }
+            data-testid="checkbox-isPacketPart"
+          />
+          <Label htmlFor="isPacketPart" className="cursor-pointer">Packet Part</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isFabric"
+            checked={formData.isFabric}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isFabric', checked as boolean)
+            }
+            data-testid="checkbox-isFabric"
+          />
+          <Label htmlFor="isFabric" className="cursor-pointer">Fabric (Cutting Table)</Label>
+        </div>
+      </div>
     </div>
 
-    {/* Supplier Information Section */}
+    {/* Section 2 — Purchasing */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">
-        Supplier Information
-      </h4>
+      <h4 className="text-md font-semibold border-b pb-2">Purchasing</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="vendorId">Vendor</Label>
@@ -313,14 +443,14 @@ const InventoryForm = ({
           </Select>
         </div>
         <div>
-          <Label htmlFor="source">Source</Label>
+          <Label htmlFor="supplierPartNumber">Supplier Part #</Label>
           <Input
-            id="source"
-            name="source"
-            value={formData.source}
+            id="supplierPartNumber"
+            name="supplierPartNumber"
+            value={formData.supplierPartNumber}
             onChange={onChange}
-            placeholder="Enter source (text field)"
-            data-testid="input-source"
+            placeholder="Enter supplier part #"
+            data-testid="input-supplierPartNumber"
           />
         </div>
         <div>
@@ -335,20 +465,7 @@ const InventoryForm = ({
           />
         </div>
         <div>
-          <Label htmlFor="supplierPartNumber">Supplier Part #</Label>
-          <Input
-            id="supplierPartNumber"
-            name="supplierPartNumber"
-            value={formData.supplierPartNumber}
-            onChange={onChange}
-            placeholder="Enter supplier part #"
-            data-testid="input-supplierPartNumber"
-          />
-        </div>
-        <div>
-          <Label htmlFor="secondarySupplierPartNumber">
-            Secondary Supplier Part #
-          </Label>
+          <Label htmlFor="secondarySupplierPartNumber">Secondary Supplier Part #</Label>
           <Input
             id="secondarySupplierPartNumber"
             name="secondarySupplierPartNumber"
@@ -357,31 +474,6 @@ const InventoryForm = ({
             placeholder="Enter secondary supplier part #"
             data-testid="input-secondarySupplierPartNumber"
           />
-        </div>
-      </div>
-    </div>
-
-    {/* Cost & Quantity Information Section */}
-    <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">
-        Cost & Quantity (MRP/COGS)
-      </h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="costPer">Purchase Cost ($)</Label>
-          <Input
-            id="costPer"
-            name="costPer"
-            type="number"
-            step="0.01"
-            value={formData.costPer}
-            onChange={onChange}
-            placeholder="491.20"
-            data-testid="input-costPer"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Cost from vendor (e.g., $491.20 for 80lb box)
-          </p>
         </div>
         <div>
           <Label htmlFor="vendorUnit">Vendor Unit</Label>
@@ -419,42 +511,30 @@ const InventoryForm = ({
           </p>
         </div>
         <div>
-          <Label htmlFor="purchaseUnit">Purchase Unit</Label>
+          <Label htmlFor="purchaseUnitId">Purchase Unit</Label>
           <Select
-            value={formData.purchaseUnit}
-            onValueChange={(value) => onSelectChange('purchaseUnit', value)}
+            value={formData.purchaseUnitId || ''}
+            onValueChange={(value) => {
+              const unit = allUnits.find(u => u.id.toString() === value);
+              onSelectChange('purchaseUnitId', value);
+              if (unit) onSelectChange('purchaseUnit', unit.symbol);
+            }}
           >
-            <SelectTrigger id="purchaseUnit" data-testid="select-purchaseUnit">
+            <SelectTrigger id="purchaseUnitId" data-testid="select-purchaseUnitId">
               <SelectValue placeholder="Select unit" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="hr">hr (hour)</SelectItem>
-              <SelectItem value="min">min (minute)</SelectItem>
-              <SelectItem value="oz">oz (ounce)</SelectItem>
-              <SelectItem value="lb">lb (pound)</SelectItem>
-              <SelectItem value="g">g (gram)</SelectItem>
-              <SelectItem value="kg">kg (kilogram)</SelectItem>
-              <SelectItem value="ml">ml (milliliter)</SelectItem>
-              <SelectItem value="L">L (liter)</SelectItem>
-              <SelectItem value="gal">gal (gallon)</SelectItem>
-              <SelectItem value="qt">qt (quart)</SelectItem>
-              <SelectItem value="pt">pt (pint)</SelectItem>
-              <SelectItem value="fl oz">fl oz (fluid ounce)</SelectItem>
-              <SelectItem value="ft">ft (foot)</SelectItem>
-              <SelectItem value="in">in (inch)</SelectItem>
-              <SelectItem value="m">m (meter)</SelectItem>
-              <SelectItem value="cm">cm (centimeter)</SelectItem>
-              <SelectItem value="mm">mm (millimeter)</SelectItem>
-              <SelectItem value="ea">ea (each)</SelectItem>
-              <SelectItem value="pc">pc (piece)</SelectItem>
-              <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
-              <SelectItem value="sq in">sq in (square inch)</SelectItem>
-              <SelectItem value="sq m">sq m (square meter)</SelectItem>
+              {Object.entries(unitsByFamily).map(([family, units]) => (
+                <SelectGroup key={family}>
+                  <SelectLabel className="capitalize">{family}</SelectLabel>
+                  {units.map(u => (
+                    <SelectItem key={u.id} value={u.id.toString()}>{u.symbol}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-gray-500 mt-1">
-            Unit of measurement (e.g., "g", "oz", "ea")
-          </p>
+          <p className="text-xs text-gray-500 mt-1">Measurement unit for purchasing (must match usage unit family)</p>
         </div>
         <div>
           <Label htmlFor="purchaseQuantity">Purchase Quantity</Label>
@@ -473,83 +553,19 @@ const InventoryForm = ({
           </p>
         </div>
         <div>
-          <Label htmlFor="consumptionRate">Consumption Rate</Label>
+          <Label htmlFor="costPer">Purchase Cost ($)</Label>
           <Input
-            id="consumptionRate"
-            name="consumptionRate"
+            id="costPer"
+            name="costPer"
             type="number"
             step="0.01"
-            value={formData.consumptionRate}
+            value={formData.costPer}
             onChange={onChange}
-            placeholder="50"
-            data-testid="input-consumptionRate"
-          />
-          <p className="text-xs text-gray-500 mt-1">Amount per item</p>
-        </div>
-        <div>
-          <Label htmlFor="usageUnit">Usage Unit</Label>
-          <Select
-            value={formData.usageUnit}
-            onValueChange={(value) => onSelectChange('usageUnit', value)}
-          >
-            <SelectTrigger id="usageUnit" data-testid="select-usageUnit">
-              <SelectValue placeholder="Select unit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="hr">hr (hour)</SelectItem>
-              <SelectItem value="min">min (minute)</SelectItem>
-              <SelectItem value="oz">oz (ounce)</SelectItem>
-              <SelectItem value="lb">lb (pound)</SelectItem>
-              <SelectItem value="g">g (gram)</SelectItem>
-              <SelectItem value="kg">kg (kilogram)</SelectItem>
-              <SelectItem value="ml">ml (milliliter)</SelectItem>
-              <SelectItem value="L">L (liter)</SelectItem>
-              <SelectItem value="gal">gal (gallon)</SelectItem>
-              <SelectItem value="qt">qt (quart)</SelectItem>
-              <SelectItem value="pt">pt (pint)</SelectItem>
-              <SelectItem value="fl oz">fl oz (fluid ounce)</SelectItem>
-              <SelectItem value="ft">ft (foot)</SelectItem>
-              <SelectItem value="in">in (inch)</SelectItem>
-              <SelectItem value="m">m (meter)</SelectItem>
-              <SelectItem value="cm">cm (centimeter)</SelectItem>
-              <SelectItem value="mm">mm (millimeter)</SelectItem>
-              <SelectItem value="ea">ea (each)</SelectItem>
-              <SelectItem value="pc">pc (piece)</SelectItem>
-              <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
-              <SelectItem value="sq in">sq in (square inch)</SelectItem>
-              <SelectItem value="sq m">sq m (square meter)</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-500 mt-1">
-            Unit of measurement (e.g., "g", "oz", "ea")
-          </p>
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="cogsPerUnit">COGS per Unit ($)</Label>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Calculator className="w-4 h-4 text-blue-500" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Auto-calculated from conversion data</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <Input
-            id="cogsPerUnit"
-            name="cogsPerUnit"
-            type="number"
-            step="0.01"
-            value={formData.cogsPerUnit}
-            onChange={onChange}
-            placeholder="0.68"
-            data-testid="input-cogsPerUnit"
+            placeholder="491.20"
+            data-testid="input-costPer"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Auto-calculated or manually editable
+            Cost from vendor (e.g., $491.20 for 80lb box)
           </p>
         </div>
         <div>
@@ -563,154 +579,123 @@ const InventoryForm = ({
             data-testid="input-orderDate"
           />
         </div>
+        <div>
+          <Label htmlFor="leadTimeDays">Lead Time</Label>
+          <Input
+            id="leadTimeDays"
+            name="leadTimeDays"
+            value={formData.leadTimeDays}
+            onChange={onChange}
+            placeholder="e.g., 3 days, 4 weeks, 2 months"
+            data-testid="input-leadTimeDays"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Lead time for forecasting/MRP calculations
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="defaultOrderMethod">Default Order Method</Label>
+          <Select
+            value={formData.defaultOrderMethod || 'none'}
+            onValueChange={(value) => onSelectChange('defaultOrderMethod', value === 'none' ? '' : value)}
+          >
+            <SelectTrigger data-testid="select-defaultOrderMethod">
+              <SelectValue placeholder="Select default order method (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="PO">PO</SelectItem>
+              <SelectItem value="WEBSITE">Website</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Default procurement method for new parts requests</p>
+        </div>
       </div>
     </div>
 
-    {/* Production Line Utilization Section */}
+    {/* Section 3 — Manufacturing Usage */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">
-        Production Line Utilization
-      </h4>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInPL1"
-            checked={formData.utilizedInPL1}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInPL1', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInPL1"
+      <h4 className="text-md font-semibold border-b pb-2">Manufacturing Usage</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="consumptionRate">Usage Per Item</Label>
+          <Input
+            id="consumptionRate"
+            name="consumptionRate"
+            type="number"
+            step="0.01"
+            value={formData.consumptionRate}
+            onChange={onChange}
+            placeholder="50"
+            data-testid="input-consumptionRate"
           />
-          <Label htmlFor="utilizedInPL1" className="cursor-pointer">
-            PL1
-          </Label>
+          <p className="text-xs text-gray-500 mt-1">Amount of this material required to produce one finished unit</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInPL2"
-            checked={formData.utilizedInPL2}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInPL2', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInPL2"
-          />
-          <Label htmlFor="utilizedInPL2" className="cursor-pointer">
-            PL2
-          </Label>
+        <div>
+          <Label htmlFor="usageUnitId">Usage Unit</Label>
+          <Select
+            value={formData.usageUnitId || ''}
+            onValueChange={(value) => {
+              const unit = allUnits.find(u => u.id.toString() === value);
+              onSelectChange('usageUnitId', value);
+              if (unit) onSelectChange('usageUnit', unit.symbol);
+            }}
+          >
+            <SelectTrigger id="usageUnitId" data-testid="select-usageUnit">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(unitsByFamily).map(([family, units]) => (
+                <SelectGroup key={family}>
+                  <SelectLabel className="capitalize">{family}</SelectLabel>
+                  {units.map(u => (
+                    <SelectItem key={u.id} value={u.id.toString()}>{u.symbol}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">
+            Unit of measurement (e.g., "g", "oz", "ea")
+          </p>
         </div>
-        {formData.utilizedInPL2 && (
-          <div className="flex items-center space-x-2 ml-6">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="traceabilityRequired"
-                checked={formData.traceabilityRequired}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    onTraceabilityClick();
-                  } else {
-                    onCheckboxChange('traceabilityRequired', false);
-                    onSaveTraceabilityFields([]);
-                  }
-                }}
-                data-testid="checkbox-traceabilityRequired"
-              />
-              <Label
-                htmlFor="traceabilityRequired"
-                className="cursor-pointer"
-                onClick={(e) => {
-                  if (formData.traceabilityRequired) {
-                    e.preventDefault();
-                    onTraceabilityClick();
-                  }
-                }}
-              >
-                Traceability Required
-                {formData.traceabilityFields.length > 0 && (
-                  <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
-                    ({formData.traceabilityFields.length} field{formData.traceabilityFields.length !== 1 ? 's' : ''})
-                  </span>
-                )}
-              </Label>
-            </div>
+      </div>
+    </div>
+
+    {/* Section 4 — Calculated Values */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">Calculated Values</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label>Cost per Usage Unit</Label>
+          <div
+            className="mt-1 flex items-center h-9 px-3 rounded-md border border-input bg-muted text-sm font-medium"
+            data-testid="display-costPerUsageUnit"
+          >
+            {(() => {
+              const costPer = parseFloat(formData.costPer);
+              const purchaseQty = parseFloat(formData.purchaseQuantity);
+              if (!costPer || !purchaseQty || isNaN(costPer) || isNaN(purchaseQty)) {
+                return <span className="text-muted-foreground">—</span>;
+              }
+              const val = costPer / purchaseQty;
+              const unit = formData.usageUnit || '';
+              return `$${val.toFixed(4)}${unit ? ` / ${unit}` : ''}`;
+            })()}
           </div>
-        )}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInFacilities"
-            checked={formData.utilizedInFacilities}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInFacilities', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInFacilities"
-          />
-          <Label htmlFor="utilizedInFacilities" className="cursor-pointer">
-            Facilities
-          </Label>
+          <p className="text-xs text-muted-foreground mt-1">Purchase Cost ÷ Purchase Quantity</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInAdmin"
-            checked={formData.utilizedInAdmin}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInAdmin', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInAdmin"
-          />
-          <Label htmlFor="utilizedInAdmin" className="cursor-pointer">
-            Admin
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInServices"
-            checked={formData.utilizedInServices}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInServices', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInServices"
-          />
-          <Label htmlFor="utilizedInServices" className="cursor-pointer">
-            Services
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="isPacket"
-            checked={formData.isPacket}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('isPacket', checked as boolean)
-            }
-            data-testid="checkbox-isPacket"
-          />
-          <Label htmlFor="isPacket" className="cursor-pointer">
-            Packet
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="isPacketPart"
-            checked={formData.isPacketPart}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('isPacketPart', checked as boolean)
-            }
-            data-testid="checkbox-isPacketPart"
-          />
-          <Label htmlFor="isPacketPart" className="cursor-pointer">
-            Packet Part
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="isFabric"
-            checked={formData.isFabric}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('isFabric', checked as boolean)
-            }
-            data-testid="checkbox-isFabric"
-          />
-          <Label htmlFor="isFabric" className="cursor-pointer">
-            Fabric (Cutting Table)
-          </Label>
+        <div>
+          <Label>COGS per Item</Label>
+          <div
+            className="mt-1 flex items-center h-9 px-3 rounded-md border border-input bg-muted text-sm font-medium"
+            data-testid="display-cogsPerUnit"
+          >
+            {formData.cogsPerUnit
+              ? `$${parseFloat(formData.cogsPerUnit).toFixed(4)}`
+              : <span className="text-muted-foreground">—</span>}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Cost per Usage Unit × Usage Per Item</p>
         </div>
       </div>
     </div>
@@ -787,37 +772,6 @@ const InventoryForm = ({
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">Assign this item to a specific asset/equipment</p>
-        </div>
-        <div className="md:col-span-2">
-          <Label htmlFor="defaultOrderMethod">Default Order Method</Label>
-          <Select
-            value={formData.defaultOrderMethod || 'none'}
-            onValueChange={(value) => onSelectChange('defaultOrderMethod', value === 'none' ? '' : value)}
-          >
-            <SelectTrigger data-testid="select-defaultOrderMethod">
-              <SelectValue placeholder="Select default order method (optional)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              <SelectItem value="PO">PO</SelectItem>
-              <SelectItem value="WEBSITE">Website</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-500 mt-1">Default procurement method for new parts requests</p>
-        </div>
-        <div>
-          <Label htmlFor="leadTimeDays">Lead Time</Label>
-          <Input
-            id="leadTimeDays"
-            name="leadTimeDays"
-            value={formData.leadTimeDays}
-            onChange={onChange}
-            placeholder="e.g., 3 days, 4 weeks, 2 months"
-            data-testid="input-leadTimeDays"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Lead time for forecasting/MRP calculations
-          </p>
         </div>
         <div className="md:col-span-2">
           <Label htmlFor="notes">Notes</Label>
@@ -1059,6 +1013,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     purchaseQuantity: '',
     consumptionRate: '',
     usageUnit: '',
+    purchaseUnitId: '',
+    usageUnitId: '',
     cogsPerUnit: '',
     orderDate: '',
     department: '',
@@ -1113,11 +1069,15 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       usageUnit,
     } = formData;
 
+    // purchaseUnit is hidden from the UI — fall back to usageUnit so COGS still
+    // calculates correctly when the two units share the same measurement family.
+    const effectivePurchaseUnit = purchaseUnit || usageUnit;
+
     // Only calculate if we have all required fields
     if (
       costPer &&
       purchaseQuantity &&
-      purchaseUnit &&
+      effectivePurchaseUnit &&
       consumptionRate &&
       usageUnit
     ) {
@@ -1128,7 +1088,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       const calculatedCOGS = calculateCOGS(
         vendorPrice,
         purQty,
-        purchaseUnit,
+        effectivePurchaseUnit,
         consRate,
         usageUnit
       );
@@ -1533,6 +1493,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       purchaseQuantity: '',
       consumptionRate: '',
       usageUnit: '',
+      purchaseUnitId: '',
+      usageUnitId: '',
       cogsPerUnit: '',
       orderDate: '',
       department: '',
@@ -1653,7 +1615,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         costPer: formData.costPer !== '' ? parseFloat(formData.costPer) : null,
         vendorUnit: formData.vendorUnit || null,
         purchaseUnitLabel: formData.purchaseUnitLabel || null,
-        purchaseUnit: formData.purchaseUnit || null,
+        purchaseUnit: formData.purchaseUnit || formData.usageUnit || null,
         purchaseQuantity: formData.purchaseQuantity
           ? parseFloat(formData.purchaseQuantity)
           : null,
@@ -1661,6 +1623,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           ? parseFloat(formData.consumptionRate)
           : null,
         usageUnit: formData.usageUnit || null,
+        purchaseUnitId: formData.purchaseUnitId ? parseInt(formData.purchaseUnitId) : null,
+        usageUnitId: formData.usageUnitId ? parseInt(formData.usageUnitId) : null,
         cogsPerUnit: formData.cogsPerUnit !== ''
           ? parseFloat(formData.cogsPerUnit)
           : null,
@@ -1713,6 +1677,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       vendorUnit: item.vendorUnit || '',
       purchaseUnitLabel: item.purchaseUnitLabel || '',
       purchaseUnit: item.purchaseUnit || '',
+      purchaseUnitId: (item as any).purchaseUnitId?.toString() || '',
       purchaseQuantity: item.purchaseQuantity
         ? item.purchaseQuantity.toString()
         : '',
@@ -1720,6 +1685,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         ? item.consumptionRate.toString()
         : '',
       usageUnit: item.usageUnit || '',
+      usageUnitId: (item as any).usageUnitId?.toString() || '',
       cogsPerUnit: item.cogsPerUnit != null ? item.cogsPerUnit.toString() : '',
       orderDate: item.orderDate
         ? new Date(item.orderDate).toISOString().split('T')[0]
@@ -2560,7 +2526,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             <div className="mt-6 border-t pt-6">
               <InventoryItemCostHistory
                 agPartNumber={editingItem.agPartNumber}
-                currentCost={editingItem.latestCost || undefined}
                 vendorUnit={editingItem.vendorUnit || undefined}
                 purchaseUnit={editingItem.purchaseUnit || undefined}
                 purchaseQuantity={editingItem.purchaseQuantity || undefined}

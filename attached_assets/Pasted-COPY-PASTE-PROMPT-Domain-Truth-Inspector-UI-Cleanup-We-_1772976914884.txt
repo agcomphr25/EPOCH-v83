@@ -1,0 +1,178 @@
+COPY-PASTE PROMPT
+Domain Truth Inspector UI Cleanup
+We are improving the Domain Truth Inspector UI for readability.
+
+This change must NOT modify any workflow logic or database queries.
+
+Only improve how information is displayed.
+
+------------------------------------------------
+PART 1 — FIX STATUS DISPLAY
+------------------------------------------------
+
+The status field currently renders a serialized React object like:
+
+{
+  key: null,
+  props: { status: "FINALIZED" }
+}
+
+Extract the actual status value.
+
+Logic:
+
+const rawStatus =
+  order.status?.props?.status ||
+  order.status?.status ||
+  order.status ||
+  "UNKNOWN";
+
+Then display a human-readable version.
+
+Create helper:
+
+function formatStatus(status) {
+  if (!status) return "Unknown";
+  return status
+    .toLowerCase()
+    .replace("_", " ")
+    .replace(/\b\w/g, l => l.toUpperCase());
+}
+
+Display:
+
+Status: Finalized
+
+Also add a small collapsible section:
+
+Raw Status Value
+
+so debugging is still possible.
+
+------------------------------------------------
+PART 2 — REMOVE LEGACY TABLE WARNING
+------------------------------------------------
+
+The warning:
+
+LEGACY_TABLE_MISSING
+Order exists in all_orders but NOT in legacy orders table
+
+should no longer appear.
+
+Update the warnings generator so this warning is suppressed.
+
+Do NOT remove the underlying check entirely — simply do not display it in the UI.
+
+------------------------------------------------
+PART 3 — ADD ORDER TYPE CLASSIFICATION
+------------------------------------------------
+
+Add a new field in Core State:
+
+Order Type
+
+Determine type using:
+
+if model_id === "no_stock"
+    → "Accessory"
+
+else if is_replacement === true
+    → "Replacement"
+
+else
+    → "Stock"
+
+Example display:
+
+Order Type: Accessory
+
+------------------------------------------------
+PART 4 — ADD N/A LOGIC FOR NON-APPLICABLE STEPS
+------------------------------------------------
+
+For orders where:
+
+model_id === "no_stock"
+
+many production steps do not apply.
+
+Update Queue Eligibility and Routing displays:
+
+If accessory order:
+
+Layup → N/A
+Barcode → N/A
+CNC → N/A
+Gunsmith → N/A
+
+Display format:
+
+N/A (Accessory order — no stock required)
+
+Do NOT hide these rows.
+They should appear but show N/A.
+
+------------------------------------------------
+PART 5 — IMPROVE ROUTING FLAGS DISPLAY
+------------------------------------------------
+
+If Routing Flags include:
+
+no_stock_model
+
+display a friendly explanation:
+
+Accessory order detected.
+Production steps skipped until Paint.
+
+------------------------------------------------
+PART 6 — FLIGHT RECORDER TEXT IMPROVEMENT
+------------------------------------------------
+
+Improve event readability.
+
+Instead of:
+
+STATUS_CHANGE
+
+display:
+
+Status changed → Finalized
+
+Instead of:
+
+DEPARTMENT_CHANGE
+
+display:
+
+Department moved → Layup/Plugging → Barcode
+
+------------------------------------------------
+PART 7 — ADD CURRENT PIPELINE POSITION
+------------------------------------------------
+
+In Core State add:
+
+Current Pipeline Position
+
+Example:
+
+Pipeline Stage: Paint
+
+------------------------------------------------
+PART 8 — TESTING
+------------------------------------------------
+
+Verify:
+
+Stock order
+Accessory order
+Replacement order
+
+Confirm:
+
+Status displays correctly
+Accessory orders show N/A steps
+Legacy warning no longer appears
+Flight recorder remains unchanged

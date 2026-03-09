@@ -1,0 +1,302 @@
+READ-ONLY FORENSIC AUDIT — INVENTORY ALLOCATION + MATERIAL READINESS IMPLEMENTATION
+
+Objective
+Verify the correctness, safety, and completeness of the recently implemented features:
+
+1. quantity_available calculation fix
+2. Inventory Allocation Engine
+3. Order lifecycle allocation trigger
+4. MRP material planning engine
+5. Material Readiness API
+6. Material Readiness dashboard
+
+This audit is STRICTLY READ-ONLY.
+
+DO NOT modify code.
+DO NOT modify database records.
+DO NOT run migrations.
+DO NOT refactor.
+
+Only inspect the codebase and report findings.
+
+Produce a structured report with the sections below.
+
+------------------------------------------------
+
+SECTION 1 — FILES MODIFIED OR CREATED
+
+Identify all files changed during the implementation.
+
+Specifically confirm the existence and contents of:
+
+server/src/services/inventoryEventService.ts
+server/src/services/inventoryAllocationService.ts
+server/src/services/mrpMaterialPlanning.ts
+server/src/routes/mrp.ts (or equivalent)
+server/src/routes/orders.ts
+client/src/pages/MaterialReadinessDashboard.tsx
+
+For each file report:
+
+• file path
+• whether it was created or modified
+• key exported functions
+• approximate line count
+• whether TypeScript compiles cleanly
+
+------------------------------------------------
+
+SECTION 2 — INVENTORY_AVAILABLE CALCULATION
+
+Locate the logic that updates inventory_balances.
+
+Confirm that quantity_available is now computed using:
+
+quantity_available =
+quantity_on_hand
+- quantity_allocated
+(- quantity_committed if implemented)
+
+Verify that quantity_available is never independently incremented or decremented.
+
+Search for any code that still performs:
+
+quantity_available +=
+quantity_available -=
+
+Report any violations.
+
+------------------------------------------------
+
+SECTION 3 — ALLOCATION ENGINE
+
+Audit server/src/services/inventoryAllocationService.ts.
+
+Confirm the presence of the following functions:
+
+allocateInventory()
+deallocateInventory()
+consumeAllocatedInventory()
+
+For allocateInventory verify:
+
+• inventory_balances row is fetched
+• quantity_available is checked
+• allocation fails if insufficient inventory
+• quantity_allocated increases correctly
+• quantity_available recalculates correctly
+• inventory_transactions row inserted
+
+For deallocateInventory verify:
+
+• quantity_allocated decreases
+• quantity_available recalculates
+• transaction logged
+
+For consumeAllocatedInventory verify:
+
+• quantity_allocated decreases
+• quantity_on_hand decreases
+• quantity_available recalculates
+• transaction type = consumption
+
+Also verify:
+
+• database transaction wrapping
+• error handling
+• type safety
+
+------------------------------------------------
+
+SECTION 4 — ORDER LIFECYCLE TRIGGER
+
+Locate the code where order status transitions from:
+
+FINALIZED → IN_PROGRESS
+
+Verify that:
+
+• BOM items are fetched
+• required material quantities are calculated
+• allocateInventory() is called for each BOM item
+• allocations occur inside a database transaction
+• status transition fails if allocation fails
+• a MATERIAL_SHORTAGE error is returned
+
+Report the exact function and file where this logic resides.
+
+------------------------------------------------
+
+SECTION 5 — MRP MATERIAL PLANNING ENGINE
+
+Audit:
+
+server/src/services/mrpMaterialPlanning.ts
+
+Verify the following functions exist:
+
+calculateMaterialDemand()
+calculateMaterialShortages()
+calculateBuildCapacity()
+
+Confirm that demand is calculated using:
+
+SUM(order_quantity × bom_quantity)
+
+Confirm queries include orders with status:
+
+FINALIZED
+IN_PROGRESS
+
+Verify shortages calculation correctly considers:
+
+quantity_on_hand
+quantity_allocated
+quantity_available
+
+Verify build capacity is calculated using:
+
+floor(quantity_available / bom_qty)
+
+Report any logic errors or edge-case risks.
+
+------------------------------------------------
+
+SECTION 6 — MATERIAL READINESS API
+
+Locate the API endpoint:
+
+GET /api/mrp/material-readiness
+
+Confirm the route:
+
+• calls the planning engine functions
+• returns a structured JSON response
+• includes:
+
+max_buildable_units
+materials array
+blocking_materials
+
+Verify that each material object includes:
+
+ag_part_number
+name
+on_hand
+allocated
+available
+required
+shortage
+
+Confirm the API does not modify any database state.
+
+------------------------------------------------
+
+SECTION 7 — FRONTEND DASHBOARD
+
+Audit:
+
+client/src/pages/MaterialReadinessDashboard.tsx
+
+Verify that:
+
+• page fetches data from /api/mrp/material-readiness
+• data loads using React query or fetch
+• top metrics display correctly
+• materials table renders correctly
+• shortages display visually (red highlight)
+• limiting material is identified
+
+Confirm that the dashboard performs no write operations.
+
+------------------------------------------------
+
+SECTION 8 — DATA FLOW VALIDATION
+
+Trace the full lifecycle:
+
+Vendor PO received
+→ createInventoryEvent
+→ putaway
+→ inventory_balances updated
+
+Order status FINALIZED → IN_PROGRESS
+→ allocateInventory
+→ inventory_balances.quantity_allocated updated
+
+Production consumes materials
+→ consumeAllocatedInventory
+→ inventory_balances.quantity_on_hand updated
+
+Confirm each stage writes the correct transaction type.
+
+------------------------------------------------
+
+SECTION 9 — SAFETY CHECKS
+
+Verify that the following protections exist:
+
+• allocation fails if quantity_available < requested quantity
+• negative inventory cannot occur
+• transactions are atomic
+• race conditions minimized
+• double allocation prevented
+
+Report any potential failure points.
+
+------------------------------------------------
+
+SECTION 10 — SCHEMA CONSISTENCY
+
+Inspect database schema for:
+
+inventory_balances
+inventory_transactions
+bom_items
+inventory_items
+all_orders
+
+Verify relationships between:
+
+bom_items.part_name (or ag_part_number)
+inventory_items.ag_part_number
+
+Confirm whether BOM linkage relies on naming convention or FK.
+
+------------------------------------------------
+
+SECTION 11 — PERFORMANCE RISKS
+
+Review queries used in:
+
+MRP demand calculation
+material readiness API
+allocation engine
+
+Identify any:
+
+N+1 queries
+full table scans
+missing indexes
+
+Recommend indexes if needed.
+
+------------------------------------------------
+
+SECTION 12 — FINAL SUMMARY
+
+Provide a concise evaluation of:
+
+• correctness of implementation
+• architecture quality
+• readiness for production use
+
+Score each subsystem:
+
+Inventory event engine
+Allocation engine
+MRP planning engine
+Material readiness API
+Dashboard UI
+
+Highlight any critical issues that must be fixed before production.

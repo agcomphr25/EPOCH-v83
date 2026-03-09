@@ -13354,14 +13354,71 @@ export const insertArInvoiceLineSchema = createInsertSchema(arInvoiceLines).omit
 export type ArInvoiceLine = typeof arInvoiceLines.$inferSelect;
 export type InsertArInvoiceLine = z.infer<typeof insertArInvoiceLineSchema>;
 
-// ─── AR Relations (declared after both tables) ──────────────────────────────
+// ─── AR Payments ─────────────────────────────────────────────────────────────
+export const arPayments = pgTable('ar_payments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  customerId: text('customer_id').notNull(),
+  paymentDate: date('payment_date').notNull(),
+  paymentMethod: text('payment_method').notNull(),
+  referenceNumber: text('reference_number'),
+  amount: numeric('amount').notNull(),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  customerIdx: index('ar_payments_customer_id_idx').on(table.customerId),
+}));
+
+export const insertArPaymentSchema = createInsertSchema(arPayments).omit({
+  id: true,
+  createdAt: true,
+});
+export type ArPayment = typeof arPayments.$inferSelect;
+export type InsertArPayment = z.infer<typeof insertArPaymentSchema>;
+
+// ─── AR Payment Allocations ──────────────────────────────────────────────────
+export const arPaymentAllocations = pgTable('ar_payment_allocations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  paymentId: uuid('payment_id').notNull().references(() => arPayments.id, { onDelete: 'cascade' }),
+  invoiceId: uuid('invoice_id').notNull().references(() => arInvoices.id),
+  amountApplied: numeric('amount_applied').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  paymentIdx: index('ar_payment_alloc_payment_id_idx').on(table.paymentId),
+  invoiceIdx: index('ar_payment_alloc_invoice_id_idx').on(table.invoiceId),
+}));
+
+export const insertArPaymentAllocationSchema = createInsertSchema(arPaymentAllocations).omit({
+  id: true,
+  createdAt: true,
+});
+export type ArPaymentAllocation = typeof arPaymentAllocations.$inferSelect;
+export type InsertArPaymentAllocation = z.infer<typeof insertArPaymentAllocationSchema>;
+
+// ─── AR Relations (declared after all AR tables) ─────────────────────────────
 export const arInvoicesRelations = relations(arInvoices, ({ many }) => ({
   lines: many(arInvoiceLines),
+  allocations: many(arPaymentAllocations),
 }));
 
 export const arInvoiceLinesRelations = relations(arInvoiceLines, ({ one }) => ({
   invoice: one(arInvoices, {
     fields: [arInvoiceLines.invoiceId],
+    references: [arInvoices.id],
+  }),
+}));
+
+export const arPaymentsRelations = relations(arPayments, ({ many }) => ({
+  allocations: many(arPaymentAllocations),
+}));
+
+export const arPaymentAllocationsRelations = relations(arPaymentAllocations, ({ one }) => ({
+  payment: one(arPayments, {
+    fields: [arPaymentAllocations.paymentId],
+    references: [arPayments.id],
+  }),
+  invoice: one(arInvoices, {
+    fields: [arPaymentAllocations.invoiceId],
     references: [arInvoices.id],
   }),
 }));

@@ -3,6 +3,7 @@ import { db } from '../../db';
 import {
   arInvoices,
   arInvoiceLines,
+  arPaymentAllocations,
   p2Customers,
   p2PurchaseOrders,
 } from '../../schema';
@@ -61,6 +62,16 @@ router.get('/', async (req: Request, res: Response) => {
         notes: arInvoices.notes,
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
+        amountPaid: sql<string>`COALESCE(
+          (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+          0
+        )`,
+        balance: sql<string>`(
+          ${arInvoices.totalAmount}::numeric - COALESCE(
+            (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+            0
+          )
+        )`,
       })
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
@@ -103,6 +114,16 @@ router.get('/:id', async (req: Request, res: Response) => {
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
         updatedAt: arInvoices.updatedAt,
+        amountPaid: sql<string>`COALESCE(
+          (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+          0
+        )`,
+        balance: sql<string>`(
+          ${arInvoices.totalAmount}::numeric - COALESCE(
+            (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+            0
+          )
+        )`,
       })
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
@@ -117,7 +138,17 @@ router.get('/:id', async (req: Request, res: Response) => {
       .from(arInvoiceLines)
       .where(eq(arInvoiceLines.invoiceId, id));
 
-    res.json({ ...invoice, lines });
+    const payments = await db
+      .select({
+        id: arPaymentAllocations.id,
+        paymentId: arPaymentAllocations.paymentId,
+        amountApplied: arPaymentAllocations.amountApplied,
+        createdAt: arPaymentAllocations.createdAt,
+      })
+      .from(arPaymentAllocations)
+      .where(eq(arPaymentAllocations.invoiceId, id));
+
+    res.json({ ...invoice, lines, payments });
   } catch (error) {
     console.error('Failed to fetch invoice:', error);
     res.status(500).json({ error: 'Failed to fetch invoice' });
@@ -316,6 +347,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
 
     await db.transaction(async (tx) => {
+      await tx.delete(arPaymentAllocations).where(eq(arPaymentAllocations.invoiceId, id));
       await tx.delete(arInvoiceLines).where(eq(arInvoiceLines.invoiceId, id));
       await tx.delete(arInvoices).where(eq(arInvoices.id, id));
     });

@@ -1550,7 +1550,7 @@ export default function CuttingOperatorDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg border overflow-hidden">
+            <div className="rounded-lg border overflow-x-auto">
               <div className="max-h-[300px] overflow-y-auto">
                 <Table>
                   <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
@@ -1833,7 +1833,7 @@ export default function CuttingOperatorDashboard() {
               <p className="text-sm">Schedule packets from the Weekly Scheduling page</p>
             </div>
           ) : (
-            <div className="rounded-lg border overflow-hidden">
+            <div className="rounded-lg border overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>

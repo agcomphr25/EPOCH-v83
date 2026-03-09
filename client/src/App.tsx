@@ -112,6 +112,7 @@ import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
+import ProductionCommandCenter from './pages/ProductionCommandCenter';
 import JOHNLTestDashboard from './pages/JOHNLTestDashboard';
 import JENSTestDashboard from './pages/JENSTestDashboard';
 import STACIWTestDashboard from './pages/STACIWTestDashboard';
@@ -623,6 +624,7 @@ function App() {
                   <Route path="/email-inbox" component={EmailInbox} />
 
                   {/* User Dashboard Routes */}
+                  <Route path="/production-command-center" component={ProductionCommandCenter} />
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
                   <Route
                     path="/admin-dashboard"

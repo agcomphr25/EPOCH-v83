@@ -935,6 +935,12 @@ export default function Navigation() {
       icon: Settings,
       description: 'Cutting Table, CNC & Gunsmith Operations dashboard',
     },
+    {
+      path: '/production-command-center',
+      label: 'Production Command Center',
+      icon: Activity,
+      description: "Matt's production-focused operational awareness dashboard",
+    },
   ];
 
   const purchaseOrdersItems = [

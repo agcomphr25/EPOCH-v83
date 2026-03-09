@@ -69,6 +69,7 @@ import ARJournalPage from './pages/ARJournalPage';
 import InvoicesPage from './pages/InvoicesPage';
 import InvoiceFormPage from './pages/InvoiceFormPage';
 import InvoiceDetailPage from './pages/InvoiceDetailPage';
+import ARAgingPage from './pages/ARAgingPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import CostCenterManagement from './pages/CostCenterManagement';
@@ -714,6 +715,7 @@ function App() {
                   {/* Finance Routes */}
                   <Route path="/finance/ap-journal" component={APJournalPage} />
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
+                  <Route path="/finance/ar-aging" component={ARAgingPage} />
                   <Route path="/finance/invoices/new" component={InvoiceFormPage} />
                   <Route path="/finance/invoices/:id/edit" component={InvoiceFormPage} />
                   <Route path="/finance/invoices/:id" component={InvoiceDetailPage} />

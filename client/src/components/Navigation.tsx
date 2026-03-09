@@ -841,6 +841,12 @@ export default function Navigation() {
       description: 'Accounts Receivable invoices and tracking',
     },
     {
+      path: '/finance/ar-aging',
+      label: 'AR Aging',
+      icon: FileText,
+      description: 'Accounts Receivable aging summary',
+    },
+    {
       path: '/finance/cogs',
       label: 'COGS Report',
       icon: TrendingUp,

@@ -40,6 +40,120 @@ router.get('/customer-pos', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/aging', async (req: Request, res: Response) => {
+  try {
+    const agingResult = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(CASE WHEN i.due_date >= CURRENT_DATE THEN balance ELSE 0 END), 0) AS current,
+        COALESCE(SUM(CASE WHEN i.due_date < CURRENT_DATE AND (CURRENT_DATE - i.due_date) <= 30 THEN balance ELSE 0 END), 0) AS days_1_30,
+        COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 30 AND (CURRENT_DATE - i.due_date) <= 60 THEN balance ELSE 0 END), 0) AS days_31_60,
+        COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 60 AND (CURRENT_DATE - i.due_date) <= 90 THEN balance ELSE 0 END), 0) AS days_61_90,
+        COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 90 THEN balance ELSE 0 END), 0) AS days_90_plus,
+        COALESCE(SUM(balance), 0) AS total_ar
+      FROM (
+        SELECT
+          inv.id,
+          inv.due_date,
+          inv.total_amount::numeric - COALESCE(
+            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+          ) AS balance
+        FROM ar_invoices inv
+        WHERE inv.status NOT IN ('PAID', 'VOID')
+      ) i
+      WHERE i.balance > 0
+    `);
+
+    const row = agingResult.rows?.[0] || agingResult[0] || {};
+    res.json({
+      current: parseFloat(row.current || '0'),
+      days_1_30: parseFloat(row.days_1_30 || '0'),
+      days_31_60: parseFloat(row.days_31_60 || '0'),
+      days_61_90: parseFloat(row.days_61_90 || '0'),
+      days_90_plus: parseFloat(row.days_90_plus || '0'),
+      total_ar: parseFloat(row.total_ar || '0'),
+    });
+  } catch (error) {
+    console.error('Failed to fetch AR aging:', error);
+    res.status(500).json({ error: 'Failed to fetch AR aging' });
+  }
+});
+
+router.get('/aging/by-customer', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        i.customer_id,
+        c.customer_name,
+        COALESCE(SUM(CASE WHEN i.due_date >= CURRENT_DATE THEN balance ELSE 0 END), 0) AS current,
+        COALESCE(SUM(CASE WHEN i.due_date < CURRENT_DATE AND (CURRENT_DATE - i.due_date) <= 30 THEN balance ELSE 0 END), 0) AS days_1_30,
+        COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 30 AND (CURRENT_DATE - i.due_date) <= 60 THEN balance ELSE 0 END), 0) AS days_31_60,
+        COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 60 AND (CURRENT_DATE - i.due_date) <= 90 THEN balance ELSE 0 END), 0) AS days_61_90,
+        COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 90 THEN balance ELSE 0 END), 0) AS days_90_plus,
+        COALESCE(SUM(balance), 0) AS total
+      FROM (
+        SELECT
+          inv.id,
+          inv.customer_id,
+          inv.due_date,
+          inv.total_amount::numeric - COALESCE(
+            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+          ) AS balance
+        FROM ar_invoices inv
+        WHERE inv.status NOT IN ('PAID', 'VOID')
+      ) i
+      LEFT JOIN p2_customers c ON i.customer_id = c.customer_id
+      WHERE i.balance > 0
+      GROUP BY i.customer_id, c.customer_name
+      ORDER BY total DESC
+    `);
+
+    const rows = result.rows || result || [];
+    res.json((rows as any[]).map((r: any) => ({
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      current: parseFloat(r.current || '0'),
+      days_1_30: parseFloat(r.days_1_30 || '0'),
+      days_31_60: parseFloat(r.days_31_60 || '0'),
+      days_61_90: parseFloat(r.days_61_90 || '0'),
+      days_90_plus: parseFloat(r.days_90_plus || '0'),
+      total: parseFloat(r.total || '0'),
+    })));
+  } catch (error) {
+    console.error('Failed to fetch AR aging by customer:', error);
+    res.status(500).json({ error: 'Failed to fetch AR aging by customer' });
+  }
+});
+
+router.get('/customer-summary/:customerId', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+
+    const result = await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS open_invoices,
+        COALESCE(SUM(
+          inv.total_amount::numeric - COALESCE(
+            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+          )
+        ), 0) AS balance,
+        MIN(inv.invoice_date) AS oldest_invoice_date
+      FROM ar_invoices inv
+      WHERE inv.customer_id = ${customerId}
+        AND inv.status NOT IN ('PAID', 'VOID')
+    `);
+
+    const row = (result.rows || result)?.[0] || {};
+    res.json({
+      openInvoices: parseInt(row.open_invoices || '0'),
+      balance: parseFloat(row.balance || '0'),
+      oldestInvoiceDate: row.oldest_invoice_date || null,
+    });
+  } catch (error) {
+    console.error('Failed to fetch customer AR summary:', error);
+    res.status(500).json({ error: 'Failed to fetch customer AR summary' });
+  }
+});
+
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { status, customerId, search } = req.query;

@@ -189,6 +189,48 @@ export async function getOpenTickets(): Promise<number> {
   return rows[0]?.count ?? 0;
 }
 
+async function getARTotalOutstanding(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COALESCE(SUM(balance), 0) AS total FROM (
+       SELECT i.total_amount::numeric - COALESCE(
+         (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = i.id), 0
+       ) AS balance
+       FROM ar_invoices i
+       WHERE i.status NOT IN ('PAID', 'VOID')
+     ) sub WHERE balance > 0`,
+  ) as any[];
+  return parseFloat(rows[0]?.total ?? '0');
+}
+
+async function getAROverdueCount(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM (
+       SELECT i.id,
+         i.total_amount::numeric - COALESCE(
+           (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = i.id), 0
+         ) AS balance
+       FROM ar_invoices i
+       WHERE i.status NOT IN ('PAID', 'VOID')
+         AND i.due_date < CURRENT_DATE
+     ) sub WHERE balance > 0`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
+async function getAROpenInvoiceCount(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM (
+       SELECT i.id,
+         i.total_amount::numeric - COALESCE(
+           (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = i.id), 0
+         ) AS balance
+       FROM ar_invoices i
+       WHERE i.status NOT IN ('PAID', 'VOID')
+     ) sub WHERE balance > 0`,
+  ) as any[];
+  return rows[0]?.count ?? 0;
+}
+
 export type MetricSlug =
   | 'cnc_queue_size'
   | 'gunsmith_queue_size'
@@ -208,7 +250,10 @@ export type MetricSlug =
   | 'p2_items_completed_week'
   | 'cutting_table_active_items'
   | 'open_credit_memos'
-  | 'open_tickets';
+  | 'open_tickets'
+  | 'ar_total_outstanding'
+  | 'ar_overdue_count'
+  | 'ar_open_invoice_count';
 
 export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   cnc_queue_size:            getCNCQueueSize,
@@ -230,4 +275,7 @@ export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   cutting_table_active_items: getCuttingTableActiveItems,
   open_credit_memos:         getOpenCreditMemos,
   open_tickets:              getOpenTickets,
+  ar_total_outstanding:      getARTotalOutstanding,
+  ar_overdue_count:          getAROverdueCount,
+  ar_open_invoice_count:     getAROpenInvoiceCount,
 };

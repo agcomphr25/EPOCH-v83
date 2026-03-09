@@ -2118,14 +2118,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           list to get started.
         </div>
       ) : (
-        <>
-        <div style={{ overflow: 'hidden', width: '100%' }}>
-          <div style={{ overflowX: 'auto', overflowY: 'hidden', border: '3px solid red', marginBottom: '8px' }}>
-            <div style={{ width: '2000px', height: '30px', background: 'linear-gradient(to right, red, orange, yellow, green, blue, purple)' }}>
-              TEST SCROLL — if you can scroll this colored bar, scrolling works
-            </div>
-          </div>
-        </div>
         <div style={{ overflow: 'hidden', width: '100%' }}>
           <div style={{ overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
             <table style={{ minWidth: '1400px', borderCollapse: 'collapse' }} className="w-full border border-gray-200 dark:border-gray-700">
@@ -2486,7 +2478,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           </table>
           </div>
         </div>
-        </>
       )}
 
       <Dialog

@@ -2118,6 +2118,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           list to get started.
         </div>
       ) : (
+        <>
         <div style={{ overflowX: 'scroll', border: '3px solid red', marginBottom: '8px' }}>
           <div style={{ width: '2000px', height: '30px', background: 'linear-gradient(to right, red, orange, yellow, green, blue, purple)' }}>
             TEST SCROLL — if you can scroll this colored bar, scrolling works
@@ -2481,6 +2482,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <Dialog

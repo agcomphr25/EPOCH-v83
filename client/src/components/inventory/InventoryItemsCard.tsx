@@ -1128,7 +1128,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     if (tableScrollRef.current && scrollLeftRef.current > 0) {
       tableScrollRef.current.scrollLeft = scrollLeftRef.current;
     }
-  });
+  }, [allItems, sortColumn, sortDirection, searchTerm, utilizedFilter]);
 
   React.useEffect(() => {
     if (isError && error) {
@@ -2129,10 +2129,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         <div
           ref={tableScrollRef}
           onScroll={(e) => { scrollLeftRef.current = (e.target as HTMLDivElement).scrollLeft; }}
-          className="w-full"
-          style={{ overflowX: 'auto', overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch' }}
+          style={{ display: 'block', overflowX: 'scroll', overscrollBehaviorX: 'contain', maxWidth: '100%', position: 'relative', WebkitOverflowScrolling: 'touch' }}
         >
-          <table className="w-full border-collapse border border-gray-200 dark:border-gray-700" style={{ minWidth: '1200px' }}>
+          <table style={{ minWidth: '1200px', width: '100%', borderCollapse: 'collapse' }} className="border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">

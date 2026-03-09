@@ -138,7 +138,7 @@ export default function NewInventoryManagerPage() {
       {/* Expanded Card Content */}
       {activeCard && (
         <div className="mt-8">
-          <Card className="border-t-4 border-t-blue-500 relative">
+          <div className="border-t-4 border-t-blue-500 relative rounded-lg border bg-card text-card-foreground shadow-sm">
             <Button
               variant="ghost"
               size="icon"
@@ -148,22 +148,22 @@ export default function NewInventoryManagerPage() {
             >
               <X className="h-5 w-5" />
             </Button>
-            <CardHeader>
-              <CardTitle className="text-xl">
+            <div className="flex flex-col space-y-1.5 p-6">
+              <div className="text-xl font-semibold leading-none tracking-tight">
                 {activeCard === 'inventory' && 'Inventory Items Management'}
                 {activeCard === 'parts-requests' &&
                   'Parts Requests Management'}
                 {activeCard === 'outstanding-orders' && 'Outstanding Orders'}
                 {activeCard === 'order-placement' && 'Order Placement'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
+            </div>
+            <div className="p-6 pt-0">
               {activeCard === 'inventory' && <InventoryItemsCard />}
               {activeCard === 'parts-requests' && <PartsRequestsCard />}
               {activeCard === 'outstanding-orders' && <OutstandingOrdersCard />}
               {activeCard === 'order-placement' && <OrderPlacementCard />}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
     </div>

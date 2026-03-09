@@ -1,0 +1,161 @@
+Prompt 1 — Create Matt’s Production Command Center Layout
+
+This defines the dashboard layout config.
+
+Writing
+
+You are implementing a new dashboard layout called the Production Command Center (PCC) for EPOCH.
+
+IMPORTANT:
+Do NOT modify any existing dashboards.
+This should be a new layout.
+
+OBJECTIVE
+
+Create a production-focused dashboard for the production manager (Matt) that provides instant operational awareness.
+
+The layout must use the existing:
+
+DashboardLayout type
+DashboardGrid component
+Metric widgets
+metrics API
+
+STEP 1 — CREATE LAYOUT FILE
+
+File:
+
+client/src/config/pccLayout.ts
+
+STEP 2 — DEFINE PCC_LAYOUT
+
+Use the DashboardLayout structure.
+
+export const PCC_LAYOUT: DashboardLayout = {
+
+sections: [
+
+{
+id: "production_health",
+title: "Production Health",
+columns: 4,
+widgets: [
+
+{
+id: "orders_in_production",
+type: "metric_stat",
+props: {
+metricSlug: "orders_in_production",
+title: "Orders In Production"
+}
+},
+
+{
+id: "orders_completed_today",
+type: "metric_stat",
+props: {
+metricSlug: "orders_completed_today",
+title: "Completed Today"
+}
+},
+
+{
+id: "open_inventory_shortages",
+type: "metric_stat",
+props: {
+metricSlug: "open_inventory_shortages",
+title: "Inventory Shortages"
+}
+},
+
+{
+id: "open_tickets",
+type: "metric_stat",
+props: {
+metricSlug: "open_tickets",
+title: "Open Tickets"
+}
+}
+
+]
+},
+
+{
+id: "department_queues",
+title: "Department Queues",
+columns: 3,
+widgets: [
+
+{
+id: "layup_queue",
+type: "metric_stat",
+props: { metricSlug: "layup_queue_size", title: "Layup Queue" }
+},
+
+{
+id: "cnc_queue",
+type: "metric_stat",
+props: { metricSlug: "cnc_queue_size", title: "CNC Queue" }
+},
+
+{
+id: "gunsmith_queue",
+type: "metric_stat",
+props: { metricSlug: "gunsmith_queue_size", title: "Gunsmith Queue" }
+},
+
+{
+id: "paint_queue",
+type: "metric_stat",
+props: { metricSlug: "paint_queue_size", title: "Paint Queue" }
+},
+
+{
+id: "finish_queue",
+type: "metric_stat",
+props: { metricSlug: "finish_queue_size", title: "Finish Queue" }
+},
+
+{
+id: "shipping_queue",
+type: "metric_stat",
+props: { metricSlug: "shipping_queue_size", title: "Shipping Queue" }
+}
+
+]
+},
+
+{
+id: "p2_operations",
+title: "P2 Operations",
+columns: 3,
+widgets: [
+
+{
+id: "p2_open_pos",
+type: "metric_stat",
+props: { metricSlug: "p2_open_pos", title: "Open P2 POs" }
+},
+
+{
+id: "p2_pending_boms",
+type: "metric_stat",
+props: { metricSlug: "p2_pending_boms", title: "Pending BOMs" }
+},
+
+{
+id: "p2_items_in_production",
+type: "metric_stat",
+props: { metricSlug: "p2_items_in_production", title: "P2 In Production" }
+}
+
+]
+}
+
+]
+
+}
+
+OUTPUT
+
+Confirm PCC_LAYOUT created and exportable.

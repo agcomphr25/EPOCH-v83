@@ -47,6 +47,8 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       let materialType = null;
       let source = null;
       let orderId = null;
+      let packetName = null;
+      let userNotes = null;
       
       try {
         if (row.queue.notes) {
@@ -55,15 +57,20 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
           materialType = parsedNotes.materialType || null;
           source = parsedNotes.source || null;
           orderId = parsedNotes.orderId || null;
+          packetName = parsedNotes.packetName || null;
+          userNotes = parsedNotes.userNotes || null;
         }
       } catch (e) {
         // Notes might not be JSON, that's ok
       }
+
+      const displayName = packetName || userNotes || row.item?.name || orderId || null;
       
       return {
         ...row.queue,
         partNumber: row.item?.agPartNumber,
         partName: row.item?.name,
+        displayName,
         inventoryItem: row.item,
         packetBomId,
         materialType,
@@ -925,17 +932,29 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       }).slice(0, 10);
     }
     
-    // Parse ply schedule and cuts config from BOM
     let plySchedule = null;
     let cutsConfig = null;
+    let cutPrograms = null;
     if (packetBom) {
       plySchedule = packetBom.plyScheduleConfig || null;
       cutsConfig = packetBom.cutsConfig || null;
+      cutPrograms = packetBom.cutProgramsConfig || null;
     }
     
     const remaining = queueItem.quantityRequested - (queueItem.quantityCompleted || 0);
     const yieldPerCut = packetBom?.yieldPerCut || 4;
     const estimatedCuts = Math.ceil(remaining / yieldPerCut);
+    
+    let packetName = null;
+    let userNotes = null;
+    try {
+      if (queueItem.notes) {
+        const parsedNotes = JSON.parse(queueItem.notes);
+        packetName = parsedNotes.packetName || null;
+        userNotes = parsedNotes.userNotes || null;
+      }
+    } catch {}
+    const displayName = packetName || userNotes || inventoryItem?.name || null;
     
     res.json({
       queueItem: {
@@ -943,6 +962,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
         status: queueItem.status === 'PENDING' ? 'IN_PROGRESS' : queueItem.status,
         partNumber: inventoryItem?.agPartNumber,
         partName: inventoryItem?.name,
+        displayName,
         remaining,
         estimatedCuts,
       },
@@ -959,6 +979,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       bomParts,
       plySchedule,
       cutsConfig,
+      cutPrograms,
       fifoInventory: fifoInventory.map(f => ({
         id: f.id,
         fabric: f.fabric,

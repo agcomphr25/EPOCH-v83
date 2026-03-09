@@ -316,6 +316,8 @@ export default function ShippingTracker() {
       filtered = filtered.filter((order) => {
         if (order.orderId.toLowerCase().includes(searchLower)) return true;
 
+        if (order.trackingNumber && order.trackingNumber.toLowerCase().includes(searchLower)) return true;
+
         if (order.customerId && customers) {
           const customer = customers.find(
             (c) => String(c.id) === String(order.customerId)
@@ -678,7 +680,7 @@ export default function ShippingTracker() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search by order number or customer name..."
+                  placeholder="Search by order number, customer name, or tracking number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"

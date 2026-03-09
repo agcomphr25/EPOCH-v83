@@ -53,12 +53,15 @@
     @apply border-border;
   }
 
-  html, body {
+  html {
     overflow-x: hidden;
+    overscroll-behavior-x: none;
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
   }
 }
 

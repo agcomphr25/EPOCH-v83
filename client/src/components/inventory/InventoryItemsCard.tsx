@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -969,6 +969,8 @@ interface InventoryItemsCardProps {
 
 export default function InventoryItemsCard({ initialSearchTerm }: InventoryItemsCardProps = {}) {
   const queryClient = useQueryClient();
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const scrollLeftRef = useRef(0);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -1120,6 +1122,12 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const { data: allItems = [], isLoading, isError, error } = useQuery<InventoryItem[]>({
     queryKey: ['/api/enhanced/inventory/items'],
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
+  });
+
+  useEffect(() => {
+    if (tableScrollRef.current && scrollLeftRef.current > 0) {
+      tableScrollRef.current.scrollLeft = scrollLeftRef.current;
+    }
   });
 
   React.useEffect(() => {
@@ -2118,8 +2126,13 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           list to get started.
         </div>
       ) : (
-        <div className="overflow-x-auto w-full">
-          <table className="min-w-[1200px] w-full border-collapse border border-gray-200 dark:border-gray-700">
+        <div
+          ref={tableScrollRef}
+          onScroll={(e) => { scrollLeftRef.current = (e.target as HTMLDivElement).scrollLeft; }}
+          className="w-full"
+          style={{ overflowX: 'auto', overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch' }}
+        >
+          <table className="w-full border-collapse border border-gray-200 dark:border-gray-700" style={{ minWidth: '1200px' }}>
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">

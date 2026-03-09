@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -41,24 +41,27 @@ export function BarcodeInputField({
     getVideoRef,
   } = scanner;
 
+  const scannerRef = useRef({ startScanning, stopScanning, getVideoRef });
+  scannerRef.current = { startScanning, stopScanning, getVideoRef };
+
   useEffect(() => {
     if (showScanner && videoContainerRef.current) {
-      const videoRef = getVideoRef();
+      const videoRef = scannerRef.current.getVideoRef();
       if (videoRef.current && !videoContainerRef.current.contains(videoRef.current)) {
         videoContainerRef.current.appendChild(videoRef.current);
         videoRef.current.style.width = '100%';
         videoRef.current.style.height = 'auto';
         videoRef.current.style.borderRadius = '8px';
       }
-      startScanning();
+      scannerRef.current.startScanning();
     }
 
     return () => {
       if (!showScanner) {
-        stopScanning();
+        scannerRef.current.stopScanning();
       }
     };
-  }, [showScanner, startScanning, stopScanning, getVideoRef]);
+  }, [showScanner]);
 
   const handleOpenScanner = () => {
     setShowScanner(true);
@@ -69,39 +72,36 @@ export function BarcodeInputField({
     stopScanning();
   };
 
-  // Handle hardware barcode scanner input (listens for rapid keystrokes)
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   useEffect(() => {
     let barcodeBuffer = '';
     let timeoutId: NodeJS.Timeout;
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Only process if this specific input is focused
       if (document.activeElement !== inputRef.current) {
         return;
       }
 
-      // Clear previous timeout
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
 
-      // Handle Enter key (end of barcode scan)
       if (e.key === 'Enter') {
         if (barcodeBuffer.length > 0) {
-          onChange(barcodeBuffer);
+          onChangeRef.current(barcodeBuffer);
           barcodeBuffer = '';
         }
         return;
       }
 
-      // Accumulate characters for hardware scanner
       if (e.key.length === 1) {
         barcodeBuffer += e.key;
 
-        // Auto-submit after 100ms of no input (typical for barcode scanners)
         timeoutId = setTimeout(() => {
           if (barcodeBuffer.length > 3) {
-            onChange(barcodeBuffer);
+            onChangeRef.current(barcodeBuffer);
           }
           barcodeBuffer = '';
         }, 100);
@@ -121,7 +121,7 @@ export function BarcodeInputField({
         clearTimeout(timeoutId);
       }
     };
-  }, [onChange]);
+  }, []);
 
   return (
     <>

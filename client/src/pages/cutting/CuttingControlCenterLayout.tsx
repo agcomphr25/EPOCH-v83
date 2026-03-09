@@ -24,7 +24,7 @@ const tabs = [
   },
   { 
     id: "schedule", 
-    label: "Weekly Schedule", 
+    label: "Weekly Scheduling", 
     path: "/cutting-control-center/schedule",
     icon: Calendar,
     description: "View and manage weekly cutting queue"

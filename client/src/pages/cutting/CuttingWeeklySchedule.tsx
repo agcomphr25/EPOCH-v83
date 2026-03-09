@@ -676,7 +676,6 @@ export default function CuttingWeeklySchedule() {
                     if (item.displayName) return item.displayName;
                     if (notes.packetName) return notes.packetName;
                     if (notes.userNotes) return notes.userNotes;
-                    if (notes.orderId) return notes.orderId;
                     if (item.partName) return item.partName;
                     // 4. Try material type from parsed notes
                     if (notes.materialType) {

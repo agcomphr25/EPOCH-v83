@@ -285,7 +285,7 @@ export default function CuttingOperatorDashboard() {
         } catch {}
       }
 
-      const displayName = item.displayName || packetName || userNotes || item.partName || orderId || null;
+      const displayName = item.displayName || packetName || userNotes || item.partName || null;
       
       const materialToPacketType: Record<string, string> = {
         'carbon_fiber': 'carbon fiber packet',
@@ -571,11 +571,21 @@ export default function CuttingOperatorDashboard() {
       });
     },
     onSuccess: (data: any) => {
+      console.log('[ScanStart] Full response:', JSON.stringify({
+        hasBom: !!data.bom,
+        bomType: data.bom?.packetType,
+        bomMaterialsCount: data.bomMaterials?.length,
+        bomPartsCount: data.bomParts?.length,
+        plyScheduleCount: Array.isArray(data.plySchedule) ? data.plySchedule.length : 0,
+        cutProgramsCount: Array.isArray(data.cutPrograms) ? data.cutPrograms.length : 0,
+        cutsConfigCount: Array.isArray(data.cutsConfig) ? data.cutsConfig.length : 0,
+        displayName: data.queueItem?.displayName,
+      }));
       setActiveScannedPacket(data);
       setValidatedRolls([]);
       setMaterialScanBarcode("");
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
-      toast({ title: 'Packet Started', description: `${data.queueItem?.partNumber || 'Packet'} is now active. Scan material rolls to begin.` });
+      toast({ title: 'Packet Started', description: `${data.queueItem?.displayName || data.queueItem?.partNumber || 'Packet'} is now active. Scan material rolls to begin.` });
     },
     onError: (error: any) => {
       toast({ title: 'Scan Error', description: error?.message || 'Failed to start packet from barcode.', variant: 'destructive' });

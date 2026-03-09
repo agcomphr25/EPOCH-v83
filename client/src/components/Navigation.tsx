@@ -829,7 +829,7 @@ export default function Navigation() {
       description: 'Accounts Payable transactions',
     },
     {
-      path: '/finance/ar',
+      path: '/finance/ar-journal',
       label: 'AR Journal',
       icon: DollarSign,
       description: 'Accounts Receivable transactions',

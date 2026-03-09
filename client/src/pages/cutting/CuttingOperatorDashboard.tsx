@@ -1413,74 +1413,102 @@ export default function CuttingOperatorDashboard() {
               </div>
             </div>
 
-            {/* Ply Schedule */}
-            {activeScannedPacket.plySchedule && Array.isArray(activeScannedPacket.plySchedule) && activeScannedPacket.plySchedule.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Ply Schedule */}
               <div className="border rounded-lg p-4">
                 <h4 className="font-medium mb-2 flex items-center gap-2">
                   <Layers className="h-4 w-4" />
                   Ply Schedule
                 </h4>
-                <div className="max-h-[200px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-16">Ply #</TableHead>
-                        <TableHead>Assigned Parts</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {activeScannedPacket.plySchedule.map((ply: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">{ply.plyNumber || idx + 1}</TableCell>
-                          <TableCell>
-                            {ply.assignedParts && Array.isArray(ply.assignedParts) ? (
-                              <div className="flex flex-wrap gap-1">
-                                {ply.assignedParts.map((part: any, pidx: number) => (
-                                  <Badge key={pidx} variant="outline" className="text-xs">
-                                    {part.partNumber} {part.quantity > 1 ? `x${part.quantity}` : ''}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">-</span>
-                            )}
-                          </TableCell>
+                {activeScannedPacket.plySchedule && Array.isArray(activeScannedPacket.plySchedule) && activeScannedPacket.plySchedule.length > 0 ? (
+                  <div className="max-h-[250px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16">Ply #</TableHead>
+                          <TableHead>Assigned Parts</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {activeScannedPacket.plySchedule.map((ply: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">{ply.plyNumber || idx + 1}</TableCell>
+                            <TableCell>
+                              {ply.assignedParts && Array.isArray(ply.assignedParts) ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {ply.assignedParts.map((part: any, pidx: number) => (
+                                    <Badge key={pidx} variant="outline" className="text-xs">
+                                      {part.partNumber} {part.quantity > 1 ? `x${part.quantity}` : ''}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No ply schedule configured for this packet</p>
+                )}
               </div>
-            )}
 
-            {/* Cuts Config */}
-            {activeScannedPacket.cutsConfig && Array.isArray(activeScannedPacket.cutsConfig) && activeScannedPacket.cutsConfig.length > 0 && (
+              {/* Cutting Programs */}
               <div className="border rounded-lg p-4">
                 <h4 className="font-medium mb-2 flex items-center gap-2">
                   <Scissors className="h-4 w-4" />
-                  Cuts Configuration
+                  Cutting Programs
                 </h4>
-                <div className="space-y-2">
-                  {activeScannedPacket.cutsConfig.map((cut: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-muted/50 rounded-lg">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-medium text-sm">{cut.materialName || cut.materialPartNumber || `Cut ${idx + 1}`}</span>
-                        <Badge>{cut.cutsNeeded} cut(s)</Badge>
-                      </div>
-                      {cut.assignedParts && Array.isArray(cut.assignedParts) && cut.assignedParts.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {cut.assignedParts.map((part: any, pidx: number) => (
-                            <Badge key={pidx} variant="secondary" className="text-xs">
-                              {part.partNumber} ({part.partsPerCut}/cut)
-                            </Badge>
-                          ))}
+                {activeScannedPacket.cutPrograms && Array.isArray(activeScannedPacket.cutPrograms) && activeScannedPacket.cutPrograms.length > 0 ? (
+                  <div className="max-h-[250px] overflow-y-auto space-y-2">
+                    {activeScannedPacket.cutPrograms.map((prog: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-muted/50 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-medium text-sm">{prog.programName || `Program ${idx + 1}`}</span>
+                          {prog.squareMetersPerCut && (
+                            <Badge variant="secondary">{prog.squareMetersPerCut} m²/cut</Badge>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                        {prog.assignedParts && Array.isArray(prog.assignedParts) && prog.assignedParts.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {prog.assignedParts.map((part: any, pidx: number) => (
+                              <Badge key={pidx} variant="outline" className="text-xs">
+                                {part.partNumber} ({part.yieldPerCut}/cut)
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : activeScannedPacket.cutsConfig && Array.isArray(activeScannedPacket.cutsConfig) && activeScannedPacket.cutsConfig.length > 0 ? (
+                  <div className="max-h-[250px] overflow-y-auto space-y-2">
+                    {activeScannedPacket.cutsConfig.map((cut: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-muted/50 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-medium text-sm">{cut.materialName || cut.materialPartNumber || `Cut ${idx + 1}`}</span>
+                          <Badge>{cut.cutsNeeded} cut(s)</Badge>
+                        </div>
+                        {cut.assignedParts && Array.isArray(cut.assignedParts) && cut.assignedParts.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {cut.assignedParts.map((part: any, pidx: number) => (
+                              <Badge key={pidx} variant="secondary" className="text-xs">
+                                {part.partNumber} ({part.partsPerCut}/cut)
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No cutting programs configured for this packet</p>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Material Roll Scanning */}
             <div className="border-2 border-dashed border-primary/30 rounded-lg p-4">

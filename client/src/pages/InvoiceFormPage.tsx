@@ -26,6 +26,32 @@ import {
 import { Plus, Trash2, Save, ArrowLeft, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+const PAYMENT_TERMS_OPTIONS = [
+  { value: 'NET_15', label: 'Net 15' },
+  { value: 'NET_30', label: 'Net 30' },
+  { value: 'NET_60', label: 'Net 60' },
+  { value: 'COD', label: 'COD' },
+  { value: 'PREPAID', label: 'Prepaid' },
+];
+
+const TERMS_DAYS: Record<string, number> = {
+  NET_15: 15,
+  NET_30: 30,
+  NET_60: 60,
+  COD: 0,
+  PREPAID: 0,
+};
+
+function calculateDueDate(invoiceDate: string, terms: string): string {
+  if (!invoiceDate || !terms || !(terms in TERMS_DAYS)) return '';
+  const [year, month, day] = invoiceDate.split('-').map(Number);
+  const date = new Date(year, month - 1, day + TERMS_DAYS[terms]);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 interface InvoiceLine {
   description: string;
   qty: string;
@@ -73,6 +99,7 @@ export default function InvoiceFormPage() {
   const isEditing = !!editId;
 
   const [form, setForm] = useState<InvoiceFormData>(defaultForm());
+  const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
   const { toast } = useToast();
 
   const { data: customers = [] } = useQuery<any[]>({
@@ -116,6 +143,7 @@ export default function InvoiceFormPage() {
               }))
             : [emptyLine()],
       });
+      setDueDateManuallySet(true);
     }
   }, [existingInvoice, isEditing]);
 
@@ -135,7 +163,24 @@ export default function InvoiceFormPage() {
   const updateField = (field: keyof InvoiceFormData, value: string) => {
     setForm((prev) => {
       if (field === 'customerId' && value !== prev.customerId) {
-        return { ...prev, customerId: value, poId: '', poOverride: '' };
+        const customer = customers.find((c: any) => c.customerId === value);
+        const prefillTerms = customer?.paymentTerms || '';
+        const newDueDate = !dueDateManuallySet && prefillTerms
+          ? calculateDueDate(prev.invoiceDate, prefillTerms)
+          : prev.dueDate;
+        return { ...prev, customerId: value, poId: '', poOverride: '', terms: prefillTerms, dueDate: newDueDate };
+      }
+      if (field === 'terms') {
+        const newDueDate = !dueDateManuallySet ? calculateDueDate(prev.invoiceDate, value) : prev.dueDate;
+        return { ...prev, terms: value, dueDate: newDueDate };
+      }
+      if (field === 'invoiceDate') {
+        const newDueDate = !dueDateManuallySet && prev.terms ? calculateDueDate(value, prev.terms) : prev.dueDate;
+        return { ...prev, invoiceDate: value, dueDate: newDueDate };
+      }
+      if (field === 'dueDate') {
+        setDueDateManuallySet(true);
+        return { ...prev, dueDate: value };
       }
       return { ...prev, [field]: value };
     });
@@ -311,12 +356,22 @@ export default function InvoiceFormPage() {
 
             <div className="space-y-2">
               <Label htmlFor="terms">Terms</Label>
-              <Input
-                id="terms"
+              <Select
                 value={form.terms}
-                onChange={(e) => updateField('terms', e.target.value)}
-                placeholder="Net 30"
-              />
+                onValueChange={(v) => updateField('terms', v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select terms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {PAYMENT_TERMS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

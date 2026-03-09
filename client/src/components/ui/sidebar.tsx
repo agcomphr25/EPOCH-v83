@@ -23,6 +23,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { KEYBOARD_SHORTCUTS } from '@/config/keyboardShortcuts';
 // import {
 //   Tooltip,
 //   TooltipContent,
@@ -34,7 +35,7 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = '12rem';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
-const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
+const SIDEBAR_KEYBOARD_SHORTCUT = KEYBOARD_SHORTCUTS.TOGGLE_SIDEBAR.key;
 
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';

@@ -183,7 +183,8 @@ export async function getOpenTickets(): Promise<number> {
   const rows = await pool.query(
     `SELECT COUNT(*)::int AS count
      FROM tickets
-     WHERE status NOT IN ('closed', 'resolved')`,
+     WHERE status NOT IN ('closed', 'resolved')
+       AND archived_at IS NULL`,
   ) as any[];
   return rows[0]?.count ?? 0;
 }

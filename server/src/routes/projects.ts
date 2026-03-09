@@ -60,18 +60,30 @@ router.get('/', async (req, res) => {
     
     const projectsWithSteps = await Promise.all(
       projectsList.map(async (project) => {
-        const steps = await storage.getProjectSteps(project.id);
-        const customer = await storage.getP2CustomerByCustomerId(project.customerId);
-        const projectManager = project.projectManagerId 
-          ? await storage.getEmployee(project.projectManagerId)
-          : null;
-        
-        return {
-          ...project,
-          steps,
-          customer,
-          projectManager,
-        };
+        try {
+          const steps = await storage.getProjectSteps(project.id);
+          const customer = project.customerId
+            ? await storage.getP2CustomerByCustomerId(project.customerId)
+            : null;
+          const projectManager = project.projectManagerId 
+            ? await storage.getEmployee(project.projectManagerId)
+            : null;
+          
+          return {
+            ...project,
+            steps,
+            customer: customer || null,
+            projectManager,
+          };
+        } catch (enrichErr) {
+          console.error(`Error enriching project ${project.id}:`, enrichErr);
+          return {
+            ...project,
+            steps: [],
+            customer: null,
+            projectManager: null,
+          };
+        }
       })
     );
     

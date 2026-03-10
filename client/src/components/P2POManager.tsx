@@ -49,7 +49,9 @@ import {
   X,
   ExternalLink,
   Factory,
+  Lock,
 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
 
@@ -96,6 +98,8 @@ interface P2PurchaseOrder
   expectedDelivery: string;
   attachments?: string[];
   sourceQuoteId?: string | null;
+  lockedAt?: string | null;
+  lockedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -498,6 +502,14 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                   : 'Create a new P2 purchase order'}
               </DialogDescription>
             </DialogHeader>
+            {selectedPO?.lockedAt && (
+              <Alert className="bg-amber-50 border-amber-200">
+                <Lock className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800">
+                  This PO is locked for production. You can still upload and manage PDF attachments below.
+                </AlertDescription>
+              </Alert>
+            )}
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(handleSubmit)}
@@ -511,7 +523,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       <FormItem>
                         <FormLabel>PO Number</FormLabel>
                         <FormControl>
-                          <Input placeholder="P2-PO-001" {...field} />
+                          <Input placeholder="P2-PO-001" {...field} disabled={!!selectedPO?.lockedAt} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -529,6 +541,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                             handleCustomerChange(value);
                           }}
                           value={field.value}
+                          disabled={!!selectedPO?.lockedAt}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -559,7 +572,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       <FormItem>
                         <FormLabel>PO Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" {...field} disabled={!!selectedPO?.lockedAt} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -572,7 +585,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       <FormItem>
                         <FormLabel>Expected Delivery</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" {...field} disabled={!!selectedPO?.lockedAt} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -589,6 +602,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
+                          disabled={!!selectedPO?.lockedAt}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -614,6 +628,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                         <Select
                           onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
                           value={field.value || 'none'}
+                          disabled={!!selectedPO?.lockedAt}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-source-quote">
@@ -644,6 +659,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                         <Textarea
                           placeholder="Additional notes..."
                           {...field}
+                          disabled={!!selectedPO?.lockedAt}
                         />
                       </FormControl>
                       <FormMessage />
@@ -740,16 +756,18 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     variant="outline"
                     onClick={() => setDialogOpen(false)}
                   >
-                    Cancel
+                    {selectedPO?.lockedAt ? 'Close' : 'Cancel'}
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={
-                      createMutation.isPending || updateMutation.isPending
-                    }
-                  >
-                    {selectedPO ? 'Update' : 'Create'} Purchase Order
-                  </Button>
+                  {!selectedPO?.lockedAt && (
+                    <Button
+                      type="submit"
+                      disabled={
+                        createMutation.isPending || updateMutation.isPending
+                      }
+                    >
+                      {selectedPO ? 'Update' : 'Create'} Purchase Order
+                    </Button>
+                  )}
                 </div>
               </form>
             </Form>

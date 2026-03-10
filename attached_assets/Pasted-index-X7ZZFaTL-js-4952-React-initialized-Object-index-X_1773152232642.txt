@@ -1,0 +1,22 @@
+index-X7ZZFaTL.js:4952 React initialized: Object
+index-X7ZZFaTL.js:4952 React hooks: Object
+index-X7ZZFaTL.js:4949 App component is rendering...
+index-X7ZZFaTL.js:4949 Environment: production
+index-X7ZZFaTL.js:4949 Base URL: /
+index-X7ZZFaTL.js:1915 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-X7ZZFaTL.js:1915 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+dashboard:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-X7ZZFaTL.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-X7ZZFaTL.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-X7ZZFaTL.js:1915 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-X7ZZFaTL.js:1915 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-X7ZZFaTL.js:1915 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-X7ZZFaTL.js:235 🌐 API Request to /api/cutting-table-mfg-queue/bulk-print-barcodes (timeout: 15000ms, deployment: true)
+index-X7ZZFaTL.js:235 ✅ API Response from /api/cutting-table-mfg-queue/bulk-print-barcodes: 200
+index-X7ZZFaTL.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+index-X7ZZFaTL.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 200
+index-X7ZZFaTL.js:1915 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/cutting-table-mfg-queue/2/validate-material:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table-mfg-queue/2/validate-material:1  Failed to load resource: the server responded with a status of 404 ()

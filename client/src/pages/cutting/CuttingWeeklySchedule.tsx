@@ -19,6 +19,26 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   Calendar,
   Scissors,
@@ -33,6 +53,8 @@ import {
   TrendingUp,
   Package,
   Layers,
+  Trash2,
+  PlusCircle,
 } from "lucide-react";
 
 type WeeklyCuttingQueueItem = {
@@ -81,6 +103,12 @@ export default function CuttingWeeklySchedule() {
   const [currentWeek] = useState(getMondayOfWeek(new Date()));
   const [scheduleQuantities, setScheduleQuantities] = useState<Record<string, number>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ p1: true, p2: true });
+  const [customDemand, setCustomDemand] = useState({
+    poNumber: '',
+    packetType: '',
+    quantity: '',
+    notes: '',
+  });
 
   const { data: weeklyQueueData, isLoading, refetch } = useQuery<{
     items: WeeklyCuttingQueueItem[];
@@ -142,16 +170,12 @@ export default function CuttingWeeklySchedule() {
       const stockModel = (item.stockModel || '').toLowerCase();
       const isP1PO = item.source === 'P1_PO';
       
-      if (stockModel.includes('mesa') || item.materialType === 'mesa') {
+      // Mesa packets are only for PO orders - regular P1 orders never need mesa packets
+      if (isP1PO && (stockModel.includes('mesa') || item.materialType === 'mesa')) {
         mesa += item.packetsNeeded;
         customerMap[customer].mesa += item.packetsNeeded;
-        if (isP1PO) {
-          oemOrders.mesa += item.packetsNeeded;
-          customerMap[customer].poMesa += item.packetsNeeded;
-        } else {
-          regularOrders.mesa += item.packetsNeeded;
-          customerMap[customer].regMesa += item.packetsNeeded;
-        }
+        oemOrders.mesa += item.packetsNeeded;
+        customerMap[customer].poMesa += item.packetsNeeded;
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
         cf += item.packetsNeeded;
         customerMap[customer].cf += item.packetsNeeded;
@@ -264,6 +288,80 @@ export default function CuttingWeeklySchedule() {
       toast({ title: "Error", description: "Failed to schedule packets.", variant: "destructive" });
     },
   });
+
+  const unscheduleMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-cutting-queue'] });
+      toast({ title: "Unscheduled", description: "Packet removed from cutting queue." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error?.message || "Failed to unschedule packet.", variant: "destructive" });
+    },
+  });
+
+  const customDemandMutation = useMutation({
+    mutationFn: async (data: { poNumber: string; packetType: string; quantity: number; notes: string }) => {
+      const materialTypeMap: Record<string, string> = {
+        'Carbon Fiber Packet': 'carbon_fiber',
+        'Fiberglass Packet': 'fiberglass',
+        'Mesa Packet': 'mesa',
+      };
+      const materialType = materialTypeMap[data.packetType] || 'unknown';
+      const description = data.poNumber
+        ? `PO ${data.poNumber} - ${data.packetType}${data.notes ? ' - ' + data.notes : ''}`
+        : `${data.packetType}${data.notes ? ' - ' + data.notes : ''}`;
+
+      return apiRequest('/api/cutting-table/schedule-to-cutting', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId: data.poNumber || `CUSTOM-${Date.now()}`,
+          bomId: 'generic-p2-packet',
+          quantity: data.quantity,
+          priority: 50,
+          dueDate: new Date(currentWeek).toISOString(),
+          source: 'MANUAL',
+          materialType,
+          packetName: data.packetType,
+          notes: description,
+        }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      setCustomDemand({ poNumber: '', packetType: '', quantity: '', notes: '' });
+      toast({
+        title: "Packets Scheduled",
+        description: `${variables.quantity} ${variables.packetType} packets added to cutting queue${variables.poNumber ? ` for PO ${variables.poNumber}` : ''}.`,
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to schedule custom packets.", variant: "destructive" });
+    },
+  });
+
+  const handleCustomDemandSubmit = () => {
+    const qty = parseInt(customDemand.quantity) || 0;
+    if (qty <= 0) {
+      toast({ title: "Invalid Quantity", description: "Enter a quantity greater than 0.", variant: "destructive" });
+      return;
+    }
+    if (!customDemand.packetType) {
+      toast({ title: "Select Packet Type", description: "Choose a packet type before scheduling.", variant: "destructive" });
+      return;
+    }
+    customDemandMutation.mutate({
+      poNumber: customDemand.poNumber.trim(),
+      packetType: customDemand.packetType,
+      quantity: qty,
+      notes: customDemand.notes.trim(),
+    });
+  };
 
   const updateQuantity = (key: string, delta: number) => {
     setScheduleQuantities(prev => ({
@@ -643,6 +741,78 @@ export default function CuttingWeeklySchedule() {
       )}
 
       <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <PlusCircle className="h-5 w-5" />
+            <CardTitle>Add Custom Packet Demand</CardTitle>
+          </div>
+          <CardDescription>
+            Manually schedule packets for POs not shown above, or for future POs you want to start early
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="custom-po">PO Number (optional)</Label>
+              <Input
+                id="custom-po"
+                placeholder="e.g. PO-1234"
+                value={customDemand.poNumber}
+                onChange={(e) => setCustomDemand(prev => ({ ...prev, poNumber: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-packet-type">Packet Type</Label>
+              <Select
+                value={customDemand.packetType}
+                onValueChange={(value) => setCustomDemand(prev => ({ ...prev, packetType: value }))}
+              >
+                <SelectTrigger id="custom-packet-type">
+                  <SelectValue placeholder="Select type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Carbon Fiber Packet">Carbon Fiber Packet</SelectItem>
+                  <SelectItem value="Fiberglass Packet">Fiberglass Packet</SelectItem>
+                  <SelectItem value="Mesa Packet">Mesa Packet</SelectItem>
+                  <SelectItem value="Disruptor Packet">Disruptor Packet</SelectItem>
+                  <SelectItem value="Antenna Cover Packet">Antenna Cover Packet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-qty">Quantity</Label>
+              <Input
+                id="custom-qty"
+                type="number"
+                min="1"
+                placeholder="# of packets"
+                value={customDemand.quantity}
+                onChange={(e) => setCustomDemand(prev => ({ ...prev, quantity: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-notes">Notes (optional)</Label>
+              <Input
+                id="custom-notes"
+                placeholder="e.g. Customer request, early start"
+                value={customDemand.notes}
+                onChange={(e) => setCustomDemand(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button
+              onClick={handleCustomDemandSubmit}
+              disabled={customDemandMutation.isPending || !customDemand.packetType || !customDemand.quantity}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {customDemandMutation.isPending ? 'Scheduling...' : 'Add to Cutting Queue'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
@@ -662,6 +832,7 @@ export default function CuttingWeeklySchedule() {
                   <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="text-center">Done</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -715,6 +886,39 @@ export default function CuttingWeeklySchedule() {
                         <Badge variant={item.status === 'COMPLETED' ? 'default' : 'outline'}>
                           {item.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.status !== 'COMPLETED' && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                disabled={unscheduleMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Unschedule Packet?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will remove "{getDescription()}" ({item.quantityRequested} packets) from the cutting queue. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => unscheduleMutation.mutate(item.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Unschedule
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

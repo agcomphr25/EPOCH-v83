@@ -1,0 +1,309 @@
+Copy-Paste Prompt
+Manufacturing Core Architecture Audit
+
+Give this to your agent exactly as written.
+
+EPOCH MANUFACTURING CORE ARCHITECTURE AUDIT
+
+Objective:
+Verify whether the EPOCH ERP contains the minimum manufacturing data structures required for a stable manufacturing system.
+
+This audit must determine if the system supports proper traceability between:
+
+items
+bill of materials
+production orders
+inventory
+purchasing
+
+CRITICAL RULES
+
+• READ ONLY
+• No file modifications
+• No migrations
+• No refactoring
+• Only inspect and report
+• All findings must include file paths and schema snippets
+
+Context
+
+EPOCH supports two production lines:
+
+P1 — Stocks
+P2 — Aerospace
+
+Both may manufacture assemblies using BOM structures and purchased materials.
+
+The system currently contains:
+inventory_items
+multiple BOM implementations
+stock_models (saleable products)
+
+We are planning to unify around a single Item Master and must ensure the manufacturing core supports it.
+
+--------------------------------
+
+PHASE 1 — ITEM MASTER
+
+Locate the table representing inventory items.
+
+Expected structure:
+
+inventory_items
+id
+sku
+name
+description
+uom
+cost
+vendor_id
+
+Return:
+
+• table schema
+• file path
+• FK relationships
+• tables referencing it
+
+Determine whether inventory_items is suitable to become the unified item master.
+
+--------------------------------
+
+PHASE 2 — BILL OF MATERIALS
+
+Search for BOM-related tables.
+
+Possible names:
+
+bom
+boms
+bom_items
+bill_of_materials
+assemblies
+assembly_components
+
+Identify:
+
+parent item reference
+child item reference
+quantity
+unit of measure
+
+Report:
+
+table schemas
+relationships
+FK constraints
+legacy vs modern implementations
+
+Determine if BOMs reference inventory_items with real FKs or soft references.
+
+--------------------------------
+
+PHASE 3 — PRODUCTION ORDERS
+
+Search for tables representing production jobs.
+
+Possible names:
+
+production_orders
+work_orders
+manufacturing_orders
+jobs
+build_orders
+
+Identify fields:
+
+item_id
+qty
+status
+production_line
+start_date
+due_date
+
+Report schema and FK references.
+
+Determine if production orders reference inventory_items.
+
+--------------------------------
+
+PHASE 4 — PRODUCTION OPERATIONS
+
+Check whether the system supports operation-level manufacturing steps.
+
+Possible tables:
+
+production_operations
+routing
+work_center_steps
+manufacturing_steps
+
+Fields may include:
+
+operation_name
+sequence
+work_center
+estimated_hours
+
+Determine whether production orders can contain multiple operations.
+
+If none exist, report that operations are missing.
+
+--------------------------------
+
+PHASE 5 — INVENTORY TRANSACTIONS
+
+Search for inventory movement tracking.
+
+Possible tables:
+
+inventory_transactions
+inventory_movements
+stock_transactions
+inventory_logs
+
+Fields may include:
+
+item_id
+qty_change
+transaction_type
+reference_id
+location
+
+Determine whether inventory changes are logged as immutable transactions.
+
+--------------------------------
+
+PHASE 6 — MATERIAL CONSUMPTION
+
+Verify how materials are consumed in manufacturing.
+
+Look for tables such as:
+
+production_order_materials
+job_materials
+build_materials
+
+Fields:
+
+production_order_id
+item_id
+qty_required
+qty_consumed
+
+Determine whether BOM materials are copied into production orders.
+
+--------------------------------
+
+PHASE 7 — PURCHASE ORDER INTEGRATION
+
+Inspect purchasing tables.
+
+Possible tables:
+
+purchase_orders
+po_lines
+vendor_po_items
+
+Determine whether purchased materials reference inventory_items.
+
+--------------------------------
+
+PHASE 8 — TRACEABILITY
+
+Determine whether the system can trace this chain:
+
+purchase_order
+→ inventory receipt
+→ production consumption
+→ finished item inventory
+→ sales shipment
+
+Report which links exist and which are missing.
+
+--------------------------------
+
+PHASE 9 — PRODUCTION LINE SUPPORT
+
+Search codebase for logic separating:
+
+P1 — Stocks
+P2 — Aerospace
+
+Look for fields such as:
+
+production_line
+department
+work_center
+
+Determine whether production lines are:
+
+table columns
+separate tables
+hardcoded logic
+
+--------------------------------
+
+PHASE 10 — GAP ANALYSIS
+
+Compare current architecture against the expected manufacturing core:
+
+Item Master
+Bill of Materials
+Production Orders
+Production Operations
+Inventory Transactions
+Purchase Orders
+
+Report missing components or architectural weaknesses.
+
+--------------------------------
+
+PHASE 11 — MANUFACTURING MATURITY SCORE
+
+Score each category:
+
+Item Master
+BOM
+Production Orders
+Operations
+Inventory Traceability
+Purchasing Integration
+
+Rate each from:
+
+0 = missing
+1 = partial
+2 = functional
+3 = mature
+
+--------------------------------
+
+PHASE 12 — RECOMMENDED IMPROVEMENTS
+
+Based on findings propose:
+
+• missing tables
+• missing relationships
+• schema improvements
+• FK constraints needed
+• architecture improvements for P1 and P2
+
+--------------------------------
+
+PHASE 13 — FINAL REPORT
+
+Produce a structured report containing:
+
+1 Current Manufacturing Architecture
+2 Table Relationships
+3 Production Flow
+4 Inventory Traceability
+5 P1 vs P2 Structure
+6 Missing Components
+7 Risk Areas
+8 Recommended Manufacturing Core
+
+Output the report as:
+
+docs/EPOCH_MANUFACTURING_CORE_AUDIT.md

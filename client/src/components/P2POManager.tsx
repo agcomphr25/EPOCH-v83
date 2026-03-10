@@ -50,6 +50,7 @@ import {
   ExternalLink,
   Factory,
   Lock,
+  LockOpen,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
@@ -283,6 +284,36 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
         variant: 'destructive',
       });
       setClearingPoId(null);
+    },
+  });
+
+  const lockMutation = useMutation({
+    mutationFn: (poId: number) =>
+      apiRequest(`/api/p2-purchase-orders/${poId}/lock`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    onSuccess: () => {
+      toast({ title: 'PO Locked', description: 'Purchase order is now locked for production and cannot be edited.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to lock PO', variant: 'destructive' });
+    },
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: (poId: number) =>
+      apiRequest(`/api/p2-purchase-orders/${poId}/unlock`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    onSuccess: () => {
+      toast({ title: 'PO Unlocked', description: 'Purchase order is now unlocked and can be edited.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to unlock PO', variant: 'destructive' });
     },
   });
 
@@ -807,10 +838,16 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       {format(new Date(po.createdAt), 'MMM d, yyyy')}
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <Badge variant={getStatusBadgeVariant(po.status)}>
                       {po.status}
                     </Badge>
+                    {po.lockedAt && (
+                      <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <Lock className="h-3 w-3" />
+                        Locked
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -879,11 +916,45 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       </Button>
                     </>
                   )}
+                  {po.lockedAt ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`Unlock ${po.poNumber}?\n\nThis will allow editing the purchase order again.`)) {
+                          unlockMutation.mutate(po.id);
+                        }
+                      }}
+                      disabled={unlockMutation.isPending}
+                      data-testid={`button-unlock-po-${po.id}`}
+                      title="Unlock this PO to allow editing"
+                      className="text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 border-amber-400"
+                    >
+                      <LockOpen className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`Lock ${po.poNumber}?\n\nThis will prevent any further edits to this purchase order. Attachments can still be managed.`)) {
+                          lockMutation.mutate(po.id);
+                        }
+                      }}
+                      disabled={lockMutation.isPending}
+                      data-testid={`button-lock-po-${po.id}`}
+                      title="Lock this PO to prevent editing"
+                    >
+                      <Lock className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => openEditDialog(po)}
                     data-testid={`button-edit-po-${po.id}`}
+                    disabled={!!po.lockedAt}
+                    title={po.lockedAt ? 'PO is locked' : 'Edit PO'}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -891,8 +962,9 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => deleteMutation.mutate(po.id)}
-                    disabled={deleteMutation.isPending}
+                    disabled={deleteMutation.isPending || !!po.lockedAt}
                     data-testid={`button-delete-po-${po.id}`}
+                    title={po.lockedAt ? 'PO is locked and cannot be deleted' : 'Delete PO'}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

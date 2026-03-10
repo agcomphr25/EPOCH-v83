@@ -916,6 +916,11 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       ) || null;
     }
     
+    // Strategy 3.5: Match by inventory item ID (direct FK link — most reliable static match)
+    if (!packetBom && queueItem.inventoryItemId) {
+      packetBom = allActiveBoms.find(b => b.inventoryItemId != null && b.inventoryItemId === queueItem.inventoryItemId) || null;
+    }
+
     // Strategy 4: Match by inventory item part number (less reliable - inventory linkage may be wrong)
     if (!packetBom && inventoryItem?.agPartNumber) {
       packetBom = allActiveBoms.find(b => b.partNumber === inventoryItem!.agPartNumber) || null;
@@ -1119,9 +1124,20 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
         where: eq(cuttingPacketBOMs.id, bomId),
       });
     }
+    if (!packetBom && queueItem.inventoryItemId) {
+      packetBom = await db.query.cuttingPacketBOMs.findFirst({
+        where: and(
+          eq(cuttingPacketBOMs.inventoryItemId, queueItem.inventoryItemId),
+          eq(cuttingPacketBOMs.isActive, true)
+        ),
+      });
+    }
     if (!packetBom && inventoryItem) {
       packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: eq(cuttingPacketBOMs.partNumber, inventoryItem.agPartNumber),
+        where: and(
+          eq(cuttingPacketBOMs.partNumber, inventoryItem.agPartNumber),
+          eq(cuttingPacketBOMs.isActive, true)
+        ),
       });
     }
     

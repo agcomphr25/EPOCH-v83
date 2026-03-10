@@ -106,6 +106,7 @@ type PacketBOM = {
   id: string;
   packetType: string;
   partNumber: string;
+  inventoryItemId?: number | null;
   yieldPerCut: number;
   squareMetersPerCut: number;
   cuts?: CutDefinition[];
@@ -312,6 +313,7 @@ export default function CuttingOperatorDashboard() {
           bom.packetType.toLowerCase().includes(packetName!.toLowerCase()) ||
           packetName!.toLowerCase().includes(bom.packetType.toLowerCase())
         )) ||
+        (item.inventoryItemId && allBOMs.find((bom: PacketBOM) => bom.inventoryItemId != null && bom.inventoryItemId === item.inventoryItemId)) ||
         (item.partNumber && allBOMs.find((bom: PacketBOM) => bom.partNumber === item.partNumber)) ||
         (item.partName && allBOMs.find((bom: PacketBOM) => 
           bom.packetType.toLowerCase() === item.partName!.toLowerCase() ||
@@ -1080,11 +1082,11 @@ export default function CuttingOperatorDashboard() {
       } catch {}
     }
     
-    // Find BOM by part number or ID (using string comparison)
-    return packetBOMs.find(b => 
-      b.partNumber === selectedMfgItem.partNumber ||
-      (bomId && String(b.id) === String(bomId))
-    ) || null;
+    // Find BOM by ID, inventory item FK, or part number (in priority order)
+    return packetBOMs.find(b => bomId && String(b.id) === String(bomId)) ||
+      packetBOMs.find(b => b.inventoryItemId != null && b.inventoryItemId === (selectedMfgItem as any).inventoryItemId) ||
+      packetBOMs.find(b => b.partNumber === selectedMfgItem.partNumber) ||
+      null;
   }, [selectedMfgItem, packetBOMs]);
 
   const pendingReceiving = fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length;

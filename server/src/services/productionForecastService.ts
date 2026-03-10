@@ -2,6 +2,19 @@ import { pool } from '../../db';
 import { PIPELINE_STAGES } from './pipelineValidationService';
 import type { PipelineStage } from './pipelineValidationService';
 
+function addBusinessDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  let remaining = Math.ceil(days);
+  while (remaining > 0) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) {
+      remaining--;
+    }
+  }
+  return result;
+}
+
 const FALLBACK_CYCLE_DAYS: Record<string, number> = {
   'P1 Production Queue': 3,
   'Layup/Plugging': 4,
@@ -216,6 +229,98 @@ export async function forecastOrder(
     remainingDays: Math.round(remainingDays * 10) / 10,
     riskStatus,
     remainingStages: remaining,
+  };
+}
+
+let backlogCache: { data: Record<string, number>; cachedAt: number } | null = null;
+const BACKLOG_CACHE_TTL = 300_000;
+
+async function loadBacklogs(): Promise<Record<string, number>> {
+  if (backlogCache && Date.now() - backlogCache.cachedAt < BACKLOG_CACHE_TTL) {
+    return backlogCache.data;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT current_department, COUNT(*)::int AS cnt
+       FROM all_orders
+       WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+         AND current_department IS NOT NULL
+       GROUP BY current_department`
+    );
+    const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+    const backlogs: Record<string, number> = {};
+    for (const row of rows) {
+      backlogs[row.current_department] = parseInt(row.cnt, 10) || 0;
+    }
+    backlogCache = { data: backlogs, cachedAt: Date.now() };
+    return backlogs;
+  } catch (err) {
+    console.error('[ProductionForecast] Failed to load backlogs:', err);
+    return {};
+  }
+}
+
+export type SimulationConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface NewOrderSimulation {
+  projectedCompletion: string;
+  suggestedDueDate: string;
+  estimatedCycleDays: number;
+  backlogDelayDays: number;
+  totalBusinessDays: number;
+  confidence: SimulationConfidence;
+  pipelineStages: string[];
+}
+
+export async function simulateNewOrder(params: {
+  model_id?: string | null;
+  is_flattop?: boolean;
+  features?: any;
+}): Promise<NewOrderSimulation> {
+  const order = {
+    is_flattop: params.is_flattop || false,
+    features: params.features || {},
+    model_id: params.model_id || null,
+  };
+
+  const pipeline = getEffectivePipeline(order);
+  const cycleTimes = await loadCycleTimes();
+  const backlogs = await loadBacklogs();
+
+  let totalCycleDays = 0;
+  let totalBacklogDelay = 0;
+
+  for (const stage of pipeline) {
+    const avgDays = cycleTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2;
+    totalCycleDays += avgDays;
+
+    const ordersAhead = backlogs[stage] ?? 0;
+    const backlogFactor = Math.min(ordersAhead / 50, 2.0);
+    const backlogDelay = avgDays * backlogFactor;
+    totalBacklogDelay += backlogDelay;
+  }
+
+  const estimatedCycleDays = totalCycleDays + totalBacklogDelay;
+  const totalBusinessDays = Math.ceil(estimatedCycleDays);
+  const projectedCompletion = addBusinessDays(new Date(), totalBusinessDays);
+
+  const bufferDays = 5;
+  const suggestedDueDate = addBusinessDays(new Date(), totalBusinessDays + bufferDays);
+
+  let confidence: SimulationConfidence = 'HIGH';
+  const totalBacklog = Object.values(backlogs).reduce((s, v) => s + v, 0);
+  if (totalBacklog > 300) confidence = 'LOW';
+  else if (totalBacklog > 150) confidence = 'MEDIUM';
+
+  return {
+    projectedCompletion: projectedCompletion.toISOString(),
+    suggestedDueDate: suggestedDueDate.toISOString(),
+    estimatedCycleDays: Math.round(estimatedCycleDays * 10) / 10,
+    backlogDelayDays: Math.round(totalBacklogDelay * 10) / 10,
+    totalBusinessDays,
+    confidence,
+    pipelineStages: pipeline,
   };
 }
 

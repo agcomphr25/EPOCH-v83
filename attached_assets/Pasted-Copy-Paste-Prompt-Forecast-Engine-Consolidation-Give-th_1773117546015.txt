@@ -1,0 +1,151 @@
+Copy-Paste Prompt — Forecast Engine Consolidation
+
+Give this to your agent.
+
+Writing
+
+You are implementing the next phase of the EPOCH forecasting system.
+
+Goal:
+Make productionForecastService.ts the canonical forecasting engine and enable pre-order simulation for CSR due-date estimation.
+
+Do NOT remove existing engines yet.
+
+STEP 1 — ADD PRE-ORDER SIMULATION
+
+Modify:
+
+server/src/services/productionForecastService.ts
+
+Add function:
+
+simulateNewOrder(params)
+
+Params:
+
+{
+model_id,
+is_flattop,
+features
+}
+
+STEP 2 — DETERMINE PIPELINE
+
+Reuse existing logic:
+
+getEffectivePipeline()
+
+Input parameters should replace DB order lookup.
+
+STEP 3 — LOAD CYCLE TIMES
+
+Reuse:
+
+loadCycleTimes()
+
+If historical data unavailable use fallback constants.
+
+STEP 4 — ADD BACKLOG MODELING
+
+Query active orders:
+
+SELECT current_department, COUNT(*)
+FROM all_orders
+WHERE status NOT IN ('FULFILLED','CANCELLED','SCRAPPED')
+GROUP BY current_department
+
+Compute backlog delay:
+
+delayDays =
+ordersAhead / departmentThroughput
+
+Department throughput can be approximated using:
+
+1 / avgCycleDays
+
+STEP 5 — BUSINESS DAY MATH
+
+Import from productionForecastEngine:
+
+addBusinessDays()
+
+Use this instead of calendar math.
+
+STEP 6 — ESTIMATE COMPLETION
+
+estimatedCycleDays =
+remainingCycleDays + backlogDelay
+
+projectedCompletion =
+addBusinessDays(NOW, estimatedCycleDays)
+
+STEP 7 — RISK CLASSIFICATION
+
+Return:
+
+{
+projectedCompletion,
+estimatedCycleDays,
+confidence,
+pipelineStages
+}
+
+Confidence logic:
+
+HIGH = backlog low
+MEDIUM = backlog moderate
+LOW = backlog high
+
+STEP 8 — NEW API ENDPOINT
+
+Add route:
+
+POST /api/admin/order-forecast/simulate
+
+Accept body:
+
+{
+model_id,
+is_flattop,
+features
+}
+
+Return forecast object.
+
+STEP 9 — CSR ORDER ENTRY INTEGRATION
+
+Modify:
+
+client/src/components/OrderEntry.tsx
+
+Replace:
+
+calculateBaseDueDate()
+
+With API call:
+
+/api/admin/order-forecast/simulate
+
+Populate the date picker with:
+
+suggestedDueDate
+
+Allow manual override.
+
+STEP 10 — LOGGING
+
+Log simulation requests for analytics:
+
+forecast_simulation_logs
+
+Fields:
+
+timestamp
+model_id
+is_flattop
+estimatedCycleDays
+suggestedDueDate
+csr_user
+
+Do not modify existing Control Tower forecast logic.
+Only extend productionForecastService.

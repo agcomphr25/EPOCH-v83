@@ -374,7 +374,10 @@ export default function OrderEntry() {
     setShowOrderDraftBanner(false);
   }, [restoreOrderDraft]);
 
-  // Calculate base due date based on stock model
+  const [forecastConfidence, setForecastConfidence] = useState<string | null>(null);
+  const [forecastCycleDays, setForecastCycleDays] = useState<number | null>(null);
+  const [isForecastLoading, setIsForecastLoading] = useState(false);
+
   const calculateBaseDueDate = useCallback(() => {
     const selectedModel = modelOptions.find((m) => m.id === modelId);
     const modelName = selectedModel?.displayName || selectedModel?.name || '';
@@ -383,7 +386,6 @@ export default function OrderEntry() {
     return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
   }, [modelId, modelOptions]);
 
-  // Update base due date when stock model changes (only for new orders, not when editing existing ones)
   useEffect(() => {
     if (
       modelId &&
@@ -393,22 +395,71 @@ export default function OrderEntry() {
       editingOrderId === null &&
       !isLoadingOrder
     ) {
-      const newBaseDueDate = calculateBaseDueDate();
-      setBaseDueDate(newBaseDueDate);
+      setIsForecastLoading(true);
+      const controller = new AbortController();
 
-      // Only update actual due date if no rush/expedite fees are currently selected and user hasn't manually set date
-      const otherOptions = features.other_options || [];
-      const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+      fetch('/api/admin/order-forecast/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        signal: controller.signal,
+        body: JSON.stringify({
+          model_id: modelId,
+          is_flattop: isFlattop,
+          features,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.suggestedDueDate) {
+            const suggested = new Date(data.suggestedDueDate);
+            setBaseDueDate(suggested);
+            setForecastConfidence(data.confidence || null);
+            setForecastCycleDays(data.totalBusinessDays || null);
 
-      if (!hasAnyRushFee && !isManualDueDate) {
-        setDueDate(newBaseDueDate);
-      }
+            const otherOptions = features.other_options || [];
+            const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+            if (!hasAnyRushFee && !isManualDueDate) {
+              setDueDate(suggested);
+            }
+          } else {
+            const fallback = calculateBaseDueDate();
+            setBaseDueDate(fallback);
+            setForecastConfidence(null);
+            setForecastCycleDays(null);
+
+            const otherOptions = features.other_options || [];
+            const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+            if (!hasAnyRushFee && !isManualDueDate) {
+              setDueDate(fallback);
+            }
+          }
+        })
+        .catch((err) => {
+          if (err.name !== 'AbortError') {
+            const fallback = calculateBaseDueDate();
+            setBaseDueDate(fallback);
+            setForecastConfidence(null);
+            setForecastCycleDays(null);
+
+            const otherOptions = features.other_options || [];
+            const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+            if (!hasAnyRushFee && !isManualDueDate) {
+              setDueDate(fallback);
+            }
+          }
+        })
+        .finally(() => setIsForecastLoading(false));
+
+      return () => controller.abort();
     }
   }, [
     modelId,
     modelOptions,
+    isFlattop,
     calculateBaseDueDate,
     features.other_options,
+    features.rail_accessory,
     isEditMode,
     isManualDueDate,
     isLoadingOrder,
@@ -1307,6 +1358,8 @@ export default function OrderEntry() {
       setIsVerified(false);
       setIsManualDueDate(false);
       setIsManualOrderDate(false);
+      setForecastConfidence(null);
+      setForecastCycleDays(null);
 
       // Reset alt ship to
       setHasAltShipTo(order.hasAltShipTo || false);
@@ -2557,7 +2610,9 @@ export default function OrderEntry() {
       nextDayAir: false,
       billToReceiver: false,
     });
-    setIsManualDueDate(false); // Reset manual due date flag
+    setIsManualDueDate(false);
+    setForecastConfidence(null);
+    setForecastCycleDays(null);
     // Reset QD same-side confirmation state
     setQdSameSideConfirmed(false);
     setQdSameSideConfirmedBy(null);
@@ -2848,6 +2903,25 @@ export default function OrderEntry() {
                           Custom
                         </Badge>
                       )}
+                      {isForecastLoading && (
+                        <span className="text-xs text-muted-foreground animate-pulse">
+                          Forecasting...
+                        </span>
+                      )}
+                      {!isManualDueDate && forecastConfidence && !isForecastLoading && (
+                        <Badge
+                          variant="outline"
+                          className={
+                            forecastConfidence === 'HIGH'
+                              ? 'text-xs border-green-500 text-green-700'
+                              : forecastConfidence === 'MEDIUM'
+                                ? 'text-xs border-yellow-500 text-yellow-700'
+                                : 'text-xs border-red-500 text-red-700'
+                          }
+                        >
+                          {forecastConfidence} confidence
+                        </Badge>
+                      )}
                     </Label>
                     <Input
                       id="dueDate"
@@ -2864,14 +2938,13 @@ export default function OrderEntry() {
                           const newDate = new Date(dateValue);
                           if (!isNaN(newDate.getTime())) {
                             setDueDate(newDate);
-                            setIsManualDueDate(true); // Mark as manually set
+                            setIsManualDueDate(true);
                           }
                         } else {
-                          // If cleared, set to default 98 days from now
                           setDueDate(
                             new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)
                           );
-                          setIsManualDueDate(false); // Reset manual flag when cleared
+                          setIsManualDueDate(false);
                         }
                       }}
                     />
@@ -2879,6 +2952,11 @@ export default function OrderEntry() {
                       <p className="text-xs text-muted-foreground mt-1">
                         Due date manually set - will not auto-adjust for stock
                         model or rush fees
+                      </p>
+                    )}
+                    {!isManualDueDate && forecastCycleDays && !isForecastLoading && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Forecast: ~{forecastCycleDays} business days based on current production data
                       </p>
                     )}
                   </div>

@@ -6,7 +6,7 @@ import { DEPARTMENTS } from '../constants/departments';
 import { getQueueIntegrityStatus } from '../services/queueIntegrityService';
 import { validatePipelineState } from '../services/pipelineValidationService';
 import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipelineRepairService';
-import { forecastActiveOrders, forecastOrder } from '../services/productionForecastService';
+import { forecastActiveOrders, forecastOrder, simulateNewOrder } from '../services/productionForecastService';
 
 const router = Router();
 
@@ -1154,6 +1154,46 @@ router.get(
       console.error('Order forecast error:', error);
       res.status(500).json({
         error: 'Failed to forecast order',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.post(
+  '/order-forecast/simulate',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const model_id = typeof body.model_id === 'string' ? body.model_id : null;
+      const is_flattop = body.is_flattop === true;
+      const features = typeof body.features === 'object' && body.features !== null ? body.features : {};
+      const result = await simulateNewOrder({ model_id, is_flattop, features });
+
+      try {
+        const userId = (req as any).user?.id || null;
+        await pool.query(
+          `INSERT INTO forecast_simulation_logs
+            (model_id, is_flattop, estimated_cycle_days, suggested_due_date, csr_user_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            model_id || null,
+            is_flattop || false,
+            result.estimatedCycleDays,
+            result.suggestedDueDate,
+            userId,
+          ]
+        );
+      } catch (logErr) {
+        console.error('[ForecastSimulate] Failed to log simulation:', logErr);
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error('Forecast simulation error:', error);
+      res.status(500).json({
+        error: 'Failed to simulate forecast',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }

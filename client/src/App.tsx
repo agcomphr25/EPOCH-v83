@@ -117,6 +117,7 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
 import ProductionCommandCenter from './pages/ProductionCommandCenter';
+import ProductionControlCenter from './pages/ProductionControlCenter';
 import JOHNLTestDashboard from './pages/JOHNLTestDashboard';
 import JENSTestDashboard from './pages/JENSTestDashboard';
 import STACIWTestDashboard from './pages/STACIWTestDashboard';
@@ -629,6 +630,7 @@ function App() {
 
                   {/* User Dashboard Routes */}
                   <Route path="/production-command-center" component={ProductionCommandCenter} />
+                  <Route path="/production-control-center" component={ProductionControlCenter} />
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
                   <Route
                     path="/admin-dashboard"

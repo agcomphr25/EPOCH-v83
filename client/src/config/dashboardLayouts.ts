@@ -105,8 +105,11 @@ export const PRODUCTION_OVERVIEW_LAYOUT: DashboardLayout = {
 
 // ─── Registry of all layouts ───────────────────────────────────────────────────
 
+import { PCC_DASHBOARD_LAYOUT } from './pccDashboardLayout';
+
 export const DASHBOARD_LAYOUTS: Record<string, DashboardLayout> = {
   production_overview: PRODUCTION_OVERVIEW_LAYOUT,
+  production_control_center: PCC_DASHBOARD_LAYOUT,
 };
 
 export function getLayout(id: string): DashboardLayout | undefined {

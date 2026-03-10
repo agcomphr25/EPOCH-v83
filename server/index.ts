@@ -397,6 +397,145 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Traveler authorized notes migration skipped:', authNotesErr.message);
       }
 
+      // Ensure cutting table packet BOM tables exist (needed for scan-start endpoint)
+      try {
+        const { sql: sqlCut } = await import('drizzle-orm');
+        await db.execute(sqlCut`
+          CREATE TABLE IF NOT EXISTS cutting_production_lines (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            line_name TEXT NOT NULL,
+            line_number INTEGER NOT NULL,
+            description TEXT,
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT now(),
+            updated_at TIMESTAMP DEFAULT now()
+          )
+        `);
+        await db.execute(sqlCut`
+          CREATE TABLE IF NOT EXISTS cutting_product_categories (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            production_line_id UUID REFERENCES cutting_production_lines(id),
+            category_name TEXT NOT NULL,
+            display_order INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT now(),
+            updated_at TIMESTAMP DEFAULT now()
+          )
+        `);
+        await db.execute(sqlCut`
+          CREATE TABLE IF NOT EXISTS cutting_packet_boms (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            packet_type TEXT NOT NULL,
+            part_number TEXT NOT NULL,
+            description TEXT,
+            cuts_config JSONB,
+            cut_programs_config JSONB,
+            no_ply_schedule BOOLEAN DEFAULT false,
+            ply_schedule_config JSONB,
+            product_category_id UUID REFERENCES cutting_product_categories(id),
+            inventory_item_id INTEGER REFERENCES inventory_items(id),
+            square_meters_per_cut REAL NOT NULL DEFAULT 0,
+            yield_per_cut INTEGER NOT NULL DEFAULT 4,
+            waste_factor REAL NOT NULL DEFAULT 0.05,
+            is_p2 BOOLEAN DEFAULT false,
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT now(),
+            updated_at TIMESTAMP DEFAULT now()
+          )
+        `);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_boms_part_number_idx ON cutting_packet_boms(part_number)`);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_boms_packet_type_idx ON cutting_packet_boms(packet_type)`);
+        await db.execute(sqlCut`
+          CREATE TABLE IF NOT EXISTS cutting_packet_bom_materials (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            packet_bom_id UUID NOT NULL REFERENCES cutting_packet_boms(id) ON DELETE CASCADE,
+            fabric_type TEXT NOT NULL,
+            common_name TEXT,
+            quantity_needed INTEGER NOT NULL DEFAULT 1,
+            rolls_required INTEGER NOT NULL DEFAULT 1,
+            square_meters_required REAL,
+            created_at TIMESTAMP DEFAULT now(),
+            updated_at TIMESTAMP DEFAULT now()
+          )
+        `);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_bom_materials_bom_idx ON cutting_packet_bom_materials(packet_bom_id)`);
+        await db.execute(sqlCut`
+          CREATE TABLE IF NOT EXISTS cutting_packet_bom_parts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            packet_bom_id UUID NOT NULL REFERENCES cutting_packet_boms(id) ON DELETE CASCADE,
+            inventory_item_id INTEGER REFERENCES inventory_items(id),
+            part_number TEXT NOT NULL,
+            part_description TEXT,
+            fabric_type TEXT NOT NULL,
+            common_name TEXT,
+            quantity_needed INTEGER NOT NULL DEFAULT 1,
+            cut_program_name TEXT,
+            square_meters_per_cut REAL,
+            yield_per_cut INTEGER NOT NULL DEFAULT 1,
+            square_meters_per_part REAL,
+            sort_order INTEGER DEFAULT 0,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT now(),
+            updated_at TIMESTAMP DEFAULT now()
+          )
+        `);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_bom_parts_bom_idx ON cutting_packet_bom_parts(packet_bom_id)`);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_bom_parts_part_number_idx ON cutting_packet_bom_parts(part_number)`);
+        await db.execute(sqlCut`
+          CREATE TABLE IF NOT EXISTS cutting_packet_bom_cuts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            packet_bom_id UUID NOT NULL REFERENCES cutting_packet_boms(id) ON DELETE CASCADE,
+            fabric_inventory_id UUID REFERENCES cutting_fabric_inventory(id),
+            mfg_queue_item_id INTEGER,
+            cut_date TIMESTAMP NOT NULL DEFAULT now(),
+            square_meters_used REAL NOT NULL,
+            pieces_yielded INTEGER NOT NULL,
+            roll_number TEXT,
+            lot_number TEXT,
+            operator_name TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT now()
+          )
+        `);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_bom_cuts_bom_idx ON cutting_packet_bom_cuts(packet_bom_id)`);
+        await db.execute(sqlCut`CREATE INDEX IF NOT EXISTS cutting_packet_bom_cuts_date_idx ON cutting_packet_bom_cuts(cut_date)`);
+        console.log('✅ Ensured cutting packet BOM tables exist');
+      } catch (cutBomErr: any) {
+        console.warn('⚠️ Cutting packet BOM tables migration skipped:', cutBomErr.message);
+      }
+
+      // Ensure cutting_fabric_inventory has all required columns (runs after cutting_production_lines is created)
+      try {
+        const { sql: sqlFabInv } = await import('drizzle-orm');
+        const fabCols = [
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS inventory_item_id INTEGER REFERENCES inventory_items(id)`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS production_line_id UUID REFERENCES cutting_production_lines(id)`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS source TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS fabric_part_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS nickname TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS supplier_part_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS supplier_po_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS manufacturer_po_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS internal_control_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS batch_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS roll_number TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS manufacture_date DATE`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS received_date DATE`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS conformance_document_link TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS square_meters NUMERIC(10,2)`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS barcode TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS depleted_at TIMESTAMP`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS depleted_by TEXT`,
+          sqlFabInv`ALTER TABLE cutting_fabric_inventory ADD COLUMN IF NOT EXISTS freezer_number INTEGER`,
+        ];
+        for (const col of fabCols) {
+          try { await db.execute(col); } catch {}
+        }
+        console.log('✅ Ensured cutting_fabric_inventory has all required columns');
+      } catch (fabInvErr: any) {
+        console.warn('⚠️ cutting_fabric_inventory columns migration:', fabInvErr.message);
+      }
+
       // Ensure instruction_pack column exists on traveler_tasks
       try {
         const { sql: sqlInst } = await import('drizzle-orm');

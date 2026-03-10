@@ -1081,7 +1081,8 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error processing scan-start:', error);
-    res.status(500).json({ error: 'Failed to process packet scan' });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to process packet scan', message });
   }
 });
 

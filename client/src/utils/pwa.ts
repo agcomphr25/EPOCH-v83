@@ -2,15 +2,16 @@
  * PWA utilities for service worker registration and app installation
  */
 
-// Register service worker
 export const registerServiceWorker = async (): Promise<void> => {
   if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('SW registered: ', registration);
+      console.info('[EPOCH] Service Worker Registered', registration.scope);
     } catch (registrationError) {
-      console.log('SW registration failed: ', registrationError);
+      console.error('[EPOCH] Service Worker registration failed:', registrationError);
     }
+  } else {
+    console.warn('[EPOCH] Service Workers not supported in this browser');
   }
 };
 
@@ -24,10 +25,9 @@ let deferredPrompt: any;
 
 export const setupInstallPrompt = (): void => {
   window.addEventListener('beforeinstallprompt', (e) => {
-    // Prevent Chrome 67 and earlier from automatically showing the prompt
     e.preventDefault();
-    // Stash the event so it can be triggered later
     deferredPrompt = e;
+    console.info('[EPOCH] Install prompt captured and ready');
   });
 };
 

@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import App from './App.tsx';
 import './index.css';
+import { registerServiceWorker, setupInstallPrompt } from './utils/pwa';
+import { startSyncEngine } from './offline/syncEngine';
 
 // Ensure React is globally available before any components load
 (window as any).React = React;
@@ -67,3 +69,9 @@ console.log('React hooks:', {
   useState: React.useState,
   useEffect: React.useEffect,
 });
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  registerServiceWorker();
+}
+setupInstallPrompt();
+startSyncEngine();

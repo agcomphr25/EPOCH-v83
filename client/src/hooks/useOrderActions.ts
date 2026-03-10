@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { performMutation } from '@/offline/performMutation';
 
 interface UseOrderActionsOptions {
   onSuccess?: () => void;
@@ -19,12 +20,17 @@ export function useOrderActions(options: UseOrderActionsOptions = {}) {
 
   const progressOrderMutation = useMutation({
     mutationFn: async ({ orderId, nextDepartment }: { orderId: string; nextDepartment?: string }) => {
-      return apiRequest(`/api/orders/${orderId}/progress`, {
-        method: 'POST',
-        body: JSON.stringify({ nextDepartment }),
+      return performMutation('MOVE_ORDER', { orderId, nextDepartment }, {
+        onOfflineOptimistic: () => {
+          toast({
+            title: 'Queued Offline',
+            description: `Order ${orderId} progression will sync when back online`,
+          });
+        },
       });
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async (result, variables) => {
+      if (result?.queued) return;
       toast({
         title: 'Success',
         description: `Order ${variables.orderId} progressed successfully`,

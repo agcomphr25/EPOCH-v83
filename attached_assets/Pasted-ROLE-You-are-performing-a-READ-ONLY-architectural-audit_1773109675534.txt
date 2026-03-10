@@ -1,0 +1,170 @@
+ROLE
+
+You are performing a READ-ONLY architectural audit of the EPOCH codebase to determine the current state of the Invoice UI, document upload system, and payment allocation UI.
+
+Do NOT modify code.
+
+The goal is to understand what already exists so the missing UI pieces can be implemented safely.
+
+PROJECT CONTEXT
+
+The backend currently supports:
+
+• invoices
+• invoice_lines
+• AR payments
+• AR payment allocations
+• AR aging queries
+
+However, the agent reported that the following UI pieces are missing:
+
+Invoice payment allocation UI
+
+Invoice PDF upload UI
+
+Document attachment display on invoices
+
+Your task is to audit the codebase to confirm exactly what exists and what is missing.
+
+PHASE 1 — LOCATE INVOICE UI PAGES
+
+Search for:
+
+invoice
+invoices
+InvoicePage
+InvoiceList
+InvoiceDetail
+InvoiceForm
+
+Identify:
+
+• file paths for invoice pages
+• which routes render these pages
+• components used for invoice forms
+
+Output:
+
+Example:
+
+client/src/pages/Invoices.tsx
+client/src/pages/InvoiceDetail.tsx
+
+Include a short description of each page.
+
+PHASE 2 — FIND DOCUMENT UPLOAD SYSTEM
+
+Search the repo for:
+
+ObjectUploader
+useUpload
+media_attachments
+upload
+fileUpload
+
+Identify:
+
+• upload components
+• upload hooks
+• API routes used for uploads
+• how documents are attached to entities
+
+Confirm whether the system supports:
+
+entity_type = "invoice"
+
+Output:
+
+• upload component name
+• example usage
+• API endpoint used for uploads
+
+PHASE 3 — CHECK IF INVOICE PAGES USE UPLOAD COMPONENTS
+
+Inspect the invoice form components.
+
+Determine:
+
+• whether ObjectUploader or similar upload component is present
+• whether invoice pages connect to media_attachments
+• whether invoice attachments are displayed anywhere
+
+Output:
+
+Example:
+
+InvoiceForm.tsx
+Upload component: NOT USED
+
+PHASE 4 — FIND PAYMENT UI
+
+Search for:
+
+payment
+PaymentForm
+PaymentPage
+ApplyPayment
+allocation
+
+Identify:
+
+• any UI pages related to payments
+• whether payment UI is connected to invoices or orders
+
+Output:
+
+Example:
+
+client/src/pages/Payments.tsx
+Connected to: all_orders
+
+Confirm whether invoice payments have any UI at all.
+
+PHASE 5 — VERIFY INVOICE API CONNECTIONS
+
+Inspect invoice pages to confirm:
+
+• which API endpoints they call
+• whether invoice lines load correctly
+• whether balance calculations are displayed
+
+Output:
+
+Example:
+
+GET /api/invoices
+GET /api/invoices/
+
+PHASE 6 — IDENTIFY REUSABLE UI COMPONENTS
+
+Locate components that can be reused for:
+
+• dropdown selectors
+• table editors
+• payment entry forms
+• modal dialogs
+• file upload
+
+Output component list.
+
+FINAL REPORT
+
+Produce a structured report with:
+
+Existing invoice UI pages
+
+Upload infrastructure status
+
+Whether invoice pages support attachments
+
+Whether payment UI exists
+
+Components that should be reused to implement:
+
+• invoice document uploads
+• payment allocation UI
+
+Also recommend the best place in the UI to add:
+
+• invoice PDF upload
+• apply payment button

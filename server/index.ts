@@ -1322,6 +1322,68 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ unit_families migration:', unitErr.message);
       }
 
+      // Ensure AR invoice/payment tables exist
+      try {
+        const { sql: sqlAR } = await import('drizzle-orm');
+        await db.execute(sqlAR`
+          CREATE TABLE IF NOT EXISTS ar_invoices (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            customer_id TEXT NOT NULL,
+            invoice_number TEXT NOT NULL,
+            invoice_date DATE NOT NULL,
+            due_date DATE,
+            terms TEXT,
+            po_id TEXT,
+            po_override TEXT,
+            subtotal NUMERIC NOT NULL,
+            tax_amount NUMERIC NOT NULL DEFAULT 0,
+            total_amount NUMERIC NOT NULL,
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            notes TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAR`
+          CREATE TABLE IF NOT EXISTS ar_invoice_lines (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            invoice_id UUID NOT NULL REFERENCES ar_invoices(id) ON DELETE CASCADE,
+            inventory_item_id TEXT,
+            description TEXT NOT NULL,
+            qty NUMERIC NOT NULL,
+            unit_price NUMERIC NOT NULL,
+            line_total NUMERIC NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAR`
+          CREATE TABLE IF NOT EXISTS ar_payments (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            customer_id TEXT NOT NULL,
+            payment_date DATE NOT NULL,
+            payment_method TEXT NOT NULL,
+            reference_number TEXT,
+            amount NUMERIC NOT NULL,
+            notes TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAR`
+          CREATE TABLE IF NOT EXISTS ar_payment_allocations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            payment_id UUID NOT NULL REFERENCES ar_payments(id) ON DELETE CASCADE,
+            invoice_id UUID NOT NULL REFERENCES ar_invoices(id),
+            amount_applied NUMERIC NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured AR invoice/payment tables exist');
+      } catch (arErr: any) {
+        console.warn('⚠️ AR tables migration:', arErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

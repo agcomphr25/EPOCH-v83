@@ -61,8 +61,15 @@ export async function processMutationQueue(): Promise<void> {
         });
 
         if (response.ok) {
-          await markMutationSynced(mutation.id);
-          console.info('[EPOCH SYNC] Mutation synced:', mutation.id);
+          const data = await response.json().catch(() => ({}));
+          if (data.status === 'replayed' || data.status === 'already_processed') {
+            await markMutationSynced(mutation.id);
+            console.info('[EPOCH SYNC] Mutation synced:', mutation.id);
+          } else {
+            await incrementRetryCount(mutation.id);
+            await markMutationFailed(mutation.id);
+            console.warn(`[EPOCH SYNC] Unexpected replay response, retrying:`, mutation.id, data);
+          }
         } else if (NON_RETRYABLE_STATUS_CODES.includes(response.status)) {
           await markMutationFailed(mutation.id);
           console.error(`[EPOCH SYNC] Mutation permanently failed (${response.status}):`, mutation.id);

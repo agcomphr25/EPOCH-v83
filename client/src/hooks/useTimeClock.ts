@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { performMutation } from '@/offline/performMutation';
 
 interface TimeClockStatus {
   status: 'IN' | 'OUT';
@@ -16,18 +17,12 @@ interface UseTimeClockReturn {
   loading: boolean;
 }
 
-/**
- * useTimeClock(employeeId: string)
- * - Fetches current clock status from GET /api/timeclock?employeeId={employeeId}
- * - Exposes: { clockedIn, clockInTime, clockOutTime, clockIn(), clockOut() }
- */
 export default function useTimeClock(employeeId: string): UseTimeClockReturn {
   const [clockedIn, setClockedIn] = useState(false);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch current status
   const refreshStatus = useCallback(async () => {
     setLoading(true);
     try {
@@ -49,31 +44,30 @@ export default function useTimeClock(employeeId: string): UseTimeClockReturn {
     refreshStatus();
   }, [refreshStatus]);
 
-  // Clock In
   const clockIn = async () => {
-    try {
-      await axios.post('/api/timeclock', {
-        employeeId,
-        action: 'IN',
-        timestamp: new Date().toISOString(),
-      });
-      await refreshStatus(); // refresh after action
-    } catch (err) {
-      throw err;
+    const timestamp = new Date().toISOString();
+    const result = await performMutation('CLOCK_IN', { employeeId, timestamp }, {
+      onOfflineOptimistic: () => {
+        setClockedIn(true);
+        setClockInTime(timestamp);
+        setClockOutTime(null);
+      },
+    });
+    if (!result?.queued) {
+      await refreshStatus();
     }
   };
 
-  // Clock Out
   const clockOut = async () => {
-    try {
-      await axios.post('/api/timeclock', {
-        employeeId,
-        action: 'OUT',
-        timestamp: new Date().toISOString(),
-      });
-      await refreshStatus(); // refresh after action
-    } catch (err) {
-      throw err;
+    const timestamp = new Date().toISOString();
+    const result = await performMutation('CLOCK_OUT', { employeeId, timestamp }, {
+      onOfflineOptimistic: () => {
+        setClockedIn(false);
+        setClockOutTime(timestamp);
+      },
+    });
+    if (!result?.queued) {
+      await refreshStatus();
     }
   };
 

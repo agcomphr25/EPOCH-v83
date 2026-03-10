@@ -7,6 +7,7 @@ function generateUUID(): string {
 export async function queueMutation(
   eventType: string,
   payload: Record<string, unknown>,
+  idempotencyKey?: string,
 ): Promise<OfflineMutation> {
   const mutation: OfflineMutation = {
     id: generateUUID(),
@@ -14,7 +15,7 @@ export async function queueMutation(
     payload,
     createdAt: Date.now(),
     retryCount: 0,
-    idempotencyKey: generateUUID(),
+    idempotencyKey: idempotencyKey || generateUUID(),
     status: 'pending',
   };
 

@@ -41,6 +41,9 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       .where(whereClause)
       .orderBy(manufacturingQueue.priority, manufacturingQueue.createdAt);
     
+    // Fetch all active BOMs once for efficient lookup
+    const allActiveBoms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
+
     const formattedItems = queueItems.map(row => {
       // Extract bomId and other data from notes JSON if present
       let packetBomId = null;
@@ -64,15 +67,24 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         // Notes might not be JSON, that's ok
       }
 
+      // Find the BOM linked to this queue item (by bomId, inventoryItemId, or partNumber)
+      const linkedBom = 
+        (packetBomId && allActiveBoms.find(b => b.id === packetBomId)) ||
+        (row.queue.inventoryItemId && allActiveBoms.find(b => b.inventoryItemId != null && b.inventoryItemId === row.queue.inventoryItemId)) ||
+        (row.item?.agPartNumber && allActiveBoms.find(b => b.partNumber === row.item!.agPartNumber)) ||
+        null;
+
       const displayName = packetName || userNotes || row.item?.name || orderId || null;
       
       return {
         ...row.queue,
-        partNumber: row.item?.agPartNumber,
+        // Show BOM's part number when a BOM is linked; fall back to inventory item's part number
+        partNumber: linkedBom?.partNumber || row.item?.agPartNumber,
         partName: row.item?.name,
         displayName,
         inventoryItem: row.item,
         packetBomId,
+        bomPartNumber: linkedBom?.partNumber || null,
         materialType,
         source,
         orderId,

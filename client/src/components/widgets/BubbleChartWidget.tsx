@@ -15,9 +15,10 @@ import {
 
 interface BubbleDataPoint {
   name: string;
-  shipments: number;
-  margin: number;
-  volume: number;
+  modelId: string;
+  weeklyShipments: number;
+  avgPrice: number;
+  totalRevenue: number;
 }
 
 interface BubbleChartWidgetProps {
@@ -33,40 +34,41 @@ const BUBBLE_COLORS = [
   'hsl(47, 96%, 53%)',
   'hsl(189, 94%, 43%)',
   'hsl(0, 72%, 51%)',
+  'hsl(160, 60%, 45%)',
+  'hsl(280, 60%, 50%)',
+  'hsl(30, 80%, 55%)',
+  'hsl(200, 70%, 50%)',
+  'hsl(350, 65%, 48%)',
+  'hsl(100, 55%, 45%)',
+  'hsl(240, 60%, 55%)',
 ];
+
+function formatCurrency(val: number) {
+  if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+  if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+  return `$${val}`;
+}
 
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
+  const d = payload[0].payload as BubbleDataPoint;
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{d.name}</p>
-      <p className="text-gray-500 dark:text-gray-400">Shipments: {d.shipments}</p>
-      <p className="text-gray-500 dark:text-gray-400">Margin: {d.margin}%</p>
-      <p className="text-gray-500 dark:text-gray-400">Volume: {d.volume}</p>
+      <p className="text-gray-500 dark:text-gray-400">Weekly Shipments: {d.weeklyShipments}</p>
+      <p className="text-gray-500 dark:text-gray-400">Avg Price: ${d.avgPrice.toLocaleString()}</p>
+      <p className="text-gray-500 dark:text-gray-400">Total Revenue: {formatCurrency(d.totalRevenue)}</p>
     </div>
   );
 }
 
 export default function BubbleChartWidget({ className }: BubbleChartWidgetProps) {
-  const { data: statsData, isLoading, isError } = useQuery({
-    queryKey: ['/api/orders/pipeline-counts'],
+  const { data, isLoading, isError } = useQuery<{ bubbles: BubbleDataPoint[]; weeksAnalyzed: number }>({
+    queryKey: ['/api/shipping/stock-model-bubbles'],
   });
 
-  const bubbleData: BubbleDataPoint[] = (() => {
-    const counts = statsData as any;
-    if (!counts) return [];
-
-    const products = [
-      { name: 'P1 Custom', shipments: counts?.shipped ?? 12, margin: 42, volume: 85 },
-      { name: 'P2 Stock', shipments: Math.round((counts?.shipped ?? 10) * 0.8), margin: 35, volume: 120 },
-      { name: 'CNC Parts', shipments: counts?.cnc ?? 8, margin: 55, volume: 40 },
-      { name: 'Paint Jobs', shipments: counts?.paint ?? 6, margin: 28, volume: 65 },
-      { name: 'Gunsmith', shipments: counts?.gunsmith ?? 4, margin: 60, volume: 30 },
-    ];
-
-    return products;
-  })();
+  const bubbleData = data?.bubbles ?? [];
+  const weeksAnalyzed = data?.weeksAnalyzed ?? 12;
 
   return (
     <div
@@ -78,7 +80,10 @@ export default function BubbleChartWidget({ className }: BubbleChartWidgetProps)
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-          Product Mix
+          Stock Model Popularity
+        </span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          Last {weeksAnalyzed} weeks
         </span>
       </div>
 
@@ -89,7 +94,11 @@ export default function BubbleChartWidget({ className }: BubbleChartWidgetProps)
       ) : isError ? (
         <div className="flex items-center justify-center h-48 gap-2 text-red-500 text-sm">
           <AlertCircle className="h-5 w-5" />
-          <span>Failed to load product mix data</span>
+          <span>Failed to load model data</span>
+        </div>
+      ) : bubbleData.length === 0 ? (
+        <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-500 text-sm">
+          No shipped orders with model data found
         </div>
       ) : (
         <div className="h-56">
@@ -97,20 +106,21 @@ export default function BubbleChartWidget({ className }: BubbleChartWidgetProps)
             <ScatterChart margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
               <XAxis
-                dataKey="shipments"
-                name="Shipments"
+                dataKey="weeklyShipments"
+                name="Weekly Shipments"
                 tick={{ fontSize: 11 }}
                 className="fill-gray-500 dark:fill-gray-400"
-                label={{ value: 'Shipments', position: 'insideBottom', offset: -3, fontSize: 10, fill: '#9ca3af' }}
+                label={{ value: 'Weekly Shipments', position: 'insideBottom', offset: -3, fontSize: 10, fill: '#9ca3af' }}
               />
               <YAxis
-                dataKey="margin"
-                name="Margin %"
+                dataKey="avgPrice"
+                name="Avg Price ($)"
                 tick={{ fontSize: 11 }}
                 className="fill-gray-500 dark:fill-gray-400"
-                label={{ value: 'Margin %', angle: -90, position: 'insideLeft', offset: 15, fontSize: 10, fill: '#9ca3af' }}
+                label={{ value: 'Avg Price ($)', angle: -90, position: 'insideLeft', offset: 15, fontSize: 10, fill: '#9ca3af' }}
+                tickFormatter={(v) => `$${v}`}
               />
-              <ZAxis dataKey="volume" range={[200, 1200]} name="Volume" />
+              <ZAxis dataKey="totalRevenue" range={[200, 1400]} name="Total Revenue" />
               <Tooltip content={<CustomTooltip />} />
               <Scatter data={bubbleData}>
                 {bubbleData.map((_, idx) => (

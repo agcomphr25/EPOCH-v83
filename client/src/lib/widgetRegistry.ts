@@ -112,8 +112,8 @@ registerWidget({
 
 registerWidget({
   id: 'bubble_chart',
-  displayName: 'Product Mix Bubble Chart',
-  description: 'Scatter/bubble chart showing product mix by shipments, margin, and volume.',
+  displayName: 'Stock Model Popularity',
+  description: 'Bubble chart showing stock model popularity by weekly shipments, avg price, and total revenue.',
   category: 'chart',
   component: BubbleChartWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],

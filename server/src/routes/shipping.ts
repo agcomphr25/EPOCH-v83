@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { auditService } from '../services/auditService';
-import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots } from '../../schema';
+import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots, stockModels } from '../../schema';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getOperationalWeek,
@@ -2798,6 +2798,79 @@ router.get('/weekly-history', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting weekly shipping history:', error);
     res.status(500).json({ error: 'Failed to get weekly shipping history' });
+  }
+});
+
+router.get('/stock-model-bubbles', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const weeksBack = 12;
+    const currentOpWeek = getOperationalWeek(now);
+    const currentOpYear = getOperationalYear(now);
+
+    let opWeek = currentOpWeek;
+    let opYear = currentOpYear;
+    for (let i = 0; i < weeksBack; i++) {
+      opWeek--;
+      if (opWeek < 1) {
+        opYear--;
+        const lastDayPrevYear = getOperationalWeekStart(1, opYear + 1);
+        lastDayPrevYear.setDate(lastDayPrevYear.getDate() - 1);
+        opWeek = getOperationalWeek(lastDayPrevYear);
+      }
+    }
+    const earliestStart = getOperationalWeekStart(opWeek, opYear);
+
+    const shippedRows = await db
+      .select({
+        modelId: allOrders.modelId,
+        paymentAmount: allOrders.paymentAmount,
+        shippedDate: allOrders.shippedDate,
+      })
+      .from(allOrders)
+      .where(
+        and(
+          gte(allOrders.shippedDate, earliestStart),
+          lte(allOrders.shippedDate, now),
+          sql`${allOrders.modelId} IS NOT NULL`,
+          sql`${allOrders.modelId} != ''`
+        )
+      );
+
+    const stockModelRows = await db
+      .select({ id: stockModels.id, displayName: stockModels.displayName, price: stockModels.price })
+      .from(stockModels);
+
+    const stockModelLookup = new Map(stockModelRows.map(m => [m.id, m]));
+
+    const modelMap = new Map<string, { count: number; totalRevenue: number }>();
+    for (const row of shippedRows) {
+      const mid = row.modelId!;
+      const entry = modelMap.get(mid) || { count: 0, totalRevenue: 0 };
+      entry.count++;
+      const basePrice = stockModelLookup.get(mid)?.price || 0;
+      const effectiveRevenue = (row.paymentAmount && row.paymentAmount > 0) ? row.paymentAmount : basePrice;
+      entry.totalRevenue += effectiveRevenue;
+      modelMap.set(mid, entry);
+    }
+
+    const bubbles = Array.from(modelMap.entries())
+      .map(([modelId, stats]) => {
+        const sm = stockModelLookup.get(modelId);
+        const name = sm?.displayName || modelId;
+        const weeklyShipments = parseFloat((stats.count / weeksBack).toFixed(1));
+        const totalRevenue = Math.round(stats.totalRevenue);
+        const avgPrice = stats.count > 0 ? Math.round(stats.totalRevenue / stats.count) : 0;
+        return { name, modelId, weeklyShipments, avgPrice, totalRevenue };
+      })
+      .filter(b => b.weeklyShipments > 0)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 15);
+
+    res.json({ bubbles, weeksAnalyzed: weeksBack });
+  } catch (error) {
+    console.error('Error getting stock model bubble data:', error);
+    res.status(500).json({ error: 'Failed to get stock model bubble data' });
   }
 });
 

@@ -1,0 +1,329 @@
+Copy-Paste Audit Prompt
+EPOCH ARCHITECTURAL AUDIT
+Objective: Identify how Parts, Products, Materials, and BOM structures currently exist in the codebase and determine the safest path toward a unified "Item Master" architecture.
+
+CRITICAL RULES
+• READ ONLY — do not modify any files
+• No refactoring yet
+• No migrations yet
+• Only inspect and report
+• All findings must include file paths and code snippets
+
+CONTEXT
+EPOCH is a manufacturing ERP with multiple production lines:
+
+P1 — Stocks
+P2 — Aerospace
+
+Both production lines may manufacture items, purchase materials, and eventually sell finished goods.
+
+We are preparing to implement Quotes, Sales Orders, and Invoices.
+
+However the current system may separate:
+- parts
+- products
+- materials
+- assemblies
+
+Best practice ERP architecture uses a single unified ITEM MASTER that can support:
+
+purchase
+sales
+manufacturing
+inventory
+BOM
+
+The goal of this audit is to determine:
+
+1) How items are currently represented
+2) Where the system distinguishes between parts vs products
+3) How BOMs reference parent and child items
+4) Whether manufacturing parents are invoiceable
+5) Whether products are linked to inventory
+6) Whether P1 and P2 have different item logic
+
+--------------------------------
+
+PHASE 1 — DATA MODEL DISCOVERY
+
+Search the codebase for the following tables, schemas, and models:
+
+parts
+products
+materials
+items
+assemblies
+bom
+boms
+bom_items
+bill_of_materials
+inventory_items
+skus
+catalog
+
+If using Drizzle ORM:
+search schema files.
+
+Return:
+
+TABLE NAME
+FILE PATH
+FIELDS
+RELATIONSHIPS
+
+Example format:
+
+Table: products
+File: server/db/schema/products.ts
+Fields:
+- id
+- sku
+- name
+- price
+
+Used by:
+sales_orders.product_id
+invoice_lines.product_id
+
+--------------------------------
+
+PHASE 2 — BOM ARCHITECTURE
+
+Identify how BOMs work.
+
+Find:
+
+parent_item
+child_item
+qty
+unit_of_measure
+
+Report:
+
+BOM tables
+schema
+relations
+
+Example:
+
+bom_items
+parent_part_id
+child_part_id
+quantity
+
+Determine:
+
+Are BOM parents stored as parts?
+products?
+assemblies?
+something else?
+
+--------------------------------
+
+PHASE 3 — SALES / INVOICE ITEMS
+
+Inspect:
+
+quotes
+sales_orders
+invoice_lines
+order_lines
+
+Determine what they reference:
+
+product_id?
+part_id?
+item_id?
+
+Example output:
+
+sales_order_lines
+references: product_id
+
+invoice_lines
+references: product_id
+
+--------------------------------
+
+PHASE 4 — PURCHASE SYSTEM
+
+Inspect:
+
+purchase_orders
+po_lines
+vendor_po_items
+
+Determine what they reference:
+
+part_id?
+material_id?
+item_id?
+
+--------------------------------
+
+PHASE 5 — INVENTORY SYSTEM
+
+Find inventory tables:
+
+inventory
+stock
+inventory_lots
+inventory_transactions
+
+Determine:
+
+Do they reference
+part_id
+product_id
+or item_id
+
+--------------------------------
+
+PHASE 6 — MANUFACTURING / PRODUCTION
+
+Inspect production system:
+
+production_orders
+manufacturing_orders
+work_orders
+
+Identify what they reference:
+
+product_id?
+part_id?
+assembly_id?
+
+Also determine if production logic differs between:
+
+P1 — Stocks
+P2 — Aerospace
+
+Search for logic such as:
+
+if production_line == "P1"
+if production_line == "P2"
+
+--------------------------------
+
+PHASE 7 — FRONTEND ITEM USAGE
+
+Search React pages for:
+
+ProductsPage
+PartsPage
+MaterialsPage
+InventoryPage
+BOMPage
+
+Identify how UI distinguishes between parts and products.
+
+--------------------------------
+
+PHASE 8 — ROLE ANALYSIS
+
+Based on findings classify current item roles:
+
+RAW MATERIAL
+COMPONENT
+SUBASSEMBLY
+FINISHED GOOD
+SERVICE
+
+Determine if the system already supports multi-role items or if everything is hard separated.
+
+--------------------------------
+
+PHASE 9 — ARCHITECTURAL GAP ANALYSIS
+
+Identify conflicts such as:
+
+• BOM parent cannot be sold
+• product cannot be manufactured
+• part cannot appear on invoice
+• purchased material cannot appear in inventory
+• manufacturing parent missing SKU
+
+--------------------------------
+
+PHASE 10 — UNIFIED ITEM MASTER DESIGN
+
+Based on the codebase propose the safest migration to:
+
+items table
+
+Example structure:
+
+items
+-----
+id
+sku
+name
+description
+item_category
+can_purchase
+can_sell
+can_manufacture
+has_bom
+inventory_tracked
+production_line
+standard_cost
+default_price
+
+--------------------------------
+
+PHASE 11 — MIGRATION PLAN
+
+Propose the safest migration strategy:
+
+STEP 1
+Create items table
+
+STEP 2
+Map existing products → items
+
+STEP 3
+Map parts → items
+
+STEP 4
+Map materials → items
+
+STEP 5
+Update BOM relationships
+
+STEP 6
+Update sales order lines
+
+STEP 7
+Update purchasing
+
+STEP 8
+Update inventory
+
+--------------------------------
+
+PHASE 12 — RISK ANALYSIS
+
+Identify:
+
+• tables that will break
+• APIs that will break
+• UI pages that must be updated
+• migrations needed
+
+--------------------------------
+
+PHASE 13 — FINAL REPORT
+
+Produce a structured report:
+
+1. Current Architecture Diagram
+2. Table Relationships
+3. Parts vs Products separation
+4. BOM architecture
+5. Sales item references
+6. Purchasing item references
+7. Inventory item references
+8. Manufacturing item references
+9. Conflicts discovered
+10. Recommended Item Master model
+11. Migration strategy

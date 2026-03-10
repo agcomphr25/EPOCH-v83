@@ -1,12 +1,40 @@
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRoute, useLocation } from 'wouter';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, CheckCircle, FileText, Paperclip } from 'lucide-react';
+import {
+  ArrowLeft,
+  Edit,
+  CheckCircle,
+  FileText,
+  Paperclip,
+  DollarSign,
+  CreditCard,
+  Loader2,
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -19,6 +47,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
+
+const PAYMENT_METHODS = [
+  { value: 'ACH', label: 'ACH' },
+  { value: 'Wire', label: 'Wire' },
+  { value: 'Check', label: 'Check' },
+  { value: 'Credit Card', label: 'Credit Card' },
+  { value: 'Cash', label: 'Cash' },
+];
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -48,11 +84,42 @@ function formatDate(val: string | null | undefined) {
   }
 }
 
+interface PaymentFormData {
+  paymentDate: string;
+  paymentMethod: string;
+  referenceNumber: string;
+  amount: string;
+  notes: string;
+}
+
+const defaultPaymentForm = (): PaymentFormData => ({
+  paymentDate: new Date().toISOString().split('T')[0],
+  paymentMethod: '',
+  referenceNumber: '',
+  amount: '',
+  notes: '',
+});
+
+interface AllocationRow {
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  totalAmount: string;
+  balance: string;
+  applyAmount: string;
+}
+
 export default function InvoiceDetailPage() {
   const [, setLocation] = useLocation();
   const [matched, params] = useRoute('/finance/invoices/:id');
   const id = params?.id;
   const { toast } = useToast();
+
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState<PaymentFormData>(defaultPaymentForm());
+  const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
+  const [allocations, setAllocations] = useState<AllocationRow[]>([]);
 
   const { data: invoice, isLoading } = useQuery<any>({
     queryKey: ['/api/ar-invoices', id],
@@ -66,7 +133,7 @@ export default function InvoiceDetailPage() {
         body: { status: 'PAID' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => 
+      queryClient.invalidateQueries({ predicate: (query) =>
         Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
       });
       toast({ title: 'Invoice marked as paid' });
@@ -75,6 +142,147 @@ export default function InvoiceDetailPage() {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     },
   });
+
+  const createPaymentMutation = useMutation({
+    mutationFn: async (data: PaymentFormData) => {
+      const result = await apiRequest('/api/ar-payments', {
+        method: 'POST',
+        body: {
+          customerId: invoice.customerId,
+          paymentDate: data.paymentDate,
+          paymentMethod: data.paymentMethod,
+          amount: data.amount,
+          referenceNumber: data.referenceNumber || null,
+          notes: data.notes || null,
+        },
+      });
+      const invoicesRes = await fetch(
+        `/api/ar-invoices?customerId=${encodeURIComponent(invoice.customerId)}`,
+        { credentials: 'include' }
+      );
+      const freshInvoices = invoicesRes.ok ? await invoicesRes.json() : [];
+      return { payment: result, invoices: freshInvoices };
+    },
+    onSuccess: ({ payment, invoices }: any) => {
+      toast({ title: 'Payment recorded' });
+      setCreatedPaymentId(payment.id);
+      setPaymentDialogOpen(false);
+
+      const openInvoices = (invoices || []).filter(
+        (inv: any) => inv.status !== 'PAID' && inv.status !== 'VOID' && parseFloat(inv.balance || inv.totalAmount) > 0
+      );
+
+      const currentBalance = parseFloat(invoice.balance ?? invoice.totalAmount);
+      const paymentAmount = parseFloat(paymentForm.amount);
+
+      setAllocations(
+        openInvoices.map((inv: any) => {
+          const bal = parseFloat(inv.balance ?? inv.totalAmount);
+          let prefill = '';
+          if (inv.id === id) {
+            prefill = String(Math.min(paymentAmount, currentBalance));
+          }
+          return {
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            invoiceDate: inv.invoiceDate,
+            totalAmount: inv.totalAmount,
+            balance: String(bal),
+            applyAmount: prefill,
+          };
+        })
+      );
+      setAllocationDialogOpen(true);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const allocateMutation = useMutation({
+    mutationFn: (data: { paymentId: string; allocations: { invoiceId: string; amount: number }[] }) =>
+      apiRequest(`/api/ar-payments/${data.paymentId}/allocate`, {
+        method: 'POST',
+        body: data.allocations,
+      }),
+    onSuccess: () => {
+      toast({ title: 'Payment allocated successfully' });
+      setAllocationDialogOpen(false);
+      setCreatedPaymentId(null);
+      setAllocations([]);
+      setPaymentForm(defaultPaymentForm());
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && (
+          (Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices') ||
+          (Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-payments')
+        )
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Allocation failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const handleOpenPaymentDialog = () => {
+    setPaymentForm({
+      ...defaultPaymentForm(),
+      amount: String(parseFloat(invoice.balance ?? invoice.totalAmount ?? '0')),
+    });
+    setPaymentDialogOpen(true);
+  };
+
+  const handleSubmitPayment = () => {
+    if (!paymentForm.paymentMethod) {
+      toast({ title: 'Validation', description: 'Payment method is required.', variant: 'destructive' });
+      return;
+    }
+    if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) {
+      toast({ title: 'Validation', description: 'Amount must be greater than zero.', variant: 'destructive' });
+      return;
+    }
+    createPaymentMutation.mutate(paymentForm);
+  };
+
+  const handleSubmitAllocation = () => {
+    if (!createdPaymentId) return;
+    const items = allocations
+      .filter((a) => a.applyAmount && parseFloat(a.applyAmount) > 0)
+      .map((a) => ({
+        invoiceId: a.invoiceId,
+        amount: parseFloat(a.applyAmount),
+      }));
+
+    if (items.length === 0) {
+      toast({ title: 'No allocations', description: 'Enter at least one amount to apply.', variant: 'destructive' });
+      return;
+    }
+
+    const totalAllocated = items.reduce((sum, i) => sum + i.amount, 0);
+    const paymentAmount = parseFloat(paymentForm.amount);
+    if (totalAllocated > paymentAmount + 0.01) {
+      toast({
+        title: 'Over-allocated',
+        description: `Total allocated (${formatCurrency(totalAllocated)}) exceeds payment amount (${formatCurrency(paymentAmount)}).`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    allocateMutation.mutate({ paymentId: createdPaymentId, allocations: items });
+  };
+
+  const updateAllocation = (index: number, value: string) => {
+    setAllocations((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], applyAmount: value };
+      return next;
+    });
+  };
+
+  const totalAllocated = allocations.reduce(
+    (sum, a) => sum + (parseFloat(a.applyAmount) || 0),
+    0
+  );
 
   if (!matched) return null;
 
@@ -100,30 +308,37 @@ export default function InvoiceDetailPage() {
   }
 
   const lines = invoice.lines || [];
+  const payments = invoice.payments || [];
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <FileText className="h-6 w-6" />
           <h1 className="text-2xl font-bold">Invoice {invoice.invoiceNumber}</h1>
           {statusBadge(invoice.status)}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => setLocation('/finance/invoices')}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Invoices
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
           <Button variant="outline" onClick={() => setLocation(`/finance/invoices/${id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit
           </Button>
           {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
-            <Button
-              onClick={() => markPaidMutation.mutate()}
-              disabled={markPaidMutation.isPending}
-            >
-              <CheckCircle className="mr-2 h-4 w-4" />
-              {markPaidMutation.isPending ? 'Updating...' : 'Mark Paid'}
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleOpenPaymentDialog}>
+                <DollarSign className="mr-2 h-4 w-4" />
+                Apply Payment
+              </Button>
+              <Button
+                onClick={() => markPaidMutation.mutate()}
+                disabled={markPaidMutation.isPending}
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                {markPaidMutation.isPending ? 'Updating...' : 'Mark Paid'}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -132,6 +347,15 @@ export default function InvoiceDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="line-items">Line Items</TabsTrigger>
+          <TabsTrigger value="payments" className="flex items-center gap-1.5">
+            <CreditCard className="h-3.5 w-3.5" />
+            Payments
+            {payments.length > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                {payments.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="attachments" className="flex items-center gap-1.5">
             <Paperclip className="h-3.5 w-3.5" />
             Attachments
@@ -197,7 +421,9 @@ export default function InvoiceDetailPage() {
                   <>
                     <div className="flex justify-between w-56">
                       <span className="text-muted-foreground">Paid:</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(invoice.amountPaid)}</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        {formatCurrency(invoice.amountPaid)}
+                      </span>
                     </div>
                     <Separator className="w-56 my-1" />
                     <div className="flex justify-between w-56">
@@ -277,6 +503,74 @@ export default function InvoiceDetailPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="payments" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Payment History
+                </span>
+                {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
+                  <Button variant="outline" size="sm" onClick={handleOpenPaymentDialog}>
+                    <DollarSign className="mr-2 h-4 w-4" />
+                    Apply Payment
+                  </Button>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {payments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CreditCard className="mx-auto h-10 w-10 mb-2 opacity-40" />
+                  <p>No payments recorded for this invoice.</p>
+                  {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
+                    <Button variant="link" className="mt-2" onClick={handleOpenPaymentDialog}>
+                      Record a payment
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Payment ID</TableHead>
+                        <TableHead className="text-right">Amount Applied</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {payments.map((p: any) => (
+                        <TableRow key={p.id}>
+                          <TableCell>{formatDate(p.createdAt)}</TableCell>
+                          <TableCell className="font-mono text-xs">{p.paymentId?.slice(0, 8)}...</TableCell>
+                          <TableCell className="text-right font-medium text-green-600 dark:text-green-400">
+                            {formatCurrency(p.amountApplied)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <Separator className="my-4" />
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex justify-between w-56">
+                      <span className="text-muted-foreground">Total Paid:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        {formatCurrency(invoice.amountPaid)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between w-56">
+                      <span className="font-bold">Balance Due:</span>
+                      <span className="font-bold">{formatCurrency(invoice.balance)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="attachments" className="mt-4">
           <Card>
             <CardHeader>
@@ -294,6 +588,176 @@ export default function InvoiceDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Record a payment for {invoice.customerName || invoice.customerId}.
+              Invoice balance: {formatCurrency(invoice.balance ?? invoice.totalAmount)}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Payment Date</Label>
+              <Input
+                type="date"
+                value={paymentForm.paymentDate}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, paymentDate: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <Select
+                value={paymentForm.paymentMethod}
+                onValueChange={(v) => setPaymentForm((p) => ({ ...p, paymentMethod: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Reference Number</Label>
+              <Input
+                value={paymentForm.referenceNumber}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, referenceNumber: e.target.value }))}
+                placeholder="Check #, wire ref, etc."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={paymentForm.notes}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, notes: e.target.value }))}
+                placeholder="Optional notes..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitPayment} disabled={createPaymentMutation.isPending}>
+              {createPaymentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Record Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={allocationDialogOpen} onOpenChange={setAllocationDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Allocate Payment</DialogTitle>
+            <DialogDescription>
+              Allocate {formatCurrency(paymentForm.amount)} across open invoices for this customer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
+                  <TableHead className="text-right w-36">Apply Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allocations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      No open invoices found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  allocations.map((row, idx) => {
+                    const bal = parseFloat(row.balance);
+                    const applied = parseFloat(row.applyAmount) || 0;
+                    const overApplied = applied > bal + 0.01;
+                    return (
+                      <TableRow key={row.invoiceId} className={row.invoiceId === id ? 'bg-muted/50' : ''}>
+                        <TableCell className="font-medium">
+                          {row.invoiceNumber}
+                          {row.invoiceId === id && (
+                            <Badge variant="secondary" className="ml-2 text-xs">Current</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(row.invoiceDate)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(row.totalAmount)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(row.balance)}</TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            max={row.balance}
+                            value={row.applyAmount}
+                            onChange={(e) => updateAllocation(idx, e.target.value)}
+                            className={`w-32 text-right ${overApplied ? 'border-destructive' : ''}`}
+                            placeholder="0.00"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+
+            <Separator />
+
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-muted-foreground">
+                Payment Amount: <span className="font-medium text-foreground">{formatCurrency(paymentForm.amount)}</span>
+              </div>
+              <div className="text-sm">
+                Total Allocated:{' '}
+                <span className={`font-bold ${totalAllocated > parseFloat(paymentForm.amount) + 0.01 ? 'text-destructive' : 'text-green-600 dark:text-green-400'}`}>
+                  {formatCurrency(totalAllocated)}
+                </span>
+                {parseFloat(paymentForm.amount) - totalAllocated > 0.01 && (
+                  <span className="text-muted-foreground ml-2">
+                    ({formatCurrency(parseFloat(paymentForm.amount) - totalAllocated)} unallocated)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAllocationDialogOpen(false)}>
+              Skip Allocation
+            </Button>
+            <Button
+              onClick={handleSubmitAllocation}
+              disabled={allocateMutation.isPending || totalAllocated === 0}
+            >
+              {allocateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Allocate Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

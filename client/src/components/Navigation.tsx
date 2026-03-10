@@ -847,6 +847,12 @@ export default function Navigation() {
       description: 'Accounts Receivable aging summary',
     },
     {
+      path: '/finance/ar-payments',
+      label: 'AR Payments',
+      icon: DollarSign,
+      description: 'Accounts Receivable payments and allocations',
+    },
+    {
       path: '/finance/cogs',
       label: 'COGS Report',
       icon: TrendingUp,

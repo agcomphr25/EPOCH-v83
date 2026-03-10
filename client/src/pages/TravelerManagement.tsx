@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   FileText,
   Plus,
@@ -58,14 +59,31 @@ import {
   Filter,
   Loader2,
   MoreHorizontal,
-  Pencil,
   Ban,
   ShieldAlert,
   ShieldCheck,
   Trash2,
   ExternalLink,
+  StickyNote,
+  Link2,
+  X,
 } from 'lucide-react';
 import { Link } from 'wouter';
+
+interface AuthorizedNote {
+  id: string;
+  travelerId: string;
+  department: string;
+  note: string;
+  linkedPurchaseOrderId: string | null;
+  linkedDocumentUrls: { url: string; label: string }[];
+  toleranceChangeAuthorized: boolean;
+  signedBy: string;
+  signedByName: string;
+  signatureRole: string | null;
+  signatureData: string | null;
+  createdAt: string;
+}
 
 interface Traveler {
   id: string;
@@ -116,9 +134,9 @@ export default function TravelerManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
+  const [showAuthorizedNotesDialog, setShowAuthorizedNotesDialog] = useState(false);
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
   const [cancelReason, setCancelReason] = useState('');
@@ -131,13 +149,14 @@ export default function TravelerManagement() {
     internalControlNumber: '',
     quantity: 1,
   });
-  const [editFormData, setEditFormData] = useState({
-    workOrderId: '',
-    salesOrderId: '',
-    lotNumber: '',
-    serialNumber: '',
-    internalControlNumber: '',
-    quantity: 1,
+  const [noteFormData, setNoteFormData] = useState({
+    department: '',
+    note: '',
+    linkedPurchaseOrderId: '',
+    toleranceChangeAuthorized: false,
+    signedByName: '',
+    signatureRole: '',
+    documentLinks: [{ url: '', label: '' }] as { url: string; label: string }[],
   });
 
   const { toast } = useToast();
@@ -187,29 +206,27 @@ export default function TravelerManagement() {
     },
   });
 
-  const editMutation = useMutation({
-    mutationFn: (data: { id: string; formData: typeof editFormData }) =>
-      apiRequest(`/api/travelers/${data.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          ...data.formData,
-          updatedBy: 'system',
-        }),
+  const addAuthorizedNoteMutation = useMutation({
+    mutationFn: (data: { travelerId: string; body: any }) =>
+      apiRequest(`/api/travelers/${data.travelerId}/authorized-notes`, {
+        method: 'POST',
+        body: JSON.stringify(data.body),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
       toast({
-        title: 'Traveler Updated',
-        description: 'Traveler details have been saved',
+        title: 'Authorized Note Added',
+        description: 'The signed note and linked documents have been recorded on this traveler.',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
-      setShowEditDialog(false);
-      setSelectedTraveler(null);
+      if (selectedTraveler) {
+        queryClient.invalidateQueries({ queryKey: ['/api/travelers', selectedTraveler.id, 'authorized-notes'] });
+      }
+      resetNoteForm();
     },
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update traveler',
+        description: error.message || 'Failed to add authorized note',
         variant: 'destructive',
       });
     },
@@ -370,24 +387,49 @@ export default function TravelerManagement() {
     });
   };
 
-  const handleEdit = (traveler: Traveler) => {
+  const handleOpenAuthorizedNotes = (traveler: Traveler) => {
     setSelectedTraveler(traveler);
-    setEditFormData({
-      workOrderId: traveler.workOrderId || '',
-      salesOrderId: traveler.salesOrderId || '',
-      lotNumber: traveler.lotNumber || '',
-      serialNumber: traveler.serialNumber || '',
-      internalControlNumber: traveler.internalControlNumber || '',
-      quantity: traveler.quantity,
-    });
-    setShowEditDialog(true);
+    resetNoteForm();
+    setShowAuthorizedNotesDialog(true);
   };
 
-  const handleSaveEdit = () => {
+  const resetNoteForm = () => {
+    setNoteFormData({
+      department: '',
+      note: '',
+      linkedPurchaseOrderId: '',
+      toleranceChangeAuthorized: false,
+      signedByName: '',
+      signatureRole: '',
+      documentLinks: [{ url: '', label: '' }],
+    });
+  };
+
+  const handleSubmitAuthorizedNote = () => {
     if (!selectedTraveler) return;
-    editMutation.mutate({
-      id: selectedTraveler.id,
-      formData: editFormData,
+    if (!noteFormData.department || !noteFormData.note || !noteFormData.signedByName) {
+      toast({
+        title: 'Missing Fields',
+        description: 'Department, note, and signer name are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const validLinks = noteFormData.documentLinks.filter(l => l.url.trim() && l.label.trim());
+
+    addAuthorizedNoteMutation.mutate({
+      travelerId: selectedTraveler.id,
+      body: {
+        department: noteFormData.department,
+        note: noteFormData.note,
+        linkedPurchaseOrderId: noteFormData.linkedPurchaseOrderId || null,
+        linkedDocumentUrls: validLinks,
+        toleranceChangeAuthorized: noteFormData.toleranceChangeAuthorized,
+        signedBy: noteFormData.signedByName.toLowerCase().replace(/\s+/g, '_'),
+        signedByName: noteFormData.signedByName,
+        signatureRole: noteFormData.signatureRole || null,
+      },
     });
   };
 
@@ -630,16 +672,14 @@ export default function TravelerManagement() {
                               View Traveler
                             </Badge>
                           </Link>
-                          {!isTerminal && (
-                            <Badge
-                              className="cursor-pointer bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors px-3 py-1 inline-flex items-center gap-1"
-                              data-testid={`badge-edit-${traveler.id}`}
-                              onClick={() => handleEdit(traveler)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                              Edit
-                            </Badge>
-                          )}
+                          <Badge
+                            className="cursor-pointer bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors px-3 py-1 inline-flex items-center gap-1"
+                            data-testid={`badge-authorized-notes-${traveler.id}`}
+                            onClick={() => handleOpenAuthorizedNotes(traveler)}
+                          >
+                            <StickyNote className="h-3 w-3" />
+                            Authorized Notes
+                          </Badge>
                           {(traveler.serialNumber || traveler.lotNumber) && (
                             <Link href={`/p2-traveler-viewer?barcode=${encodeURIComponent(traveler.serialNumber || traveler.lotNumber || '')}`}>
                               <Badge
@@ -666,12 +706,10 @@ export default function TravelerManagement() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {!isTerminal && (
-                                <DropdownMenuItem onClick={() => handleEdit(traveler)}>
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit Details
-                                </DropdownMenuItem>
-                              )}
+                              <DropdownMenuItem onClick={() => handleOpenAuthorizedNotes(traveler)}>
+                                <StickyNote className="h-4 w-4 mr-2" />
+                                Authorized Notes
+                              </DropdownMenuItem>
                               {traveler.status === 'DRAFT' && (
                                 <DropdownMenuItem onClick={() => handleStart(traveler.id)}>
                                   <Play className="h-4 w-4 mr-2" />
@@ -867,115 +905,16 @@ export default function TravelerManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Traveler</DialogTitle>
-            <DialogDescription>
-              Update details for traveler {selectedTraveler?.travelerNumber}
-              {selectedTraveler?.partNumber && ` - ${selectedTraveler.partNumber}`}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-workOrderId">Work Order ID</Label>
-                <Input
-                  id="edit-workOrderId"
-                  value={editFormData.workOrderId}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, workOrderId: e.target.value })
-                  }
-                  placeholder="WO-12345"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-salesOrderId">Sales Order ID</Label>
-                <Input
-                  id="edit-salesOrderId"
-                  value={editFormData.salesOrderId}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, salesOrderId: e.target.value })
-                  }
-                  placeholder="SO-12345"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-lotNumber">Lot Number</Label>
-                <Input
-                  id="edit-lotNumber"
-                  value={editFormData.lotNumber}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, lotNumber: e.target.value })
-                  }
-                  placeholder="LOT-2024-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-serialNumber">Serial Number</Label>
-                <Input
-                  id="edit-serialNumber"
-                  value={editFormData.serialNumber}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, serialNumber: e.target.value })
-                  }
-                  placeholder="SN-001"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-icn">Internal Control Number</Label>
-                <Input
-                  id="edit-icn"
-                  value={editFormData.internalControlNumber}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      internalControlNumber: e.target.value,
-                    })
-                  }
-                  placeholder="ICN-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-quantity">Quantity</Label>
-                <Input
-                  id="edit-quantity"
-                  type="number"
-                  min="1"
-                  value={editFormData.quantity}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      quantity: parseInt(e.target.value) || 1,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveEdit}
-              disabled={editMutation.isPending}
-            >
-              {editMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Authorized Notes Dialog */}
+      <AuthorizedNotesDialog
+        open={showAuthorizedNotesDialog}
+        onOpenChange={setShowAuthorizedNotesDialog}
+        traveler={selectedTraveler}
+        noteFormData={noteFormData}
+        setNoteFormData={setNoteFormData}
+        onSubmit={handleSubmitAuthorizedNote}
+        isPending={addAuthorizedNoteMutation.isPending}
+      />
 
       {/* Cancel Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
@@ -1051,5 +990,276 @@ export default function TravelerManagement() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function AuthorizedNotesDialog({
+  open,
+  onOpenChange,
+  traveler,
+  noteFormData,
+  setNoteFormData,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  traveler: Traveler | null;
+  noteFormData: {
+    department: string;
+    note: string;
+    linkedPurchaseOrderId: string;
+    toleranceChangeAuthorized: boolean;
+    signedByName: string;
+    signatureRole: string;
+    documentLinks: { url: string; label: string }[];
+  };
+  setNoteFormData: (data: any) => void;
+  onSubmit: () => void;
+  isPending: boolean;
+}) {
+  const { data: existingNotes = [] } = useQuery<AuthorizedNote[]>({
+    queryKey: ['/api/travelers', traveler?.id, 'authorized-notes'],
+    enabled: !!traveler?.id && open,
+  });
+
+  const departments = [
+    'Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC', 'Shipping'
+  ];
+
+  const addDocumentLink = () => {
+    setNoteFormData({
+      ...noteFormData,
+      documentLinks: [...noteFormData.documentLinks, { url: '', label: '' }],
+    });
+  };
+
+  const removeDocumentLink = (index: number) => {
+    const updated = noteFormData.documentLinks.filter((_: any, i: number) => i !== index);
+    setNoteFormData({ ...noteFormData, documentLinks: updated.length ? updated : [{ url: '', label: '' }] });
+  };
+
+  const updateDocumentLink = (index: number, field: 'url' | 'label', value: string) => {
+    const updated = [...noteFormData.documentLinks];
+    updated[index] = { ...updated[index], [field]: value };
+    setNoteFormData({ ...noteFormData, documentLinks: updated });
+  };
+
+  if (!traveler) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <StickyNote className="h-5 w-5 text-emerald-600" />
+            Authorized Notes
+          </DialogTitle>
+          <DialogDescription>
+            Traveler {traveler.travelerNumber}
+            {traveler.partNumber && ` - ${traveler.partNumber}`}
+            {' '}— Add signed notes to authorize tolerance changes and link PO documents.
+          </DialogDescription>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1 pr-4 max-h-[60vh]">
+          <div className="space-y-6">
+            {existingNotes.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Existing Notes ({existingNotes.length})
+                </h4>
+                {existingNotes.map((note) => (
+                  <Card key={note.id} className="border-emerald-200">
+                    <CardContent className="p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                            {note.department}
+                          </Badge>
+                          {note.toleranceChangeAuthorized && (
+                            <Badge className="bg-amber-100 text-amber-800">
+                              Tolerance Change Authorized
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(note.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm">{note.note}</p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Signed by: <strong>{note.signedByName}</strong>{note.signatureRole ? ` (${note.signatureRole})` : ''}</span>
+                        {note.linkedPurchaseOrderId && (
+                          <span>PO: <strong>{note.linkedPurchaseOrderId}</strong></span>
+                        )}
+                      </div>
+                      {note.linkedDocumentUrls && note.linkedDocumentUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {note.linkedDocumentUrls.map((doc: { url: string; label: string }, idx: number) => (
+                            <a
+                              key={idx}
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                            >
+                              <Link2 className="h-3 w-3" />
+                              {doc.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-4 border-t pt-4">
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Add New Authorized Note
+              </h4>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="note-department">Department *</Label>
+                  <Select
+                    value={noteFormData.department}
+                    onValueChange={(val) => setNoteFormData({ ...noteFormData, department: val })}
+                  >
+                    <SelectTrigger id="note-department">
+                      <SelectValue placeholder="Select department..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="note-po">Linked Purchase Order</Label>
+                  <Input
+                    id="note-po"
+                    value={noteFormData.linkedPurchaseOrderId}
+                    onChange={(e) => setNoteFormData({ ...noteFormData, linkedPurchaseOrderId: e.target.value })}
+                    placeholder="PO-12345"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="note-text">Note *</Label>
+                <Textarea
+                  id="note-text"
+                  value={noteFormData.note}
+                  onChange={(e) => setNoteFormData({ ...noteFormData, note: e.target.value })}
+                  placeholder="Describe the authorized change, tolerance deviation, or instructions..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="tolerance-auth"
+                  checked={noteFormData.toleranceChangeAuthorized}
+                  onChange={(e) => setNoteFormData({ ...noteFormData, toleranceChangeAuthorized: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="tolerance-auth" className="cursor-pointer text-sm">
+                  Authorize tolerance changes for this department
+                </Label>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Document Links</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addDocumentLink}>
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Link
+                  </Button>
+                </div>
+                {noteFormData.documentLinks.map((link: { url: string; label: string }, index: number) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      placeholder="Document label"
+                      value={link.label}
+                      onChange={(e) => updateDocumentLink(index, 'label', e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      placeholder="URL or path"
+                      value={link.url}
+                      onChange={(e) => updateDocumentLink(index, 'url', e.target.value)}
+                      className="flex-[2]"
+                    />
+                    {noteFormData.documentLinks.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeDocumentLink(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  These documents will follow the remaining travelers throughout PO completion.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="note-signer">Signed By *</Label>
+                  <Input
+                    id="note-signer"
+                    value={noteFormData.signedByName}
+                    onChange={(e) => setNoteFormData({ ...noteFormData, signedByName: e.target.value })}
+                    placeholder="Full name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="note-role">Role</Label>
+                  <Select
+                    value={noteFormData.signatureRole}
+                    onValueChange={(val) => setNoteFormData({ ...noteFormData, signatureRole: val })}
+                  >
+                    <SelectTrigger id="note-role">
+                      <SelectValue placeholder="Select role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="QC">QC</SelectItem>
+                      <SelectItem value="ENGINEERING">Engineering</SelectItem>
+                      <SelectItem value="LEAD">Lead</SelectItem>
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                      <SelectItem value="OPERATOR">Operator</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button
+            onClick={onSubmit}
+            disabled={isPending || !noteFormData.department || !noteFormData.note || !noteFormData.signedByName}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <StickyNote className="h-4 w-4 mr-2" />
+            Sign & Add Note
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

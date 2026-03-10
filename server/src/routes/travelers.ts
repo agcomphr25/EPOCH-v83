@@ -9,11 +9,13 @@ import {
   insertTravelerTaskSchema,
   insertTravelerTaskFieldSchema,
   insertTravelerSignatureSchema,
+  insertTravelerAuthorizedNoteSchema,
   employees,
   p2SerializedItems,
   p2SerializedItemEvents,
   travelers,
   travelerSteps,
+  travelerAuthorizedNotes,
   partRoutings,
 } from '../../schema';
 
@@ -1566,6 +1568,58 @@ router.get('/:travelerId/events', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching events:', error);
     res.status(500).json({ error: 'Failed to fetch events', message: error.message });
+  }
+});
+
+router.get('/:travelerId/authorized-notes', async (req: Request, res: Response) => {
+  try {
+    const { travelerId } = req.params;
+    const notes = await db.select().from(travelerAuthorizedNotes)
+      .where(eq(travelerAuthorizedNotes.travelerId, travelerId))
+      .orderBy(travelerAuthorizedNotes.createdAt);
+    res.json(notes);
+  } catch (error: any) {
+    console.error('Error fetching authorized notes:', error);
+    res.status(500).json({ error: 'Failed to fetch authorized notes', message: error.message });
+  }
+});
+
+router.post('/:travelerId/authorized-notes', async (req: Request, res: Response) => {
+  try {
+    const { travelerId } = req.params;
+    const parsed = insertTravelerAuthorizedNoteSchema.parse({
+      ...req.body,
+      travelerId,
+    });
+
+    const [note] = await db.insert(travelerAuthorizedNotes).values(parsed).returning();
+    res.status(201).json(note);
+  } catch (error: any) {
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
+    console.error('Error creating authorized note:', error);
+    res.status(500).json({ error: 'Failed to create authorized note', message: error.message });
+  }
+});
+
+router.delete('/:travelerId/authorized-notes/:noteId', async (req: Request, res: Response) => {
+  try {
+    const { travelerId, noteId } = req.params;
+    const result = await db.delete(travelerAuthorizedNotes)
+      .where(and(
+        eq(travelerAuthorizedNotes.id, noteId),
+        eq(travelerAuthorizedNotes.travelerId, travelerId)
+      ))
+      .returning();
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Authorized note not found' });
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting authorized note:', error);
+    res.status(500).json({ error: 'Failed to delete authorized note', message: error.message });
   }
 });
 

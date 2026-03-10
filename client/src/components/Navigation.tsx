@@ -351,6 +351,12 @@ export default function Navigation() {
       description: 'Detect mismatches between expected and actual department queue membership',
     },
     {
+      path: '/admin/control-tower',
+      label: 'Production Control Tower',
+      icon: Factory,
+      description: 'Real-time production heatmap with bottleneck detection and pipeline health overview',
+    },
+    {
       path: '/pdf-templates',
       label: 'PDF Templates',
       icon: FileText,

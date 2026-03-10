@@ -14,6 +14,7 @@ import {
   Loader2,
   Info,
   GitBranch,
+  Factory,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -407,14 +408,22 @@ export default function QueueIntegrityMonitor() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-indigo-600" />
-            System Integrity Monitor
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Queue integrity and pipeline validation diagnostics.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShieldCheck className="h-6 w-6 text-indigo-600" />
+              System Integrity Monitor
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Queue integrity and pipeline validation diagnostics.
+            </p>
+          </div>
+          <Link href="/admin/control-tower">
+            <Button variant="outline" size="sm" className="flex items-center gap-1.5">
+              <Factory className="h-3.5 w-3.5" />
+              Control Tower
+            </Button>
+          </Link>
         </div>
 
         <Tabs defaultValue="integrity">

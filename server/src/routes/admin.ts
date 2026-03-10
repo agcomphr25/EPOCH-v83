@@ -799,6 +799,76 @@ router.get(
 );
 
 router.get(
+  '/production-heatmap',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const deptRows = await pool.query(
+        `SELECT
+          current_department AS department,
+          COUNT(*)::int AS order_count,
+          ROUND(AVG(EXTRACT(EPOCH FROM now() - updated_at) / 86400.0)::numeric, 1) AS avg_days_in_stage
+        FROM all_orders
+        WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+          AND current_department IS NOT NULL
+          AND scrap_date IS NULL
+          AND (is_cancelled IS NULL OR is_cancelled = false)
+        GROUP BY current_department
+        ORDER BY order_count DESC`
+      );
+      const departments = Array.isArray(deptRows) ? deptRows : (deptRows?.rows ?? []);
+
+      const totalActive = departments.reduce((sum: number, d: any) => sum + (d.order_count || 0), 0);
+
+      let pipelineErrors = 0;
+      let queueErrors = 0;
+      try {
+        const pipelineStatus = await validatePipelineState();
+        pipelineErrors = pipelineStatus.errors.length;
+      } catch (_) {}
+
+      try {
+        const queueStatus = getQueueIntegrityStatus();
+        queueErrors = queueStatus.criticalCount + queueStatus.warningCount;
+      } catch (_) {}
+
+      const stalledThresholdDays = 14;
+      const stalledResult = await pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM all_orders
+         WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+           AND current_department IS NOT NULL
+           AND scrap_date IS NULL
+           AND (is_cancelled IS NULL OR is_cancelled = false)
+           AND updated_at < NOW() - INTERVAL '${stalledThresholdDays} days'`
+      );
+      const stalledRows = Array.isArray(stalledResult) ? stalledResult : (stalledResult?.rows ?? []);
+      const stalledCount = stalledRows[0]?.count || 0;
+
+      res.json({
+        totalActive,
+        pipelineErrors,
+        queueErrors,
+        stalledOrders: stalledCount,
+        departments: departments.map((d: any) => ({
+          department: d.department,
+          orderCount: d.order_count,
+          avgDaysInStage: parseFloat(d.avg_days_in_stage) || 0,
+        })),
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Production heatmap error:', error);
+      res.status(500).json({
+        error: 'Failed to generate production heatmap',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.get(
   '/pipeline-validation',
   authenticateToken,
   requireRole('ADMIN'),

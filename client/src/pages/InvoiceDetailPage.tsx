@@ -1,11 +1,12 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRoute, useLocation } from 'wouter';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, CheckCircle, FileText } from 'lucide-react';
+import { ArrowLeft, Edit, CheckCircle, FileText, Paperclip } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -126,108 +128,172 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Invoice Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Customer</p>
-              <p className="font-medium">{invoice.customerName || invoice.customerId}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Invoice #</p>
-              <p className="font-medium">{invoice.invoiceNumber}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Status</p>
-              <div className="mt-1">{statusBadge(invoice.status)}</div>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Invoice Date</p>
-              <p className="font-medium">{formatDate(invoice.invoiceDate)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Due Date</p>
-              <p className="font-medium">{formatDate(invoice.dueDate)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Terms</p>
-              <p className="font-medium">{invoice.terms || '—'}</p>
-            </div>
-            {(invoice.poId || invoice.poOverride) && (
-              <div>
-                <p className="text-sm text-muted-foreground">PO</p>
-                <p className="font-medium">{invoice.poOverride || invoice.poId || '—'}</p>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="line-items">Line Items</TabsTrigger>
+          <TabsTrigger value="attachments" className="flex items-center gap-1.5">
+            <Paperclip className="h-3.5 w-3.5" />
+            Attachments
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Invoice Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Customer</p>
+                  <p className="font-medium">{invoice.customerName || invoice.customerId}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Invoice #</p>
+                  <p className="font-medium">{invoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <div className="mt-1">{statusBadge(invoice.status)}</div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Invoice Date</p>
+                  <p className="font-medium">{formatDate(invoice.invoiceDate)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Due Date</p>
+                  <p className="font-medium">{formatDate(invoice.dueDate)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Terms</p>
+                  <p className="font-medium">{invoice.terms || '—'}</p>
+                </div>
+                {(invoice.poId || invoice.poOverride) && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">PO</p>
+                    <p className="font-medium">{invoice.poOverride || invoice.poId || '—'}</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          {invoice.notes && (
-            <>
+
               <Separator className="my-4" />
-              <div>
-                <p className="text-sm text-muted-foreground">Notes</p>
-                <p className="mt-1">{invoice.notes}</p>
+
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex justify-between w-56">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span className="font-medium">{formatCurrency(invoice.subtotal)}</span>
+                </div>
+                <div className="flex justify-between w-56">
+                  <span className="text-muted-foreground">Tax:</span>
+                  <span className="font-medium">{formatCurrency(invoice.taxAmount)}</span>
+                </div>
+                <Separator className="w-56 my-1" />
+                <div className="flex justify-between w-56">
+                  <span className="font-bold">Total:</span>
+                  <span className="font-bold">{formatCurrency(invoice.totalAmount)}</span>
+                </div>
+                {invoice.amountPaid !== undefined && (
+                  <>
+                    <div className="flex justify-between w-56">
+                      <span className="text-muted-foreground">Paid:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(invoice.amountPaid)}</span>
+                    </div>
+                    <Separator className="w-56 my-1" />
+                    <div className="flex justify-between w-56">
+                      <span className="font-bold">Balance Due:</span>
+                      <span className="font-bold">{formatCurrency(invoice.balance)}</span>
+                    </div>
+                  </>
+                )}
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Line Items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Unit Price</TableHead>
-                <TableHead className="text-right">Line Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    No line items
-                  </TableCell>
-                </TableRow>
-              ) : (
-                lines.map((line: any, idx: number) => (
-                  <TableRow key={line.id || idx}>
-                    <TableCell>{line.description}</TableCell>
-                    <TableCell className="text-right">{line.qty}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(line.unitPrice)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(line.lineTotal)}</TableCell>
-                  </TableRow>
-                ))
+              {invoice.notes && (
+                <>
+                  <Separator className="my-4" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Notes</p>
+                    <p className="mt-1">{invoice.notes}</p>
+                  </div>
+                </>
               )}
-            </TableBody>
-          </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <Separator className="my-4" />
+        <TabsContent value="line-items" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Line Items</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Unit Price</TableHead>
+                    <TableHead className="text-right">Line Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lines.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        No line items
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    lines.map((line: any, idx: number) => (
+                      <TableRow key={line.id || idx}>
+                        <TableCell>{line.description}</TableCell>
+                        <TableCell className="text-right">{line.qty}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(line.unitPrice)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(line.lineTotal)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
 
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex justify-between w-48">
-              <span className="text-muted-foreground">Subtotal:</span>
-              <span className="font-medium">{formatCurrency(invoice.subtotal)}</span>
-            </div>
-            <div className="flex justify-between w-48">
-              <span className="text-muted-foreground">Tax:</span>
-              <span className="font-medium">{formatCurrency(invoice.taxAmount)}</span>
-            </div>
-            <Separator className="w-48 my-1" />
-            <div className="flex justify-between w-48">
-              <span className="font-bold">Total:</span>
-              <span className="font-bold">{formatCurrency(invoice.totalAmount)}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              <Separator className="my-4" />
+
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex justify-between w-48">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span className="font-medium">{formatCurrency(invoice.subtotal)}</span>
+                </div>
+                <div className="flex justify-between w-48">
+                  <span className="text-muted-foreground">Tax:</span>
+                  <span className="font-medium">{formatCurrency(invoice.taxAmount)}</span>
+                </div>
+                <Separator className="w-48 my-1" />
+                <div className="flex justify-between w-48">
+                  <span className="font-bold">Total:</span>
+                  <span className="font-bold">{formatCurrency(invoice.totalAmount)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="attachments" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Paperclip className="h-5 w-5" />
+                Attachments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MediaAttachmentPicker
+                entityType="invoice"
+                entityId={invoice.id}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

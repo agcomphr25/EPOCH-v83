@@ -1,73 +1,49 @@
-import { useState, useEffect } from 'react';
-import { Wifi, WifiOff, CloudOff } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { useOfflineStatus } from '../hooks/useOfflineStatus';
 
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-
-/**
- * Component to show online/offline status and PWA connectivity
- */
 export default function OfflineIndicator() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [showStatus, setShowStatus] = useState(false);
+  const { isOffline, isSyncing, queuedMutationCount } = useOfflineStatus();
 
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setShowStatus(true);
-      // Hide status after 3 seconds
-      setTimeout(() => setShowStatus(false), 3000);
-    };
+  if (!isOffline && !isSyncing) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-green-700">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+        </span>
+        <Wifi className="h-3 w-3" />
+        <span className="hidden sm:inline">Online</span>
+      </div>
+    );
+  }
 
-    const handleOffline = () => {
-      setIsOnline(false);
-      setShowStatus(true);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Only show when status changes or when offline
-  if (!showStatus && isOnline) {
-    return null;
+  if (isSyncing) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-yellow-500" />
+        </span>
+        <RefreshCw className="h-3 w-3 animate-spin" />
+        <span className="hidden sm:inline">Syncing changes...</span>
+        {queuedMutationCount > 0 && (
+          <span className="font-medium">({queuedMutationCount})</span>
+        )}
+      </div>
+    );
   }
 
   return (
-    <Card className="fixed top-20 right-4 z-50 shadow-lg">
-      <CardContent className="p-3">
-        <div className="flex items-center gap-2">
-          {isOnline ? (
-            <>
-              <Wifi className="h-4 w-4 text-green-600" />
-              <Badge
-                variant="outline"
-                className="text-green-600 border-green-600"
-              >
-                Connected
-              </Badge>
-            </>
-          ) : (
-            <>
-              <WifiOff className="h-4 w-4 text-red-600" />
-              <Badge variant="outline" className="text-red-600 border-red-600">
-                Offline Mode
-              </Badge>
-            </>
-          )}
-        </div>
-        {!isOnline && (
-          <p className="text-xs text-gray-600 mt-1">
-            <CloudOff className="h-3 w-3 inline mr-1" />
-            Working offline with cached data
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-50 border border-red-200 text-xs text-red-800">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+      </span>
+      <WifiOff className="h-3 w-3" />
+      <span className="hidden sm:inline">Offline Mode — Changes will sync automatically</span>
+      {queuedMutationCount > 0 && (
+        <span className="font-medium">({queuedMutationCount})</span>
+      )}
+    </div>
   );
 }

@@ -85,6 +85,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
+import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
@@ -2220,6 +2221,7 @@ export default function Navigation() {
               </kbd>
             </Button>
             <InstallPWAButton />
+            <OfflineIndicator />
             <span className="text-sm text-gray-600">
               Manufacturing ERP System
             </span>

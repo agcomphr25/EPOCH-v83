@@ -24,6 +24,11 @@ const createProjectRequestSchema = z.object({
   createdBy: z.number().optional(),
 });
 
+const VALID_PIPELINE_STAGES = [
+  'rfq_received', 'quote_preparing', 'quote_submitted', 'purchase_review',
+  'po_received', 'production', 'shipping', 'completed',
+] as const;
+
 const updateProjectRequestSchema = z.object({
   projectName: z.string().optional(),
   description: z.string().optional().nullable(),
@@ -31,7 +36,7 @@ const updateProjectRequestSchema = z.object({
   projectManagerId: z.number().optional().nullable(),
   reminderDays: z.number().min(1).optional(),
   status: z.enum(['active', 'on_hold', 'completed', 'cancelled', 'inactive', 'won', 'lost']).optional(),
-  currentStage: z.string().optional().nullable(),
+  currentStage: z.enum(VALID_PIPELINE_STAGES).optional().nullable(),
   notes: z.string().optional().nullable(),
   updatedBy: z.number().optional(),
 });
@@ -378,8 +383,20 @@ router.patch('/:id', async (req, res) => {
     }
     
     const validatedData = validationResult.data;
-    const project = await storage.updateProject(id, validatedData);
+    const updatePayload: any = { ...validatedData };
+    if (validatedData.currentStage) {
+      updatePayload.stageUpdatedAt = new Date();
+    }
+    const project = await storage.updateProject(id, updatePayload);
     
+    if (validatedData.currentStage) {
+      await storage.createProjectActivityLog({
+        projectId: id,
+        activityType: 'stage_changed',
+        description: `Stage changed to ${validatedData.currentStage}`,
+      });
+    }
+
     if (validatedData.projectManagerId) {
       const updaterSnapshot = validatedData.updatedBy
         ? await createEmployeeIdentitySnapshot(validatedData.updatedBy)

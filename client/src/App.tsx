@@ -237,6 +237,7 @@ import MetricsSandbox from './pages/MetricsSandbox';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
+import P2PipelineBoardPage from './pages/P2PipelineBoardPage';
 import HelpCenter from './pages/HelpCenter';
 import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
@@ -860,6 +861,7 @@ function App() {
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/preproduction-checklists" component={PreproductionChecklistPage} />
                   <Route path="/projects" component={ProjectsPage} />
+                  <Route path="/projects/pipeline" component={P2PipelineBoardPage} />
                   <Route path="/projects/:id" component={ProjectDetailPage} />
                   <Route
                     path="/kickback-tracking"

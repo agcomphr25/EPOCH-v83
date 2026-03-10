@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ProjectStep {
@@ -182,10 +182,16 @@ export default function ProjectsPage() {
           <h1 className="text-3xl font-bold" data-testid="page-title">P2 Projects</h1>
           <p className="text-muted-foreground">Track and manage P2 project workflows</p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-new-project">
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setLocation('/projects/pipeline')}>
+            <LayoutGrid className="mr-2 h-4 w-4" />
+            Pipeline Board
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-new-project">
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4 flex-wrap">

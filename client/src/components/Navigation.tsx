@@ -1019,6 +1019,12 @@ export default function Navigation() {
       icon: FolderKanban,
       description: 'Track P2 project workflows through multi-step wizard',
     },
+    {
+      path: '/projects/pipeline',
+      label: 'Pipeline Board',
+      icon: FolderKanban,
+      description: 'Kanban view of project pipeline stages',
+    },
   ];
 
   const verifiedModulesItems = [
@@ -1132,6 +1138,12 @@ export default function Navigation() {
       label: 'Projects',
       icon: FolderKanban,
       description: 'Multi-step project workflow tracking',
+    },
+    {
+      path: '/projects/pipeline',
+      label: 'Pipeline Board',
+      icon: FolderKanban,
+      description: 'Kanban view of project pipeline stages',
     },
   ];
 

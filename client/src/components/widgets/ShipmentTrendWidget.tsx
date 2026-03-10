@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -19,6 +20,14 @@ interface WeekData {
   movingAvg: number | null;
 }
 
+interface WeeklyHistoryEntry {
+  operationalWeek: number;
+  operationalYear: number;
+  weekLabel: string;
+  dateRange: string;
+  shipped: number;
+}
+
 interface ShipmentTrendWidgetProps {
   className?: string;
   weeks?: number;
@@ -34,36 +43,28 @@ function computeMovingAverage(data: { shipped: number }[], window: number): (num
 }
 
 export default function ShipmentTrendWidget({ className, weeks = 8 }: ShipmentTrendWidgetProps) {
-  const { data: statsData, isLoading, isError } = useQuery({
-    queryKey: ['/api/shipping/stats'],
+  const { data: historyData, isLoading, isError } = useQuery<{ weeks: WeeklyHistoryEntry[] }>({
+    queryKey: ['/api/shipping/weekly-history'],
   });
 
-  const chartData: WeekData[] = (() => {
-    const shipped = (statsData as any)?.shipped ?? 0;
+  const chartData: WeekData[] = useMemo(() => {
+    if (!historyData?.weeks?.length) return [];
 
-    const weekLabels: WeekData[] = [];
-    const now = new Date();
-    const seed = shipped > 0 ? shipped : 12;
-    for (let i = weeks - 1; i >= 0; i--) {
-      const weekDate = new Date(now);
-      weekDate.setDate(weekDate.getDate() - i * 7);
-      const label = `W${Math.ceil((weekDate.getDate()) / 7)}`;
-      const isCurrentWeek = i === 0;
-      const deterministicVariance = ((i * 7 + 3) % 5) / 10;
-      weekLabels.push({
-        week: label,
-        shipped: isCurrentWeek ? shipped : Math.max(1, Math.round(seed * (0.7 + deterministicVariance))),
-        movingAvg: null,
-      });
-    }
+    const weekEntries = historyData.weeks.slice(-weeks);
 
-    const avgs = computeMovingAverage(weekLabels, 4);
-    weekLabels.forEach((w, i) => {
+    const rawData = weekEntries.map((w) => ({
+      week: w.weekLabel,
+      shipped: w.shipped,
+      movingAvg: null as number | null,
+    }));
+
+    const avgs = computeMovingAverage(rawData, 4);
+    rawData.forEach((w, i) => {
       w.movingAvg = avgs[i];
     });
 
-    return weekLabels;
-  })();
+    return rawData;
+  }, [historyData, weeks]);
 
   return (
     <div

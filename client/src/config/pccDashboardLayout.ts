@@ -19,7 +19,7 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
             title: 'Stocks Shipped',
             subtitle: 'Operational week (Wed–Tue)',
             accentColor: 'hsl(221, 83%, 53%)',
-            target: 25,
+            target: 110,
             trend: 'up',
             trendLabel: 'Tracking ahead of last week',
           },

@@ -1,12 +1,19 @@
 import { Router, Request, Response } from 'express';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, gte, lte, and, sql } from 'drizzle-orm';
 import axios from 'axios';
+import { format } from 'date-fns';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { auditService } from '../services/auditService';
 import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots } from '../../schema';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  getOperationalWeek,
+  getOperationalYear,
+  getOperationalWeekStart,
+  getOperationalWeekEnd,
+} from '../../../shared/weekUtils';
 
 const router = Router();
 
@@ -2724,6 +2731,73 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       success: false,
       error: err.message || 'Notification failed',
     });
+  }
+});
+
+router.get('/weekly-history', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const currentOpWeek = getOperationalWeek(now);
+    const currentOpYear = getOperationalYear(now);
+
+    const weeks: Array<{
+      operationalWeek: number;
+      operationalYear: number;
+      weekLabel: string;
+      dateRange: string;
+      shipped: number;
+    }> = [];
+
+    let opWeek = currentOpWeek;
+    let opYear = currentOpYear;
+    const weekSlots: Array<{ week: number; year: number; start: Date; end: Date }> = [];
+
+    for (let i = 0; i < 12; i++) {
+      weekSlots.unshift({ week: opWeek, year: opYear, start: getOperationalWeekStart(opWeek, opYear), end: getOperationalWeekEnd(opWeek, opYear) });
+      opWeek--;
+      if (opWeek < 1) {
+        opYear--;
+        const lastDayPrevYear = getOperationalWeekStart(1, opYear + 1);
+        lastDayPrevYear.setDate(lastDayPrevYear.getDate() - 1);
+        opWeek = getOperationalWeek(lastDayPrevYear);
+      }
+    }
+
+    const earliestStart = weekSlots[0].start;
+    const latestEnd = weekSlots[weekSlots.length - 1].end;
+
+    const shippedOrders = await db
+      .select({
+        shippedDate: allOrders.shippedDate,
+      })
+      .from(allOrders)
+      .where(
+        and(
+          gte(allOrders.shippedDate, earliestStart),
+          lte(allOrders.shippedDate, latestEnd)
+        )
+      );
+
+    for (const slot of weekSlots) {
+      const count = shippedOrders.filter((o) => {
+        if (!o.shippedDate) return false;
+        const d = new Date(o.shippedDate);
+        return d >= slot.start && d <= slot.end;
+      }).length;
+
+      weeks.push({
+        operationalWeek: slot.week,
+        operationalYear: slot.year,
+        weekLabel: `W${slot.week}`,
+        dateRange: `${format(slot.start, 'MMM d')} - ${format(slot.end, 'MMM d')}`,
+        shipped: count,
+      });
+    }
+
+    res.json({ weeks });
+  } catch (error) {
+    console.error('Error getting weekly shipping history:', error);
+    res.status(500).json({ error: 'Failed to get weekly shipping history' });
   }
 });
 

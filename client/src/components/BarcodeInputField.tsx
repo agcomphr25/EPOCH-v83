@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Scan } from 'lucide-react';
+import { Camera } from 'lucide-react';
 import { useCameraScanner } from '@/hooks/useCameraScanner';
 
 interface BarcodeInputFieldProps {
@@ -145,7 +145,7 @@ export function BarcodeInputField({
           data-testid={`${testId}-scan-button`}
           title="Scan barcode with camera"
         >
-          <Scan className="h-4 w-4" />
+          <Camera className="h-4 w-4" />
         </Button>
       </div>
 

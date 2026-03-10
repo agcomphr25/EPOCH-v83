@@ -1,5 +1,6 @@
 import { Factory } from 'lucide-react';
 import DashboardGrid from '@/components/widgets/DashboardGrid';
+import DashboardControlBar from '@/components/widgets/DashboardControlBar';
 import { PCC_DASHBOARD_LAYOUT } from '@/config/pccDashboardLayout';
 import { DashboardFilterProvider } from '@/contexts/DashboardFilterContext';
 
@@ -8,7 +9,7 @@ export default function ProductionControlCenter() {
     <DashboardFilterProvider>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-4">
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600 text-white">
               <Factory className="h-5 w-5" />
             </div>
@@ -20,6 +21,10 @@ export default function ProductionControlCenter() {
                 Real-time production monitoring and operational awareness
               </p>
             </div>
+          </div>
+
+          <div className="mb-6">
+            <DashboardControlBar />
           </div>
 
           <DashboardGrid layout={PCC_DASHBOARD_LAYOUT} />

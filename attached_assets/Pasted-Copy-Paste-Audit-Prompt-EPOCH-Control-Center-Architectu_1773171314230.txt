@@ -1,0 +1,254 @@
+Copy-Paste Audit Prompt
+
+EPOCH Control Center Architecture Audit — Control Tower Ribbon Preparation
+
+EPOCH CONTROL CENTER ARCHITECTURE AUDIT
+Control Tower Ribbon Preparation
+Read-Only Forensic Inspection — No Code Changes
+
+Goal
+
+Understand how the current Production Control Center dashboard is structured so a new "Control Tower Ribbon" can be added safely without breaking existing widgets.
+
+The ribbon will eventually display high-priority operational signals above the dashboard widgets and support the existing domain toggle system:
+
+P1
+P2
+Company
+
+Do NOT modify any files. Only inspect and report.
+
+--------------------------------------------------
+
+PHASE 1 — Locate Production Control Center
+
+Find the main dashboard page that renders the Production Control Center.
+
+Likely files:
+
+client/src/pages/*
+client/src/components/*Dashboard*
+client/src/components/*ControlCenter*
+client/src/components/*CommandCenter*
+
+Identify:
+
+• main PCC page component
+• route path
+• parent layout component
+• how widgets are rendered
+
+Report:
+
+file path
+component name
+route path
+
+--------------------------------------------------
+
+PHASE 2 — Widget Rendering System
+
+Determine how dashboard widgets are registered and rendered.
+
+Search for:
+
+widgetRegistry
+metricRegistry
+dashboardWidgets
+controlCenterWidgets
+
+Identify:
+
+• registry file location
+• widget configuration structure
+• widget metadata fields
+• whether widgets declare domains (P1 / P2 / Company)
+
+Example expected structure:
+
+{
+  id
+  title
+  component
+  domain
+  refreshInterval
+}
+
+Report the actual structure used.
+
+--------------------------------------------------
+
+PHASE 3 — Domain Toggle System
+
+Inspect how the dashboard switches between:
+
+P1
+P2
+Company
+
+Search for:
+
+toggle
+domain
+mode
+viewType
+pipelineType
+
+Determine:
+
+• where toggle state is stored
+• how widgets are filtered by domain
+• how the UI updates when switching modes
+
+Report:
+
+toggle component file
+state variable name
+filter logic used for widgets
+
+--------------------------------------------------
+
+PHASE 4 — Dashboard Layout
+
+Identify the layout component that organizes widgets.
+
+Examples:
+
+DashboardGrid
+WidgetGrid
+ControlCenterLayout
+
+Determine:
+
+• whether layout supports header sections
+• whether a top bar region exists
+• where a ribbon could be inserted safely
+
+Report the component tree:
+
+ProductionControlCenter
+  ├── Header
+  ├── ToggleBar
+  ├── WidgetGrid
+  └── Widgets
+
+--------------------------------------------------
+
+PHASE 5 — Metrics / Data Sources
+
+Locate the backend services used by dashboard widgets.
+
+Search for:
+
+metricsService
+dashboardMetrics
+controlTowerMetrics
+forecastEngine
+productionMetrics
+
+Determine:
+
+• which endpoints supply widget data
+• whether a centralized metrics service exists
+• whether widgets query APIs independently
+
+List example endpoints used.
+
+--------------------------------------------------
+
+PHASE 6 — Identify Operational Risk Signals
+
+Search the codebase for queries or services calculating operational signals such as:
+
+orders past due
+production backlog
+shipment delays
+quotes awaiting response
+pipeline value
+
+These will become candidates for ribbon alerts.
+
+Report any existing queries calculating these metrics.
+
+--------------------------------------------------
+
+PHASE 7 — Determine Where the Ribbon Should Mount
+
+Recommend the safest insertion point for the new Control Tower Ribbon.
+
+The ribbon should appear:
+
+Above the widget grid
+Below the domain toggle
+
+Example layout target:
+
+ControlCenter
+  ├── DomainToggle
+  ├── ControlTowerRibbon   ← new component
+  └── WidgetGrid
+
+Confirm whether this placement is possible.
+
+--------------------------------------------------
+
+PHASE 8 — Proposed Ribbon Architecture
+
+Based on the discovered architecture, propose a design for:
+
+ControlTowerRibbon component
+
+Structure example:
+
+RibbonSignal {
+  id
+  label
+  value
+  severity
+  domain
+  route
+}
+
+Example signal:
+
+{
+  id: "ordersBehindSchedule",
+  label: "Orders Behind Schedule",
+  value: 3,
+  severity: "warning",
+  domain: "p1",
+  route: "/production/orders?filter=late"
+}
+
+Define:
+
+• signal registry location
+• backend endpoints required
+• how signals change with domain toggle
+
+--------------------------------------------------
+
+PHASE 9 — Risk Assessment
+
+Identify potential risks before implementing the ribbon:
+
+• layout conflicts
+• widget grid assumptions
+• API load impact
+• state conflicts with toggle system
+
+--------------------------------------------------
+
+DELIVERABLE
+
+Produce a structured report including:
+
+1. Production Control Center architecture
+2. widget registry structure
+3. domain toggle implementation
+4. dashboard layout hierarchy
+5. metrics service usage
+6. candidate ribbon signals
+7. recommended ribbon insertion point
+8. proposed ribbon component structure
+9. implementation risk assessment

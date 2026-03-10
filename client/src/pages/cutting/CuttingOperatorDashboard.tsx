@@ -1468,24 +1468,30 @@ export default function CuttingOperatorDashboard() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {activeScannedPacket.plySchedule.map((ply: any, idx: number) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{ply.plyNumber || idx + 1}</TableCell>
-                            <TableCell>
-                              {ply.assignedParts && Array.isArray(ply.assignedParts) ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {ply.assignedParts.map((part: any, pidx: number) => (
-                                    <Badge key={pidx} variant="outline" className="text-xs">
-                                      {part.partNumber} {part.quantity > 1 ? `x${part.quantity}` : ''}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">-</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {(() => {
+                          const partNameMap: Record<string, string> = {};
+                          (activeScannedPacket.bomParts || []).forEach((p: any) => {
+                            if (p.partNumber) partNameMap[p.partNumber] = p.partDescription || p.commonName || '';
+                          });
+                          return activeScannedPacket.plySchedule.map((ply: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{ply.plyNumber || idx + 1}</TableCell>
+                              <TableCell>
+                                {ply.assignedParts && Array.isArray(ply.assignedParts) ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {ply.assignedParts.map((part: any, pidx: number) => (
+                                      <Badge key={pidx} variant="outline" className="text-xs">
+                                        {partNameMap[part.partNumber] || part.partNumber}{part.quantity > 1 ? ` x${part.quantity}` : ''}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        })()}
                       </TableBody>
                     </Table>
                   </div>
@@ -1500,48 +1506,59 @@ export default function CuttingOperatorDashboard() {
                   <Scissors className="h-4 w-4" />
                   Cutting Programs
                 </h4>
-                {activeScannedPacket.cutPrograms && Array.isArray(activeScannedPacket.cutPrograms) && activeScannedPacket.cutPrograms.length > 0 ? (
-                  <div className="max-h-[250px] overflow-y-auto space-y-2">
-                    {activeScannedPacket.cutPrograms.map((prog: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-muted/50 rounded-lg">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-medium text-sm">{prog.programName || `Program ${idx + 1}`}</span>
-                          {prog.squareMetersPerCut && (
-                            <Badge variant="secondary">{prog.squareMetersPerCut} m²/cut</Badge>
-                          )}
-                        </div>
-                        {prog.assignedParts && Array.isArray(prog.assignedParts) && prog.assignedParts.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {prog.assignedParts.map((part: any, pidx: number) => (
-                              <Badge key={pidx} variant="outline" className="text-xs">
-                                {part.partNumber} ({part.yieldPerCut}/cut)
-                              </Badge>
-                            ))}
+                {(() => {
+                  const partNameMap: Record<string, string> = {};
+                  (activeScannedPacket.bomParts || []).forEach((p: any) => {
+                    if (p.partNumber) partNameMap[p.partNumber] = p.partDescription || p.commonName || '';
+                  });
+                  if (activeScannedPacket.cutPrograms && Array.isArray(activeScannedPacket.cutPrograms) && activeScannedPacket.cutPrograms.length > 0) {
+                    return (
+                      <div className="max-h-[250px] overflow-y-auto space-y-2">
+                        {activeScannedPacket.cutPrograms.map((prog: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted/50 rounded-lg">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-medium text-sm">{prog.programName || `Program ${idx + 1}`}</span>
+                              {prog.squareMetersPerCut && (
+                                <Badge variant="secondary">{prog.squareMetersPerCut} m²/cut</Badge>
+                              )}
+                            </div>
+                            {prog.assignedParts && Array.isArray(prog.assignedParts) && prog.assignedParts.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {prog.assignedParts.map((part: any, pidx: number) => (
+                                  <Badge key={pidx} variant="outline" className="text-xs">
+                                    {partNameMap[part.partNumber] || part.partNumber} ({part.yieldPerCut}/cut)
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : activeScannedPacket.cutsConfig && Array.isArray(activeScannedPacket.cutsConfig) && activeScannedPacket.cutsConfig.length > 0 ? (
-                  <div className="max-h-[250px] overflow-y-auto space-y-2">
-                    {activeScannedPacket.cutsConfig.map((cut: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-muted/50 rounded-lg">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-medium text-sm">{cut.materialName || cut.materialPartNumber || `Cut ${idx + 1}`}</span>
-                          <Badge>{cut.cutsNeeded} cut(s)</Badge>
-                        </div>
-                        {cut.assignedParts && Array.isArray(cut.assignedParts) && cut.assignedParts.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {cut.assignedParts.map((part: any, pidx: number) => (
-                              <Badge key={pidx} variant="secondary" className="text-xs">
-                                {part.partNumber} ({part.partsPerCut}/cut)
-                              </Badge>
-                            ))}
+                    );
+                  } else if (activeScannedPacket.cutsConfig && Array.isArray(activeScannedPacket.cutsConfig) && activeScannedPacket.cutsConfig.length > 0) {
+                    return (
+                      <div className="max-h-[250px] overflow-y-auto space-y-2">
+                        {activeScannedPacket.cutsConfig.map((cut: any, idx: number) => (
+                          <div key={idx} className="p-3 bg-muted/50 rounded-lg">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-medium text-sm">{cut.materialName || cut.materialPartNumber || `Cut ${idx + 1}`}</span>
+                              <Badge>{cut.cutsNeeded} cut(s)</Badge>
+                            </div>
+                            {cut.assignedParts && Array.isArray(cut.assignedParts) && cut.assignedParts.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {cut.assignedParts.map((part: any, pidx: number) => (
+                                  <Badge key={pidx} variant="secondary" className="text-xs">
+                                    {partNameMap[part.partNumber] || part.partNumber} ({part.partsPerCut}/cut)
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  } else { return null; }
+                })() ||
                 ) : (
                   <p className="text-sm text-muted-foreground py-4 text-center">No cutting programs configured for this packet</p>
                 )}

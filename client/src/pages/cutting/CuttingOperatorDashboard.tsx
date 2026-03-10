@@ -1367,20 +1367,40 @@ export default function CuttingOperatorDashboard() {
               {/* Production Info */}
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <h4 className="font-medium mb-2 text-sm">Production Summary</h4>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Remaining</p>
-                    <p className="font-bold text-lg">{activeScannedPacket.queueItem?.remaining || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Cuts Needed</p>
-                    <p className="font-bold text-lg">{activeScannedPacket.queueItem?.estimatedCuts || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">m²/Cut</p>
-                    <p className="font-bold text-lg">{activeScannedPacket.bom?.squareMetersPerCut || '-'}</p>
-                  </div>
-                </div>
+                {(() => {
+                  const remaining = activeScannedPacket.queueItem?.remaining || 0;
+                  const yieldPerCut = activeScannedPacket.bom?.yieldPerCut || 0;
+                  const estimatedCuts = activeScannedPacket.queueItem?.estimatedCuts || 0;
+                  const bomParts = activeScannedPacket.bomParts || [];
+                  const partsPerPacket = bomParts.length;
+                  const totalSqm = bomParts.reduce((sum: number, p: any) => {
+                    const sqm = parseFloat(p.squareMetersPerPart) || parseFloat(p.squareMetersPerCut) || 0;
+                    const qty = parseInt(p.quantityNeeded) || 1;
+                    return sum + (sqm * qty);
+                  }, 0);
+                  const headerSqm = parseFloat(activeScannedPacket.bom?.squareMetersPerCut) || 0;
+                  const displaySqm = totalSqm > 0 ? totalSqm.toFixed(1) : (headerSqm > 0 ? headerSqm : '-');
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Remaining</p>
+                        <p className="font-bold text-lg">{remaining}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Parts/Packet</p>
+                        <p className="font-bold text-lg">{partsPerPacket || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Yield/Cut</p>
+                        <p className="font-bold text-lg">{yieldPerCut || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">m²/Packet</p>
+                        <p className="font-bold text-lg">{displaySqm}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Required Materials from BOM */}
@@ -1402,9 +1422,18 @@ export default function CuttingOperatorDashboard() {
                     ))}
                   </div>
                 ) : activeScannedPacket.bomParts && activeScannedPacket.bomParts.length > 0 ? (
-                  <div className="space-y-1">
-                    {[...new Set(activeScannedPacket.bomParts.map((p: any) => p.fabricType))].map((ft: any) => (
-                      <div key={ft} className="text-sm p-1.5 bg-background rounded font-medium">{ft}</div>
+                  <div className="space-y-1 max-h-[180px] overflow-y-auto">
+                    {activeScannedPacket.bomParts.map((part: any, idx: number) => (
+                      <div key={part.id || idx} className="flex items-center justify-between text-sm p-1.5 bg-background rounded">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="text-xs text-muted-foreground font-mono shrink-0">{part.partNumber || `#${idx + 1}`}</span>
+                          <span className="font-medium truncate">{part.partDescription || part.commonName || part.fabricType || 'Part'}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {part.quantityNeeded && <Badge variant="secondary" className="text-xs">x{part.quantityNeeded}</Badge>}
+                          {part.squareMetersPerPart && <Badge variant="outline" className="text-xs">{part.squareMetersPerPart} m²</Badge>}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 ) : (

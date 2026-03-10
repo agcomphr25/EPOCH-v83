@@ -1,5 +1,6 @@
 import { pool } from '../../db';
 import { DEPARTMENTS } from '../constants/departments';
+import { validatePipelineState } from './pipelineValidationService';
 
 interface HistoryEntry {
   time: string;
@@ -135,6 +136,20 @@ async function runIntegrityCheck(): Promise<void> {
     // Prepend to rolling history (newest first), capped at HISTORY_LIMIT
     checkHistory.unshift({ time: now, healthy: criticalCount === 0, criticalCount, warningCount });
     if (checkHistory.length > HISTORY_LIMIT) checkHistory.length = HISTORY_LIMIT;
+    try {
+      const pipelineReport = await validatePipelineState();
+      const totalErrors = pipelineReport.errors.length;
+      if (totalErrors > 0) {
+        console.log(
+          `🔍 Pipeline validation: ${totalErrors} issue(s) detected — ` +
+          `${pipelineReport.summary.pipelineDrift} drift, ` +
+          `${pipelineReport.summary.stageRegression} regression, ` +
+          `${pipelineReport.summary.skippedStages} skipped`
+        );
+      }
+    } catch (pipelineError) {
+      console.error('[QueueIntegrityService] Pipeline validation failed:', pipelineError);
+    }
   } catch (error) {
     console.error('[QueueIntegrityService] Background check failed:', error);
   }

@@ -4,6 +4,8 @@ import { seedOrderReferenceTables } from '../../seeds/orderReferenceTables';
 import { pool } from '../../db';
 import { DEPARTMENTS } from '../constants/departments';
 import { getQueueIntegrityStatus } from '../services/queueIntegrityService';
+import { validatePipelineState } from '../services/pipelineValidationService';
+import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipelineRepairService';
 
 const router = Router();
 
@@ -790,6 +792,89 @@ router.get(
       console.error('Explain queue visibility error:', error);
       res.status(500).json({
         error: 'Failed to evaluate queue visibility',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.get(
+  '/pipeline-validation',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const report = await validatePipelineState();
+      res.json(report);
+    } catch (error) {
+      console.error('Pipeline validation error:', error);
+      res.status(500).json({
+        error: 'Failed to run pipeline validation',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.get(
+  '/pipeline-validation/status',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const report = await validatePipelineState();
+      res.json({
+        healthy: report.errors.length === 0,
+        totalOrdersChecked: report.totalOrdersChecked,
+        errorCount: report.errors.length,
+        summary: report.summary,
+        generatedAt: report.generatedAt,
+      });
+    } catch (error) {
+      console.error('Pipeline validation status error:', error);
+      res.status(500).json({
+        error: 'Failed to get pipeline validation status',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.post(
+  '/pipeline-repair/batch',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await batchRepairPipelineDrift();
+      res.json(result);
+    } catch (error) {
+      console.error('Batch pipeline repair error:', error);
+      res.status(500).json({
+        error: 'Failed to run batch pipeline repair',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.post(
+  '/pipeline-repair/:orderId',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const result = await repairPipelineDrift(orderId);
+      if (result) {
+        res.json({ success: true, result });
+      } else {
+        res.json({ success: true, message: 'No repair needed — order is already in the correct stage.' });
+      }
+    } catch (error) {
+      console.error('Pipeline repair error:', error);
+      res.status(500).json({
+        error: 'Failed to repair pipeline drift',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }

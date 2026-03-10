@@ -1,0 +1,194 @@
+Copy-Paste Prompt — Pipeline Validation Engine
+You are implementing a new backend service for EPOCH called the
+
+PIPELINE VALIDATION ENGINE
+
+This service will validate the production pipeline against the
+current_department queue assignments.
+
+The goal is to detect cases where timestamps and department assignments
+do not match.
+
+--------------------------------------------------
+
+STEP 1 — CREATE NEW SERVICE
+
+Create file:
+
+server/src/services/pipelineValidationService.ts
+
+--------------------------------------------------
+
+STEP 2 — DEFINE CANONICAL PIPELINE ORDER
+
+Define the canonical P1 pipeline sequence using the existing
+departmentFlow logic but expressed explicitly.
+
+Example order:
+
+P1 Production Queue
+Layup/Plugging
+Barcode
+CNC
+Gunsmith
+Finish
+Finish QC
+Paint
+Shipping QC
+Shipping
+
+--------------------------------------------------
+
+STEP 3 — DERIVE STAGE FROM TIMESTAMPS
+
+Create function:
+
+derivePipelineStage(order)
+
+Use completion timestamps from all_orders:
+
+layupCompletedAt
+barcodeCompletedAt
+cncCompletedAt
+gunsmithCompletedAt
+finishCompletedAt
+qcCompletedAt
+paintCompletedAt
+shippingCompletedAt
+
+Logic example:
+
+if layupCompletedAt is null
+  return "Layup/Plugging"
+
+if barcodeCompletedAt is null
+  return "Barcode"
+
+if cncCompletedAt is null
+  return "CNC"
+
+Continue through pipeline.
+
+Return:
+
+{
+  derivedStage,
+  stageIndex
+}
+
+--------------------------------------------------
+
+STEP 4 — VALIDATE AGAINST current_department
+
+For each active order:
+
+compare
+
+derivedStage
+vs
+order.currentDepartment
+
+If mismatch:
+
+record error
+
+Example error object:
+
+{
+  orderId,
+  orderNumber,
+  derivedStage,
+  currentDepartment,
+  errorType: "PIPELINE_DRIFT"
+}
+
+--------------------------------------------------
+
+STEP 5 — DETECT STAGE REGRESSION
+
+If
+
+currentDepartmentIndex < derivedStageIndex
+
+then flag:
+
+STAGE_REGRESSION
+
+--------------------------------------------------
+
+STEP 6 — DETECT SKIPPED STAGES
+
+If derivedStageIndex jumps more than 1 step
+without allowed skip rules:
+
+flag
+
+SKIPPED_STAGE
+
+Respect existing business rules:
+
+Flat Top → skip CNC
+No Rail → skip Gunsmith
+No Stock → jump to Shipping QC
+
+--------------------------------------------------
+
+STEP 7 — RETURN VALIDATION REPORT
+
+Return structure:
+
+{
+  totalOrdersChecked,
+  errors: [],
+  summary: {
+    pipelineDrift,
+    stageRegression,
+    skippedStages,
+    stalledOrders
+  }
+}
+
+--------------------------------------------------
+
+STEP 8 — ADD ADMIN API ROUTE
+
+Add endpoint:
+
+GET /api/admin/pipeline-validation
+
+Route location:
+
+server/src/routes/admin.ts
+
+Response:
+
+JSON validation report
+
+--------------------------------------------------
+
+STEP 9 — ADD BACKGROUND CHECK
+
+Integrate with existing queue integrity background worker.
+
+Run every 5 minutes.
+
+--------------------------------------------------
+
+STEP 10 — ADMIN UI
+
+Add a new tab next to Queue Integrity Monitor:
+
+Pipeline Validation
+
+Columns:
+
+Order
+Derived Stage
+Current Department
+Error Type
+
+--------------------------------------------------
+
+Do not modify existing queue logic.
+
+Only add validation logic.

@@ -19,6 +19,17 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Calendar,
   Scissors,
@@ -33,6 +44,7 @@ import {
   TrendingUp,
   Package,
   Layers,
+  Trash2,
 } from "lucide-react";
 
 type WeeklyCuttingQueueItem = {
@@ -262,6 +274,22 @@ export default function CuttingWeeklySchedule() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to schedule packets.", variant: "destructive" });
+    },
+  });
+
+  const unscheduleMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-cutting-queue'] });
+      toast({ title: "Unscheduled", description: "Packet removed from cutting queue." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error?.message || "Failed to unschedule packet.", variant: "destructive" });
     },
   });
 
@@ -662,6 +690,7 @@ export default function CuttingWeeklySchedule() {
                   <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="text-center">Done</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -715,6 +744,39 @@ export default function CuttingWeeklySchedule() {
                         <Badge variant={item.status === 'COMPLETED' ? 'default' : 'outline'}>
                           {item.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.status !== 'COMPLETED' && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                disabled={unscheduleMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Unschedule Packet?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will remove "{getDescription()}" ({item.quantityRequested} packets) from the cutting queue. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => unscheduleMutation.mutate(item.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Unschedule
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

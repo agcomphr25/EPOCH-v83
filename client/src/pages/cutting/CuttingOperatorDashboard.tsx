@@ -1558,8 +1558,7 @@ export default function CuttingOperatorDashboard() {
                       </div>
                     );
                   } else { return null; }
-                })() ||
-                ) : (
+                })() || (
                   <p className="text-sm text-muted-foreground py-4 text-center">No cutting programs configured for this packet</p>
                 )}
               </div>

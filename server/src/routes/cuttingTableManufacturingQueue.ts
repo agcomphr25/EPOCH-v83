@@ -1085,6 +1085,43 @@ router.post('/scan-start', async (req: Request, res: Response) => {
   }
 });
 
+// Unschedule (delete) a cutting table queue item - blocked for completed or partially completed items
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsedId = parseInt(id);
+    if (isNaN(parsedId)) {
+      return res.status(400).json({ error: 'Invalid queue item ID' });
+    }
+
+    const queueItem = await db.query.manufacturingQueue.findFirst({
+      where: and(
+        eq(manufacturingQueue.id, parsedId),
+        eq(manufacturingQueue.department, 'Cutting Table')
+      ),
+    });
+
+    if (!queueItem) {
+      return res.status(404).json({ error: 'Cutting table queue item not found' });
+    }
+
+    if (queueItem.status === 'COMPLETED') {
+      return res.status(400).json({ error: 'Cannot unschedule a completed item' });
+    }
+
+    if (queueItem.status === 'IN_PROGRESS' && (queueItem.quantityCompleted || 0) > 0) {
+      return res.status(400).json({ error: 'Cannot unschedule an item that has partially completed work' });
+    }
+
+    await db.delete(manufacturingQueue).where(eq(manufacturingQueue.id, parsedId));
+
+    res.json({ success: true, message: 'Queue item unscheduled successfully' });
+  } catch (error) {
+    console.error('Error unscheduling queue item:', error);
+    res.status(500).json({ error: 'Failed to unschedule queue item' });
+  }
+});
+
 // Validate a scanned material roll against the BOM for the active queue item
 router.post('/:id/validate-material', async (req: Request, res: Response) => {
   try {

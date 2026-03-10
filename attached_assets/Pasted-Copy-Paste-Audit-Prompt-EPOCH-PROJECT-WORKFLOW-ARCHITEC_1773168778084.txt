@@ -1,0 +1,219 @@
+Copy-Paste Audit Prompt
+EPOCH PROJECT WORKFLOW ARCHITECTURE AUDIT
+Read-Only Forensic Inspection — No Code Changes
+
+Goal
+Understand how Projects, workflow stages, and milestone tracking currently function in the codebase so we can redesign the system to support:
+
+• Non-sequential milestone tracking
+• Project lifecycle states
+• Current stage indicators for dashboards
+• Optional/skipped workflow steps
+• One PO per project
+• Manual and automatic project completion
+
+Do NOT modify any code. Only inspect and report.
+
+--------------------------------------------------
+
+PHASE 1 — Project Schema
+
+Locate and document the full database schema for:
+
+projects table
+
+Report:
+
+• columns
+• enums
+• status fields
+• workflow fields
+• stage tracking fields
+• relations to:
+  - quotes
+  - purchase_orders
+  - production_orders
+  - shipments
+  - documents
+  - attachments
+
+Identify:
+
+1) whether a project.status field exists
+2) whether a current_stage field exists
+3) whether workflow is stored in the project record
+
+--------------------------------------------------
+
+PHASE 2 — Workflow / Stage System
+
+Locate all code implementing the "Project Workflow" UI visible in the project page.
+
+Specifically inspect:
+
+client/src/pages/Project*
+client/src/components/Project*
+server routes related to projects
+
+Identify:
+
+• how workflow stages are defined
+• where stage definitions live
+• whether stages are hardcoded or database driven
+• how stage completion is recorded
+• how stage ordering is enforced
+
+Determine if the system currently requires:
+
+Stage A → Stage B → Stage C
+
+or if stages can be completed independently.
+
+--------------------------------------------------
+
+PHASE 3 — Forms & Attachments
+
+Each workflow step appears to have:
+
+View Form
+Open Form
+Attach PDF
+Link Record
+Mark Complete
+
+Inspect the backend handling for these.
+
+Report:
+
+• where form data is stored
+• how attachments are linked to projects
+• whether workflow completion requires a form
+• whether skipped stages are supported
+
+--------------------------------------------------
+
+PHASE 4 — PO & Production Linking
+
+Inspect relationships between:
+
+projects
+quotes
+purchase_orders
+production_orders
+shipments
+
+Determine:
+
+1) whether a project can have multiple POs
+2) whether a PO can exist without completing earlier workflow stages
+3) whether production orders reference projects directly or through PO
+
+--------------------------------------------------
+
+PHASE 5 — Stage Reporting / Dashboards
+
+Search the codebase for any queries that attempt to determine the "stage" of a project.
+
+Examples:
+
+project progress
+project workflow
+project status indicators
+dashboard widgets
+
+Determine:
+
+• how the current stage is calculated
+• whether the stage is stored or derived
+• how project progress percentage is calculated
+
+--------------------------------------------------
+
+PHASE 6 — Project Completion
+
+Determine whether the system has any concept of:
+
+project closed
+project completed
+project archived
+
+Inspect:
+
+• schema fields
+• server logic
+• UI controls
+
+Determine if project completion is tied to:
+
+• workflow stages
+• shipment completion
+• production orders
+
+--------------------------------------------------
+
+PHASE 7 — Architectural Limitations
+
+Identify all problems with the current architecture.
+
+Specifically check for:
+
+• forced sequential workflow
+• inability to skip steps
+• inability to attach documents without completing a step
+• inability to close projects early
+• inability to represent "lost quote" projects
+• inability to display project stage on dashboards
+
+--------------------------------------------------
+
+PHASE 8 — Recommended Architecture
+
+Based on the findings, propose a new architecture including:
+
+1) Project lifecycle status
+
+active
+inactive
+won
+lost
+cancelled
+completed
+
+2) Milestone tracking system
+
+Independent milestone records per project with:
+
+milestone_type
+status
+completed_at
+notes
+attachments
+
+3) Current stage field on project
+
+Example:
+
+rfq_received
+quote_preparing
+quote_submitted
+purchase_review
+po_received
+production
+completed
+
+4) One PO per project relationship
+
+5) Automatic project completion triggers
+
+--------------------------------------------------
+
+Deliverables
+
+Provide:
+
+1) Full schema diagram
+2) Current workflow architecture
+3) Architectural weaknesses
+4) Proposed new schema
+5) Migration plan that will not break existing data
+6) Example dashboard query for listing projects by stage

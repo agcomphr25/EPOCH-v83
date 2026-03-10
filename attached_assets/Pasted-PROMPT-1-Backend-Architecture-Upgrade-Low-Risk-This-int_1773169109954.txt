@@ -1,0 +1,185 @@
+PROMPT 1 — Backend Architecture Upgrade (Low Risk)
+
+This introduces the stage system + lifecycle statuses without touching your current step logic yet.
+
+Copy-paste:
+
+EPOCH PROJECT PIPELINE ARCHITECTURE UPGRADE
+Safe Incremental Refactor — Preserve Existing Workflow
+
+Goal
+Upgrade the Projects system so it supports a flexible pipeline stage model and richer lifecycle statuses without breaking the existing project_steps workflow.
+
+Do NOT delete any existing tables or routes.
+
+--------------------------------
+
+PHASE 1 — Extend Project Lifecycle Status
+
+Expand the projects.status enum.
+
+Current values:
+active
+on_hold
+completed
+cancelled
+
+New values:
+
+active
+inactive
+won
+lost
+cancelled
+completed
+
+Rules:
+
+inactive → paused project
+won → PO received
+lost → quote rejected
+completed → project shipped and closed
+
+Update any schema definitions in:
+
+server/schema.ts
+server/db/schema.ts
+
+Ensure existing values remain valid.
+
+--------------------------------
+
+PHASE 2 — Add Pipeline Stage Field
+
+Add two new columns to projects table.
+
+projects.current_stage TEXT
+projects.stage_updated_at TIMESTAMP
+
+Default values for existing rows:
+
+current_stage = 'rfq_received'
+stage_updated_at = now()
+
+This field represents the operational pipeline stage.
+
+Example values:
+
+rfq_received
+quote_preparing
+quote_submitted
+purchase_review
+po_received
+production
+shipping
+completed
+inactive
+
+Do NOT enforce enum constraints. Use TEXT for flexibility.
+
+--------------------------------
+
+PHASE 3 — Stage Update Logic
+
+Whenever a project step is completed, update current_stage automatically.
+
+Mapping:
+
+rfq_risk_assessment → rfq_received
+quote → quote_submitted
+purchase_review_checklist → purchase_review
+preproduction_checklist → po_received
+p2_order → production
+
+Logic:
+
+if stepType = 'quote'
+  current_stage = 'quote_submitted'
+
+if stepType = 'p2_order'
+  current_stage = 'production'
+  project.status = 'won'
+
+Always update:
+
+stage_updated_at = now()
+
+--------------------------------
+
+PHASE 4 — Add Direct PO Link
+
+Add a new column:
+
+projects.po_id INTEGER REFERENCES p2_purchase_orders(id)
+
+Backfill this field:
+
+SELECT linkedP2OrderId
+FROM project_steps
+WHERE stepType = 'p2_order'
+
+Populate projects.po_id accordingly.
+
+--------------------------------
+
+PHASE 5 — API Updates
+
+Extend existing project APIs to include:
+
+current_stage
+stage_updated_at
+po_id
+
+Update:
+
+GET /api/projects
+GET /api/projects/:id
+
+--------------------------------
+
+PHASE 6 — Dashboard Query Support
+
+Add a new endpoint:
+
+GET /api/projects/pipeline
+
+Return:
+
+projectId
+projectCode
+projectName
+customerName
+current_stage
+status
+targetShipDate
+stage_updated_at
+
+Only include:
+
+status IN ('active','won')
+
+--------------------------------
+
+PHASE 7 — Validation
+
+Ensure existing workflow pages still function.
+
+Verify:
+
+Project creation still generates steps
+Step completion still works
+Attachments still upload
+Activity logs still record
+
+Do not modify project_steps logic yet.
+
+--------------------------------
+
+Deliverable
+
+Working backend with:
+
+• lifecycle statuses
+• pipeline stage tracking
+• PO direct link
+• pipeline query API

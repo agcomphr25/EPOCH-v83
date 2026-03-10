@@ -9625,7 +9625,9 @@ export const projectStepStatusEnum = pgEnum('project_step_status', [
   'pending',
   'in_progress', 
   'completed',
-  'blocked'
+  'blocked',
+  'skipped',
+  'not_applicable'
 ]);
 
 // Project Status Enum
@@ -9633,7 +9635,10 @@ export const projectStatusEnum = pgEnum('project_status', [
   'active',
   'on_hold',
   'completed',
-  'cancelled'
+  'cancelled',
+  'inactive',
+  'won',
+  'lost'
 ]);
 
 // Project Step Types (workflow order)
@@ -9656,6 +9661,9 @@ export const projects = pgTable('projects', {
   currentStepType: projectStepTypeEnum('current_step_type').default('rfq_risk_assessment'),
   targetShipDate: date('target_ship_date'),
   actualShipDate: date('actual_ship_date'),
+  currentStage: text('current_stage').default('rfq_received'),
+  stageUpdatedAt: timestamp('stage_updated_at').defaultNow(),
+  poId: integer('po_id').references(() => p2PurchaseOrders.id),
   projectManagerId: integer('project_manager_id').references(() => employees.id),
   reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
   lastReminderSentAt: timestamp('last_reminder_sent_at'),

@@ -24,19 +24,33 @@ const createProjectRequestSchema = z.object({
   createdBy: z.number().optional(),
 });
 
+const VALID_PIPELINE_STAGES = [
+  'rfq_received', 'quote_preparing', 'quote_submitted', 'purchase_review',
+  'po_received', 'production', 'shipping', 'completed',
+] as const;
+
 const updateProjectRequestSchema = z.object({
   projectName: z.string().optional(),
   description: z.string().optional().nullable(),
   targetShipDate: z.string().optional().nullable(),
   projectManagerId: z.number().optional().nullable(),
   reminderDays: z.number().min(1).optional(),
-  status: z.enum(['active', 'on_hold', 'completed', 'cancelled']).optional(),
+  status: z.enum(['active', 'on_hold', 'completed', 'cancelled', 'inactive', 'won', 'lost']).optional(),
+  currentStage: z.enum(VALID_PIPELINE_STAGES).optional().nullable(),
   notes: z.string().optional().nullable(),
   updatedBy: z.number().optional(),
 });
 
+const STEP_TO_STAGE_MAP: Record<string, string> = {
+  rfq_risk_assessment: 'rfq_received',
+  quote: 'quote_submitted',
+  purchase_review_checklist: 'purchase_review',
+  preproduction_checklist: 'po_received',
+  p2_order: 'production',
+};
+
 const updateStepRequestSchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional(),
+  status: z.enum(['pending', 'in_progress', 'completed', 'blocked', 'not_applicable']).optional(),
   linkedRfqId: z.number().optional().nullable(),
   linkedQuoteId: z.string().optional().nullable(),
   linkedPurchaseReviewId: z.number().optional().nullable(),
@@ -68,12 +82,14 @@ router.get('/', async (req, res) => {
           const projectManager = project.projectManagerId 
             ? await storage.getEmployee(project.projectManagerId)
             : null;
+          const attachments = await storage.getProjectStepAttachmentsByProject(project.id);
           
           return {
             ...project,
             steps,
             customer: customer || null,
             projectManager,
+            attachmentCount: attachments.length,
           };
         } catch (enrichErr) {
           console.error(`Error enriching project ${project.id}:`, enrichErr);
@@ -82,6 +98,7 @@ router.get('/', async (req, res) => {
             steps: [],
             customer: null,
             projectManager: null,
+            attachmentCount: 0,
           };
         }
       })
@@ -106,6 +123,39 @@ router.get('/next-code', async (req, res) => {
 
 router.get('/step-types', async (req, res) => {
   res.json(PROJECT_STEP_TYPES);
+});
+
+router.get('/pipeline', async (req, res) => {
+  try {
+    const allProjects = await storage.getAllProjects();
+    const pipelineProjects = allProjects.filter(
+      p => p.status === 'active' || p.status === 'won'
+    );
+
+    const results = await Promise.all(
+      pipelineProjects.map(async (project) => {
+        const customer = project.customerId
+          ? await storage.getP2CustomerByCustomerId(project.customerId)
+          : null;
+        return {
+          projectId: project.id,
+          projectCode: project.projectCode,
+          projectName: project.projectName,
+          customerName: customer?.customerName || 'Unknown',
+          currentStage: project.currentStage || 'rfq_received',
+          status: project.status,
+          targetShipDate: project.targetShipDate,
+          stageUpdatedAt: project.stageUpdatedAt,
+          poId: project.poId,
+        };
+      })
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching project pipeline:', error);
+    res.status(500).json({ message: 'Failed to fetch project pipeline' });
+  }
 });
 
 router.get('/unlinked-submissions/:stepType', async (req, res) => {
@@ -333,8 +383,20 @@ router.patch('/:id', async (req, res) => {
     }
     
     const validatedData = validationResult.data;
-    const project = await storage.updateProject(id, validatedData);
+    const updatePayload: any = { ...validatedData };
+    if (validatedData.currentStage) {
+      updatePayload.stageUpdatedAt = new Date();
+    }
+    const project = await storage.updateProject(id, updatePayload);
     
+    if (validatedData.currentStage) {
+      await storage.createProjectActivityLog({
+        projectId: id,
+        activityType: 'stage_changed',
+        description: `Stage changed to ${validatedData.currentStage}`,
+      });
+    }
+
     if (validatedData.projectManagerId) {
       const updaterSnapshot = validatedData.updatedBy
         ? await createEmployeeIdentitySnapshot(validatedData.updatedBy)
@@ -400,21 +462,10 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       return res.status(404).json({ message: 'Step not found' });
     }
     
-    if (status === 'completed' || linkedRfqId !== undefined || linkedQuoteId !== undefined || 
-        linkedPurchaseReviewId !== undefined || linkedPreproductionChecklistId !== undefined || 
-        linkedP2OrderId !== undefined) {
+    if (status === 'completed') {
       if (currentStep.status !== 'in_progress') {
         return res.status(400).json({ 
-          message: 'Cannot modify a step that is not in progress. Complete previous steps first.' 
-        });
-      }
-      
-      const previousSteps = allSteps.filter(s => s.stepOrder < currentStep.stepOrder);
-      const allPreviousCompleted = previousSteps.every(s => s.status === 'completed');
-      
-      if (!allPreviousCompleted) {
-        return res.status(400).json({ 
-          message: 'Cannot complete or link this step. All previous steps must be completed first.' 
+          message: 'Cannot complete a step that is not in progress. Start the step first.' 
         });
       }
     }
@@ -442,7 +493,12 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
     if (linkedQuoteId !== undefined) updateData.linkedQuoteId = linkedQuoteId;
     if (linkedPurchaseReviewId !== undefined) updateData.linkedPurchaseReviewId = linkedPurchaseReviewId;
     if (linkedPreproductionChecklistId !== undefined) updateData.linkedPreproductionChecklistId = linkedPreproductionChecklistId;
-    if (linkedP2OrderId !== undefined) updateData.linkedP2OrderId = linkedP2OrderId;
+    if (linkedP2OrderId !== undefined) {
+      updateData.linkedP2OrderId = linkedP2OrderId;
+      if (linkedP2OrderId !== null) {
+        await storage.updateProject(projectId, { poId: linkedP2OrderId } as any);
+      }
+    }
     if (notes !== undefined) updateData.notes = notes;
     
     const step = await storage.updateProjectStep(stepId, updateData);
@@ -478,15 +534,29 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       const nextStep = allSteps.find(s => s.stepOrder === nextStepIndex + 1);
       
       if (nextStep) {
-        await storage.updateProjectStep(nextStep.id, { 
-          status: 'in_progress',
-          startedAt: new Date(),
-        });
+        if (nextStep.status === 'pending') {
+          await storage.updateProjectStep(nextStep.id, { 
+            status: 'in_progress',
+            startedAt: new Date(),
+          });
+        }
         
         const nextStepInfo = PROJECT_STEP_TYPES.find(s => s.type === nextStep.stepType);
-        await storage.updateProject(projectId, { 
+        const completedStage = STEP_TO_STAGE_MAP[step.stepType] || null;
+        const projectUpdate: any = { 
           currentStepType: nextStep.stepType as any,
-        });
+        };
+        if (completedStage) {
+          projectUpdate.currentStage = completedStage;
+          projectUpdate.stageUpdatedAt = new Date();
+        }
+        if (step.stepType === 'p2_order') {
+          projectUpdate.status = 'won';
+          if (updateData.linkedP2OrderId) {
+            projectUpdate.poId = updateData.linkedP2OrderId;
+          }
+        }
+        await storage.updateProject(projectId, projectUpdate);
         
         await storage.createProjectActivityLog({
           projectId,
@@ -495,15 +565,25 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
           description: `${nextStepInfo?.label || nextStep.stepType} started`,
         });
       } else {
-        await storage.updateProject(projectId, { 
-          status: 'completed',
-          actualShipDate: new Date().toISOString().split('T')[0],
-        });
+        const isFinalP2Order = step.stepType === 'p2_order';
+        const finalUpdate: any = {
+          currentStage: isFinalP2Order ? 'production' : 'completed',
+          stageUpdatedAt: new Date(),
+          status: isFinalP2Order ? 'won' : 'completed',
+        };
+        if (!isFinalP2Order) {
+          finalUpdate.actualShipDate = new Date().toISOString().split('T')[0];
+        }
+        if (isFinalP2Order && updateData.linkedP2OrderId) {
+          finalUpdate.poId = updateData.linkedP2OrderId;
+        }
+        await storage.updateProject(projectId, finalUpdate);
         
         await storage.createProjectActivityLog({
           projectId,
-          activityType: 'project_completed',
-          description: 'Project completed',
+          activityType: isFinalP2Order ? 'step_completed' : 'project_completed',
+          stepType: isFinalP2Order ? 'p2_order' : undefined,
+          description: isFinalP2Order ? 'P2 Order completed — project won' : 'Project completed',
         });
       }
     }
@@ -523,6 +603,95 @@ router.get('/:projectId/activity', async (req, res) => {
   } catch (error) {
     console.error('Error fetching project activity log:', error);
     res.status(500).json({ message: 'Failed to fetch activity log' });
+  }
+});
+
+router.patch('/:projectId/steps/:stepId/skip', async (req, res) => {
+  try {
+    const { projectId, stepId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      return res.status(400).json({ message: 'A skip reason is required' });
+    }
+
+    const allSteps = await storage.getProjectSteps(projectId);
+    const step = allSteps.find(s => s.id === stepId);
+    if (!step) {
+      return res.status(404).json({ message: 'Step not found' });
+    }
+
+    if (step.status === 'completed') {
+      return res.status(400).json({ message: 'Cannot skip a completed step. Reopen it first.' });
+    }
+
+    const existingNotes = step.notes ? `${step.notes}\n` : '';
+    const updatedStep = await storage.updateProjectStep(stepId, {
+      status: 'skipped' as any,
+      completedAt: new Date(),
+      notes: `${existingNotes}[Skipped] ${reason.trim()}`,
+    });
+
+    await storage.createProjectActivityLog({
+      projectId,
+      activityType: 'step_skipped',
+      stepType: step.stepType,
+      description: `${PROJECT_STEP_TYPES.find(s => s.type === step.stepType)?.label || step.stepType} skipped: ${reason.trim()}`,
+    });
+
+    res.json(updatedStep);
+  } catch (error) {
+    console.error('Error skipping project step:', error);
+    res.status(500).json({ message: 'Failed to skip project step' });
+  }
+});
+
+router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
+  try {
+    const { projectId, stepId } = req.params;
+
+    const allSteps = await storage.getProjectSteps(projectId);
+    const step = allSteps.find(s => s.id === stepId);
+    if (!step) {
+      return res.status(404).json({ message: 'Step not found' });
+    }
+
+    if (step.status !== 'completed' && step.status !== 'skipped') {
+      return res.status(400).json({ 
+        message: 'Only completed or skipped steps can be reopened' 
+      });
+    }
+
+    const updatedStep = await storage.updateProjectStep(stepId, {
+      status: 'in_progress' as any,
+      completedAt: null,
+      completedBy: null,
+      completedByDisplayName: null,
+      startedAt: new Date(),
+    });
+
+    const project = await storage.getProject(projectId);
+    if (project && (project.status === 'completed' || project.status === 'won')) {
+      const projectUpdate: any = {
+        status: 'active',
+        currentStepType: step.stepType as any,
+        currentStage: STEP_TO_STAGE_MAP[step.stepType] || project.currentStage,
+        stageUpdatedAt: new Date(),
+      };
+      await storage.updateProject(projectId, projectUpdate);
+    }
+
+    await storage.createProjectActivityLog({
+      projectId,
+      activityType: 'step_reopened',
+      stepType: step.stepType,
+      description: `${PROJECT_STEP_TYPES.find(s => s.type === step.stepType)?.label || step.stepType} reopened`,
+    });
+
+    res.json(updatedStep);
+  } catch (error) {
+    console.error('Error reopening project step:', error);
+    res.status(500).json({ message: 'Failed to reopen project step' });
   }
 });
 

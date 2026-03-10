@@ -1,0 +1,200 @@
+Copy-Paste Implementation Prompt
+
+EPOCH Control Tower Ribbon Implementation
+
+EPOCH CONTROL TOWER RIBBON IMPLEMENTATION
+Safe PCC Enhancement
+
+Goal
+
+Add a Control Tower Ribbon above the Production Control Center widget grid that displays operational alerts and signals.
+
+The ribbon must integrate with the existing dashboard architecture without modifying the widget system.
+
+--------------------------------------------------
+
+PHASE 1 — Create Ribbon Component
+
+Create new file:
+
+client/src/components/widgets/ControlTowerRibbon.tsx
+
+Component responsibilities:
+
+• read businessContext using useDashboardFilters()
+• fetch signals from backend endpoint
+• render horizontal signal chips
+• support click navigation
+
+Signal interface:
+
+interface RibbonSignal {
+  id: string
+  label: string
+  value: number
+  severity: 'info' | 'warning' | 'critical'
+  domain: 'company' | 'p1' | 'p2'
+  route: string
+  icon?: string
+}
+
+--------------------------------------------------
+
+PHASE 2 — UI Rendering
+
+Render a horizontal flex container.
+
+Example layout:
+
+<div className="flex gap-3 overflow-x-auto py-2">
+
+Each signal chip contains:
+
+icon
+label
+value badge
+
+Severity colors:
+
+critical → bg-red-500/10 text-red-600
+warning → bg-yellow-500/10 text-yellow-600
+info → bg-blue-500/10 text-blue-600
+
+Hide ribbon completely if there are no signals.
+
+--------------------------------------------------
+
+PHASE 3 — Backend Signal Service
+
+Create service:
+
+server/src/services/controlTowerService.ts
+
+This service aggregates signals from existing sources.
+
+Example:
+
+getControlTowerSignals(context)
+
+Return array of RibbonSignal objects.
+
+Signals to implement initially:
+
+Orders Behind Schedule
+  → use /api/admin/stuck-orders query
+
+Inventory Shortages
+  → metricsService open_inventory_shortages
+
+AR Overdue
+  → metricsService ar_overdue_count
+
+Quotes Awaiting Response
+  → quotes where status = SENT
+
+P2 Pending BOMs
+  → metricsService p2_pending_boms
+
+--------------------------------------------------
+
+PHASE 4 — API Endpoint
+
+Create route:
+
+server/src/routes/controlTower.ts
+
+Endpoint:
+
+GET /api/control-tower/signals
+
+Returns:
+
+{
+  signals: RibbonSignal[]
+}
+
+The endpoint may compute signals for all domains.
+
+--------------------------------------------------
+
+PHASE 5 — Data Fetching
+
+Inside ControlTowerRibbon.tsx use TanStack Query:
+
+queryKey: ['controlTowerSignals']
+queryFn: fetch /api/control-tower/signals
+staleTime: 30000
+
+Filter signals by:
+
+signal.domain === businessContext
+or
+signal.domain === 'company'
+
+--------------------------------------------------
+
+PHASE 6 — Insert Ribbon Into PCC
+
+Edit:
+
+client/src/pages/ProductionControlCenter.tsx
+
+Insert component between control bar and grid:
+
+<DashboardControlBar />
+
+<ControlTowerRibbon />
+
+<DashboardGrid layout={PCC_DASHBOARD_LAYOUT} />
+
+--------------------------------------------------
+
+PHASE 7 — Navigation
+
+When a signal chip is clicked:
+
+navigate(signal.route)
+
+Use existing router navigation utilities.
+
+--------------------------------------------------
+
+PHASE 8 — Styling
+
+Use existing Tailwind styling patterns.
+
+Ribbon container:
+
+bg-muted/40
+border
+rounded-lg
+px-3
+py-2
+
+Signal chips:
+
+rounded-md
+px-3
+py-1
+text-sm
+font-medium
+flex items-center gap-2
+
+--------------------------------------------------
+
+PHASE 9 — Validation
+
+Verify:
+
+• Ribbon appears above dashboard grid
+• Domain toggle filters signals
+• Clicking a signal navigates correctly
+• Dashboard widgets remain unchanged
+• No layout shift when ribbon hidden
+
+--------------------------------------------------
+
+Deliverable
+
+Working Control Tower Ribbon integrated into the Production Control Center with domain-aware operational signals.
+What You'll Get After This

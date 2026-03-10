@@ -127,6 +127,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/waste-management-form',
   '/preproduction-checklists',
   '/projects',
+  '/projects/pipeline',
   '/help',
   '/signature-workflow',
   '/pdf-signature-tool',

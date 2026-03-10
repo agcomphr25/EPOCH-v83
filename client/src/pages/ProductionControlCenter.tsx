@@ -1,6 +1,7 @@
 import { Factory } from 'lucide-react';
 import DashboardGrid from '@/components/widgets/DashboardGrid';
 import DashboardControlBar from '@/components/widgets/DashboardControlBar';
+import ControlTowerRibbon from '@/components/widgets/ControlTowerRibbon';
 import { PCC_DASHBOARD_LAYOUT } from '@/config/pccDashboardLayout';
 import { DashboardFilterProvider } from '@/contexts/DashboardFilterContext';
 
@@ -26,6 +27,8 @@ export default function ProductionControlCenter() {
           <div className="mb-6">
             <DashboardControlBar />
           </div>
+
+          <ControlTowerRibbon />
 
           <DashboardGrid layout={PCC_DASHBOARD_LAYOUT} />
         </div>

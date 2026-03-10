@@ -44,7 +44,7 @@ interface ProjectStep {
   id: string;
   stepType: string;
   stepOrder: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped' | 'not_applicable';
   startedAt: string | null;
   completedAt: string | null;
   completedBy: number | null;
@@ -73,10 +73,13 @@ interface Project {
   projectName: string;
   customerId: string;
   description: string | null;
-  status: 'active' | 'on_hold' | 'completed' | 'cancelled';
+  status: 'active' | 'on_hold' | 'completed' | 'cancelled' | 'inactive' | 'won' | 'lost';
   currentStepType: string;
   targetShipDate: string | null;
   actualShipDate: string | null;
+  currentStage: string | null;
+  stageUpdatedAt: string | null;
+  poId: number | null;
   projectManagerId: number | null;
   reminderDays: number;
   notes: string | null;
@@ -120,6 +123,21 @@ const STATUS_COLORS: Record<string, string> = {
   on_hold: 'bg-yellow-100 text-yellow-800',
   completed: 'bg-blue-100 text-blue-800',
   cancelled: 'bg-red-100 text-red-800',
+  inactive: 'bg-gray-100 text-gray-800',
+  won: 'bg-emerald-100 text-emerald-800',
+  lost: 'bg-orange-100 text-orange-800',
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  rfq_received: 'RFQ Received',
+  quote_preparing: 'Quote Preparing',
+  quote_submitted: 'Quote Submitted',
+  purchase_review: 'Purchase Review',
+  po_received: 'PO Received',
+  production: 'Production',
+  shipping: 'Shipping',
+  completed: 'Completed',
+  inactive: 'Inactive',
 };
 
 const STEP_STATUS_ICONS: Record<string, typeof Circle> = {
@@ -127,6 +145,8 @@ const STEP_STATUS_ICONS: Record<string, typeof Circle> = {
   in_progress: Clock,
   completed: CheckCircle2,
   blocked: AlertCircle,
+  skipped: Circle,
+  not_applicable: Circle,
 };
 
 const STEP_STATUS_COLORS: Record<string, string> = {
@@ -134,6 +154,8 @@ const STEP_STATUS_COLORS: Record<string, string> = {
   in_progress: 'text-blue-500',
   completed: 'text-green-500',
   blocked: 'text-red-500',
+  skipped: 'text-gray-300',
+  not_applicable: 'text-gray-300',
 };
 
 export default function ProjectDetailPage() {
@@ -149,6 +171,8 @@ export default function ProjectDetailPage() {
   const [uploadNotes, setUploadNotes] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [isSkipDialogOpen, setIsSkipDialogOpen] = useState(false);
+  const [skipReason, setSkipReason] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -228,6 +252,46 @@ export default function ProjectDetailPage() {
     },
   });
 
+  const startStepMutation = useMutation({
+    mutationFn: async (stepId: string) => {
+      return apiRequest(`/api/projects/${id}/steps/${stepId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'in_progress' }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+    },
+  });
+
+  const skipStepMutation = useMutation({
+    mutationFn: async ({ stepId, reason }: { stepId: string; reason: string }) => {
+      return apiRequest(`/api/projects/${id}/steps/${stepId}/skip`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      setIsSkipDialogOpen(false);
+      setSkipReason('');
+      setSelectedStep(null);
+      toast({ title: 'Step skipped' });
+    },
+  });
+
+  const reopenStepMutation = useMutation({
+    mutationFn: async (stepId: string) => {
+      return apiRequest(`/api/projects/${id}/steps/${stepId}/reopen`, {
+        method: 'PATCH',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      toast({ title: 'Step reopened' });
+    },
+  });
+
   const { data: stepAttachments = [] } = useQuery<StepAttachment[]>({
     queryKey: ['/api/project-step-attachments', selectedStep?.id],
     enabled: !!selectedStep?.id && isUploadDialogOpen,
@@ -262,7 +326,9 @@ export default function ProjectDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments/by-project', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       toast({ title: 'Document deleted', description: 'The attachment has been removed.' });
     },
   });
@@ -321,7 +387,9 @@ export default function ProjectDetailPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments/by-project', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       setUploadNotes('');
       toast({ title: 'Document uploaded', description: `${file.name} has been attached to this step.` });
     } catch (error) {
@@ -416,6 +484,11 @@ export default function ProjectDetailPage() {
             <Badge className={STATUS_COLORS[project.status]}>
               {project.status.replace('_', ' ')}
             </Badge>
+            {project.currentStage && (
+              <Badge variant="outline" className="text-xs">
+                {STAGE_LABELS[project.currentStage] || project.currentStage}
+              </Badge>
+            )}
           </div>
           <p className="text-lg text-muted-foreground">{project.projectName}</p>
         </div>
@@ -516,15 +589,23 @@ export default function ProjectDetailPage() {
                       </div>
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold">{config?.label || step.stepType}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {step.status === 'completed' && step.completedAt
-                                ? `Completed${step.completedByDisplayName ? ` by ${step.completedByDisplayName}` : ''} ${formatDistanceToNow(new Date(step.completedAt), { addSuffix: true })}`
-                                : step.status === 'in_progress' && step.startedAt
-                                ? `Started ${formatDistanceToNow(new Date(step.startedAt), { addSuffix: true })}`
-                                : 'Pending'}
-                            </p>
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <h3 className="font-semibold">{config?.label || step.stepType}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {step.status === 'completed' && step.completedAt
+                                  ? `Completed${step.completedByDisplayName ? ` by ${step.completedByDisplayName}` : ''} ${formatDistanceToNow(new Date(step.completedAt), { addSuffix: true })}`
+                                  : step.status === 'in_progress' && step.startedAt
+                                  ? `Started ${formatDistanceToNow(new Date(step.startedAt), { addSuffix: true })}`
+                                  : 'Pending'}
+                              </p>
+                            </div>
+                            {stepAttachments.length > 0 && (
+                              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                                <Paperclip className="h-3 w-3" />
+                                {stepAttachments.length} doc{stepAttachments.length !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex gap-2 flex-wrap justify-end">
                             {step.status === 'in_progress' && (
@@ -571,6 +652,18 @@ export default function ProjectDetailPage() {
                                 >
                                   <CheckCircle2 className="mr-1 h-4 w-4" />
                                   Mark Complete
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-gray-500"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setSkipReason('');
+                                    setIsSkipDialogOpen(true);
+                                  }}
+                                >
+                                  Skip
                                 </Button>
                               </>
                             )}
@@ -627,8 +720,70 @@ export default function ProjectDetailPage() {
                                       <LinkIcon className="mr-1 h-4 w-4" />
                                       {linkedId ? 'Edit Link' : 'Link'}
                                     </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-amber-600"
+                                      onClick={() => reopenStepMutation.mutate(step.id)}
+                                      disabled={reopenStepMutation.isPending}
+                                    >
+                                      Reopen
+                                    </Button>
                                   </>
                                 )}
+                              </>
+                            )}
+                            {step.status === 'skipped' && (
+                              <>
+                                <Badge variant="secondary" className="text-gray-500 text-xs">Skipped</Badge>
+                                {isAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-amber-600"
+                                    onClick={() => reopenStepMutation.mutate(step.id)}
+                                    disabled={reopenStepMutation.isPending}
+                                  >
+                                    Reopen
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            {(step.status === 'pending' || step.status === 'blocked') && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => startStepMutation.mutate(step.id)}
+                                  disabled={startStepMutation.isPending}
+                                >
+                                  <Clock className="mr-1 h-4 w-4" />
+                                  Start
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setIsUploadDialogOpen(true);
+                                  }}
+                                  data-testid={`button-upload-${step.status}-${step.stepType}`}
+                                >
+                                  <Upload className="mr-1 h-4 w-4" />
+                                  Attach PDF
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-gray-500"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setSkipReason('');
+                                    setIsSkipDialogOpen(true);
+                                  }}
+                                >
+                                  Skip
+                                </Button>
                               </>
                             )}
                           </div>
@@ -636,9 +791,9 @@ export default function ProjectDetailPage() {
                         {step.notes && (
                           <p className="text-sm bg-muted p-2 rounded">{step.notes}</p>
                         )}
-                        {step.status === 'completed' && isExpanded && (
-                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-green-200">
-                            {linkedId && (
+                        {stepAttachments.length > 0 && (step.status !== 'completed' || isExpanded) && (
+                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-blue-200">
+                            {step.status === 'completed' && isExpanded && linkedId && (
                               <div className="flex items-center gap-2">
                                 <Badge variant="secondary" className="flex items-center gap-1">
                                   <LinkIcon className="h-3 w-3" />
@@ -646,51 +801,59 @@ export default function ProjectDetailPage() {
                                 </Badge>
                               </div>
                             )}
-                            {stepAttachments.length > 0 && (
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-muted-foreground">Attached Documents:</p>
-                                <div className="space-y-1">
-                                  {stepAttachments.map((attachment) => (
-                                    <div 
-                                      key={attachment.id} 
-                                      className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                        <span>{attachment.originalFileName}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          ({(attachment.fileSize / 1024).toFixed(1)} KB)
-                                        </span>
-                                      </div>
-                                      <div className="flex gap-1">
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-muted-foreground">Attached Documents:</p>
+                              <div className="space-y-1">
+                                {stepAttachments.map((attachment) => (
+                                  <div 
+                                    key={attachment.id} 
+                                    className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                      <span>{attachment.originalFileName}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        ({(attachment.fileSize / 1024).toFixed(1)} KB)
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
+                                        data-testid={`button-download-attachment-${attachment.id}`}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                      {isAdmin && (
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
-                                          data-testid={`button-download-attachment-${attachment.id}`}
+                                          className="text-red-600 hover:text-red-700"
+                                          onClick={() => {
+                                            setSelectedStep(step);
+                                            deleteAttachmentMutation.mutate(attachment.id);
+                                          }}
+                                          data-testid={`button-delete-attachment-${attachment.id}`}
                                         >
-                                          <Download className="h-4 w-4" />
+                                          <Trash2 className="h-4 w-4" />
                                         </Button>
-                                        {isAdmin && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-red-600 hover:text-red-700"
-                                            onClick={() => {
-                                              setSelectedStep(step);
-                                              deleteAttachmentMutation.mutate(attachment.id);
-                                            }}
-                                            data-testid={`button-delete-attachment-${attachment.id}`}
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        )}
-                                      </div>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
+                                  </div>
+                                ))}
                               </div>
-                            )}
+                            </div>
+                          </div>
+                        )}
+                        {step.status === 'completed' && isExpanded && stepAttachments.length === 0 && linkedId && (
+                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-green-200">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="flex items-center gap-1">
+                                <LinkIcon className="h-3 w-3" />
+                                Linked Record: {linkedId}
+                              </Badge>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -761,7 +924,10 @@ export default function ProjectDetailPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="won">Won</SelectItem>
                   <SelectItem value="on_hold">On Hold</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
@@ -1026,6 +1192,44 @@ export default function ProjectDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSkipDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsSkipDialogOpen(false);
+          setSkipReason('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Skip Step</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Provide a reason for skipping this step. The step can be reopened later if needed.
+            </p>
+            <Textarea
+              placeholder="Reason for skipping..."
+              value={skipReason}
+              onChange={(e) => setSkipReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSkipDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedStep && skipReason.trim()) {
+                  skipStepMutation.mutate({ stepId: selectedStep.id, reason: skipReason.trim() });
+                }
+              }}
+              disabled={!skipReason.trim() || skipStepMutation.isPending}
+            >
+              {skipStepMutation.isPending ? 'Skipping...' : 'Skip Step'}
             </Button>
           </DialogFooter>
         </DialogContent>

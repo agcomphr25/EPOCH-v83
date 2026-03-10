@@ -11,14 +11,14 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ProjectStep {
   id: string;
   stepType: string;
   stepOrder: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped' | 'not_applicable';
   startedAt: string | null;
   completedAt: string | null;
 }
@@ -38,6 +38,10 @@ interface Project {
   steps: ProjectStep[];
   customer?: { id: number; customerId: string; name: string };
   projectManager?: { id: number; name: string };
+  attachmentCount?: number;
+  currentStage?: string;
+  stageUpdatedAt?: string;
+  poId?: number;
 }
 
 interface P2Customer {
@@ -66,6 +70,21 @@ const STATUS_COLORS: Record<string, string> = {
   on_hold: 'bg-yellow-100 text-yellow-800',
   completed: 'bg-blue-100 text-blue-800',
   cancelled: 'bg-red-100 text-red-800',
+  inactive: 'bg-gray-100 text-gray-800',
+  won: 'bg-emerald-100 text-emerald-800',
+  lost: 'bg-orange-100 text-orange-800',
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  rfq_received: 'RFQ Received',
+  quote_preparing: 'Quote Preparing',
+  quote_submitted: 'Quote Submitted',
+  purchase_review: 'Purchase Review',
+  po_received: 'PO Received',
+  production: 'Production',
+  shipping: 'Shipping',
+  completed: 'Completed',
+  inactive: 'Inactive',
 };
 
 const STEP_STATUS_COLORS: Record<string, string> = {
@@ -73,6 +92,8 @@ const STEP_STATUS_COLORS: Record<string, string> = {
   in_progress: 'bg-blue-500',
   completed: 'bg-green-500',
   blocked: 'bg-red-500',
+  skipped: 'bg-gray-300',
+  not_applicable: 'bg-gray-300',
 };
 
 export default function ProjectsPage() {
@@ -133,7 +154,7 @@ export default function ProjectsPage() {
       project.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCustomer = customerFilter === 'all' || project.customerId === customerFilter;
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || project.status === statusFilter || project.currentStage === statusFilter;
     
     return matchesSearch && matchesCustomer && matchesStatus;
   });
@@ -161,10 +182,16 @@ export default function ProjectsPage() {
           <h1 className="text-3xl font-bold" data-testid="page-title">P2 Projects</h1>
           <p className="text-muted-foreground">Track and manage P2 project workflows</p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-new-project">
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setLocation('/projects/pipeline')}>
+            <LayoutGrid className="mr-2 h-4 w-4" />
+            Pipeline Board
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-new-project">
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4 flex-wrap">
@@ -200,7 +227,10 @@ export default function ProjectsPage() {
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="won">Won</SelectItem>
             <SelectItem value="on_hold">On Hold</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="lost">Lost</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
@@ -255,9 +285,16 @@ export default function ProjectsPage() {
                       {project.projectName}
                     </CardDescription>
                   </div>
-                  <Badge className={STATUS_COLORS[project.status]}>
-                    {project.status.replace('_', ' ')}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge className={STATUS_COLORS[project.status]}>
+                      {project.status.replace('_', ' ')}
+                    </Badge>
+                    {project.currentStage && (
+                      <Badge variant="outline" className="text-xs">
+                        {STAGE_LABELS[project.currentStage] || project.currentStage}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -302,7 +339,15 @@ export default function ProjectsPage() {
                   </div>
                 </div>
                 
-                <div className="flex justify-end">
+                <div className="flex justify-between items-center">
+                  {(project.attachmentCount ?? 0) > 0 ? (
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      <span>{project.attachmentCount} doc{project.attachmentCount !== 1 ? 's' : ''}</span>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />
                 </div>
               </CardContent>

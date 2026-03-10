@@ -614,8 +614,9 @@ export default function TravelerManagement() {
                 <TableHead>Traveler #</TableHead>
                 <TableHead>Part Number</TableHead>
                 <TableHead>Part Name</TableHead>
+                <TableHead>Serial Number</TableHead>
                 <TableHead>Work Order</TableHead>
-                <TableHead>Lot/Serial</TableHead>
+                <TableHead>Lot #</TableHead>
                 <TableHead>Qty</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
@@ -625,7 +626,7 @@ export default function TravelerManagement() {
             <TableBody>
               {filteredTravelers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     {searchTerm || statusFilter !== 'all'
                       ? 'No travelers match your search criteria'
                       : 'No travelers yet. Create one from a part routing.'}
@@ -647,10 +648,11 @@ export default function TravelerManagement() {
                       </TableCell>
                       <TableCell>{traveler.partNumber || '-'}</TableCell>
                       <TableCell>{traveler.partName || '-'}</TableCell>
-                      <TableCell>{traveler.workOrderId || '-'}</TableCell>
-                      <TableCell>
-                        {traveler.lotNumber || traveler.serialNumber || '-'}
+                      <TableCell className="font-mono text-sm">
+                        {traveler.serialNumber || '-'}
                       </TableCell>
+                      <TableCell>{traveler.workOrderId || '-'}</TableCell>
+                      <TableCell>{traveler.lotNumber || '-'}</TableCell>
                       <TableCell>{traveler.quantity}</TableCell>
                       <TableCell>
                         <Badge className={STATUS_COLORS[traveler.status] || 'bg-gray-100'}>

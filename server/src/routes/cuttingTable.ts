@@ -1305,24 +1305,28 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
       ? await storage.getCuttingProductionLine(inventory.productionLineId)
       : null;
 
-    // Generate printable HTML with barcode
+    // Generate printable HTML with barcode — 4x6 shipping label format
     const expFormatted = inventory.expirationDate
       ? new Date(inventory.expirationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })
+      : null;
+    const dateReceived = inventory.dateReceived
+      ? new Date(inventory.dateReceived).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })
       : null;
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Barcode Label - ${inventory.barcode}</title>
+  <title>Fabric Label - ${inventory.barcode}</title>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     @media print {
-      @page { margin: 0.4in 0.5in; }
+      @page { size: 6in 4in; margin: 0; }
+      html, body { width: 6in; height: 4in; }
       .no-print { display: none !important; }
-      body { background: white; padding: 0; }
-      .label { width: 100%; height: 100%; border: 2px solid #000; }
+      body { background: white; padding: 0; display: block; min-height: auto; }
+      .label { border: none; box-shadow: none; }
     }
     body {
       font-family: Arial, sans-serif;
@@ -1353,87 +1357,110 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     .btn-close:hover { background: #4b5563; }
     .label {
       background: white;
-      border: 2px solid #000;
-      width: 7in;
-      padding: 24px 28px;
+      border: 1px solid #ccc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      width: 6in;
+      height: 4in;
+      padding: 0.2in 0.25in;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      overflow: hidden;
     }
-    .label-top {
+    .label-header {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      border-bottom: 1.5px solid #000;
-      padding-bottom: 10px;
+      align-items: center;
+      border-bottom: 2px solid #000;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
     }
     .company {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: bold;
       color: #000;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
     .label-type {
-      font-size: 13px;
+      font-size: 11px;
+      font-weight: bold;
       color: #000;
+      text-transform: uppercase;
+      background: #000;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 2px;
     }
     .fabric-name {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       color: #000;
-      line-height: 1.25;
+      line-height: 1.2;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .fields {
-      display: flex;
-      gap: 40px;
+    .fields-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px 16px;
+      margin-bottom: 6px;
     }
     .field {
-      font-size: 13px;
       color: #000;
-      line-height: 1.5;
     }
     .field-label {
-      font-size: 11px;
+      font-size: 8px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      color: #555;
+      line-height: 1.2;
     }
     .field-value {
-      font-size: 16px;
+      font-size: 13px;
       font-weight: bold;
+      line-height: 1.3;
     }
     .barcode-section {
+      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding-top: 8px;
+      justify-content: center;
+      margin-top: auto;
     }
     .barcode-section svg {
       width: 100%;
-      max-width: 6in;
+      max-width: 5in;
+      height: auto;
     }
     .barcode-text {
-      font-size: 12px;
+      font-size: 11px;
       font-family: monospace;
       color: #000;
-      letter-spacing: 1px;
-      margin-top: 4px;
+      letter-spacing: 2px;
+      margin-top: 2px;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
   <div class="controls no-print">
-    <button class="btn btn-print" onclick="window.print()">Print Label</button>
+    <button class="btn btn-print" onclick="window.print()">Print Label (4x6)</button>
     <button class="btn btn-close" onclick="window.close()">Close</button>
   </div>
   <div class="label">
-    <div class="label-top">
+    <div class="label-header">
       <div class="company">AG Composites</div>
-      <div class="label-type">Fabric Inventory${line ? ' &bull; ' + line.lineName : ''}</div>
+      <div class="label-type">Fabric Roll${line ? ' - ' + line.lineName : ''}</div>
     </div>
     <div class="fabric-name">${inventory.fabric || inventory.fabricPartNumber || 'Fabric Roll'}</div>
-    <div class="fields">
+    <div class="fields-grid">
       ${inventory.rollNumber ? `<div class="field"><div class="field-label">Roll #</div><div class="field-value">${inventory.rollNumber}</div></div>` : ''}
+      ${inventory.lotNumber ? `<div class="field"><div class="field-label">Lot #</div><div class="field-value">${inventory.lotNumber}</div></div>` : ''}
+      ${inventory.squareMeters ? `<div class="field"><div class="field-label">Qty (m\u00B2)</div><div class="field-value">${inventory.squareMeters}</div></div>` : ''}
+      ${dateReceived ? `<div class="field"><div class="field-label">Received</div><div class="field-value">${dateReceived}</div></div>` : ''}
       ${expFormatted ? `<div class="field"><div class="field-label">Expires</div><div class="field-value">${expFormatted}</div></div>` : ''}
       ${inventory.source ? `<div class="field"><div class="field-label">Source</div><div class="field-value">${inventory.source}</div></div>` : ''}
     </div>
@@ -1445,8 +1472,8 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <script>
     JsBarcode("#barcode", "${inventory.barcode}", {
       format: "CODE128",
-      width: 2.5,
-      height: 80,
+      width: 2,
+      height: 60,
       displayValue: false,
       margin: 0
     });

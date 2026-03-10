@@ -68,12 +68,14 @@ router.get('/', async (req, res) => {
           const projectManager = project.projectManagerId 
             ? await storage.getEmployee(project.projectManagerId)
             : null;
+          const attachments = await storage.getProjectStepAttachmentsByProject(project.id);
           
           return {
             ...project,
             steps,
             customer: customer || null,
             projectManager,
+            attachmentCount: attachments.length,
           };
         } catch (enrichErr) {
           console.error(`Error enriching project ${project.id}:`, enrichErr);
@@ -82,6 +84,7 @@ router.get('/', async (req, res) => {
             steps: [],
             customer: null,
             projectManager: null,
+            attachmentCount: 0,
           };
         }
       })

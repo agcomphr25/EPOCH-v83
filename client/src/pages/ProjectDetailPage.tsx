@@ -262,7 +262,9 @@ export default function ProjectDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments/by-project', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       toast({ title: 'Document deleted', description: 'The attachment has been removed.' });
     },
   });
@@ -321,7 +323,9 @@ export default function ProjectDetailPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments/by-project', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       setUploadNotes('');
       toast({ title: 'Document uploaded', description: `${file.name} has been attached to this step.` });
     } catch (error) {
@@ -516,15 +520,23 @@ export default function ProjectDetailPage() {
                       </div>
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold">{config?.label || step.stepType}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {step.status === 'completed' && step.completedAt
-                                ? `Completed${step.completedByDisplayName ? ` by ${step.completedByDisplayName}` : ''} ${formatDistanceToNow(new Date(step.completedAt), { addSuffix: true })}`
-                                : step.status === 'in_progress' && step.startedAt
-                                ? `Started ${formatDistanceToNow(new Date(step.startedAt), { addSuffix: true })}`
-                                : 'Pending'}
-                            </p>
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <h3 className="font-semibold">{config?.label || step.stepType}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {step.status === 'completed' && step.completedAt
+                                  ? `Completed${step.completedByDisplayName ? ` by ${step.completedByDisplayName}` : ''} ${formatDistanceToNow(new Date(step.completedAt), { addSuffix: true })}`
+                                  : step.status === 'in_progress' && step.startedAt
+                                  ? `Started ${formatDistanceToNow(new Date(step.startedAt), { addSuffix: true })}`
+                                  : 'Pending'}
+                              </p>
+                            </div>
+                            {stepAttachments.length > 0 && (
+                              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                                <Paperclip className="h-3 w-3" />
+                                {stepAttachments.length} doc{stepAttachments.length !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex gap-2 flex-wrap justify-end">
                             {step.status === 'in_progress' && (
@@ -631,14 +643,28 @@ export default function ProjectDetailPage() {
                                 )}
                               </>
                             )}
+                            {(step.status === 'pending' || step.status === 'blocked') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedStep(step);
+                                  setIsUploadDialogOpen(true);
+                                }}
+                                data-testid={`button-upload-${step.status}-${step.stepType}`}
+                              >
+                                <Upload className="mr-1 h-4 w-4" />
+                                Attach PDF
+                              </Button>
+                            )}
                           </div>
                         </div>
                         {step.notes && (
                           <p className="text-sm bg-muted p-2 rounded">{step.notes}</p>
                         )}
-                        {step.status === 'completed' && isExpanded && (
-                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-green-200">
-                            {linkedId && (
+                        {stepAttachments.length > 0 && (step.status !== 'completed' || isExpanded) && (
+                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-blue-200">
+                            {step.status === 'completed' && isExpanded && linkedId && (
                               <div className="flex items-center gap-2">
                                 <Badge variant="secondary" className="flex items-center gap-1">
                                   <LinkIcon className="h-3 w-3" />
@@ -646,51 +672,59 @@ export default function ProjectDetailPage() {
                                 </Badge>
                               </div>
                             )}
-                            {stepAttachments.length > 0 && (
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-muted-foreground">Attached Documents:</p>
-                                <div className="space-y-1">
-                                  {stepAttachments.map((attachment) => (
-                                    <div 
-                                      key={attachment.id} 
-                                      className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                        <span>{attachment.originalFileName}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          ({(attachment.fileSize / 1024).toFixed(1)} KB)
-                                        </span>
-                                      </div>
-                                      <div className="flex gap-1">
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-muted-foreground">Attached Documents:</p>
+                              <div className="space-y-1">
+                                {stepAttachments.map((attachment) => (
+                                  <div 
+                                    key={attachment.id} 
+                                    className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                      <span>{attachment.originalFileName}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        ({(attachment.fileSize / 1024).toFixed(1)} KB)
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
+                                        data-testid={`button-download-attachment-${attachment.id}`}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                      {isAdmin && (
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
-                                          data-testid={`button-download-attachment-${attachment.id}`}
+                                          className="text-red-600 hover:text-red-700"
+                                          onClick={() => {
+                                            setSelectedStep(step);
+                                            deleteAttachmentMutation.mutate(attachment.id);
+                                          }}
+                                          data-testid={`button-delete-attachment-${attachment.id}`}
                                         >
-                                          <Download className="h-4 w-4" />
+                                          <Trash2 className="h-4 w-4" />
                                         </Button>
-                                        {isAdmin && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-red-600 hover:text-red-700"
-                                            onClick={() => {
-                                              setSelectedStep(step);
-                                              deleteAttachmentMutation.mutate(attachment.id);
-                                            }}
-                                            data-testid={`button-delete-attachment-${attachment.id}`}
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        )}
-                                      </div>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
+                                  </div>
+                                ))}
                               </div>
-                            )}
+                            </div>
+                          </div>
+                        )}
+                        {step.status === 'completed' && isExpanded && stepAttachments.length === 0 && linkedId && (
+                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-green-200">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="flex items-center gap-1">
+                                <LinkIcon className="h-3 w-3" />
+                                Linked Record: {linkedId}
+                              </Badge>
+                            </div>
                           </div>
                         )}
                       </div>

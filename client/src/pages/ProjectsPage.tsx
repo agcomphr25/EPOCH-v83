@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ProjectStep {
@@ -38,6 +38,7 @@ interface Project {
   steps: ProjectStep[];
   customer?: { id: number; customerId: string; name: string };
   projectManager?: { id: number; name: string };
+  attachmentCount?: number;
 }
 
 interface P2Customer {
@@ -302,7 +303,15 @@ export default function ProjectsPage() {
                   </div>
                 </div>
                 
-                <div className="flex justify-end">
+                <div className="flex justify-between items-center">
+                  {(project.attachmentCount ?? 0) > 0 ? (
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      <span>{project.attachmentCount} doc{project.attachmentCount !== 1 ? 's' : ''}</span>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />
                 </div>
               </CardContent>

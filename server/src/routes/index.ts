@@ -9137,6 +9137,87 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // AR Journal — orders invoiced/shipped within date range with payment status
+  app.get('/api/finance/ar', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      if (!pool) return res.status(500).json({ error: 'Database connection not available' });
+
+      const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+      const from = dateFrom || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const to = dateTo || new Date().toISOString().slice(0, 10);
+
+      const rows = await pool.query(`
+        SELECT
+          ao.id,
+          ao.order_id                                         AS "orderId",
+          COALESCE(c.name, 'Unknown')                        AS "customerName",
+          COALESCE(ao.price_override, ao.calculated_total, 0) AS amount,
+          ao.shipped_date::date                              AS date,
+          'prepaid'                                          AS terms,
+          CASE
+            WHEN COALESCE(SUM(p.payment_amount), 0) >=
+                 COALESCE(ao.price_override, ao.calculated_total, 0) * 0.99 THEN 'paid'
+            WHEN ao.shipped_date < NOW() - INTERVAL '30 days' THEN 'overdue'
+            ELSE 'pending'
+          END AS status
+        FROM all_orders ao
+        LEFT JOIN customers c
+          ON c.id = (CASE WHEN ao.customer_id ~ '^[0-9]+$' THEN ao.customer_id::int ELSE NULL END)
+        LEFT JOIN payments p ON p.order_id = ao.order_id
+        WHERE ao.shipped_date::date BETWEEN $1 AND $2
+          AND ao.status NOT IN ('CANCELLED', 'SCRAPPED')
+        GROUP BY ao.id, ao.order_id, c.name,
+                 ao.price_override, ao.calculated_total, ao.shipped_date
+        ORDER BY date DESC
+        LIMIT 500
+      `, [from, to]) as any[];
+
+      res.json(rows);
+    } catch (error) {
+      console.error('Finance AR error:', error);
+      res.status(500).json({ error: 'Failed to fetch AR transactions' });
+    }
+  });
+
+  // AP Journal — vendor POs within date range with payment status
+  app.get('/api/finance/ap', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      if (!pool) return res.status(500).json({ error: 'Database connection not available' });
+
+      const { dateFrom, dateTo } = req.query as { dateFrom?: string; dateTo?: string };
+      const from = dateFrom || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const to = dateTo || new Date().toISOString().slice(0, 10);
+
+      const rows = await pool.query(`
+        SELECT
+          vp.id,
+          vp.po_number                                 AS "poNumber",
+          COALESCE(v.name, 'Unknown Vendor')           AS "vendorName",
+          COALESCE(vp.total_amount, 0)                 AS amount,
+          vp.order_date::date                          AS date,
+          CASE
+            WHEN vp.status = 'CLOSED' THEN 'paid'
+            WHEN vp.order_date < NOW() - INTERVAL '45 days'
+              AND vp.status NOT IN ('CLOSED', 'CANCELLED') THEN 'overdue'
+            ELSE 'pending'
+          END AS status
+        FROM vendor_pos vp
+        LEFT JOIN vendors v ON v.id = vp.vendor_id
+        WHERE vp.order_date::date BETWEEN $1 AND $2
+          AND vp.status != 'CANCELLED'
+        ORDER BY vp.order_date DESC
+        LIMIT 500
+      `, [from, to]) as any[];
+
+      res.json(rows);
+    } catch (error) {
+      console.error('Finance AP error:', error);
+      res.status(500).json({ error: 'Failed to fetch AP transactions' });
+    }
+  });
+
   // Migration endpoint: Sync existing production orders to main orders table for layup scheduler
   app.post('/api/migrate-production-orders-to-layup', async (req, res) => {
     try {

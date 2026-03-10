@@ -87,6 +87,18 @@ export default function OrderSummaryModal({
     enabled: isOpen,
   });
 
+  const { data: forecast } = useQuery<{
+    projectedCompletion: string;
+    remainingDays: number;
+    riskStatus: 'ON_TRACK' | 'AT_RISK' | 'LATE';
+    remainingStages: string[];
+  }>({
+    queryKey: ['/api/admin/order-forecast', orderId],
+    queryFn: () => apiRequest(`/api/admin/order-forecast/${orderId}`),
+    enabled: isOpen,
+    retry: false,
+  });
+
   // Handle the payments data structure - API returns { payments: [] }
   const payments = Array.isArray(paymentsData)
     ? paymentsData
@@ -288,6 +300,49 @@ export default function OrderSummaryModal({
                     <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-medium">
                       {order.notes}
                     </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {forecast && (
+                <Card className={`border ${
+                  forecast.riskStatus === 'LATE'
+                    ? 'border-red-200 bg-red-50 dark:bg-red-900/20'
+                    : forecast.riskStatus === 'AT_RISK'
+                    ? 'border-amber-200 bg-amber-50 dark:bg-amber-900/20'
+                    : 'border-green-200 bg-green-50 dark:bg-green-900/20'
+                }`}>
+                  <CardContent className="pt-4 pb-3">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500 block text-xs">Committed Due Date</span>
+                        <span className="font-semibold">
+                          {order?.dueDate ? new Date(order.dueDate).toLocaleDateString() : '—'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-xs">Projected Completion</span>
+                        <span className={`font-semibold ${
+                          forecast.riskStatus === 'LATE' ? 'text-red-600' :
+                          forecast.riskStatus === 'AT_RISK' ? 'text-amber-600' : 'text-green-600'
+                        }`}>
+                          {new Date(forecast.projectedCompletion).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-xs">Schedule Risk</span>
+                        <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded ${
+                          forecast.riskStatus === 'LATE'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                            : forecast.riskStatus === 'AT_RISK'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                            : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                        }`}>
+                          {forecast.riskStatus === 'LATE' ? 'Late' : forecast.riskStatus === 'AT_RISK' ? 'At Risk' : 'On Track'}
+                        </span>
+                        <span className="text-gray-400 text-xs ml-2">{forecast.remainingDays}d remaining</span>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               )}

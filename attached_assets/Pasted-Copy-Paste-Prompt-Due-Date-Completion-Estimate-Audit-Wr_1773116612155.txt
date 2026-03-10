@@ -1,0 +1,218 @@
+Copy-Paste Prompt — Due Date & Completion Estimate Audit
+Writing
+
+You are performing a READ-ONLY FORENSIC AUDIT of the EPOCH order due-date and estimated completion logic.
+
+Do NOT modify any files.
+
+The goal is to fully understand how EPOCH currently determines:
+
+• order due dates
+• estimated completion
+• lead time calculations
+• department timing rules
+
+This information will be used to integrate a Production Forecast Engine that improves CSR due-date estimates.
+
+Run the audit in phases.
+
+PHASE 1 — ORDER CREATION FLOW
+
+Identify where orders are created and finalized.
+
+Search for:
+
+createOrder
+finalizeOrder
+submitOrder
+POST /api/orders
+order_drafts → all_orders
+
+Report:
+
+File paths
+Functions responsible for order creation
+Database insert logic
+
+Determine exactly where:
+
+due_date (or dueDate) is first assigned.
+
+PHASE 2 — DUE DATE CALCULATION LOGIC
+
+Search the repo for:
+
+due_date
+dueDate
+estimatedCompletion
+leadTime
+promiseDate
+deliveryDate
+
+Locate all functions that calculate or modify the due date.
+
+Report:
+
+File path
+Function name
+Inputs used to compute due date
+
+Example inputs to identify:
+
+model type
+stock model
+flattop / no rail flags
+quantity
+departmentTimes
+lead time constants
+
+PHASE 3 — LEAD TIME PARAMETERS
+
+Search for configuration or constants controlling production time.
+
+Possible names:
+
+departmentTimes
+leadTimeConfig
+pipelineTimes
+productionDays
+OTD calculations
+
+Identify:
+
+Where department cycle times are defined
+How total lead time is computed
+Whether lead times are static or dynamic
+
+Report all constants and configuration objects.
+
+PHASE 4 — PIPELINE TIMING
+
+Inspect code using:
+
+departmentTimes
+or similar timing structures.
+
+Determine:
+
+How many days each department contributes to due-date calculations.
+
+Example expected pattern:
+
+Layup → 35 days
+Barcode → 5 days
+CNC → 5 days
+Finish → 5–10 days
+
+Report the full timing model.
+
+PHASE 5 — SPECIAL ORDER RULES
+
+Identify logic for special routing.
+
+Search for:
+
+flattop
+no rail
+no stock
+skip stage
+
+Determine how these options affect:
+
+pipeline duration
+due date calculations
+
+Report each rule.
+
+PHASE 6 — ORDER STATUS VS DUE DATE
+
+Inspect the all_orders schema.
+
+Identify:
+
+due_date column
+promised_date column (if any)
+
+Determine:
+
+If due dates ever change after finalization.
+
+Search for any code updating due_date after order creation.
+
+PHASE 7 — UI DISPLAY
+
+Locate where due dates appear in the frontend.
+
+Search client code for:
+
+dueDate
+estimatedCompletion
+orderDueDate
+
+Identify:
+
+Order entry screen
+Order detail page
+Production pipeline overview
+
+Report which pages display due date information.
+
+PHASE 8 — EXISTING FORECASTING OR ESTIMATES
+
+Search for any code that predicts completion dates.
+
+Search for:
+
+forecast
+estimateCompletion
+projectedCompletion
+OTD
+
+Determine if the system already estimates completion internally.
+
+PHASE 9 — DATA REQUIRED FOR FORECAST ENGINE
+
+Confirm the following fields exist in all_orders:
+
+current_department
+due_date
+updated_at
+
+Confirm the following timestamps exist:
+
+layup_completed_at
+cnc_completed_at
+finish_completed_at
+paint_completed_at
+shipping_completed_at
+
+These will be used for predictive forecasting.
+
+FINAL REPORT
+
+Produce a document titled:
+
+EPOCH Due Date Generation Architecture
+
+Include sections:
+
+Order Creation Flow
+Due Date Calculation Logic
+Lead Time Parameters
+Pipeline Timing Model
+Special Order Rules
+Schema Fields
+UI Display Locations
+
+Finally answer these questions:
+
+Where is the canonical due-date calculation performed?
+
+Which parameters influence lead time?
+
+Are due dates static or recalculated anywhere?
+
+What parts of the codebase would need modification to integrate a forecast engine?
+
+Do not modify code.
+Only inspect and report.

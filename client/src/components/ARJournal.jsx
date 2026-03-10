@@ -59,8 +59,7 @@ export default function ARJournal({ dateFrom, dateTo }) {
     }
   };
 
-  // Filter transactions based on selected terms
-  const filteredData = data.filter((transaction) => {
+  const filteredData = (Array.isArray(data) ? data : []).filter((transaction) => {
     if (termsFilter === 'all') return true;
     return transaction.terms === termsFilter;
   });

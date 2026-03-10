@@ -13,9 +13,12 @@ import {
   AlertCircle,
   Loader2,
   Info,
+  GitBranch,
+  Factory,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface DeptResult {
   department: string;
@@ -39,6 +42,26 @@ interface IntegrityData {
   departments: DeptResult[];
   invalidDepartments: { orderId: string; invalidDepartment: string }[];
   orphanedOrders: { orderId: string; status: string; createdAt: string }[];
+}
+
+interface PipelineError {
+  orderId: string;
+  orderNumber: string;
+  derivedStage: string;
+  currentDepartment: string;
+  errorType: 'PIPELINE_DRIFT' | 'STAGE_REGRESSION' | 'SKIPPED_STAGE' | 'STALLED_ORDER';
+}
+
+interface PipelineValidationData {
+  totalOrdersChecked: number;
+  generatedAt: string;
+  errors: PipelineError[];
+  summary: {
+    pipelineDrift: number;
+    stageRegression: number;
+    skippedStages: number;
+    stalledOrders: number;
+  };
 }
 
 const SEVERITY_CONFIG = {
@@ -189,6 +212,182 @@ function DeptRow({ dept }: { dept: DeptResult }) {
   );
 }
 
+const ERROR_TYPE_CONFIG: Record<string, { label: string; color: string; badgeClass: string }> = {
+  PIPELINE_DRIFT: {
+    label: 'Pipeline Drift',
+    color: 'text-orange-600 dark:text-orange-400',
+    badgeClass: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+  },
+  STAGE_REGRESSION: {
+    label: 'Stage Regression',
+    color: 'text-red-600 dark:text-red-400',
+    badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+  },
+  SKIPPED_STAGE: {
+    label: 'Skipped Stage',
+    color: 'text-yellow-600 dark:text-yellow-400',
+    badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+  },
+  STALLED_ORDER: {
+    label: 'Stalled Order',
+    color: 'text-purple-600 dark:text-purple-400',
+    badgeClass: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
+  },
+};
+
+function PipelineValidationTab() {
+  const [runKey, setRunKey] = useState(0);
+
+  const { data, isLoading, error, isFetching } = useQuery<PipelineValidationData>({
+    queryKey: ['/api/admin/pipeline-validation', runKey],
+    queryFn: () => apiRequest('/api/admin/pipeline-validation'),
+    retry: false,
+    staleTime: 0,
+  });
+
+  const totalErrors = data?.errors.length ?? 0;
+  const allOk = data && totalErrors === 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500">
+            Compares derived pipeline stage (from timestamps) against current_department assignments.
+            Detects drift, regression, and skipped stages.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setRunKey((k) => k + 1)}
+          disabled={isFetching}
+          className="flex items-center gap-1.5"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          Re-run Check
+        </Button>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Running pipeline validation…
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+          <div className="flex items-center gap-2 font-semibold mb-1">
+            <XCircle className="h-4 w-4" />
+            Validation failed
+          </div>
+          {String(error)}
+        </div>
+      )}
+
+      {data && (
+        <>
+          <div
+            className={`rounded-lg border px-5 py-4 flex items-center gap-4 ${
+              allOk
+                ? 'border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800'
+                : 'border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800'
+            }`}
+          >
+            {allOk ? (
+              <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
+            ) : (
+              <AlertTriangle className="h-6 w-6 text-orange-500 flex-shrink-0" />
+            )}
+            <div className="flex-1">
+              <p
+                className={`font-semibold text-sm ${
+                  allOk
+                    ? 'text-green-800 dark:text-green-300'
+                    : 'text-red-800 dark:text-red-300'
+                }`}
+              >
+                {allOk
+                  ? 'All pipeline stages are consistent — no issues detected.'
+                  : `${totalErrors} pipeline issue${totalErrors !== 1 ? 's' : ''} detected`}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Generated {new Date(data.generatedAt).toLocaleString()} ·{' '}
+                {data.totalOrdersChecked} orders checked ·{' '}
+                {data.summary.pipelineDrift} drift ·{' '}
+                {data.summary.stageRegression} regression ·{' '}
+                {data.summary.skippedStages} skipped
+              </p>
+            </div>
+          </div>
+
+          {totalErrors > 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Pipeline Errors ({totalErrors})
+                </h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Order
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Derived Stage
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Current Department
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Error Type
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.errors.map((err, i) => {
+                    const cfg = ERROR_TYPE_CONFIG[err.errorType] || ERROR_TYPE_CONFIG.PIPELINE_DRIFT;
+                    return (
+                      <tr
+                        key={i}
+                        className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+                      >
+                        <td className="px-4 py-2.5">
+                          <OrderIdLink id={err.orderId} />
+                        </td>
+                        <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+                          {err.derivedStage}
+                        </td>
+                        <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+                          {err.currentDepartment}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded ${cfg.badgeClass}`}>
+                            {cfg.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {allOk && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-1">
+              <CheckCircle className="h-4 w-4" />
+              No pipeline issues detected. All orders are in the correct stage.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function QueueIntegrityMonitor() {
   const [runKey, setRunKey] = useState(0);
 
@@ -209,208 +408,236 @@ export default function QueueIntegrityMonitor() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShieldCheck className="h-6 w-6 text-indigo-600" />
-              Queue Integrity Monitor
+              System Integrity Monitor
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Detects mismatches between expected queue membership and actual queue results.
-              Read-only — does not modify production data.
+              Queue integrity and pipeline validation diagnostics.
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRunKey((k) => k + 1)}
-            disabled={isFetching}
-            className="flex items-center gap-1.5"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-            Re-run Check
-          </Button>
+          <Link href="/admin/control-tower">
+            <Button variant="outline" size="sm" className="flex items-center gap-1.5">
+              <Factory className="h-3.5 w-3.5" />
+              Control Tower
+            </Button>
+          </Link>
         </div>
 
-        {isLoading && (
-          <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Running integrity checks across all departments…
-          </div>
-        )}
+        <Tabs defaultValue="integrity">
+          <TabsList className="mb-4">
+            <TabsTrigger value="integrity" className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Queue Integrity
+            </TabsTrigger>
+            <TabsTrigger value="pipeline" className="flex items-center gap-1.5">
+              <GitBranch className="h-3.5 w-3.5" />
+              Pipeline Validation
+            </TabsTrigger>
+          </TabsList>
 
-        {error && (
-          <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-            <div className="flex items-center gap-2 font-semibold mb-1">
-              <XCircle className="h-4 w-4" />
-              Check failed
-            </div>
-            {String(error)}
-          </div>
-        )}
-
-        {data && (
-          <>
-            {/* Summary banner */}
-            <div
-              className={`rounded-lg border px-5 py-4 flex items-center gap-4 ${
-                allOk
-                  ? 'border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800'
-                  : 'border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800'
-              }`}
-            >
-              {allOk ? (
-                <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
-              ) : (
-                <XCircle className="h-6 w-6 text-red-500 flex-shrink-0" />
-              )}
-              <div className="flex-1">
-                <p
-                  className={`font-semibold text-sm ${
-                    allOk
-                      ? 'text-green-800 dark:text-green-300'
-                      : 'text-red-800 dark:text-red-300'
-                  }`}
+          <TabsContent value="integrity">
+            <div className="space-y-6">
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-gray-500">
+                  Detects mismatches between expected queue membership and actual queue results.
+                  Read-only — does not modify production data.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRunKey((k) => k + 1)}
+                  disabled={isFetching}
+                  className="flex items-center gap-1.5"
                 >
-                  {allOk
-                    ? 'All queues are consistent — no mismatches detected.'
-                    : `${summary!.departmentsWithMismatches} department${
-                        summary!.departmentsWithMismatches !== 1 ? 's' : ''
-                      } with mismatches`}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Generated {new Date(data.generatedAt).toLocaleString()} ·{' '}
-                  {summary!.departmentsChecked} departments checked ·{' '}
-                  {summary!.invalidDepartmentCount} invalid dept
-                  {summary!.invalidDepartmentCount !== 1 ? 's' : ''} ·{' '}
-                  {summary!.orphanedOrderCount} orphaned order
-                  {summary!.orphanedOrderCount !== 1 ? 's' : ''}
-                </p>
+                  <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                  Re-run Check
+                </Button>
               </div>
-            </div>
 
-            {/* Department table */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Department Queue Comparison
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Expected = domain rules · Actual = what the queue API returns · Click a mismatch row to expand order IDs
-                </p>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Department
-                    </th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Expected
-                    </th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Actual
-                    </th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Delta
-                    </th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Severity
-                    </th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.departments.map((dept) => (
-                    <DeptRow key={dept.department} dept={dept} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Invalid departments */}
-            {data.invalidDepartments.length > 0 && (
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-orange-200 dark:border-orange-800 overflow-hidden">
-                <div className="px-4 py-3 border-b border-orange-100 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20 flex items-center gap-2">
-                  <Info className="h-4 w-4 text-blue-500" />
-                  <h2 className="text-sm font-semibold text-orange-800 dark:text-orange-300">
-                    Invalid Departments — INFO ({data.invalidDepartments.length})
-                  </h2>
+              {isLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Running integrity checks across all departments…
                 </div>
-                <p className="px-4 pt-3 pb-1 text-xs text-gray-500">
-                  Active orders whose <code className="font-mono">current_department</code> is not in the known department list.
-                </p>
-                <div className="px-4 pb-4 pt-2">
-                  <div className="space-y-1">
-                    {data.invalidDepartments.map((r, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-3 text-sm py-1.5 border-b border-gray-50 dark:border-gray-800 last:border-0"
-                      >
-                        <OrderIdLink id={r.orderId} />
-                        <span className="text-gray-400">→</span>
-                        <Badge variant="outline" className="text-orange-700 border-orange-300 text-xs">
-                          {r.invalidDepartment}
-                        </Badge>
-                      </div>
-                    ))}
+              )}
+
+              {error && (
+                <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+                  <div className="flex items-center gap-2 font-semibold mb-1">
+                    <XCircle className="h-4 w-4" />
+                    Check failed
                   </div>
+                  {String(error)}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Orphaned orders */}
-            {data.orphanedOrders.length > 0 && (
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
-                <div className="px-4 py-3 border-b border-red-100 dark:border-red-800 bg-red-50 dark:bg-red-950/20 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-500" />
-                  <h2 className="text-sm font-semibold text-red-800 dark:text-red-300">
-                    Orphaned Orders — CRITICAL ({data.orphanedOrders.length})
-                  </h2>
-                </div>
-                <p className="px-4 pt-3 pb-1 text-xs text-gray-500">
-                  Active orders with no <code className="font-mono">current_department</code> — invisible to all department queues.
-                </p>
-                <div className="px-4 pb-4 pt-2">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-100 dark:border-gray-800">
-                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Order ID</th>
-                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Status</th>
-                        <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.orphanedOrders.map((r, i) => (
-                        <tr key={i} className="border-b border-gray-50 dark:border-gray-800 last:border-0">
-                          <td className="py-1.5">
-                            <OrderIdLink id={r.orderId} />
-                          </td>
-                          <td className="py-1.5">
-                            <Badge variant="outline" className="text-xs">{r.status}</Badge>
-                          </td>
-                          <td className="py-1.5 text-gray-400">
-                            {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}
-                          </td>
+              {data && (
+                <>
+                  <div
+                    className={`rounded-lg border px-5 py-4 flex items-center gap-4 ${
+                      allOk
+                        ? 'border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800'
+                        : 'border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800'
+                    }`}
+                  >
+                    {allOk ? (
+                      <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="h-6 w-6 text-red-500 flex-shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <p
+                        className={`font-semibold text-sm ${
+                          allOk
+                            ? 'text-green-800 dark:text-green-300'
+                            : 'text-red-800 dark:text-red-300'
+                        }`}
+                      >
+                        {allOk
+                          ? 'All queues are consistent — no mismatches detected.'
+                          : `${summary!.departmentsWithMismatches} department${
+                              summary!.departmentsWithMismatches !== 1 ? 's' : ''
+                            } with mismatches`}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Generated {new Date(data.generatedAt).toLocaleString()} ·{' '}
+                        {summary!.departmentsChecked} departments checked ·{' '}
+                        {summary!.invalidDepartmentCount} invalid dept
+                        {summary!.invalidDepartmentCount !== 1 ? 's' : ''} ·{' '}
+                        {summary!.orphanedOrderCount} orphaned order
+                        {summary!.orphanedOrderCount !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        Department Queue Comparison
+                      </h2>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Expected = domain rules · Actual = what the queue API returns · Click a mismatch row to expand order IDs
+                      </p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Department
+                          </th>
+                          <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Expected
+                          </th>
+                          <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Actual
+                          </th>
+                          <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Delta
+                          </th>
+                          <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Severity
+                          </th>
+                          <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Status
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                      </thead>
+                      <tbody>
+                        {data.departments.map((dept) => (
+                          <DeptRow key={dept.department} dept={dept} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-            {data.invalidDepartments.length === 0 && data.orphanedOrders.length === 0 && (
-              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-1">
-                <CheckCircle className="h-4 w-4" />
-                No invalid departments or orphaned orders detected.
-              </div>
-            )}
-          </>
-        )}
+                  {data.invalidDepartments.length > 0 && (
+                    <div className="bg-white dark:bg-gray-900 rounded-lg border border-orange-200 dark:border-orange-800 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-orange-100 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20 flex items-center gap-2">
+                        <Info className="h-4 w-4 text-blue-500" />
+                        <h2 className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                          Invalid Departments — INFO ({data.invalidDepartments.length})
+                        </h2>
+                      </div>
+                      <p className="px-4 pt-3 pb-1 text-xs text-gray-500">
+                        Active orders whose <code className="font-mono">current_department</code> is not in the known department list.
+                      </p>
+                      <div className="px-4 pb-4 pt-2">
+                        <div className="space-y-1">
+                          {data.invalidDepartments.map((r, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-3 text-sm py-1.5 border-b border-gray-50 dark:border-gray-800 last:border-0"
+                            >
+                              <OrderIdLink id={r.orderId} />
+                              <span className="text-gray-400">→</span>
+                              <Badge variant="outline" className="text-orange-700 border-orange-300 text-xs">
+                                {r.invalidDepartment}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {data.orphanedOrders.length > 0 && (
+                    <div className="bg-white dark:bg-gray-900 rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-red-100 dark:border-red-800 bg-red-50 dark:bg-red-950/20 flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-500" />
+                        <h2 className="text-sm font-semibold text-red-800 dark:text-red-300">
+                          Orphaned Orders — CRITICAL ({data.orphanedOrders.length})
+                        </h2>
+                      </div>
+                      <p className="px-4 pt-3 pb-1 text-xs text-gray-500">
+                        Active orders with no <code className="font-mono">current_department</code> — invisible to all department queues.
+                      </p>
+                      <div className="px-4 pb-4 pt-2">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-gray-100 dark:border-gray-800">
+                              <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Order ID</th>
+                              <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Status</th>
+                              <th className="text-left py-1.5 text-gray-400 font-semibold uppercase tracking-wide">Created</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {data.orphanedOrders.map((r, i) => (
+                              <tr key={i} className="border-b border-gray-50 dark:border-gray-800 last:border-0">
+                                <td className="py-1.5">
+                                  <OrderIdLink id={r.orderId} />
+                                </td>
+                                <td className="py-1.5">
+                                  <Badge variant="outline" className="text-xs">{r.status}</Badge>
+                                </td>
+                                <td className="py-1.5 text-gray-400">
+                                  {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {data.invalidDepartments.length === 0 && data.orphanedOrders.length === 0 && (
+                    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 px-1">
+                      <CheckCircle className="h-4 w-4" />
+                      No invalid departments or orphaned orders detected.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="pipeline">
+            <PipelineValidationTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

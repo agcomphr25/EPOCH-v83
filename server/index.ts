@@ -843,6 +843,17 @@ async function initializeBackgroundServices() {
             UNIQUE(order_id, department, week_start_date)
           )
         `);
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS forecast_simulation_logs (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT,
+            is_flattop BOOLEAN DEFAULT false,
+            estimated_cycle_days NUMERIC,
+            suggested_due_date TIMESTAMP,
+            csr_user_id INTEGER,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
         console.log('✅ Ensured production forecast engine tables exist');
       } catch (fcErr: any) {
         console.warn('⚠️ Production forecast tables migration:', fcErr.message);

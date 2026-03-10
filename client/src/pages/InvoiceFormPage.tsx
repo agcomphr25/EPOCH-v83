@@ -23,8 +23,9 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Plus, Trash2, Save, ArrowLeft, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, Loader2, Paperclip } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
 const PAYMENT_TERMS_OPTIONS = [
   { value: 'NET_15', label: 'Net 15' },
@@ -530,6 +531,39 @@ export default function InvoiceFormPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {isEditing && editId && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Paperclip className="h-5 w-5" />
+                Attachments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MediaAttachmentPicker
+                entityType="invoice"
+                entityId={editId}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {!isEditing && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Paperclip className="h-5 w-5" />
+                Attachments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Save the invoice first, then you can attach documents from the invoice detail page or by editing the invoice.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex justify-end gap-3">
           <Button

@@ -1,0 +1,160 @@
+import { pool } from '../../db';
+import { derivePipelineStage, validatePipelineState, PIPELINE_STAGES } from './pipelineValidationService';
+import type { PipelineError, ErrorType } from './pipelineValidationService';
+
+const REPAIRABLE_ERROR_TYPES = new Set<string>(['PIPELINE_DRIFT', 'STAGE_REGRESSION']);
+const BATCH_LIMIT = 200;
+
+export interface RepairResult {
+  orderId: string;
+  orderNumber: string;
+  oldDepartment: string;
+  repairedDepartment: string;
+  repairType: 'AUTO';
+}
+
+export interface BatchRepairReport {
+  repairedCount: number;
+  skippedCount: number;
+  exceededLimit: boolean;
+  results: RepairResult[];
+}
+
+async function loadOrderById(orderId: string) {
+  const result = await pool.query(
+    `SELECT
+      id, order_id, current_department, status,
+      is_flattop, model_id, features,
+      layup_completed_at, plugging_completed_at,
+      cnc_completed_at, finish_completed_at,
+      gunsmith_completed_at, paint_completed_at,
+      qc_completed_at, shipping_completed_at,
+      updated_at
+    FROM all_orders
+    WHERE order_id = $1
+    LIMIT 1`,
+    [orderId]
+  );
+  const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+  return rows[0] || null;
+}
+
+async function logRepairAudit(
+  orderId: string,
+  oldDepartment: string,
+  newDepartment: string
+): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO admin_audit_log (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, timestamp)
+       VALUES ($1, 'current_department', 'Current Department', $2, $3, 'PIPELINE_AUTO_REPAIR', 'SYSTEM', 'PIPELINE_AUTO_REPAIR', NOW())`,
+      [orderId, oldDepartment, newDepartment]
+    );
+  } catch (err) {
+    console.error(`[PipelineRepair] Failed to log audit for order ${orderId}:`, err);
+  }
+}
+
+function classifyError(order: any, derivedStage: string): ErrorType | null {
+  const currentDept = order.current_department || '';
+  if (currentDept === derivedStage) return null;
+
+  const currentIdx = PIPELINE_STAGES.indexOf(currentDept as any);
+  const derivedIdx = PIPELINE_STAGES.indexOf(derivedStage as any);
+
+  if (currentIdx === -1 || derivedIdx === -1) return 'PIPELINE_DRIFT';
+
+  if (currentIdx < derivedIdx) {
+    const gap = derivedIdx - currentIdx;
+    return gap > 2 ? 'SKIPPED_STAGE' : 'STAGE_REGRESSION';
+  }
+
+  const gap = currentIdx - derivedIdx;
+  return gap > 2 ? 'SKIPPED_STAGE' : 'PIPELINE_DRIFT';
+}
+
+export async function repairPipelineDrift(orderId: string, skipTypeCheck = false): Promise<RepairResult | null> {
+  const order = await loadOrderById(orderId);
+  if (!order) {
+    throw new Error(`Order ${orderId} not found`);
+  }
+
+  const oldDepartment = order.current_department || '';
+  const { derivedStage } = derivePipelineStage(order);
+
+  if (oldDepartment === derivedStage) {
+    return null;
+  }
+
+  if (!skipTypeCheck) {
+    const errorType = classifyError(order, derivedStage);
+    if (!errorType || !REPAIRABLE_ERROR_TYPES.has(errorType)) {
+      throw new Error(
+        `Order ${orderId} has error type "${errorType || 'UNKNOWN'}" which requires manual review. ` +
+        `Only PIPELINE_DRIFT and STAGE_REGRESSION can be auto-repaired.`
+      );
+    }
+  }
+
+  await pool.query(
+    `UPDATE all_orders
+     SET current_department = $1, updated_at = NOW()
+     WHERE order_id = $2`,
+    [derivedStage, orderId]
+  );
+
+  await logRepairAudit(orderId, oldDepartment, derivedStage);
+
+  return {
+    orderId,
+    orderNumber: orderId,
+    oldDepartment,
+    repairedDepartment: derivedStage,
+    repairType: 'AUTO',
+  };
+}
+
+export async function batchRepairPipelineDrift(): Promise<BatchRepairReport> {
+  const report = await validatePipelineState();
+
+  const repairableErrors = report.errors.filter(
+    (e: PipelineError) => REPAIRABLE_ERROR_TYPES.has(e.errorType)
+  );
+
+  const exceededLimit = repairableErrors.length > BATCH_LIMIT;
+  const toRepair = repairableErrors.slice(0, BATCH_LIMIT);
+
+  const results: RepairResult[] = [];
+  let skippedCount = 0;
+
+  for (const error of toRepair) {
+    try {
+      const result = await repairPipelineDrift(error.orderId, true);
+      if (result) {
+        results.push(result);
+      } else {
+        skippedCount++;
+      }
+    } catch (err) {
+      console.error(`[PipelineRepair] Failed to repair order ${error.orderId}:`, err);
+      skippedCount++;
+    }
+  }
+
+  if (exceededLimit) {
+    console.warn(
+      `⚠️ Pipeline batch repair: ${repairableErrors.length} orders need repair but limit is ${BATCH_LIMIT}. Only first ${BATCH_LIMIT} were processed.`
+    );
+  }
+
+  console.log(
+    `Pipeline auto-repair executed — ${results.length} orders repaired`
+  );
+
+  return {
+    repairedCount: results.length,
+    skippedCount: skippedCount + (repairableErrors.length - toRepair.length),
+    exceededLimit,
+    results,
+  };
+}

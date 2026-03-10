@@ -1,0 +1,245 @@
+Copy-Paste Prompt — Throughput Analytics + Stuck Orders Inspector
+Writing
+
+You are implementing two new features for the EPOCH Production Control Tower.
+
+Production Throughput Analytics
+
+Stuck Orders Inspector
+
+Do NOT modify the Pipeline Validation Engine or Queue Integrity Monitor.
+
+Extend the existing Control Tower system.
+
+FEATURE 1 — STUCK ORDERS INSPECTOR
+
+STEP 1 — BACKEND API
+
+Add endpoint:
+
+GET /api/admin/stuck-orders
+
+Location:
+
+server/src/routes/admin.ts
+
+STEP 2 — STUCK ORDER LOGIC
+
+Query active orders from all_orders.
+
+Exclude:
+
+FULFILLED
+CANCELLED
+SCRAPPED
+
+Compute:
+
+days_in_department = NOW() - updated_at
+
+STEP 3 — DEPARTMENT THRESHOLDS
+
+Define thresholds:
+
+const DEPARTMENT_THRESHOLDS = {
+
+"Layup/Plugging": 7,
+"Barcode": 3,
+"CNC": 5,
+"Gunsmith": 5,
+"Finish": 7,
+"Finish QC": 3,
+"Paint": 5,
+"Shipping QC": 3,
+"Shipping": 2
+
+}
+
+STEP 4 — FILTER STUCK ORDERS
+
+An order is STUCK if:
+
+days_in_department > threshold for its department
+
+Return:
+
+{
+orderId,
+orderNumber,
+customerName,
+department,
+daysInDepartment,
+dueDate
+}
+
+STEP 5 — LIMIT RESULTS
+
+Return top 50 stuck orders sorted by:
+
+daysInDepartment DESC
+
+FEATURE 2 — PRODUCTION THROUGHPUT ANALYTICS
+
+STEP 6 — BACKEND API
+
+Add endpoint:
+
+GET /api/admin/throughput-analytics
+
+Location:
+
+server/src/routes/admin.ts
+
+STEP 7 — CALCULATE CYCLE TIMES
+
+Use completion timestamps in all_orders:
+
+layup_completed_at
+barcode_completed_at
+cnc_completed_at
+gunsmith_completed_at
+finish_completed_at
+qc_completed_at
+paint_completed_at
+shipping_completed_at
+
+Compute stage durations.
+
+Examples:
+
+Layup duration:
+
+barcode_completed_at - layup_completed_at
+
+CNC duration:
+
+gunsmith_completed_at - cnc_completed_at
+
+Finish duration:
+
+qc_completed_at - finish_completed_at
+
+STEP 8 — AGGREGATE METRICS
+
+Return:
+
+{
+departmentCycleTimes: [
+{
+department,
+avgDays
+}
+],
+ordersCompletedToday,
+ordersCompletedThisWeek,
+ordersCompletedThisMonth
+}
+
+Use shipping_completed_at as the completion timestamp.
+
+STEP 9 — ORDERS COMPLETED COUNTS
+
+Calculate:
+
+today:
+
+shipping_completed_at >= NOW() - INTERVAL '1 day'
+
+week:
+
+shipping_completed_at >= NOW() - INTERVAL '7 days'
+
+month:
+
+shipping_completed_at >= NOW() - INTERVAL '30 days'
+
+FEATURE 3 — CONTROL TOWER UI EXTENSION
+
+STEP 10 — UPDATE PAGE
+
+Modify:
+
+client/src/pages/admin/ProductionControlTower.tsx
+
+STEP 11 — FETCH NEW DATA
+
+Add API calls:
+
+GET /api/admin/stuck-orders
+GET /api/admin/throughput-analytics
+
+Load data using existing fetch patterns.
+
+STEP 12 — STUCK ORDERS PANEL
+
+Add new section below heatmap.
+
+Title:
+
+Stuck Orders Inspector
+
+Table columns:
+
+Order
+Customer
+Department
+Days in Department
+Due Date
+
+Sort by:
+
+Days in Department DESC
+
+Highlight rows where daysInDepartment > threshold * 2 in red.
+
+STEP 13 — THROUGHPUT ANALYTICS PANEL
+
+Add section:
+
+Production Throughput
+
+Show cards:
+
+Orders Completed Today
+Orders Completed This Week
+Orders Completed This Month
+
+STEP 14 — DEPARTMENT CYCLE TIME TABLE
+
+Add table:
+
+Department
+Avg Days
+
+Highlight departments where avgDays exceeds threshold.
+
+STEP 15 — FINAL CONTROL TOWER LAYOUT
+
+Production Control Tower
+
+Summary Cards
+Active Orders
+Pipeline Errors
+Queue Errors
+Stalled Orders
+
+Department Heatmap
+
+Stuck Orders Inspector
+
+Production Throughput
+
+Department Cycle Time Table
+
+STEP 16 — PERFORMANCE
+
+Limit stuck orders query to 50 rows.
+
+Cache throughput analytics for 60 seconds.
+
+STEP 17 — RETURN STRUCTURE
+
+Ensure APIs return JSON in consistent format with generatedAt timestamp.
+
+Do not modify existing validation or repair services.
+Only extend Control Tower analytics.

@@ -351,6 +351,12 @@ export default function Navigation() {
       description: 'Detect mismatches between expected and actual department queue membership',
     },
     {
+      path: '/admin/control-tower',
+      label: 'Production Control Tower',
+      icon: Factory,
+      description: 'Real-time production heatmap with bottleneck detection and pipeline health overview',
+    },
+    {
       path: '/pdf-templates',
       label: 'PDF Templates',
       icon: FileText,
@@ -845,6 +851,12 @@ export default function Navigation() {
       label: 'AR Aging',
       icon: FileText,
       description: 'Accounts Receivable aging summary',
+    },
+    {
+      path: '/finance/ar-payments',
+      label: 'AR Payments',
+      icon: DollarSign,
+      description: 'Accounts Receivable payments and allocations',
     },
     {
       path: '/finance/cogs',
@@ -1895,7 +1907,7 @@ export default function Navigation() {
                 </Button>
 
                 {financeExpanded && (
-                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px] max-h-[70vh] overflow-y-auto">
                     {filteredFinanceItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;

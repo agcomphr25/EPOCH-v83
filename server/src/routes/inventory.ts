@@ -140,6 +140,18 @@ router.get('/items/part-numbers', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/items/fabric-items', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT id, ag_part_number as "agPartNumber", name, source, supplier_part_number as "supplierPartNumber" FROM inventory_items WHERE is_fabric = true AND (is_active = true OR is_active IS NULL) ORDER BY ag_part_number`
+    );
+    res.json(result.rows || []);
+  } catch (error) {
+    console.error('Get fabric items error:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric items' });
+  }
+});
+
 // Enhanced Inventory API - Get item by AG Part Number (for unit conversion lookup)
 // This route is at /items/by-part-number to work with /api/inventory mount point
 router.get('/items/by-part-number/:partNumber', async (req: Request, res: Response) => {

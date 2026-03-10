@@ -39,6 +39,9 @@ interface Project {
   customer?: { id: number; customerId: string; name: string };
   projectManager?: { id: number; name: string };
   attachmentCount?: number;
+  currentStage?: string;
+  stageUpdatedAt?: string;
+  poId?: number;
 }
 
 interface P2Customer {
@@ -67,6 +70,21 @@ const STATUS_COLORS: Record<string, string> = {
   on_hold: 'bg-yellow-100 text-yellow-800',
   completed: 'bg-blue-100 text-blue-800',
   cancelled: 'bg-red-100 text-red-800',
+  inactive: 'bg-gray-100 text-gray-800',
+  won: 'bg-emerald-100 text-emerald-800',
+  lost: 'bg-orange-100 text-orange-800',
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  rfq_received: 'RFQ Received',
+  quote_preparing: 'Quote Preparing',
+  quote_submitted: 'Quote Submitted',
+  purchase_review: 'Purchase Review',
+  po_received: 'PO Received',
+  production: 'Production',
+  shipping: 'Shipping',
+  completed: 'Completed',
+  inactive: 'Inactive',
 };
 
 const STEP_STATUS_COLORS: Record<string, string> = {
@@ -134,7 +152,7 @@ export default function ProjectsPage() {
       project.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCustomer = customerFilter === 'all' || project.customerId === customerFilter;
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || project.status === statusFilter || project.currentStage === statusFilter;
     
     return matchesSearch && matchesCustomer && matchesStatus;
   });
@@ -201,7 +219,10 @@ export default function ProjectsPage() {
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="won">Won</SelectItem>
             <SelectItem value="on_hold">On Hold</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="lost">Lost</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
@@ -256,9 +277,16 @@ export default function ProjectsPage() {
                       {project.projectName}
                     </CardDescription>
                   </div>
-                  <Badge className={STATUS_COLORS[project.status]}>
-                    {project.status.replace('_', ' ')}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge className={STATUS_COLORS[project.status]}>
+                      {project.status.replace('_', ' ')}
+                    </Badge>
+                    {project.currentStage && (
+                      <Badge variant="outline" className="text-xs">
+                        {STAGE_LABELS[project.currentStage] || project.currentStage}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">

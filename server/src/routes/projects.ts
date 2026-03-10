@@ -30,10 +30,19 @@ const updateProjectRequestSchema = z.object({
   targetShipDate: z.string().optional().nullable(),
   projectManagerId: z.number().optional().nullable(),
   reminderDays: z.number().min(1).optional(),
-  status: z.enum(['active', 'on_hold', 'completed', 'cancelled']).optional(),
+  status: z.enum(['active', 'on_hold', 'completed', 'cancelled', 'inactive', 'won', 'lost']).optional(),
+  currentStage: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   updatedBy: z.number().optional(),
 });
+
+const STEP_TO_STAGE_MAP: Record<string, string> = {
+  rfq_risk_assessment: 'rfq_received',
+  quote: 'quote_submitted',
+  purchase_review_checklist: 'purchase_review',
+  preproduction_checklist: 'po_received',
+  p2_order: 'production',
+};
 
 const updateStepRequestSchema = z.object({
   status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional(),
@@ -109,6 +118,39 @@ router.get('/next-code', async (req, res) => {
 
 router.get('/step-types', async (req, res) => {
   res.json(PROJECT_STEP_TYPES);
+});
+
+router.get('/pipeline', async (req, res) => {
+  try {
+    const allProjects = await storage.getAllProjects();
+    const pipelineProjects = allProjects.filter(
+      p => p.status === 'active' || p.status === 'won'
+    );
+
+    const results = await Promise.all(
+      pipelineProjects.map(async (project) => {
+        const customer = project.customerId
+          ? await storage.getP2CustomerByCustomerId(project.customerId)
+          : null;
+        return {
+          projectId: project.id,
+          projectCode: project.projectCode,
+          projectName: project.projectName,
+          customerName: customer?.customerName || 'Unknown',
+          currentStage: project.currentStage || 'rfq_received',
+          status: project.status,
+          targetShipDate: project.targetShipDate,
+          stageUpdatedAt: project.stageUpdatedAt,
+          poId: project.poId,
+        };
+      })
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching project pipeline:', error);
+    res.status(500).json({ message: 'Failed to fetch project pipeline' });
+  }
 });
 
 router.get('/unlinked-submissions/:stepType', async (req, res) => {
@@ -445,7 +487,12 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
     if (linkedQuoteId !== undefined) updateData.linkedQuoteId = linkedQuoteId;
     if (linkedPurchaseReviewId !== undefined) updateData.linkedPurchaseReviewId = linkedPurchaseReviewId;
     if (linkedPreproductionChecklistId !== undefined) updateData.linkedPreproductionChecklistId = linkedPreproductionChecklistId;
-    if (linkedP2OrderId !== undefined) updateData.linkedP2OrderId = linkedP2OrderId;
+    if (linkedP2OrderId !== undefined) {
+      updateData.linkedP2OrderId = linkedP2OrderId;
+      if (linkedP2OrderId !== null) {
+        await storage.updateProject(projectId, { poId: linkedP2OrderId } as any);
+      }
+    }
     if (notes !== undefined) updateData.notes = notes;
     
     const step = await storage.updateProjectStep(stepId, updateData);
@@ -487,9 +534,21 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
         });
         
         const nextStepInfo = PROJECT_STEP_TYPES.find(s => s.type === nextStep.stepType);
-        await storage.updateProject(projectId, { 
+        const completedStage = STEP_TO_STAGE_MAP[step.stepType] || null;
+        const projectUpdate: any = { 
           currentStepType: nextStep.stepType as any,
-        });
+        };
+        if (completedStage) {
+          projectUpdate.currentStage = completedStage;
+          projectUpdate.stageUpdatedAt = new Date();
+        }
+        if (step.stepType === 'p2_order') {
+          projectUpdate.status = 'won';
+          if (updateData.linkedP2OrderId) {
+            projectUpdate.poId = updateData.linkedP2OrderId;
+          }
+        }
+        await storage.updateProject(projectId, projectUpdate);
         
         await storage.createProjectActivityLog({
           projectId,
@@ -498,15 +557,25 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
           description: `${nextStepInfo?.label || nextStep.stepType} started`,
         });
       } else {
-        await storage.updateProject(projectId, { 
-          status: 'completed',
-          actualShipDate: new Date().toISOString().split('T')[0],
-        });
+        const isFinalP2Order = step.stepType === 'p2_order';
+        const finalUpdate: any = {
+          currentStage: isFinalP2Order ? 'production' : 'completed',
+          stageUpdatedAt: new Date(),
+          status: isFinalP2Order ? 'won' : 'completed',
+        };
+        if (!isFinalP2Order) {
+          finalUpdate.actualShipDate = new Date().toISOString().split('T')[0];
+        }
+        if (isFinalP2Order && updateData.linkedP2OrderId) {
+          finalUpdate.poId = updateData.linkedP2OrderId;
+        }
+        await storage.updateProject(projectId, finalUpdate);
         
         await storage.createProjectActivityLog({
           projectId,
-          activityType: 'project_completed',
-          description: 'Project completed',
+          activityType: isFinalP2Order ? 'step_completed' : 'project_completed',
+          stepType: isFinalP2Order ? 'p2_order' : undefined,
+          description: isFinalP2Order ? 'P2 Order completed — project won' : 'Project completed',
         });
       }
     }

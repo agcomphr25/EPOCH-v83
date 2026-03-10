@@ -1384,6 +1384,63 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ AR tables migration:', arErr.message);
       }
 
+      // Ensure projects table has pipeline stage columns
+      try {
+        const { sql: sqlProj } = await import('drizzle-orm');
+        // Add new enum values for project_status
+        await db.execute(sqlProj`
+          DO $$ BEGIN
+            ALTER TYPE project_status ADD VALUE IF NOT EXISTS 'inactive';
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlProj`
+          DO $$ BEGIN
+            ALTER TYPE project_status ADD VALUE IF NOT EXISTS 'won';
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlProj`
+          DO $$ BEGIN
+            ALTER TYPE project_status ADD VALUE IF NOT EXISTS 'lost';
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        // Add new columns
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_stage TEXT DEFAULT 'rfq_received'`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS stage_updated_at TIMESTAMP DEFAULT NOW()`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)`);
+        // Backfill current_stage from current_step_type for existing rows that still have the default
+        await db.execute(sqlProj`
+          UPDATE projects SET current_stage = CASE current_step_type
+            WHEN 'rfq_risk_assessment' THEN 'rfq_received'
+            WHEN 'quote' THEN 'quote_preparing'
+            WHEN 'purchase_review_checklist' THEN 'purchase_review'
+            WHEN 'preproduction_checklist' THEN 'po_received'
+            WHEN 'p2_order' THEN 'production'
+            ELSE 'rfq_received'
+          END
+          WHERE current_stage = 'rfq_received' AND current_step_type != 'rfq_risk_assessment'
+        `);
+        // Backfill completed projects
+        await db.execute(sqlProj`
+          UPDATE projects SET current_stage = 'completed'
+          WHERE status = 'completed' AND current_stage != 'completed'
+        `);
+        // Backfill po_id from project_steps
+        await db.execute(sqlProj`
+          UPDATE projects p SET po_id = ps.linked_p2_order_id
+          FROM project_steps ps
+          WHERE ps.project_id = p.id
+            AND ps.step_type = 'p2_order'
+            AND ps.linked_p2_order_id IS NOT NULL
+            AND p.po_id IS NULL
+        `);
+        console.log('✅ Ensured projects table has pipeline stage columns');
+      } catch (projErr: any) {
+        console.warn('⚠️ Projects pipeline migration:', projErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

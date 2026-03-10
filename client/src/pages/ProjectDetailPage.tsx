@@ -73,10 +73,13 @@ interface Project {
   projectName: string;
   customerId: string;
   description: string | null;
-  status: 'active' | 'on_hold' | 'completed' | 'cancelled';
+  status: 'active' | 'on_hold' | 'completed' | 'cancelled' | 'inactive' | 'won' | 'lost';
   currentStepType: string;
   targetShipDate: string | null;
   actualShipDate: string | null;
+  currentStage: string | null;
+  stageUpdatedAt: string | null;
+  poId: number | null;
   projectManagerId: number | null;
   reminderDays: number;
   notes: string | null;
@@ -120,6 +123,21 @@ const STATUS_COLORS: Record<string, string> = {
   on_hold: 'bg-yellow-100 text-yellow-800',
   completed: 'bg-blue-100 text-blue-800',
   cancelled: 'bg-red-100 text-red-800',
+  inactive: 'bg-gray-100 text-gray-800',
+  won: 'bg-emerald-100 text-emerald-800',
+  lost: 'bg-orange-100 text-orange-800',
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  rfq_received: 'RFQ Received',
+  quote_preparing: 'Quote Preparing',
+  quote_submitted: 'Quote Submitted',
+  purchase_review: 'Purchase Review',
+  po_received: 'PO Received',
+  production: 'Production',
+  shipping: 'Shipping',
+  completed: 'Completed',
+  inactive: 'Inactive',
 };
 
 const STEP_STATUS_ICONS: Record<string, typeof Circle> = {
@@ -420,6 +438,11 @@ export default function ProjectDetailPage() {
             <Badge className={STATUS_COLORS[project.status]}>
               {project.status.replace('_', ' ')}
             </Badge>
+            {project.currentStage && (
+              <Badge variant="outline" className="text-xs">
+                {STAGE_LABELS[project.currentStage] || project.currentStage}
+              </Badge>
+            )}
           </div>
           <p className="text-lg text-muted-foreground">{project.projectName}</p>
         </div>
@@ -795,7 +818,10 @@ export default function ProjectDetailPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="won">Won</SelectItem>
                   <SelectItem value="on_hold">On Hold</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>

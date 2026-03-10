@@ -1,0 +1,200 @@
+Copy-Paste Prompt — Pipeline Integrity System Verification Audit
+Writing
+
+You are performing a READ-ONLY POST-IMPLEMENTATION AUDIT of the EPOCH Pipeline Integrity System.
+
+Do NOT modify any files.
+
+Your goal is to confirm whether the following components exist and are properly connected:
+
+Pipeline Validation Engine
+
+Pipeline Repair Engine
+
+Admin Repair API
+
+Production Control Tower Dashboard
+
+Run the audit in phases.
+
+PHASE 1 — PIPELINE VALIDATION ENGINE
+
+Search for:
+
+pipelineValidationService
+derivePipelineStage
+validatePipelineState
+PIPELINE_STAGES
+
+If the file exists:
+
+server/src/services/pipelineValidationService.ts
+
+Open it and report:
+
+• PIPELINE_STAGES definition
+• derivePipelineStage() logic
+• validatePipelineState() logic
+• database tables queried
+
+Confirm whether it reads from:
+
+all_orders
+
+Report:
+
+VALIDATION ENGINE STATUS
+
+Fully Implemented
+Partially Implemented
+Not Found
+
+PHASE 2 — PIPELINE REPAIR ENGINE
+
+Search for:
+
+pipelineRepairService
+repairPipelineDrift
+
+If found:
+
+server/src/services/pipelineRepairService.ts
+
+Report:
+
+• repairPipelineDrift() logic
+• whether it imports derivePipelineStage()
+• what fields it updates on all_orders
+• whether audit logging is implemented
+
+Confirm safety rules:
+
+Does it avoid repairing:
+
+SKIPPED_STAGE
+STALLED_ORDER
+
+Report:
+
+REPAIR ENGINE STATUS
+
+Fully Implemented
+Partially Implemented
+Not Found
+
+PHASE 3 — ADMIN REPAIR API
+
+Search routes for:
+
+/api/admin/pipeline-repair
+
+Verify the following endpoints exist:
+
+POST /api/admin/pipeline-repair/
+POST /api/admin/pipeline-repair/batch
+
+For each route report:
+
+File path
+Handler function
+Service called
+
+Confirm:
+
+• batch repair limit exists (example 200 orders)
+• dryRun option exists if implemented
+
+Report:
+
+ADMIN API STATUS
+
+Fully Implemented
+Partially Implemented
+Not Found
+
+PHASE 4 — BACKGROUND VALIDATION WORKER
+
+Search for scheduled jobs invoking:
+
+validatePipelineState
+
+Confirm whether validation runs automatically.
+
+Report:
+
+• where the background job is started
+• interval timing (example every 5 minutes)
+
+PHASE 5 — ADMIN UI
+
+Search frontend for:
+
+PipelineValidation
+ProductionControlTower
+/admin/pipeline-validation
+/admin/control-tower
+
+For each page report:
+
+File path
+Main components rendered
+API endpoints called
+
+Confirm navigation links exist from:
+
+QueueIntegrityMonitor
+PipelineValidation
+
+PHASE 6 — CONTROL TOWER DATA
+
+Search backend for:
+
+/api/admin/production-heatmap
+
+Confirm the SQL query used.
+
+Report:
+
+• tables queried
+• aggregation logic
+• returned fields
+
+PHASE 7 — END-TO-END DATA FLOW
+
+Trace the complete system:
+
+Validation Service
+→ Admin API
+→ UI Page
+→ Repair Service
+
+Confirm that:
+
+• validation results appear in the UI
+• repair endpoints call the repair service
+• repaired orders update all_orders.current_department
+
+FINAL REPORT
+
+Produce a report titled:
+
+EPOCH Pipeline Integrity System Verification
+
+Include sections:
+
+Validation Engine
+Repair Engine
+Admin API
+Background Worker
+Admin UI
+Control Tower
+Data Flow
+
+For each section give status:
+
+WORKING
+PARTIAL
+MISSING
+
+Do not modify code.
+Only inspect and report.

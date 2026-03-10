@@ -1,0 +1,212 @@
+Copy-Paste Prompt — Forecast Engine Architecture Audit
+Writing
+
+You are performing a READ-ONLY FORENSIC AUDIT of the EPOCH production forecasting system.
+
+Do NOT modify any files.
+
+The goal is to determine which forecasting engine should be the canonical system used for:
+
+• CSR due-date estimation
+• production completion forecasting
+• Control Tower schedule risk detection
+
+The audit must identify all forecasting logic and compare the existing engines.
+
+Run the audit in phases.
+
+PHASE 1 — FORECAST ENGINE DISCOVERY
+
+Search the repo for:
+
+forecast
+forecastEngine
+forecastService
+estimateCompletion
+projectedCompletion
+scheduleRisk
+
+Identify all files related to forecasting.
+
+Expected candidates:
+
+server/services/productionForecastEngine.ts
+server/src/services/productionForecastService.ts
+
+For each file report:
+
+File path
+Main exported functions
+Purpose of the service
+
+PHASE 2 — ENGINE CAPABILITIES
+
+For each forecasting engine report:
+
+Inputs used:
+
+current_department
+due_date
+model_id
+features
+queue backlog
+historical cycle times
+
+Processing logic:
+
+Does it simulate the pipeline forward?
+Does it simulate backward from due date?
+Does it use business days or calendar days?
+Does it use real throughput analytics?
+
+Outputs returned:
+
+projectedCompletion
+estimatedShipDate
+scheduleRisk
+timeline stages
+
+PHASE 3 — ENGINE USAGE
+
+Determine where each engine is used in the codebase.
+
+Search for imports of:
+
+productionForecastEngine
+productionForecastService
+
+Report all files that import them.
+
+Expected usage areas:
+
+Control Tower
+Order Summary Modal
+Weekly Forecast page
+Schedule risk indicators
+
+For each usage report:
+
+Component/page
+API route
+Function called
+
+PHASE 4 — API ROUTES
+
+Search backend routes for:
+
+/forecast
+/order-forecast
+/production-forecast
+
+List all forecast-related endpoints.
+
+Example expected routes:
+
+GET /forecast/order/
+GET /forecast/dashboard
+GET /forecast/weekly
+GET /api/admin/order-forecast
+
+For each route report:
+
+File path
+Engine used
+Response fields returned
+
+PHASE 5 — MODELING DIFFERENCES
+
+Compare the two engines.
+
+Identify differences in:
+
+Pipeline stage list
+Department cycle times
+Skip rule handling (flattop, no_rail, no_stock)
+Queue backlog modeling
+Business-day vs calendar-day math
+
+Report which engine has:
+
+More realistic pipeline simulation
+Better backlog awareness
+Better integration with throughput analytics
+
+PHASE 6 — DATA SOURCES
+
+Identify the data sources used by each engine.
+
+Possible sources:
+
+all_orders
+completion timestamps
+department throughput analytics
+queue sizes
+historical production data
+
+Report whether engines use:
+
+static constants
+or real production metrics.
+
+PHASE 7 — PERFORMANCE AND CACHING
+
+Inspect caching behavior.
+
+Report:
+
+Whether forecast results are cached
+Cache duration
+Database query frequency
+
+Identify any potential performance risks.
+
+PHASE 8 — CSR ESTIMATE READINESS
+
+Determine which engine could support:
+
+CSR order-entry due-date estimation.
+
+Check whether the engine can accept inputs like:
+
+model_id
+is_flattop
+features
+rush_fee
+expedite_fee
+quantity
+
+without requiring an existing order record.
+
+Report whether each engine supports:
+
+simulation before order creation.
+
+FINAL REPORT
+
+Produce a document titled:
+
+EPOCH Forecast Engine Architecture
+
+Include sections:
+
+Forecast Engine Inventory
+Engine Capabilities
+Where Each Engine Is Used
+API Endpoints
+Modeling Differences
+Data Sources
+Performance Characteristics
+CSR Estimation Readiness
+
+Finally answer these questions:
+
+Which forecast engine should become the canonical system?
+
+Which engine currently drives Control Tower risk predictions?
+
+Can either engine simulate due dates before an order exists?
+
+What changes would be required to use the forecast engine in OrderEntry.tsx?
+
+Do not modify code.
+Only inspect and report.

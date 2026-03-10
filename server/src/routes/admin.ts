@@ -798,6 +798,173 @@ router.get(
   }
 );
 
+const DEPARTMENT_THRESHOLDS: Record<string, number> = {
+  'P1 Production Queue': 7,
+  'Layup/Plugging': 7,
+  'Barcode': 3,
+  'CNC': 5,
+  'Gunsmith': 5,
+  'Finish': 7,
+  'Finish QC': 3,
+  'Paint': 5,
+  'Shipping QC': 3,
+  'Shipping': 2,
+};
+
+router.get(
+  '/stuck-orders',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const thresholdCases = Object.entries(DEPARTMENT_THRESHOLDS)
+        .map(([dept, days], i) => `WHEN current_department = $${i + 1} THEN ${days}`)
+        .join(' ');
+      const deptParams = Object.keys(DEPARTMENT_THRESHOLDS);
+
+      const result = await pool.query(
+        `SELECT
+          o.order_id,
+          o.order_id AS order_number,
+          COALESCE(c.name, 'Unknown') AS customer_name,
+          o.current_department AS department,
+          ROUND(EXTRACT(EPOCH FROM NOW() - o.updated_at) / 86400.0, 1) AS days_in_department,
+          o.due_date
+        FROM all_orders o
+        LEFT JOIN customers c ON c.id::text = o.customer_id
+        WHERE o.status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+          AND o.current_department IS NOT NULL
+          AND o.scrap_date IS NULL
+          AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
+          AND EXTRACT(EPOCH FROM NOW() - o.updated_at) / 86400.0 > CASE ${thresholdCases} ELSE 7 END
+        ORDER BY EXTRACT(EPOCH FROM NOW() - o.updated_at) DESC
+        LIMIT 50`,
+        deptParams
+      );
+
+      const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+
+      res.json({
+        stuckOrders: rows.map((r: any) => ({
+          orderId: r.order_id,
+          orderNumber: r.order_number,
+          customerName: r.customer_name,
+          department: r.department,
+          daysInDepartment: parseFloat(r.days_in_department) || 0,
+          dueDate: r.due_date,
+        })),
+        totalCount: rows.length,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Stuck orders query error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch stuck orders',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+let throughputCache: { data: any; cachedAt: number } | null = null;
+const THROUGHPUT_CACHE_TTL = 60_000;
+
+router.get(
+  '/throughput-analytics',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      if (throughputCache && Date.now() - throughputCache.cachedAt < THROUGHPUT_CACHE_TTL) {
+        return res.json(throughputCache.data);
+      }
+
+      const cycleTimeResult = await pool.query(
+        `SELECT department, ROUND(AVG(days)::numeric, 1) AS avg_days FROM (
+          SELECT 'Layup/Plugging' AS department,
+            EXTRACT(EPOCH FROM (cnc_completed_at - COALESCE(layup_completed_at, plugging_completed_at))) / 86400.0 AS days
+          FROM all_orders
+          WHERE COALESCE(layup_completed_at, plugging_completed_at) IS NOT NULL AND cnc_completed_at IS NOT NULL
+            AND status NOT IN ('CANCELLED', 'SCRAPPED')
+            AND cnc_completed_at > COALESCE(layup_completed_at, plugging_completed_at)
+
+          UNION ALL SELECT 'CNC',
+            EXTRACT(EPOCH FROM (COALESCE(gunsmith_completed_at, finish_completed_at) - cnc_completed_at)) / 86400.0
+          FROM all_orders
+          WHERE cnc_completed_at IS NOT NULL AND COALESCE(gunsmith_completed_at, finish_completed_at) IS NOT NULL
+            AND status NOT IN ('CANCELLED', 'SCRAPPED')
+            AND COALESCE(gunsmith_completed_at, finish_completed_at) > cnc_completed_at
+
+          UNION ALL SELECT 'Gunsmith',
+            EXTRACT(EPOCH FROM (finish_completed_at - gunsmith_completed_at)) / 86400.0
+          FROM all_orders
+          WHERE gunsmith_completed_at IS NOT NULL AND finish_completed_at IS NOT NULL
+            AND status NOT IN ('CANCELLED', 'SCRAPPED')
+            AND finish_completed_at > gunsmith_completed_at
+
+          UNION ALL SELECT 'Finish',
+            EXTRACT(EPOCH FROM (qc_completed_at - finish_completed_at)) / 86400.0
+          FROM all_orders
+          WHERE finish_completed_at IS NOT NULL AND qc_completed_at IS NOT NULL
+            AND status NOT IN ('CANCELLED', 'SCRAPPED')
+            AND qc_completed_at > finish_completed_at
+
+          UNION ALL SELECT 'Finish QC',
+            EXTRACT(EPOCH FROM (paint_completed_at - qc_completed_at)) / 86400.0
+          FROM all_orders
+          WHERE qc_completed_at IS NOT NULL AND paint_completed_at IS NOT NULL
+            AND status NOT IN ('CANCELLED', 'SCRAPPED')
+            AND paint_completed_at > qc_completed_at
+
+          UNION ALL SELECT 'Paint',
+            EXTRACT(EPOCH FROM (shipping_completed_at - paint_completed_at)) / 86400.0
+          FROM all_orders
+          WHERE paint_completed_at IS NOT NULL AND shipping_completed_at IS NOT NULL
+            AND status NOT IN ('CANCELLED', 'SCRAPPED')
+            AND shipping_completed_at > paint_completed_at
+        ) AS stage_durations GROUP BY department`
+      );
+
+      const cycleRows = Array.isArray(cycleTimeResult) ? cycleTimeResult : (cycleTimeResult?.rows ?? []);
+
+      const completionResult = await pool.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE shipping_completed_at >= NOW() - INTERVAL '1 day')::int AS today,
+          COUNT(*) FILTER (WHERE shipping_completed_at >= NOW() - INTERVAL '7 days')::int AS week,
+          COUNT(*) FILTER (WHERE shipping_completed_at >= NOW() - INTERVAL '30 days')::int AS month
+        FROM all_orders
+        WHERE shipping_completed_at IS NOT NULL
+          AND status NOT IN ('CANCELLED', 'SCRAPPED')`
+      );
+
+      const completionRows = Array.isArray(completionResult) ? completionResult : (completionResult?.rows ?? []);
+      const counts = completionRows[0] || { today: 0, week: 0, month: 0 };
+
+      const responseData = {
+        departmentCycleTimes: cycleRows
+          .filter((r: any) => r.avg_days !== null)
+          .map((r: any) => ({
+            department: r.department,
+            avgDays: parseFloat(r.avg_days) || 0,
+          })),
+        ordersCompletedToday: parseInt(counts.today) || 0,
+        ordersCompletedThisWeek: parseInt(counts.week) || 0,
+        ordersCompletedThisMonth: parseInt(counts.month) || 0,
+        generatedAt: new Date().toISOString(),
+      };
+
+      throughputCache = { data: responseData, cachedAt: Date.now() };
+      res.json(responseData);
+    } catch (error) {
+      console.error('Throughput analytics error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch throughput analytics',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
 router.get(
   '/production-heatmap',
   authenticateToken,

@@ -581,6 +581,115 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
 
     const mergedTraceabilityData = [...traceabilityData, ...travelerFieldTraceability];
 
+    // Build material usage summary from routing config + traceability records
+    const materialUsage: any[] = [];
+    if (routing?.departmentConfig && typeof routing.departmentConfig === 'object') {
+      const deptConfig = routing.departmentConfig as Record<string, any>;
+      for (const [dept, config] of Object.entries(deptConfig)) {
+        const materials = config?.materials || [];
+        for (const mat of materials) {
+          if (!mat.partId) continue;
+          const partId = parseInt(mat.partId);
+          
+          let inventoryItem: any = null;
+          if (!isNaN(partId)) {
+            inventoryItem = await db.query.inventoryItems.findFirst({
+              where: eq(inventoryItems.id, partId),
+            });
+          }
+
+          const requiredFieldLabels = (mat.requiredFields || []).map((f: string) => f.toLowerCase());
+          const capturedTraceability = mergedTraceabilityData.filter((t: any) => {
+            if (t.inventoryPartId && String(t.inventoryPartId) === String(mat.partId)) return true;
+            if (t.inventoryPartNumber && t.inventoryPartNumber === mat.partNumber) return true;
+            if (t.department === dept && t.source === 'traveler_field') {
+              const label = (t.traceabilityLabel || '').toLowerCase();
+              if (requiredFieldLabels.some((rf: string) => label.includes(rf) || rf.includes(label))) return true;
+              const partName = (mat.partName || '').toLowerCase();
+              if (label.includes(partName) || partName.includes(label)) return true;
+            }
+            return false;
+          });
+
+          const fabricMatches: any[] = [];
+          const capturedValues = [
+            ...capturedTraceability.map((t: any) => t.traceabilityValue),
+          ].filter(Boolean);
+          
+          for (const val of capturedValues) {
+            const trimmedVal = val.trim();
+            if (!trimmedVal) continue;
+            const fabricMatch = await db.query.cuttingFabricInventory.findFirst({
+              where: or(
+                eq(cuttingFabricInventory.lotNumber, trimmedVal),
+                eq(cuttingFabricInventory.rollNumber, trimmedVal),
+                eq(cuttingFabricInventory.batchNumber, trimmedVal),
+                eq(cuttingFabricInventory.barcode, trimmedVal),
+                eq(cuttingFabricInventory.internalControlNumber, trimmedVal),
+              ),
+            });
+            if (fabricMatch && !fabricMatches.find((f: any) => f.id === fabricMatch.id)) {
+              fabricMatches.push({
+                id: fabricMatch.id,
+                fabric: fabricMatch.fabric,
+                fabricPartNumber: fabricMatch.fabricPartNumber,
+                nickname: fabricMatch.nickname,
+                source: fabricMatch.source,
+                supplierPartNumber: fabricMatch.supplierPartNumber,
+                supplierPoNumber: fabricMatch.supplierPoNumber,
+                manufacturerPoNumber: fabricMatch.manufacturerPoNumber,
+                lotNumber: fabricMatch.lotNumber,
+                rollNumber: fabricMatch.rollNumber,
+                batchNumber: fabricMatch.batchNumber,
+                internalControlNumber: fabricMatch.internalControlNumber,
+                barcode: fabricMatch.barcode,
+                manufactureDate: fabricMatch.manufactureDate,
+                receivedDate: fabricMatch.receivedDate,
+                expirationDate: fabricMatch.expirationDate,
+                location: fabricMatch.location,
+                freezerNumber: fabricMatch.freezerNumber,
+                conformanceDocumentLink: fabricMatch.conformanceDocumentLink,
+                quantityInStock: fabricMatch.quantityInStock,
+                squareMeters: fabricMatch.squareMeters,
+                notes: fabricMatch.notes,
+                status: fabricMatch.status,
+                depletedAt: fabricMatch.depletedAt,
+                depletedBy: fabricMatch.depletedBy,
+              });
+            }
+          }
+
+          materialUsage.push({
+            department: dept,
+            partId: mat.partId,
+            partNumber: mat.partNumber || inventoryItem?.agPartNumber || null,
+            partName: mat.partName || inventoryItem?.name || null,
+            requiredFields: mat.requiredFields || [],
+            entryMethod: mat.entryMethod || 'manual',
+            inventoryItem: inventoryItem ? {
+              id: inventoryItem.id,
+              name: inventoryItem.name,
+              agPartNumber: inventoryItem.agPartNumber,
+              source: inventoryItem.source,
+              supplierPartNumber: inventoryItem.supplierPartNumber,
+              category: inventoryItem.category,
+              location: inventoryItem.location,
+              isFabric: inventoryItem.isFabric,
+              traceabilityRequired: inventoryItem.traceabilityRequired,
+              traceabilityFields: inventoryItem.traceabilityFields,
+            } : null,
+            capturedValues: capturedTraceability.map((t: any) => ({
+              field: t.traceabilityLabel || t.traceabilityType,
+              value: t.traceabilityValue,
+              recordedBy: t.recordedBy,
+              recordedAt: t.recordedAt || t.createdAt,
+            })),
+            fabricDetails: fabricMatches,
+          });
+        }
+      }
+    }
+
     let routingDocs: any[] = [];
     try {
       const conditions = [];
@@ -617,6 +726,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       workTasks: resolvedWorkTasks,
       events: resolvedEvents,
       traceabilityData: mergedTraceabilityData,
+      materialUsage,
       customData,
       ovenCureLogs,
       vacuumLeakTests,

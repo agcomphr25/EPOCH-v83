@@ -1,6 +1,7 @@
 import { useMetric } from '@/hooks/useMetric';
 import { Loader2, AlertCircle, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
 
 interface ThresholdRule {
   max: number;
@@ -52,6 +53,7 @@ export default function SignalCardWidget({
   invertSignal = false,
   className,
 }: SignalCardWidgetProps) {
+  const { businessContext } = useDashboardFilters();
   const { data, isLoading, isError } = useMetric(metricSlug);
 
   const displayTitle = title ?? data?.name ?? metricSlug;
@@ -71,6 +73,8 @@ export default function SignalCardWidget({
   const config = colorConfig[signalColor];
   const SignalIcon = config.icon;
 
+  const contextLabel = businessContext !== 'company' ? ` (${businessContext.toUpperCase()})` : '';
+
   return (
     <div
       className={cn(
@@ -82,7 +86,7 @@ export default function SignalCardWidget({
     >
       <div className="flex items-center justify-between">
         <span className={cn('text-xs font-semibold uppercase tracking-wide', config.text)}>
-          {displayTitle}
+          {displayTitle}{contextLabel}
         </span>
         <SignalIcon className={cn('h-5 w-5', config.text)} />
       </div>

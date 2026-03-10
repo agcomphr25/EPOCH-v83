@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Package, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
 
 interface KitComponent {
   name: string;
@@ -20,8 +21,15 @@ interface KitProgressWidgetProps {
 }
 
 export default function KitProgressWidget({ className }: KitProgressWidgetProps) {
+  const { timeRange, businessContext } = useDashboardFilters();
+
   const { data: mrpData, isLoading, isError } = useQuery({
-    queryKey: ['/api/mrp/material-readiness'],
+    queryKey: ['/api/mrp/material-readiness', timeRange, businessContext],
+    queryFn: async () => {
+      const res = await fetch('/api/mrp/material-readiness');
+      if (!res.ok) throw new Error('Failed to fetch material readiness');
+      return res.json();
+    },
   });
 
   const kits: KitData[] = (() => {

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
 import {
   ComposedChart,
   Bar,
@@ -43,8 +44,16 @@ function computeMovingAverage(data: { shipped: number }[], window: number): (num
 }
 
 export default function ShipmentTrendWidget({ className, weeks = 8 }: ShipmentTrendWidgetProps) {
+  const { timeRange, businessContext } = useDashboardFilters();
+
   const { data: historyData, isLoading, isError } = useQuery<{ weeks: WeeklyHistoryEntry[] }>({
-    queryKey: ['/api/shipping/weekly-history'],
+    queryKey: ['/api/shipping/weekly-history', { timeRange, businessContext }],
+    queryFn: async () => {
+      const params = new URLSearchParams({ timeRange, businessContext });
+      const res = await fetch(`/api/shipping/weekly-history?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch weekly history');
+      return res.json();
+    },
   });
 
   const chartData: WeekData[] = useMemo(() => {
@@ -66,6 +75,9 @@ export default function ShipmentTrendWidget({ className, weeks = 8 }: ShipmentTr
     return rawData;
   }, [historyData, weeks]);
 
+  const displayedWeeks = chartData.length;
+  const timeLabel = timeRange === 'ytd' ? 'Year to Date' : timeRange === 'mtd' ? 'Month to Date' : `Last ${displayedWeeks} Weeks`;
+
   return (
     <div
       className={cn(
@@ -77,6 +89,9 @@ export default function ShipmentTrendWidget({ className, weeks = 8 }: ShipmentTr
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
           Weekly Shipment Trend
+        </span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          {timeLabel}{businessContext !== 'company' ? ` · ${businessContext.toUpperCase()}` : ''}
         </span>
       </div>
 

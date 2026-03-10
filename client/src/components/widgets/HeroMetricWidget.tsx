@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { useMetric } from '@/hooks/useMetric';
-import { Loader2, AlertCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Loader2, AlertCircle, TrendingUp, TrendingDown, Minus, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
+import FlippableCard from './FlippableCard';
 
 interface HeroMetricWidgetProps {
   metricSlug: string;
@@ -14,6 +17,14 @@ interface HeroMetricWidgetProps {
   trend?: 'up' | 'down' | 'neutral';
   trendLabel?: string;
   onClick?: () => void;
+  enableFlip?: boolean;
+}
+
+interface HeroBacksideData {
+  ytdShipments: number;
+  lastMonthSameWeek: number;
+  fourWeekAvg: number;
+  avgRevenuePerStock: number;
 }
 
 function getProgressColor(pct: number): { bar: string; text: string; bg: string } {
@@ -22,61 +33,60 @@ function getProgressColor(pct: number): { bar: string; text: string; bg: string 
   return { bar: 'bg-red-500', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' };
 }
 
-export default function HeroMetricWidget({
-  metricSlug,
-  title,
+function HeroFront({
+  displayTitle,
   subtitle,
-  unit,
   icon,
-  className,
-  accentColor = 'hsl(221, 83%, 53%)',
+  accentColor,
+  value,
   target,
+  displayUnit,
   trend,
   trendLabel,
-  onClick,
-}: HeroMetricWidgetProps) {
-  const { data, isLoading, isError } = useMetric(metricSlug);
-
-  const displayTitle = title ?? data?.name ?? metricSlug;
-  const displayUnit = unit ?? data?.unit ?? '';
-  const value = data?.value ?? 0;
+  isLoading,
+  isError,
+  enableFlip,
+}: {
+  displayTitle: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  accentColor: string;
+  value: number;
+  target?: number;
+  displayUnit: string;
+  trend?: 'up' | 'down' | 'neutral';
+  trendLabel?: string;
+  isLoading: boolean;
+  isError: boolean;
+  enableFlip?: boolean;
+}) {
   const progressPct = target && target > 0 ? Math.min(100, Math.round((value / target) * 100)) : null;
-
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
   const progressColors = progressPct !== null ? getProgressColor(progressPct) : null;
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800',
-        'px-6 py-5 shadow-sm flex flex-col gap-2 relative overflow-hidden',
-        onClick && 'cursor-pointer hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all',
-        className,
-      )}
-      onClick={onClick}
-    >
-      <div
-        className="absolute top-0 left-0 w-full h-1 rounded-t-xl"
-        style={{ backgroundColor: accentColor }}
-      />
-
+    <div className="rounded-xl border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 px-6 py-5 shadow-sm flex flex-col gap-2 relative overflow-hidden h-full">
+      <div className="absolute top-0 left-0 w-full h-1 rounded-t-xl" style={{ backgroundColor: accentColor }} />
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
           {displayTitle}
         </span>
-        {icon ? (
-          <span className="text-gray-400 dark:text-gray-500">{icon}</span>
-        ) : (
-          <TrendingUp className="h-5 w-5 text-gray-300 dark:text-gray-600" />
-        )}
+        <div className="flex items-center gap-1.5">
+          {enableFlip && (
+            <RotateCcw className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
+          )}
+          {icon ? (
+            <span className="text-gray-400 dark:text-gray-500">{icon}</span>
+          ) : (
+            <TrendingUp className="h-5 w-5 text-gray-300 dark:text-gray-600" />
+          )}
+        </div>
       </div>
 
       {subtitle && (
         <div className="flex items-center gap-1.5 -mt-1">
           <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-          <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
-            {subtitle}
-          </span>
+          <span className="text-xs font-medium text-gray-400 dark:text-gray-500">{subtitle}</span>
         </div>
       )}
 
@@ -98,9 +108,7 @@ export default function HeroMetricWidget({
                 / {target.toLocaleString()} goal
               </span>
             ) : displayUnit ? (
-              <span className="text-sm text-gray-400 dark:text-gray-500 mb-1">
-                {displayUnit}
-              </span>
+              <span className="text-sm text-gray-400 dark:text-gray-500 mb-1">{displayUnit}</span>
             ) : null}
           </div>
         )}
@@ -140,5 +148,115 @@ export default function HeroMetricWidget({
         </div>
       )}
     </div>
+  );
+}
+
+function HeroBack({ accentColor, backsideData, isLoading }: { accentColor: string; backsideData?: HeroBacksideData; isLoading: boolean }) {
+  const stats = [
+    { label: 'YTD Shipments', value: backsideData?.ytdShipments ?? 0 },
+    { label: 'Last Month Same Week', value: backsideData?.lastMonthSameWeek ?? 0 },
+    { label: '4-Week Average', value: backsideData?.fourWeekAvg ?? 0 },
+    { label: 'Avg Revenue / Stock', value: backsideData?.avgRevenuePerStock ?? 0, isCurrency: true },
+  ];
+
+  return (
+    <div className="rounded-xl border bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 px-6 py-5 shadow-sm flex flex-col gap-3 relative overflow-hidden h-full">
+      <div className="absolute top-0 left-0 w-full h-1 rounded-t-xl" style={{ backgroundColor: accentColor }} />
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+          Shipping Insights
+        </span>
+        <RotateCcw className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center flex-1">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-300 dark:text-gray-600" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 mt-1">
+          {stats.map((s) => (
+            <div key={s.label} className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                {s.label}
+              </span>
+              <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
+                {s.isCurrency ? `$${s.value.toLocaleString()}` : s.value.toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function HeroMetricWidget({
+  metricSlug,
+  title,
+  subtitle,
+  unit,
+  icon,
+  className,
+  accentColor = 'hsl(221, 83%, 53%)',
+  target,
+  trend,
+  trendLabel,
+  onClick,
+  enableFlip = false,
+}: HeroMetricWidgetProps) {
+  const { businessContext } = useDashboardFilters();
+  const { data, isLoading, isError } = useMetric(metricSlug);
+
+  const { data: backsideData, isLoading: backsideLoading } = useQuery<HeroBacksideData>({
+    queryKey: ['/api/shipping/hero-backside', { businessContext }],
+    queryFn: async () => {
+      const params = new URLSearchParams({ businessContext });
+      const res = await fetch(`/api/shipping/hero-backside?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch hero backside');
+      return res.json();
+    },
+    enabled: enableFlip,
+  });
+
+  const displayTitle = title ?? data?.name ?? metricSlug;
+  const displayUnit = unit ?? data?.unit ?? '';
+  const value = data?.value ?? 0;
+
+  const frontContent = (
+    <HeroFront
+      displayTitle={displayTitle}
+      subtitle={subtitle}
+      icon={icon}
+      accentColor={accentColor}
+      value={value}
+      target={target}
+      displayUnit={displayUnit}
+      trend={trend}
+      trendLabel={trendLabel}
+      isLoading={isLoading}
+      isError={isError}
+      enableFlip={enableFlip}
+    />
+  );
+
+  if (!enableFlip) {
+    return (
+      <div className={cn(onClick && 'cursor-pointer', className)} onClick={onClick}>
+        {frontContent}
+      </div>
+    );
+  }
+
+  const backContent = (
+    <HeroBack accentColor={accentColor} backsideData={backsideData} isLoading={backsideLoading} />
+  );
+
+  return (
+    <FlippableCard
+      front={frontContent}
+      back={backContent}
+      className={className}
+    />
   );
 }

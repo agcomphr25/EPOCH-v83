@@ -22,6 +22,7 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
             target: 110,
             trend: 'up',
             trendLabel: 'Tracking ahead of last week',
+            enableFlip: true,
           },
         },
         {

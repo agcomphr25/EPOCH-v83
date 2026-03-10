@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
 import {
   ScatterChart,
   Scatter,
@@ -63,12 +64,22 @@ function CustomTooltip({ active, payload }: any) {
 }
 
 export default function BubbleChartWidget({ className }: BubbleChartWidgetProps) {
+  const { timeRange, businessContext } = useDashboardFilters();
+
   const { data, isLoading, isError } = useQuery<{ bubbles: BubbleDataPoint[]; weeksAnalyzed: number }>({
-    queryKey: ['/api/shipping/stock-model-bubbles'],
+    queryKey: ['/api/shipping/stock-model-bubbles', { timeRange, businessContext }],
+    queryFn: async () => {
+      const params = new URLSearchParams({ timeRange, businessContext });
+      const res = await fetch(`/api/shipping/stock-model-bubbles?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch bubble data');
+      return res.json();
+    },
   });
 
   const bubbleData = data?.bubbles ?? [];
   const weeksAnalyzed = data?.weeksAnalyzed ?? 12;
+
+  const timeLabel = timeRange === 'ytd' ? 'Year to Date' : timeRange === 'mtd' ? 'Month to Date' : `Last ${weeksAnalyzed} weeks`;
 
   return (
     <div
@@ -83,7 +94,7 @@ export default function BubbleChartWidget({ className }: BubbleChartWidgetProps)
           Stock Model Popularity
         </span>
         <span className="text-[10px] text-gray-400 dark:text-gray-500">
-          Last {weeksAnalyzed} weeks
+          {timeLabel}{businessContext !== 'company' ? ` · ${businessContext.toUpperCase()}` : ''}
         </span>
       </div>
 

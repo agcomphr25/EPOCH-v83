@@ -781,6 +781,16 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Checklist management tables migration:', clErr.message);
       }
 
+      // Ensure project_steps and project_activity_log have display name columns
+      try {
+        const { sql: sqlProjCols } = await import('drizzle-orm');
+        await db.execute(sqlProjCols`ALTER TABLE project_steps ADD COLUMN IF NOT EXISTS completed_by_display_name TEXT`);
+        await db.execute(sqlProjCols`ALTER TABLE project_activity_log ADD COLUMN IF NOT EXISTS performed_by_display_name TEXT`);
+        console.log('✅ Ensured project tables have display name columns');
+      } catch (projColErr: any) {
+        console.warn('⚠️ Project display name columns migration:', projColErr.message);
+      }
+
       // Ensure production forecast engine tables exist
       try {
         const { sql: sqlFC } = await import('drizzle-orm');

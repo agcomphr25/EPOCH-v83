@@ -1418,6 +1418,11 @@ export default function CuttingOperatorDashboard() {
                   <Target className="h-4 w-4" />
                   FIFO - Pull These Rolls
                 </h4>
+                {activeScannedPacket.requiredFabricTypes && activeScannedPacket.requiredFabricTypes.length > 0 && (
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Required: {activeScannedPacket.requiredFabricTypes.join(', ')}
+                  </div>
+                )}
                 {activeScannedPacket.fifoInventory && activeScannedPacket.fifoInventory.length > 0 ? (
                   <div className="space-y-1 max-h-[150px] overflow-y-auto">
                     {activeScannedPacket.fifoInventory.slice(0, 5).map((roll: any, idx: number) => (
@@ -1437,7 +1442,11 @@ export default function CuttingOperatorDashboard() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-amber-600">No matching fabric in inventory</p>
+                  <p className="text-sm text-amber-600">
+                    {activeScannedPacket.requiredFabricTypes && activeScannedPacket.requiredFabricTypes.length > 0 
+                      ? 'No matching fabric in inventory for required types' 
+                      : 'No BOM fabric types configured - cannot determine required materials'}
+                  </p>
                 )}
               </div>
             </div>

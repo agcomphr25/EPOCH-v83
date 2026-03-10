@@ -964,9 +964,17 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     }
     
     // Get FIFO-ordered fabric inventory matching BOM materials
-    const fabricMaterialNames = bomMaterials.map(m => m.fabricType.toLowerCase()).filter(t => t.length > 0);
-    const bomPartFabricTypes = bomParts.map(p => p.fabricType.toLowerCase()).filter(t => t.length > 0);
-    const allRequiredFabricTypes = [...new Set([...fabricMaterialNames, ...bomPartFabricTypes])];
+    // Collect both fabricType and commonName from BOM materials and parts
+    const allRequiredFabricTypes = new Set<string>();
+    bomMaterials.forEach((m: any) => {
+      if (m.fabricType?.trim()) allRequiredFabricTypes.add(m.fabricType.trim().toLowerCase());
+      if (m.commonName?.trim()) allRequiredFabricTypes.add(m.commonName.trim().toLowerCase());
+    });
+    bomParts.forEach((p: any) => {
+      if (p.fabricType?.trim()) allRequiredFabricTypes.add(p.fabricType.trim().toLowerCase());
+      if (p.commonName?.trim()) allRequiredFabricTypes.add(p.commonName.trim().toLowerCase());
+    });
+    const requiredTypes = Array.from(allRequiredFabricTypes);
     
     let fifoInventory: any[] = [];
     const activeFabric = await db
@@ -975,26 +983,33 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       .where(eq(cuttingFabricInventory.status, 'active'))
       .orderBy(asc(cuttingFabricInventory.receivedDate), asc(cuttingFabricInventory.expirationDate));
     
+    // Stricter fabric matching: require significant overlap, not just substring containment
+    // Minimum match length of 4 chars prevents short strings from matching everything
     const strictFabricMatch = (fabricFields: string[], requiredTypes: string[]): boolean => {
       const validFields = fabricFields.filter(f => f.length > 0);
       if (validFields.length === 0) return false;
       return requiredTypes.some(req => 
-        validFields.some(field => field.includes(req) || req.includes(field))
+        validFields.some(field => {
+          if (field === req) return true;
+          if (req.length >= 4 && field.includes(req)) return true;
+          if (field.length >= 4 && req.includes(field)) return true;
+          return false;
+        })
       );
     };
     
-    if (allRequiredFabricTypes.length > 0) {
+    if (requiredTypes.length > 0) {
       fifoInventory = activeFabric.filter(f => {
-        const ft = (f.fabric || '').toLowerCase();
-        const nickname = (f.nickname || '').toLowerCase();
-        const partNum = (f.fabricPartNumber || '').toLowerCase();
-        return strictFabricMatch([ft, nickname, partNum], allRequiredFabricTypes);
+        const ft = (f.fabric || '').trim().toLowerCase();
+        const nickname = (f.nickname || '').trim().toLowerCase();
+        const partNum = (f.fabricPartNumber || '').trim().toLowerCase();
+        return strictFabricMatch([ft, nickname, partNum], requiredTypes);
       });
+      console.log(`[scan-start FIFO] Required fabric types: [${requiredTypes.join(', ')}], matched ${fifoInventory.length} of ${activeFabric.length} active rolls`);
     } else {
-      fifoInventory = activeFabric.filter(f => {
-        const sqm = parseFloat(String(f.squareMeters || '0'));
-        return sqm > 0;
-      }).slice(0, 10);
+      // No BOM fabric requirements found - don't show random rolls
+      fifoInventory = [];
+      console.log(`[scan-start FIFO] No BOM fabric types found for packet. BOM: ${packetBom?.id || 'none'}, materials: ${bomMaterials.length}, parts: ${bomParts.length}`);
     }
     
     let plySchedule = null;
@@ -1045,6 +1060,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       plySchedule,
       cutsConfig,
       cutPrograms,
+      requiredFabricTypes: requiredTypes,
       fifoInventory: fifoInventory.map(f => ({
         id: f.id,
         fabric: f.fabric,
@@ -1101,19 +1117,51 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       where: eq(inventoryItems.id, queueItem.inventoryItemId),
     });
     
-    // Find the fabric roll by barcode, ICN, or roll number
+    // Find the fabric roll by barcode, ICN, roll number, or ID
     const allFabric = await db
       .select()
       .from(cuttingFabricInventory)
       .where(eq(cuttingFabricInventory.status, 'active'));
     
-    const matchedRoll = allFabric.find(f => 
-      f.barcode === barcode ||
-      f.internalControlNumber === barcode ||
-      f.rollNumber === barcode
+    const barcodeNorm = barcode.trim();
+    
+    // Try exact match first on barcode, ICN, or roll number
+    let matchedRoll = allFabric.find(f => 
+      f.barcode === barcodeNorm ||
+      f.internalControlNumber === barcodeNorm ||
+      f.rollNumber === barcodeNorm
     );
     
+    // Try case-insensitive match
     if (!matchedRoll) {
+      const barcodeLower = barcodeNorm.toLowerCase();
+      matchedRoll = allFabric.find(f => 
+        (f.barcode && f.barcode.toLowerCase() === barcodeLower) ||
+        (f.internalControlNumber && f.internalControlNumber.toLowerCase() === barcodeLower) ||
+        (f.rollNumber && f.rollNumber.toLowerCase() === barcodeLower)
+      );
+    }
+    
+    // Try matching by fabric inventory ID (UUID)
+    if (!matchedRoll) {
+      matchedRoll = allFabric.find(f => f.id === barcodeNorm);
+    }
+    
+    // Try parsing synthetic barcode format: FAB-{ICN}-{id_prefix}
+    if (!matchedRoll && barcodeNorm.startsWith('FAB-')) {
+      const parts = barcodeNorm.split('-');
+      if (parts.length >= 3) {
+        const icnPart = parts.slice(1, -1).join('-');
+        const idPrefix = parts[parts.length - 1];
+        matchedRoll = allFabric.find(f =>
+          (f.internalControlNumber && f.internalControlNumber === icnPart) ||
+          (f.id && f.id.startsWith(idPrefix))
+        );
+      }
+    }
+    
+    if (!matchedRoll) {
+      console.log(`[validate-material] Roll not found. Scanned: "${barcodeNorm}". Active rolls: ${allFabric.length}. Sample barcodes: ${allFabric.slice(0, 5).map(f => `barcode=${f.barcode}, ICN=${f.internalControlNumber}, roll=${f.rollNumber}`).join(' | ')}`);
       return res.status(404).json({ 
         valid: false,
         error: 'Material roll not found in inventory',
@@ -1215,7 +1263,12 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
     }
     
     const isMatch = Array.from(allowedFabricTypes).some(allowed => 
-      rollFields.some(field => field.includes(allowed) || allowed.includes(field))
+      rollFields.some(field => {
+        if (field === allowed) return true;
+        if (allowed.length >= 4 && field.includes(allowed)) return true;
+        if (field.length >= 4 && allowed.includes(field)) return true;
+        return false;
+      })
     );
     
     if (!isMatch) {

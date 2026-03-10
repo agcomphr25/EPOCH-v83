@@ -1,7 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, AlertCircle, Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   ScatterChart,
   Scatter,
@@ -54,16 +61,28 @@ function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload as BubbleDataPoint;
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-xs shadow-lg">
-      <p className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{d.name}</p>
-      <p className="text-gray-500 dark:text-gray-400">Weekly Shipments: {d.weeklyShipments}</p>
-      <p className="text-gray-500 dark:text-gray-400">Avg Price: ${d.avgPrice.toLocaleString()}</p>
-      <p className="text-gray-500 dark:text-gray-400">Total Revenue: {formatCurrency(d.totalRevenue)}</p>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-xs shadow-xl backdrop-blur-sm">
+      <p className="font-bold text-sm text-gray-900 dark:text-gray-100 mb-2 border-b border-gray-100 dark:border-gray-800 pb-1.5">{d.name}</p>
+      <div className="space-y-1">
+        <p className="text-gray-600 dark:text-gray-400 flex justify-between gap-4">
+          <span>Weekly Shipments</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-200">{d.weeklyShipments}</span>
+        </p>
+        <p className="text-gray-600 dark:text-gray-400 flex justify-between gap-4">
+          <span>Avg Price</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-200">${d.avgPrice.toLocaleString()}</span>
+        </p>
+        <p className="text-gray-600 dark:text-gray-400 flex justify-between gap-4">
+          <span>Total Revenue</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-200">{formatCurrency(d.totalRevenue)}</span>
+        </p>
+      </div>
     </div>
   );
 }
 
 export default function BubbleChartWidget({ className }: BubbleChartWidgetProps) {
+  const [sheetOpen, setSheetOpen] = useState(false);
   const { timeRange, businessContext } = useDashboardFilters();
 
   const { data, isLoading, isError } = useQuery<{ bubbles: BubbleDataPoint[]; weeksAnalyzed: number }>({
@@ -93,9 +112,18 @@ export default function BubbleChartWidget({ className }: BubbleChartWidgetProps)
         <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
           Stock Model Popularity
         </span>
-        <span className="text-[10px] text-gray-400 dark:text-gray-500">
-          {timeLabel}{businessContext !== 'company' ? ` · ${businessContext.toUpperCase()}` : ''}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+            {timeLabel}{businessContext !== 'company' ? ` · ${businessContext.toUpperCase()}` : ''}
+          </span>
+          <button
+            onClick={() => setSheetOpen(true)}
+            title="Open details"
+            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -135,13 +163,67 @@ export default function BubbleChartWidget({ className }: BubbleChartWidgetProps)
               <Tooltip content={<CustomTooltip />} />
               <Scatter data={bubbleData}>
                 {bubbleData.map((_, idx) => (
-                  <Cell key={idx} fill={BUBBLE_COLORS[idx % BUBBLE_COLORS.length]} fillOpacity={0.7} />
+                  <Cell key={idx} fill={BUBBLE_COLORS[idx % BUBBLE_COLORS.length]} fillOpacity={0.8} />
                 ))}
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
         </div>
       )}
+
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent className="w-[560px] sm:max-w-[640px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Stock Model Popularity</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 h-72">
+            {bubbleData.length > 0 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+                  <XAxis dataKey="weeklyShipments" name="Weekly Shipments" tick={{ fontSize: 11 }} className="fill-gray-500 dark:fill-gray-400" />
+                  <YAxis dataKey="avgPrice" name="Avg Price ($)" tick={{ fontSize: 11 }} className="fill-gray-500 dark:fill-gray-400" tickFormatter={(v) => `$${v}`} />
+                  <ZAxis dataKey="totalRevenue" range={[200, 1400]} name="Total Revenue" />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Scatter data={bubbleData}>
+                    {bubbleData.map((_, idx) => (
+                      <Cell key={idx} fill={BUBBLE_COLORS[idx % BUBBLE_COLORS.length]} fillOpacity={0.8} />
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-gray-500 dark:text-gray-400 text-xs uppercase">
+                  <th className="text-left pb-2">Model</th>
+                  <th className="text-right pb-2">Shipments/wk</th>
+                  <th className="text-right pb-2">Avg Price</th>
+                  <th className="text-right pb-2">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bubbleData
+                  .slice()
+                  .sort((a, b) => b.totalRevenue - a.totalRevenue)
+                  .map((d, idx) => (
+                    <tr key={d.modelId} className="border-t border-gray-100 dark:border-gray-800">
+                      <td className="py-1.5 text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: BUBBLE_COLORS[idx % BUBBLE_COLORS.length] }} />
+                        {d.name}
+                      </td>
+                      <td className="py-1.5 text-right font-semibold text-gray-900 dark:text-gray-100">{d.weeklyShipments}</td>
+                      <td className="py-1.5 text-right text-gray-600 dark:text-gray-400">${d.avgPrice.toLocaleString()}</td>
+                      <td className="py-1.5 text-right text-gray-600 dark:text-gray-400">{formatCurrency(d.totalRevenue)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

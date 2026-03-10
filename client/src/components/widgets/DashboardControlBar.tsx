@@ -34,16 +34,16 @@ export default function DashboardControlBar() {
 
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 py-3 shadow-sm">
-      <div className="flex items-center rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5">
+      <div className="flex items-center gap-1">
         {TIME_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => setTimeRange(opt.value)}
             className={cn(
-              'px-3 py-1.5 text-xs font-semibold rounded-md transition-all',
+              'px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all duration-200',
               timeRange === opt.value
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300',
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-muted text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700',
             )}
           >
             {opt.label}
@@ -51,18 +51,18 @@ export default function DashboardControlBar() {
         ))}
       </div>
 
-      <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+      <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 hidden sm:block" />
 
-      <div className="flex items-center rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5">
+      <div className="flex items-center gap-1">
         {CONTEXT_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => setBusinessContext(opt.value)}
             className={cn(
-              'px-3 py-1.5 text-xs font-semibold rounded-md transition-all',
+              'px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all duration-200',
               businessContext === opt.value
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300',
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-muted text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700',
             )}
           >
             {opt.label}

@@ -27,10 +27,22 @@ interface HeroBacksideData {
   avgRevenuePerStock: number;
 }
 
-function getProgressColor(pct: number): { bar: string; text: string; bg: string } {
-  if (pct >= 75) return { bar: 'bg-green-500', text: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
-  if (pct >= 50) return { bar: 'bg-yellow-500', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' };
-  return { bar: 'bg-red-500', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' };
+function getProgressColor(pct: number): { gradient: string; text: string; bg: string } {
+  if (pct >= 75) return { gradient: 'linear-gradient(90deg, #22c55e, #4ade80)', text: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
+  if (pct >= 50) return { gradient: 'linear-gradient(90deg, #eab308, #facc15)', text: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' };
+  return { gradient: 'linear-gradient(90deg, #ef4444, #f87171)', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' };
+}
+
+function getProjectedTotal(current: number, target: number): { projected: number; onPace: boolean } {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const hour = now.getHours();
+  const daysMap: Record<number, number> = { 3: 0, 4: 1, 5: 2, 6: 3, 0: 4, 1: 5, 2: 6 };
+  const elapsedDays = (daysMap[dayOfWeek] ?? 0) + (hour / 24);
+  const totalDays = 7;
+  if (elapsedDays <= 0) return { projected: current, onPace: current >= target };
+  const projected = Math.round((current / elapsedDays) * totalDays);
+  return { projected, onPace: projected >= target };
 }
 
 function HeroFront({
@@ -116,19 +128,27 @@ function HeroFront({
 
       {progressPct !== null && progressColors && !isLoading && !isError && (
         <div className="flex flex-col gap-1.5 mt-1">
-          <div className={cn('w-full h-3 rounded-full overflow-hidden', progressColors.bg)}>
+          <div className={cn('w-full rounded-lg overflow-hidden', progressColors.bg)} style={{ height: '12px' }}>
             <div
-              className={cn('h-full rounded-full transition-all duration-500', progressColors.bar)}
-              style={{ width: `${progressPct}%` }}
+              className="h-full rounded-lg transition-all duration-500"
+              style={{ width: `${progressPct}%`, background: progressColors.gradient }}
             />
           </div>
           <div className="flex items-center justify-between">
             <span className={cn('text-xs font-semibold', progressColors.text)}>
               {progressPct}% of target
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              {progressPct >= 75 ? 'On pace' : progressPct >= 50 ? 'At risk' : 'Behind pace'}
-            </span>
+            {target && target > 0 && (() => {
+              const { projected, onPace } = getProjectedTotal(value, target);
+              return (
+                <span className={cn(
+                  'text-xs font-semibold',
+                  onPace ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+                )}>
+                  Projected: {projected} {onPace ? '▲ On pace' : '▼ Behind pace'}
+                </span>
+              );
+            })()}
           </div>
         </div>
       )}

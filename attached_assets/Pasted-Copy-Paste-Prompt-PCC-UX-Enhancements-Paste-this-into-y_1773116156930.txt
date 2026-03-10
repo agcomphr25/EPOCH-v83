@@ -1,0 +1,267 @@
+Copy-Paste Prompt — PCC UX Enhancements
+
+Paste this into your agent.
+
+PROMPT START
+
+We will improve the Production Control Center dashboard UX by enhancing visual hierarchy, density, and interactivity.
+
+Do not rewrite existing architecture.
+
+Reuse:
+
+DashboardGrid
+WidgetRenderer
+widgetRegistry
+HeroMetricWidget
+ShipmentTrendWidget
+BubbleChartWidget
+KitProgressWidget
+SignalCardWidget
+SwimLanePreviewWidget
+DashboardFilterContext
+
+The goal is to make the dashboard feel like an operations control center rather than a report page.
+
+Phase 1 — Improve Hero Metric Card
+
+Modify:
+
+HeroMetricWidget.tsx
+
+Enhancements:
+
+Increase visual hierarchy
+
+Add projection indicator
+
+Improve progress bar styling
+
+Add:
+
+goal progress bar height: 12px
+rounded corners
+gradient fill
+
+Add projected pace calculation:
+
+projectedTotal = (currentTotal / elapsedTime) * totalPeriod
+
+Display:
+
+Projected: X
+▲ On pace / ▼ Behind pace
+
+Typography:
+
+metric value: text-5xl
+title: text-sm uppercase tracking-wide
+subtitle: muted text
+Phase 2 — Add Sparkline Micro-Charts to Queue Cards
+
+Enhance department queue cards.
+
+Create component:
+
+SparklineChart.tsx
+
+Use Recharts LineChart with minimal styling.
+
+Requirements:
+
+height: 24px
+no axes
+no grid
+strokeWidth: 2
+smooth line
+
+Add sparkline below queue numbers:
+
+Example:
+
+CNC
+36 orders
+▁▃▅▆▅▃▂
+
+Data source can temporarily use recent queue history if available or fallback to synthetic trend data.
+
+Phase 3 — Group Department Queues
+
+Replace multiple queue cards with a single DepartmentStatusWidget.
+
+Create:
+
+DepartmentStatusWidget.tsx
+
+Layout:
+
+Department   Orders   Sparkline
+
+Layup        258      trend
+CNC          36       trend
+Gunsmith     19       trend
+Finish       34       trend
+Paint        10       trend
+Shipping     38       trend
+
+Use grid layout inside the card.
+
+Phase 4 — Improve Chart Styling
+
+Update existing charts.
+
+Modify:
+
+ShipmentTrendWidget.tsx
+BubbleChartWidget.tsx
+
+Enhancements:
+
+Shipment trend:
+
+barRadius: 4
+barSize: 18
+movingAverage strokeWidth: 3
+movingAverage stroke: orange
+bar color: blue
+
+Bubble chart:
+
+bubble opacity: 0.8
+hover scale animation
+tooltip styling improved
+
+Add subtle gradient fill under line.
+
+Phase 5 — Improve Card Styling System
+
+Enhance all dashboard cards.
+
+Modify base Card styling:
+
+hover:shadow-lg
+transition duration-200
+hover:translate-y-[-2px]
+
+Add optional header actions:
+
+expand icon
+refresh icon
+
+Icons placed top-right.
+
+Phase 6 — Improve Control Bar
+
+Modify dashboard control bar.
+
+Enhancements:
+
+Convert filters to pill buttons:
+
+Week | MTD | YTD
+Company | P1 | P2
+
+Active state:
+
+bg-primary
+text-white
+
+Inactive:
+
+bg-muted
+
+Add subtle divider between filter groups.
+
+Phase 7 — Add Radar Capability Widget
+
+Create:
+
+CapabilityRadarWidget.tsx
+
+Use Recharts RadarChart.
+
+Axes:
+
+Layup
+CNC
+Finish
+Paint
+Shipping
+Quality
+
+Values represent:
+
+capacity utilization
+
+Add legend and color differentiation.
+
+Register widget type:
+
+capability_radar
+Phase 8 — Improve Section Headers
+
+Enhance dashboard section headers.
+
+Use consistent format:
+
+EXECUTIVE METRICS
+DEPARTMENT STATUS
+TRENDS & ANALYSIS
+OPERATIONAL STATUS
+SIGNALS
+
+Styling:
+
+uppercase
+tracking-wide
+text-xs
+muted color
+divider line below
+Phase 9 — Add Card Interaction Cues
+
+Add optional expand indicator.
+
+Icon:
+
+↗
+
+On hover:
+
+tooltip: "Open details"
+
+Cards that support drilldown:
+
+ShipmentTrendWidget
+SwimLanePreviewWidget
+BubbleChartWidget
+
+Open details via Sheet component.
+
+Phase 10 — Layout Refinement
+
+Adjust PCC layout spacing.
+
+Goals:
+
+hero card visually dominant
+charts balanced across width
+operational widgets grouped
+signals separated at bottom
+
+Ensure responsive grid behavior:
+
+desktop: 4 columns
+tablet: 2 columns
+mobile: 1 column
+Deliverables
+
+Return summary:
+
+components created
+components modified
+widgets enhanced
+layout changes
+
+Also include screenshots or descriptions of major visual improvements.
+
+PROMPT END

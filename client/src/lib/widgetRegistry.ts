@@ -5,11 +5,13 @@ export type WidgetTypeId =
   | 'metric_stat'
   | 'metric_stat_group'
   | 'hero_metric'
+  | 'department_status'
   | 'shipment_trend'
   | 'bubble_chart'
   | 'kit_progress'
   | 'signal_card'
-  | 'swim_lane_preview';
+  | 'swim_lane_preview'
+  | 'capability_radar';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -69,6 +71,8 @@ import BubbleChartWidget from '@/components/widgets/BubbleChartWidget';
 import KitProgressWidget from '@/components/widgets/KitProgressWidget';
 import SignalCardWidget from '@/components/widgets/SignalCardWidget';
 import SwimLanePreviewWidget from '@/components/widgets/SwimLanePreviewWidget';
+import CapabilityRadarWidget from '@/components/widgets/CapabilityRadarWidget';
+import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -146,6 +150,26 @@ registerWidget({
   description: 'Compact production pipeline visualization with expandable detail sheet.',
   category: 'status',
   component: SwimLanePreviewWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'capability_radar',
+  displayName: 'Capability Radar',
+  description: 'Radar chart showing department capacity utilization across Layup, CNC, Finish, Paint, Shipping, and Quality.',
+  category: 'chart',
+  component: CapabilityRadarWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'department_status',
+  displayName: 'Department Status',
+  description: 'Consolidated table of all department queues with sparkline trends.',
+  category: 'table',
+  component: DepartmentStatusWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

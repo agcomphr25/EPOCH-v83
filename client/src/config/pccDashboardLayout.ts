@@ -8,8 +8,8 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
   sections: [
     {
       id: 'hero',
-      title: undefined,
-      columns: 3,
+      title: 'Executive Metrics',
+      columns: 4,
       widgets: [
         {
           id: 'hero-stocks-shipped',
@@ -19,9 +19,10 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
             title: 'Stocks Shipped',
             subtitle: 'Operational week (Wed–Tue)',
             accentColor: 'hsl(221, 83%, 53%)',
-            target: 25,
+            target: 110,
             trend: 'up',
             trendLabel: 'Tracking ahead of last week',
+            enableFlip: true,
           },
         },
         {
@@ -49,48 +50,14 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
 
     {
       id: 'department_metrics',
-      title: 'Department Queues',
-      columns: 4,
+      title: 'Department Status',
+      columns: 1,
       widgets: [
         {
-          id: 'pcc-layup',
-          type: 'metric_stat',
-          props: { metricSlug: 'layup_queue_size', title: 'Layup' },
-        },
-        {
-          id: 'pcc-cnc',
-          type: 'metric_stat',
-          props: { metricSlug: 'cnc_queue_size', title: 'CNC' },
-        },
-        {
-          id: 'pcc-gunsmith',
-          type: 'metric_stat',
-          props: { metricSlug: 'gunsmith_queue_size', title: 'Gunsmith' },
-        },
-        {
-          id: 'pcc-finish',
-          type: 'metric_stat',
-          props: { metricSlug: 'finish_queue_size', title: 'Finish' },
-        },
-        {
-          id: 'pcc-paint',
-          type: 'metric_stat',
-          props: { metricSlug: 'paint_queue_size', title: 'Paint' },
-        },
-        {
-          id: 'pcc-shipping',
-          type: 'metric_stat',
-          props: { metricSlug: 'shipping_queue_size', title: 'Shipping' },
-        },
-        {
-          id: 'pcc-p1-queue',
-          type: 'metric_stat',
-          props: { metricSlug: 'p1_queue_size', title: 'P1 Queue' },
-        },
-        {
-          id: 'pcc-barcode',
-          type: 'metric_stat',
-          props: { metricSlug: 'barcode_queue_size', title: 'Barcode' },
+          id: 'pcc-department-status',
+          type: 'department_status',
+          props: {},
+          colSpan: 'col-span-1',
         },
       ],
     },
@@ -129,6 +96,11 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
           props: {},
         },
         {
+          id: 'pcc-capability-radar',
+          type: 'capability_radar',
+          props: {},
+        },
+        {
           id: 'pcc-signal-shortages',
           type: 'signal_card',
           props: {
@@ -146,7 +118,7 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
 
     {
       id: 'signals',
-      title: 'Signal Cards',
+      title: 'Signals',
       columns: 3,
       widgets: [
         {

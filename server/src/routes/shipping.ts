@@ -1,12 +1,19 @@
 import { Router, Request, Response } from 'express';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, gte, lte, and, sql } from 'drizzle-orm';
 import axios from 'axios';
+import { format } from 'date-fns';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { auditService } from '../services/auditService';
-import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots } from '../../schema';
+import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots, stockModels } from '../../schema';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  getOperationalWeek,
+  getOperationalYear,
+  getOperationalWeekStart,
+  getOperationalWeekEnd,
+} from '../../../shared/weekUtils';
 
 const router = Router();
 
@@ -2724,6 +2731,265 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       success: false,
       error: err.message || 'Notification failed',
     });
+  }
+});
+
+router.get('/hero-backside', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const businessContext = (req.query.businessContext as string) || 'company';
+    const currentOpWeek = getOperationalWeek(now);
+    const currentOpYear = getOperationalYear(now);
+
+    const ytdStart = getOperationalWeekStart(1, currentOpYear);
+    const ytdConditions = [
+      gte(allOrders.shippedDate, ytdStart),
+      lte(allOrders.shippedDate, now),
+    ];
+    const bizFilter = buildBusinessContextFilter(businessContext);
+    if (bizFilter) {
+      ytdConditions.push(bizFilter);
+    }
+
+    const ytdRows = await db
+      .select({ shippedDate: allOrders.shippedDate, paymentAmount: allOrders.paymentAmount })
+      .from(allOrders)
+      .where(and(...ytdConditions));
+
+    const ytdShipments = ytdRows.length;
+    const ytdRevenue = ytdRows.reduce((sum, r) => sum + (r.paymentAmount ?? 0), 0);
+    const avgRevenuePerStock = ytdShipments > 0 ? Math.round(ytdRevenue / ytdShipments) : 0;
+
+    const lastMonthWeek = currentOpWeek - 4;
+    let lmWeek = lastMonthWeek;
+    let lmYear = currentOpYear;
+    if (lmWeek < 1) {
+      lmYear--;
+      const lastDayPrevYear = getOperationalWeekStart(1, lmYear + 1);
+      lastDayPrevYear.setDate(lastDayPrevYear.getDate() - 1);
+      lmWeek = getOperationalWeek(lastDayPrevYear) + lmWeek;
+    }
+    const lmStart = getOperationalWeekStart(lmWeek, lmYear);
+    const lmEnd = getOperationalWeekEnd(lmWeek, lmYear);
+
+    const lmConditions = [
+      gte(allOrders.shippedDate, lmStart),
+      lte(allOrders.shippedDate, lmEnd),
+    ];
+    if (bizFilter) lmConditions.push(bizFilter);
+
+    const lastMonthSameWeekRows = await db
+      .select({ id: allOrders.id })
+      .from(allOrders)
+      .where(and(...lmConditions));
+    const lastMonthSameWeek = lastMonthSameWeekRows.length;
+
+    let fourWeekTotal = 0;
+    let tempWeek = currentOpWeek;
+    let tempYear = currentOpYear;
+    for (let i = 0; i < 4; i++) {
+      tempWeek--;
+      if (tempWeek < 1) {
+        tempYear--;
+        const lastDayPrevYear = getOperationalWeekStart(1, tempYear + 1);
+        lastDayPrevYear.setDate(lastDayPrevYear.getDate() - 1);
+        tempWeek = getOperationalWeek(lastDayPrevYear);
+      }
+      const wStart = getOperationalWeekStart(tempWeek, tempYear);
+      const wEnd = getOperationalWeekEnd(tempWeek, tempYear);
+      const wConditions = [
+        gte(allOrders.shippedDate, wStart),
+        lte(allOrders.shippedDate, wEnd),
+      ];
+      if (bizFilter) wConditions.push(bizFilter);
+      const wRows = await db
+        .select({ id: allOrders.id })
+        .from(allOrders)
+        .where(and(...wConditions));
+      fourWeekTotal += wRows.length;
+    }
+    const fourWeekAvg = Math.round((fourWeekTotal / 4) * 10) / 10;
+
+    res.json({
+      ytdShipments,
+      lastMonthSameWeek,
+      fourWeekAvg,
+      avgRevenuePerStock,
+    });
+  } catch (error) {
+    console.error('Error getting hero backside data:', error);
+    res.status(500).json({ error: 'Failed to get hero backside data' });
+  }
+});
+
+function getWeekCountForTimeRange(timeRange: string): number {
+  if (timeRange === 'mtd') {
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    return Math.max(1, Math.ceil(dayOfMonth / 7));
+  }
+  if (timeRange === 'ytd') {
+    return getOperationalWeek(new Date());
+  }
+  return 12;
+}
+
+function buildBusinessContextFilter(businessContext: string) {
+  if (businessContext === 'p1') {
+    return sql`(${allOrders.modelId} IS NOT NULL AND ${allOrders.modelId} != '')`;
+  }
+  if (businessContext === 'p2') {
+    return sql`(${allOrders.modelId} IS NULL OR ${allOrders.modelId} = '')`;
+  }
+  return undefined;
+}
+
+router.get('/weekly-history', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const timeRange = (req.query.timeRange as string) || 'week';
+    const businessContext = (req.query.businessContext as string) || 'company';
+    const currentOpWeek = getOperationalWeek(now);
+    const currentOpYear = getOperationalYear(now);
+    const totalWeeks = getWeekCountForTimeRange(timeRange);
+
+    const weeks: Array<{
+      operationalWeek: number;
+      operationalYear: number;
+      weekLabel: string;
+      dateRange: string;
+      shipped: number;
+    }> = [];
+
+    let opWeek = currentOpWeek;
+    let opYear = currentOpYear;
+    const weekSlots: Array<{ week: number; year: number; start: Date; end: Date }> = [];
+
+    for (let i = 0; i < totalWeeks; i++) {
+      weekSlots.unshift({ week: opWeek, year: opYear, start: getOperationalWeekStart(opWeek, opYear), end: getOperationalWeekEnd(opWeek, opYear) });
+      opWeek--;
+      if (opWeek < 1) {
+        opYear--;
+        const lastDayPrevYear = getOperationalWeekStart(1, opYear + 1);
+        lastDayPrevYear.setDate(lastDayPrevYear.getDate() - 1);
+        opWeek = getOperationalWeek(lastDayPrevYear);
+      }
+    }
+
+    const earliestStart = weekSlots[0].start;
+    const latestEnd = weekSlots[weekSlots.length - 1].end;
+
+    const conditions = [
+      gte(allOrders.shippedDate, earliestStart),
+      lte(allOrders.shippedDate, latestEnd),
+    ];
+    const bizFilter = buildBusinessContextFilter(businessContext);
+    if (bizFilter) conditions.push(bizFilter);
+
+    const shippedOrders = await db
+      .select({
+        shippedDate: allOrders.shippedDate,
+      })
+      .from(allOrders)
+      .where(and(...conditions));
+
+    for (const slot of weekSlots) {
+      const count = shippedOrders.filter((o) => {
+        if (!o.shippedDate) return false;
+        const d = new Date(o.shippedDate);
+        return d >= slot.start && d <= slot.end;
+      }).length;
+
+      weeks.push({
+        operationalWeek: slot.week,
+        operationalYear: slot.year,
+        weekLabel: `W${slot.week}`,
+        dateRange: `${format(slot.start, 'MMM d')} - ${format(slot.end, 'MMM d')}`,
+        shipped: count,
+      });
+    }
+
+    res.json({ weeks });
+  } catch (error) {
+    console.error('Error getting weekly shipping history:', error);
+    res.status(500).json({ error: 'Failed to get weekly shipping history' });
+  }
+});
+
+router.get('/stock-model-bubbles', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const timeRange = (req.query.timeRange as string) || 'week';
+    const businessContext = (req.query.businessContext as string) || 'company';
+    const weeksBack = getWeekCountForTimeRange(timeRange);
+    const currentOpWeek = getOperationalWeek(now);
+    const currentOpYear = getOperationalYear(now);
+
+    let opWeek = currentOpWeek;
+    let opYear = currentOpYear;
+    for (let i = 0; i < weeksBack; i++) {
+      opWeek--;
+      if (opWeek < 1) {
+        opYear--;
+        const lastDayPrevYear = getOperationalWeekStart(1, opYear + 1);
+        lastDayPrevYear.setDate(lastDayPrevYear.getDate() - 1);
+        opWeek = getOperationalWeek(lastDayPrevYear);
+      }
+    }
+    const earliestStart = getOperationalWeekStart(opWeek, opYear);
+
+    const conditions = [
+      gte(allOrders.shippedDate, earliestStart),
+      lte(allOrders.shippedDate, now),
+      sql`${allOrders.modelId} IS NOT NULL`,
+      sql`${allOrders.modelId} != ''`,
+    ];
+    const bizFilter = buildBusinessContextFilter(businessContext);
+    if (bizFilter) conditions.push(bizFilter);
+
+    const shippedRows = await db
+      .select({
+        modelId: allOrders.modelId,
+        paymentAmount: allOrders.paymentAmount,
+        shippedDate: allOrders.shippedDate,
+      })
+      .from(allOrders)
+      .where(and(...conditions));
+
+    const stockModelRows = await db
+      .select({ id: stockModels.id, displayName: stockModels.displayName, price: stockModels.price })
+      .from(stockModels);
+
+    const stockModelLookup = new Map(stockModelRows.map(m => [m.id, m]));
+
+    const modelMap = new Map<string, { count: number; totalRevenue: number }>();
+    for (const row of shippedRows) {
+      const mid = row.modelId!;
+      const entry = modelMap.get(mid) || { count: 0, totalRevenue: 0 };
+      entry.count++;
+      const basePrice = stockModelLookup.get(mid)?.price || 0;
+      const effectiveRevenue = (row.paymentAmount && row.paymentAmount > 0) ? row.paymentAmount : basePrice;
+      entry.totalRevenue += effectiveRevenue;
+      modelMap.set(mid, entry);
+    }
+
+    const bubbles = Array.from(modelMap.entries())
+      .map(([modelId, stats]) => {
+        const sm = stockModelLookup.get(modelId);
+        const name = sm?.displayName || modelId;
+        const weeklyShipments = parseFloat((stats.count / weeksBack).toFixed(1));
+        const totalRevenue = Math.round(stats.totalRevenue);
+        const avgPrice = stats.count > 0 ? Math.round(stats.totalRevenue / stats.count) : 0;
+        return { name, modelId, weeklyShipments, avgPrice, totalRevenue };
+      })
+      .filter(b => b.weeklyShipments > 0)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 15);
+
+    res.json({ bubbles, weeksAnalyzed: weeksBack });
+  } catch (error) {
+    console.error('Error getting stock model bubble data:', error);
+    res.status(500).json({ error: 'Failed to get stock model bubble data' });
   }
 });
 

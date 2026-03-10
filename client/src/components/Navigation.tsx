@@ -960,6 +960,12 @@ export default function Navigation() {
       icon: Activity,
       description: "Matt's production-focused operational awareness dashboard",
     },
+    {
+      path: '/production-control-center',
+      label: 'Production Control Center',
+      icon: Factory,
+      description: 'Real-time production monitoring and operational awareness',
+    },
   ];
 
   const purchaseOrdersItems = [

@@ -371,6 +371,32 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Traveler signatures migration skipped:', sigErr.message);
       }
 
+      // Ensure traveler_authorized_notes table exists
+      try {
+        const { sql: sqlAuthNotes } = await import('drizzle-orm');
+        await db.execute(sqlAuthNotes`
+          CREATE TABLE IF NOT EXISTS traveler_authorized_notes (
+            id VARCHAR(255) PRIMARY KEY DEFAULT (gen_random_uuid())::character varying,
+            traveler_id VARCHAR(255) NOT NULL REFERENCES travelers(id) ON DELETE CASCADE,
+            department VARCHAR(255) NOT NULL,
+            note TEXT NOT NULL,
+            linked_purchase_order_id VARCHAR(255),
+            linked_document_urls JSONB DEFAULT '[]'::jsonb,
+            tolerance_change_authorized BOOLEAN DEFAULT false,
+            signed_by VARCHAR(255) NOT NULL,
+            signed_by_name VARCHAR(255) NOT NULL,
+            signature_role VARCHAR(50),
+            signature_data TEXT,
+            created_at TIMESTAMPTZ DEFAULT now()
+          )
+        `);
+        await db.execute(sqlAuthNotes`CREATE INDEX IF NOT EXISTS traveler_authorized_notes_traveler_id_idx ON traveler_authorized_notes(traveler_id)`);
+        await db.execute(sqlAuthNotes`CREATE INDEX IF NOT EXISTS traveler_authorized_notes_department_idx ON traveler_authorized_notes(department)`);
+        console.log('✅ Ensured traveler_authorized_notes table exists');
+      } catch (authNotesErr: any) {
+        console.warn('⚠️ Traveler authorized notes migration skipped:', authNotesErr.message);
+      }
+
       // Ensure instruction_pack column exists on traveler_tasks
       try {
         const { sql: sqlInst } = await import('drizzle-orm');

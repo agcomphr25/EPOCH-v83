@@ -1,0 +1,33 @@
+index-DyVsvpiS.js:4953 React initialized: Object
+index-DyVsvpiS.js:4953 React hooks: Object
+index-DyVsvpiS.js:4953 [EPOCH SYNC] Sync engine starting
+index-DyVsvpiS.js:4953 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DyVsvpiS.js:4950 App component is rendering...
+index-DyVsvpiS.js:4950 Environment: production
+index-DyVsvpiS.js:4950 Base URL: /
+index-DyVsvpiS.js:1535 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-DyVsvpiS.js:1535 [EPOCH] Install prompt captured and ready
+/travelers:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/travelers/007cdcda-d4b7-4caf-9afe-614992745bd6/authorized-notes:1  Failed to load resource: the server responded with a status of 500 ()
+/api/travelers/007cdcda-d4b7-4caf-9afe-614992745bd6/authorized-notes:1  Failed to load resource: the server responded with a status of 500 ()
+/api/travelers/cdd74781-e9d8-481b-9f04-63ae6563ee91/authorized-notes:1  Failed to load resource: the server responded with a status of 500 ()
+/api/travelers/cdd74781-e9d8-481b-9f04-63ae6563ee91/authorized-notes:1  Failed to load resource: the server responded with a status of 500 ()
+index-DyVsvpiS.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DyVsvpiS.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/cutting-table/fabric-inventory:1  Failed to load resource: the server responded with a status of 500 ()
+index-DyVsvpiS.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/scan-start:1  Failed to load resource: the server responded with a status of 500 ()
+index-DyVsvpiS.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 500
+index-DyVsvpiS.js:4953 API error raw body: {"error":"Failed to process packet scan"}
+console.error @ index-DyVsvpiS.js:4953
+index-DyVsvpiS.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/scan-start: Error: Failed to process packet scan
+    at Me (index-DyVsvpiS.js:235:6362)
+console.error @ index-DyVsvpiS.js:4953
+index-DyVsvpiS.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/scan-start:1  Failed to load resource: the server responded with a status of 500 ()
+index-DyVsvpiS.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 500
+index-DyVsvpiS.js:4953 API error raw body: {"error":"Failed to process packet scan"}
+console.error @ index-DyVsvpiS.js:4953
+index-DyVsvpiS.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/scan-start: Error: Failed to process packet scan
+    at Me (index-DyVsvpiS.js:235:6362)
+console.error @ index-DyVsvpiS.js:4953

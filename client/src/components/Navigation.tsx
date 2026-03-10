@@ -1901,7 +1901,7 @@ export default function Navigation() {
                 </Button>
 
                 {financeExpanded && (
-                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px] max-h-[70vh] overflow-y-auto">
                     {filteredFinanceItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;

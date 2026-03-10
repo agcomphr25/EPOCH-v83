@@ -58,6 +58,7 @@ interface TravelerData {
   workTasks: any[];
   events: any[];
   traceabilityData: any[];
+  materialUsage: any[];
   customData: any[];
   ovenCureLogs: any[];
   vacuumLeakTests: any[];
@@ -502,245 +503,301 @@ export default function P2TravelerViewer() {
             </TabsContent>
 
             <TabsContent value="traceability" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Material Traceability Records</CardTitle>
-                  <CardDescription>Batch numbers, lot codes, and material certifications per AS9100 requirements — enriched with fabric inventory data</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {travelerData.traceabilityData && travelerData.traceabilityData.length > 0 ? (
-                    <div className="space-y-4">
-                      {travelerData.traceabilityData.map((trace: any, index: number) => (
-                        <div key={trace.id} data-testid={`row-trace-${index}`} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary">{trace.department}</Badge>
-                              <Badge variant="outline">{trace.traceabilityType}</Badge>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {trace.recordedBy} — {safeFormat(trace.createdAt, 'MMM d, yyyy h:mm a')}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                            <div>
-                              <span className="text-muted-foreground text-xs">{trace.traceabilityLabel}</span>
-                              <p className="font-mono font-medium">{trace.traceabilityValue}</p>
-                            </div>
-                            {trace.inventoryPartNumber && (
-                              <div>
-                                <span className="text-muted-foreground text-xs">Part Number</span>
-                                <p className="font-medium">{trace.inventoryPartNumber}</p>
+              <div className="space-y-6">
+                {/* Materials Used Section */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Materials Used</CardTitle>
+                    <CardDescription>Actual materials consumed in production with full inventory traceability</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {travelerData.materialUsage && travelerData.materialUsage.length > 0 ? (
+                      <div className="space-y-4">
+                        {travelerData.materialUsage.map((mat: any, index: number) => (
+                          <div key={`mat-${index}`} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">{mat.department}</Badge>
+                                <span className="font-semibold text-sm">{mat.partName}</span>
                               </div>
-                            )}
-                            {trace.inventoryDetail && (
-                              <>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Material Name</span>
-                                  <p className="font-medium">{trace.inventoryDetail.name}</p>
-                                </div>
-                                {trace.inventoryDetail.agPartNumber && (
+                              <div className="flex items-center gap-2">
+                                {mat.partNumber && (
+                                  <Badge variant="outline" className="font-mono">Part #{mat.partNumber}</Badge>
+                                )}
+                                {mat.capturedValues.length > 0 ? (
+                                  <Badge className="bg-emerald-100 text-emerald-800">Traced</Badge>
+                                ) : (
+                                  <Badge variant="destructive">Not Yet Traced</Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {mat.inventoryItem && (
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                                {mat.inventoryItem.agPartNumber && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">AG Part #</span>
-                                    <p className="font-mono">{trace.inventoryDetail.agPartNumber}</p>
+                                    <p className="font-mono font-medium">{mat.inventoryItem.agPartNumber}</p>
                                   </div>
                                 )}
-                                {trace.inventoryDetail.source && (
+                                {mat.inventoryItem.source && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Source</span>
-                                    <p>{trace.inventoryDetail.source}</p>
+                                    <p>{mat.inventoryItem.source}</p>
                                   </div>
                                 )}
-                                {trace.inventoryDetail.supplierPartNumber && (
+                                {mat.inventoryItem.supplierPartNumber && (
                                   <div>
                                     <span className="text-muted-foreground text-xs">Supplier Part #</span>
-                                    <p className="font-mono">{trace.inventoryDetail.supplierPartNumber}</p>
+                                    <p className="font-mono">{mat.inventoryItem.supplierPartNumber}</p>
                                   </div>
                                 )}
-                                {trace.inventoryDetail.location && (
+                                {mat.inventoryItem.category && (
                                   <div>
-                                    <span className="text-muted-foreground text-xs">Location</span>
-                                    <p>{trace.inventoryDetail.location}</p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          {trace.fabricDetail && (
-                            <div className="mt-3 pt-3 border-t">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Fabric Inventory Details</p>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                {trace.fabricDetail.fabric && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Fabric Type</span>
-                                    <p className="font-medium">{trace.fabricDetail.fabric}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.nickname && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Nickname</span>
-                                    <p>{trace.fabricDetail.nickname}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.fabricPartNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Fabric Part #</span>
-                                    <p className="font-mono">{trace.fabricDetail.fabricPartNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.source && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Source / Manufacturer</span>
-                                    <p>{trace.fabricDetail.source}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.supplierPartNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Supplier Part #</span>
-                                    <p className="font-mono">{trace.fabricDetail.supplierPartNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.internalControlNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">ICN</span>
-                                    <p className="font-mono font-semibold">{trace.fabricDetail.internalControlNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.barcode && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Barcode</span>
-                                    <p className="font-mono">{trace.fabricDetail.barcode}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.lotNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Lot #</span>
-                                    <p className="font-mono">{trace.fabricDetail.lotNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.rollNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Roll #</span>
-                                    <p className="font-mono">{trace.fabricDetail.rollNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.batchNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Batch #</span>
-                                    <p className="font-mono">{trace.fabricDetail.batchNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.supplierPoNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Supplier PO #</span>
-                                    <p className="font-mono">{trace.fabricDetail.supplierPoNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.manufacturerPoNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Manufacturer PO #</span>
-                                    <p className="font-mono">{trace.fabricDetail.manufacturerPoNumber}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.manufactureDate && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Manufacture Date</span>
-                                    <p>{safeFormat(trace.fabricDetail.manufactureDate, 'MMM d, yyyy')}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.receivedDate && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Received Date</span>
-                                    <p>{safeFormat(trace.fabricDetail.receivedDate, 'MMM d, yyyy')}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.expirationDate && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Expiration Date</span>
-                                    <p className={isValid(new Date(trace.fabricDetail.expirationDate)) && new Date(trace.fabricDetail.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
-                                      {safeFormat(trace.fabricDetail.expirationDate, 'MMM d, yyyy')}
-                                    </p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.location && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Location</span>
-                                    <p>{trace.fabricDetail.location}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.freezerNumber != null && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Freezer #</span>
-                                    <p>{trace.fabricDetail.freezerNumber}</p>
-                                  </div>
-                                )}
-                                {(trace.fabricDetail.quantityInStock != null) && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Qty In Stock</span>
-                                    <p>{trace.fabricDetail.quantityInStock}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.squareMeters != null && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Square Meters</span>
-                                    <p>{trace.fabricDetail.squareMeters}</p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.conformanceDocumentLink && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Conformance Document</span>
-                                    <p>
-                                      <a
-                                        href={trace.fabricDetail.conformanceDocumentLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:underline"
-                                      >
-                                        View Document
-                                      </a>
-                                    </p>
-                                  </div>
-                                )}
-                                {trace.fabricDetail.status && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Status</span>
-                                    <Badge variant={trace.fabricDetail.status === 'active' ? 'default' : 'destructive'}>
-                                      {trace.fabricDetail.status}
-                                    </Badge>
-                                  </div>
-                                )}
-                                {(trace.fabricDetail.depletedAt || trace.fabricDetail.depletedBy) && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Depleted</span>
-                                    <p className="text-red-600">
-                                      {trace.fabricDetail.depletedAt
-                                        ? safeFormat(trace.fabricDetail.depletedAt, 'MMM d, yyyy h:mm a')
-                                        : 'Yes'}
-                                      {trace.fabricDetail.depletedBy ? ` by ${trace.fabricDetail.depletedBy}` : ''}
-                                    </p>
+                                    <span className="text-muted-foreground text-xs">Category</span>
+                                    <p>{mat.inventoryItem.category}</p>
                                   </div>
                                 )}
                               </div>
-                              {trace.fabricDetail.notes && (
-                                <div className="mt-3 pt-2 border-t border-dashed">
-                                  <span className="text-muted-foreground text-xs">Notes</span>
-                                  <p className="text-sm mt-1">{trace.fabricDetail.notes}</p>
+                            )}
+
+                            {mat.capturedValues.length > 0 && (
+                              <div className="bg-muted/50 rounded-md p-3 mb-3">
+                                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Captured Traceability</p>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                                  {mat.capturedValues.map((cv: any, ci: number) => (
+                                    <div key={ci}>
+                                      <span className="text-muted-foreground text-xs">{cv.field}</span>
+                                      <p className="font-mono font-medium">{cv.value}</p>
+                                      {cv.recordedBy && (
+                                        <span className="text-xs text-muted-foreground">by {cv.recordedBy}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {mat.fabricDetails && mat.fabricDetails.length > 0 && mat.fabricDetails.map((fab: any, fi: number) => (
+                              <div key={fi} className="mt-3 pt-3 border-t">
+                                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Inventory Material Details</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                  {fab.fabric && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Fabric Type</span>
+                                      <p className="font-medium">{fab.fabric}</p>
+                                    </div>
+                                  )}
+                                  {fab.nickname && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Nickname</span>
+                                      <p>{fab.nickname}</p>
+                                    </div>
+                                  )}
+                                  {fab.fabricPartNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Fabric Part #</span>
+                                      <p className="font-mono">{fab.fabricPartNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.source && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Source / Manufacturer</span>
+                                      <p>{fab.source}</p>
+                                    </div>
+                                  )}
+                                  {fab.internalControlNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">ICN</span>
+                                      <p className="font-mono font-semibold">{fab.internalControlNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.lotNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Lot #</span>
+                                      <p className="font-mono">{fab.lotNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.rollNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Roll #</span>
+                                      <p className="font-mono">{fab.rollNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.batchNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Batch #</span>
+                                      <p className="font-mono">{fab.batchNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.supplierPartNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Supplier Part #</span>
+                                      <p className="font-mono">{fab.supplierPartNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.supplierPoNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Supplier PO #</span>
+                                      <p className="font-mono">{fab.supplierPoNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.manufacturerPoNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Manufacturer PO #</span>
+                                      <p className="font-mono">{fab.manufacturerPoNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.barcode && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Barcode</span>
+                                      <p className="font-mono">{fab.barcode}</p>
+                                    </div>
+                                  )}
+                                  {fab.manufactureDate && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Manufacture Date</span>
+                                      <p>{safeFormat(fab.manufactureDate, 'MMM d, yyyy')}</p>
+                                    </div>
+                                  )}
+                                  {fab.receivedDate && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Received Date</span>
+                                      <p>{safeFormat(fab.receivedDate, 'MMM d, yyyy')}</p>
+                                    </div>
+                                  )}
+                                  {fab.expirationDate && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Expiration Date</span>
+                                      <p className={isValid(new Date(fab.expirationDate)) && new Date(fab.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
+                                        {safeFormat(fab.expirationDate, 'MMM d, yyyy')}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {fab.location && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Location</span>
+                                      <p>{fab.location}</p>
+                                    </div>
+                                  )}
+                                  {fab.freezerNumber != null && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Freezer #</span>
+                                      <p>{fab.freezerNumber}</p>
+                                    </div>
+                                  )}
+                                  {fab.squareMeters != null && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Square Meters</span>
+                                      <p>{fab.squareMeters}</p>
+                                    </div>
+                                  )}
+                                  {fab.conformanceDocumentLink && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Conformance Document</span>
+                                      <p>
+                                        <a href={fab.conformanceDocumentLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                          View Document
+                                        </a>
+                                      </p>
+                                    </div>
+                                  )}
+                                  {fab.status && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Status</span>
+                                      <Badge variant={fab.status === 'active' ? 'default' : 'destructive'}>
+                                        {fab.status}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                  {(fab.depletedAt || fab.depletedBy) && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">Depleted</span>
+                                      <p className="text-red-600">
+                                        {fab.depletedAt ? safeFormat(fab.depletedAt, 'MMM d, yyyy h:mm a') : 'Yes'}
+                                        {fab.depletedBy ? ` by ${fab.depletedBy}` : ''}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                                {fab.notes && (
+                                  <div className="mt-2 pt-2 border-t border-dashed">
+                                    <span className="text-muted-foreground text-xs">Notes</span>
+                                    <p className="text-sm mt-1">{fab.notes}</p>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+
+                            {mat.capturedValues.length > 0 && (!mat.fabricDetails || mat.fabricDetails.length === 0) && (
+                              <p className="text-xs text-muted-foreground mt-2 italic">
+                                No matching material found in fabric inventory for captured values
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-gray-500 py-8">No materials configured for this routing</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Traceability Records Section (kept as-is) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Traceability Records</CardTitle>
+                    <CardDescription>All traceability entries captured during traveler execution</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {travelerData.traceabilityData && travelerData.traceabilityData.length > 0 ? (
+                      <div className="space-y-4">
+                        {travelerData.traceabilityData.map((trace: any, index: number) => (
+                          <div key={trace.id} data-testid={`row-trace-${index}`} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">{trace.department}</Badge>
+                                <Badge variant="outline">{trace.traceabilityType}</Badge>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {trace.recordedBy} — {safeFormat(trace.createdAt, 'MMM d, yyyy h:mm a')}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                              <div>
+                                <span className="text-muted-foreground text-xs">{trace.traceabilityLabel}</span>
+                                <p className="font-mono font-medium">{trace.traceabilityValue}</p>
+                              </div>
+                              {trace.inventoryPartNumber && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">Part Number</span>
+                                  <p className="font-medium">{trace.inventoryPartNumber}</p>
                                 </div>
                               )}
+                              {trace.inventoryDetail && (
+                                <>
+                                  <div>
+                                    <span className="text-muted-foreground text-xs">Material Name</span>
+                                    <p className="font-medium">{trace.inventoryDetail.name}</p>
+                                  </div>
+                                  {trace.inventoryDetail.agPartNumber && (
+                                    <div>
+                                      <span className="text-muted-foreground text-xs">AG Part #</span>
+                                      <p className="font-mono">{trace.inventoryDetail.agPartNumber}</p>
+                                    </div>
+                                  )}
+                                </>
+                              )}
                             </div>
-                          )}
-                          {!trace.inventoryDetail && !trace.fabricDetail && (
-                            <p className="text-xs text-muted-foreground mt-2 italic">
-                              No matching material found in fabric inventory
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-center text-gray-500 py-8">No traceability records found</p>
-                  )}
-                </CardContent>
-              </Card>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-gray-500 py-8">No traceability records found</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="oven-cures" className="mt-4">

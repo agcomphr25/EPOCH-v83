@@ -154,16 +154,12 @@ export default function CuttingWeeklySchedule() {
       const stockModel = (item.stockModel || '').toLowerCase();
       const isP1PO = item.source === 'P1_PO';
       
-      if (stockModel.includes('mesa') || item.materialType === 'mesa') {
+      // Mesa packets are only for PO orders - regular P1 orders never need mesa packets
+      if (isP1PO && (stockModel.includes('mesa') || item.materialType === 'mesa')) {
         mesa += item.packetsNeeded;
         customerMap[customer].mesa += item.packetsNeeded;
-        if (isP1PO) {
-          oemOrders.mesa += item.packetsNeeded;
-          customerMap[customer].poMesa += item.packetsNeeded;
-        } else {
-          regularOrders.mesa += item.packetsNeeded;
-          customerMap[customer].regMesa += item.packetsNeeded;
-        }
+        oemOrders.mesa += item.packetsNeeded;
+        customerMap[customer].poMesa += item.packetsNeeded;
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
         cf += item.packetsNeeded;
         customerMap[customer].cf += item.packetsNeeded;

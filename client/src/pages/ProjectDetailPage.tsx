@@ -44,7 +44,7 @@ interface ProjectStep {
   id: string;
   stepType: string;
   stepOrder: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped' | 'not_applicable';
   startedAt: string | null;
   completedAt: string | null;
   completedBy: number | null;
@@ -145,6 +145,8 @@ const STEP_STATUS_ICONS: Record<string, typeof Circle> = {
   in_progress: Clock,
   completed: CheckCircle2,
   blocked: AlertCircle,
+  skipped: Circle,
+  not_applicable: Circle,
 };
 
 const STEP_STATUS_COLORS: Record<string, string> = {
@@ -152,6 +154,8 @@ const STEP_STATUS_COLORS: Record<string, string> = {
   in_progress: 'text-blue-500',
   completed: 'text-green-500',
   blocked: 'text-red-500',
+  skipped: 'text-gray-300',
+  not_applicable: 'text-gray-300',
 };
 
 export default function ProjectDetailPage() {
@@ -167,6 +171,8 @@ export default function ProjectDetailPage() {
   const [uploadNotes, setUploadNotes] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [isSkipDialogOpen, setIsSkipDialogOpen] = useState(false);
+  const [skipReason, setSkipReason] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -243,6 +249,46 @@ export default function ProjectDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+    },
+  });
+
+  const startStepMutation = useMutation({
+    mutationFn: async (stepId: string) => {
+      return apiRequest(`/api/projects/${id}/steps/${stepId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'in_progress' }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+    },
+  });
+
+  const skipStepMutation = useMutation({
+    mutationFn: async ({ stepId, reason }: { stepId: string; reason: string }) => {
+      return apiRequest(`/api/projects/${id}/steps/${stepId}/skip`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      setIsSkipDialogOpen(false);
+      setSkipReason('');
+      setSelectedStep(null);
+      toast({ title: 'Step skipped' });
+    },
+  });
+
+  const reopenStepMutation = useMutation({
+    mutationFn: async (stepId: string) => {
+      return apiRequest(`/api/projects/${id}/steps/${stepId}/reopen`, {
+        method: 'PATCH',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      toast({ title: 'Step reopened' });
     },
   });
 
@@ -607,6 +653,18 @@ export default function ProjectDetailPage() {
                                   <CheckCircle2 className="mr-1 h-4 w-4" />
                                   Mark Complete
                                 </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-gray-500"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setSkipReason('');
+                                    setIsSkipDialogOpen(true);
+                                  }}
+                                >
+                                  Skip
+                                </Button>
                               </>
                             )}
                             {step.status === 'completed' && (
@@ -662,23 +720,71 @@ export default function ProjectDetailPage() {
                                       <LinkIcon className="mr-1 h-4 w-4" />
                                       {linkedId ? 'Edit Link' : 'Link'}
                                     </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-amber-600"
+                                      onClick={() => reopenStepMutation.mutate(step.id)}
+                                      disabled={reopenStepMutation.isPending}
+                                    >
+                                      Reopen
+                                    </Button>
                                   </>
                                 )}
                               </>
                             )}
+                            {step.status === 'skipped' && (
+                              <>
+                                <Badge variant="secondary" className="text-gray-500 text-xs">Skipped</Badge>
+                                {isAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-amber-600"
+                                    onClick={() => reopenStepMutation.mutate(step.id)}
+                                    disabled={reopenStepMutation.isPending}
+                                  >
+                                    Reopen
+                                  </Button>
+                                )}
+                              </>
+                            )}
                             {(step.status === 'pending' || step.status === 'blocked') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedStep(step);
-                                  setIsUploadDialogOpen(true);
-                                }}
-                                data-testid={`button-upload-${step.status}-${step.stepType}`}
-                              >
-                                <Upload className="mr-1 h-4 w-4" />
-                                Attach PDF
-                              </Button>
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => startStepMutation.mutate(step.id)}
+                                  disabled={startStepMutation.isPending}
+                                >
+                                  <Clock className="mr-1 h-4 w-4" />
+                                  Start
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setIsUploadDialogOpen(true);
+                                  }}
+                                  data-testid={`button-upload-${step.status}-${step.stepType}`}
+                                >
+                                  <Upload className="mr-1 h-4 w-4" />
+                                  Attach PDF
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-gray-500"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setSkipReason('');
+                                    setIsSkipDialogOpen(true);
+                                  }}
+                                >
+                                  Skip
+                                </Button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -1086,6 +1192,44 @@ export default function ProjectDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSkipDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsSkipDialogOpen(false);
+          setSkipReason('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Skip Step</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Provide a reason for skipping this step. The step can be reopened later if needed.
+            </p>
+            <Textarea
+              placeholder="Reason for skipping..."
+              value={skipReason}
+              onChange={(e) => setSkipReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSkipDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedStep && skipReason.trim()) {
+                  skipStepMutation.mutate({ stepId: selectedStep.id, reason: skipReason.trim() });
+                }
+              }}
+              disabled={!skipReason.trim() || skipStepMutation.isPending}
+            >
+              {skipStepMutation.isPending ? 'Skipping...' : 'Skip Step'}
             </Button>
           </DialogFooter>
         </DialogContent>

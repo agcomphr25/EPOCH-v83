@@ -18,7 +18,7 @@ interface ProjectStep {
   id: string;
   stepType: string;
   stepOrder: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped' | 'not_applicable';
   startedAt: string | null;
   completedAt: string | null;
 }
@@ -92,6 +92,8 @@ const STEP_STATUS_COLORS: Record<string, string> = {
   in_progress: 'bg-blue-500',
   completed: 'bg-green-500',
   blocked: 'bg-red-500',
+  skipped: 'bg-gray-300',
+  not_applicable: 'bg-gray-300',
 };
 
 export default function ProjectsPage() {

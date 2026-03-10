@@ -9625,7 +9625,9 @@ export const projectStepStatusEnum = pgEnum('project_step_status', [
   'pending',
   'in_progress', 
   'completed',
-  'blocked'
+  'blocked',
+  'skipped',
+  'not_applicable'
 ]);
 
 // Project Status Enum

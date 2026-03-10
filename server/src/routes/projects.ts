@@ -45,7 +45,7 @@ const STEP_TO_STAGE_MAP: Record<string, string> = {
 };
 
 const updateStepRequestSchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional(),
+  status: z.enum(['pending', 'in_progress', 'completed', 'blocked', 'not_applicable']).optional(),
   linkedRfqId: z.number().optional().nullable(),
   linkedQuoteId: z.string().optional().nullable(),
   linkedPurchaseReviewId: z.number().optional().nullable(),
@@ -445,21 +445,10 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       return res.status(404).json({ message: 'Step not found' });
     }
     
-    if (status === 'completed' || linkedRfqId !== undefined || linkedQuoteId !== undefined || 
-        linkedPurchaseReviewId !== undefined || linkedPreproductionChecklistId !== undefined || 
-        linkedP2OrderId !== undefined) {
+    if (status === 'completed') {
       if (currentStep.status !== 'in_progress') {
         return res.status(400).json({ 
-          message: 'Cannot modify a step that is not in progress. Complete previous steps first.' 
-        });
-      }
-      
-      const previousSteps = allSteps.filter(s => s.stepOrder < currentStep.stepOrder);
-      const allPreviousCompleted = previousSteps.every(s => s.status === 'completed');
-      
-      if (!allPreviousCompleted) {
-        return res.status(400).json({ 
-          message: 'Cannot complete or link this step. All previous steps must be completed first.' 
+          message: 'Cannot complete a step that is not in progress. Start the step first.' 
         });
       }
     }
@@ -528,10 +517,12 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       const nextStep = allSteps.find(s => s.stepOrder === nextStepIndex + 1);
       
       if (nextStep) {
-        await storage.updateProjectStep(nextStep.id, { 
-          status: 'in_progress',
-          startedAt: new Date(),
-        });
+        if (nextStep.status === 'pending') {
+          await storage.updateProjectStep(nextStep.id, { 
+            status: 'in_progress',
+            startedAt: new Date(),
+          });
+        }
         
         const nextStepInfo = PROJECT_STEP_TYPES.find(s => s.type === nextStep.stepType);
         const completedStage = STEP_TO_STAGE_MAP[step.stepType] || null;
@@ -595,6 +586,95 @@ router.get('/:projectId/activity', async (req, res) => {
   } catch (error) {
     console.error('Error fetching project activity log:', error);
     res.status(500).json({ message: 'Failed to fetch activity log' });
+  }
+});
+
+router.patch('/:projectId/steps/:stepId/skip', async (req, res) => {
+  try {
+    const { projectId, stepId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      return res.status(400).json({ message: 'A skip reason is required' });
+    }
+
+    const allSteps = await storage.getProjectSteps(projectId);
+    const step = allSteps.find(s => s.id === stepId);
+    if (!step) {
+      return res.status(404).json({ message: 'Step not found' });
+    }
+
+    if (step.status === 'completed') {
+      return res.status(400).json({ message: 'Cannot skip a completed step. Reopen it first.' });
+    }
+
+    const existingNotes = step.notes ? `${step.notes}\n` : '';
+    const updatedStep = await storage.updateProjectStep(stepId, {
+      status: 'skipped' as any,
+      completedAt: new Date(),
+      notes: `${existingNotes}[Skipped] ${reason.trim()}`,
+    });
+
+    await storage.createProjectActivityLog({
+      projectId,
+      activityType: 'step_skipped',
+      stepType: step.stepType,
+      description: `${PROJECT_STEP_TYPES.find(s => s.type === step.stepType)?.label || step.stepType} skipped: ${reason.trim()}`,
+    });
+
+    res.json(updatedStep);
+  } catch (error) {
+    console.error('Error skipping project step:', error);
+    res.status(500).json({ message: 'Failed to skip project step' });
+  }
+});
+
+router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
+  try {
+    const { projectId, stepId } = req.params;
+
+    const allSteps = await storage.getProjectSteps(projectId);
+    const step = allSteps.find(s => s.id === stepId);
+    if (!step) {
+      return res.status(404).json({ message: 'Step not found' });
+    }
+
+    if (step.status !== 'completed' && step.status !== 'skipped') {
+      return res.status(400).json({ 
+        message: 'Only completed or skipped steps can be reopened' 
+      });
+    }
+
+    const updatedStep = await storage.updateProjectStep(stepId, {
+      status: 'in_progress' as any,
+      completedAt: null,
+      completedBy: null,
+      completedByDisplayName: null,
+      startedAt: new Date(),
+    });
+
+    const project = await storage.getProject(projectId);
+    if (project && (project.status === 'completed' || project.status === 'won')) {
+      const projectUpdate: any = {
+        status: 'active',
+        currentStepType: step.stepType as any,
+        currentStage: STEP_TO_STAGE_MAP[step.stepType] || project.currentStage,
+        stageUpdatedAt: new Date(),
+      };
+      await storage.updateProject(projectId, projectUpdate);
+    }
+
+    await storage.createProjectActivityLog({
+      projectId,
+      activityType: 'step_reopened',
+      stepType: step.stepType,
+      description: `${PROJECT_STEP_TYPES.find(s => s.type === step.stepType)?.label || step.stepType} reopened`,
+    });
+
+    res.json(updatedStep);
+  } catch (error) {
+    console.error('Error reopening project step:', error);
+    res.status(500).json({ message: 'Failed to reopen project step' });
   }
 });
 

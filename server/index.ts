@@ -1436,7 +1436,20 @@ async function initializeBackgroundServices() {
             AND ps.linked_p2_order_id IS NOT NULL
             AND p.po_id IS NULL
         `);
-        console.log('✅ Ensured projects table has pipeline stage columns');
+        // Add new step status enum values
+        await db.execute(sqlProj`
+          DO $$ BEGIN
+            ALTER TYPE project_step_status ADD VALUE IF NOT EXISTS 'skipped';
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlProj`
+          DO $$ BEGIN
+            ALTER TYPE project_step_status ADD VALUE IF NOT EXISTS 'not_applicable';
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        console.log('✅ Ensured projects table has pipeline stage columns and flexible step statuses');
       } catch (projErr: any) {
         console.warn('⚠️ Projects pipeline migration:', projErr.message);
       }

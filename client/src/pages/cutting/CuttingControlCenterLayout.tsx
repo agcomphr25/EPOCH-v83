@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Route, Switch, Link, useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { 
@@ -9,7 +9,6 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import CuttingBomAssignment from "./CuttingBomAssignment";
 import CuttingWeeklySchedule from "./CuttingWeeklySchedule";
 import CuttingOperatorDashboard from "./CuttingOperatorDashboard";
@@ -119,20 +118,9 @@ export default function CuttingControlCenterLayout() {
           ))}
         </div>
 
-        <Switch>
-          <Route path="/cutting-control-center/bom">
-            <CuttingBomAssignment />
-          </Route>
-          <Route path="/cutting-control-center/schedule">
-            <CuttingWeeklySchedule />
-          </Route>
-          <Route path="/cutting-control-center/dashboard">
-            <CuttingOperatorDashboard />
-          </Route>
-          <Route>
-            <CuttingBomAssignment />
-          </Route>
-        </Switch>
+        {currentTab === "bom" && <CuttingBomAssignment />}
+        {currentTab === "schedule" && <CuttingWeeklySchedule />}
+        {currentTab === "dashboard" && <CuttingOperatorDashboard />}
       </div>
     </div>
   );

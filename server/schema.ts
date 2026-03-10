@@ -4842,6 +4842,26 @@ export const travelerEvents = pgTable('traveler_events', {
   actionIdx: index('traveler_events_action_idx').on(table.action),
 }));
 
+export const travelerAuthorizedNotes = pgTable('traveler_authorized_notes', {
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id', { length: 255 })
+    .references(() => travelers.id, { onDelete: 'cascade' })
+    .notNull(),
+  department: varchar('department', { length: 255 }).notNull(),
+  note: text('note').notNull(),
+  linkedPurchaseOrderId: varchar('linked_purchase_order_id', { length: 255 }),
+  linkedDocumentUrls: jsonb('linked_document_urls').default([]),
+  toleranceChangeAuthorized: boolean('tolerance_change_authorized').default(false),
+  signedBy: varchar('signed_by', { length: 255 }).notNull(),
+  signedByName: varchar('signed_by_name', { length: 255 }).notNull(),
+  signatureRole: varchar('signature_role', { length: 50 }),
+  signatureData: text('signature_data'),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  travelerIdIdx: index('traveler_authorized_notes_traveler_id_idx').on(table.travelerId),
+  departmentIdx: index('traveler_authorized_notes_department_idx').on(table.department),
+}));
+
 // P2 Serialized Item Traceability - Stores scanned/entered traceability data per department
 export const p2SerializedItemTraceability = pgTable('p2_serialized_item_traceability', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -5988,6 +6008,27 @@ export type TravelerSignature = typeof travelerSignatures.$inferSelect;
 
 export type InsertTravelerEvent = z.infer<typeof insertTravelerEventSchema>;
 export type TravelerEvent = typeof travelerEvents.$inferSelect;
+
+export const insertTravelerAuthorizedNoteSchema = createInsertSchema(travelerAuthorizedNotes)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    travelerId: z.string().min(1, 'Traveler ID is required'),
+    department: z.string().min(1, 'Department is required'),
+    note: z.string().min(1, 'Note is required'),
+    signedBy: z.string().min(1, 'Signer ID is required'),
+    signedByName: z.string().min(1, 'Signer name is required'),
+    linkedPurchaseOrderId: z.string().optional().nullable(),
+    linkedDocumentUrls: z.array(z.object({
+      url: z.string().min(1),
+      label: z.string().min(1),
+    })).optional().default([]),
+    toleranceChangeAuthorized: z.boolean().optional().default(false),
+    signatureRole: z.string().optional().nullable(),
+    signatureData: z.string().optional().nullable(),
+  });
+
+export type InsertTravelerAuthorizedNote = z.infer<typeof insertTravelerAuthorizedNoteSchema>;
+export type TravelerAuthorizedNote = typeof travelerAuthorizedNotes.$inferSelect;
 
 export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2SerializedItemTraceabilitySchema>;
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
@@ -8006,6 +8047,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   id: uuid('id').defaultRandom().primaryKey(),
   materialId: uuid('material_id').references(() => cuttingMaterials.id),
   productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id),
   source: text('source'), // Fabric source/manufacturer
   fabric: text('fabric'), // Fabric type/description
   fabricPartNumber: text('fabric_part_number'), // Part number for the fabric type

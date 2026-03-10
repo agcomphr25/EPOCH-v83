@@ -6,6 +6,7 @@ import { DEPARTMENTS } from '../constants/departments';
 import { getQueueIntegrityStatus } from '../services/queueIntegrityService';
 import { validatePipelineState } from '../services/pipelineValidationService';
 import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipelineRepairService';
+import { forecastActiveOrders, forecastOrder } from '../services/productionForecastService';
 
 const router = Router();
 
@@ -1112,6 +1113,47 @@ router.post(
       console.error('Pipeline repair error:', error);
       res.status(500).json({
         error: 'Failed to repair pipeline drift',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.get(
+  '/order-forecast',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await forecastActiveOrders();
+      res.json(result);
+    } catch (error) {
+      console.error('Order forecast error:', error);
+      res.status(500).json({
+        error: 'Failed to generate order forecasts',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.get(
+  '/order-forecast/:orderId',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const result = await forecastOrder(orderId);
+      if (result) {
+        res.json(result);
+      } else {
+        res.status(404).json({ error: 'Order not found or has no remaining stages' });
+      }
+    } catch (error) {
+      console.error('Order forecast error:', error);
+      res.status(500).json({
+        error: 'Failed to forecast order',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }

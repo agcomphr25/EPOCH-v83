@@ -65,6 +65,27 @@ interface ThroughputData {
   generatedAt: string;
 }
 
+interface OrderForecast {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  currentDepartment: string;
+  dueDate: string | null;
+  projectedCompletion: string;
+  remainingDays: number;
+  riskStatus: 'ON_TRACK' | 'AT_RISK' | 'LATE';
+  remainingStages: string[];
+}
+
+interface ForecastData {
+  totalForecasted: number;
+  onTrack: number;
+  atRisk: number;
+  late: number;
+  orders: OrderForecast[];
+  generatedAt: string;
+}
+
 const STANDARD_DAYS: Record<string, number> = {
   'P1 Production Queue': 5,
   'Layup/Plugging': 3,
@@ -154,7 +175,14 @@ export default function ProductionControlTower() {
     staleTime: 60000,
   });
 
-  const isLoading = heatmapLoading || stuckLoading || throughputLoading;
+  const { data: forecast, isLoading: forecastLoading } = useQuery<ForecastData>({
+    queryKey: ['/api/admin/order-forecast', runKey],
+    queryFn: () => apiRequest('/api/admin/order-forecast'),
+    retry: false,
+    staleTime: 60000,
+  });
+
+  const isLoading = heatmapLoading || stuckLoading || throughputLoading || forecastLoading;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -556,6 +584,127 @@ export default function ProductionControlTower() {
               </div>
             )}
           </>
+        )}
+
+        {forecast && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4 text-rose-500" />
+                  Schedule Risk
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Predicted completion vs committed due date · {forecast.totalForecasted} orders forecasted
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+                  <span className="font-semibold text-red-600 dark:text-red-400">{forecast.late}</span> Late
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">{forecast.atRisk}</span> At Risk
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                  <span className="font-semibold text-green-600 dark:text-green-400">{forecast.onTrack}</span> On Track
+                </span>
+              </div>
+            </div>
+            {(forecast.late > 0 || forecast.atRisk > 0) && (
+              <div className="max-h-[400px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50 dark:bg-gray-900/50 z-10">
+                    <tr className="border-b border-gray-100 dark:border-gray-800">
+                      <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Order
+                      </th>
+                      <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Customer
+                      </th>
+                      <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Department
+                      </th>
+                      <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Due Date
+                      </th>
+                      <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Projected
+                      </th>
+                      <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Remaining
+                      </th>
+                      <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Risk
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecast.orders
+                      .filter((o) => o.riskStatus !== 'ON_TRACK')
+                      .sort((a, b) => {
+                        const priority = { LATE: 0, AT_RISK: 1, ON_TRACK: 2 };
+                        return (priority[a.riskStatus] - priority[b.riskStatus]) || b.remainingDays - a.remainingDays;
+                      })
+                      .slice(0, 50)
+                      .map((order) => (
+                        <tr
+                          key={order.orderId}
+                          className={`border-b border-gray-100 dark:border-gray-800 transition-colors ${
+                            order.riskStatus === 'LATE'
+                              ? 'bg-red-50 dark:bg-red-950/20'
+                              : 'bg-amber-50 dark:bg-amber-950/10'
+                          }`}
+                        >
+                          <td className="px-5 py-3">
+                            <span className="font-medium text-gray-800 dark:text-gray-200 font-mono text-xs">
+                              {order.orderNumber}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-gray-600 dark:text-gray-400 truncate max-w-[160px]">
+                            {order.customerName}
+                          </td>
+                          <td className="px-5 py-3 text-gray-700 dark:text-gray-300 text-xs">
+                            {order.currentDepartment}
+                          </td>
+                          <td className="px-5 py-3 text-center text-xs text-gray-500">
+                            {order.dueDate
+                              ? new Date(order.dueDate).toLocaleDateString()
+                              : '—'}
+                          </td>
+                          <td className="px-5 py-3 text-center text-xs">
+                            <span className={order.riskStatus === 'LATE' ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-amber-600 dark:text-amber-400 font-semibold'}>
+                              {new Date(order.projectedCompletion).toLocaleDateString()}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-center tabular-nums text-xs">
+                            <span className="font-semibold text-gray-600 dark:text-gray-400">
+                              {order.remainingDays}d
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-center">
+                            <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded ${
+                              order.riskStatus === 'LATE'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
+                            }`}>
+                              {order.riskStatus === 'LATE' ? 'Late' : 'At Risk'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {forecast.late === 0 && forecast.atRisk === 0 && (
+              <div className="px-5 py-8 text-center text-sm text-green-600 dark:text-green-400">
+                All forecasted orders are currently on track.
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

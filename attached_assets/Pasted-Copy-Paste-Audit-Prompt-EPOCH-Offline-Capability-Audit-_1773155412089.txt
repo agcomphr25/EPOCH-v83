@@ -1,0 +1,246 @@
+Copy-Paste Audit Prompt
+
+(EPOCH Offline Capability Audit)
+
+You are performing a READ-ONLY ARCHITECTURAL AUDIT of the EPOCH codebase.
+
+GOAL
+Determine whether EPOCH can support OFFLINE OPERATION for department operators and what is required to implement it safely.
+
+Offline operation means:
+
+• Department users can continue processing items when internet is down
+• Actions are stored locally
+• When internet returns, changes sync to the server
+• Data conflicts are detected and handled safely
+• No production work is lost
+
+This audit is READ-ONLY.
+Do NOT modify any files.
+
+--------------------------------------------------
+
+PHASE 1 — PWA / Offline Infrastructure Scan
+
+Search the entire repo for evidence of:
+
+• service workers
+• PWA configuration
+• manifest.json
+• Workbox
+• offline caching
+• background sync
+• IndexedDB
+• localStorage persistence
+
+Look for:
+
+serviceWorker.ts
+service-worker.js
+registerServiceWorker
+manifest.json
+workbox
+backgroundSync
+offlineCache
+
+Report:
+
+1. Does the application currently support PWA installation?
+2. Is a service worker implemented?
+3. Are assets cached for offline use?
+4. Are API calls cached or replayed?
+
+--------------------------------------------------
+
+PHASE 2 — Frontend Data Persistence
+
+Audit the frontend for any offline-capable storage.
+
+Search for:
+
+IndexedDB
+Dexie
+localforage
+idb
+localStorage
+sessionStorage
+redux-persist
+react-query persistence
+TanStack Query cache persistence
+
+Identify:
+
+• Any local database usage
+• Any queueing or retry systems
+• Any persistent state storage
+
+Report:
+
+1. Does EPOCH already persist state locally?
+2. Are API mutations stored if requests fail?
+3. Is there a retry mechanism?
+
+--------------------------------------------------
+
+PHASE 3 — API Interaction Pattern
+
+Audit how frontend communicates with backend.
+
+Identify:
+
+• fetch / axios / apiClient calls
+• mutation endpoints
+• order updates
+• production updates
+• status changes
+
+Determine:
+
+1. Are API calls synchronous only?
+2. Are failures handled with retry logic?
+3. Is there a mutation queue system?
+
+--------------------------------------------------
+
+PHASE 4 — Department Workflow Risk Analysis
+
+Identify the main operator actions that must work offline:
+
+Examples to search:
+
+• department status updates
+• move order to next department
+• scan barcode / QR
+• assign work
+• record completion
+• record QC results
+• record shipping events
+• record time tracking
+
+Locate the code paths for these actions.
+
+Report:
+
+1. Which of these operations currently require a live API call?
+2. Which would break if internet drops?
+
+--------------------------------------------------
+
+PHASE 5 — Sync Safety
+
+If offline actions are stored locally and synced later, conflicts may occur.
+
+Analyze whether EPOCH currently supports:
+
+• optimistic updates
+• record versioning
+• timestamps
+• last-write-wins
+• merge logic
+
+Search for:
+
+updated_at
+version
+etag
+optimistic update
+conflict
+
+Report:
+
+Does the system have a way to detect conflicting updates?
+
+--------------------------------------------------
+
+PHASE 6 — Data Model Readiness
+
+Offline systems require certain schema patterns.
+
+Check if core tables include:
+
+updated_at
+created_at
+version
+change_log
+event tables
+
+Look especially at:
+
+orders
+production_orders
+department_status
+inventory
+time_entries
+shipping_events
+
+Determine whether the database structure could support event replay.
+
+--------------------------------------------------
+
+PHASE 7 — Infrastructure Compatibility
+
+Determine if the current stack supports offline-first architecture.
+
+Inspect:
+
+Frontend framework
+State management
+API structure
+Authentication system
+
+Determine if:
+
+• token refresh would work offline
+• offline actions could be replayed safely
+• authentication expires during outages
+
+--------------------------------------------------
+
+PHASE 8 — Recommended Architecture
+
+Based on the audit, propose the safest architecture for EPOCH offline operation.
+
+Evaluate:
+
+Option A — Simple retry queue  
+Option B — Local mutation queue + sync  
+Option C — Full offline-first architecture
+
+Explain:
+
+• best option for a manufacturing floor
+• complexity
+• implementation effort
+
+--------------------------------------------------
+
+PHASE 9 — Implementation Blueprint
+
+Provide a step-by-step implementation plan including:
+
+1. Service Worker layer
+2. Local database (IndexedDB)
+3. Mutation queue
+4. Sync engine
+5. Conflict resolution rules
+6. UI indicators for offline state
+7. Admin reconciliation tools
+
+--------------------------------------------------
+
+OUTPUT FORMAT
+
+Produce a structured report:
+
+EPOCH OFFLINE CAPABILITY AUDIT
+
+1. Current Offline Support
+2. Existing Infrastructure
+3. Critical Gaps
+4. Risk Analysis
+5. Recommended Architecture
+6. Implementation Plan
+7. Estimated Complexity (Low / Medium / High)
+
+Do not modify any files.
+Only audit and report.

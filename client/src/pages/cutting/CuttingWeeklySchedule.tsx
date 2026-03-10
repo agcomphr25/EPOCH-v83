@@ -30,6 +30,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   Calendar,
   Scissors,
@@ -45,6 +54,7 @@ import {
   Package,
   Layers,
   Trash2,
+  PlusCircle,
 } from "lucide-react";
 
 type WeeklyCuttingQueueItem = {
@@ -93,6 +103,12 @@ export default function CuttingWeeklySchedule() {
   const [currentWeek] = useState(getMondayOfWeek(new Date()));
   const [scheduleQuantities, setScheduleQuantities] = useState<Record<string, number>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ p1: true, p2: true });
+  const [customDemand, setCustomDemand] = useState({
+    poNumber: '',
+    packetType: '',
+    quantity: '',
+    notes: '',
+  });
 
   const { data: weeklyQueueData, isLoading, refetch } = useQuery<{
     items: WeeklyCuttingQueueItem[];
@@ -288,6 +304,64 @@ export default function CuttingWeeklySchedule() {
       toast({ title: "Error", description: error?.message || "Failed to unschedule packet.", variant: "destructive" });
     },
   });
+
+  const customDemandMutation = useMutation({
+    mutationFn: async (data: { poNumber: string; packetType: string; quantity: number; notes: string }) => {
+      const materialTypeMap: Record<string, string> = {
+        'Carbon Fiber Packet': 'carbon_fiber',
+        'Fiberglass Packet': 'fiberglass',
+        'Mesa Packet': 'mesa',
+      };
+      const materialType = materialTypeMap[data.packetType] || 'unknown';
+      const description = data.poNumber
+        ? `PO ${data.poNumber} - ${data.packetType}${data.notes ? ' - ' + data.notes : ''}`
+        : `${data.packetType}${data.notes ? ' - ' + data.notes : ''}`;
+
+      return apiRequest('/api/cutting-table/schedule-to-cutting', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId: data.poNumber || `CUSTOM-${Date.now()}`,
+          bomId: 'generic-p2-packet',
+          quantity: data.quantity,
+          priority: 50,
+          dueDate: new Date(currentWeek).toISOString(),
+          source: 'MANUAL',
+          materialType,
+          packetName: data.packetType,
+          notes: description,
+        }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      setCustomDemand({ poNumber: '', packetType: '', quantity: '', notes: '' });
+      toast({
+        title: "Packets Scheduled",
+        description: `${variables.quantity} ${variables.packetType} packets added to cutting queue${variables.poNumber ? ` for PO ${variables.poNumber}` : ''}.`,
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to schedule custom packets.", variant: "destructive" });
+    },
+  });
+
+  const handleCustomDemandSubmit = () => {
+    const qty = parseInt(customDemand.quantity) || 0;
+    if (qty <= 0) {
+      toast({ title: "Invalid Quantity", description: "Enter a quantity greater than 0.", variant: "destructive" });
+      return;
+    }
+    if (!customDemand.packetType) {
+      toast({ title: "Select Packet Type", description: "Choose a packet type before scheduling.", variant: "destructive" });
+      return;
+    }
+    customDemandMutation.mutate({
+      poNumber: customDemand.poNumber.trim(),
+      packetType: customDemand.packetType,
+      quantity: qty,
+      notes: customDemand.notes.trim(),
+    });
+  };
 
   const updateQuantity = (key: string, delta: number) => {
     setScheduleQuantities(prev => ({
@@ -665,6 +739,78 @@ export default function CuttingWeeklySchedule() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <PlusCircle className="h-5 w-5" />
+            <CardTitle>Add Custom Packet Demand</CardTitle>
+          </div>
+          <CardDescription>
+            Manually schedule packets for POs not shown above, or for future POs you want to start early
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="custom-po">PO Number (optional)</Label>
+              <Input
+                id="custom-po"
+                placeholder="e.g. PO-1234"
+                value={customDemand.poNumber}
+                onChange={(e) => setCustomDemand(prev => ({ ...prev, poNumber: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-packet-type">Packet Type</Label>
+              <Select
+                value={customDemand.packetType}
+                onValueChange={(value) => setCustomDemand(prev => ({ ...prev, packetType: value }))}
+              >
+                <SelectTrigger id="custom-packet-type">
+                  <SelectValue placeholder="Select type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Carbon Fiber Packet">Carbon Fiber Packet</SelectItem>
+                  <SelectItem value="Fiberglass Packet">Fiberglass Packet</SelectItem>
+                  <SelectItem value="Mesa Packet">Mesa Packet</SelectItem>
+                  <SelectItem value="Disruptor Packet">Disruptor Packet</SelectItem>
+                  <SelectItem value="Antenna Cover Packet">Antenna Cover Packet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-qty">Quantity</Label>
+              <Input
+                id="custom-qty"
+                type="number"
+                min="1"
+                placeholder="# of packets"
+                value={customDemand.quantity}
+                onChange={(e) => setCustomDemand(prev => ({ ...prev, quantity: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-notes">Notes (optional)</Label>
+              <Input
+                id="custom-notes"
+                placeholder="e.g. Customer request, early start"
+                value={customDemand.notes}
+                onChange={(e) => setCustomDemand(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button
+              onClick={handleCustomDemandSubmit}
+              disabled={customDemandMutation.isPending || !customDemand.packetType || !customDemand.quantity}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {customDemandMutation.isPending ? 'Scheduling...' : 'Add to Cutting Queue'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

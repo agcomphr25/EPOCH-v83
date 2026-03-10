@@ -1,0 +1,178 @@
+Here Is the Prompt You Should Run Next
+
+Paste this into your agent to begin PCC implementation.
+
+COPY-PASTE IMPLEMENTATION PROMPT
+
+We are implementing a new Production Control Center dashboard.
+
+The existing architecture includes:
+
+DashboardGrid
+WidgetRenderer
+widgetRegistry
+dashboardLayouts.ts
+MetricStatWidget
+Recharts chart system
+metricsService snapshot API
+
+Your task is to implement the new PCC widgets.
+
+Do not modify existing architecture unless necessary.
+
+PHASE 1 — Create Hero Metric Widget
+
+Create HeroMetricWidget.tsx.
+
+Features:
+
+- large KPI display
+- progress bar
+- trend arrow
+- optional subtitle
+- supports metricSlug prop
+- styled using existing Card component
+
+Use MetricStatWidget as reference.
+
+Register widget type:
+
+hero_metric
+
+---
+
+PHASE 2 — Shipment Trend Widget
+
+Create ShipmentTrendWidget.tsx.
+
+Use Recharts ComposedChart.
+
+Display:
+
+- weekly shipment bars
+- 4-week moving average line overlay
+
+Data source:
+
+/api/shipping/stats
+
+Register widget type:
+
+shipment_trend
+
+---
+
+PHASE 3 — Bubble Chart Widget
+
+Create BubbleChartWidget.tsx.
+
+Use Recharts ScatterChart.
+
+Axes:
+
+x = weekly shipments
+y = margin
+z = bubble size
+
+Data source:
+
+product mix metrics.
+
+Register widget type:
+
+bubble_chart
+
+---
+
+PHASE 4 — Kit Progress Widget
+
+Create KitProgressWidget.tsx.
+
+Display:
+
+Kit name
+bottleneck step
+progress bar
+
+Logic:
+
+kit_progress = MIN(component_progress)
+
+Register widget type:
+
+kit_progress
+
+---
+
+PHASE 5 — Signal Card Widget
+
+Create SignalCardWidget.tsx.
+
+Inputs:
+
+title
+value
+threshold rules
+
+Outputs:
+
+green / yellow / red styling.
+
+Register widget type:
+
+signal_card
+
+---
+
+PHASE 6 — Swim Lane Preview Widget
+
+Create SwimLanePreviewWidget.tsx.
+
+Display:
+
+pipeline stages
+counts per stage
+
+Click → open Sheet with full board.
+
+Register widget type:
+
+swim_lane_preview
+
+---
+
+PHASE 7 — PCC Layout
+
+Add new layout:
+
+PCC_LAYOUT
+
+to dashboardLayouts.ts.
+
+Include:
+
+hero stocks shipped card
+metric row
+bubble chart
+shipment trend
+kit progress
+swim lane preview
+signal cards.
+
+---
+
+PHASE 8 — PCC Page
+
+Create:
+
+ProductionControlCenter.tsx
+
+Render DashboardGrid with PCC_LAYOUT.
+
+---
+
+Produce a summary of:
+
+files created
+widgets registered
+metrics used

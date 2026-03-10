@@ -1,0 +1,276 @@
+Copy-Paste Audit Prompt (Dashboard Architecture)
+
+Paste this directly into your agent.
+
+PROMPT START
+
+You are conducting a read-only architectural audit of the dashboard system in this codebase.
+
+Your goal is to determine:
+
+How the current dashboard is implemented
+
+What charting and layout systems exist
+
+What components can be reused
+
+What must be built to support a new Production Control Center dashboard
+
+Do NOT modify code.
+Only inspect and report.
+
+Run the audit in the phases below.
+
+Phase 1 — Locate Dashboard Entry Points
+
+Search the entire repository for:
+
+Dashboard
+
+dashboard
+
+control center
+
+home
+
+overview
+
+metrics
+
+analytics
+
+Identify:
+
+• main dashboard pages
+• routes that load dashboards
+• layout containers
+• widget/card components
+
+Produce a table:
+
+Component / Page
+File Path
+Purpose
+Route
+Phase 2 — Identify Widget/Card System
+
+Search for reusable components such as:
+
+Card
+
+Widget
+
+MetricCard
+
+DashboardCard
+
+Panel
+
+Tile
+
+For each component report:
+
+Component Name
+File Path
+Props accepted
+Usage locations
+
+Determine whether the system already supports:
+
+reusable widgets
+
+dynamic content
+
+configurable cards
+
+Phase 3 — Identify Chart Libraries
+
+Search the project for chart libraries:
+
+Possible ones include:
+
+Recharts
+
+Chart.js
+
+Nivo
+
+ECharts
+
+D3
+
+Victory
+
+ApexCharts
+
+Report:
+
+Library
+Files using it
+Chart types implemented
+
+Also identify whether the codebase already supports:
+
+bar charts
+
+line charts
+
+radar charts
+
+donut charts
+
+bubble charts
+
+Note which chart type would support:
+
+Product mix bubble chart
+4-week moving average overlay
+Phase 4 — Inspect Layout System
+
+Determine how the dashboard layout is currently handled.
+
+Search for:
+
+Grid
+
+Layout
+
+react-grid-layout
+
+flex grid
+
+masonry
+
+dashboard layout
+
+Determine:
+
+Is the layout static or dynamic?
+Are cards draggable?
+Can cards be resized?
+
+Report if a grid layout system exists that would support drag-and-drop dashboards.
+
+Phase 5 — Identify Data Sources
+
+Search for queries or services used by the dashboard.
+
+Look for:
+
+shipments
+
+orders
+
+scrap
+
+revenue
+
+satisfaction
+
+metrics
+
+Map each dashboard metric to:
+
+Data Source
+API Route
+Database Table
+
+Example output:
+
+Stocks Shipped
+API: /api/shipments/weekly
+Table: shipments
+Phase 6 — Inspect Global Filters
+
+Search the codebase for:
+
+time filters
+date ranges
+context selectors
+
+Look for components handling:
+
+MTD
+YTD
+weekly metrics
+
+Determine if a global filter system already exists.
+
+Phase 7 — Identify Expand / Modal Patterns
+
+Search for UI patterns supporting:
+
+modal
+drawer
+expand panel
+overlay
+
+These will be needed for:
+
+Swim lane expansion
+Widget drilldown
+
+Report reusable components.
+
+Phase 8 — Identify Search and Command Systems
+
+Confirm existing implementation of:
+
+Ctrl+E global search
+
+Determine:
+
+Search component
+Search data sources
+Search UI implementation
+
+Then identify whether the architecture could support a command palette.
+
+Phase 9 — Produce a Dashboard Capability Report
+
+Summarize findings under these sections:
+
+Existing Dashboard Architecture
+Reusable Components
+Charting Capabilities
+Layout System
+Data Sources
+Filter System
+Search System
+Missing Capabilities
+Phase 10 — Gap Analysis for New PCC Dashboard
+
+Determine what must be built to support:
+
+Hero metric card
+Card flip interaction
+Bubble chart widget
+Kit progress widget
+Weekly shipment trend with moving average
+Signal cards
+Swim lane preview card
+Drag-and-drop dashboard layout
+
+List:
+
+Reusable
+Needs modification
+Needs new component
+Phase 11 — Recommended Implementation Plan
+
+Produce a step-by-step build plan for implementing the new dashboard.
+
+Break it into tasks:
+
+Task ID
+Component
+File to create or modify
+Purpose
+
+End the report with:
+
+Summary of what already exists
+Summary of what must be built
+Estimated complexity of implementing the PCC dashboard
+
+PROMPT END

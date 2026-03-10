@@ -1,9 +1,15 @@
-import { ComponentType, lazy } from 'react';
+import { ComponentType } from 'react';
 
 // ─── Widget Type IDs ──────────────────────────────────────────────────────────
 export type WidgetTypeId =
   | 'metric_stat'
-  | 'metric_stat_group';
+  | 'metric_stat_group'
+  | 'hero_metric'
+  | 'shipment_trend'
+  | 'bubble_chart'
+  | 'kit_progress'
+  | 'signal_card'
+  | 'swim_lane_preview';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -57,6 +63,12 @@ export function getWidgetsByCategory(
 // Import synchronously so the registry is populated before any renderer runs.
 import MetricStatWidget from '@/components/widgets/MetricStatWidget';
 import MetricStatGroup from '@/components/widgets/MetricStatGroup';
+import HeroMetricWidget from '@/components/widgets/HeroMetricWidget';
+import ShipmentTrendWidget from '@/components/widgets/ShipmentTrendWidget';
+import BubbleChartWidget from '@/components/widgets/BubbleChartWidget';
+import KitProgressWidget from '@/components/widgets/KitProgressWidget';
+import SignalCardWidget from '@/components/widgets/SignalCardWidget';
+import SwimLanePreviewWidget from '@/components/widgets/SwimLanePreviewWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -76,4 +88,64 @@ registerWidget({
   component: MetricStatGroup as ComponentType<Record<string, unknown>>,
   requiredProps: ['slugs'],
   defaultProps: { label: '' },
+});
+
+registerWidget({
+  id: 'hero_metric',
+  displayName: 'Hero Metric Card',
+  description: 'Large-format KPI card with progress bar, trend arrow, and accent color.',
+  category: 'metric',
+  component: HeroMetricWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: ['metricSlug'],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'shipment_trend',
+  displayName: 'Shipment Trend Chart',
+  description: 'Weekly shipment bar chart with 4-week moving average line overlay.',
+  category: 'chart',
+  component: ShipmentTrendWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: { weeks: 8 },
+});
+
+registerWidget({
+  id: 'bubble_chart',
+  displayName: 'Product Mix Bubble Chart',
+  description: 'Scatter/bubble chart showing product mix by shipments, margin, and volume.',
+  category: 'chart',
+  component: BubbleChartWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'kit_progress',
+  displayName: 'Kit Progress Tracker',
+  description: 'BOM/kit completion tracker with progress bars and bottleneck identification.',
+  category: 'status',
+  component: KitProgressWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'signal_card',
+  displayName: 'Signal Card',
+  description: 'Conditionally styled alert card (green/yellow/red) based on threshold rules.',
+  category: 'status',
+  component: SignalCardWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: ['metricSlug'],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'swim_lane_preview',
+  displayName: 'Swim Lane Preview',
+  description: 'Compact production pipeline visualization with expandable detail sheet.',
+  category: 'status',
+  component: SwimLanePreviewWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
 });

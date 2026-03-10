@@ -154,6 +154,7 @@ import emailTemplatesRoutes from './emailTemplates';
 import signOrderSettingsRoutes from './signOrderSettings';
 import arInvoicesRoutes from './arInvoices';
 import arPaymentsRoutes from './arPayments';
+import offlineReplayRoutes from './offlineReplay';
 
 export function registerRoutes(app: Express): Server {
   // Temporary debug route - raw order data inspector
@@ -611,6 +612,9 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/material-intelligence', materialIntelligenceRoutes);
   app.use('/api/ar-invoices', arInvoicesRoutes);
   app.use('/api/ar-payments', arPaymentsRoutes);
+
+  // Offline mutation replay endpoint
+  app.use('/api/offline', offlineReplayRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

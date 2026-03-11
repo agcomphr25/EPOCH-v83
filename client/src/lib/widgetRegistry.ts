@@ -208,6 +208,11 @@ registerWidget({
   description: 'Month-to-date revenue summary with phone vs online breakdown.',
   category: 'metric',
   component: PaymentAnalyticsWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
   id: 'forecast_accuracy',
   displayName: 'Forecast Accuracy',
   description: 'Shows forecast vs. actual completion accuracy with error metrics and trend breakdown.',

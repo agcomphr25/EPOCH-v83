@@ -49,13 +49,13 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
     },
 
     {
-      id: 'department_metrics',
-      title: 'Department Status',
+      id: 'project_pipeline',
+      title: 'Project Pipeline',
       columns: 1,
       widgets: [
         {
-          id: 'pcc-department-status',
-          type: 'department_status',
+          id: 'pcc-pipeline-board',
+          type: 'pipeline_board',
           props: {},
           colSpan: 'col-span-1',
         },

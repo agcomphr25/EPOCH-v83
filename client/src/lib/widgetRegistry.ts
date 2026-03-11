@@ -11,7 +11,8 @@ export type WidgetTypeId =
   | 'kit_progress'
   | 'signal_card'
   | 'swim_lane_preview'
-  | 'capability_radar';
+  | 'capability_radar'
+  | 'pipeline_board';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -73,6 +74,7 @@ import SignalCardWidget from '@/components/widgets/SignalCardWidget';
 import SwimLanePreviewWidget from '@/components/widgets/SwimLanePreviewWidget';
 import CapabilityRadarWidget from '@/components/widgets/CapabilityRadarWidget';
 import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget';
+import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -170,6 +172,16 @@ registerWidget({
   description: 'Consolidated table of all department queues with sparkline trends.',
   category: 'table',
   component: DepartmentStatusWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'pipeline_board',
+  displayName: 'Project Pipeline',
+  description: 'Compact kanban view of the P2 project pipeline across all stages.',
+  category: 'status',
+  component: PipelineBoardWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

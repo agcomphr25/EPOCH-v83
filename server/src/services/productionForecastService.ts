@@ -412,6 +412,11 @@ export async function forecastActiveOrders(): Promise<ForecastSummary & { simula
       });
     }
 
+    try {
+      const { stampForecastOnOrders } = await import('./forecastAccuracyService');
+      stampForecastOnOrders().catch(() => {});
+    } catch {}
+
     return {
       totalForecasted: orders.length,
       onTrack,

@@ -1098,6 +1098,16 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Self-learning cycle time tables migration:', mdsErr.message);
       }
 
+      try {
+        const { sql: sqlFat } = await import('drizzle-orm');
+        await db.execute(sqlFat`ALTER TABLE all_orders ADD COLUMN IF NOT EXISTS forecast_completion_date TIMESTAMP`);
+        await db.execute(sqlFat`ALTER TABLE all_orders ADD COLUMN IF NOT EXISTS actual_completion_date TIMESTAMP`);
+        await db.execute(sqlFat`ALTER TABLE all_orders ADD COLUMN IF NOT EXISTS forecast_error_days REAL`);
+        console.log('✅ Ensured forecast accuracy tracking columns exist');
+      } catch (fatErr: any) {
+        console.warn('⚠️ Forecast accuracy columns migration:', fatErr.message);
+      }
+
       // Ensure address validation columns exist on customer_addresses and vendors
       try {
         const { sql: sqlAddr } = await import('drizzle-orm');

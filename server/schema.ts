@@ -151,6 +151,10 @@ export const allOrders = pgTable('all_orders', {
   notificationSentAt: timestamp('notification_sent_at'),
   deliveryConfirmed: boolean('delivery_confirmed').default(false),
   deliveryConfirmedAt: timestamp('delivery_confirmed_at'),
+  // Forecast Accuracy Tracking
+  forecastCompletionDate: timestamp('forecast_completion_date'),
+  actualCompletionDate: timestamp('actual_completion_date'),
+  forecastErrorDays: real('forecast_error_days'),
   // Cancellation Information
   isCancelled: boolean('is_cancelled').default(false),
   cancelledAt: timestamp('cancelled_at'),

@@ -1274,6 +1274,38 @@ router.get(
   }
 );
 
+router.get(
+  '/forecast-accuracy',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { getForecastAccuracy } = await import('../services/forecastAccuracyService');
+      const metrics = await getForecastAccuracy();
+      res.json(metrics);
+    } catch (error) {
+      console.error('Forecast accuracy error:', error);
+      res.status(500).json({ error: 'Failed to get forecast accuracy' });
+    }
+  }
+);
+
+router.post(
+  '/forecast-accuracy/stamp',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { stampForecastOnOrders } = await import('../services/forecastAccuracyService');
+      const count = await stampForecastOnOrders();
+      res.json({ stamped: count });
+    } catch (error) {
+      console.error('Forecast stamp error:', error);
+      res.status(500).json({ error: 'Failed to stamp forecasts' });
+    }
+  }
+);
+
 router.post(
   '/cycle-time-learning/rebuild',
   authenticateToken,

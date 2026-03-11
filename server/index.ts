@@ -546,18 +546,44 @@ async function initializeBackgroundServices() {
           )
         `);
 
-        // Add missing columns to cutting_built_packets
-        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES cutting_packet_sessions(id) ON DELETE SET NULL`);
+        // Create cutting_built_packets if it doesn't exist
+        await db.execute(sqlCpT`
+          CREATE TABLE IF NOT EXISTS cutting_built_packets (
+            id SERIAL PRIMARY KEY,
+            session_id UUID,
+            product_category_id UUID NOT NULL REFERENCES cutting_product_categories(id),
+            barcode TEXT NOT NULL UNIQUE,
+            packet_number INTEGER NOT NULL,
+            build_date TIMESTAMP NOT NULL DEFAULT NOW(),
+            status TEXT NOT NULL DEFAULT 'AVAILABLE',
+            allocated_to_order TEXT,
+            consumed_at TIMESTAMP,
+            consumed_by TEXT,
+            is_mixed_fabric BOOLEAN DEFAULT FALSE,
+            fabric_source_count INTEGER DEFAULT 1,
+            notes TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+
+        // Add missing columns to cutting_built_packets (for tables created before these columns existed)
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS session_id UUID`);
         await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS is_mixed_fabric BOOLEAN DEFAULT FALSE`);
         await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS fabric_source_count INTEGER DEFAULT 1`);
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS allocated_to_order TEXT`);
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMP`);
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS consumed_by TEXT`);
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
 
         // Create cutting_built_packet_fabric_sources if it doesn't exist
         await db.execute(sqlCpT`
           CREATE TABLE IF NOT EXISTS cutting_built_packet_fabric_sources (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            built_packet_id UUID NOT NULL REFERENCES cutting_built_packets(id) ON DELETE CASCADE,
+            id SERIAL PRIMARY KEY,
+            built_packet_id INTEGER NOT NULL REFERENCES cutting_built_packets(id) ON DELETE CASCADE,
             fabric_inventory_id UUID REFERENCES cutting_fabric_inventory(id),
-            component_id UUID REFERENCES cutting_components(id),
+            component_id UUID,
             fabric_type TEXT,
             lot_number TEXT,
             batch_number TEXT,

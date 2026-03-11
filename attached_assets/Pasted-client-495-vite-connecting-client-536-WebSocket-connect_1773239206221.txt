@@ -1,0 +1,152 @@
+client:495 [vite] connecting...
+client:536 WebSocket connection to 'wss://81da5235-3506-43c9-b5a0-9f24aea90b97-00-11xbhy7ilmi86.riker.replit.dev/?token=z3htzYN9Fh65' failed: 
+setupWebSocket @ client:536
+(anonymous) @ client:531
+client:536 Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=z3htzYN9Fh65' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+setupWebSocket @ client:536
+fallback @ client:509
+(anonymous) @ client:555
+chunk-NFC5BX5N.js?v=9f62c624:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+main.tsx:67 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+main.tsx:68 React hooks: {useState: ƒ, useEffect: ƒ}
+syncEngine.ts:98 [EPOCH SYNC] Sync engine starting
+syncEngine.ts:112 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+App.tsx:341 App component is rendering...
+App.tsx:342 Environment: development
+App.tsx:343 Base URL: /
+App.tsx:341 App component is rendering...
+App.tsx:342 Environment: development
+App.tsx:343 Base URL: /
+useCameraScanner.ts:46 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+useCameraScanner.ts:46 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+pwa.ts:30 [EPOCH] Install prompt captured and ready
+dashboard:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+chunk-NFC5BX5N.js?v=9f62c624:18625 [Violation] 'setTimeout' handler took 107ms
+queryClient.ts:59 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 120000ms, deployment: false)
+queryClient.ts:110  POST https://81da5235-3506-43c9-b5a0-9f24aea90b97-00-11xbhy7ilmi86.riker.replit.dev/api/cutting-table-mfg-queue/scan-start 404 (Not Found)
+apiRequest @ queryClient.ts:110
+mutationFn @ CuttingOperatorDashboard.tsx:570
+fn @ @tanstack_react-query.js?v=9f62c624:1234
+run @ @tanstack_react-query.js?v=9f62c624:507
+start @ @tanstack_react-query.js?v=9f62c624:550
+execute @ @tanstack_react-query.js?v=9f62c624:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=9f62c624:2692
+(anonymous) @ @tanstack_react-query.js?v=9f62c624:3415
+handlePacketScan @ CuttingOperatorDashboard.tsx:664
+onChange @ CuttingOperatorDashboard.tsx:1185
+onChange @ BarcodeInputField.tsx:133
+callCallback2 @ chunk-NFC5BX5N.js?v=9f62c624:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=9f62c624:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=9f62c624:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=9f62c624:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=9f62c624:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=9f62c624:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=9f62c624:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=9f62c624:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=9f62c624:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=9f62c624:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=9f62c624:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=9f62c624:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=9f62c624:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=9f62c624:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=9f62c624:5449
+queryClient.ts:112 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 404
+main.tsx:35 API error raw body: {"error":"Cutting table queue item not found"}
+console.error @ main.tsx:35
+apiRequest @ queryClient.ts:116
+await in apiRequest
+mutationFn @ CuttingOperatorDashboard.tsx:570
+fn @ @tanstack_react-query.js?v=9f62c624:1234
+run @ @tanstack_react-query.js?v=9f62c624:507
+start @ @tanstack_react-query.js?v=9f62c624:550
+execute @ @tanstack_react-query.js?v=9f62c624:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=9f62c624:2692
+(anonymous) @ @tanstack_react-query.js?v=9f62c624:3415
+handlePacketScan @ CuttingOperatorDashboard.tsx:664
+onChange @ CuttingOperatorDashboard.tsx:1185
+onChange @ BarcodeInputField.tsx:133
+callCallback2 @ chunk-NFC5BX5N.js?v=9f62c624:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=9f62c624:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=9f62c624:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=9f62c624:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=9f62c624:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=9f62c624:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=9f62c624:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=9f62c624:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=9f62c624:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=9f62c624:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=9f62c624:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=9f62c624:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=9f62c624:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=9f62c624:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=9f62c624:5449
+main.tsx:35 💥 API Request failed for /api/cutting-table-mfg-queue/scan-start: Error: Cutting table queue item not found
+    at apiRequest (queryClient.ts:145:24)
+console.error @ main.tsx:35
+apiRequest @ queryClient.ts:170
+await in apiRequest
+mutationFn @ CuttingOperatorDashboard.tsx:570
+fn @ @tanstack_react-query.js?v=9f62c624:1234
+run @ @tanstack_react-query.js?v=9f62c624:507
+start @ @tanstack_react-query.js?v=9f62c624:550
+execute @ @tanstack_react-query.js?v=9f62c624:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=9f62c624:2692
+(anonymous) @ @tanstack_react-query.js?v=9f62c624:3415
+handlePacketScan @ CuttingOperatorDashboard.tsx:664
+onChange @ CuttingOperatorDashboard.tsx:1185
+onChange @ BarcodeInputField.tsx:133
+callCallback2 @ chunk-NFC5BX5N.js?v=9f62c624:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=9f62c624:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=9f62c624:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=9f62c624:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=9f62c624:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=9f62c624:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=9f62c624:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=9f62c624:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=9f62c624:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=9f62c624:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=9f62c624:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=9f62c624:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=9f62c624:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=9f62c624:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=9f62c624:5449
+queryClient.ts:59 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 120000ms, deployment: false)
+queryClient.ts:112 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 200
+useCameraScanner.ts:46 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+CuttingOperatorDashboard.tsx:589  POST https://81da5235-3506-43c9-b5a0-9f24aea90b97-00-11xbhy7ilmi86.riker.replit.dev/api/cutting-table-mfg-queue/21/validate-material 404 (Not Found)
+mutationFn @ CuttingOperatorDashboard.tsx:589
+fn @ @tanstack_react-query.js?v=9f62c624:1234
+run @ @tanstack_react-query.js?v=9f62c624:507
+start @ @tanstack_react-query.js?v=9f62c624:550
+execute @ @tanstack_react-query.js?v=9f62c624:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=9f62c624:2692
+(anonymous) @ @tanstack_react-query.js?v=9f62c624:3415
+handleMaterialScan @ CuttingOperatorDashboard.tsx:670
+(anonymous) @ CuttingOperatorDashboard.tsx:684
+setTimeout
+(anonymous) @ CuttingOperatorDashboard.tsx:683
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=9f62c624:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=9f62c624:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=9f62c624:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=9f62c624:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=9f62c624:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=9f62c624:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=9f62c624:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=9f62c624:19416
+commitRoot @ chunk-NFC5BX5N.js?v=9f62c624:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=9f62c624:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=9f62c624:9119
+flushSync @ chunk-NFC5BX5N.js?v=9f62c624:18959
+finishEventHandler @ chunk-NFC5BX5N.js?v=9f62c624:3569
+batchedUpdates @ chunk-NFC5BX5N.js?v=9f62c624:3582
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=9f62c624:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=9f62c624:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=9f62c624:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=9f62c624:5449

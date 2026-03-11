@@ -650,9 +650,12 @@ export default function CuttingOperatorDashboard() {
       setMaterialScanBarcode("");
     },
     onError: (error: any) => {
+      const errorMsg = error?.status === 404 
+        ? `Roll not found in inventory. Scanned: ${error?.scannedBarcode || materialScanBarcode}` 
+        : (error?.error || 'This material does not match the BOM requirements for this packet.');
       toast({
-        title: 'Material Rejected',
-        description: error?.error || 'This material does not match the BOM requirements for this packet.',
+        title: error?.status === 404 ? 'Roll Not Found' : 'Material Rejected',
+        description: errorMsg,
         variant: 'destructive',
       });
       setMaterialScanBarcode("");
@@ -673,7 +676,28 @@ export default function CuttingOperatorDashboard() {
     });
   };
 
+  const packetScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSubmittedPacketRef = useRef<string>("");
+  useEffect(() => {
+    if (packetScanTimerRef.current) {
+      clearTimeout(packetScanTimerRef.current);
+      packetScanTimerRef.current = null;
+    }
+    if (packetScanBarcode && packetScanBarcode.length > 5 && packetScanBarcode.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(packetScanBarcode)) {
+      packetScanTimerRef.current = setTimeout(() => {
+        if (packetScanBarcode !== lastSubmittedPacketRef.current) {
+          lastSubmittedPacketRef.current = packetScanBarcode;
+          handlePacketScan(packetScanBarcode);
+        }
+      }, 400);
+    }
+    return () => {
+      if (packetScanTimerRef.current) clearTimeout(packetScanTimerRef.current);
+    };
+  }, [packetScanBarcode]);
+
   const materialScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSubmittedMaterialRef = useRef<string>("");
   useEffect(() => {
     if (materialScanTimerRef.current) {
       clearTimeout(materialScanTimerRef.current);
@@ -681,8 +705,11 @@ export default function CuttingOperatorDashboard() {
     }
     if (materialScanBarcode && materialScanBarcode.length > 5 && activeScannedPacket?.queueItem?.id) {
       materialScanTimerRef.current = setTimeout(() => {
-        handleMaterialScan(materialScanBarcode);
-      }, 300);
+        if (materialScanBarcode !== lastSubmittedMaterialRef.current) {
+          lastSubmittedMaterialRef.current = materialScanBarcode;
+          handleMaterialScan(materialScanBarcode);
+        }
+      }, 400);
     }
     return () => {
       if (materialScanTimerRef.current) clearTimeout(materialScanTimerRef.current);
@@ -1181,9 +1208,6 @@ export default function CuttingOperatorDashboard() {
                 value={packetScanBarcode}
                 onChange={(val) => {
                   setPacketScanBarcode(val);
-                  if (val && val.length > 5 && val.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(val)) {
-                    handlePacketScan(val);
-                  }
                 }}
                 placeholder="Scan packet barcode (MFG-...)..."
                 data-testid="input-packet-scan"

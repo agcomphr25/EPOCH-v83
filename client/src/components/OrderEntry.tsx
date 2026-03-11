@@ -42,6 +42,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { ForecastDateModal } from '@/components/orders/ForecastDateModal';
+import { getConfidenceLabel } from '@/lib/forecastConfidence';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -377,6 +379,63 @@ export default function OrderEntry() {
   const [forecastConfidence, setForecastConfidence] = useState<string | null>(null);
   const [forecastCycleDays, setForecastCycleDays] = useState<number | null>(null);
   const [isForecastLoading, setIsForecastLoading] = useState(false);
+  const [forecastModalOpen, setForecastModalOpen] = useState(false);
+  const [fullForecastData, setFullForecastData] = useState<any>(null);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+
+  const mappedForecastData = useMemo(() => {
+    if (!fullForecastData) return null;
+    const data = fullForecastData;
+    const recommended = data.suggestedDueDate;
+    const projected = data.projectedCompletion;
+    const bufferDays = data.totalBusinessDays - data.estimatedCycleDays;
+    const conservativeDate = new Date(
+      new Date(recommended).getTime() + Math.ceil(bufferDays) * 86400000
+    ).toISOString();
+    const confidenceLabel = getConfidenceLabel(data.confidence || 'LOW');
+
+    const timeline: { stage: string; date: string }[] = [];
+    if (data.pipelineStages && data.pipelineStages.length > 0) {
+      const totalCycleDays = data.estimatedCycleDays || data.totalBusinessDays || 1;
+      const stageCount = data.pipelineStages.length;
+      let cumulativeDays = 0;
+      for (let i = 0; i < stageCount; i++) {
+        cumulativeDays += totalCycleDays / stageCount;
+        const stageDate = new Date(Date.now() + Math.round(cumulativeDays) * 86400000);
+        timeline.push({ stage: data.pipelineStages[i], date: stageDate.toISOString() });
+      }
+    }
+
+    const reasons: string[] = [];
+    const stageCount = data.pipelineStages?.length || 0;
+    const cycleDays = Math.round(data.estimatedCycleDays || 0);
+    if (cycleDays > 0) {
+      reasons.push(`Average cycle time: ~${cycleDays} production days across ${stageCount} department${stageCount !== 1 ? 's' : ''}`);
+    }
+    const backlogDays = Math.round(data.backlogDelayDays || 0);
+    if (backlogDays > 0) {
+      reasons.push(`Queue backlog adds ~${backlogDays} day${backlogDays !== 1 ? 's' : ''} based on current load`);
+    }
+    reasons.push(`Safety buffer: ${Math.ceil(bufferDays)} business day${Math.ceil(bufferDays) !== 1 ? 's' : ''} added beyond projected completion`);
+    const otherOptions = features.other_options || [];
+    if (otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2')) {
+      reasons.push('Rush fee applied — timeline may be shortened');
+    }
+
+    return {
+      recommendedDate: recommended,
+      confidence: confidenceLabel,
+      window: {
+        earliest: projected,
+        latest: conservativeDate,
+      },
+      timeline,
+      reasons,
+      totalBusinessDays: data.totalBusinessDays || 0,
+      estimatedCycleDays: data.estimatedCycleDays || 0,
+      backlogDelayDays: data.backlogDelayDays || 0,
+    };
+  }, [fullForecastData, features.other_options]);
 
   const calculateBaseDueDate = useCallback(() => {
     const selectedModel = modelOptions.find((m) => m.id === modelId);
@@ -416,6 +475,8 @@ export default function OrderEntry() {
             setBaseDueDate(suggested);
             setForecastConfidence(data.confidence || null);
             setForecastCycleDays(data.totalBusinessDays || null);
+            setFullForecastData(data);
+            setForecastError(null);
 
             const otherOptions = features.other_options || [];
             const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
@@ -427,6 +488,8 @@ export default function OrderEntry() {
             setBaseDueDate(fallback);
             setForecastConfidence(null);
             setForecastCycleDays(null);
+            setFullForecastData(null);
+            setForecastError('No forecast data returned');
 
             const otherOptions = features.other_options || [];
             const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
@@ -441,6 +504,8 @@ export default function OrderEntry() {
             setBaseDueDate(fallback);
             setForecastConfidence(null);
             setForecastCycleDays(null);
+            setFullForecastData(null);
+            setForecastError('Could not reach forecast engine');
 
             const otherOptions = features.other_options || [];
             const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
@@ -2923,31 +2988,58 @@ export default function OrderEntry() {
                         </Badge>
                       )}
                     </Label>
-                    <Input
-                      id="dueDate"
-                      name="dueDate"
-                      type="date"
-                      value={
-                        dueDate && !isNaN(dueDate.getTime())
-                          ? dueDate.toISOString().split('T')[0]
-                          : ''
-                      }
-                      onChange={(e) => {
-                        const dateValue = e.target.value;
-                        if (dateValue) {
-                          const newDate = new Date(dateValue);
-                          if (!isNaN(newDate.getTime())) {
-                            setDueDate(newDate);
-                            setIsManualDueDate(true);
+                    <div className="flex gap-2">
+                      {!isEditMode ? (
+                        <div
+                          className="flex-1 flex items-center h-10 px-3 border rounded-md bg-background cursor-pointer hover:border-blue-400 transition-colors"
+                          onClick={() => setForecastModalOpen(true)}
+                        >
+                          <span className={dueDate && !isNaN(dueDate.getTime()) ? 'text-foreground' : 'text-muted-foreground'}>
+                            {dueDate && !isNaN(dueDate.getTime())
+                              ? dueDate.toISOString().split('T')[0]
+                              : 'Select date...'}
+                          </span>
+                        </div>
+                      ) : (
+                        <Input
+                          id="dueDate"
+                          name="dueDate"
+                          type="date"
+                          className="flex-1"
+                          value={
+                            dueDate && !isNaN(dueDate.getTime())
+                              ? dueDate.toISOString().split('T')[0]
+                              : ''
                           }
-                        } else {
-                          setDueDate(
-                            new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)
-                          );
-                          setIsManualDueDate(false);
-                        }
-                      }}
-                    />
+                          onChange={(e) => {
+                            const dateValue = e.target.value;
+                            if (dateValue) {
+                              const newDate = new Date(dateValue);
+                              if (!isNaN(newDate.getTime())) {
+                                setDueDate(newDate);
+                                setIsManualDueDate(true);
+                              }
+                            } else {
+                              setDueDate(
+                                new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)
+                              );
+                              setIsManualDueDate(false);
+                            }
+                          }}
+                        />
+                      )}
+                      {!isEditMode && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 text-xs"
+                          onClick={() => setForecastModalOpen(true)}
+                        >
+                          Forecast Options
+                        </Button>
+                      )}
+                    </div>
                     {isManualDueDate && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Due date manually set - will not auto-adjust for stock
@@ -6400,6 +6492,21 @@ export default function OrderEntry() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ForecastDateModal
+        open={forecastModalOpen}
+        onClose={() => setForecastModalOpen(false)}
+        onSelectDate={(date, isManual) => {
+          setDueDate(date);
+          setIsManualDueDate(isManual);
+          if (!isManual) {
+            setBaseDueDate(date);
+          }
+        }}
+        forecastData={mappedForecastData}
+        isLoading={isForecastLoading}
+        error={forecastError}
+      />
     </div>
   );
 }

@@ -1453,22 +1453,39 @@ export default function CuttingOperatorDashboard() {
                   </div>
                 )}
                 {activeScannedPacket.fifoInventory && activeScannedPacket.fifoInventory.length > 0 ? (
-                  <div className="space-y-1 max-h-[150px] overflow-y-auto">
-                    {activeScannedPacket.fifoInventory.slice(0, 5).map((roll: any, idx: number) => (
-                      <div key={roll.id} className="flex items-center justify-between text-xs p-1.5 bg-background rounded">
-                        <div className="flex items-center gap-1">
-                          {idx === 0 && <Badge className="bg-green-600 text-[10px] px-1">FIRST</Badge>}
-                          <span className="font-medium">{roll.fabric || roll.nickname}</span>
-                        </div>
-                        <div className="text-right">
-                          <div>Roll {roll.rollNumber}</div>
-                          <div className="text-muted-foreground">
-                            {roll.freezerNumber ? `Freezer ${roll.freezerNumber}` : roll.location || '-'}
-                            {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    {(() => {
+                      const rolls = activeScannedPacket.fifoInventory;
+                      const grouped = new Map<string, any[]>();
+                      rolls.forEach((roll: any) => {
+                        const key = roll.fabricPartNumber || roll.fabric || roll.nickname || 'unknown';
+                        if (!grouped.has(key)) grouped.set(key, []);
+                        grouped.get(key)!.push(roll);
+                      });
+                      const displayRolls: any[] = [];
+                      grouped.forEach((groupRolls) => {
+                        displayRolls.push(groupRolls[0]);
+                      });
+                      grouped.forEach((groupRolls) => {
+                        groupRolls.slice(1).forEach(r => displayRolls.push(r));
+                      });
+                      return displayRolls.map((roll: any, idx: number) => (
+                        <div key={roll.id} className="flex items-center justify-between text-xs p-1.5 bg-background rounded">
+                          <div className="flex items-center gap-1">
+                            {idx === 0 && <Badge className="bg-green-600 text-[10px] px-1">FIRST</Badge>}
+                            <span className="font-medium">{roll.fabric || roll.nickname}</span>
+                            {roll.fabricPartNumber && <span className="text-muted-foreground">({roll.fabricPartNumber})</span>}
+                          </div>
+                          <div className="text-right">
+                            <div>Roll {roll.rollNumber}</div>
+                            <div className="text-muted-foreground">
+                              {roll.freezerNumber ? `Freezer ${roll.freezerNumber}` : roll.location || '-'}
+                              {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 ) : (
                   <p className="text-sm text-amber-600">

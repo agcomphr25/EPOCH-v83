@@ -554,6 +554,12 @@ export default function Navigation() {
       description: 'Track stocks shipped by company week',
     },
     {
+      path: '/weekly-shipments',
+      label: 'Weekly Shipments Overview',
+      icon: Package,
+      description: 'Combined view of all P1 and OEM shipments by week',
+    },
+    {
       path: '/urgent-orders-report',
       label: 'Urgent Orders Report',
       icon: AlertTriangle,

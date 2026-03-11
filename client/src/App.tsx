@@ -136,6 +136,7 @@ import { BOMAdministration } from './pages/BOMAdministration';
 import RobustBOMAdministration from './pages/RobustBOMAdministration';
 import AGBottomMetalReport from './pages/AGBottomMetalReport';
 import ShippingTracker from './pages/ShippingTracker';
+import WeeklyShipmentsOverview from './pages/WeeklyShipmentsOverview';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import EmployeeDetail from './pages/EmployeeDetail';
 import EmployeePortal from './pages/EmployeePortal';
@@ -945,6 +946,7 @@ function App() {
                     component={AGBottomMetalReport}
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
+                  <Route path="/weekly-shipments" component={WeeklyShipmentsOverview} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
 

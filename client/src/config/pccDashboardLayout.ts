@@ -91,8 +91,8 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
           props: {},
         },
         {
-          id: 'pcc-cc-processing',
-          type: 'cc_processing',
+          id: 'pcc-ar-aging',
+          type: 'ar_aging',
           props: {},
         },
         {

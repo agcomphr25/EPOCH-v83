@@ -16,7 +16,8 @@ export type WidgetTypeId =
   | 'otd_summary'
   | 'payment_analytics'
   | 'forecast_accuracy'
-  | 'cc_processing';
+  | 'cc_processing'
+  | 'ar_aging';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -83,6 +84,7 @@ import OTDWidget from '@/components/widgets/OTDWidget';
 import PaymentAnalyticsWidget from '@/components/widgets/PaymentAnalyticsWidget';
 import ForecastAccuracyWidget from '@/components/widgets/ForecastAccuracyWidget';
 import CreditCardProcessingWidget from '@/components/widgets/CreditCardProcessingWidget';
+import ARAgingWidget from '@/components/widgets/ARAgingWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -230,6 +232,16 @@ registerWidget({
   description: 'YTD credit card volume breakdown (Online vs Phone) from historical data, with recent months detail.',
   category: 'metric',
   component: CreditCardProcessingWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'ar_aging',
+  displayName: 'AR Aging Summary',
+  description: 'Outstanding accounts receivable broken down by aging bucket with top customer balances.',
+  category: 'metric',
+  component: ARAgingWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

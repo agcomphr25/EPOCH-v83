@@ -24,7 +24,7 @@ const CONTEXT_OPTIONS = [
 const QUICK_ACTIONS = [
   { label: 'Order', icon: Plus, route: '/order-entry' },
   { label: 'Vendors', icon: Truck, route: '/vendors' },
-  { label: 'Inventory', icon: Package, route: '/inventory' },
+  { label: 'Inventory', icon: Package, route: '/inventory/enhanced-mrp' },
   { label: 'Maintenance', icon: Wrench, route: '/maintenance' },
 ];
 

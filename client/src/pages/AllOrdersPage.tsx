@@ -130,6 +130,7 @@ export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [statusFilterMode, setStatusFilterMode] = useState<'include' | 'exclude'>('include');
   const [sortBy, setSortBy] = useState<
     'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate'
   >('orderDate');
@@ -563,10 +564,15 @@ export default function AllOrdersPage() {
         selectedDepartment === 'all' ||
         order.currentDepartment === selectedDepartment;
 
-      // Status filter
-      const statusMatch =
-        selectedStatus === 'all' ||
-        order.status?.toUpperCase() === selectedStatus.toUpperCase();
+      // Status filter (include or exclude mode)
+      let statusMatch: boolean;
+      if (selectedStatus === 'all') {
+        statusMatch = true;
+      } else if (statusFilterMode === 'exclude') {
+        statusMatch = order.status?.toUpperCase() !== selectedStatus.toUpperCase();
+      } else {
+        statusMatch = order.status?.toUpperCase() === selectedStatus.toUpperCase();
+      }
 
       // Search filter - search in multiple fields including FB Order Number
       if (!searchTerm.trim()) {
@@ -589,7 +595,7 @@ export default function AllOrdersPage() {
 
       return departmentMatch && statusMatch && searchMatch;
     });
-  }, [allOrders, searchTerm, selectedDepartment, selectedStatus]);
+  }, [allOrders, searchTerm, selectedDepartment, selectedStatus, statusFilterMode]);
 
   // Function to calculate search relevance score
   const getSearchRelevanceScore = (order: any, searchTerm: string) => {
@@ -652,7 +658,7 @@ export default function AllOrdersPage() {
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedDepartment, selectedStatus, sortBy]);
+  }, [searchTerm, selectedDepartment, selectedStatus, statusFilterMode, sortBy]);
 
   // Calculate client-side pagination
   const paginationData = React.useMemo(() => {
@@ -776,7 +782,10 @@ export default function AllOrdersPage() {
               <span className="text-sm font-medium">Status:</span>
               <Select
                 value={selectedStatus}
-                onValueChange={setSelectedStatus}
+                onValueChange={(val) => {
+                  setSelectedStatus(val);
+                  if (val === 'all') setStatusFilterMode('include');
+                }}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Statuses" />
@@ -792,8 +801,19 @@ export default function AllOrdersPage() {
                   <SelectItem value="DRAFT">Draft</SelectItem>
                 </SelectContent>
               </Select>
+              {selectedStatus !== 'all' && (
+                <Button
+                  variant={statusFilterMode === 'exclude' ? 'destructive' : 'outline'}
+                  size="sm"
+                  onClick={() => setStatusFilterMode(statusFilterMode === 'include' ? 'exclude' : 'include')}
+                  className="text-xs px-2 h-8"
+                  title={statusFilterMode === 'include' ? 'Click to exclude this status instead' : 'Click to include this status instead'}
+                >
+                  {statusFilterMode === 'include' ? 'Include' : 'Exclude'}
+                </Button>
+              )}
               {/* Test Reminder Button - visible when filtering for PENDING_SIGNATURE or for admin */}
-              {(selectedStatus === 'PENDING_SIGNATURE' || currentUser?.role === 'ADMIN') && (
+              {((selectedStatus === 'PENDING_SIGNATURE' && statusFilterMode === 'include') || currentUser?.role === 'ADMIN') && (
                 <Button
                   variant="outline"
                   size="sm"

@@ -91,8 +91,8 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
           props: {},
         },
         {
-          id: 'pcc-swim-lane',
-          type: 'swim_lane_preview',
+          id: 'pcc-cc-processing',
+          type: 'cc_processing',
           props: {},
         },
         {

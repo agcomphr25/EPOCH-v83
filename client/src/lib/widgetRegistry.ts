@@ -15,7 +15,8 @@ export type WidgetTypeId =
   | 'pipeline_board'
   | 'otd_summary'
   | 'payment_analytics'
-  | 'forecast_accuracy';
+  | 'forecast_accuracy'
+  | 'cc_processing';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -81,6 +82,7 @@ import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
 import OTDWidget from '@/components/widgets/OTDWidget';
 import PaymentAnalyticsWidget from '@/components/widgets/PaymentAnalyticsWidget';
 import ForecastAccuracyWidget from '@/components/widgets/ForecastAccuracyWidget';
+import CreditCardProcessingWidget from '@/components/widgets/CreditCardProcessingWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -218,6 +220,16 @@ registerWidget({
   description: 'Shows forecast vs. actual completion accuracy with error metrics and trend breakdown.',
   category: 'metric',
   component: ForecastAccuracyWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'cc_processing',
+  displayName: 'Credit Card Processing',
+  description: 'YTD credit card volume breakdown (Online vs Phone) from historical data, with recent months detail.',
+  category: 'metric',
+  component: CreditCardProcessingWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

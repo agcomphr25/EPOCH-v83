@@ -588,6 +588,24 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Serial number migration skipped:', serialErr.message);
       }
 
+      // Ensure p2_customers has all shipping + rfq columns added in later schema revisions
+      try {
+        const { sql: sqlP2C } = await import('drizzle-orm');
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_company_name TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_contact_name TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_address TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_address_2 TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_city TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_state TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS shipping_zip TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS ship_to_address TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS rfq_prefix TEXT`);
+        await db.execute(sqlP2C`ALTER TABLE p2_customers ADD COLUMN IF NOT EXISTS rfq_sequences JSONB DEFAULT '{}'::jsonb`);
+        console.log('✅ Ensured p2_customers has all shipping and RFQ columns');
+      } catch (p2cErr: any) {
+        console.warn('⚠️ p2_customers column migration skipped:', p2cErr.message);
+      }
+
       // Ensure routing_documents has extracted_text column
       try {
         const { sql: sqlTag } = await import('drizzle-orm');

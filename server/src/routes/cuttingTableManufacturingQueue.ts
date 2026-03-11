@@ -964,7 +964,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     }
     
     // Get FIFO-ordered fabric inventory matching BOM materials
-    // Collect both fabricType and commonName from BOM materials and parts
+    // Collect fabricType, commonName, and fallback to part number base from BOM materials and parts
     const allRequiredFabricTypes = new Set<string>();
     bomMaterials.forEach((m: any) => {
       if (m.fabricType?.trim()) allRequiredFabricTypes.add(m.fabricType.trim().toLowerCase());
@@ -973,6 +973,10 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     bomParts.forEach((p: any) => {
       if (p.fabricType?.trim()) allRequiredFabricTypes.add(p.fabricType.trim().toLowerCase());
       if (p.commonName?.trim()) allRequiredFabricTypes.add(p.commonName.trim().toLowerCase());
+      if (!p.fabricType?.trim() && !p.commonName?.trim() && p.partNumber?.trim()) {
+        const basePartNum = p.partNumber.trim().replace(/[a-zA-Z]+$/, '');
+        if (basePartNum) allRequiredFabricTypes.add(basePartNum.toLowerCase());
+      }
     });
     const requiredTypes = Array.from(allRequiredFabricTypes);
     
@@ -985,6 +989,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     
     // Stricter fabric matching: require significant overlap, not just substring containment
     // Minimum match length of 4 chars prevents short strings from matching everything
+    // Also supports numeric part number prefix matching (e.g., required "301" matches roll "301" or "301g")
     const strictFabricMatch = (fabricFields: string[], requiredTypes: string[]): boolean => {
       const validFields = fabricFields.filter(f => f.length > 0);
       if (validFields.length === 0) return false;
@@ -993,6 +998,12 @@ router.post('/scan-start', async (req: Request, res: Response) => {
           if (field === req) return true;
           if (req.length >= 4 && field.includes(req)) return true;
           if (field.length >= 4 && req.includes(field)) return true;
+          if (/^\d+$/.test(req) && req.length >= 3) {
+            if (field.startsWith(req) || field === req) return true;
+          }
+          if (/^\d+$/.test(field) && field.length >= 3) {
+            if (req.startsWith(field) || req === field) return true;
+          }
           return false;
         })
       );
@@ -1274,6 +1285,7 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       .where(eq(cuttingPacketBOMParts.packetBomId, packetBom.id));
     
     // Collect all allowed fabric types from BOM (filter out empty strings)
+    // Also fall back to base part number when fabricType/commonName are empty
     const allowedFabricTypes = new Set<string>();
     bomMaterials.forEach(m => {
       if (m.fabricType?.trim()) allowedFabricTypes.add(m.fabricType.trim().toLowerCase());
@@ -1282,6 +1294,10 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
     bomParts.forEach(p => {
       if (p.fabricType?.trim()) allowedFabricTypes.add(p.fabricType.trim().toLowerCase());
       if (p.commonName?.trim()) allowedFabricTypes.add(p.commonName.trim().toLowerCase());
+      if (!p.fabricType?.trim() && !p.commonName?.trim() && p.partNumber?.trim()) {
+        const basePartNum = p.partNumber.trim().replace(/[a-zA-Z]+$/, '');
+        if (basePartNum) allowedFabricTypes.add(basePartNum.toLowerCase());
+      }
     });
     
     // Check if the scanned roll's fabric type matches any allowed type
@@ -1305,6 +1321,12 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
         if (field === allowed) return true;
         if (allowed.length >= 4 && field.includes(allowed)) return true;
         if (field.length >= 4 && allowed.includes(field)) return true;
+        if (/^\d+$/.test(allowed) && allowed.length >= 3) {
+          if (field.startsWith(allowed) || field === allowed) return true;
+        }
+        if (/^\d+$/.test(field) && field.length >= 3) {
+          if (allowed.startsWith(field) || allowed === field) return true;
+        }
         return false;
       })
     );

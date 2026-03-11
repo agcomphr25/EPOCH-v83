@@ -271,6 +271,7 @@ export interface NewOrderSimulation {
   totalBusinessDays: number;
   confidence: SimulationConfidence;
   pipelineStages: string[];
+  stageDurations: { stage: string; days: number }[];
   isAdjustable: boolean;
 }
 
@@ -291,6 +292,7 @@ export async function simulateNewOrder(params: {
 
   let totalCycleDays = 0;
   let totalBacklogDelay = 0;
+  const stageDurations: { stage: string; days: number }[] = [];
 
   for (const stage of pipeline) {
     const avgDays = cycleTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2;
@@ -300,6 +302,8 @@ export async function simulateNewOrder(params: {
     const backlogFactor = Math.min(ordersAhead / 50, 2.0);
     const backlogDelay = avgDays * backlogFactor;
     totalBacklogDelay += backlogDelay;
+
+    stageDurations.push({ stage, days: Math.round((avgDays + backlogDelay) * 10) / 10 });
   }
 
   const isAdjustable = !!(params.model_id && params.model_id.toLowerCase().includes('adj'));
@@ -325,6 +329,7 @@ export async function simulateNewOrder(params: {
     totalBusinessDays,
     confidence,
     pipelineStages: pipeline,
+    stageDurations,
     isAdjustable,
   };
 }

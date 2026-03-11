@@ -383,6 +383,17 @@ export default function OrderEntry() {
   const [fullForecastData, setFullForecastData] = useState<any>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
 
+  const addBusinessDaysClient = (start: Date, days: number): Date => {
+    const result = new Date(start);
+    let added = 0;
+    while (added < days) {
+      result.setDate(result.getDate() + 1);
+      const dow = result.getDay();
+      if (dow !== 0 && dow !== 6) added++;
+    }
+    return result;
+  };
+
   const mappedForecastData = useMemo(() => {
     if (!fullForecastData) return null;
     const data = fullForecastData;
@@ -395,13 +406,20 @@ export default function OrderEntry() {
     const confidenceLabel = getConfidenceLabel(data.confidence || 'LOW');
 
     const timeline: { stage: string; date: string }[] = [];
-    if (data.pipelineStages && data.pipelineStages.length > 0) {
+    if (data.stageDurations && data.stageDurations.length > 0) {
+      let cumulativeDays = 0;
+      for (const sd of data.stageDurations) {
+        cumulativeDays += sd.days;
+        const stageDate = addBusinessDaysClient(new Date(), Math.round(cumulativeDays));
+        timeline.push({ stage: sd.stage, date: stageDate.toISOString() });
+      }
+    } else if (data.pipelineStages && data.pipelineStages.length > 0) {
       const totalCycleDays = data.estimatedCycleDays || data.totalBusinessDays || 1;
       const stageCount = data.pipelineStages.length;
       let cumulativeDays = 0;
       for (let i = 0; i < stageCount; i++) {
         cumulativeDays += totalCycleDays / stageCount;
-        const stageDate = new Date(Date.now() + Math.round(cumulativeDays) * 86400000);
+        const stageDate = addBusinessDaysClient(new Date(), Math.round(cumulativeDays));
         timeline.push({ stage: data.pipelineStages[i], date: stageDate.toISOString() });
       }
     }

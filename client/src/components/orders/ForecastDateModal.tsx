@@ -122,10 +122,6 @@ export function ForecastDateModal({
             <div className="p-4 rounded-lg border bg-blue-50/50 border-blue-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">Recommended Completion</span>
-                <Badge variant="outline" className={`${confidenceColor} text-xs`}>
-                  <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${dotColor}`} />
-                  {confidenceLevel} Confidence
-                </Badge>
               </div>
               <p className="text-2xl font-bold text-blue-900">
                 {formatDate(forecastData.recommendedDate)}

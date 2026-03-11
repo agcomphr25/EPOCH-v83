@@ -292,7 +292,7 @@ export default function OrderEntry() {
 
   const isNewOrderMode = !isEditMode && !isDuplicateMode && !editingOrderId;
 
-  const { hasDraft: hasOrderDraft, restoreDraft: restoreOrderDraft, clearDraft: clearOrderDraft } = useFormDraft<OrderDraftData>({
+  const { hasDraft: hasOrderDraft, restoreDraft: restoreOrderDraft, clearDraft: clearOrderDraft, resumeAutoSave: resumeOrderDraftAutoSave } = useFormDraft<OrderDraftData>({
     storageKey: 'order-entry-draft',
     getValues: () => ({
       customer,
@@ -2972,20 +2972,6 @@ export default function OrderEntry() {
                         <span className="text-xs text-muted-foreground animate-pulse">
                           Forecasting...
                         </span>
-                      )}
-                      {!isManualDueDate && forecastConfidence && !isForecastLoading && (
-                        <Badge
-                          variant="outline"
-                          className={
-                            forecastConfidence === 'HIGH'
-                              ? 'text-xs border-green-500 text-green-700'
-                              : forecastConfidence === 'MEDIUM'
-                                ? 'text-xs border-yellow-500 text-yellow-700'
-                                : 'text-xs border-red-500 text-red-700'
-                          }
-                        >
-                          {forecastConfidence} confidence
-                        </Badge>
                       )}
                     </Label>
                     <div className="flex gap-2">

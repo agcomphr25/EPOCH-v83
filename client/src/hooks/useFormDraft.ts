@@ -20,6 +20,8 @@ interface UseFormDraftReturn<T> {
   restoreDraft: () => T | null;
   clearDraft: () => void;
   saveDraft: () => void;
+  pauseAutoSave: () => void;
+  resumeAutoSave: () => void;
 }
 
 function parseDraft<T>(raw: string): T | null {
@@ -45,6 +47,7 @@ export function useFormDraft<T>({
 }: UseFormDraftOptions<T>): UseFormDraftReturn<T> {
   const [hasDraft, setHasDraft] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pausedRef = useRef(false);
   const getValuesRef = useRef(getValues);
   getValuesRef.current = getValues;
 
@@ -67,7 +70,7 @@ export function useFormDraft<T>({
   }, [storageKey]);
 
   const saveDraft = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || pausedRef.current) return;
     try {
       const values = getValuesRef.current();
       const wrapper: DraftWrapper<T> = {
@@ -124,8 +127,18 @@ export function useFormDraft<T>({
   const clearDraft = useCallback(() => {
     localStorage.removeItem(storageKey);
     setHasDraft(false);
+    pausedRef.current = true;
     if (timerRef.current) clearTimeout(timerRef.current);
   }, [storageKey]);
 
-  return { hasDraft, restoreDraft, clearDraft, saveDraft };
+  const pauseAutoSave = useCallback(() => {
+    pausedRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const resumeAutoSave = useCallback(() => {
+    pausedRef.current = false;
+  }, []);
+
+  return { hasDraft, restoreDraft, clearDraft, saveDraft, pauseAutoSave, resumeAutoSave };
 }

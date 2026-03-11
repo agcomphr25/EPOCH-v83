@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Package,
@@ -28,16 +29,19 @@ import {
   Factory,
   Layers,
   ExternalLink,
+  Plus,
+  X,
+  PenLine,
 } from 'lucide-react';
 import {
   getCurrentOperationalWeek,
   formatOperationalWeekRange,
-  getShippingWeekInfo,
   getOperationalWeekStart,
   getOperationalWeekEnd,
 } from '@shared/weekUtils';
 import { format } from 'date-fns';
 import { Link } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 
 interface P1Order {
   id: number;
@@ -86,7 +90,7 @@ interface OEMShipment {
 
 interface UnifiedShipment {
   id: string;
-  type: 'P1' | 'OEM';
+  type: 'P1' | 'OEM' | 'Ad Hoc';
   orderId: string;
   modelOrDescription: string;
   customerName: string;
@@ -96,13 +100,111 @@ interface UnifiedShipment {
   itemCount: number;
 }
 
+interface AdHocEntry {
+  orderId: string;
+  addedAt: string;
+}
+
+function getAdHocStorageKey(week: number, year: number): string {
+  return `epoch-adhoc-shipments-${year}-W${week}`;
+}
+
+function loadAdHocEntries(week: number, year: number): AdHocEntry[] {
+  try {
+    const raw = localStorage.getItem(getAdHocStorageKey(week, year));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e: unknown) =>
+        typeof e === 'object' &&
+        e !== null &&
+        typeof (e as AdHocEntry).orderId === 'string' &&
+        typeof (e as AdHocEntry).addedAt === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveAdHocEntries(week: number, year: number, entries: AdHocEntry[]) {
+  localStorage.setItem(getAdHocStorageKey(week, year), JSON.stringify(entries));
+}
+
 export default function WeeklyShipmentsOverview() {
   const { week: currentWeek, year: currentOpYear } = getCurrentOperationalWeek();
+  const { toast } = useToast();
 
   const [selectedYear, setSelectedYear] = useState<number>(currentOpYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [adHocEntries, setAdHocEntries] = useState<AdHocEntry[]>([]);
+  const [adHocInput, setAdHocInput] = useState('');
+
+  useEffect(() => {
+    setAdHocEntries(loadAdHocEntries(selectedWeek, selectedYear));
+  }, [selectedWeek, selectedYear]);
+
+  const addAdHocOrders = useCallback(() => {
+    const raw = adHocInput.trim();
+    if (!raw) return;
+
+    const newIds = raw
+      .split(/[\s,;]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => s.length > 0);
+
+    if (newIds.length === 0) return;
+
+    const existingSet = new Set(adHocEntries.map((e) => e.orderId));
+    const added: string[] = [];
+    const skipped: string[] = [];
+
+    const now = new Date().toISOString();
+    const updatedEntries = [...adHocEntries];
+
+    newIds.forEach((id) => {
+      if (existingSet.has(id)) {
+        skipped.push(id);
+      } else {
+        existingSet.add(id);
+        updatedEntries.push({ orderId: id, addedAt: now });
+        added.push(id);
+      }
+    });
+
+    setAdHocEntries(updatedEntries);
+    saveAdHocEntries(selectedWeek, selectedYear, updatedEntries);
+    setAdHocInput('');
+
+    if (added.length > 0) {
+      toast({
+        title: `Added ${added.length} order${added.length > 1 ? 's' : ''}`,
+        description: added.join(', ') + (skipped.length > 0 ? ` (${skipped.length} already existed)` : ''),
+      });
+    } else if (skipped.length > 0) {
+      toast({
+        title: 'Already added',
+        description: `${skipped.join(', ')} already in ad hoc list`,
+      });
+    }
+  }, [adHocInput, adHocEntries, selectedWeek, selectedYear, toast]);
+
+  const removeAdHocOrder = useCallback(
+    (orderId: string) => {
+      const updated = adHocEntries.filter((e) => e.orderId !== orderId);
+      setAdHocEntries(updated);
+      saveAdHocEntries(selectedWeek, selectedYear, updated);
+    },
+    [adHocEntries, selectedWeek, selectedYear]
+  );
+
+  const clearAllAdHoc = useCallback(() => {
+    setAdHocEntries([]);
+    saveAdHocEntries(selectedWeek, selectedYear, []);
+    toast({ title: 'Cleared', description: 'All ad hoc entries removed for this week' });
+  }, [selectedWeek, selectedYear, toast]);
 
   const { data: orders, isLoading: ordersLoading, isError: ordersError } = useQuery<P1Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
@@ -168,6 +270,20 @@ export default function WeeklyShipmentsOverview() {
     return map;
   }, [customers]);
 
+  const adHocShipments: UnifiedShipment[] = useMemo(() => {
+    return adHocEntries.map((entry) => ({
+      id: `adhoc-${entry.orderId}`,
+      type: 'Ad Hoc' as const,
+      orderId: entry.orderId,
+      modelOrDescription: 'Manually added',
+      customerName: '—',
+      trackingNumber: '',
+      carrier: '',
+      shippedDate: new Date(entry.addedAt),
+      itemCount: 1,
+    }));
+  }, [adHocEntries]);
+
   const unifiedShipments = useMemo(() => {
     const items: UnifiedShipment[] = [];
 
@@ -212,9 +328,11 @@ export default function WeeklyShipmentsOverview() {
       });
     }
 
+    items.push(...adHocShipments);
+
     items.sort((a, b) => b.shippedDate.getTime() - a.shippedDate.getTime());
     return items;
-  }, [orders, oemData, weekStart, weekEnd, customerMap]);
+  }, [orders, oemData, weekStart, weekEnd, customerMap, adHocShipments]);
 
   const filteredShipments = useMemo(() => {
     let filtered = unifiedShipments;
@@ -223,6 +341,8 @@ export default function WeeklyShipmentsOverview() {
       filtered = filtered.filter((s) => s.type === 'P1');
     } else if (activeTab === 'oem') {
       filtered = filtered.filter((s) => s.type === 'OEM');
+    } else if (activeTab === 'adhoc') {
+      filtered = filtered.filter((s) => s.type === 'Ad Hoc');
     }
 
     if (searchTerm) {
@@ -241,6 +361,7 @@ export default function WeeklyShipmentsOverview() {
 
   const p1Count = unifiedShipments.filter((s) => s.type === 'P1').length;
   const oemCount = unifiedShipments.filter((s) => s.type === 'OEM').length;
+  const adHocCount = adHocShipments.length;
   const totalItems = unifiedShipments.reduce((sum, s) => sum + s.itemCount, 0);
 
   const uniqueTrackingNumbers = new Set(
@@ -252,6 +373,64 @@ export default function WeeklyShipmentsOverview() {
 
   const isLoading = ordersLoading || oemLoading;
   const hasError = ordersError || oemError;
+
+  const renderShipmentTable = (shipments: UnifiedShipment[]) => (
+    <div className="border rounded-lg overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-gray-50">
+            <TableHead className="w-20">Type</TableHead>
+            <TableHead>Order ID</TableHead>
+            <TableHead>Model / Description</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Tracking #</TableHead>
+            <TableHead>Carrier</TableHead>
+            <TableHead>Shipped Date</TableHead>
+            <TableHead className="text-right">Qty</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {shipments.map((shipment) => (
+            <TableRow key={shipment.id}>
+              <TableCell>
+                <Badge
+                  variant={shipment.type === 'P1' ? 'default' : 'secondary'}
+                  className={
+                    shipment.type === 'P1'
+                      ? 'bg-green-100 text-green-800 hover:bg-green-100'
+                      : shipment.type === 'OEM'
+                        ? 'bg-purple-100 text-purple-800 hover:bg-purple-100'
+                        : 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+                  }
+                >
+                  {shipment.type}
+                </Badge>
+              </TableCell>
+              <TableCell className="font-mono font-medium">
+                {shipment.orderId}
+              </TableCell>
+              <TableCell className="max-w-[200px] truncate">
+                {shipment.modelOrDescription}
+              </TableCell>
+              <TableCell>{shipment.customerName}</TableCell>
+              <TableCell className="font-mono text-xs">
+                {shipment.trackingNumber || (
+                  <span className="text-gray-400 italic">No tracking</span>
+                )}
+              </TableCell>
+              <TableCell>{shipment.carrier || '—'}</TableCell>
+              <TableCell>
+                {format(shipment.shippedDate, 'MMM d, yyyy')}
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {shipment.itemCount}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
 
   return (
     <div className="container mx-auto p-6">
@@ -317,7 +496,7 @@ export default function WeeklyShipmentsOverview() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-gray-600">Total Stocks Shipped</div>
@@ -343,6 +522,15 @@ export default function WeeklyShipmentsOverview() {
             </div>
             <div className="text-3xl font-bold text-purple-600">{oemCount}</div>
             <div className="text-xs text-gray-500 mt-1">PO shipments</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-gray-600 flex items-center gap-1">
+              <PenLine className="h-3 w-3" /> Ad Hoc
+            </div>
+            <div className="text-3xl font-bold text-amber-600">{adHocCount}</div>
+            <div className="text-xs text-gray-500 mt-1">Manually added</div>
           </CardContent>
         </Card>
         <Card>
@@ -398,90 +586,111 @@ export default function WeeklyShipmentsOverview() {
               <TabsTrigger value="oem">
                 OEM ({oemCount})
               </TabsTrigger>
+              <TabsTrigger value="adhoc">
+                Ad Hoc ({adHocCount})
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value={activeTab} className="mt-4">
-              {hasError ? (
-                <div className="text-center py-12 text-red-500">
-                  <Package className="h-12 w-12 mx-auto mb-3 text-red-300" />
-                  <p className="text-lg font-medium">Failed to load shipment data</p>
-                  <p className="text-sm mt-1 text-gray-500">
-                    {ordersError ? 'Could not load P1 orders. ' : ''}
-                    {oemError ? 'Could not load OEM shipments. ' : ''}
-                    Please try refreshing the page.
-                  </p>
+            <TabsContent value="adhoc" className="mt-4">
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <PenLine className="h-4 w-4 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-800">
+                    Add orders that should count toward this week but haven't been fully processed
+                  </span>
                 </div>
-              ) : isLoading ? (
-                <div className="flex items-center justify-center py-12 text-gray-500">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3" />
-                  Loading shipments...
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter order #s separated by commas or spaces (e.g. AG100, AG101, AG102)"
+                    value={adHocInput}
+                    onChange={(e) => setAdHocInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addAdHocOrders();
+                    }}
+                    className="flex-1 bg-white"
+                  />
+                  <Button onClick={addAdHocOrders} size="sm" className="gap-1">
+                    <Plus className="h-4 w-4" /> Add
+                  </Button>
                 </div>
-              ) : filteredShipments.length === 0 ? (
+              </div>
+
+              {adHocEntries.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-lg font-medium">No shipments found</p>
+                  <PenLine className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-lg font-medium">No ad hoc orders</p>
                   <p className="text-sm mt-1">
-                    {searchTerm
-                      ? 'Try adjusting your search term'
-                      : 'No stocks were shipped during this week'}
+                    Enter order numbers above to manually include them in this week's count
                   </p>
                 </div>
               ) : (
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="w-20">Type</TableHead>
-                        <TableHead>Order ID</TableHead>
-                        <TableHead>Model / Description</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Tracking #</TableHead>
-                        <TableHead>Carrier</TableHead>
-                        <TableHead>Shipped Date</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredShipments.map((shipment) => (
-                        <TableRow key={shipment.id}>
-                          <TableCell>
-                            <Badge
-                              variant={shipment.type === 'P1' ? 'default' : 'secondary'}
-                              className={
-                                shipment.type === 'P1'
-                                  ? 'bg-green-100 text-green-800 hover:bg-green-100'
-                                  : 'bg-purple-100 text-purple-800 hover:bg-purple-100'
-                              }
-                            >
-                              {shipment.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono font-medium">
-                            {shipment.orderId}
-                          </TableCell>
-                          <TableCell className="max-w-[200px] truncate">
-                            {shipment.modelOrDescription}
-                          </TableCell>
-                          <TableCell>{shipment.customerName}</TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {shipment.trackingNumber || (
-                              <span className="text-gray-400 italic">No tracking</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{shipment.carrier || '—'}</TableCell>
-                          <TableCell>
-                            {format(shipment.shippedDate, 'MMM d, yyyy')}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {shipment.itemCount}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-gray-600">
+                      {adHocEntries.length} order{adHocEntries.length !== 1 ? 's' : ''} manually added for Week {selectedWeek}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllAdHoc}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                    >
+                      <X className="h-3 w-3" /> Clear All
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {adHocEntries.map((entry) => (
+                      <Badge
+                        key={entry.orderId}
+                        variant="secondary"
+                        className="bg-amber-100 text-amber-800 hover:bg-amber-200 gap-1 pl-3 pr-1 py-1.5 text-sm"
+                      >
+                        <span className="font-mono font-medium">{entry.orderId}</span>
+                        <button
+                          onClick={() => removeAdHocOrder(entry.orderId)}
+                          className="ml-1 rounded-full hover:bg-amber-300 p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </>
               )}
             </TabsContent>
+
+            {['all', 'p1', 'oem'].map((tabValue) => (
+              <TabsContent key={tabValue} value={tabValue} className="mt-4">
+                {hasError ? (
+                  <div className="text-center py-12 text-red-500">
+                    <Package className="h-12 w-12 mx-auto mb-3 text-red-300" />
+                    <p className="text-lg font-medium">Failed to load shipment data</p>
+                    <p className="text-sm mt-1 text-gray-500">
+                      {ordersError ? 'Could not load P1 orders. ' : ''}
+                      {oemError ? 'Could not load OEM shipments. ' : ''}
+                      Please try refreshing the page.
+                    </p>
+                  </div>
+                ) : isLoading ? (
+                  <div className="flex items-center justify-center py-12 text-gray-500">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3" />
+                    Loading shipments...
+                  </div>
+                ) : filteredShipments.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-lg font-medium">No shipments found</p>
+                    <p className="text-sm mt-1">
+                      {searchTerm
+                        ? 'Try adjusting your search term'
+                        : 'No stocks were shipped during this week'}
+                    </p>
+                  </div>
+                ) : (
+                  renderShipmentTable(filteredShipments)
+                )}
+              </TabsContent>
+            ))}
           </Tabs>
         </CardContent>
       </Card>

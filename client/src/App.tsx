@@ -136,6 +136,7 @@ import { BOMAdministration } from './pages/BOMAdministration';
 import RobustBOMAdministration from './pages/RobustBOMAdministration';
 import AGBottomMetalReport from './pages/AGBottomMetalReport';
 import ShippingTracker from './pages/ShippingTracker';
+import WeeklyShipmentsOverview from './pages/WeeklyShipmentsOverview';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import EmployeeDetail from './pages/EmployeeDetail';
 import EmployeePortal from './pages/EmployeePortal';
@@ -239,6 +240,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import P2PipelineBoardPage from './pages/P2PipelineBoardPage';
 import HelpCenter from './pages/HelpCenter';
+import P2OrderGuide from './pages/P2OrderGuide';
 import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
@@ -785,6 +787,7 @@ function App() {
                   {/* Refund Management Routes */}
                   <Route path="/refund-request" component={RefundRequest} />
                   <Route path="/help" component={HelpCenter} />
+                  <Route path="/help/p2-order-guide" component={P2OrderGuide} />
                   <Route path="/refund-queue" component={RefundQueue} />
                   <Route path="/rma-form" component={RMAFormPage} />
 
@@ -945,6 +948,7 @@ function App() {
                     component={AGBottomMetalReport}
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
+                  <Route path="/weekly-shipments" component={WeeklyShipmentsOverview} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
 

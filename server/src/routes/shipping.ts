@@ -432,6 +432,14 @@ router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
       }
     }
 
+    // Record actual completion for forecast accuracy tracking
+    try {
+      const { recordActualCompletion } = await import('../services/forecastAccuracyService');
+      await recordActualCompletion(orderId);
+    } catch (accuracyError) {
+      console.error('[ForecastAccuracy] Error recording actual completion:', accuracyError);
+    }
+
     // Capture accounting snapshot for QuickBooks journal entry prep
     try {
       await captureAccountingSnapshot(orderId);

@@ -1,0 +1,363 @@
+Copy-Paste Prompt
+EPOCH Audit — AI Documentation From Audit Trails
+You are conducting a READ-ONLY FORENSIC ARCHITECTURE AUDIT of the EPOCH codebase.
+
+Your goal is to determine how to implement a new subsystem called:
+
+AI Documentation From Audit Trails
+
+This system will analyze EPOCH audit logs and operational events to automatically generate:
+
+• process documentation
+• workflow diagrams
+• operational guides
+• FAQ explanations
+• process drift detection
+
+The system should observe real user behavior and system workflows and convert them into human-readable documentation.
+
+This audit must inspect the entire repository and produce an IMPLEMENTATION PLAN based on the current architecture.
+
+DO NOT modify any files.
+DO NOT refactor anything.
+This is a READ-ONLY investigation.
+
+---
+
+PHASE 1 — Audit Logging Infrastructure
+
+Locate all existing audit or event logging systems.
+
+Search for:
+
+audit
+event
+activity
+history
+timeline
+log
+tracking
+lifecycle
+status change
+workflow
+
+Identify:
+
+1. audit log tables
+2. event tables
+3. event emitters in services
+4. middleware logging
+5. status change tracking
+6. order lifecycle tracking
+7. queue transitions
+
+Document:
+
+Table name
+Columns
+Where records are written
+Which services generate logs
+
+Output example format:
+
+Audit Log System
+
+Table: audit_log
+Columns:
+id
+timestamp
+user_id
+action
+entity_type
+entity_id
+metadata JSON
+
+Writes occur in:
+server/services/orderService.ts
+server/services/inventoryService.ts
+server/services/productionQueue.ts
+
+---
+
+PHASE 2 — Workflow & Lifecycle Events
+
+Identify all lifecycle transitions for major entities.
+
+Inspect services handling:
+
+sales orders
+production orders
+inventory allocation
+shipping
+queue management
+forecasting
+routing
+
+Document the lifecycle states.
+
+Example:
+
+Sales Order Lifecycle
+
+CREATE_ORDER
+FORECAST_GENERATED
+ENTER_LAYUP_QUEUE
+ENTER_CNC_QUEUE
+ENTER_FINISH_QUEUE
+READY_TO_SHIP
+SHIPPED
+
+Find:
+
+Where transitions occur
+Which services trigger them
+Which tables store them
+
+---
+
+PHASE 3 — Queue and Production Pipeline
+
+Identify production pipeline stages.
+
+Search for:
+
+queue
+stage
+department
+workflow
+routing
+pipeline
+station
+process stage
+
+Determine:
+
+Layup
+CNC
+Gunsmith
+Finish
+QC
+Shipping
+
+Find where stage transitions are recorded.
+
+Document:
+
+file paths
+services
+database tables
+
+---
+
+PHASE 4 — Domain Entities Suitable for Documentation
+
+Identify entities whose workflows could be documented.
+
+Examples:
+
+sales orders
+production orders
+inventory reservation
+purchase orders
+shipping workflows
+customer service processes
+
+List each entity and its lifecycle.
+
+Example output:
+
+Entity: Sales Orders
+States:
+draft
+submitted
+scheduled
+in production
+completed
+shipped
+
+---
+
+PHASE 5 — Audit Data Quality
+
+Evaluate whether the audit data is sufficient for process mining.
+
+Check whether logs contain:
+
+timestamp
+actor (user or system)
+entity id
+event type
+metadata
+
+Identify missing data required for workflow reconstruction.
+
+Example:
+
+Missing:
+previous_state
+next_state
+department_stage
+
+---
+
+PHASE 6 — Process Mining Feasibility
+
+Determine whether audit logs can reconstruct workflows.
+
+For example:
+
+CREATE_ORDER
+→ FORECAST_GENERATED
+→ ENTER_LAYUP_QUEUE
+→ ENTER_CNC_QUEUE
+→ ENTER_FINISH_QUEUE
+→ SHIPPED
+
+Explain:
+
+• how workflows could be extracted
+• what queries would reconstruct them
+
+---
+
+PHASE 7 — Documentation Generator Architecture
+
+Design a system that converts audit trails into documentation.
+
+Propose new services such as:
+
+server/services/processMiner.ts
+server/services/processDocGenerator.ts
+server/services/processDriftDetector.ts
+
+Explain what each service would do.
+
+Example:
+
+processMiner.ts
+
+Reads audit logs
+Groups events by entity
+Builds event sequences
+Calculates most common workflows
+
+processDocGenerator.ts
+
+Converts workflows into:
+
+How-To guides
+Process explanations
+FAQ answers
+
+---
+
+PHASE 8 — Knowledge Base UI
+
+Design a UI inside EPOCH for generated documentation.
+
+Propose a page such as:
+
+/help/processes
+
+Sections:
+
+Observed Workflows
+Operational Guides
+Process Variants
+Common Delays
+
+Explain what React components would be required.
+
+---
+
+PHASE 9 — Process Drift Detection
+
+Design a system that detects changes in workflows.
+
+Example:
+
+Old workflow
+
+Layup → CNC → Finish
+
+New workflow
+
+Layup → QC → CNC → Finish
+
+Explain how the system would detect drift.
+
+---
+
+PHASE 10 — Bottleneck & Delay Analysis
+
+Explain how audit logs could reveal bottlenecks.
+
+Example:
+
+CNC queue wait time
+Finish throughput
+Layup cycle time
+
+Propose analytics queries.
+
+---
+
+PHASE 11 — Implementation Roadmap
+
+Create a step-by-step implementation plan.
+
+Stages:
+
+Stage 1
+Audit logging improvements
+
+Stage 2
+Process mining engine
+
+Stage 3
+Documentation generator
+
+Stage 4
+Knowledge base UI
+
+Stage 5
+Drift detection
+
+Stage 6
+AI explanations
+
+---
+
+PHASE 12 — Required Schema Additions
+
+If necessary, propose schema improvements.
+
+Examples:
+
+event_type
+previous_state
+next_state
+department_stage
+process_id
+
+Explain why each is needed.
+
+---
+
+FINAL REPORT
+
+Produce a structured report with sections:
+
+1. Existing Audit Infrastructure
+2. Workflow Event Sources
+3. Lifecycle Models
+4. Process Mining Feasibility
+5. Required Schema Improvements
+6. Proposed Architecture
+7. Implementation Roadmap
+8. Risks & Limitations
+
+Include file paths and schema references where possible.
+
+Do not modify any code.
+This is a READ-ONLY forensic analysis.

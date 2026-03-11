@@ -45,6 +45,11 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
             accentColor: 'hsl(25, 95%, 53%)',
           },
         },
+        {
+          id: 'pcc-forecast-accuracy',
+          type: 'forecast_accuracy',
+          props: {},
+        },
       ],
     },
 

@@ -11,7 +11,8 @@ export type WidgetTypeId =
   | 'kit_progress'
   | 'signal_card'
   | 'swim_lane_preview'
-  | 'capability_radar';
+  | 'capability_radar'
+  | 'forecast_accuracy';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -73,6 +74,7 @@ import SignalCardWidget from '@/components/widgets/SignalCardWidget';
 import SwimLanePreviewWidget from '@/components/widgets/SwimLanePreviewWidget';
 import CapabilityRadarWidget from '@/components/widgets/CapabilityRadarWidget';
 import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget';
+import ForecastAccuracyWidget from '@/components/widgets/ForecastAccuracyWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -170,6 +172,16 @@ registerWidget({
   description: 'Consolidated table of all department queues with sparkline trends.',
   category: 'table',
   component: DepartmentStatusWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'forecast_accuracy',
+  displayName: 'Forecast Accuracy',
+  description: 'Shows forecast vs. actual completion accuracy with error metrics and trend breakdown.',
+  category: 'metric',
+  component: ForecastAccuracyWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

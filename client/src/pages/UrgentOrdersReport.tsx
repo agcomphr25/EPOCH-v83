@@ -89,7 +89,8 @@ export default function UrgentOrdersReport() {
       (order) =>
         (order.urgency === 'high' || order.urgency === 'critical') &&
         order.status !== 'FULFILLED' &&
-        order.status !== 'CANCELLED'
+        order.status !== 'CANCELLED' &&
+        order.currentDepartment !== 'Shipping Management'
     );
 
     result.sort((a, b) => {

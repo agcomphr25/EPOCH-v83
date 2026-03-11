@@ -1,6 +1,8 @@
 import { pool } from '../../db';
 import { PIPELINE_STAGES } from './pipelineValidationService';
 import type { PipelineStage } from './pipelineValidationService';
+import { runSimulation, simulateFactoryCompletion, simulateNewOrderDES } from './productionSimulator';
+import type { SimulationOrderResult, DepartmentForecastEntry } from './productionSimulator';
 
 function addBusinessDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -79,6 +81,8 @@ export interface OrderForecast {
   remainingDays: number;
   riskStatus: RiskStatus;
   remainingStages: string[];
+  departmentTimeline?: DepartmentForecastEntry[];
+  simulationConfidence?: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
 export interface ForecastSummary {
@@ -207,10 +211,31 @@ export async function forecastOrder(
   const terminalStatuses = ['FULFILLED', 'CANCELLED', 'SCRAPPED'];
   if (order.status && terminalStatuses.includes(order.status)) return null;
 
-  const cycleTimes = await loadCycleTimes();
   const remaining = getRemainingStages(order.current_department, order);
   if (remaining.length === 0) return null;
 
+  try {
+    const simResult = await simulateFactoryCompletion(orderId);
+    if (simResult) {
+      return {
+        orderId: order.order_id,
+        orderNumber: order.order_id,
+        customerName: order.customer_name,
+        currentDepartment: order.current_department,
+        dueDate: order.due_date,
+        projectedCompletion: simResult.projectedCompletion,
+        remainingDays: simResult.remainingDays,
+        riskStatus: simResult.riskStatus,
+        remainingStages: remaining,
+        departmentTimeline: simResult.departmentTimeline,
+        simulationConfidence: simResult.confidence,
+      };
+    }
+  } catch (simErr) {
+    console.warn('[ProductionForecast] DES simulation failed, falling back:', simErr);
+  }
+
+  const cycleTimes = await loadCycleTimes();
   const remainingDays = remaining.reduce(
     (sum, stage) => sum + (cycleTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2),
     0
@@ -324,7 +349,90 @@ export async function simulateNewOrder(params: {
   };
 }
 
-export async function forecastActiveOrders(): Promise<ForecastSummary> {
+export async function forecastActiveOrders(): Promise<ForecastSummary & { simulationDurationMs?: number }> {
+  try {
+    const snapshot = await runSimulation();
+
+    const nameResult = await pool.query(
+      `SELECT o.order_id, COALESCE(c.name, 'Unknown') AS customer_name, o.due_date,
+              o.current_department, o.is_flattop, o.model_id, o.features
+       FROM all_orders o
+       LEFT JOIN customers c ON c.id::text = o.customer_id
+       WHERE o.status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+         AND o.current_department IS NOT NULL
+         AND o.scrap_date IS NULL
+         AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
+       ORDER BY o.due_date ASC NULLS LAST
+       LIMIT 500`
+    );
+    const rows = Array.isArray(nameResult) ? nameResult : (nameResult?.rows ?? []);
+    const nameMap = new Map<string, { customerName: string; dueDate: string | null; currentDepartment: string; is_flattop: boolean; model_id: string | null; features: any }>();
+    for (const row of rows) {
+      nameMap.set(row.order_id, {
+        customerName: row.customer_name,
+        dueDate: row.due_date,
+        currentDepartment: row.current_department,
+        is_flattop: row.is_flattop,
+        model_id: row.model_id,
+        features: row.features,
+      });
+    }
+
+    const orders: OrderForecast[] = [];
+    let onTrack = 0;
+    let atRisk = 0;
+    let late = 0;
+
+    for (const [orderId, simResult] of snapshot.results) {
+      const info = nameMap.get(orderId);
+      if (!info) continue;
+
+      const remaining = getRemainingStages(info.currentDepartment, {
+        is_flattop: info.is_flattop,
+        model_id: info.model_id,
+        features: info.features,
+      });
+
+      if (simResult.riskStatus === 'ON_TRACK') onTrack++;
+      else if (simResult.riskStatus === 'AT_RISK') atRisk++;
+      else late++;
+
+      orders.push({
+        orderId,
+        orderNumber: orderId,
+        customerName: info.customerName,
+        currentDepartment: simResult.currentDepartment,
+        dueDate: simResult.dueDate,
+        projectedCompletion: simResult.projectedCompletion,
+        remainingDays: simResult.remainingDays,
+        riskStatus: simResult.riskStatus,
+        remainingStages: remaining,
+        departmentTimeline: simResult.departmentTimeline,
+        simulationConfidence: simResult.confidence,
+      });
+    }
+
+    try {
+      const { stampForecastOnOrders } = await import('./forecastAccuracyService');
+      stampForecastOnOrders().catch(() => {});
+    } catch {}
+
+    return {
+      totalForecasted: orders.length,
+      onTrack,
+      atRisk,
+      late,
+      orders,
+      generatedAt: snapshot.generatedAt,
+      simulationDurationMs: snapshot.simulationDurationMs,
+    };
+  } catch (err) {
+    console.warn('[ProductionForecast] DES simulation failed for active orders, using legacy:', err);
+    return forecastActiveOrdersLegacy();
+  }
+}
+
+async function forecastActiveOrdersLegacy(): Promise<ForecastSummary> {
   const result = await pool.query(
     `SELECT
       o.order_id, o.current_department, o.due_date,

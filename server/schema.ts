@@ -8146,18 +8146,18 @@ export const cuttingCutRecords = pgTable('cutting_cut_records', {
 
 // Cutting Table - Built Packets (individual packets with full traceability)
 export const cuttingBuiltPackets = pgTable('cutting_built_packets', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  sessionId: uuid('session_id').references(() => cuttingPacketSessions.id, { onDelete: 'cascade' }),
+  id: serial('id').primaryKey(),
+  sessionId: uuid('session_id'),
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id).notNull(),
-  barcode: text('barcode').notNull().unique(), // Auto-generated barcode for this packet
-  packetNumber: integer('packet_number').notNull(), // Sequential number within the session
+  barcode: text('barcode').notNull().unique(),
+  packetNumber: integer('packet_number').notNull(),
   buildDate: timestamp('build_date').notNull().defaultNow(),
-  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, ALLOCATED, CONSUMED, SCRAPPED
-  allocatedToOrder: text('allocated_to_order'), // Order ID if allocated
+  status: text('status').notNull().default('AVAILABLE'),
+  allocatedToOrder: text('allocated_to_order'),
   consumedAt: timestamp('consumed_at'),
   consumedBy: text('consumed_by'),
-  isMixedFabric: boolean('is_mixed_fabric').default(false), // True if packet contains multiple fabric sources
-  fabricSourceCount: integer('fabric_source_count').default(1), // Number of different fabric sources
+  isMixedFabric: boolean('is_mixed_fabric').default(false),
+  fabricSourceCount: integer('fabric_source_count').default(1),
   notes: text('notes'),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -8170,15 +8170,13 @@ export const cuttingBuiltPackets = pgTable('cutting_built_packets', {
 
 // Cutting Table - Built Packet Fabric Sources (for mixed fabric traceability)
 export const cuttingBuiltPacketFabricSources = pgTable('cutting_built_packet_fabric_sources', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  builtPacketId: uuid('built_packet_id')
+  id: serial('id').primaryKey(),
+  builtPacketId: integer('built_packet_id')
     .references(() => cuttingBuiltPackets.id, { onDelete: 'cascade' })
     .notNull(),
   fabricInventoryId: uuid('fabric_inventory_id')
-    .references(() => cuttingFabricInventory.id)
-    .notNull(),
-  componentId: uuid('component_id').references(() => cuttingComponents.id),
-  // Denormalized traceability data for label printing
+    .references(() => cuttingFabricInventory.id),
+  componentId: uuid('component_id'),
   fabricType: text('fabric_type'),
   lotNumber: text('lot_number'),
   batchNumber: text('batch_number'),
@@ -8186,8 +8184,8 @@ export const cuttingBuiltPacketFabricSources = pgTable('cutting_built_packet_fab
   supplierPartNumber: text('supplier_part_number'),
   internalControlNumber: text('internal_control_number'),
   expirationDate: date('expiration_date'),
-  quantityUsed: integer('quantity_used').notNull().default(1), // Quantity from this source
-  isPrimary: boolean('is_primary').default(true), // Primary source indicator
+  quantityUsed: integer('quantity_used').notNull().default(1),
+  isPrimary: boolean('is_primary').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({
   packetIdx: index('cutting_built_packet_sources_packet_idx').on(table.builtPacketId),

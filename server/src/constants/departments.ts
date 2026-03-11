@@ -1,5 +1,5 @@
 export const DEPARTMENTS = [
-  'Production Queue',
+  'P1 Production Queue',
   'Layup/Plugging',
   'Barcode',
   'CNC',

@@ -5,7 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import cron from 'node-cron';
 import { createServer } from 'http';
-import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 import { db } from './db';
 import { authenticateToken } from './middleware/auth';
@@ -215,6 +214,12 @@ earlyServer.listen({ port, host: '0.0.0.0' }, () => {
 
 (async () => {
   try {
+    // Dynamic import defers tsx compilation of routes/index.ts (137 files, 9300 lines)
+    // until AFTER the server is already listening.  Static import would block the entire
+    // module from running (including earlyServer.listen) for ~13 seconds while tsx
+    // compiles — causing Replit's health-check probe to time out during that window.
+    const { registerRoutes } = await import('./src/routes/index');
+
     // Pass the already-listening server so registerRoutes reuses it instead
     // of creating (and returning) a brand-new one.
     const server = await registerRoutes(app, earlyServer);

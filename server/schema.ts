@@ -13144,6 +13144,19 @@ export const insertProductionForecastVerificationSchema = createInsertSchema(pro
 export type ProductionForecastVerification = typeof productionForecastVerifications.$inferSelect;
 export type InsertProductionForecastVerification = z.infer<typeof insertProductionForecastVerificationSchema>;
 
+// Department Capacity for DES Simulation
+export const departmentCapacity = pgTable('department_capacity', {
+  id: serial('id').primaryKey(),
+  department: text('department').unique().notNull(),
+  stations: integer('stations').notNull().default(1),
+  avgParallelEfficiency: real('avg_parallel_efficiency').notNull().default(0.85),
+  lastUpdated: timestamp('last_updated').defaultNow(),
+});
+
+export const insertDepartmentCapacitySchema = createInsertSchema(departmentCapacity).omit({ id: true, lastUpdated: true });
+export type DepartmentCapacity = typeof departmentCapacity.$inferSelect;
+export type InsertDepartmentCapacity = z.infer<typeof insertDepartmentCapacitySchema>;
+
 // ============ Executive Rundown System ============
 
 export const executivePriorityEnum = pgEnum('executive_priority', [

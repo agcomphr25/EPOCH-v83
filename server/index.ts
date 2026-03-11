@@ -1024,6 +1024,40 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Production forecast tables migration:', fcErr.message);
       }
 
+      try {
+        const { sql: sqlCap } = await import('drizzle-orm');
+        await db.execute(sqlCap`
+          CREATE TABLE IF NOT EXISTS department_capacity (
+            id SERIAL PRIMARY KEY,
+            department TEXT UNIQUE NOT NULL,
+            stations INTEGER NOT NULL DEFAULT 1,
+            avg_parallel_efficiency REAL NOT NULL DEFAULT 0.85,
+            last_updated TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        const capCheck = await db.execute(sqlCap`SELECT COUNT(*)::int AS cnt FROM department_capacity`);
+        const capRows = Array.isArray(capCheck) ? capCheck : (capCheck?.rows ?? []);
+        if (!capRows[0]?.cnt || capRows[0].cnt === 0) {
+          await db.execute(sqlCap`
+            INSERT INTO department_capacity (department, stations, avg_parallel_efficiency) VALUES
+              ('P1 Production Queue', 10, 1.0),
+              ('Layup/Plugging', 4, 0.85),
+              ('Barcode', 2, 0.95),
+              ('CNC', 2, 0.90),
+              ('Gunsmith', 2, 0.85),
+              ('Finish', 3, 0.85),
+              ('Finish QC', 2, 0.95),
+              ('Paint', 2, 0.85),
+              ('Shipping QC', 2, 0.95),
+              ('Shipping', 2, 0.90)
+            ON CONFLICT (department) DO NOTHING
+          `);
+        }
+        console.log('✅ Ensured department_capacity table exists with seed data');
+      } catch (capErr: any) {
+        console.warn('⚠️ Department capacity migration:', capErr.message);
+      }
+
       // Ensure address validation columns exist on customer_addresses and vendors
       try {
         const { sql: sqlAddr } = await import('drizzle-orm');

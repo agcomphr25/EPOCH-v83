@@ -418,6 +418,9 @@ export default function OrderEntry() {
       const backlogWeeks = (backlogDays / 5).toFixed(1);
       reasons.push(`Queue backlog adds ~${backlogWeeks} week${backlogDays > 5 ? 's' : ''} based on current load`);
     }
+    if (data.isAdjustable) {
+      reasons.push('Adjustable model: +2 weeks added for adjustable cheekpiece work');
+    }
     const bufferWeeks = Math.ceil(bufferDays / 5);
     reasons.push(`Safety buffer: ~${bufferWeeks} week${bufferWeeks !== 1 ? 's' : ''} added beyond projected completion`);
     const otherOptions = features.other_options || [];

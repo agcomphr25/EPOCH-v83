@@ -271,6 +271,7 @@ export interface NewOrderSimulation {
   totalBusinessDays: number;
   confidence: SimulationConfidence;
   pipelineStages: string[];
+  isAdjustable: boolean;
 }
 
 export async function simulateNewOrder(params: {
@@ -301,7 +302,10 @@ export async function simulateNewOrder(params: {
     totalBacklogDelay += backlogDelay;
   }
 
-  const estimatedCycleDays = totalCycleDays + totalBacklogDelay;
+  const isAdjustable = !!(params.model_id && params.model_id.toLowerCase().includes('adj'));
+  const adjustableExtraDays = isAdjustable ? 10 : 0;
+
+  const estimatedCycleDays = totalCycleDays + totalBacklogDelay + adjustableExtraDays;
   const totalBusinessDays = Math.ceil(estimatedCycleDays);
   const projectedCompletion = addBusinessDays(new Date(), totalBusinessDays);
 
@@ -321,6 +325,7 @@ export async function simulateNewOrder(params: {
     totalBusinessDays,
     confidence,
     pipelineStages: pipeline,
+    isAdjustable,
   };
 }
 

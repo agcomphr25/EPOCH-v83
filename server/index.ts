@@ -1058,6 +1058,46 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Department capacity migration:', capErr.message);
       }
 
+      try {
+        const { sql: sqlMds } = await import('drizzle-orm');
+        await db.execute(sqlMds`
+          CREATE TABLE IF NOT EXISTS model_department_stats (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT NOT NULL,
+            department TEXT NOT NULL,
+            avg_duration_minutes REAL NOT NULL,
+            median_duration_minutes REAL NOT NULL,
+            p90_duration_minutes REAL NOT NULL,
+            sample_count INTEGER NOT NULL DEFAULT 0,
+            std_dev_minutes REAL DEFAULT 0,
+            avg_days REAL NOT NULL,
+            confidence TEXT NOT NULL DEFAULT 'LOW',
+            last_rebuilt TIMESTAMP DEFAULT NOW(),
+            UNIQUE(model_id, department)
+          )
+        `);
+        await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS mds_model_id_idx ON model_department_stats(model_id)`);
+        await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS mds_department_idx ON model_department_stats(department)`);
+        await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS mds_confidence_idx ON model_department_stats(confidence)`);
+        await db.execute(sqlMds`
+          CREATE TABLE IF NOT EXISTS cycle_time_drift_log (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT NOT NULL,
+            department TEXT NOT NULL,
+            previous_avg_minutes REAL NOT NULL,
+            new_avg_minutes REAL NOT NULL,
+            drift_percent REAL NOT NULL,
+            direction TEXT NOT NULL,
+            detected_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS drift_log_detected_at_idx ON cycle_time_drift_log(detected_at)`);
+        await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS drift_log_model_id_idx ON cycle_time_drift_log(model_id)`);
+        console.log('✅ Ensured self-learning cycle time tables exist');
+      } catch (mdsErr: any) {
+        console.warn('⚠️ Self-learning cycle time tables migration:', mdsErr.message);
+      }
+
       // Ensure address validation columns exist on customer_addresses and vendors
       try {
         const { sql: sqlAddr } = await import('drizzle-orm');
@@ -1761,6 +1801,17 @@ async function initializeBackgroundServices() {
     });
     
     console.log('🏥 Daily system health checks scheduler active (runs at configured time from UI)');
+
+    cron.schedule('0 2 * * *', async () => {
+      try {
+        const { rebuildModelDepartmentStats } = await import('./src/services/cycleTimeLearning');
+        const report = await rebuildModelDepartmentStats();
+        console.log(`[CycleTimeLearning] Nightly rebuild: ${report.statsInserted + report.statsUpdated} stats, ${report.anomaliesDetected.length} anomalies, ${report.durationMs}ms`);
+      } catch (err) {
+        console.error('[CycleTimeLearning] Nightly rebuild failed:', err);
+      }
+    });
+    console.log('🧠 Nightly cycle time learning rebuild scheduled (every day at 2:00 AM)');
 
     // Queue integrity background monitor
     try {

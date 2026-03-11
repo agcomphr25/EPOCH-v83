@@ -1274,4 +1274,69 @@ router.get(
   }
 );
 
+router.post(
+  '/cycle-time-learning/rebuild',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { rebuildModelDepartmentStats } = await import('../services/cycleTimeLearning');
+      const report = await rebuildModelDepartmentStats();
+      res.json(report);
+    } catch (error) {
+      console.error('Cycle time rebuild error:', error);
+      res.status(500).json({ error: 'Failed to rebuild cycle time stats' });
+    }
+  }
+);
+
+router.get(
+  '/cycle-time-learning/stats',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { getStatsOverview } = await import('../services/cycleTimeLearning');
+      const overview = await getStatsOverview();
+      res.json(overview);
+    } catch (error) {
+      console.error('Cycle time stats error:', error);
+      res.status(500).json({ error: 'Failed to get cycle time stats' });
+    }
+  }
+);
+
+router.get(
+  '/cycle-time-learning/drift-log',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string, 10) || 50;
+      const { getDriftLog } = await import('../services/cycleTimeLearning');
+      const log = await getDriftLog(Math.min(limit, 200));
+      res.json(log);
+    } catch (error) {
+      console.error('Drift log error:', error);
+      res.status(500).json({ error: 'Failed to get drift log' });
+    }
+  }
+);
+
+router.get(
+  '/cycle-time-learning/model-stats',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { getModelCycleTimes } = await import('../services/cycleTimeLearning');
+      const data = await getModelCycleTimes();
+      res.json(data);
+    } catch (error) {
+      console.error('Model cycle times error:', error);
+      res.status(500).json({ error: 'Failed to get model cycle times' });
+    }
+  }
+);
+
 export default router;

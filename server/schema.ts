@@ -13157,6 +13157,49 @@ export const insertDepartmentCapacitySchema = createInsertSchema(departmentCapac
 export type DepartmentCapacity = typeof departmentCapacity.$inferSelect;
 export type InsertDepartmentCapacity = z.infer<typeof insertDepartmentCapacitySchema>;
 
+// Model Department Stats — Self-Learning Cycle Times
+export const modelDepartmentStats = pgTable('model_department_stats', {
+  id: serial('id').primaryKey(),
+  modelId: text('model_id').notNull(),
+  department: text('department').notNull(),
+  avgDurationMinutes: real('avg_duration_minutes').notNull(),
+  medianDurationMinutes: real('median_duration_minutes').notNull(),
+  p90DurationMinutes: real('p90_duration_minutes').notNull(),
+  sampleCount: integer('sample_count').notNull().default(0),
+  stdDevMinutes: real('std_dev_minutes').default(0),
+  avgDays: real('avg_days').notNull(),
+  confidence: text('confidence').notNull().default('LOW'),
+  lastRebuilt: timestamp('last_rebuilt').defaultNow(),
+}, (table) => ({
+  modelDeptUnique: unique().on(table.modelId, table.department),
+  modelIdx: index('mds_model_id_idx').on(table.modelId),
+  deptIdx: index('mds_department_idx').on(table.department),
+  confidenceIdx: index('mds_confidence_idx').on(table.confidence),
+}));
+
+export const insertModelDepartmentStatsSchema = createInsertSchema(modelDepartmentStats).omit({ id: true, lastRebuilt: true });
+export type ModelDepartmentStats = typeof modelDepartmentStats.$inferSelect;
+export type InsertModelDepartmentStats = z.infer<typeof insertModelDepartmentStatsSchema>;
+
+// Cycle Time Drift Log — Anomaly Detection
+export const cycleTimeDriftLog = pgTable('cycle_time_drift_log', {
+  id: serial('id').primaryKey(),
+  modelId: text('model_id').notNull(),
+  department: text('department').notNull(),
+  previousAvgMinutes: real('previous_avg_minutes').notNull(),
+  newAvgMinutes: real('new_avg_minutes').notNull(),
+  driftPercent: real('drift_percent').notNull(),
+  direction: text('direction').notNull(),
+  detectedAt: timestamp('detected_at').defaultNow(),
+}, (table) => ({
+  detectedAtIdx: index('drift_log_detected_at_idx').on(table.detectedAt),
+  modelIdx: index('drift_log_model_id_idx').on(table.modelId),
+}));
+
+export const insertCycleTimeDriftLogSchema = createInsertSchema(cycleTimeDriftLog).omit({ id: true, detectedAt: true });
+export type CycleTimeDriftLog = typeof cycleTimeDriftLog.$inferSelect;
+export type InsertCycleTimeDriftLog = z.infer<typeof insertCycleTimeDriftLogSchema>;
+
 // ============ Executive Rundown System ============
 
 export const executivePriorityEnum = pgEnum('executive_priority', [

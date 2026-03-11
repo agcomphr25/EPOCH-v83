@@ -156,6 +156,15 @@ async function loadCapacity(): Promise<Record<string, { stations: number; effici
   }
 }
 
+async function loadModelCycleTimes(): Promise<Record<string, Record<string, number>>> {
+  try {
+    const { getModelCycleTimes } = await import('./cycleTimeLearning');
+    return await getModelCycleTimes();
+  } catch {
+    return {};
+  }
+}
+
 async function loadCycleTimes(): Promise<Record<string, number>> {
   try {
     const result = await pool.query(
@@ -260,10 +269,11 @@ export async function runSimulation(): Promise<SimulationSnapshot> {
   }
 
   const startTime = Date.now();
-  const [activeOrders, capacity, cycleTimes] = await Promise.all([
+  const [activeOrders, capacity, cycleTimes, modelCycleTimes] = await Promise.all([
     loadActiveOrders(),
     loadCapacity(),
     loadCycleTimes(),
+    loadModelCycleTimes(),
   ]);
 
   const deptStates: Record<string, DepartmentState> = {};
@@ -319,7 +329,8 @@ export async function runSimulation(): Promise<SimulationSnapshot> {
       }
       if (!station.busy && dept.queue.length > 0) {
         const order = dept.queue.shift()!;
-        const baseDays = cycleTimes[dept.name] ?? FALLBACK_CYCLE_DAYS[dept.name] ?? 2;
+        const modelSpecific = order.modelId ? modelCycleTimes[order.modelId]?.[dept.name] : undefined;
+        const baseDays = modelSpecific ?? cycleTimes[dept.name] ?? FALLBACK_CYCLE_DAYS[dept.name] ?? 2;
         const processingDays = baseDays / dept.efficiency;
         const completionTime = currentTime + processingDays;
 

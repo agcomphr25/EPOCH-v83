@@ -4252,11 +4252,14 @@ export const p2Customers = pgTable('p2_customers', {
   billingCity: text('billing_city'),
   billingState: text('billing_state'),
   billingZip: text('billing_zip'),
+  shippingCompanyName: text('shipping_company_name'),
+  shippingContactName: text('shipping_contact_name'),
   shippingAddress: text('shipping_address'),
+  shippingAddress2: text('shipping_address_2'),
   shippingCity: text('shipping_city'),
   shippingState: text('shipping_state'),
   shippingZip: text('shipping_zip'),
-  shipToAddress: text('ship_to_address'), // New field for ship-to information
+  shipToAddress: text('ship_to_address'),
   paymentTerms: text('payment_terms').default('NET_30'),
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE, SUSPENDED
   notes: text('notes'),

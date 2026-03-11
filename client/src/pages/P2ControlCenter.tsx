@@ -977,7 +977,10 @@ interface P2Customer {
   billingCity: string | null;
   billingState: string | null;
   billingZip: string | null;
+  shippingCompanyName: string | null;
+  shippingContactName: string | null;
   shippingAddress: string | null;
+  shippingAddress2: string | null;
   shippingCity: string | null;
   shippingState: string | null;
   shippingZip: string | null;
@@ -1026,7 +1029,10 @@ function P2CustomersTab() {
     billingCity: '',
     billingState: '',
     billingZip: '',
+    shippingCompanyName: '',
+    shippingContactName: '',
     shippingAddress: '',
+    shippingAddress2: '',
     shippingCity: '',
     shippingState: '',
     shippingZip: '',
@@ -1172,7 +1178,10 @@ function P2CustomersTab() {
       billingCity: '',
       billingState: '',
       billingZip: '',
+      shippingCompanyName: '',
+      shippingContactName: '',
       shippingAddress: '',
+      shippingAddress2: '',
       shippingCity: '',
       shippingState: '',
       shippingZip: '',
@@ -1196,7 +1205,10 @@ function P2CustomersTab() {
       billingCity: customer.billingCity || '',
       billingState: customer.billingState || '',
       billingZip: customer.billingZip || '',
+      shippingCompanyName: customer.shippingCompanyName || '',
+      shippingContactName: customer.shippingContactName || '',
       shippingAddress: customer.shippingAddress || '',
+      shippingAddress2: customer.shippingAddress2 || '',
       shippingCity: customer.shippingCity || '',
       shippingState: customer.shippingState || '',
       shippingZip: customer.shippingZip || '',
@@ -1446,6 +1458,26 @@ function P2CustomersTab() {
             <div className="col-span-2 border-t pt-4 mt-2">
               <Label className="text-base font-medium">Shipping Address</Label>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="shippingCompanyName">Company Name</Label>
+              <Input
+                id="shippingCompanyName"
+                placeholder="Subsidiary or receiving company"
+                value={formData.shippingCompanyName}
+                onChange={(e) => setFormData({ ...formData, shippingCompanyName: e.target.value })}
+                data-testid="input-shipping-company-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shippingContactName">Contact Name</Label>
+              <Input
+                id="shippingContactName"
+                placeholder="Receiving contact person"
+                value={formData.shippingContactName}
+                onChange={(e) => setFormData({ ...formData, shippingContactName: e.target.value })}
+                data-testid="input-shipping-contact-name"
+              />
+            </div>
             <div className="col-span-2 space-y-2">
               <Label htmlFor="shippingAddress">Street Address</Label>
               <Input
@@ -1454,6 +1486,16 @@ function P2CustomersTab() {
                 value={formData.shippingAddress}
                 onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
                 data-testid="input-shipping-address"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="shippingAddress2">Address Line 2</Label>
+              <Input
+                id="shippingAddress2"
+                placeholder="Suite, building, floor, etc."
+                value={formData.shippingAddress2}
+                onChange={(e) => setFormData({ ...formData, shippingAddress2: e.target.value })}
+                data-testid="input-shipping-address-2"
               />
             </div>
             <div className="space-y-2">
@@ -1648,6 +1690,26 @@ function P2CustomersTab() {
                 <div className="col-span-2 border-t pt-4 mt-2">
                   <Label className="text-base font-medium">Shipping Address</Label>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-shippingCompanyName">Company Name</Label>
+                  <Input
+                    id="edit-shippingCompanyName"
+                    placeholder="Subsidiary or receiving company"
+                    value={formData.shippingCompanyName}
+                    onChange={(e) => setFormData({ ...formData, shippingCompanyName: e.target.value })}
+                    data-testid="input-edit-shipping-company-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-shippingContactName">Contact Name</Label>
+                  <Input
+                    id="edit-shippingContactName"
+                    placeholder="Receiving contact person"
+                    value={formData.shippingContactName}
+                    onChange={(e) => setFormData({ ...formData, shippingContactName: e.target.value })}
+                    data-testid="input-edit-shipping-contact-name"
+                  />
+                </div>
                 <div className="col-span-2 space-y-2">
                   <Label htmlFor="edit-shippingAddress">Street Address</Label>
                   <Input
@@ -1655,6 +1717,16 @@ function P2CustomersTab() {
                     value={formData.shippingAddress}
                     onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
                     data-testid="input-edit-shipping-address"
+                  />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="edit-shippingAddress2">Address Line 2</Label>
+                  <Input
+                    id="edit-shippingAddress2"
+                    placeholder="Suite, building, floor, etc."
+                    value={formData.shippingAddress2}
+                    onChange={(e) => setFormData({ ...formData, shippingAddress2: e.target.value })}
+                    data-testid="input-edit-shipping-address-2"
                   />
                 </div>
                 <div className="space-y-2">

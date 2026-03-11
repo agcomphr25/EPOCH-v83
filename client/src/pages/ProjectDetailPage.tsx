@@ -172,6 +172,7 @@ export default function ProjectDetailPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [isSkipDialogOpen, setIsSkipDialogOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string } | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -820,7 +821,20 @@ export default function ProjectDetailPage() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
+                                        onClick={() => setPreviewAttachment({
+                                          url: `/api/project-step-attachments/download/${attachment.id}`,
+                                          name: attachment.originalFileName,
+                                        })}
+                                        title="View document"
+                                        data-testid={`button-view-attachment-${attachment.id}`}
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}?download=true`, '_blank')}
+                                        title="Download document"
                                         data-testid={`button-download-attachment-${attachment.id}`}
                                       >
                                         <Download className="h-4 w-4" />
@@ -1168,7 +1182,20 @@ export default function ProjectDetailPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
+                          onClick={() => setPreviewAttachment({
+                            url: `/api/project-step-attachments/download/${attachment.id}`,
+                            name: attachment.originalFileName,
+                          })}
+                          title="View document"
+                          data-testid={`button-view-${attachment.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}?download=true`, '_blank')}
+                          title="Download document"
                           data-testid={`button-download-${attachment.id}`}
                         >
                           <Download className="h-4 w-4" />
@@ -1230,6 +1257,42 @@ export default function ProjectDetailPage() {
               disabled={!skipReason.trim() || skipStepMutation.isPending}
             >
               {skipStepMutation.isPending ? 'Skipping...' : 'Skip Step'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => { if (!open) setPreviewAttachment(null); }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              {previewAttachment?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Document preview
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            {previewAttachment && (
+              <iframe
+                src={previewAttachment.url}
+                className="w-full h-full rounded border"
+                title={previewAttachment.name}
+              />
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => previewAttachment && window.open(`${previewAttachment.url}?download=true`, '_blank')}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Download
+            </Button>
+            <Button variant="outline" onClick={() => setPreviewAttachment(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

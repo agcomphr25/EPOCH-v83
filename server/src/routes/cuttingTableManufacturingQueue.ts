@@ -1209,6 +1209,13 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       }
     }
     
+    // Try matching by fabric part number directly
+    if (!matchedRoll) {
+      matchedRoll = allFabric.find(f =>
+        f.fabricPartNumber && f.fabricPartNumber === barcodeNorm
+      );
+    }
+    
     if (!matchedRoll) {
       console.log(`[validate-material] Roll not found. Scanned: "${barcodeNorm}". Active rolls: ${allFabric.length}. Sample barcodes: ${allFabric.slice(0, 5).map(f => `barcode=${f.barcode}, ICN=${f.internalControlNumber}, roll=${f.rollNumber}`).join(' | ')}`);
       return res.status(404).json({ 

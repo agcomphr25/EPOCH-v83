@@ -673,6 +673,22 @@ export default function CuttingOperatorDashboard() {
     });
   };
 
+  const materialScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (materialScanTimerRef.current) {
+      clearTimeout(materialScanTimerRef.current);
+      materialScanTimerRef.current = null;
+    }
+    if (materialScanBarcode && materialScanBarcode.length > 5 && activeScannedPacket?.queueItem?.id) {
+      materialScanTimerRef.current = setTimeout(() => {
+        handleMaterialScan(materialScanBarcode);
+      }, 300);
+    }
+    return () => {
+      if (materialScanTimerRef.current) clearTimeout(materialScanTimerRef.current);
+    };
+  }, [materialScanBarcode]);
+
   const handleCloseScannedPacket = () => {
     setActiveScannedPacket(null);
     setValidatedRolls([]);
@@ -1622,9 +1638,6 @@ export default function CuttingOperatorDashboard() {
                   value={materialScanBarcode}
                   onChange={(val) => {
                     setMaterialScanBarcode(val);
-                    if (val && val.length > 5) {
-                      handleMaterialScan(val);
-                    }
                   }}
                   placeholder="Scan material roll barcode..."
                   data-testid="input-material-scan"

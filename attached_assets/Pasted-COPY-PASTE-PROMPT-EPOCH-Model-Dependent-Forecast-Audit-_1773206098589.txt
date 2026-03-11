@@ -1,0 +1,288 @@
+COPY-PASTE PROMPT
+EPOCH Model-Dependent Forecast Audit
+
+Run a read-only architectural audit of the EPOCH codebase to determine how estimated completion dates are currently calculated and what would be required to support stock-model dependent forecasting with backlog awareness.
+
+Do NOT modify any files.
+
+Produce a structured report answering the phases below.
+
+PHASE 1 — Locate the Current Forecast Engine
+
+Identify every service responsible for calculating order timelines or estimated completion dates.
+
+Search for:
+
+forecast
+
+completion date
+
+due date
+
+estimate
+
+simulate
+
+backlog
+
+cycle time
+
+queue
+
+lead time
+
+Likely files include:
+
+server/services/productionForecastEngine.ts
+server/src/services/productionForecastService.ts
+
+For each service report:
+
+file path
+
+exported functions
+
+which functions generate estimated completion dates
+
+which endpoints call them
+
+Document the main algorithm flow.
+
+PHASE 2 — Identify Inputs to the Forecast
+
+Determine exactly what information the forecast engine currently uses.
+
+List all inputs including:
+
+order id
+
+current department
+
+order routing
+
+department cycle times
+
+department queue length
+
+rush / expedite adjustments
+
+skip-stage logic
+
+safety buffers
+
+For each input show:
+
+variable
+source
+file location
+
+Example:
+
+avgDepartmentCycleTime
+source: department_stats table
+used in: productionForecastEngine.ts line X
+PHASE 3 — Determine Whether Stock Model Is Used
+
+Search for:
+
+stockModel
+stock_model
+model
+sku
+productModel
+
+Determine:
+
+Whether the order’s stock model is available inside the forecast engine
+
+Whether the forecast logic branches based on model
+
+Whether certain models skip departments
+
+Whether model-specific cycle times exist
+
+Report:
+
+stock model available to forecast: yes/no
+where it comes from
+whether it influences forecast
+PHASE 4 — Analyze Queue Calculations
+
+Identify how backlog is currently calculated.
+
+Determine whether the system counts:
+
+orders per department
+orders per stage
+orders per department per model
+orders per department per product line
+
+Show the query used to measure backlog.
+
+Example output:
+
+SELECT COUNT(*)
+FROM orders
+WHERE department = 'CNC'
+AND status != 'complete'
+
+Report whether model differentiation exists in queue calculations.
+
+PHASE 5 — Determine Cycle Time Data Source
+
+Identify where cycle times are stored.
+
+Possibilities include:
+
+department stats table
+production metrics table
+hard-coded constants
+historical order analysis
+
+For each department identify:
+
+avg_cycle_time
+median_cycle_time
+std_dev
+
+Determine whether cycle time can vary by:
+
+department
+stock model
+product line
+feature set
+PHASE 6 — Identify Routing Logic
+
+Determine how the system decides which departments an order passes through.
+
+Look for:
+
+routing tables
+skip logic
+department sequences
+
+Confirm whether routing can vary by:
+
+stock model
+features
+order type
+PHASE 7 — Evaluate Data Needed for Model-Dependent Forecasting
+
+Determine whether the schema currently supports:
+
+model specific cycle times
+model specific capacity
+model specific queue calculations
+
+Check for existing tables such as:
+
+stock_models
+products
+order_items
+routing_templates
+
+List any fields that could support model-specific forecasting.
+
+PHASE 8 — Identify Missing Architecture
+
+Determine what must be added to support:
+
+Model-dependent cycle times
+
+Example structure:
+
+model_department_stats
+----------------------
+stock_model
+department
+avg_cycle_time
+capacity_multiplier
+last_updated
+Model-specific queue weighting
+
+Example logic:
+
+effective_queue =
+orders_in_queue
++ model_specific_backlog
+Capacity adjustments
+
+Example:
+
+Alpine Hunter capacity multiplier = 1.4
+Classic = 1.0
+Ultralight = 0.7
+PHASE 9 — Evaluate Historical Data Availability
+
+Determine whether EPOCH already collects the data required to compute model-specific production times.
+
+Search audit tables such as:
+
+order_department_transitions
+audit_events
+order_history
+
+Check whether we can derive:
+
+avg time in department per model
+median time per model
+variance per model
+PHASE 10 — Frontend Dependencies
+
+Identify where the estimated completion date appears in the UI.
+
+Likely locations:
+
+Order creation page
+Order detail page
+Production Control Center
+Shipping dashboard
+
+Document:
+
+component
+API endpoint
+data source
+PHASE 11 — Performance Risk Analysis
+
+Evaluate whether calculating model-specific forecasts would require:
+
+heavy queries
+full table scans
+historical aggregation
+
+Recommend whether forecasting should:
+
+compute on demand
+use cached statistics
+run scheduled recalculations
+PHASE 12 — Implementation Roadmap
+
+Provide a step-by-step architecture plan to support:
+
+model-specific forecasting
+model backlog weighting
+dynamic due date prediction
+
+Include:
+
+schema additions
+
+service changes
+
+queue logic updates
+
+UI updates
+
+FINAL OUTPUT
+
+Produce a structured report containing:
+
+1 Current Forecast Architecture
+2 Stock Model Awareness
+3 Queue Calculation Method
+4 Cycle Time Data Sources
+5 Routing Logic
+6 Historical Data Availability
+7 Missing Architecture
+8 Implementation Plan

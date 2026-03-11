@@ -1218,36 +1218,68 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       });
     }
     
-    // Find matching BOM to validate material
+    // Find matching BOM to validate material (mirrors scan-start BOM matching strategies)
     let bomId: string | null = null;
+    let notesMaterialType: string | null = null;
+    let notesPacketName: string | null = null;
     try {
       if (queueItem.notes) {
         const parsedNotes = JSON.parse(queueItem.notes);
         bomId = parsedNotes.bomId || null;
+        notesMaterialType = parsedNotes.materialType || null;
+        notesPacketName = parsedNotes.packetName || null;
       }
     } catch {}
     
     let packetBom = null;
+    const allActiveBoms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
+    
     if (bomId) {
-      packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: eq(cuttingPacketBOMs.id, bomId),
-      });
+      packetBom = allActiveBoms.find(b => b.id === bomId) || null;
+      if (!packetBom) {
+        packetBom = await db.query.cuttingPacketBOMs.findFirst({
+          where: eq(cuttingPacketBOMs.id, bomId),
+        });
+      }
+    }
+    if (!packetBom && notesMaterialType) {
+      const materialToPacketType: Record<string, string> = {
+        'carbon_fiber': 'carbon fiber packet',
+        'fiberglass': 'fiberglass packet',
+        'mesa': 'mesa packet',
+        'p2_disruptor': 'disruptor',
+        'p2_disruptor_packet': 'disruptor packet',
+        'p2_antenna': 'antenna cover',
+        'p2_antenna_cover': 'antenna cover packet',
+      };
+      const targetType = materialToPacketType[notesMaterialType];
+      if (targetType) {
+        packetBom = allActiveBoms.find(b =>
+          b.packetType.toLowerCase() === targetType ||
+          b.packetType.toLowerCase().includes(targetType) ||
+          targetType.includes(b.packetType.toLowerCase())
+        ) || null;
+      }
+    }
+    if (!packetBom && notesPacketName) {
+      packetBom = allActiveBoms.find(b =>
+        b.packetType.toLowerCase() === notesPacketName!.toLowerCase() ||
+        b.packetType.toLowerCase().includes(notesPacketName!.toLowerCase()) ||
+        notesPacketName!.toLowerCase().includes(b.packetType.toLowerCase())
+      ) || null;
     }
     if (!packetBom && queueItem.inventoryItemId) {
-      packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: and(
-          eq(cuttingPacketBOMs.inventoryItemId, queueItem.inventoryItemId),
-          eq(cuttingPacketBOMs.isActive, true)
-        ),
-      });
+      packetBom = allActiveBoms.find(b => b.inventoryItemId != null && b.inventoryItemId === queueItem.inventoryItemId) || null;
     }
-    if (!packetBom && inventoryItem) {
-      packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: and(
-          eq(cuttingPacketBOMs.partNumber, inventoryItem.agPartNumber),
-          eq(cuttingPacketBOMs.isActive, true)
-        ),
-      });
+    if (!packetBom && inventoryItem?.agPartNumber) {
+      packetBom = allActiveBoms.find(b => b.partNumber === inventoryItem!.agPartNumber) || null;
+    }
+    if (!packetBom && inventoryItem?.name) {
+      packetBom = allActiveBoms.find(b =>
+        b.packetType.toLowerCase() === inventoryItem!.name.toLowerCase() ||
+        b.packetType.toLowerCase().includes(inventoryItem!.name.toLowerCase()) ||
+        inventoryItem!.name.toLowerCase().includes(b.packetType.toLowerCase())
+      ) || null;
     }
     
     // If no BOM exists, allow any material (no validation possible)
@@ -1332,6 +1364,7 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
     );
     
     if (!isMatch) {
+      console.log(`[validate-material] REJECTED: roll partNum="${matchedRoll.fabricPartNumber}", fabric="${(matchedRoll.fabric||'').substring(0,40)}", allowedTypes=[${Array.from(allowedFabricTypes).join(', ')}], rollFields=[${rollFields.join(', ')}], BOM=${packetBom.id}`);
       return res.status(400).json({
         valid: false,
         error: `Material "${matchedRoll.fabric || matchedRoll.nickname || barcode}" does not match the BOM requirements for this packet`,

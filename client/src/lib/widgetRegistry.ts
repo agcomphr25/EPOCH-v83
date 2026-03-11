@@ -14,7 +14,7 @@ export type WidgetTypeId =
   | 'capability_radar'
   | 'pipeline_board'
   | 'otd_summary'
-  | 'payment_analytics';
+  | 'payment_analytics'
   | 'forecast_accuracy';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────

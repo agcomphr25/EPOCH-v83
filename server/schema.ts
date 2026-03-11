@@ -13134,16 +13134,6 @@ export const insertModelForecastMultiplierSchema = createInsertSchema(modelForec
 export type ModelForecastMultiplier = typeof modelForecastMultiplier.$inferSelect;
 export type InsertModelForecastMultiplier = z.infer<typeof insertModelForecastMultiplierSchema>;
 
-export const modelDepartmentStats = pgTable('model_department_stats', {
-  id: serial('id').primaryKey(),
-  modelId: text('model_id').notNull(),
-  department: text('department').notNull(),
-  avgDurationMinutes: real('avg_duration_minutes').notNull(),
-  medianDurationMinutes: real('median_duration_minutes'),
-  sampleSize: integer('sample_size').notNull().default(0),
-  lastUpdated: timestamp('last_updated').defaultNow(),
-});
-
 export const modelQueueWeights = pgTable('model_queue_weights', {
   id: serial('id').primaryKey(),
   modelId: text('model_id').notNull().unique(),

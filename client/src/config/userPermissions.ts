@@ -361,6 +361,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   tandym: {
     routes: [],
+    fullAccess: true,
   },
 
   tims: {

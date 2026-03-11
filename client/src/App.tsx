@@ -240,6 +240,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import P2PipelineBoardPage from './pages/P2PipelineBoardPage';
 import HelpCenter from './pages/HelpCenter';
+import P2OrderGuide from './pages/P2OrderGuide';
 import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
@@ -786,6 +787,7 @@ function App() {
                   {/* Refund Management Routes */}
                   <Route path="/refund-request" component={RefundRequest} />
                   <Route path="/help" component={HelpCenter} />
+                  <Route path="/help/p2-order-guide" component={P2OrderGuide} />
                   <Route path="/refund-queue" component={RefundQueue} />
                   <Route path="/rma-form" component={RMAFormPage} />
 

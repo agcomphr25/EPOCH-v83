@@ -15,7 +15,10 @@ import {
   Layers,
   HelpCircle,
   BookOpen,
+  FileText,
+  ArrowRight,
 } from 'lucide-react';
+import { Link } from 'wouter';
 
 interface FAQItem {
   id: string;
@@ -269,6 +272,32 @@ export default function HelpCenter() {
               ))}
             </Accordion>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Guides */}
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            Step-by-Step Guides
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Link href="/help/p2-order-guide">
+            <div className="flex items-center justify-between p-3 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-medium">How to Create a New P2 Order</h3>
+                  <p className="text-sm text-muted-foreground">Complete walkthrough of the P2 order creation process</p>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </Link>
         </CardContent>
       </Card>
 

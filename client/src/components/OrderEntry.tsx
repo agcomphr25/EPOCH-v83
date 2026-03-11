@@ -410,13 +410,16 @@ export default function OrderEntry() {
     const stageCount = data.pipelineStages?.length || 0;
     const cycleDays = Math.round(data.estimatedCycleDays || 0);
     if (cycleDays > 0) {
-      reasons.push(`Average cycle time: ~${cycleDays} production days across ${stageCount} department${stageCount !== 1 ? 's' : ''}`);
+      const cycleWeeks = Math.round(cycleDays / 5);
+      reasons.push(`Average cycle time: ~${cycleWeeks} week${cycleWeeks !== 1 ? 's' : ''} across ${stageCount} department${stageCount !== 1 ? 's' : ''}`);
     }
     const backlogDays = Math.round(data.backlogDelayDays || 0);
     if (backlogDays > 0) {
-      reasons.push(`Queue backlog adds ~${backlogDays} day${backlogDays !== 1 ? 's' : ''} based on current load`);
+      const backlogWeeks = (backlogDays / 5).toFixed(1);
+      reasons.push(`Queue backlog adds ~${backlogWeeks} week${backlogDays > 5 ? 's' : ''} based on current load`);
     }
-    reasons.push(`Safety buffer: ${Math.ceil(bufferDays)} business day${Math.ceil(bufferDays) !== 1 ? 's' : ''} added beyond projected completion`);
+    const bufferWeeks = Math.ceil(bufferDays / 5);
+    reasons.push(`Safety buffer: ~${bufferWeeks} week${bufferWeeks !== 1 ? 's' : ''} added beyond projected completion`);
     const otherOptions = features.other_options || [];
     if (otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2')) {
       reasons.push('Rush fee applied — timeline may be shortened');
@@ -3034,7 +3037,7 @@ export default function OrderEntry() {
                     )}
                     {!isManualDueDate && forecastCycleDays && !isForecastLoading && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Forecast: ~{forecastCycleDays} business days based on current production data
+                        Forecast: ~{Math.round(forecastCycleDays / 5)} weeks based on current production data
                       </p>
                     )}
                   </div>

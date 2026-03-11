@@ -127,7 +127,7 @@ export function ForecastDateModal({
                 {formatDate(forecastData.recommendedDate)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                ~{forecastData.totalBusinessDays} business days from today
+                ~{Math.round(forecastData.totalBusinessDays / 5)} weeks from today
               </p>
               <Button
                 className="mt-3 w-full"

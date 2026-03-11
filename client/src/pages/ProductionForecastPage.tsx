@@ -4,10 +4,31 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings, ArrowUpDown, ArrowUp, ArrowDown, X, CalendarDays } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings, ArrowUpDown, ArrowUp, ArrowDown, X, CalendarDays, TrendingDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
+
+const DEPARTMENT_SEQUENCE = [
+  'P1 Production Queue',
+  'Layup/Plugging',
+  'Barcode',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Shipping QC',
+  'Shipping',
+];
+
+function getDeptGap(actualDept: string | null, expectedDept: string): number {
+  if (!actualDept) return -1;
+  const actualIdx = DEPARTMENT_SEQUENCE.indexOf(actualDept);
+  const expectedIdx = DEPARTMENT_SEQUENCE.indexOf(expectedDept);
+  if (actualIdx === -1 || expectedIdx === -1) return -1;
+  return expectedIdx - actualIdx;
+}
 
 interface ForecastItem {
   orderId: string;
@@ -20,8 +41,10 @@ interface ForecastItem {
 
 type SortField = 'orderId' | 'model' | 'actualDepartment' | 'expectedDepartment' | 'status' | 'estimatedShipDate';
 type SortDirection = 'asc' | 'desc';
+type DriftSortField = 'orderId' | 'model' | 'actualDepartment' | 'expectedDepartment' | 'gap' | 'estimatedShipDate';
 
 export default function ProductionForecastPage() {
+  const [activeTab, setActiveTab] = useState('forecast');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('off_track');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
@@ -31,6 +54,10 @@ export default function ProductionForecastPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+
+  const [driftSearch, setDriftSearch] = useState('');
+  const [driftSortField, setDriftSortField] = useState<DriftSortField | null>('gap');
+  const [driftSortDirection, setDriftSortDirection] = useState<SortDirection>('desc');
 
   const { data: forecastData, isLoading, error } = useQuery<ForecastItem[]>({
     queryKey: ['/api/forecast/dashboard'],
@@ -96,6 +123,26 @@ export default function ProductionForecastPage() {
     return <ArrowDown className="w-3 h-3 ml-1" />;
   };
 
+  const handleDriftSort = (field: DriftSortField) => {
+    if (driftSortField === field) {
+      if (driftSortDirection === 'asc') {
+        setDriftSortDirection('desc');
+      } else {
+        setDriftSortField(null);
+        setDriftSortDirection('asc');
+      }
+    } else {
+      setDriftSortField(field);
+      setDriftSortDirection('asc');
+    }
+  };
+
+  const getDriftSortIcon = (field: DriftSortField) => {
+    if (driftSortField !== field) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-40" />;
+    if (driftSortDirection === 'asc') return <ArrowUp className="w-3 h-3 ml-1" />;
+    return <ArrowDown className="w-3 h-3 ml-1" />;
+  };
+
   const filteredAndSortedData = useMemo(() => {
     if (!forecastData) return [];
 
@@ -144,6 +191,65 @@ export default function ProductionForecastPage() {
     };
   }, [forecastData]);
 
+  const driftData = useMemo(() => {
+    if (!forecastData) return { behind1: [], behind2: [], behind3Plus: [], summary: { behind1: 0, behind2: 0, behind3Plus: 0 } };
+
+    const offTrackOrders = forecastData
+      .filter((item) => item.status === 'off_track')
+      .map((item) => ({
+        ...item,
+        gap: getDeptGap(item.actualDepartment, item.expectedDepartment),
+      }))
+      .filter((item) => item.gap > 0);
+
+    const behind1 = offTrackOrders.filter((o) => o.gap === 1);
+    const behind2 = offTrackOrders.filter((o) => o.gap === 2);
+    const behind3Plus = offTrackOrders.filter((o) => o.gap >= 3);
+
+    return {
+      behind1,
+      behind2,
+      behind3Plus,
+      summary: {
+        behind1: behind1.length,
+        behind2: behind2.length,
+        behind3Plus: behind3Plus.length,
+      },
+    };
+  }, [forecastData]);
+
+  const filteredDriftOrders = useMemo(() => {
+    const allDrift = [...driftData.behind2, ...driftData.behind3Plus];
+
+    let result = allDrift.filter((item) => {
+      if (!driftSearch) return true;
+      const term = driftSearch.toLowerCase();
+      return (
+        item.orderId.toLowerCase().includes(term) ||
+        (item.model && item.model.toLowerCase().includes(term))
+      );
+    });
+
+    if (driftSortField) {
+      result = [...result].sort((a, b) => {
+        if (driftSortField === 'gap') {
+          return driftSortDirection === 'asc' ? a.gap - b.gap : b.gap - a.gap;
+        }
+        if (driftSortField === 'estimatedShipDate') {
+          const aDate = new Date(a.estimatedShipDate).getTime();
+          const bDate = new Date(b.estimatedShipDate).getTime();
+          return driftSortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+        }
+        const aVal = String(a[driftSortField as keyof typeof a] ?? '').toLowerCase();
+        const bVal = String(b[driftSortField as keyof typeof b] ?? '').toLowerCase();
+        const cmp = aVal.localeCompare(bVal);
+        return driftSortDirection === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [driftData, driftSearch, driftSortField, driftSortDirection]);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'on_track':
@@ -163,6 +269,23 @@ export default function ProductionForecastPage() {
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const getGapBadge = (gap: number) => {
+    if (gap === 2) {
+      return (
+        <Badge className="bg-orange-100 text-orange-800 border-orange-300">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          2 BEHIND
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-red-100 text-red-800 border-red-300">
+        <AlertTriangle className="w-3 h-3 mr-1" />
+        {gap} BEHIND
+      </Badge>
+    );
   };
 
   if (error) {
@@ -224,154 +347,289 @@ export default function ProductionForecastPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <CardTitle>Order Forecast</CardTitle>
-              {activeFilterCount > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground">
-                  <X className="w-3 h-3 mr-1" />
-                  Clear all filters ({activeFilterCount})
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Input
-                placeholder="Search by Order ID or Model..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-56"
-              />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="on_track">On Track</SelectItem>
-                  <SelectItem value="off_track">Off Track</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Actual Dept" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Actual Depts</SelectItem>
-                  {uniqueDepartments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={expectedDeptFilter} onValueChange={setExpectedDeptFilter}>
-                <SelectTrigger className="w-[170px]">
-                  <SelectValue placeholder="Expected Dept" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Expected Depts</SelectItem>
-                  {uniqueExpectedDepts.map((dept) => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={modelFilter} onValueChange={setModelFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Model" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Models</SelectItem>
-                  {uniqueModels.map((model) => (
-                    <SelectItem key={model} value={model}>{model}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="flex items-center gap-1.5 border rounded-md px-2 py-1 bg-background">
-                <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="text-sm bg-transparent outline-none w-[130px] text-foreground"
-                  title="Due date from"
-                />
-                <span className="text-muted-foreground text-xs">–</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="text-sm bg-transparent outline-none w-[130px] text-foreground"
-                  title="Due date to"
-                />
-              </div>
-            </div>
-            {activeFilterCount > 0 && (
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredAndSortedData.length} of {forecastData?.length ?? 0} orders
-              </p>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="forecast" className="flex items-center gap-1.5">
+            <BarChart3 className="w-4 h-4" />
+            Forecast Overview
+          </TabsTrigger>
+          <TabsTrigger value="drift" className="flex items-center gap-1.5">
+            <TrendingDown className="w-4 h-4" />
+            Drift Analysis
+            {driftData.summary.behind2 + driftData.summary.behind3Plus > 0 && (
+              <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0">
+                {driftData.summary.behind2 + driftData.summary.behind3Plus}
+              </Badge>
             )}
-          </div>
-        </CardHeader>
-        <CardContent>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="forecast" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>Order Forecast</CardTitle>
+                  {activeFilterCount > 0 && (
+                    <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground">
+                      <X className="w-3 h-3 mr-1" />
+                      Clear all filters ({activeFilterCount})
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    placeholder="Search by Order ID or Model..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full sm:w-56"
+                  />
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="on_track">On Track</SelectItem>
+                      <SelectItem value="off_track">Off Track</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Actual Dept" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Actual Depts</SelectItem>
+                      {uniqueDepartments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={expectedDeptFilter} onValueChange={setExpectedDeptFilter}>
+                    <SelectTrigger className="w-[170px]">
+                      <SelectValue placeholder="Expected Dept" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Expected Depts</SelectItem>
+                      {uniqueExpectedDepts.map((dept) => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={modelFilter} onValueChange={setModelFilter}>
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="Model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Models</SelectItem>
+                      {uniqueModels.map((model) => (
+                        <SelectItem key={model} value={model}>{model}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-1.5 border rounded-md px-2 py-1 bg-background">
+                    <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="text-sm bg-transparent outline-none w-[130px] text-foreground"
+                      title="Due date from"
+                    />
+                    <span className="text-muted-foreground text-xs">–</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="text-sm bg-transparent outline-none w-[130px] text-foreground"
+                      title="Due date to"
+                    />
+                  </div>
+                </div>
+                {activeFilterCount > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Showing {filteredAndSortedData.length} of {forecastData?.length ?? 0} orders
+                  </p>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  <span>Generating forecast...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12 text-muted-foreground">#</TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('orderId')}>
+                          <div className="flex items-center">Order {getSortIcon('orderId')}</div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('model')}>
+                          <div className="flex items-center">Model {getSortIcon('model')}</div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('actualDepartment')}>
+                          <div className="flex items-center">Actual Dept {getSortIcon('actualDepartment')}</div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('expectedDepartment')}>
+                          <div className="flex items-center">Expected Dept {getSortIcon('expectedDepartment')}</div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('status')}>
+                          <div className="flex items-center">Status {getSortIcon('status')}</div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('estimatedShipDate')}>
+                          <div className="flex items-center">Est Ship Date {getSortIcon('estimatedShipDate')}</div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAndSortedData.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            {searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || expectedDeptFilter !== 'all' || modelFilter !== 'all'
+                              ? 'No orders match your filters'
+                              : 'No active orders found for forecasting'}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredAndSortedData.map((item, index) => (
+                          <TableRow key={item.orderId}>
+                            <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
+                            <TableCell className="font-medium">{item.orderId}</TableCell>
+                            <TableCell>{item.model || '—'}</TableCell>
+                            <TableCell>{item.actualDepartment || '—'}</TableCell>
+                            <TableCell>{item.expectedDepartment}</TableCell>
+                            <TableCell>{getStatusBadge(item.status)}</TableCell>
+                            <TableCell>{item.estimatedShipDate}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="drift" className="mt-4 space-y-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin mr-2" />
-              <span>Generating forecast...</span>
+              <span>Analyzing drift...</span>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-muted-foreground">#</TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('orderId')}>
-                      <div className="flex items-center">Order {getSortIcon('orderId')}</div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('model')}>
-                      <div className="flex items-center">Model {getSortIcon('model')}</div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('actualDepartment')}>
-                      <div className="flex items-center">Actual Dept {getSortIcon('actualDepartment')}</div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('expectedDepartment')}>
-                      <div className="flex items-center">Expected Dept {getSortIcon('expectedDepartment')}</div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('status')}>
-                      <div className="flex items-center">Status {getSortIcon('status')}</div>
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('estimatedShipDate')}>
-                      <div className="flex items-center">Est Ship Date {getSortIcon('estimatedShipDate')}</div>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAndSortedData.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        {searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || expectedDeptFilter !== 'all' || modelFilter !== 'all'
-                          ? 'No orders match your filters'
-                          : 'No active orders found for forecasting'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredAndSortedData.map((item, index) => (
-                      <TableRow key={item.orderId}>
-                        <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
-                        <TableCell className="font-medium">{item.orderId}</TableCell>
-                        <TableCell>{item.model || '—'}</TableCell>
-                        <TableCell>{item.actualDepartment || '—'}</TableCell>
-                        <TableCell>{item.expectedDepartment}</TableCell>
-                        <TableCell>{getStatusBadge(item.status)}</TableCell>
-                        <TableCell>{item.estimatedShipDate}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-yellow-600">1 Department Behind</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-yellow-600">{driftData.summary.behind1}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Slightly off schedule</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-orange-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-orange-600">2 Departments Behind</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-orange-600">{driftData.summary.behind2}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Significantly behind schedule</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-red-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-red-600">3+ Departments Behind</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">{driftData.summary.behind3Plus}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Critical — needs immediate attention</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingDown className="w-5 h-5" />
+                        Orders 2+ Departments Behind
+                      </CardTitle>
+                      <span className="text-sm text-muted-foreground">
+                        {filteredDriftOrders.length} orders
+                      </span>
+                    </div>
+                    <Input
+                      placeholder="Search by Order ID or Model..."
+                      value={driftSearch}
+                      onChange={(e) => setDriftSearch(e.target.value)}
+                      className="w-full sm:w-56"
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12 text-muted-foreground">#</TableHead>
+                          <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleDriftSort('orderId')}>
+                            <div className="flex items-center">Order {getDriftSortIcon('orderId')}</div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleDriftSort('model')}>
+                            <div className="flex items-center">Model {getDriftSortIcon('model')}</div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleDriftSort('actualDepartment')}>
+                            <div className="flex items-center">Actual Dept {getDriftSortIcon('actualDepartment')}</div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleDriftSort('expectedDepartment')}>
+                            <div className="flex items-center">Expected Dept {getDriftSortIcon('expectedDepartment')}</div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleDriftSort('gap')}>
+                            <div className="flex items-center">Drift {getDriftSortIcon('gap')}</div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleDriftSort('estimatedShipDate')}>
+                            <div className="flex items-center">Est Ship Date {getDriftSortIcon('estimatedShipDate')}</div>
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredDriftOrders.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                              {driftSearch
+                                ? 'No orders match your search'
+                                : 'No orders are 2+ departments behind — looking good!'}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredDriftOrders.map((item, index) => (
+                            <TableRow key={item.orderId} className={item.gap >= 3 ? 'bg-red-50' : ''}>
+                              <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
+                              <TableCell className="font-medium">{item.orderId}</TableCell>
+                              <TableCell>{item.model || '—'}</TableCell>
+                              <TableCell>{item.actualDepartment || '—'}</TableCell>
+                              <TableCell>{item.expectedDepartment}</TableCell>
+                              <TableCell>{getGapBadge(item.gap)}</TableCell>
+                              <TableCell>{item.estimatedShipDate}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

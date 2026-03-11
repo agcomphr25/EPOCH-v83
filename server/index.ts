@@ -504,6 +504,72 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Cutting packet BOM tables migration skipped:', cutBomErr.message);
       }
 
+      // Ensure cutting packet traceability tables exist and cutting_built_packets has all columns
+      try {
+        const { sql: sqlCpT } = await import('drizzle-orm');
+
+        // Create cutting_packet_sessions if it doesn't exist (FK parent for cutting_built_packets.session_id)
+        await db.execute(sqlCpT`
+          CREATE TABLE IF NOT EXISTS cutting_packet_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            product_category_id UUID REFERENCES cutting_product_categories(id),
+            week_date DATE,
+            work_date DATE,
+            packets_target INTEGER NOT NULL DEFAULT 1,
+            created_by TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+
+        // Create cutting_packet_session_lots if it doesn't exist
+        await db.execute(sqlCpT`
+          CREATE TABLE IF NOT EXISTS cutting_packet_session_lots (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id UUID NOT NULL REFERENCES cutting_packet_sessions(id) ON DELETE CASCADE,
+            component_id UUID REFERENCES cutting_components(id),
+            fabric_inventory_id UUID REFERENCES cutting_fabric_inventory(id),
+            cuts_planned INTEGER NOT NULL DEFAULT 0,
+            quantity_used INTEGER NOT NULL DEFAULT 0,
+            waste_factor_applied REAL DEFAULT 0.05,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+
+        // Add missing columns to cutting_built_packets
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES cutting_packet_sessions(id) ON DELETE SET NULL`);
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS is_mixed_fabric BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS fabric_source_count INTEGER DEFAULT 1`);
+
+        // Create cutting_built_packet_fabric_sources if it doesn't exist
+        await db.execute(sqlCpT`
+          CREATE TABLE IF NOT EXISTS cutting_built_packet_fabric_sources (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            built_packet_id UUID NOT NULL REFERENCES cutting_built_packets(id) ON DELETE CASCADE,
+            fabric_inventory_id UUID REFERENCES cutting_fabric_inventory(id),
+            component_id UUID REFERENCES cutting_components(id),
+            fabric_type TEXT,
+            lot_number TEXT,
+            batch_number TEXT,
+            roll_number TEXT,
+            supplier_part_number TEXT,
+            internal_control_number TEXT,
+            expiration_date DATE,
+            quantity_used INTEGER NOT NULL DEFAULT 1,
+            is_primary BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_packet_idx ON cutting_built_packet_fabric_sources(built_packet_id)`);
+        await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx ON cutting_built_packet_fabric_sources(fabric_inventory_id)`);
+
+        console.log('✅ Ensured cutting packet traceability tables exist (sessions, built_packets columns, fabric_sources)');
+      } catch (cpTErr: any) {
+        console.warn('⚠️ Cutting packet traceability migration skipped:', cpTErr.message);
+      }
+
       // Ensure cutting_fabric_inventory has all required columns (runs after cutting_production_lines is created)
       try {
         const { sql: sqlFabInv } = await import('drizzle-orm');

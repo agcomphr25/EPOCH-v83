@@ -7,6 +7,7 @@ import { getQueueIntegrityStatus } from '../services/queueIntegrityService';
 import { validatePipelineState } from '../services/pipelineValidationService';
 import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipelineRepairService';
 import { forecastActiveOrders, forecastOrder, simulateNewOrder } from '../services/productionForecastService';
+import { simulateFactoryCompletion, invalidateSimulationCache } from '../services/productionSimulator';
 
 const router = Router();
 
@@ -1196,6 +1197,176 @@ router.post(
         error: 'Failed to simulate forecast',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
+    }
+  }
+);
+
+router.get(
+  '/department-capacity',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const result = await pool.query(
+        `SELECT department, stations, avg_parallel_efficiency, last_updated
+         FROM department_capacity
+         ORDER BY department`
+      );
+      const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+      res.json(rows);
+    } catch (error) {
+      console.error('Department capacity fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch department capacity' });
+    }
+  }
+);
+
+router.put(
+  '/department-capacity/:department',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { department } = req.params;
+      const { stations, avg_parallel_efficiency } = req.body;
+      const stationsNum = parseInt(stations, 10);
+      if (isNaN(stationsNum) || stationsNum < 1 || stationsNum > 50) {
+        return res.status(400).json({ error: 'stations must be an integer between 1 and 50' });
+      }
+      const effNum = avg_parallel_efficiency != null ? parseFloat(avg_parallel_efficiency) : 0.85;
+      if (isNaN(effNum) || effNum <= 0 || effNum > 1.5) {
+        return res.status(400).json({ error: 'avg_parallel_efficiency must be between 0.01 and 1.5' });
+      }
+      const efficiency = effNum;
+      await pool.query(
+        `INSERT INTO department_capacity (department, stations, avg_parallel_efficiency, last_updated)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (department) DO UPDATE SET
+           stations = $2, avg_parallel_efficiency = $3, last_updated = NOW()`,
+        [department, stationsNum, efficiency]
+      );
+      invalidateSimulationCache();
+      res.json({ success: true, department, stations, avg_parallel_efficiency: efficiency });
+    } catch (error) {
+      console.error('Department capacity update error:', error);
+      res.status(500).json({ error: 'Failed to update department capacity' });
+    }
+  }
+);
+
+router.get(
+  '/order-forecast/:orderId/timeline',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId } = req.params;
+      const result = await simulateFactoryCompletion(orderId);
+      if (result) {
+        res.json(result);
+      } else {
+        res.status(404).json({ error: 'Order not found in simulation' });
+      }
+    } catch (error) {
+      console.error('Order timeline simulation error:', error);
+      res.status(500).json({ error: 'Failed to simulate order timeline' });
+    }
+  }
+);
+
+router.get(
+  '/forecast-accuracy',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { getForecastAccuracy } = await import('../services/forecastAccuracyService');
+      const metrics = await getForecastAccuracy();
+      res.json(metrics);
+    } catch (error) {
+      console.error('Forecast accuracy error:', error);
+      res.status(500).json({ error: 'Failed to get forecast accuracy' });
+    }
+  }
+);
+
+router.post(
+  '/forecast-accuracy/stamp',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { stampForecastOnOrders } = await import('../services/forecastAccuracyService');
+      const count = await stampForecastOnOrders();
+      res.json({ stamped: count });
+    } catch (error) {
+      console.error('Forecast stamp error:', error);
+      res.status(500).json({ error: 'Failed to stamp forecasts' });
+    }
+  }
+);
+
+router.post(
+  '/cycle-time-learning/rebuild',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { rebuildModelDepartmentStats } = await import('../services/cycleTimeLearning');
+      const report = await rebuildModelDepartmentStats();
+      res.json(report);
+    } catch (error) {
+      console.error('Cycle time rebuild error:', error);
+      res.status(500).json({ error: 'Failed to rebuild cycle time stats' });
+    }
+  }
+);
+
+router.get(
+  '/cycle-time-learning/stats',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { getStatsOverview } = await import('../services/cycleTimeLearning');
+      const overview = await getStatsOverview();
+      res.json(overview);
+    } catch (error) {
+      console.error('Cycle time stats error:', error);
+      res.status(500).json({ error: 'Failed to get cycle time stats' });
+    }
+  }
+);
+
+router.get(
+  '/cycle-time-learning/drift-log',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string, 10) || 50;
+      const { getDriftLog } = await import('../services/cycleTimeLearning');
+      const log = await getDriftLog(Math.min(limit, 200));
+      res.json(log);
+    } catch (error) {
+      console.error('Drift log error:', error);
+      res.status(500).json({ error: 'Failed to get drift log' });
+    }
+  }
+);
+
+router.get(
+  '/cycle-time-learning/model-stats',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const { getModelCycleTimes } = await import('../services/cycleTimeLearning');
+      const data = await getModelCycleTimes();
+      res.json(data);
+    } catch (error) {
+      console.error('Model cycle times error:', error);
+      res.status(500).json({ error: 'Failed to get model cycle times' });
     }
   }
 );

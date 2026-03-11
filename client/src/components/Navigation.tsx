@@ -555,6 +555,12 @@ export default function Navigation() {
       description: 'Track stocks shipped by company week',
     },
     {
+      path: '/weekly-shipments',
+      label: 'Weekly Shipments Overview',
+      icon: Package,
+      description: 'Combined view of all P1 and OEM shipments by week',
+    },
+    {
       path: '/urgent-orders-report',
       label: 'Urgent Orders Report',
       icon: AlertTriangle,
@@ -1000,6 +1006,12 @@ export default function Navigation() {
       label: 'P2 Control Center',
       icon: Factory,
       description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
+    },
+    {
+      path: '/help/p2-order-guide',
+      label: 'P2 Order Guide',
+      icon: BookOpen,
+      description: 'Step-by-step guide for creating new P2 orders',
     },
     {
       path: '/manufacturing-queue',

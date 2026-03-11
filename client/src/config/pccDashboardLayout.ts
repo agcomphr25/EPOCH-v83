@@ -40,6 +40,11 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
           type: 'otd_summary',
           props: {},
         },
+        {
+          id: 'pcc-forecast-accuracy',
+          type: 'forecast_accuracy',
+          props: {},
+        },
       ],
     },
 

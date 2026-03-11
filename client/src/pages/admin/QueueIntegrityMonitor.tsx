@@ -237,6 +237,19 @@ const ERROR_TYPE_CONFIG: Record<string, { label: string; color: string; badgeCla
 
 function PipelineValidationTab() {
   const [runKey, setRunKey] = useState(0);
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set(['SKIPPED_STAGE']));
+
+  const toggleErrorType = (type: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
 
   const { data, isLoading, error, isFetching } = useQuery<PipelineValidationData>({
     queryKey: ['/api/admin/pipeline-validation', runKey],
@@ -245,7 +258,9 @@ function PipelineValidationTab() {
     staleTime: 0,
   });
 
+  const filteredErrors = data?.errors.filter((err) => !hiddenTypes.has(err.errorType)) ?? [];
   const totalErrors = data?.errors.length ?? 0;
+  const visibleErrors = filteredErrors.length;
   const allOk = data && totalErrors === 0;
 
   return (
@@ -323,57 +338,87 @@ function PipelineValidationTab() {
           </div>
 
           {totalErrors > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Pipeline Errors ({totalErrors})
-                </h2>
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mr-1">Filter:</span>
+                {Object.entries(ERROR_TYPE_CONFIG).map(([type, cfg]) => {
+                  const count = data.errors.filter((e) => e.errorType === type).length;
+                  if (count === 0) return null;
+                  const isVisible = !hiddenTypes.has(type);
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => toggleErrorType(type)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                        isVisible
+                          ? `${cfg.badgeClass} border-transparent`
+                          : 'bg-gray-100 text-gray-400 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700 line-through'
+                      }`}
+                    >
+                      {cfg.label} ({count})
+                    </button>
+                  );
+                })}
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Order
-                    </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Derived Stage
-                    </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Current Department
-                    </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Error Type
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.errors.map((err, i) => {
-                    const cfg = ERROR_TYPE_CONFIG[err.errorType] || ERROR_TYPE_CONFIG.PIPELINE_DRIFT;
-                    return (
-                      <tr
-                        key={i}
-                        className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
-                      >
-                        <td className="px-4 py-2.5">
-                          <OrderIdLink id={err.orderId} />
-                        </td>
-                        <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
-                          {err.derivedStage}
-                        </td>
-                        <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
-                          {err.currentDepartment}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded ${cfg.badgeClass}`}>
-                            {cfg.label}
-                          </span>
-                        </td>
+
+              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                  <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Pipeline Errors ({visibleErrors}{visibleErrors !== totalErrors ? ` of ${totalErrors}` : ''})
+                  </h2>
+                </div>
+                {visibleErrors === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-gray-400">
+                    All errors are filtered out. Adjust the filters above to see results.
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Order
+                        </th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Derived Stage
+                        </th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Current Department
+                        </th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Error Type
+                        </th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody>
+                      {filteredErrors.map((err, i) => {
+                        const cfg = ERROR_TYPE_CONFIG[err.errorType] || ERROR_TYPE_CONFIG.PIPELINE_DRIFT;
+                        return (
+                          <tr
+                            key={i}
+                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+                          >
+                            <td className="px-4 py-2.5">
+                              <OrderIdLink id={err.orderId} />
+                            </td>
+                            <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+                              {err.derivedStage}
+                            </td>
+                            <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+                              {err.currentDepartment}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded ${cfg.badgeClass}`}>
+                                {cfg.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
           )}
 
           {allOk && (

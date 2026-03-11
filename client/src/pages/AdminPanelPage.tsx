@@ -757,9 +757,8 @@ export default function AdminPanelPage() {
                       </h3>
                       <div className="space-y-4">
                         {fieldsInCategory.map((field) => {
-                          // Type assertion for dynamic field access
                           const orderData = selectedOrder as any;
-                          const currentValue = editedFields[field.key] ?? orderData?.[field.dbField];
+                          const currentValue = editedFields[field.key] ?? orderData?.[field.dbField] ?? orderData?.[field.key];
                           
                           return (
                             <div key={field.key} className="space-y-2">

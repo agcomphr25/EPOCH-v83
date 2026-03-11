@@ -15,6 +15,7 @@ export type WidgetTypeId =
   | 'pipeline_board'
   | 'otd_summary'
   | 'payment_analytics';
+  | 'forecast_accuracy';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -79,6 +80,7 @@ import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget'
 import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
 import OTDWidget from '@/components/widgets/OTDWidget';
 import PaymentAnalyticsWidget from '@/components/widgets/PaymentAnalyticsWidget';
+import ForecastAccuracyWidget from '@/components/widgets/ForecastAccuracyWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -206,6 +208,11 @@ registerWidget({
   description: 'Month-to-date revenue summary with phone vs online breakdown.',
   category: 'metric',
   component: PaymentAnalyticsWidget as ComponentType<Record<string, unknown>>,
+  id: 'forecast_accuracy',
+  displayName: 'Forecast Accuracy',
+  description: 'Shows forecast vs. actual completion accuracy with error metrics and trend breakdown.',
+  category: 'metric',
+  component: ForecastAccuracyWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

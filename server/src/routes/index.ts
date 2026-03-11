@@ -8530,14 +8530,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const now = new Date();
       const month = parseInt(req.query.month as string) || (now.getMonth() + 1);
       const year = parseInt(req.query.year as string) || now.getFullYear();
+      const mode = (req.query.mode as string) || (req.query.mtd === 'true' ? 'mtd' : 'full');
       
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      let startDate: Date;
+      let effectiveEndDate: Date;
+      const isMTD = mode === 'mtd';
       
-      const isMTD = req.query.mtd === 'true';
-      const effectiveEndDate = isMTD ? new Date() : endDate;
+      if (mode === 'ytd') {
+        startDate = new Date(year, 0, 1);
+        effectiveEndDate = new Date();
+      } else {
+        startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        effectiveEndDate = mode === 'mtd' ? new Date() : endDate;
+      }
       
-      console.log(`💰 Payment Analytics: ${startDate.toISOString()} to ${effectiveEndDate.toISOString()}`);
+      console.log(`💰 Payment Analytics (${mode}): ${startDate.toISOString()} to ${effectiveEndDate.toISOString()}`);
       
       const paymentsQuery = `
         SELECT 

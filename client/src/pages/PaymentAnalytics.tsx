@@ -50,13 +50,13 @@ export default function PaymentAnalytics() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [isMTD, setIsMTD] = useState(true);
+  const [viewMode, setViewMode] = useState<'mtd' | 'full' | 'ytd'>('mtd');
   const [typeFilter, setTypeFilter] = useState<'all' | 'phone' | 'online'>('all');
 
   const { data, isLoading, error } = useQuery<PaymentAnalyticsResponse>({
-    queryKey: ['/api/finance/payment-analytics', month, year, isMTD],
+    queryKey: ['/api/finance/payment-analytics', month, year, viewMode],
     queryFn: async () => {
-      const res = await fetch(`/api/finance/payment-analytics?month=${month}&year=${year}&mtd=${isMTD}`);
+      const res = await fetch(`/api/finance/payment-analytics?month=${month}&year=${year}&mode=${viewMode}`);
       if (!res.ok) throw new Error('Failed to fetch payment analytics');
       return res.json();
     },
@@ -93,16 +93,18 @@ export default function PaymentAnalytics() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" data-testid="page-title">Payment Analytics</h1>
         <div className="flex items-center gap-4">
-          <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
-            <SelectTrigger className="w-[140px]" data-testid="select-month">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTHS.map((m, idx) => (
-                <SelectItem key={idx} value={(idx + 1).toString()}>{m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {viewMode !== 'ytd' && (
+            <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
+              <SelectTrigger className="w-[140px]" data-testid="select-month">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTHS.map((m, idx) => (
+                  <SelectItem key={idx} value={(idx + 1).toString()}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
             <SelectTrigger className="w-[100px]" data-testid="select-year">
               <SelectValue />
@@ -113,14 +115,35 @@ export default function PaymentAnalytics() {
               ))}
             </SelectContent>
           </Select>
-          <Button
-            variant={isMTD ? 'default' : 'outline'}
-            onClick={() => setIsMTD(!isMTD)}
-            data-testid="toggle-mtd"
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            {isMTD ? 'Month to Date' : 'Full Month'}
-          </Button>
+          <div className="flex items-center border rounded-md overflow-hidden">
+            <Button
+              variant={viewMode === 'mtd' ? 'default' : 'ghost'}
+              size="sm"
+              className="rounded-none"
+              onClick={() => setViewMode('mtd')}
+              data-testid="toggle-mtd"
+            >
+              Month to Date
+            </Button>
+            <Button
+              variant={viewMode === 'full' ? 'default' : 'ghost'}
+              size="sm"
+              className="rounded-none"
+              onClick={() => setViewMode('full')}
+              data-testid="toggle-full"
+            >
+              Full Month
+            </Button>
+            <Button
+              variant={viewMode === 'ytd' ? 'default' : 'ghost'}
+              size="sm"
+              className="rounded-none"
+              onClick={() => setViewMode('ytd')}
+              data-testid="toggle-ytd"
+            >
+              Year to Date
+            </Button>
+          </div>
         </div>
       </div>
 

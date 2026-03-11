@@ -81,8 +81,8 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
       columns: 3,
       widgets: [
         {
-          id: 'pcc-kit-progress',
-          type: 'kit_progress',
+          id: 'pcc-payment-analytics',
+          type: 'payment_analytics',
           props: {},
         },
         {

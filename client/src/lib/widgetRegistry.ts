@@ -13,7 +13,8 @@ export type WidgetTypeId =
   | 'swim_lane_preview'
   | 'capability_radar'
   | 'pipeline_board'
-  | 'otd_summary';
+  | 'otd_summary'
+  | 'payment_analytics';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
 // The serialisable description of a single widget on a dashboard.
@@ -77,6 +78,7 @@ import CapabilityRadarWidget from '@/components/widgets/CapabilityRadarWidget';
 import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget';
 import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
 import OTDWidget from '@/components/widgets/OTDWidget';
+import PaymentAnalyticsWidget from '@/components/widgets/PaymentAnalyticsWidget';
 
 registerWidget({
   id: 'metric_stat',
@@ -194,6 +196,16 @@ registerWidget({
   description: 'On-time delivery percentage and breakdown for the current month.',
   category: 'metric',
   component: OTDWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'payment_analytics',
+  displayName: 'Payment Analytics',
+  description: 'Month-to-date revenue summary with phone vs online breakdown.',
+  category: 'metric',
+  component: PaymentAnalyticsWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

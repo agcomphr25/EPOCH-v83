@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import cron from 'node-cron';
+import { createServer } from 'http';
 import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 import { db } from './db';
@@ -189,9 +190,34 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Early server bind ────────────────────────────────────────────────────────
+// Create the HTTP server and start listening BEFORE registerRoutes runs.
+// registerRoutes imports 60+ modules via tsx which takes ~15s to compile in
+// production.  Replit's health check fires during that window and would fail
+// because no port is bound yet.  By listening first, health checks pass
+// immediately while route registration finishes in the background.
+const port = parseInt(process.env.PORT || '5000', 10);
+const earlyServer = createServer(app);
+
+// In production, register static file serving immediately so GET / returns
+// the built HTML (200) rather than 404 while routes are still loading.
+if (process.env.NODE_ENV !== 'development') {
+  serveStatic(app);
+}
+
+earlyServer.listen({ port, host: '0.0.0.0' }, () => {
+  console.log(`Server started successfully`);
+  console.log(`- Port: ${port}`);
+  console.log(`- Host: 0.0.0.0`);
+  console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
+  log(`serving on port ${port}`);
+});
+
 (async () => {
   try {
-    const server = await registerRoutes(app);
+    // Pass the already-listening server so registerRoutes reuses it instead
+    // of creating (and returning) a brand-new one.
+    const server = await registerRoutes(app, earlyServer);
 
     notificationManager.initialize(server);
 
@@ -214,32 +240,14 @@ app.use((req, res, next) => {
       });
     });
 
-    // Setup vite in development, static serving in production
+    // In development, set up Vite HMR on the already-running server.
+    // In production, static files were already registered above (early bind).
     if (app.get('env') === 'development') {
       await setupVite(app, server);
-    } else {
-      serveStatic(app);
     }
 
-    // ALWAYS serve the app on the port specified in the environment variable PORT
-    const port = parseInt(process.env.PORT || '5000', 10);
-    server.listen(
-      {
-        port,
-        host: '0.0.0.0',
-      },
-      () => {
-        console.log(`Server started successfully`);
-        console.log(`- Port: ${port}`);
-        console.log(`- Host: 0.0.0.0`);
-        console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
-        log(`serving on port ${port}`);
-
-        // Initialize database and cron jobs AFTER server is listening
-        // This ensures health checks pass while background services initialize
-        initializeBackgroundServices();
-      }
-    );
+    // Initialize database and cron jobs (non-blocking background work)
+    initializeBackgroundServices();
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

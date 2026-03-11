@@ -157,7 +157,7 @@ import arPaymentsRoutes from './arPayments';
 import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
 
-export function registerRoutes(app: Express): Server {
+export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Temporary debug route - raw order data inspector
   app.get('/api/debug/order/:orderId', authenticateToken, async (req, res) => {
     try {
@@ -9299,8 +9299,9 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Create and return HTTP server
-  return createServer(app);
+  // Return the pre-existing server if one was passed in (early-bind pattern),
+  // otherwise create a new one (backward-compatible fallback).
+  return existingServer || createServer(app);
 }
 
 export {

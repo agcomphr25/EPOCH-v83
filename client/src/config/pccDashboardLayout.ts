@@ -36,14 +36,9 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
           },
         },
         {
-          id: 'hero-inventory-shortages',
-          type: 'hero_metric',
-          props: {
-            metricSlug: 'open_inventory_shortages',
-            title: 'Inventory Shortages',
-            subtitle: 'Open shortages blocking production',
-            accentColor: 'hsl(25, 95%, 53%)',
-          },
+          id: 'hero-otd-summary',
+          type: 'otd_summary',
+          props: {},
         },
       ],
     },

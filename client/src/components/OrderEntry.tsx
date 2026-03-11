@@ -429,14 +429,18 @@ export default function OrderEntry() {
     const cycleDays = Math.round(data.estimatedCycleDays || 0);
     if (cycleDays > 0) {
       const cycleWeeks = Math.round(cycleDays / 5);
-      reasons.push(`Average cycle time: ~${cycleWeeks} week${cycleWeeks !== 1 ? 's' : ''} across ${stageCount} department${stageCount !== 1 ? 's' : ''}`);
+      const sourceLabel = data.modelSpecific ? 'Model-specific cycle time' : 'Average cycle time';
+      reasons.push(`${sourceLabel}: ~${cycleWeeks} week${cycleWeeks !== 1 ? 's' : ''} across ${stageCount} department${stageCount !== 1 ? 's' : ''}`);
+    }
+    if (data.modelSpecific) {
+      reasons.push('Using historical data specific to this stock model');
     }
     const backlogDays = Math.round(data.backlogDelayDays || 0);
     if (backlogDays > 0) {
       const backlogWeeks = (backlogDays / 5).toFixed(1);
-      reasons.push(`Queue backlog adds ~${backlogWeeks} week${backlogDays > 5 ? 's' : ''} based on current load`);
+      reasons.push(`Weighted queue backlog adds ~${backlogWeeks} week${backlogDays > 5 ? 's' : ''} based on current load`);
     }
-    if (data.isAdjustable) {
+    if (data.isAdjustable && !data.modelSpecific) {
       reasons.push('Adjustable model: +2 weeks added for adjustable cheekpiece work');
     }
     const bufferWeeks = Math.ceil(bufferDays / 5);
@@ -444,6 +448,12 @@ export default function OrderEntry() {
     const otherOptions = features.other_options || [];
     if (otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2')) {
       reasons.push('Rush fee applied — timeline may be shortened');
+    }
+    if (data.modelReasons && data.modelReasons.length > 0) {
+      const deptReasons = data.modelReasons.filter((r: string) => r.includes('days avg'));
+      for (const r of deptReasons.slice(0, 3)) {
+        reasons.push(r);
+      }
     }
 
     return {

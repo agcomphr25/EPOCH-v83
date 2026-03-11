@@ -196,6 +196,43 @@ async function getDepartmentDefaults(): Promise<Record<string, number>> {
   return defaults;
 }
 
+async function getModelDepartmentStats(modelId: string | null): Promise<Record<string, number> | null> {
+  if (!modelId) return null;
+  try {
+    const result = await pgPool.query(
+      'SELECT department, avg_duration_minutes FROM model_department_stats WHERE model_id = $1 AND sample_size >= 5',
+      [modelId]
+    );
+    if (result.rows.length === 0) return null;
+    const stats: Record<string, number> = {};
+    for (const row of result.rows) {
+      const avgDays = parseFloat(row.avg_duration_minutes) / (60 * 24);
+      if (!isNaN(avgDays) && avgDays > 0) {
+        stats[row.department] = Math.round(avgDays * 10) / 10;
+      }
+    }
+    return Object.keys(stats).length > 0 ? stats : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getDepartmentDefaultsForModel(modelId: string | null): Promise<{ defaults: Record<string, number>; multiplier: number }> {
+  const baseDefaults = await getDepartmentDefaults();
+  const modelStats = await getModelDepartmentStats(modelId);
+
+  if (modelStats) {
+    const merged = { ...baseDefaults };
+    for (const [dept, days] of Object.entries(modelStats)) {
+      merged[dept] = days;
+    }
+    return { defaults: merged, multiplier: 1.0 };
+  }
+
+  const multiplier = await getModelMultiplier(modelId);
+  return { defaults: baseDefaults, multiplier };
+}
+
 async function getModelMultiplier(modelId: string | null): Promise<number> {
   if (!modelId) return 1.0;
   const result = await pgPool.query(
@@ -214,20 +251,39 @@ const POST_PRODUCTION_DEPARTMENTS = [
 ];
 
 async function getDepartmentBacklogs(): Promise<Record<string, number>> {
-  const result = await pgPool.query(
-    `SELECT current_department, COUNT(*) as cnt
-     FROM all_orders
-     WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
-       AND current_department IS NOT NULL
-     GROUP BY current_department`
-  );
-  const backlogs: Record<string, number> = {};
-  for (const row of result.rows) {
-    if (!POST_PRODUCTION_DEPARTMENTS.includes(row.current_department)) {
-      backlogs[row.current_department] = parseInt(row.cnt, 10);
+  try {
+    const result = await pgPool.query(
+      `SELECT o.current_department,
+              SUM(COALESCE(w.queue_weight, 1.0))::numeric AS weighted_count
+       FROM all_orders o
+       LEFT JOIN model_queue_weights w ON o.model_id = w.model_id
+       WHERE o.status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+         AND o.current_department IS NOT NULL
+       GROUP BY o.current_department`
+    );
+    const backlogs: Record<string, number> = {};
+    for (const row of result.rows) {
+      if (!POST_PRODUCTION_DEPARTMENTS.includes(row.current_department)) {
+        backlogs[row.current_department] = parseFloat(row.weighted_count) || 0;
+      }
     }
+    return backlogs;
+  } catch (err) {
+    const result = await pgPool.query(
+      `SELECT current_department, COUNT(*) as cnt
+       FROM all_orders
+       WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+         AND current_department IS NOT NULL
+       GROUP BY current_department`
+    );
+    const backlogs: Record<string, number> = {};
+    for (const row of result.rows) {
+      if (!POST_PRODUCTION_DEPARTMENTS.includes(row.current_department)) {
+        backlogs[row.current_department] = parseInt(row.cnt, 10);
+      }
+    }
+    return backlogs;
   }
-  return backlogs;
 }
 
 export async function simulateOrderForecast(orderId: string): Promise<OrderForecast | null> {
@@ -241,8 +297,7 @@ export async function simulateOrderForecast(orderId: string): Promise<OrderForec
   if (orderResult.rows.length === 0) return null;
 
   const order = orderResult.rows[0];
-  const departmentDefaults = await getDepartmentDefaults();
-  const multiplier = await getModelMultiplier(order.model_id);
+  const { defaults: departmentDefaults, multiplier } = await getDepartmentDefaultsForModel(order.model_id);
   const backlogs = await getDepartmentBacklogs();
 
   const currentDept = order.current_department || 'P1 Production Queue';
@@ -266,8 +321,7 @@ export async function simulateBackwardFromDueDate(order: {
   due_date: string | null;
 }): Promise<BackwardForecast | null> {
   if (!order.due_date) {
-    const departmentDefaults = await getDepartmentDefaults();
-    const multiplier = await getModelMultiplier(order.model_id);
+    const { defaults: departmentDefaults, multiplier } = await getDepartmentDefaultsForModel(order.model_id);
     const backlogs = await getDepartmentBacklogs();
     const currentDept = order.current_department || 'P1 Production Queue';
     const { timeline, estimatedShipDate } = buildTimeline(
@@ -282,8 +336,7 @@ export async function simulateBackwardFromDueDate(order: {
     };
   }
 
-  const departmentDefaults = await getDepartmentDefaults();
-  const multiplier = await getModelMultiplier(order.model_id);
+  const { defaults: departmentDefaults, multiplier } = await getDepartmentDefaultsForModel(order.model_id);
   const dueDate = new Date(order.due_date);
 
   const timeline = buildBackwardTimeline(dueDate, multiplier, departmentDefaults);

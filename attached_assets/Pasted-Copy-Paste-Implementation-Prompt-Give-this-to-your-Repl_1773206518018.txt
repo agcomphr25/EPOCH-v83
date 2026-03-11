@@ -1,0 +1,171 @@
+Copy-Paste Implementation Prompt
+
+Give this to your Replit agent.
+
+EPOCH MODEL-DEPENDENT FORECAST IMPLEMENTATION
+ARCHITECTURE UPGRADE
+
+This task upgrades the forecasting system to support model-dependent cycle times and queue weighting.
+
+Do NOT break existing endpoints or UI.
+
+The goal is to improve forecast accuracy while preserving current behavior as fallback.
+
+------------------------------------------------
+
+PHASE 1 — Create Model Department Stats Table
+
+Add new table:
+
+model_department_stats
+
+columns:
+
+model_id TEXT
+department TEXT
+avg_duration_minutes NUMERIC
+median_duration_minutes NUMERIC
+sample_size INTEGER
+last_updated TIMESTAMP
+
+indexes:
+
+(model_id, department)
+
+Purpose:
+
+Stores aggregated historical cycle times per model per department.
+
+------------------------------------------------
+
+PHASE 2 — Aggregation Job
+
+Create service:
+
+server/services/modelStatsAggregator.ts
+
+Function:
+
+rebuildModelDepartmentStats()
+
+Algorithm:
+
+SELECT
+model_id,
+department,
+AVG(duration_minutes),
+PERCENTILE_CONT(0.5),
+COUNT(*)
+FROM order_department_transitions
+JOIN all_orders
+ON entity_id = all_orders.id
+GROUP BY model_id, department
+
+Insert results into model_department_stats.
+
+Rules:
+
+ignore samples < 5 orders
+fallback to department averages when insufficient data
+
+------------------------------------------------
+
+PHASE 3 — Model Weighted Queue Calculation
+
+Modify queue logic in:
+
+productionForecastService.ts
+
+Instead of:
+
+COUNT(*)
+
+calculate:
+
+SUM(model_weight)
+
+Example:
+
+AlpineHunter weight = 1.4
+Ultralight weight = 0.7
+
+Add table:
+
+model_queue_weights
+
+model_id
+queue_weight
+
+Fallback weight = 1.0
+
+------------------------------------------------
+
+PHASE 4 — Model Aware Cycle Times
+
+Modify loadCycleTimes() logic.
+
+Priority:
+
+1 model_department_stats
+2 department_forecast_defaults
+3 hardcoded fallback
+
+Example:
+
+if stats exist:
+
+cycleTime =
+model_department_stats.avg_duration_minutes
+
+else fallback.
+
+------------------------------------------------
+
+PHASE 5 — Shared Forecast Core
+
+Create new shared service:
+
+server/services/forecastCore.ts
+
+Functions:
+
+simulateOrderForecast()
+calculateQueueDelay()
+calculateDepartmentDuration()
+
+Both engines must call this service.
+
+Remove duplicate forecasting logic.
+
+------------------------------------------------
+
+PHASE 6 — Forecast Reasoning Output
+
+Enhance forecast explanation.
+
+Example:
+
+"Alpine Hunter averages 6.2 days in Finish.
+There are currently 14 weighted orders ahead of this one."
+
+------------------------------------------------
+
+PHASE 7 — Safe Deployment
+
+Ensure fallback behavior:
+
+If model stats missing:
+use department averages.
+
+No UI changes required.
+
+------------------------------------------------
+
+FINAL OUTPUT
+
+Report:
+
+1 tables created
+2 services added
+3 files modified
+4 endpoints affected

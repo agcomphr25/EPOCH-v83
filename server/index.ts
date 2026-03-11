@@ -1019,6 +1019,30 @@ async function initializeBackgroundServices() {
             created_at TIMESTAMP DEFAULT NOW()
           )
         `);
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS model_department_stats (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT NOT NULL,
+            department TEXT NOT NULL,
+            avg_duration_minutes REAL NOT NULL,
+            median_duration_minutes REAL,
+            sample_size INTEGER NOT NULL DEFAULT 0,
+            last_updated TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlFC`
+          CREATE UNIQUE INDEX IF NOT EXISTS model_dept_stats_model_dept_idx
+            ON model_department_stats (model_id, department)
+        `);
+        await db.execute(sqlFC`
+          CREATE TABLE IF NOT EXISTS model_queue_weights (
+            id SERIAL PRIMARY KEY,
+            model_id TEXT NOT NULL UNIQUE,
+            queue_weight REAL NOT NULL DEFAULT 1.0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
         console.log('✅ Ensured production forecast engine tables exist');
       } catch (fcErr: any) {
         console.warn('⚠️ Production forecast tables migration:', fcErr.message);
@@ -1680,6 +1704,14 @@ async function initializeBackgroundServices() {
     });
     
     console.log('🎫 Daily ticket stale reminders scheduled (every day at 10:00 AM)');
+
+    // Start model stats aggregator (rebuilds model-department cycle time stats every 4 hours)
+    try {
+      const { startModelStatsAggregator } = await import('./services/modelStatsAggregator');
+      startModelStatsAggregator();
+    } catch (aggErr: any) {
+      console.warn('⚠️ Model stats aggregator failed to start:', aggErr.message);
+    }
 
     // Set up dynamic health checks scheduler (checks every minute if it's time to run)
     // This allows the scheduled time to be changed via the UI without restarting the server

@@ -964,7 +964,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     }
     
     // Get FIFO-ordered fabric inventory matching BOM materials
-    // Collect both fabricType and commonName from BOM materials and parts
+    // Collect fabricType, commonName, and fallback to part number base from BOM materials and parts
     const allRequiredFabricTypes = new Set<string>();
     bomMaterials.forEach((m: any) => {
       if (m.fabricType?.trim()) allRequiredFabricTypes.add(m.fabricType.trim().toLowerCase());
@@ -973,6 +973,10 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     bomParts.forEach((p: any) => {
       if (p.fabricType?.trim()) allRequiredFabricTypes.add(p.fabricType.trim().toLowerCase());
       if (p.commonName?.trim()) allRequiredFabricTypes.add(p.commonName.trim().toLowerCase());
+      if (!p.fabricType?.trim() && !p.commonName?.trim() && p.partNumber?.trim()) {
+        const basePartNum = p.partNumber.trim().replace(/[a-zA-Z]+$/, '');
+        if (basePartNum) allRequiredFabricTypes.add(basePartNum.toLowerCase());
+      }
     });
     const requiredTypes = Array.from(allRequiredFabricTypes);
     
@@ -985,6 +989,7 @@ router.post('/scan-start', async (req: Request, res: Response) => {
     
     // Stricter fabric matching: require significant overlap, not just substring containment
     // Minimum match length of 4 chars prevents short strings from matching everything
+    // Also supports numeric part number prefix matching (e.g., required "301" matches roll "301" or "301g")
     const strictFabricMatch = (fabricFields: string[], requiredTypes: string[]): boolean => {
       const validFields = fabricFields.filter(f => f.length > 0);
       if (validFields.length === 0) return false;
@@ -993,6 +998,12 @@ router.post('/scan-start', async (req: Request, res: Response) => {
           if (field === req) return true;
           if (req.length >= 4 && field.includes(req)) return true;
           if (field.length >= 4 && req.includes(field)) return true;
+          if (/^\d+$/.test(req) && req.length >= 3) {
+            if (field.startsWith(req) || field === req) return true;
+          }
+          if (/^\d+$/.test(field) && field.length >= 3) {
+            if (req.startsWith(field) || req === field) return true;
+          }
           return false;
         })
       );
@@ -1198,6 +1209,13 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       }
     }
     
+    // Try matching by fabric part number directly
+    if (!matchedRoll) {
+      matchedRoll = allFabric.find(f =>
+        f.fabricPartNumber && f.fabricPartNumber === barcodeNorm
+      );
+    }
+    
     if (!matchedRoll) {
       console.log(`[validate-material] Roll not found. Scanned: "${barcodeNorm}". Active rolls: ${allFabric.length}. Sample barcodes: ${allFabric.slice(0, 5).map(f => `barcode=${f.barcode}, ICN=${f.internalControlNumber}, roll=${f.rollNumber}`).join(' | ')}`);
       return res.status(404).json({ 
@@ -1207,36 +1225,68 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       });
     }
     
-    // Find matching BOM to validate material
+    // Find matching BOM to validate material (mirrors scan-start BOM matching strategies)
     let bomId: string | null = null;
+    let notesMaterialType: string | null = null;
+    let notesPacketName: string | null = null;
     try {
       if (queueItem.notes) {
         const parsedNotes = JSON.parse(queueItem.notes);
         bomId = parsedNotes.bomId || null;
+        notesMaterialType = parsedNotes.materialType || null;
+        notesPacketName = parsedNotes.packetName || null;
       }
     } catch {}
     
     let packetBom = null;
+    const allActiveBoms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
+    
     if (bomId) {
-      packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: eq(cuttingPacketBOMs.id, bomId),
-      });
+      packetBom = allActiveBoms.find(b => b.id === bomId) || null;
+      if (!packetBom) {
+        packetBom = await db.query.cuttingPacketBOMs.findFirst({
+          where: eq(cuttingPacketBOMs.id, bomId),
+        });
+      }
+    }
+    if (!packetBom && notesMaterialType) {
+      const materialToPacketType: Record<string, string> = {
+        'carbon_fiber': 'carbon fiber packet',
+        'fiberglass': 'fiberglass packet',
+        'mesa': 'mesa packet',
+        'p2_disruptor': 'disruptor',
+        'p2_disruptor_packet': 'disruptor packet',
+        'p2_antenna': 'antenna cover',
+        'p2_antenna_cover': 'antenna cover packet',
+      };
+      const targetType = materialToPacketType[notesMaterialType];
+      if (targetType) {
+        packetBom = allActiveBoms.find(b =>
+          b.packetType.toLowerCase() === targetType ||
+          b.packetType.toLowerCase().includes(targetType) ||
+          targetType.includes(b.packetType.toLowerCase())
+        ) || null;
+      }
+    }
+    if (!packetBom && notesPacketName) {
+      packetBom = allActiveBoms.find(b =>
+        b.packetType.toLowerCase() === notesPacketName!.toLowerCase() ||
+        b.packetType.toLowerCase().includes(notesPacketName!.toLowerCase()) ||
+        notesPacketName!.toLowerCase().includes(b.packetType.toLowerCase())
+      ) || null;
     }
     if (!packetBom && queueItem.inventoryItemId) {
-      packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: and(
-          eq(cuttingPacketBOMs.inventoryItemId, queueItem.inventoryItemId),
-          eq(cuttingPacketBOMs.isActive, true)
-        ),
-      });
+      packetBom = allActiveBoms.find(b => b.inventoryItemId != null && b.inventoryItemId === queueItem.inventoryItemId) || null;
     }
-    if (!packetBom && inventoryItem) {
-      packetBom = await db.query.cuttingPacketBOMs.findFirst({
-        where: and(
-          eq(cuttingPacketBOMs.partNumber, inventoryItem.agPartNumber),
-          eq(cuttingPacketBOMs.isActive, true)
-        ),
-      });
+    if (!packetBom && inventoryItem?.agPartNumber) {
+      packetBom = allActiveBoms.find(b => b.partNumber === inventoryItem!.agPartNumber) || null;
+    }
+    if (!packetBom && inventoryItem?.name) {
+      packetBom = allActiveBoms.find(b =>
+        b.packetType.toLowerCase() === inventoryItem!.name.toLowerCase() ||
+        b.packetType.toLowerCase().includes(inventoryItem!.name.toLowerCase()) ||
+        inventoryItem!.name.toLowerCase().includes(b.packetType.toLowerCase())
+      ) || null;
     }
     
     // If no BOM exists, allow any material (no validation possible)
@@ -1274,6 +1324,7 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
       .where(eq(cuttingPacketBOMParts.packetBomId, packetBom.id));
     
     // Collect all allowed fabric types from BOM (filter out empty strings)
+    // Also fall back to base part number when fabricType/commonName are empty
     const allowedFabricTypes = new Set<string>();
     bomMaterials.forEach(m => {
       if (m.fabricType?.trim()) allowedFabricTypes.add(m.fabricType.trim().toLowerCase());
@@ -1282,6 +1333,10 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
     bomParts.forEach(p => {
       if (p.fabricType?.trim()) allowedFabricTypes.add(p.fabricType.trim().toLowerCase());
       if (p.commonName?.trim()) allowedFabricTypes.add(p.commonName.trim().toLowerCase());
+      if (!p.fabricType?.trim() && !p.commonName?.trim() && p.partNumber?.trim()) {
+        const basePartNum = p.partNumber.trim().replace(/[a-zA-Z]+$/, '');
+        if (basePartNum) allowedFabricTypes.add(basePartNum.toLowerCase());
+      }
     });
     
     // Check if the scanned roll's fabric type matches any allowed type
@@ -1305,11 +1360,18 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
         if (field === allowed) return true;
         if (allowed.length >= 4 && field.includes(allowed)) return true;
         if (field.length >= 4 && allowed.includes(field)) return true;
+        if (/^\d+$/.test(allowed) && allowed.length >= 3) {
+          if (field.startsWith(allowed) || field === allowed) return true;
+        }
+        if (/^\d+$/.test(field) && field.length >= 3) {
+          if (allowed.startsWith(field) || allowed === field) return true;
+        }
         return false;
       })
     );
     
     if (!isMatch) {
+      console.log(`[validate-material] REJECTED: roll partNum="${matchedRoll.fabricPartNumber}", fabric="${(matchedRoll.fabric||'').substring(0,40)}", allowedTypes=[${Array.from(allowedFabricTypes).join(', ')}], rollFields=[${rollFields.join(', ')}], BOM=${packetBom.id}`);
       return res.status(400).json({
         valid: false,
         error: `Material "${matchedRoll.fabric || matchedRoll.nickname || barcode}" does not match the BOM requirements for this packet`,

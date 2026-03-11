@@ -650,9 +650,12 @@ export default function CuttingOperatorDashboard() {
       setMaterialScanBarcode("");
     },
     onError: (error: any) => {
+      const errorMsg = error?.status === 404 
+        ? `Roll not found in inventory. Scanned: ${error?.scannedBarcode || materialScanBarcode}` 
+        : (error?.error || 'This material does not match the BOM requirements for this packet.');
       toast({
-        title: 'Material Rejected',
-        description: error?.error || 'This material does not match the BOM requirements for this packet.',
+        title: error?.status === 404 ? 'Roll Not Found' : 'Material Rejected',
+        description: errorMsg,
         variant: 'destructive',
       });
       setMaterialScanBarcode("");
@@ -672,6 +675,46 @@ export default function CuttingOperatorDashboard() {
       barcode: barcode.trim(),
     });
   };
+
+  const packetScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSubmittedPacketRef = useRef<string>("");
+  useEffect(() => {
+    if (packetScanTimerRef.current) {
+      clearTimeout(packetScanTimerRef.current);
+      packetScanTimerRef.current = null;
+    }
+    if (packetScanBarcode && packetScanBarcode.length > 5 && packetScanBarcode.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(packetScanBarcode)) {
+      packetScanTimerRef.current = setTimeout(() => {
+        if (packetScanBarcode !== lastSubmittedPacketRef.current) {
+          lastSubmittedPacketRef.current = packetScanBarcode;
+          handlePacketScan(packetScanBarcode);
+        }
+      }, 400);
+    }
+    return () => {
+      if (packetScanTimerRef.current) clearTimeout(packetScanTimerRef.current);
+    };
+  }, [packetScanBarcode]);
+
+  const materialScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSubmittedMaterialRef = useRef<string>("");
+  useEffect(() => {
+    if (materialScanTimerRef.current) {
+      clearTimeout(materialScanTimerRef.current);
+      materialScanTimerRef.current = null;
+    }
+    if (materialScanBarcode && materialScanBarcode.length > 5 && activeScannedPacket?.queueItem?.id) {
+      materialScanTimerRef.current = setTimeout(() => {
+        if (materialScanBarcode !== lastSubmittedMaterialRef.current) {
+          lastSubmittedMaterialRef.current = materialScanBarcode;
+          handleMaterialScan(materialScanBarcode);
+        }
+      }, 400);
+    }
+    return () => {
+      if (materialScanTimerRef.current) clearTimeout(materialScanTimerRef.current);
+    };
+  }, [materialScanBarcode]);
 
   const handleCloseScannedPacket = () => {
     setActiveScannedPacket(null);
@@ -1165,9 +1208,6 @@ export default function CuttingOperatorDashboard() {
                 value={packetScanBarcode}
                 onChange={(val) => {
                   setPacketScanBarcode(val);
-                  if (val && val.length > 5 && val.startsWith('MFG-') && /^MFG-\d+-[^-]+/.test(val)) {
-                    handlePacketScan(val);
-                  }
                 }}
                 placeholder="Scan packet barcode (MFG-...)..."
                 data-testid="input-packet-scan"
@@ -1453,22 +1493,39 @@ export default function CuttingOperatorDashboard() {
                   </div>
                 )}
                 {activeScannedPacket.fifoInventory && activeScannedPacket.fifoInventory.length > 0 ? (
-                  <div className="space-y-1 max-h-[150px] overflow-y-auto">
-                    {activeScannedPacket.fifoInventory.slice(0, 5).map((roll: any, idx: number) => (
-                      <div key={roll.id} className="flex items-center justify-between text-xs p-1.5 bg-background rounded">
-                        <div className="flex items-center gap-1">
-                          {idx === 0 && <Badge className="bg-green-600 text-[10px] px-1">FIRST</Badge>}
-                          <span className="font-medium">{roll.fabric || roll.nickname}</span>
-                        </div>
-                        <div className="text-right">
-                          <div>Roll {roll.rollNumber}</div>
-                          <div className="text-muted-foreground">
-                            {roll.freezerNumber ? `Freezer ${roll.freezerNumber}` : roll.location || '-'}
-                            {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    {(() => {
+                      const rolls = activeScannedPacket.fifoInventory;
+                      const grouped = new Map<string, any[]>();
+                      rolls.forEach((roll: any) => {
+                        const key = roll.fabricPartNumber || roll.fabric || roll.nickname || 'unknown';
+                        if (!grouped.has(key)) grouped.set(key, []);
+                        grouped.get(key)!.push(roll);
+                      });
+                      const displayRolls: any[] = [];
+                      grouped.forEach((groupRolls) => {
+                        displayRolls.push(groupRolls[0]);
+                      });
+                      grouped.forEach((groupRolls) => {
+                        groupRolls.slice(1).forEach(r => displayRolls.push(r));
+                      });
+                      return displayRolls.map((roll: any, idx: number) => (
+                        <div key={roll.id} className="flex items-center justify-between text-xs p-1.5 bg-background rounded">
+                          <div className="flex items-center gap-1">
+                            {idx === 0 && <Badge className="bg-green-600 text-[10px] px-1">FIRST</Badge>}
+                            <span className="font-medium">{roll.fabric || roll.nickname}</span>
+                            {roll.fabricPartNumber && <span className="text-muted-foreground">({roll.fabricPartNumber})</span>}
+                          </div>
+                          <div className="text-right">
+                            <div>Roll {roll.rollNumber}</div>
+                            <div className="text-muted-foreground">
+                              {roll.freezerNumber ? `Freezer ${roll.freezerNumber}` : roll.location || '-'}
+                              {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 ) : (
                   <p className="text-sm text-amber-600">
@@ -1605,9 +1662,6 @@ export default function CuttingOperatorDashboard() {
                   value={materialScanBarcode}
                   onChange={(val) => {
                     setMaterialScanBarcode(val);
-                    if (val && val.length > 5) {
-                      handleMaterialScan(val);
-                    }
                   }}
                   placeholder="Scan material roll barcode..."
                   data-testid="input-material-scan"

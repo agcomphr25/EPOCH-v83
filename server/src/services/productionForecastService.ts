@@ -307,7 +307,6 @@ export async function forecastOrder(
     console.warn('[ProductionForecast] DES simulation failed, falling back:', simErr);
   }
 
-  const cycleTimes = await loadCycleTimes();
   const remainingDays = remaining.reduce(
     (sum, stage) => sum + (cycleTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2),
     0

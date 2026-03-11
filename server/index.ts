@@ -1020,21 +1020,6 @@ async function initializeBackgroundServices() {
           )
         `);
         await db.execute(sqlFC`
-          CREATE TABLE IF NOT EXISTS model_department_stats (
-            id SERIAL PRIMARY KEY,
-            model_id TEXT NOT NULL,
-            department TEXT NOT NULL,
-            avg_duration_minutes REAL NOT NULL,
-            median_duration_minutes REAL,
-            sample_size INTEGER NOT NULL DEFAULT 0,
-            last_updated TIMESTAMP DEFAULT NOW()
-          )
-        `);
-        await db.execute(sqlFC`
-          CREATE UNIQUE INDEX IF NOT EXISTS model_dept_stats_model_dept_idx
-            ON model_department_stats (model_id, department)
-        `);
-        await db.execute(sqlFC`
           CREATE TABLE IF NOT EXISTS model_queue_weights (
             id SERIAL PRIMARY KEY,
             model_id TEXT NOT NULL UNIQUE,
@@ -1090,16 +1075,23 @@ async function initializeBackgroundServices() {
             model_id TEXT NOT NULL,
             department TEXT NOT NULL,
             avg_duration_minutes REAL NOT NULL,
-            median_duration_minutes REAL NOT NULL,
-            p90_duration_minutes REAL NOT NULL,
+            median_duration_minutes REAL NOT NULL DEFAULT 0,
+            p90_duration_minutes REAL NOT NULL DEFAULT 0,
             sample_count INTEGER NOT NULL DEFAULT 0,
             std_dev_minutes REAL DEFAULT 0,
-            avg_days REAL NOT NULL,
+            avg_days REAL NOT NULL DEFAULT 0,
             confidence TEXT NOT NULL DEFAULT 'LOW',
             last_rebuilt TIMESTAMP DEFAULT NOW(),
             UNIQUE(model_id, department)
           )
         `);
+        await db.execute(sqlMds`ALTER TABLE model_department_stats ADD COLUMN IF NOT EXISTS p90_duration_minutes REAL NOT NULL DEFAULT 0`);
+        await db.execute(sqlMds`ALTER TABLE model_department_stats ADD COLUMN IF NOT EXISTS sample_count INTEGER NOT NULL DEFAULT 0`);
+        await db.execute(sqlMds`ALTER TABLE model_department_stats ADD COLUMN IF NOT EXISTS std_dev_minutes REAL DEFAULT 0`);
+        await db.execute(sqlMds`ALTER TABLE model_department_stats ADD COLUMN IF NOT EXISTS avg_days REAL NOT NULL DEFAULT 0`);
+        await db.execute(sqlMds`ALTER TABLE model_department_stats ADD COLUMN IF NOT EXISTS confidence TEXT NOT NULL DEFAULT 'LOW'`);
+        await db.execute(sqlMds`ALTER TABLE model_department_stats ADD COLUMN IF NOT EXISTS last_rebuilt TIMESTAMP DEFAULT NOW()`);
+        await db.execute(sqlMds`CREATE UNIQUE INDEX IF NOT EXISTS model_dept_stats_model_dept_idx ON model_department_stats(model_id, department)`);
         await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS mds_model_id_idx ON model_department_stats(model_id)`);
         await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS mds_department_idx ON model_department_stats(department)`);
         await db.execute(sqlMds`CREATE INDEX IF NOT EXISTS mds_confidence_idx ON model_department_stats(confidence)`);

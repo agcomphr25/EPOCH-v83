@@ -611,7 +611,12 @@ export default function CuttingOperatorDashboard() {
         });
 
         const bomMaterials = activeScannedPacket?.bomMaterials || [];
-        const totalRollsRequired = bomMaterials.reduce((sum: number, m: any) => sum + (m.rollsRequired || 1), 0);
+        let totalRollsRequired = bomMaterials.reduce((sum: number, m: any) => sum + (m.rollsRequired || 1), 0);
+        if (totalRollsRequired === 0) {
+          const bomParts = activeScannedPacket?.bomParts || [];
+          const distinctFabricTypes = new Set(bomParts.map((p: any) => (p.fabricType || p.commonName || '').toLowerCase()).filter(Boolean));
+          totalRollsRequired = distinctFabricTypes.size;
+        }
         if (totalRollsRequired > 0 && updatedRolls.length >= totalRollsRequired && activeScannedPacket?.queueItem && !autoCompletePendingRef.current) {
           autoCompletePendingRef.current = true;
           const qi = activeScannedPacket.queueItem;
@@ -725,23 +730,26 @@ export default function CuttingOperatorDashboard() {
 
   const handleCompleteScannedPacket = () => {
     if (!activeScannedPacket?.queueItem) return;
+    const qi = activeScannedPacket.queueItem;
+    const remaining = qi.remaining != null ? qi.remaining : Math.max(0, (qi.quantityRequested || 0) - (qi.quantityCompleted || 0));
+
     setSelectedMfgItem({
-      id: activeScannedPacket.queueItem.id,
-      partNumber: activeScannedPacket.queueItem.partNumber,
-      partName: activeScannedPacket.queueItem.partName,
-      displayName: activeScannedPacket.queueItem.displayName || activeScannedPacket.queueItem.partName,
-      quantityOrdered: activeScannedPacket.queueItem.quantityRequested || activeScannedPacket.queueItem.remaining,
-      quantityCompleted: activeScannedPacket.queueItem.quantityCompleted || 0,
-      status: activeScannedPacket.queueItem.status,
-      priority: activeScannedPacket.queueItem.priority || 50,
-      assignedTo: activeScannedPacket.queueItem.assignedTo,
+      id: qi.id,
+      partNumber: qi.partNumber,
+      partName: qi.partName,
+      displayName: qi.displayName || qi.partName,
+      quantityOrdered: qi.quantityRequested || qi.remaining,
+      quantityCompleted: qi.quantityCompleted || 0,
+      status: qi.status,
+      priority: qi.priority || 50,
+      assignedTo: qi.assignedTo,
       fabricLot: null,
       fabricBatch: null,
       fabricRoll: null,
-      notes: activeScannedPacket.queueItem.notes,
-      createdAt: activeScannedPacket.queueItem.createdAt,
-      dueDate: activeScannedPacket.queueItem.dueDate,
-      estimatedCuts: activeScannedPacket.queueItem.estimatedCuts,
+      notes: qi.notes,
+      createdAt: qi.createdAt,
+      dueDate: qi.dueDate,
+      estimatedCuts: qi.estimatedCuts,
       packetBomId: activeScannedPacket.bom?.id || null,
     } as ManufacturingQueueItem);
     
@@ -769,6 +777,10 @@ export default function CuttingOperatorDashboard() {
       isFifoNext: false,
     }));
     setScannedFabrics(mappedFabrics);
+    setProductionForm(prev => ({
+      ...prev,
+      quantityCompleted: String(remaining > 0 ? remaining : 1),
+    }));
     setIsProductionDialogOpen(true);
     handleCloseScannedPacket();
   };
@@ -1391,10 +1403,9 @@ export default function CuttingOperatorDashboard() {
                   size="sm"
                   className="bg-green-600 hover:bg-green-700"
                   onClick={handleCompleteScannedPacket}
-                  disabled={validatedRolls.length === 0}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-1" />
-                  Complete with {validatedRolls.length} Roll(s)
+                  {validatedRolls.length > 0 ? `Complete with ${validatedRolls.length} Roll(s)` : 'Complete Packet'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={handleCloseScannedPacket}>
                   Close
@@ -2733,10 +2744,10 @@ export default function CuttingOperatorDashboard() {
             </Button>
             <Button 
               onClick={handleCompleteProduction} 
-              disabled={completeItemMutation.isPending}
+              disabled={completeItemMutation.isPending || completeWithTraceabilityMutation.isPending}
               data-testid="button-submit-complete"
             >
-              {completeItemMutation.isPending ? 'Completing...' : 'Complete Production'}
+              {(completeItemMutation.isPending || completeWithTraceabilityMutation.isPending) ? 'Completing...' : 'Complete Production'}
             </Button>
           </DialogFooter>
         </DialogContent>

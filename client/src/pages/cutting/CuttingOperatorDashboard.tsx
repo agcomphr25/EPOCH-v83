@@ -731,58 +731,43 @@ export default function CuttingOperatorDashboard() {
   const handleCompleteScannedPacket = () => {
     if (!activeScannedPacket?.queueItem) return;
     const qi = activeScannedPacket.queueItem;
-    const remaining = qi.remaining != null ? qi.remaining : Math.max(0, (qi.quantityRequested || 0) - (qi.quantityCompleted || 0));
 
-    setSelectedMfgItem({
-      id: qi.id,
-      partNumber: qi.partNumber,
-      partName: qi.partName,
-      displayName: qi.displayName || qi.partName,
-      quantityOrdered: qi.quantityRequested || qi.remaining,
-      quantityCompleted: qi.quantityCompleted || 0,
-      status: qi.status,
-      priority: qi.priority || 50,
-      assignedTo: qi.assignedTo,
-      fabricLot: null,
-      fabricBatch: null,
-      fabricRoll: null,
-      notes: qi.notes,
-      createdAt: qi.createdAt,
-      dueDate: qi.dueDate,
-      estimatedCuts: qi.estimatedCuts,
-      packetBomId: activeScannedPacket.bom?.id || null,
-    } as ManufacturingQueueItem);
-    
-    const mappedFabrics = validatedRolls.map((r: any) => ({
-      id: r.id,
-      fabricType: r.fabric || r.nickname || '',
-      fabricPartNumber: r.fabricPartNumber,
-      nickname: r.nickname,
-      commonName: r.fabric,
-      supplierPartNumber: null,
-      internalControlNumber: r.internalControlNumber,
-      lotNumber: r.lotNumber,
-      batchNumber: r.batchNumber,
-      rollNumber: r.rollNumber,
-      quantityInStock: parseFloat(r.squareMeters || '0'),
-      squareMeters: parseFloat(r.squareMeters || '0'),
-      receivedDate: r.receivedDate,
-      expirationDate: r.expirationDate,
-      location: r.location,
-      freezerLocation: r.freezerNumber ? String(r.freezerNumber) : null,
-      barcode: r.barcode,
-      barcodeValue: r.barcode || `FAB-${r.internalControlNumber || 'UNK'}-${r.id?.substring(0, 8) || 'X'}`,
-      status: 'available' as const,
-      lowStockThreshold: 10,
-      isFifoNext: false,
-    }));
-    setScannedFabrics(mappedFabrics);
-    setProductionForm(prev => ({
-      ...prev,
-      quantityCompleted: String(remaining > 0 ? remaining : 1),
-    }));
-    setIsProductionDialogOpen(true);
-    handleCloseScannedPacket();
+    if (validatedRolls.length > 0) {
+      const fabricSources = validatedRolls.map((r: any) => ({
+        fabricInventoryId: r.id,
+        fabricType: r.fabric || r.nickname || '',
+        lotNumber: r.lotNumber,
+        batchNumber: r.batchNumber,
+        rollNumber: r.rollNumber,
+        internalControlNumber: r.internalControlNumber,
+        expirationDate: r.expirationDate,
+        quantityUsed: 1,
+        isDepleted: false,
+      }));
+      completeWithTraceabilityMutation.mutate({
+        id: qi.id,
+        quantityCompleted: 1,
+        fabricSources,
+        completedBy: currentUser?.username || 'unknown',
+        completionNotes: `Completed via scan. ${validatedRolls.length} roll(s) recorded.`,
+      }, {
+        onSuccess: () => {
+          handleCloseScannedPacket();
+        },
+      });
+    } else {
+      completeItemMutation.mutate({
+        id: qi.id,
+        quantityCompleted: 1,
+        fabricLot: '',
+        completionNotes: 'Completed via scan (no material rolls scanned).',
+        completedBy: currentUser?.username || 'unknown',
+      }, {
+        onSuccess: () => {
+          handleCloseScannedPacket();
+        },
+      });
+    }
   };
 
   const togglePrintId = (id: number) => {
@@ -1403,9 +1388,13 @@ export default function CuttingOperatorDashboard() {
                   size="sm"
                   className="bg-green-600 hover:bg-green-700"
                   onClick={handleCompleteScannedPacket}
+                  disabled={completeWithTraceabilityMutation.isPending || completeItemMutation.isPending}
                 >
-                  <CheckCircle2 className="h-4 w-4 mr-1" />
-                  {validatedRolls.length > 0 ? `Complete with ${validatedRolls.length} Roll(s)` : 'Complete Packet'}
+                  {(completeWithTraceabilityMutation.isPending || completeItemMutation.isPending) ? (
+                    <><RefreshCw className="h-4 w-4 mr-1 animate-spin" /> Saving...</>
+                  ) : (
+                    <><CheckCircle2 className="h-4 w-4 mr-1" /> {validatedRolls.length > 0 ? `Complete — ${validatedRolls.length} Roll(s)` : 'Complete Packet'}</>
+                  )}
                 </Button>
                 <Button size="sm" variant="outline" onClick={handleCloseScannedPacket}>
                   Close

@@ -1,5 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface DraftWrapper<T> {
+  data: T;
+  savedAt: number;
+}
+
 interface UseFormDraftOptions<T> {
   storageKey: string;
   getValues: () => T;
@@ -13,6 +20,23 @@ interface UseFormDraftReturn<T> {
   restoreDraft: () => T | null;
   clearDraft: () => void;
   saveDraft: () => void;
+  pauseAutoSave: () => void;
+  resumeAutoSave: () => void;
+}
+
+function parseDraft<T>(raw: string): T | null {
+  const parsed = JSON.parse(raw);
+  if (parsed && typeof parsed === 'object' && 'savedAt' in parsed && 'data' in parsed) {
+    const wrapper = parsed as DraftWrapper<T>;
+    if (Date.now() - wrapper.savedAt > DRAFT_MAX_AGE_MS) {
+      return null;
+    }
+    return wrapper.data;
+  }
+  if (Date.now() - (parsed?._draftTimestamp || 0) > DRAFT_MAX_AGE_MS && parsed?._draftTimestamp) {
+    return null;
+  }
+  return parsed as T;
 }
 
 export function useFormDraft<T>({
@@ -23,6 +47,7 @@ export function useFormDraft<T>({
 }: UseFormDraftOptions<T>): UseFormDraftReturn<T> {
   const [hasDraft, setHasDraft] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pausedRef = useRef(false);
   const getValuesRef = useRef(getValues);
   getValuesRef.current = getValues;
 
@@ -30,8 +55,13 @@ export function useFormDraft<T>({
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
-        JSON.parse(saved);
-        setHasDraft(true);
+        const data = parseDraft(saved);
+        if (data === null) {
+          localStorage.removeItem(storageKey);
+          setHasDraft(false);
+        } else {
+          setHasDraft(true);
+        }
       }
     } catch {
       localStorage.removeItem(storageKey);
@@ -40,13 +70,16 @@ export function useFormDraft<T>({
   }, [storageKey]);
 
   const saveDraft = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || pausedRef.current) return;
     try {
       const values = getValuesRef.current();
-      localStorage.setItem(storageKey, JSON.stringify(values));
+      const wrapper: DraftWrapper<T> = {
+        data: values,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(wrapper));
       setHasDraft(true);
     } catch {
-      // silently fail
     }
   }, [storageKey, enabled]);
 
@@ -77,7 +110,12 @@ export function useFormDraft<T>({
     try {
       const saved = localStorage.getItem(storageKey);
       if (!saved) return null;
-      const data = JSON.parse(saved) as T;
+      const data = parseDraft<T>(saved);
+      if (data === null) {
+        localStorage.removeItem(storageKey);
+        setHasDraft(false);
+        return null;
+      }
       return data;
     } catch {
       localStorage.removeItem(storageKey);
@@ -89,8 +127,18 @@ export function useFormDraft<T>({
   const clearDraft = useCallback(() => {
     localStorage.removeItem(storageKey);
     setHasDraft(false);
+    pausedRef.current = true;
     if (timerRef.current) clearTimeout(timerRef.current);
   }, [storageKey]);
 
-  return { hasDraft, restoreDraft, clearDraft, saveDraft };
+  const pauseAutoSave = useCallback(() => {
+    pausedRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const resumeAutoSave = useCallback(() => {
+    pausedRef.current = false;
+  }, []);
+
+  return { hasDraft, restoreDraft, clearDraft, saveDraft, pauseAutoSave, resumeAutoSave };
 }

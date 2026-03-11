@@ -36,14 +36,9 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
           },
         },
         {
-          id: 'hero-inventory-shortages',
-          type: 'hero_metric',
-          props: {
-            metricSlug: 'open_inventory_shortages',
-            title: 'Inventory Shortages',
-            subtitle: 'Open shortages blocking production',
-            accentColor: 'hsl(25, 95%, 53%)',
-          },
+          id: 'hero-otd-summary',
+          type: 'otd_summary',
+          props: {},
         },
         {
           id: 'pcc-forecast-accuracy',
@@ -54,13 +49,13 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
     },
 
     {
-      id: 'department_metrics',
-      title: 'Department Status',
+      id: 'project_pipeline',
+      title: 'Project Pipeline',
       columns: 1,
       widgets: [
         {
-          id: 'pcc-department-status',
-          type: 'department_status',
+          id: 'pcc-pipeline-board',
+          type: 'pipeline_board',
           props: {},
           colSpan: 'col-span-1',
         },
@@ -91,8 +86,8 @@ export const PCC_DASHBOARD_LAYOUT: DashboardLayout = {
       columns: 3,
       widgets: [
         {
-          id: 'pcc-kit-progress',
-          type: 'kit_progress',
+          id: 'pcc-payment-analytics',
+          type: 'payment_analytics',
           props: {},
         },
         {

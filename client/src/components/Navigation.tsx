@@ -230,6 +230,7 @@ export default function Navigation() {
     useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
   const [centralStorageExpanded, setCentralStorageExpanded] = useState(false);
+  const [systemHealthExpanded, setSystemHealthExpanded] = useState(false);
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -246,6 +247,7 @@ export default function Navigation() {
     setDepartmentQueueExpanded(false);
     setVerifiedModulesExpanded(false);
     setCentralStorageExpanded(false);
+    setSystemHealthExpanded(false);
   }, []);
 
   // Helper function to toggle dropdown
@@ -276,6 +278,8 @@ export default function Navigation() {
           setVerifiedModulesExpanded(false);
         if (dropdownName !== 'centralStorage')
           setCentralStorageExpanded(false);
+        if (dropdownName !== 'systemHealth')
+          setSystemHealthExpanded(false);
       }
     },
     []
@@ -334,6 +338,35 @@ export default function Navigation() {
       description: 'Advanced order management and editing for administrators',
     },
     {
+      path: '/pdf-templates',
+      label: 'PDF Templates',
+      icon: FileText,
+      description: 'Manage PDF templates with custom logos and styling for P1, P2, RFQ, etc.',
+    },
+    {
+      path: '/watch-rules',
+      label: 'Watch Rules',
+      icon: Eye,
+      description: 'Configure rules to monitor specific customer orders through departments',
+    },
+    {
+      path: '/admin/qr-codes',
+      label: 'QR Code Management',
+      icon: QrCode,
+      description: 'Create and manage QR codes for orders, equipment, and other items',
+    },
+
+    // Documentation button disabled per user request - was causing problems
+    // {
+    //   path: '/documentation',
+    //   label: 'Documentation',
+    //   icon: BookOpen,
+    //   description: 'Complete system architecture and structure'
+    // }
+  ];
+
+  const systemHealthItems = [
+    {
       path: '/admin/health-checks',
       label: 'System Health Checks',
       icon: Activity,
@@ -357,38 +390,6 @@ export default function Navigation() {
       icon: Factory,
       description: 'Real-time production heatmap with bottleneck detection and pipeline health overview',
     },
-    {
-      path: '/pdf-templates',
-      label: 'PDF Templates',
-      icon: FileText,
-      description: 'Manage PDF templates with custom logos and styling for P1, P2, RFQ, etc.',
-    },
-    {
-      path: '/watch-rules',
-      label: 'Watch Rules',
-      icon: Eye,
-      description: 'Configure rules to monitor specific customer orders through departments',
-    },
-    {
-      path: '/admin/qr-codes',
-      label: 'QR Code Management',
-      icon: QrCode,
-      description: 'Create and manage QR codes for orders, equipment, and other items',
-    },
-    {
-      path: '/admin/checklist-management',
-      label: 'Checklist Management',
-      icon: ClipboardList,
-      description: 'Create and manage daily, weekly, and monthly checklists for employees',
-    },
-
-    // Documentation button disabled per user request - was causing problems
-    // {
-    //   path: '/documentation',
-    //   label: 'Documentation',
-    //   icon: BookOpen,
-    //   description: 'Complete system architecture and structure'
-    // }
   ];
 
   const orderManagementItems = [
@@ -777,6 +778,12 @@ export default function Navigation() {
       label: 'Badge Configuration',
       icon: Scan,
       description: 'Configure employee badge actions and workflows',
+    },
+    {
+      path: '/admin/checklist-management',
+      label: 'Checklist Management',
+      icon: ClipboardList,
+      description: 'Create and manage daily, weekly, and monthly checklists for employees',
     },
   ];
 
@@ -1367,7 +1374,14 @@ export default function Navigation() {
     () => filterByPermissions(departmentQueueItems, currentUser?.username, userRole),
     [departmentQueueItems, currentUser?.username, userRole]
   );
+  const filteredSystemHealthItems = useMemo(
+    () => filterByPermissions(systemHealthItems, currentUser?.username, userRole),
+    [systemHealthItems, currentUser?.username, userRole]
+  );
 
+  const isSystemHealthActive = systemHealthItems.some(
+    (item) => location === item.path
+  );
   const isVerifiedModulesActive = verifiedModulesItems.some(
     (item) => location === item.path
   );
@@ -2096,6 +2110,60 @@ export default function Navigation() {
                 {centralStorageExpanded && (
                   <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                     {filteredCentralStorageItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
+
+                      return (
+                        <button
+                          key={item.path}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                            isActive && 'bg-primary text-white hover:bg-primary'
+                          )}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* System Health Checks Dropdown */}
+            {filteredSystemHealthItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isSystemHealthActive ? 'default' : 'ghost'}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    isSystemHealthActive && 'bg-primary text-white'
+                  )}
+                  onClick={() =>
+                    toggleDropdown(
+                      'systemHealth',
+                      systemHealthExpanded,
+                      setSystemHealthExpanded
+                    )
+                  }
+                >
+                  <Activity className="h-4 w-4" />
+                  System Health Checks
+                  {systemHealthExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {systemHealthExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[250px]">
+                    {filteredSystemHealthItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;
 

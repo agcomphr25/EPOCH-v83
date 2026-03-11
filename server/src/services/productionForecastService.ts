@@ -166,6 +166,77 @@ async function loadCycleTimes(): Promise<Record<string, number>> {
   }
 }
 
+let modelCycleTimeCache: { data: Record<string, Record<string, number>>; cachedAt: number } | null = null;
+const MODEL_CYCLE_CACHE_TTL = 300_000;
+
+async function loadModelCycleTimes(): Promise<Record<string, Record<string, number>>> {
+  if (modelCycleTimeCache && Date.now() - modelCycleTimeCache.cachedAt < MODEL_CYCLE_CACHE_TTL) {
+    return modelCycleTimeCache.data;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT model_id, department, avg_duration_minutes, sample_size
+       FROM model_department_stats
+       WHERE sample_size >= 5`
+    );
+    const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+    const modelTimes: Record<string, Record<string, number>> = {};
+    for (const row of rows) {
+      if (!modelTimes[row.model_id]) modelTimes[row.model_id] = {};
+      const avgDays = parseFloat(row.avg_duration_minutes) / (60 * 24);
+      if (!isNaN(avgDays) && avgDays > 0) {
+        modelTimes[row.model_id][row.department] = Math.round(avgDays * 10) / 10;
+      }
+    }
+    modelCycleTimeCache = { data: modelTimes, cachedAt: Date.now() };
+    return modelTimes;
+  } catch (err) {
+    return {};
+  }
+}
+
+async function getCycleTimesForModel(modelId: string | null): Promise<{ times: Record<string, number>; modelSpecific: boolean; modelDepartments: string[] }> {
+  const baseTimes = await loadCycleTimes();
+  if (!modelId) return { times: baseTimes, modelSpecific: false, modelDepartments: [] };
+
+  const allModelTimes = await loadModelCycleTimes();
+  const modelTimes = allModelTimes[modelId];
+  if (!modelTimes || Object.keys(modelTimes).length === 0) {
+    return { times: baseTimes, modelSpecific: false, modelDepartments: [] };
+  }
+
+  const merged = { ...baseTimes };
+  const modelDepartments: string[] = [];
+  for (const [dept, days] of Object.entries(modelTimes)) {
+    merged[dept] = days;
+    modelDepartments.push(dept);
+  }
+  return { times: merged, modelSpecific: true, modelDepartments };
+}
+
+let queueWeightCache: { data: Record<string, number>; cachedAt: number } | null = null;
+const QUEUE_WEIGHT_CACHE_TTL = 300_000;
+
+async function loadQueueWeights(): Promise<Record<string, number>> {
+  if (queueWeightCache && Date.now() - queueWeightCache.cachedAt < QUEUE_WEIGHT_CACHE_TTL) {
+    return queueWeightCache.data;
+  }
+
+  try {
+    const result = await pool.query('SELECT model_id, queue_weight FROM model_queue_weights');
+    const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+    const weights: Record<string, number> = {};
+    for (const row of rows) {
+      weights[row.model_id] = parseFloat(row.queue_weight) || 1.0;
+    }
+    queueWeightCache = { data: weights, cachedAt: Date.now() };
+    return weights;
+  } catch (err) {
+    return {};
+  }
+}
+
 function getRemainingStages(
   currentDepartment: string,
   order: { is_flattop?: boolean; features?: any; model_id?: string | null }
@@ -211,6 +282,7 @@ export async function forecastOrder(
   const terminalStatuses = ['FULFILLED', 'CANCELLED', 'SCRAPPED'];
   if (order.status && terminalStatuses.includes(order.status)) return null;
 
+  const { times: cycleTimes } = await getCycleTimesForModel(order.model_id);
   const remaining = getRemainingStages(order.current_department, order);
   if (remaining.length === 0) return null;
 
@@ -267,16 +339,18 @@ async function loadBacklogs(): Promise<Record<string, number>> {
 
   try {
     const result = await pool.query(
-      `SELECT current_department, COUNT(*)::int AS cnt
-       FROM all_orders
-       WHERE status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
-         AND current_department IS NOT NULL
-       GROUP BY current_department`
+      `SELECT o.current_department,
+              SUM(COALESCE(w.queue_weight, 1.0))::numeric AS weighted_count
+       FROM all_orders o
+       LEFT JOIN model_queue_weights w ON o.model_id = w.model_id
+       WHERE o.status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')
+         AND o.current_department IS NOT NULL
+       GROUP BY o.current_department`
     );
     const rows = Array.isArray(result) ? result : (result?.rows ?? []);
     const backlogs: Record<string, number> = {};
     for (const row of rows) {
-      backlogs[row.current_department] = parseInt(row.cnt, 10) || 0;
+      backlogs[row.current_department] = parseFloat(row.weighted_count) || 0;
     }
     backlogCache = { data: backlogs, cachedAt: Date.now() };
     return backlogs;
@@ -296,6 +370,10 @@ export interface NewOrderSimulation {
   totalBusinessDays: number;
   confidence: SimulationConfidence;
   pipelineStages: string[];
+  stageDurations: { stage: string; days: number }[];
+  isAdjustable: boolean;
+  modelSpecific: boolean;
+  modelReasons: string[];
 }
 
 export async function simulateNewOrder(params: {
@@ -310,23 +388,48 @@ export async function simulateNewOrder(params: {
   };
 
   const pipeline = getEffectivePipeline(order);
-  const cycleTimes = await loadCycleTimes();
+  const { times: cycleTimes, modelSpecific, modelDepartments } = await getCycleTimesForModel(order.model_id);
+  const baseTimes = await loadCycleTimes();
   const backlogs = await loadBacklogs();
 
   let totalCycleDays = 0;
   let totalBacklogDelay = 0;
+  const stageDurations: { stage: string; days: number }[] = [];
+  const modelReasons: string[] = [];
 
   for (const stage of pipeline) {
     const avgDays = cycleTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2;
     totalCycleDays += avgDays;
 
-    const ordersAhead = backlogs[stage] ?? 0;
-    const backlogFactor = Math.min(ordersAhead / 50, 2.0);
+    const weightedAhead = backlogs[stage] ?? 0;
+    const backlogFactor = Math.min(weightedAhead / 50, 2.0);
     const backlogDelay = avgDays * backlogFactor;
     totalBacklogDelay += backlogDelay;
+
+    stageDurations.push({ stage, days: Math.round((avgDays + backlogDelay) * 10) / 10 });
+
+    if (modelSpecific && modelDepartments.includes(stage)) {
+      const baseAvg = baseTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2;
+      const diff = avgDays - baseAvg;
+      if (Math.abs(diff) >= 0.5) {
+        const direction = diff > 0 ? 'longer' : 'shorter';
+        modelReasons.push(`${stage}: ${avgDays.toFixed(1)} days avg (${Math.abs(diff).toFixed(1)} days ${direction} than overall avg)`);
+      }
+    }
+
+    if (weightedAhead > 0) {
+      const roundedAhead = Math.round(weightedAhead * 10) / 10;
+      modelReasons.push(`${stage}: ${roundedAhead} weighted orders ahead in queue`);
+    }
   }
 
-  const estimatedCycleDays = totalCycleDays + totalBacklogDelay;
+  const isAdjustable = !!(params.model_id && params.model_id.toLowerCase().includes('adj'));
+  const adjustableExtraDays = (!modelSpecific && isAdjustable) ? 10 : 0;
+  if (adjustableExtraDays > 0) {
+    modelReasons.push('Adjustable model: +2 weeks added (no model-specific history available)');
+  }
+
+  const estimatedCycleDays = totalCycleDays + totalBacklogDelay + adjustableExtraDays;
   const totalBusinessDays = Math.ceil(estimatedCycleDays);
   const projectedCompletion = addBusinessDays(new Date(), totalBusinessDays);
 
@@ -337,6 +440,9 @@ export async function simulateNewOrder(params: {
   const totalBacklog = Object.values(backlogs).reduce((s, v) => s + v, 0);
   if (totalBacklog > 300) confidence = 'LOW';
   else if (totalBacklog > 150) confidence = 'MEDIUM';
+  if (modelSpecific) {
+    if (confidence === 'MEDIUM') confidence = 'HIGH';
+  }
 
   return {
     projectedCompletion: projectedCompletion.toISOString(),
@@ -346,6 +452,10 @@ export async function simulateNewOrder(params: {
     totalBusinessDays,
     confidence,
     pipelineStages: pipeline,
+    stageDurations,
+    isAdjustable,
+    modelSpecific,
+    modelReasons,
   };
 }
 
@@ -449,7 +559,8 @@ async function forecastActiveOrdersLegacy(): Promise<ForecastSummary> {
   );
 
   const rows = Array.isArray(result) ? result : (result?.rows ?? []);
-  const cycleTimes = await loadCycleTimes();
+  const baseTimes = await loadCycleTimes();
+  const allModelTimes = await loadModelCycleTimes();
 
   const orders: OrderForecast[] = [];
   let onTrack = 0;
@@ -459,6 +570,9 @@ async function forecastActiveOrdersLegacy(): Promise<ForecastSummary> {
   for (const row of rows) {
     const remaining = getRemainingStages(row.current_department, row);
     if (remaining.length === 0) continue;
+
+    const modelTimes = row.model_id ? allModelTimes[row.model_id] : null;
+    const cycleTimes = modelTimes ? { ...baseTimes, ...modelTimes } : baseTimes;
 
     const remainingDays = remaining.reduce(
       (sum, stage) => sum + (cycleTimes[stage] ?? FALLBACK_CYCLE_DAYS[stage] ?? 2),

@@ -1,0 +1,230 @@
+Copy-Paste Implementation Prompt
+
+(For your Replit agent)
+
+Writing
+
+TASK: Implement a Forecast Date Selector modal for Estimated Completion Date in the Order Form.
+
+GOAL
+Replace the current plain date picker with a modal that displays forecast recommendations from the existing forecast engine so CSRs can select an informed completion date instead of guessing.
+
+IMPORTANT
+Do NOT modify the forecast engine logic. Only improve the UI and how the forecast results are presented.
+
+────────────────────────────────
+
+PART 1 — API STRUCTURE
+
+Inspect the existing endpoint used by the order form that returns forecast data.
+
+Normalize the response so the UI can consume this structure:
+
+{
+recommendedDate: string,
+confidence: number,
+window: {
+earliest: string,
+latest: string
+},
+timeline?: [
+{ stage: string, date: string }
+],
+reasons?: string[]
+}
+
+If the existing endpoint does not return this shape, create a small mapper on the frontend that converts the existing response.
+
+Do not change backend logic.
+
+────────────────────────────────
+
+PART 2 — CREATE FORECAST MODAL COMPONENT
+
+Create component:
+
+client/src/components/orders/ForecastDateModal.tsx
+
+UI layout:
+
+Title:
+Estimated Completion Forecast
+
+Sections:
+
+RECOMMENDED DATE
+
+Display:
+
+Recommended Completion
+[ DATE ]
+
+Confidence:
+High / Medium / Low
+
+Button:
+[ Use Recommended Date ]
+
+────────────────────────────────
+
+EXPECTED WINDOW
+
+Display:
+
+Earliest Possible
+[ date ]
+
+Most Likely
+[ recommendedDate ]
+
+Latest Expected
+[ date ]
+
+Render visually as a horizontal bar with a marker on the recommended date.
+
+────────────────────────────────
+
+PRODUCTION TIMELINE (optional)
+
+If timeline exists:
+
+Layup
+Plugging
+CNC
+Gunsmith
+Paint
+QC
+
+Render as a vertical timeline list.
+
+────────────────────────────────
+
+FORECAST REASONING
+
+Render bullet list:
+
+• Average cycle time
+• Queue backlog
+• Safety buffer
+• Rush adjustments
+
+────────────────────────────────
+
+ALTERNATIVE OPTIONS
+
+Buttons:
+
+[ Earliest Possible Date ]
+[ Recommended Date ]
+[ Conservative Promise Date ]
+
+Selecting a button populates the order form field.
+
+────────────────────────────────
+
+PART 3 — CONNECT MODAL TO ORDER FORM
+
+Find the Estimated Completion Date field in:
+
+client/src/pages/orders/OrderFormPage.tsx
+
+Replace the date input behavior.
+
+Current behavior:
+click → date picker
+
+New behavior:
+click → open ForecastDateModal
+
+Add button beside field:
+
+[ Forecast Options ]
+
+The modal should populate the date field when a selection is made.
+
+────────────────────────────────
+
+PART 4 — CONFIDENCE DISPLAY
+
+Create helper:
+
+client/src/lib/forecastConfidence.ts
+
+function getConfidenceLabel(score){
+if(score > .75) return "High"
+if(score > .45) return "Medium"
+return "Low"
+}
+
+Display label with color:
+
+High → green
+Medium → amber
+Low → red
+
+────────────────────────────────
+
+PART 5 — MANUAL OVERRIDE
+
+Inside the modal include:
+
+Manual Override
+[ Open Calendar Picker ]
+
+If used:
+
+• allow user to select any date
+• set orderForm.manualCompletionDate = true
+• disable auto-forecast updates for that order
+
+────────────────────────────────
+
+PART 6 — UX DETAILS
+
+Add loading state:
+
+"Running production forecast..."
+
+If forecast fails:
+
+Fallback message:
+
+"Forecast unavailable. Using default 14 week estimate."
+
+Still allow manual selection.
+
+────────────────────────────────
+
+PART 7 — DRAFT FIX
+
+Also implement this fix:
+
+When order is successfully saved:
+
+localStorage.removeItem("orderDraft")
+
+Also ignore drafts older than 24 hours.
+
+────────────────────────────────
+
+RESULT
+
+The order creation flow becomes:
+
+Open order
+Select model
+Click completion date
+Forecast modal opens
+CSR selects recommended date
+Date populates form
+Save order
+
+────────────────────────────────
+
+DO NOT
+
+• rewrite forecast engine
+• change production scheduling logic
+• modify database schema
+
+Only build UI and connect to existing forecast endpoint.

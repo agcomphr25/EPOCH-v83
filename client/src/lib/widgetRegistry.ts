@@ -12,6 +12,9 @@ export type WidgetTypeId =
   | 'signal_card'
   | 'swim_lane_preview'
   | 'capability_radar'
+  | 'pipeline_board'
+  | 'otd_summary'
+  | 'payment_analytics';
   | 'forecast_accuracy';
 
 // ─── Widget Config ─────────────────────────────────────────────────────────────
@@ -74,6 +77,9 @@ import SignalCardWidget from '@/components/widgets/SignalCardWidget';
 import SwimLanePreviewWidget from '@/components/widgets/SwimLanePreviewWidget';
 import CapabilityRadarWidget from '@/components/widgets/CapabilityRadarWidget';
 import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget';
+import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
+import OTDWidget from '@/components/widgets/OTDWidget';
+import PaymentAnalyticsWidget from '@/components/widgets/PaymentAnalyticsWidget';
 import ForecastAccuracyWidget from '@/components/widgets/ForecastAccuracyWidget';
 
 registerWidget({
@@ -177,6 +183,31 @@ registerWidget({
 });
 
 registerWidget({
+  id: 'pipeline_board',
+  displayName: 'Project Pipeline',
+  description: 'Compact kanban view of the P2 project pipeline across all stages.',
+  category: 'status',
+  component: PipelineBoardWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'otd_summary',
+  displayName: 'OTD Summary',
+  description: 'On-time delivery percentage and breakdown for the current month.',
+  category: 'metric',
+  component: OTDWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'payment_analytics',
+  displayName: 'Payment Analytics',
+  description: 'Month-to-date revenue summary with phone vs online breakdown.',
+  category: 'metric',
+  component: PaymentAnalyticsWidget as ComponentType<Record<string, unknown>>,
   id: 'forecast_accuracy',
   displayName: 'Forecast Accuracy',
   description: 'Shows forecast vs. actual completion accuracy with error metrics and trend breakdown.',

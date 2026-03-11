@@ -4256,11 +4256,14 @@ export const p2Customers = pgTable('p2_customers', {
   billingCity: text('billing_city'),
   billingState: text('billing_state'),
   billingZip: text('billing_zip'),
+  shippingCompanyName: text('shipping_company_name'),
+  shippingContactName: text('shipping_contact_name'),
   shippingAddress: text('shipping_address'),
+  shippingAddress2: text('shipping_address_2'),
   shippingCity: text('shipping_city'),
   shippingState: text('shipping_state'),
   shippingZip: text('shipping_zip'),
-  shipToAddress: text('ship_to_address'), // New field for ship-to information
+  shipToAddress: text('ship_to_address'),
   paymentTerms: text('payment_terms').default('NET_30'),
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE, SUSPENDED
   notes: text('notes'),
@@ -13130,6 +13133,24 @@ export type InsertDepartmentForecastDefault = z.infer<typeof insertDepartmentFor
 export const insertModelForecastMultiplierSchema = createInsertSchema(modelForecastMultiplier).omit({ id: true, createdAt: true, updatedAt: true });
 export type ModelForecastMultiplier = typeof modelForecastMultiplier.$inferSelect;
 export type InsertModelForecastMultiplier = z.infer<typeof insertModelForecastMultiplierSchema>;
+
+export const modelDepartmentStats = pgTable('model_department_stats', {
+  id: serial('id').primaryKey(),
+  modelId: text('model_id').notNull(),
+  department: text('department').notNull(),
+  avgDurationMinutes: real('avg_duration_minutes').notNull(),
+  medianDurationMinutes: real('median_duration_minutes'),
+  sampleSize: integer('sample_size').notNull().default(0),
+  lastUpdated: timestamp('last_updated').defaultNow(),
+});
+
+export const modelQueueWeights = pgTable('model_queue_weights', {
+  id: serial('id').primaryKey(),
+  modelId: text('model_id').notNull().unique(),
+  queueWeight: real('queue_weight').notNull().default(1.0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
 export const productionForecastVerifications = pgTable('production_forecast_verifications', {
   id: serial('id').primaryKey(),

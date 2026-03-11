@@ -488,7 +488,8 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
       fabricSourceCount: fabricSources.length,
     });
   } catch (error) {
-    console.error('Error completing packet with traceability:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('Error completing packet with traceability:', errMsg, error);
     res.status(500).json({ error: 'Failed to complete packet with traceability' });
   }
 });

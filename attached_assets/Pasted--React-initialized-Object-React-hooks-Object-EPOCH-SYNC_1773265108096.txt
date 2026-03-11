@@ -1,0 +1,98 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DbIQmrIT.js:4950 App component is rendering...
+index-DbIQmrIT.js:4950 Environment: production
+index-DbIQmrIT.js:4950 Base URL: /
+index-DbIQmrIT.js:1535 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-DbIQmrIT.js:1535 [EPOCH] Install prompt captured and ready
+dashboard:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 200
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/generate-labels (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/generate-labels: 200
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/generate-labels (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/generate-labels: 200
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/generate-labels (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/generate-labels: 200
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 200
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 200
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DbIQmrIT.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-DbIQmrIT.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-DbIQmrIT.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-DbIQmrIT.js:4953
+index-DbIQmrIT.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-DbIQmrIT.js:235:6362)
+console.error @ index-DbIQmrIT.js:4953

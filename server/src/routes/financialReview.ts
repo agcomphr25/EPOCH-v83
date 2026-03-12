@@ -337,10 +337,11 @@ router.get('/live/customer-score', async (req, res) => {
   try {
     const rows = await pool.query(`
       SELECT
-        ROUND(AVG(overall_score)::numeric, 1) AS avg_score,
+        ROUND(AVG(overall_satisfaction)::numeric, 1) AS avg_score,
         COUNT(*) AS response_count
       FROM customer_satisfaction_responses
       WHERE created_at >= NOW() - INTERVAL '12 months'
+        AND is_complete = true
     `) as any[];
     const r = rows[0] || {};
     res.json({

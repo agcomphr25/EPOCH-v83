@@ -26,7 +26,7 @@ interface SummaryData {
     avg30Day: number | null; responseCount30Day: number; lastUpdated: string;
   };
   arAging: { current: number; days30: number; days60: number; days90plus: number; totalOutstanding: number; lastUpdated: string };
-  pipeline: { totalValue: number; pWeightedValue: number; openCount: number; byStage: Record<string, number>; lastUpdated: string };
+  pipeline: { totalValue: number; pWeightedValue: number; openCount: number; byStage: Record<string, number>; p2ByStatus: Record<string, number>; lastUpdated: string };
   returnRate: { returnCount: number; totalOrders: number; rate: number | null; lastUpdated: string };
 }
 
@@ -469,6 +469,27 @@ export default function FinancialReviewPage() {
                 )}
               </div>
             </div>
+            {/* Live P2 open order pipeline from p2_purchase_orders */}
+            {summary?.pipeline && (
+              <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-3">
+                  <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide">Open P2 Orders</div>
+                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">{summary.pipeline.openCount}</div>
+                </div>
+                {Object.entries(summary.pipeline.p2ByStatus ?? {}).map(([status, count]) => (
+                  <div key={status} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-3">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">{status}</div>
+                    <div className="text-2xl font-bold text-gray-800 dark:text-gray-200 mt-1">{count as number}</div>
+                  </div>
+                ))}
+                {Object.entries(summary.pipeline.byStage ?? {}).slice(0, 2).map(([stage, count]) => (
+                  <div key={stage} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-3">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">{stage.replace(/_/g, ' ')}</div>
+                    <div className="text-2xl font-bold text-gray-800 dark:text-gray-200 mt-1">{count as number}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
               {pipeline.length === 0 ? (
                 <div className="p-8 text-center text-gray-400 italic">No pipeline opportunities for this period</div>

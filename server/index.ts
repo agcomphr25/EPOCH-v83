@@ -601,21 +601,31 @@ async function initializeBackgroundServices() {
         await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS consumed_by TEXT`);
         await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
 
-        // Check if cutting_built_packet_fabric_sources exists with wrong column types
-        const fsColCheck = await db.execute(sqlCpT`
-          SELECT data_type FROM information_schema.columns
-          WHERE table_name = 'cutting_built_packet_fabric_sources' AND column_name = 'id'
-        `);
-        const fsIdType = (fsColCheck as any)?.rows?.[0]?.data_type;
-        if (fsIdType && fsIdType !== 'integer') {
-          const fsCount = await db.execute(sqlCpT`SELECT COUNT(*)::int AS cnt FROM cutting_built_packet_fabric_sources`);
-          const fsRowCount = (fsCount as any)?.rows?.[0]?.cnt || 0;
-          if (fsRowCount === 0) {
-            console.log(`⚠️ cutting_built_packet_fabric_sources.id is '${fsIdType}' (empty table) — recreating with SERIAL`);
-            await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packet_fabric_sources CASCADE`);
-          } else {
-            console.warn(`⚠️ cutting_built_packet_fabric_sources.id is '${fsIdType}' with ${fsRowCount} rows — skipping destructive migration`);
-          }
+        // Fix product_category_id type: early table creation used integer, but cutting_product_categories.id is uuid
+        try {
+          await db.execute(sqlCpT`
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'cutting_built_packets'
+                  AND column_name = 'product_category_id'
+                  AND data_type = 'integer'
+              ) THEN
+                -- Delete any rows with non-castable integer values before type conversion
+                DELETE FROM cutting_built_packet_fabric_sources
+                  WHERE built_packet_id IN (
+                    SELECT id FROM cutting_built_packets WHERE product_category_id IS NOT NULL
+                  );
+                DELETE FROM cutting_built_packets WHERE product_category_id IS NOT NULL;
+                -- Now safe to convert the empty/null column
+                ALTER TABLE cutting_built_packets
+                  ALTER COLUMN product_category_id TYPE uuid USING NULL;
+              END IF;
+            END $$
+          `);
+        } catch (colFixErr: any) {
+          console.warn('⚠️ cutting_built_packets.product_category_id type fix skipped:', colFixErr.message);
         }
 
         // Create cutting_built_packet_fabric_sources if it doesn't exist
@@ -640,14 +650,34 @@ async function initializeBackgroundServices() {
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_packet_idx ON cutting_built_packet_fabric_sources(built_packet_id)`);
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx ON cutting_built_packet_fabric_sources(fabric_inventory_id)`);
 
-        // Ensure manufacturing_queue has all columns needed for packet completion traceability
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS fabric_lot TEXT`);
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS fabric_batch TEXT`);
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS fabric_roll TEXT`);
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS material_details TEXT`);
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS completion_notes TEXT`);
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS completed_by TEXT`);
-        await db.execute(sqlCpT`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP`);
+        // Fix fabric_inventory_id type: early table creation used integer, but cutting_fabric_inventory.id is uuid
+        try {
+          await db.execute(sqlCpT`
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'cutting_built_packet_fabric_sources'
+                  AND column_name = 'fabric_inventory_id'
+                  AND data_type = 'integer'
+              ) THEN
+                -- Clear any non-castable integer references before type conversion
+                UPDATE cutting_built_packet_fabric_sources SET fabric_inventory_id = NULL WHERE fabric_inventory_id IS NOT NULL;
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  ALTER COLUMN fabric_inventory_id TYPE uuid USING NULL;
+              END IF;
+            END $$
+          `);
+        } catch (fabFixErr: any) {
+          console.warn('⚠️ fabric_sources.fabric_inventory_id type fix skipped:', fabFixErr.message);
+        }
+
+        try {
+          await db.execute(sqlCpT`ALTER TABLE cutting_built_packet_fabric_sources ADD COLUMN IF NOT EXISTS component_id UUID`);
+          await db.execute(sqlCpT`ALTER TABLE cutting_built_packet_fabric_sources ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
+        } catch (colAddErr: any) {
+          console.warn('⚠️ fabric_sources column additions skipped:', colAddErr.message);
+        }
 
         console.log('✅ Ensured cutting packet traceability tables exist (sessions, built_packets columns, fabric_sources)');
       } catch (cpTErr: any) {
@@ -1815,6 +1845,48 @@ async function initializeBackgroundServices() {
         console.log('✅ Ensured AR invoice/payment tables exist');
       } catch (arErr: any) {
         console.warn('⚠️ AR tables migration:', arErr.message);
+      }
+
+      // Ensure capability-based permission system tables exist
+      try {
+        const { sql: sqlPerm } = await import('drizzle-orm');
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_capabilities (
+            id SERIAL PRIMARY KEY,
+            key TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'general'
+          )
+        `);
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_roles (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            is_system BOOLEAN NOT NULL DEFAULT false
+          )
+        `);
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_role_capabilities (
+            id SERIAL PRIMARY KEY,
+            role_id INTEGER NOT NULL REFERENCES perm_roles(id) ON DELETE CASCADE,
+            capability_id INTEGER NOT NULL REFERENCES perm_capabilities(id) ON DELETE CASCADE,
+            UNIQUE (role_id, capability_id)
+          )
+        `);
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_user_overrides (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            capability_id INTEGER NOT NULL REFERENCES perm_capabilities(id) ON DELETE CASCADE,
+            effect TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (user_id, capability_id)
+          )
+        `);
+        console.log('✅ Ensured perm_ permission tables exist');
+      } catch (permErr: any) {
+        console.warn('⚠️ perm_ tables migration:', permErr.message);
       }
 
       // Ensure projects table has pipeline stage columns

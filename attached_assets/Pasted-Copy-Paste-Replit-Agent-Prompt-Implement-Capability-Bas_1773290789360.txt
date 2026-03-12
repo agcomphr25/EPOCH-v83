@@ -1,0 +1,212 @@
+Copy-Paste Replit Agent Prompt
+Implement Capability-Based Permission System
+TASK: Implement a capability-based permission system for EPOCH while preserving the existing route permission logic.
+
+GOAL
+Replace route-only permissions with a scalable capability system that supports:
+
+• Role-based permissions
+• Per-user overrides
+• Page protection
+• Button/action protection
+• Future field-level permissions
+• API enforcement
+
+Do NOT break existing functionality. This should be additive.
+
+----------------------------------------------------
+
+ARCHITECTURE OVERVIEW
+
+Permissions are capability strings:
+
+orders.view
+orders.create
+orders.edit
+orders.cancel
+
+inventory.view
+inventory.adjust
+inventory.audit
+
+finance.invoice.view
+finance.invoice.create
+finance.invoice.edit
+finance.invoice.delete
+
+finance.ar.view
+finance.ar.manage
+
+employee.view
+employee.viewSensitive
+employee.edit
+employee.editCompensation
+
+----------------------------------------------------
+
+DATABASE CHANGES
+
+Create new tables:
+
+permissions
+roles
+role_permissions
+user_permissions
+
+SCHEMA
+
+permissions
+-----------
+id
+key (unique string)
+description
+
+roles
+-----------
+id
+name
+
+role_permissions
+-----------
+role_id
+permission_id
+
+user_permissions
+-----------
+user_id
+permission_id
+effect (allow | deny)
+
+----------------------------------------------------
+
+BACKEND IMPLEMENTATION
+
+Create middleware:
+
+server/middleware/requirePermission.ts
+
+Function:
+
+requirePermission(permissionKey)
+
+Behavior:
+
+1. Load user role permissions
+2. Apply user overrides
+3. Deny if permission not present
+4. Return 403 if unauthorized
+
+Example:
+
+app.post(
+  "/api/invoices/delete",
+  requirePermission("finance.invoice.delete"),
+  deleteInvoiceHandler
+)
+
+----------------------------------------------------
+
+PERMISSION RESOLUTION LOGIC
+
+Final permissions are computed as:
+
+(role permissions)
++ user allow overrides
+- user deny overrides
+
+Implement helper:
+
+getUserPermissions(userId)
+
+Cache results in memory for the request lifecycle.
+
+----------------------------------------------------
+
+FRONTEND IMPLEMENTATION
+
+Create hook:
+
+client/hooks/usePermissions.ts
+
+Functions:
+
+can(permissionKey)
+
+Example usage:
+
+if (!can("finance.invoice.view")) redirect("/")
+
+Buttons:
+
+{can("finance.invoice.delete") && <DeleteButton />}
+
+----------------------------------------------------
+
+ROUTE PROTECTION
+
+Add permission metadata to protected pages.
+
+Example:
+
+/finance/invoices
+requires: finance.invoice.view
+
+/finance/ar
+requires: finance.ar.view
+
+If permission missing:
+
+redirect to dashboard
+
+----------------------------------------------------
+
+ADMIN UI
+
+Add admin page:
+
+Settings → Roles & Permissions
+
+Admins can:
+
+• create roles
+• assign permissions to roles
+• add user overrides
+• remove user permissions
+
+----------------------------------------------------
+
+MIGRATION STRATEGY
+
+Map current route permissions to capabilities.
+
+Example:
+
+/finance/invoices → finance.invoice.view
+/finance/ar → finance.ar.view
+
+Do not delete route permissions yet.
+
+Route checks should fallback to capability checks.
+
+----------------------------------------------------
+
+TESTING
+
+Verify:
+
+• pages hide correctly
+• buttons hide correctly
+• API blocks unauthorized calls
+• admin override works
+• role inheritance works
+
+----------------------------------------------------
+
+OUTPUT
+
+After implementation provide:
+
+1. file tree of new permission system
+2. database schema changes
+3. example permission assignments
+4. instructions for adding new permissions

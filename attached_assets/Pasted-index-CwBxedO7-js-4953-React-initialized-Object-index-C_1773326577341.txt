@@ -1,0 +1,39 @@
+index-CwBxedO7.js:4953 React initialized: Object
+index-CwBxedO7.js:4953 React hooks: Object
+index-CwBxedO7.js:4953 [EPOCH SYNC] Sync engine starting
+index-CwBxedO7.js:4953 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-CwBxedO7.js:4950 App component is rendering...
+index-CwBxedO7.js:4950 Environment: production
+index-CwBxedO7.js:4950 Base URL: /
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CwBxedO7.js:4953 Failed to fetch session for redirect: Error: Not authenticated
+    at index-CwBxedO7.js:4950:169197
+console.error @ index-CwBxedO7.js:4953
+index-CwBxedO7.js:235 Use of history.pushState in a trivial session history context, which maintains only one session history entry, is treated as history.replaceState.
+history.<computed> @ index-CwBxedO7.js:235
+index-CwBxedO7.js:1535 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-CwBxedO7.js:1535 [EPOCH] Install prompt captured and ready
+/login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-CwBxedO7.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-CwBxedO7.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-CwBxedO7.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-CwBxedO7.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-CwBxedO7.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-CwBxedO7.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-CwBxedO7.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-CwBxedO7.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-CwBxedO7.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CwBxedO7.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CwBxedO7.js:235 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+index-CwBxedO7.js:235 ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 200
+index-CwBxedO7.js:1912 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CwBxedO7.js:235 🌐 API Request to /api/cutting-table-mfg-queue/2/complete-with-traceability (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/2/complete-with-traceability:1  Failed to load resource: the server responded with a status of 500 ()
+index-CwBxedO7.js:235 ✅ API Response from /api/cutting-table-mfg-queue/2/complete-with-traceability: 500
+index-CwBxedO7.js:4953 API error raw body: {"error":"Failed to complete packet with traceability"}
+console.error @ index-CwBxedO7.js:4953
+index-CwBxedO7.js:4953 💥 API Request failed for /api/cutting-table-mfg-queue/2/complete-with-traceability: Error: Failed to complete packet with traceability
+    at Ue (index-CwBxedO7.js:235:6362)
+console.error @ index-CwBxedO7.js:4953

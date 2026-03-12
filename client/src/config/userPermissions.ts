@@ -8,6 +8,7 @@ import { getDashboardRoute } from './dashboardMapping';
 export interface UserPermissions {
   routes: string[];
   fullAccess?: boolean;
+  deniedRoutes?: string[]; // Routes to explicitly block (used with fullAccess: true)
 }
 
 // Default routes for users not explicitly listed - only employee portal
@@ -167,6 +168,13 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   staciw: {
     routes: [],
     fullAccess: true,
+    deniedRoutes: [
+      '/finance/ar',
+      '/finance/ar-journal',
+      '/finance/ar-aging',
+      '/finance/ar-payments',
+      '/finance/invoices',
+    ],
   },
 
   // Regular users with limited access based on their dashboard cards
@@ -286,6 +294,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/layup-plugging',
       '/orders-list',
       '/orders-management',
+      '/finance/invoices',
     ],
   },
 
@@ -295,6 +304,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/layup-plugging',
       '/orders-list',
       '/orders-management',
+      '/finance/invoices',
     ],
   },
 
@@ -356,6 +366,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/layup-plugging',
       '/orders-list',
       '/orders-management',
+      '/finance/invoices',
     ],
   },
 
@@ -479,6 +490,14 @@ export function hasRouteAccess(
   }
 
   if (permissions.fullAccess) {
+    // Check denied routes first — these are explicit blocks even for full-access users
+    if (permissions.deniedRoutes) {
+      for (const denied of permissions.deniedRoutes) {
+        if (routeMatches(route, denied)) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
@@ -595,11 +614,16 @@ export function getAllowedRoutes(username: string): string[] {
 }
 
 /**
- * Check if a user has full navigation access
+ * Check if a user has full navigation access with no restrictions.
+ * Returns false when the user has deniedRoutes so the nav falls through
+ * to per-route hasRouteAccess checks, which enforce the deny list.
  */
 export function hasFullAccess(username: string): boolean {
   const permissions = USER_PERMISSIONS[username.toLowerCase()];
-  return permissions?.fullAccess === true;
+  if (!permissions?.fullAccess) return false;
+  // If there are denied routes the nav must do per-item filtering
+  if (permissions.deniedRoutes && permissions.deniedRoutes.length > 0) return false;
+  return true;
 }
 
 /**

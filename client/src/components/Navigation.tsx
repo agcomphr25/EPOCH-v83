@@ -72,6 +72,7 @@ import {
   CalendarDays,
   Mic,
   ShieldCheck,
+  LayoutGrid,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -336,6 +337,18 @@ export default function Navigation() {
       label: 'Admin Panel',
       icon: Shield,
       description: 'Advanced order management and editing for administrators',
+    },
+    {
+      path: '/admin/roles-permissions',
+      label: 'Roles & Permissions',
+      icon: Shield,
+      description: 'Manage capability-based role permissions and individual user overrides',
+    },
+    {
+      path: '/admin/widget-catalog',
+      label: 'Widget Catalog',
+      icon: LayoutGrid,
+      description: 'Browse all 16 registered widget types with live previews and copy-ready configs',
     },
     {
       path: '/pdf-templates',

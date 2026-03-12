@@ -26,7 +26,7 @@ interface SummaryData {
     avg30Day: number | null; responseCount30Day: number; lastUpdated: string;
   };
   arAging: { current: number; days30: number; days60: number; days90plus: number; totalOutstanding: number; lastUpdated: string };
-  pipeline: { totalValue: number; pWeightedValue: number; openCount: number; byStage: Record<string, number>; p2ByStatus: Record<string, number>; lastUpdated: string };
+  pipeline: { openCount: number; byStage: Record<string, number>; p2ByStatus: Record<string, number>; lastUpdated: string };
   returnRate: { returnCount: number; totalOrders: number; rate: number | null; lastUpdated: string };
 }
 

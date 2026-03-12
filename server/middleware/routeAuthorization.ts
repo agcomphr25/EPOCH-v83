@@ -192,9 +192,9 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
   '/time-clock-admin': ['ADMIN', 'OWNER'],
-  '/financial-review': ['ADMIN', 'OWNER'],
-  '/financial-review/sessions': ['ADMIN', 'OWNER'],
-  '/financial-review/sessions/:monthKey': ['ADMIN', 'OWNER'],
+  '/financial-review': ['ADMIN', 'OWNER', 'FINANCE'],
+  '/financial-review/sessions': ['ADMIN', 'OWNER', 'FINANCE'],
+  '/financial-review/sessions/:monthKey': ['ADMIN', 'OWNER', 'FINANCE'],
   '/finance/dashboard': ['ADMIN', 'OWNER'],
   '/finance/cost-centers': ['ADMIN', 'OWNER'],
   '/finance/cost-accounting': ['ADMIN', 'OWNER'],
@@ -402,5 +402,24 @@ export function requireAdminAccess(req: Request, res: Response, next: NextFuncti
   return res.status(403).json({ 
     error: 'Admin access required',
     message: 'This action requires administrator privileges'
+  });
+}
+
+// Finance or admin access — allows ADMIN, OWNER, and FINANCE roles
+export function requireFinanceAccess(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const { username, role } = req.user;
+
+  if (hasFullAccess(username) || role === 'ADMIN' || role === 'OWNER' || role === 'FINANCE') {
+    return next();
+  }
+
+  console.warn(`⚠️ FINANCE ACCESS DENIED: User ${username} (role: ${role}) attempted to access ${req.method} ${req.originalUrl}`);
+  return res.status(403).json({
+    error: 'Finance access required',
+    message: 'This action requires finance or administrator privileges'
   });
 }

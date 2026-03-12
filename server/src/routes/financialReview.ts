@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { authenticateToken } from '../../middleware/auth';
-import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { requireFinanceAccess } from '../../middleware/routeAuthorization';
 import { pool } from '../../db';
 
 const router = Router();
 
 router.use(authenticateToken);
-router.use(requireAdminAccess);
+router.use(requireFinanceAccess);
 
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
@@ -130,10 +130,10 @@ router.get('/summary', async (req, res) => {
       returnRate = { returnCount: rc, totalOrders: tc, rate: tc > 0 ? Math.round((rc / tc) * 1000) / 10 : null };
     } catch (err: any) { console.warn('[financial-review] return rate query failed:', err.message); }
 
-    // Pipeline totals — live from p2_purchase_orders (P2 pipeline) and projects stages
-    let pipelineTotals = { totalValue: 0, pWeightedValue: 0, openCount: 0, byStage: {} as Record<string, number>, p2ByStatus: {} as Record<string, number> };
+    // Live P2 pipeline — from p2_purchase_orders and projects (all live DB data)
+    let pipelineTotals = { openCount: 0, byStage: {} as Record<string, number>, p2ByStatus: {} as Record<string, number> };
     try {
-      // Live P2 pipeline: p2_purchase_orders open count by status
+      // Live P2 open orders from p2_purchase_orders
       const p2Rows = await pool.query(`
         SELECT status, COUNT(*) AS cnt
         FROM p2_purchase_orders
@@ -147,7 +147,7 @@ router.get('/summary', async (req, res) => {
         openCount += Number(r.cnt);
       });
 
-      // Live project stage breakdown (engineering/production pipeline stages)
+      // Live project stage breakdown from projects table
       const projRows = await pool.query(`
         SELECT current_stage, COUNT(*) AS cnt
         FROM projects
@@ -157,25 +157,7 @@ router.get('/summary', async (req, res) => {
       const byStage: Record<string, number> = {};
       projRows.forEach((r: any) => { byStage[r.current_stage] = Number(r.cnt); });
 
-      // BD pipeline value from current session (manual opportunity tracking — no monetary values in P2 system)
-      const now = new Date();
-      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const sesRows = await pool.query(
-        `SELECT bd_pipeline FROM financial_review_sessions WHERE month_key = $1`,
-        [monthKey]
-      ) as any[];
-      const pipeline: any[] = sesRows[0]?.bd_pipeline || [];
-      const { totalValue, pWeightedValue } = pipeline.reduce((acc: any, item: any) => {
-        const val = Number(item.value) || 0;
-        const pwin = Number(item.pwin) || 0;
-        const won = item.status === 'won';
-        const lost = item.status === 'lost';
-        return {
-          totalValue: acc.totalValue + val,
-          pWeightedValue: acc.pWeightedValue + (won ? val : lost ? 0 : val * (pwin / 100)),
-        };
-      }, { totalValue: 0, pWeightedValue: 0 });
-      pipelineTotals = { totalValue, pWeightedValue, openCount, byStage, p2ByStatus };
+      pipelineTotals = { openCount, byStage, p2ByStatus };
     } catch (err: any) { console.warn('[financial-review] pipeline query failed:', err.message); }
 
     const fetchedAt = new Date().toISOString();

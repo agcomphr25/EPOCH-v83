@@ -21,7 +21,7 @@ export const DEPARTMENT_COLORS: Record<PipelineDepartment, { bg: string; hex: st
   "Gunsmith":            { bg: "bg-slate-600",   hex: "#475569", text: "text-white",  border: "border-slate-600" },
   "Finish":              { bg: "bg-rose-500",    hex: "#F43F5E", text: "text-white",  border: "border-rose-500" },
   "Finish QC":           { bg: "bg-lime-500",    hex: "#84CC16", text: "text-white",  border: "border-lime-500" },
-  "Paint":               { bg: "bg-indigo-500",  hex: "#6366F1", text: "text-white",  border: "border-indigo-500" },
+  "Paint":               { bg: "bg-violet-500",  hex: "#8B5CF6", text: "text-white",  border: "border-violet-500" },
   "Shipping QC":         { bg: "bg-red-700",     hex: "#B91C1C", text: "text-white",  border: "border-red-700" },
   "Shipping":            { bg: "bg-cyan-600",    hex: "#0891B2", text: "text-white",  border: "border-cyan-600" },
 };

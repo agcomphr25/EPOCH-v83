@@ -58,25 +58,32 @@ router.get('/summary', async (req, res) => {
       `) as any[];
     } catch (_) {}
 
-    // AR aging using ar_invoices.total_amount + due_date
-    let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0 };
+    // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
+    let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0, totalOutstanding: 0 };
     try {
       const arRows = await pool.query(`
         SELECT
-          SUM(CASE WHEN due_date >= NOW()::date - 30 THEN total_amount ELSE 0 END) AS current_bucket,
-          SUM(CASE WHEN due_date < NOW()::date - 30
-                    AND due_date >= NOW()::date - 60 THEN total_amount ELSE 0 END) AS days_30,
-          SUM(CASE WHEN due_date < NOW()::date - 60
-                    AND due_date >= NOW()::date - 90 THEN total_amount ELSE 0 END) AS days_60,
-          SUM(CASE WHEN due_date < NOW()::date - 90 THEN total_amount ELSE 0 END) AS days_90plus
-        FROM ar_invoices WHERE status NOT IN ('PAID', 'paid', 'VOID', 'void')
+          COALESCE(SUM(CASE WHEN i.due_date >= CURRENT_DATE THEN i.balance ELSE 0 END), 0) AS current_bucket,
+          COALESCE(SUM(CASE WHEN i.due_date < CURRENT_DATE AND (CURRENT_DATE - i.due_date) <= 30 THEN i.balance ELSE 0 END), 0) AS days_1_30,
+          COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 30 AND (CURRENT_DATE - i.due_date) <= 60 THEN i.balance ELSE 0 END), 0) AS days_31_60,
+          COALESCE(SUM(CASE WHEN (CURRENT_DATE - i.due_date) > 60 THEN i.balance ELSE 0 END), 0) AS days_90plus,
+          COALESCE(SUM(i.balance), 0) AS total_outstanding
+        FROM (
+          SELECT inv.due_date,
+            inv.total_amount::numeric - COALESCE(
+              (SELECT SUM(apa.amount_applied::numeric) FROM ar_payment_allocations apa WHERE apa.invoice_id = inv.id), 0
+            ) AS balance
+          FROM ar_invoices inv
+          WHERE inv.status NOT IN ('PAID', 'VOID')
+        ) i WHERE i.balance > 0
       `) as any[];
       const r = arRows[0] || {};
       arAging = {
         current: Number(r.current_bucket) || 0,
-        days30: Number(r.days_30) || 0,
-        days60: Number(r.days_60) || 0,
+        days30: Number(r.days_1_30) || 0,
+        days60: Number(r.days_31_60) || 0,
         days90plus: Number(r.days_90plus) || 0,
+        totalOutstanding: Number(r.total_outstanding) || 0,
       };
     } catch (_) {}
 
@@ -92,9 +99,37 @@ router.get('/summary', async (req, res) => {
       cs30 = cs30Rows[0] || {};
     } catch (_) {}
 
-    // BD pipeline totals — from current month session
-    let pipelineTotals = { totalValue: 0, pWeightedValue: 0, openCount: 0 };
+    // Customer return rate — refund_requests in last 12 months
+    let returnRate: { returnCount: number; totalOrders: number; rate: number | null } = { returnCount: 0, totalOrders: 0, rate: null };
     try {
+      const returnRows = await pool.query(`
+        SELECT COUNT(*) AS return_count FROM refund_requests
+        WHERE created_at >= NOW() - INTERVAL '12 months'
+      `) as any[];
+      const orderRows = await pool.query(`
+        SELECT COUNT(*) AS total_orders FROM all_orders
+        WHERE created_at >= NOW() - INTERVAL '12 months'
+          AND status NOT IN ('cancelled', 'draft')
+      `) as any[];
+      const rc = Number(returnRows[0]?.return_count) || 0;
+      const tc = Number(orderRows[0]?.total_orders) || 0;
+      returnRate = { returnCount: rc, totalOrders: tc, rate: tc > 0 ? Math.round((rc / tc) * 1000) / 10 : null };
+    } catch (_) {}
+
+    // Pipeline totals — from projects table (open stages)
+    let pipelineTotals = { totalValue: 0, pWeightedValue: 0, openCount: 0, byStage: {} as Record<string, number> };
+    try {
+      const projRows = await pool.query(`
+        SELECT current_stage, COUNT(*) AS cnt
+        FROM projects
+        WHERE status NOT IN ('completed', 'cancelled', 'lost') AND current_stage IS NOT NULL
+        GROUP BY current_stage
+      `) as any[];
+      const openCount = projRows.reduce((s: number, r: any) => s + Number(r.cnt), 0);
+      const byStage: Record<string, number> = {};
+      projRows.forEach((r: any) => { byStage[r.current_stage] = Number(r.cnt); });
+
+      // Also pull BD pipeline from current session for value/P-weighted
       const now = new Date();
       const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const sesRows = await pool.query(
@@ -102,7 +137,7 @@ router.get('/summary', async (req, res) => {
         [monthKey]
       ) as any[];
       const pipeline: any[] = sesRows[0]?.bd_pipeline || [];
-      pipelineTotals = pipeline.reduce((acc: any, item: any) => {
+      const { totalValue, pWeightedValue } = pipeline.reduce((acc: any, item: any) => {
         const val = Number(item.value) || 0;
         const pwin = Number(item.pwin) || 0;
         const won = item.status === 'won';
@@ -110,9 +145,9 @@ router.get('/summary', async (req, res) => {
         return {
           totalValue: acc.totalValue + val,
           pWeightedValue: acc.pWeightedValue + (won ? val : lost ? 0 : val * (pwin / 100)),
-          openCount: acc.openCount + (!lost ? 1 : 0),
         };
-      }, { totalValue: 0, pWeightedValue: 0, openCount: 0 });
+      }, { totalValue: 0, pWeightedValue: 0 });
+      pipelineTotals = { totalValue, pWeightedValue, openCount, byStage };
     } catch (_) {}
 
     const fetchedAt = new Date().toISOString();
@@ -150,6 +185,7 @@ router.get('/summary', async (req, res) => {
       },
       arAging: { ...arAging, lastUpdated: fetchedAt },
       pipeline: { ...pipelineTotals, lastUpdated: fetchedAt },
+      returnRate: { ...returnRate, lastUpdated: fetchedAt },
     });
   } catch (err: any) {
     console.error('financial-review summary error:', err);

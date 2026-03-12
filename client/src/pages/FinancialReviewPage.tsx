@@ -9,7 +9,7 @@ import {
   RefreshCw, Activity, DollarSign, Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import reviewConfig from '@/config/financial-review-config.json';
+import reviewConfig from '@/config/financialReviewConfig.json';
 
 interface SummaryData {
   fetchedAt: string;
@@ -25,8 +25,9 @@ interface SummaryData {
     avgScore: number | null; responseCount: number;
     avg30Day: number | null; responseCount30Day: number; lastUpdated: string;
   };
-  arAging: { current: number; days30: number; days60: number; days90plus: number; lastUpdated: string };
-  pipeline: { totalValue: number; pWeightedValue: number; openCount: number; lastUpdated: string };
+  arAging: { current: number; days30: number; days60: number; days90plus: number; totalOutstanding: number; lastUpdated: string };
+  pipeline: { totalValue: number; pWeightedValue: number; openCount: number; byStage: Record<string, number>; lastUpdated: string };
+  returnRate: { returnCount: number; totalOrders: number; rate: number | null; lastUpdated: string };
 }
 
 interface Session {
@@ -316,7 +317,7 @@ export default function FinancialReviewPage() {
             )}
           </section>
 
-          {/* ── QMS / Nonconformities ── */}
+          {/* ── QMS KPIs & Nonconformities ── */}
           <section className="print-section">
             <SectionLabel
               title="QMS KPIs & Nonconformities"
@@ -347,16 +348,27 @@ export default function FinancialReviewPage() {
                   </div>
                   <div className="text-xs text-gray-400 mt-1">Target: ≥ 95%</div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm col-span-2">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-400" />
-                    <div className="text-sm font-medium text-gray-500">QMS Status</div>
+                    <Users className="h-4 w-4 text-blue-400" />
+                    <div className="text-sm font-medium text-gray-500">Customer Return Rate</div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    {(ncr ?? 0) < 5 && (otd ?? 0) >= 95
-                      ? 'All quality targets met this period. Continue standard monitoring.'
-                      : 'One or more quality targets not met. Review action items below.'}
+                  <div className={`text-3xl font-bold ${(summary?.returnRate?.rate ?? 0) <= 2 ? 'text-green-600' : 'text-red-600'}`}>
+                    {summary?.returnRate?.rate != null ? `${summary.returnRate.rate}%` : '—'}
                   </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {summary?.returnRate?.returnCount ?? 0} returns / {summary?.returnRate?.totalOrders ?? 0} orders (12 mo)
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <DollarSign className="h-4 w-4 text-yellow-500" />
+                    <div className="text-sm font-medium text-gray-500">AR Outstanding</div>
+                  </div>
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {fmt(summary?.arAging?.totalOutstanding)}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">Balance due on open invoices</div>
                 </div>
               </div>
             )}

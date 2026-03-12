@@ -338,6 +338,12 @@ export default function Navigation() {
       description: 'Advanced order management and editing for administrators',
     },
     {
+      path: '/admin/roles-permissions',
+      label: 'Roles & Permissions',
+      icon: Shield,
+      description: 'Manage capability-based role permissions and individual user overrides',
+    },
+    {
       path: '/pdf-templates',
       label: 'PDF Templates',
       icon: FileText,

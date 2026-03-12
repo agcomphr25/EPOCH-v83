@@ -1772,6 +1772,48 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ AR tables migration:', arErr.message);
       }
 
+      // Ensure capability-based permission system tables exist
+      try {
+        const { sql: sqlPerm } = await import('drizzle-orm');
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_capabilities (
+            id SERIAL PRIMARY KEY,
+            key TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'general'
+          )
+        `);
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_roles (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            is_system BOOLEAN NOT NULL DEFAULT false
+          )
+        `);
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_role_capabilities (
+            id SERIAL PRIMARY KEY,
+            role_id INTEGER NOT NULL REFERENCES perm_roles(id) ON DELETE CASCADE,
+            capability_id INTEGER NOT NULL REFERENCES perm_capabilities(id) ON DELETE CASCADE,
+            UNIQUE (role_id, capability_id)
+          )
+        `);
+        await db.execute(sqlPerm`
+          CREATE TABLE IF NOT EXISTS perm_user_overrides (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            capability_id INTEGER NOT NULL REFERENCES perm_capabilities(id) ON DELETE CASCADE,
+            effect TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (user_id, capability_id)
+          )
+        `);
+        console.log('✅ Ensured perm_ permission tables exist');
+      } catch (permErr: any) {
+        console.warn('⚠️ perm_ tables migration:', permErr.message);
+      }
+
       // Ensure projects table has pipeline stage columns
       try {
         const { sql: sqlProj } = await import('drizzle-orm');

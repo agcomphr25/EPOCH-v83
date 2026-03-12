@@ -13541,3 +13541,39 @@ export const arPaymentAllocationsRelations = relations(arPaymentAllocations, ({ 
     references: [arInvoices.id],
   }),
 }));
+
+// ─── Capability-Based Permission System ───────────────────────────────────────
+// Distinct from the employee-capability system (capabilities / employeeCapabilities).
+// This drives page access, button visibility, and API enforcement for web users.
+
+export const permCapabilities = pgTable('perm_capabilities', {
+  id: serial('id').primaryKey(),
+  key: text('key').notNull().unique(),          // e.g. "finance.ar.view"
+  description: text('description').notNull().default(''),
+  category: text('category').notNull().default('general'), // e.g. "finance", "orders"
+});
+
+export const permRoles = pgTable('perm_roles', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),         // e.g. "ADMIN", "OWNER", "EMPLOYEE"
+  description: text('description').notNull().default(''),
+  isSystem: boolean('is_system').notNull().default(false), // system roles can't be deleted
+});
+
+export const permRoleCapabilities = pgTable('perm_role_capabilities', {
+  id: serial('id').primaryKey(),
+  roleId: integer('role_id').notNull().references(() => permRoles.id, { onDelete: 'cascade' }),
+  capabilityId: integer('capability_id').notNull().references(() => permCapabilities.id, { onDelete: 'cascade' }),
+}, (table) => ({
+  uniq: unique().on(table.roleId, table.capabilityId),
+}));
+
+export const permUserOverrides = pgTable('perm_user_overrides', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  capabilityId: integer('capability_id').notNull().references(() => permCapabilities.id, { onDelete: 'cascade' }),
+  effect: text('effect').notNull(), // 'allow' | 'deny'
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  uniq: unique().on(table.userId, table.capabilityId),
+}));

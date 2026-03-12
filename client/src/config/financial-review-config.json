@@ -1,6 +1,6 @@
 {
-  "version": "2025-02",
-  "description": "Monthly Financial Review — config-driven section schema and sample data",
+  "version": "2026-02",
+  "description": "Monthly Financial Review — config-driven section schema and February 2026 sample data",
   "sections": [
     {
       "id": "revenue",

@@ -1609,6 +1609,7 @@ export interface IStorage {
           | 'dept-overdue'
           | 'cannot-meet-due'
           | 'critical';
+        expectedDepartment?: string;
       }>
     >
   >;
@@ -11353,11 +11354,11 @@ export class DatabaseStorage implements IStorage {
           | 'dept-overdue'
           | 'cannot-meet-due'
           | 'critical';
+        expectedDepartment?: string;
       }>
     >
   > {
     try {
-      // Get all active orders with their department entry timestamps from allOrders (includes both drafts and finalized)
       const orders = await db
         .select({
           orderId: allOrders.orderId,
@@ -11365,6 +11366,7 @@ export class DatabaseStorage implements IStorage {
           modelId: allOrders.modelId,
           currentDepartment: allOrders.currentDepartment,
           dueDate: allOrders.dueDate,
+          orderDate: allOrders.orderDate,
           layupCompletedAt: allOrders.layupCompletedAt,
           pluggingCompletedAt: allOrders.pluggingCompletedAt,
           cncCompletedAt: allOrders.cncCompletedAt,
@@ -11383,7 +11385,23 @@ export class DatabaseStorage implements IStorage {
           )
         );
 
-      // Group by department and calculate schedule status
+      let expectedDeptMap: Record<string, string> = {};
+      try {
+        const { getBulkExpectedDepartments } = await import('./services/productionForecastEngine');
+        const forecastInput = orders
+          .filter(o => o.currentDepartment)
+          .map(o => ({
+            order_id: o.orderId,
+            model_id: o.modelId || null,
+            current_department: o.currentDepartment,
+            order_date: o.orderDate ? o.orderDate.toISOString().split('T')[0] : null,
+            due_date: o.dueDate ? o.dueDate.toISOString().split('T')[0] : null,
+          }));
+        expectedDeptMap = await getBulkExpectedDepartments(forecastInput);
+      } catch (err) {
+        console.error('Failed to compute bulk expected departments:', err);
+      }
+
       const pipelineDetails: Record<
         string,
         Array<{
@@ -11396,16 +11414,14 @@ export class DatabaseStorage implements IStorage {
             | 'dept-overdue'
             | 'cannot-meet-due'
             | 'critical';
+          expectedDepartment?: string;
         }>
       > = {};
 
       orders.forEach((order) => {
         if (!order.currentDepartment) return;
 
-        // Calculate days in current department
         const daysInDept = this.calculateDaysInDepartment(order);
-
-        // Calculate schedule status
         const scheduleStatus = this.calculateScheduleStatus(order, daysInDept);
 
         if (!pipelineDetails[order.currentDepartment]) {
@@ -11419,6 +11435,7 @@ export class DatabaseStorage implements IStorage {
           dueDate: order.dueDate,
           daysInDept,
           scheduleStatus,
+          expectedDepartment: expectedDeptMap[order.orderId] || undefined,
         });
       });
 

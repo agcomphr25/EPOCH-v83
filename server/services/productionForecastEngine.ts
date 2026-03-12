@@ -361,6 +361,45 @@ export async function simulateBackwardFromDueDate(order: {
 
 let _backwardDebugLogged = false;
 
+export async function getBulkExpectedDepartments(orders: Array<{
+  order_id: string;
+  model_id: string | null;
+  current_department: string | null;
+  order_date: string | null;
+  due_date: string | null;
+}>): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  const modelCache = new Map<string | null, { defaults: Record<string, number>; multiplier: number }>();
+  let backlogs: Record<string, number> | null = null;
+
+  for (const order of orders) {
+    try {
+      if (!modelCache.has(order.model_id)) {
+        modelCache.set(order.model_id, await getDepartmentDefaultsForModel(order.model_id));
+      }
+      const { defaults: departmentDefaults, multiplier } = modelCache.get(order.model_id)!;
+
+      let timeline: DepartmentTimeline[];
+
+      if (order.due_date) {
+        const dueDate = new Date(order.due_date);
+        timeline = buildBackwardTimeline(dueDate, multiplier, departmentDefaults);
+      } else {
+        if (!backlogs) backlogs = await getDepartmentBacklogs();
+        const currentDept = order.current_department || 'P1 Production Queue';
+        const built = buildTimeline(currentDept, order.order_date, multiplier, departmentDefaults, backlogs);
+        timeline = built.timeline;
+      }
+
+      result[order.order_id] = findExpectedDepartment(timeline);
+    } catch {
+      result[order.order_id] = order.current_department || 'P1 Production Queue';
+    }
+  }
+
+  return result;
+}
+
 export async function getExpectedDepartment(orderId: string): Promise<ExpectedDepartmentResult | null> {
   const orderResult = await pgPool.query(
     `SELECT order_id, model_id, current_department, order_date, due_date

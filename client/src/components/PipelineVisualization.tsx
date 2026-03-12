@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import { PIPELINE_DEPARTMENTS } from '@/constants/pipelineDepartments';
+import { PIPELINE_DEPARTMENTS, DEPARTMENT_COLORS, type PipelineDepartment } from '@/constants/pipelineDepartments';
 import { calculateFlowPressure, type PressureLevel } from '@/utils/calculateFlowPressure';
 
 type ScheduleStatus =
@@ -22,13 +22,21 @@ interface OrderDetail {
   daysInDept: number;
   scheduleStatus: ScheduleStatus;
   fbOrderNumber?: string;
+  expectedDepartment?: string;
 }
 
-const statusColors: Record<ScheduleStatus, string> = {
-  'on-schedule': 'bg-green-500',
-  'dept-overdue': 'bg-yellow-500',
+const statusBorderColors: Record<ScheduleStatus, string> = {
+  'on-schedule': 'border-transparent',
+  'dept-overdue': 'border-yellow-400',
+  'cannot-meet-due': 'border-orange-500',
+  critical: 'border-red-600',
+};
+
+const statusDotColors: Record<ScheduleStatus, string> = {
+  'on-schedule': 'bg-transparent',
+  'dept-overdue': 'bg-yellow-400',
   'cannot-meet-due': 'bg-orange-500',
-  critical: 'bg-red-500',
+  critical: 'bg-red-600',
 };
 
 const pressureColors: Record<PressureLevel, { arrow: string; badge: string; dot: string }> = {
@@ -36,6 +44,11 @@ const pressureColors: Record<PressureLevel, { arrow: string; badge: string; dot:
   MEDIUM: { arrow: 'text-yellow-500', badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300', dot: 'bg-yellow-500' },
   HIGH:   { arrow: 'text-red-500',    badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',    dot: 'bg-red-500'    },
 };
+
+function getDeptColor(dept: string | undefined): { bg: string; hex: string; text: string; border: string } {
+  if (!dept) return { bg: 'bg-gray-400', hex: '#9CA3AF', text: 'text-white', border: 'border-gray-400' };
+  return DEPARTMENT_COLORS[dept as PipelineDepartment] || { bg: 'bg-gray-400', hex: '#9CA3AF', text: 'text-white', border: 'border-gray-400' };
+}
 
 // ── Pressure arrow between departments ───────────────────────────────────────
 const FlowPressureIndicator = ({
@@ -59,10 +72,8 @@ const FlowPressureIndicator = ({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Arrow shaft */}
       <div className={`flex flex-col items-center gap-0.5 cursor-default select-none`}>
         <div className={`w-px h-5 ${colors.dot}`} />
-        {/* Arrowhead */}
         <svg width="14" height="10" viewBox="0 0 14 10" className="block">
           <polygon
             points="7,10 0,0 14,0"
@@ -71,13 +82,10 @@ const FlowPressureIndicator = ({
         </svg>
       </div>
 
-      {/* Pressure dot indicator */}
       <div className={`mt-1 w-2.5 h-2.5 rounded-full ${colors.dot} opacity-80`} />
 
-      {/* Tooltip — floats below the indicator */}
       {hovered && (
         <div className="absolute z-50 top-full mt-2 left-1/2 -translate-x-1/2 w-56 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl pointer-events-none">
-          {/* Tooltip caret */}
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-b-4 border-b-gray-900" />
           <div className={`font-bold mb-1.5 ${pressureLevel === 'HIGH' ? 'text-red-400' : pressureLevel === 'MEDIUM' ? 'text-yellow-400' : 'text-green-400'}`}>
             Flow Pressure: {pressureLevel}
@@ -105,23 +113,17 @@ const FlowPressureIndicator = ({
 
 // ── Order pixel (high-volume) ─────────────────────────────────────────────────
 const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => {
-  const getStatusStyle = (status: ScheduleStatus) => {
-    if (status === 'critical')        return { backgroundColor: '#EF4444' };
-    if (status === 'cannot-meet-due') return { backgroundColor: '#FFA500' };
-    if (status === 'dept-overdue')    return { backgroundColor: '#FFFF00' };
-    return {};
-  };
+  const deptColor = getDeptColor(order.expectedDepartment);
+  const hasProblem = order.scheduleStatus !== 'on-schedule';
 
   return (
     <div
-      className={`w-2 h-2 cursor-pointer hover:scale-150 transition-transform ${
-        ['critical', 'cannot-meet-due', 'dept-overdue'].includes(order.scheduleStatus)
-          ? ''
-          : statusColors[order.scheduleStatus]
+      className={`w-2.5 h-2.5 cursor-pointer hover:scale-150 transition-transform rounded-sm ${
+        hasProblem ? `border ${statusBorderColors[order.scheduleStatus]}` : ''
       }`}
-      style={getStatusStyle(order.scheduleStatus)}
+      style={{ backgroundColor: deptColor.hex }}
       onClick={onClick}
-      title={`${getDisplayOrderId(order)} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+      title={`${getDisplayOrderId(order)} - Expected: ${order.expectedDepartment || 'N/A'} - ${order.scheduleStatus} (${order.daysInDept} days)`}
     />
   );
 };
@@ -136,25 +138,24 @@ const OrderChip = ({
   onClick?: () => void;
   getModelDisplayName?: (modelId: string) => string;
 }) => {
-  const getStatusStyle = (status: ScheduleStatus) => {
-    if (status === 'critical')        return { backgroundColor: '#EF4444', color: '#FFFFFF' };
-    if (status === 'cannot-meet-due') return { backgroundColor: '#FFA500' };
-    if (status === 'dept-overdue')    return { backgroundColor: '#FFFF00', color: '#000000' };
-    return {};
-  };
+  const deptColor = getDeptColor(order.expectedDepartment);
+  const hasProblem = order.scheduleStatus !== 'on-schedule';
 
   return (
     <div
-      className={`px-2 py-1 rounded text-xs cursor-pointer hover:bg-opacity-80 transition-colors ${
-        ['critical', 'cannot-meet-due', 'dept-overdue'].includes(order.scheduleStatus)
-          ? ''
-          : statusColors[order.scheduleStatus] + ' text-white'
+      className={`relative px-2 py-1 rounded text-xs cursor-pointer hover:brightness-110 transition-all text-white font-medium ${
+        hasProblem ? `border-2 ${statusBorderColors[order.scheduleStatus]}` : 'border border-transparent'
       }`}
-      style={getStatusStyle(order.scheduleStatus)}
+      style={{ backgroundColor: deptColor.hex }}
       onClick={onClick}
-      title={`${getDisplayOrderId(order)} - ${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+      title={`${getDisplayOrderId(order)} - Expected: ${order.expectedDepartment || 'N/A'} - ${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
     >
       {getDisplayOrderId(order)}
+      {hasProblem && (
+        <span
+          className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${statusDotColors[order.scheduleStatus]}`}
+        />
+      )}
     </div>
   );
 };
@@ -235,7 +236,6 @@ export default function PipelineVisualization() {
 
   const totalOrders = Object.values(pipelineCounts || {}).reduce((sum, c) => sum + c, 0);
 
-  // Build per-department count array aligned to PIPELINE_DEPARTMENTS order
   const deptCounts = PIPELINE_DEPARTMENTS.map((name) => pipelineCounts?.[name] ?? 0);
 
   return (
@@ -256,9 +256,8 @@ export default function PipelineVisualization() {
               const count = pipelineCounts?.[deptName] ?? 0;
               const orders = pipelineDetails?.[deptName] ?? [];
               const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
-              const isOverloaded = count > 45;
+              const deptColor = getDeptColor(deptName);
 
-              // Upstream pressure (from previous dept into this one)
               const upstreamCount = idx > 0 ? deptCounts[idx - 1] : null;
               const upstreamName  = idx > 0 ? PIPELINE_DEPARTMENTS[idx - 1] : null;
               const upstreamPressure =
@@ -269,7 +268,6 @@ export default function PipelineVisualization() {
 
               return (
                 <React.Fragment key={deptName}>
-                  {/* Pressure arrow from previous dept */}
                   {idx > 0 && upstreamCount !== null && upstreamName && (
                     <FlowPressureIndicator
                       upstreamName={upstreamName}
@@ -279,7 +277,6 @@ export default function PipelineVisualization() {
                     />
                   )}
 
-                  {/* Department card */}
                   <div
                     className={`flex-shrink-0 w-24 text-center space-y-2 rounded-lg p-1 transition-colors ${
                       isHighPressureTarget
@@ -287,20 +284,20 @@ export default function PipelineVisualization() {
                         : ''
                     }`}
                   >
-                    {/* Count tile */}
                     <div
-                      className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl ${
-                        isOverloaded ? 'text-black' : 'bg-[#7BAFD4] text-white'
+                      className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl text-white relative ${
+                        count > 45 ? 'ring-2 ring-yellow-400 ring-offset-1' : ''
                       }`}
-                      style={isOverloaded ? { backgroundColor: '#FFFF00' } : {}}
+                      style={{ backgroundColor: deptColor.hex }}
                     >
                       {count}
+                      {count > 45 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">!</span>
+                      )}
                     </div>
 
-                    {/* Dept name */}
                     <div className="text-xs font-medium leading-tight">{deptName}</div>
 
-                    {/* Order visualization */}
                     <div className="min-h-[60px] p-2 bg-gray-50 dark:bg-gray-800/50 rounded border overflow-hidden">
                       <DepartmentVisualization
                         department={deptName}
@@ -313,7 +310,6 @@ export default function PipelineVisualization() {
                     <Progress value={percentage} className="h-2" />
                     <div className="text-xs text-gray-500">{percentage.toFixed(1)}%</div>
 
-                    {/* Upstream pressure badge */}
                     {upstreamPressure && (
                       <div
                         className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-tight ${
@@ -334,30 +330,51 @@ export default function PipelineVisualization() {
         </div>
 
         {/* Legend */}
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-center gap-4 text-sm flex-wrap">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-green-500 rounded" />
-              <span>On Schedule</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FFFF00' }} />
-              <span>Dept Overdue</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FFA500' }} />
-              <span>Can't Meet Due</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-red-500 rounded" />
-              <span>Critical</span>
+        <div className="mt-4 space-y-3">
+          {/* Department color legend */}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">Department Colors (card = forecast expected dept)</div>
+            <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+              {PIPELINE_DEPARTMENTS.map((dept) => {
+                const color = getDeptColor(dept);
+                return (
+                  <div key={dept} className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded" style={{ backgroundColor: color.hex }} />
+                    <span>{dept}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
+          {/* Schedule status legend */}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">Schedule Status (border / dot indicator)</div>
+            <div className="flex items-center justify-center gap-4 text-xs flex-wrap">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-gray-300" />
+                <span>On Schedule (no border)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded border-2 border-yellow-400 bg-gray-200" />
+                <span>Dept Overdue</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded border-2 border-orange-500 bg-gray-200" />
+                <span>Can't Meet Due</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded border-2 border-red-600 bg-gray-200" />
+                <span>Critical</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pressure + overloaded legend */}
           <div className="flex items-center justify-center gap-4 text-xs text-gray-600 flex-wrap">
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FFFF00' }} />
-              <span>Card: &gt;45 Stocks</span>
+              <div className="w-3 h-3 rounded border-2 border-yellow-400 bg-gray-300" />
+              <span>Header ring: &gt;45 Orders</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-green-500" />

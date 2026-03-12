@@ -14,7 +14,7 @@ import reviewConfig from '@/config/financialReviewConfig.json';
 interface SummaryData {
   fetchedAt: string;
   revenue: {
-    total6Mo: number; recent3Mo: number; prior3Mo: number;
+    currentMonthAr: number; total6Mo: number; recent3Mo: number; prior3Mo: number;
     growthPct: number | null; lastUpdated: string;
   };
   otdPercent: number | null;
@@ -248,10 +248,10 @@ export default function FinancialReviewPage() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <KpiCard
-                  title="6-Month CC Revenue"
-                  value={fmt(summary?.revenue?.total6Mo)}
-                  sub={recentRevGrowth != null ? `${recentRevGrowth > 0 ? '+' : ''}${recentRevGrowth}% QoQ` : 'No prior-period data'}
-                  good={recentRevGrowth != null ? recentRevGrowth > 0 : undefined}
+                  title="Current Month Revenue"
+                  value={fmt(summary?.revenue?.currentMonthAr)}
+                  sub={`6-mo CC total: ${fmt(summary?.revenue?.total6Mo ?? 0)}`}
+                  good={summary?.revenue?.currentMonthAr != null ? summary.revenue.currentMonthAr > 0 : undefined}
                   icon={recentRevGrowth != null && recentRevGrowth > 0 ? TrendingUp : TrendingDown}
                   fetchedAt={summary?.revenue?.lastUpdated}
                 />
@@ -272,10 +272,10 @@ export default function FinancialReviewPage() {
                   fetchedAt={summary?.ncrLastUpdated}
                 />
                 <KpiCard
-                  title="Customer Satisfaction"
-                  value={cs?.avgScore != null ? `${cs.avgScore} / 5` : '—'}
-                  sub={cs?.responseCount ? `${cs.responseCount} responses (12 mo)` : 'No responses'}
-                  good={cs?.avgScore != null ? cs.avgScore >= 4 : undefined}
+                  title="Customer Satisfaction (30d)"
+                  value={cs?.avg30Day != null ? `${cs.avg30Day} / 5` : '—'}
+                  sub={cs?.responseCount30Day ? `${cs.responseCount30Day} responses · 12mo avg: ${cs.avgScore ?? '—'}` : '12mo avg: ' + (cs?.avgScore ?? '—')}
+                  good={cs?.avg30Day != null ? cs.avg30Day >= 4 : undefined}
                   icon={Star}
                   fetchedAt={cs?.lastUpdated}
                 />

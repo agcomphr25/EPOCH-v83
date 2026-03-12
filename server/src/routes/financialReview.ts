@@ -9,7 +9,7 @@ router.use(authenticateToken);
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
   try {
-    // Revenue (last 6 months) — payments.payment_amount
+    // Revenue (last 6 months) — payments.payment_amount (CC payments)
     let revRows: any[] = [];
     try {
       revRows = await pool.query(`
@@ -22,7 +22,19 @@ router.get('/summary', async (req, res) => {
         WHERE payment_date >= NOW() - INTERVAL '6 months'
           AND payment_type = 'credit_card'
       `) as any[];
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] revenue query failed:', err.message); }
+
+    // Current month AR invoice revenue
+    let currentMonthArRevenue = 0;
+    try {
+      const arRevRows = await pool.query(`
+        SELECT COALESCE(SUM(total_amount), 0) AS current_month_ar
+        FROM ar_invoices
+        WHERE invoice_date >= DATE_TRUNC('month', NOW())
+          AND status NOT IN ('VOID', 'void')
+      `) as any[];
+      currentMonthArRevenue = Number(arRevRows[0]?.current_month_ar) || 0;
+    } catch (err: any) { console.warn('[financial-review] AR revenue query failed:', err.message); }
 
     // OTD — all_orders.shipped_date vs estimated_delivery
     let otdRows: any[] = [];
@@ -36,7 +48,7 @@ router.get('/summary', async (req, res) => {
           AND created_at >= NOW() - INTERVAL '3 months'
           AND status NOT IN ('cancelled', 'draft')
       `) as any[];
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] OTD query failed:', err.message); }
 
     // NCR
     let ncrRows: any[] = [];
@@ -45,9 +57,9 @@ router.get('/summary', async (req, res) => {
         SELECT COUNT(*) AS ncr_count FROM nonconformances
         WHERE created_at >= NOW() - INTERVAL '3 months'
       `) as any[];
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] NCR query failed:', err.message); }
 
-    // Customer satisfaction — 12-month (overall_satisfaction column)
+    // Customer satisfaction — 12-month + 30-day (overall_satisfaction column)
     let csRows: any[] = [];
     try {
       csRows = await pool.query(`
@@ -56,7 +68,7 @@ router.get('/summary', async (req, res) => {
         WHERE created_at >= NOW() - INTERVAL '12 months'
           AND is_complete = true
       `) as any[];
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] CS 12mo query failed:', err.message); }
 
     // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
     let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0, totalOutstanding: 0 };
@@ -85,7 +97,7 @@ router.get('/summary', async (req, res) => {
         days90plus: Number(r.days_90plus) || 0,
         totalOutstanding: Number(r.total_outstanding) || 0,
       };
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] AR aging query failed:', err.message); }
 
     // Customer satisfaction — 30-day window
     let cs30: any = {};
@@ -97,7 +109,7 @@ router.get('/summary', async (req, res) => {
           AND is_complete = true
       `) as any[];
       cs30 = cs30Rows[0] || {};
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] CS 30d query failed:', err.message); }
 
     // Customer return rate — refund_requests in last 12 months
     let returnRate: { returnCount: number; totalOrders: number; rate: number | null } = { returnCount: 0, totalOrders: 0, rate: null };
@@ -114,7 +126,7 @@ router.get('/summary', async (req, res) => {
       const rc = Number(returnRows[0]?.return_count) || 0;
       const tc = Number(orderRows[0]?.total_orders) || 0;
       returnRate = { returnCount: rc, totalOrders: tc, rate: tc > 0 ? Math.round((rc / tc) * 1000) / 10 : null };
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] return rate query failed:', err.message); }
 
     // Pipeline totals — from projects table (open stages)
     let pipelineTotals = { totalValue: 0, pWeightedValue: 0, openCount: 0, byStage: {} as Record<string, number> };
@@ -148,7 +160,7 @@ router.get('/summary', async (req, res) => {
         };
       }, { totalValue: 0, pWeightedValue: 0 });
       pipelineTotals = { totalValue, pWeightedValue, openCount, byStage };
-    } catch (_) {}
+    } catch (err: any) { console.warn('[financial-review] pipeline query failed:', err.message); }
 
     const fetchedAt = new Date().toISOString();
 
@@ -166,6 +178,7 @@ router.get('/summary', async (req, res) => {
     res.json({
       fetchedAt,
       revenue: {
+        currentMonthAr: currentMonthArRevenue,
         total6Mo: Number(rev.total_6mo) || 0,
         recent3Mo: recentRev,
         prior3Mo: priorRev,

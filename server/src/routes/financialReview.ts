@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { authenticateToken } from '../../middleware/auth';
+import { requireAdminAccess } from '../../middleware/routeAuthorization';
 import { pool } from '../../db';
 
 const router = Router();
 
 router.use(authenticateToken);
+router.use(requireAdminAccess);
 
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
@@ -128,20 +130,34 @@ router.get('/summary', async (req, res) => {
       returnRate = { returnCount: rc, totalOrders: tc, rate: tc > 0 ? Math.round((rc / tc) * 1000) / 10 : null };
     } catch (err: any) { console.warn('[financial-review] return rate query failed:', err.message); }
 
-    // Pipeline totals — from projects table (open stages)
-    let pipelineTotals = { totalValue: 0, pWeightedValue: 0, openCount: 0, byStage: {} as Record<string, number> };
+    // Pipeline totals — live from p2_purchase_orders (P2 pipeline) and projects stages
+    let pipelineTotals = { totalValue: 0, pWeightedValue: 0, openCount: 0, byStage: {} as Record<string, number>, p2ByStatus: {} as Record<string, number> };
     try {
+      // Live P2 pipeline: p2_purchase_orders open count by status
+      const p2Rows = await pool.query(`
+        SELECT status, COUNT(*) AS cnt
+        FROM p2_purchase_orders
+        WHERE status NOT IN ('completed', 'cancelled', 'shipped')
+        GROUP BY status
+      `) as any[];
+      const p2ByStatus: Record<string, number> = {};
+      let openCount = 0;
+      p2Rows.forEach((r: any) => {
+        p2ByStatus[r.status] = Number(r.cnt);
+        openCount += Number(r.cnt);
+      });
+
+      // Live project stage breakdown (engineering/production pipeline stages)
       const projRows = await pool.query(`
         SELECT current_stage, COUNT(*) AS cnt
         FROM projects
         WHERE status NOT IN ('completed', 'cancelled', 'lost') AND current_stage IS NOT NULL
         GROUP BY current_stage
       `) as any[];
-      const openCount = projRows.reduce((s: number, r: any) => s + Number(r.cnt), 0);
       const byStage: Record<string, number> = {};
       projRows.forEach((r: any) => { byStage[r.current_stage] = Number(r.cnt); });
 
-      // Also pull BD pipeline from current session for value/P-weighted
+      // BD pipeline value from current session (manual opportunity tracking — no monetary values in P2 system)
       const now = new Date();
       const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const sesRows = await pool.query(
@@ -159,7 +175,7 @@ router.get('/summary', async (req, res) => {
           pWeightedValue: acc.pWeightedValue + (won ? val : lost ? 0 : val * (pwin / 100)),
         };
       }, { totalValue: 0, pWeightedValue: 0 });
-      pipelineTotals = { totalValue, pWeightedValue, openCount, byStage };
+      pipelineTotals = { totalValue, pWeightedValue, openCount, byStage, p2ByStatus };
     } catch (err: any) { console.warn('[financial-review] pipeline query failed:', err.message); }
 
     const fetchedAt = new Date().toISOString();

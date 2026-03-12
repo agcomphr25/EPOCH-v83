@@ -1,0 +1,125 @@
+{
+  "sections": [
+    {
+      "id": "cover",
+      "title": "Monthly Business Review",
+      "slideIndex": 1,
+      "type": "manual"
+    },
+    {
+      "id": "agenda",
+      "title": "Agenda",
+      "slideIndex": 2,
+      "type": "manual"
+    },
+    {
+      "id": "financial-header",
+      "title": "Financial Review",
+      "slideIndex": 3,
+      "type": "static"
+    },
+    {
+      "id": "shipments",
+      "title": "# Products Shipped",
+      "slideIndex": 4,
+      "type": "live",
+      "endpoint": "/api/financial-review/live/shipments"
+    },
+    {
+      "id": "cc-sales",
+      "title": "Credit Card Sales",
+      "slideIndex": 5,
+      "type": "live",
+      "endpoint": "/api/financial-review/live/revenue"
+    },
+    {
+      "id": "revenue-trend",
+      "title": "Revenue Trend",
+      "slideIndex": 6,
+      "type": "live",
+      "endpoint": "/api/financial-review/live/revenue"
+    },
+    {
+      "id": "financial-highlights",
+      "title": "Combined Financial Highlights",
+      "slideIndex": 7,
+      "type": "mixed",
+      "liveEndpoint": "/api/financial-review/live/revenue",
+      "manualFields": ["gross_margin_pct", "net_income", "cash_balance"]
+    },
+    {
+      "id": "cash-flow",
+      "title": "Cash Flow Projection",
+      "slideIndex": 8,
+      "type": "manual",
+      "manualFields": ["cash_forecast_notes"]
+    },
+    {
+      "id": "as-financials",
+      "title": "AS Financial Highlights",
+      "slideIndex": 9,
+      "type": "manual",
+      "manualFields": ["as_revenue", "as_gross_margin_pct", "as_net_income"]
+    },
+    {
+      "id": "kpis",
+      "title": "Quality Objectives — KPIs",
+      "slideIndex": 10,
+      "type": "live",
+      "endpoint": "/api/financial-review/live/kpis"
+    },
+    {
+      "id": "kpis-cont",
+      "title": "Quality Objectives (cont.)",
+      "slideIndex": 11,
+      "type": "static"
+    },
+    {
+      "id": "action-items",
+      "title": "Action Items Update",
+      "slideIndex": 12,
+      "type": "manual",
+      "manualFields": ["action_items"]
+    },
+    {
+      "id": "customer-score",
+      "title": "Customer Satisfaction Score",
+      "slideIndex": 13,
+      "type": "live",
+      "endpoint": "/api/financial-review/live/customer-score"
+    },
+    {
+      "id": "bd-pipeline",
+      "title": "Business Development Pipeline",
+      "slideIndex": 14,
+      "type": "manual",
+      "manualFields": ["bd_pipeline"]
+    },
+    {
+      "id": "risk-opportunity",
+      "title": "Risk & Opportunity",
+      "slideIndex": 15,
+      "type": "manual",
+      "manualFields": ["risk_opportunity_text"]
+    },
+    {
+      "id": "calendar",
+      "title": "Calendar Review",
+      "slideIndex": 16,
+      "type": "manual",
+      "manualFields": ["calendar_events"]
+    }
+  ],
+  "liveDataSources": {
+    "shipments": "/api/financial-review/live/shipments",
+    "revenue": "/api/financial-review/live/revenue",
+    "kpis": "/api/financial-review/live/kpis",
+    "customerScore": "/api/financial-review/live/customer-score",
+    "summary": "/api/financial-review/summary"
+  },
+  "printStyles": {
+    "hideOnPrint": [".no-print"],
+    "pageBreak": ".slide-container",
+    "pageMargin": "1in"
+  }
+}

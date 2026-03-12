@@ -6,6 +6,98 @@ const router = Router();
 
 router.use(authenticateToken);
 
+// GET /api/financial-review/summary — aggregated live dashboard data
+router.get('/summary', async (req, res) => {
+  try {
+    // Revenue (last 6 months)
+    const revRows = await pool.query(`
+      SELECT
+        SUM(CASE WHEN payment_date >= NOW() - INTERVAL '3 months' THEN amount ELSE 0 END) AS recent_rev,
+        SUM(CASE WHEN payment_date >= NOW() - INTERVAL '6 months'
+                  AND payment_date < NOW() - INTERVAL '3 months' THEN amount ELSE 0 END) AS prior_rev,
+        SUM(amount) AS total_6mo
+      FROM payments
+      WHERE payment_date >= NOW() - INTERVAL '6 months'
+    `) as any[];
+
+    // OTD
+    const otdRows = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE ship_date <= promise_date OR promise_date IS NULL) AS on_time,
+        COUNT(*) AS total
+      FROM all_orders
+      WHERE ship_date IS NOT NULL
+        AND created_at >= NOW() - INTERVAL '3 months'
+        AND status NOT IN ('cancelled', 'draft')
+    `) as any[];
+
+    // NCR
+    const ncrRows = await pool.query(`
+      SELECT COUNT(*) AS ncr_count FROM nonconformances
+      WHERE created_at >= NOW() - INTERVAL '3 months'
+    `) as any[];
+
+    // Customer satisfaction
+    const csRows = await pool.query(`
+      SELECT ROUND(AVG(overall_score)::numeric, 1) AS avg_score, COUNT(*) AS count
+      FROM customer_satisfaction_responses
+      WHERE created_at >= NOW() - INTERVAL '12 months'
+    `) as any[];
+
+    // AR aging (30/60/90+ day buckets) — only if table exists
+    let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0 };
+    try {
+      const arRows = await pool.query(`
+        SELECT
+          SUM(CASE WHEN NOW() - due_date <= INTERVAL '30 days' THEN balance_due ELSE 0 END) AS current_bucket,
+          SUM(CASE WHEN NOW() - due_date > INTERVAL '30 days'
+                    AND NOW() - due_date <= INTERVAL '60 days' THEN balance_due ELSE 0 END) AS days_30,
+          SUM(CASE WHEN NOW() - due_date > INTERVAL '60 days'
+                    AND NOW() - due_date <= INTERVAL '90 days' THEN balance_due ELSE 0 END) AS days_60,
+          SUM(CASE WHEN NOW() - due_date > INTERVAL '90 days' THEN balance_due ELSE 0 END) AS days_90plus
+        FROM ar_invoices WHERE status != 'paid'
+      `) as any[];
+      const r = arRows[0] || {};
+      arAging = {
+        current: Number(r.current_bucket) || 0,
+        days30: Number(r.days_30) || 0,
+        days60: Number(r.days_60) || 0,
+        days90plus: Number(r.days_90plus) || 0,
+      };
+    } catch (_) {}
+
+    const rev = revRows[0] || {};
+    const otd = otdRows[0] || { on_time: 0, total: 0 };
+    const ncr = ncrRows[0] || { ncr_count: 0 };
+    const cs = csRows[0] || {};
+
+    const recentRev = Number(rev.recent_rev) || 0;
+    const priorRev = Number(rev.prior_rev) || 0;
+    const revenueGrowthPct = priorRev > 0
+      ? Math.round(((recentRev - priorRev) / priorRev) * 100)
+      : null;
+
+    res.json({
+      revenue: {
+        total6Mo: Number(rev.total_6mo) || 0,
+        recent3Mo: recentRev,
+        prior3Mo: priorRev,
+        growthPct: revenueGrowthPct,
+      },
+      otdPercent: otd.total > 0 ? Math.round((Number(otd.on_time) / Number(otd.total)) * 100) : null,
+      ncrCount: Number(ncr.ncr_count) || 0,
+      customerSatisfaction: {
+        avgScore: cs.avg_score ? Number(cs.avg_score) : null,
+        responseCount: Number(cs.count) || 0,
+      },
+      arAging,
+    });
+  } catch (err: any) {
+    console.error('financial-review summary error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/financial-review — list all sessions, newest first
 router.get('/', async (req, res) => {
   try {

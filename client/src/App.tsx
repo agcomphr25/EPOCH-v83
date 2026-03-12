@@ -726,6 +726,9 @@ function App() {
                     component={EnhancedReportsPage}
                   />
 
+                  {/* Financial Review — canonical routes */}
+                  <Route path="/financial-review/:monthKey" component={FinancialReviewSlidePage} />
+                  <Route path="/financial-review" component={FinancialReviewListPage} />
                   {/* Finance Routes */}
                   <Route path="/finance/review/:monthKey" component={FinancialReviewSlidePage} />
                   <Route path="/finance/review" component={FinancialReviewListPage} />

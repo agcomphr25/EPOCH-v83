@@ -166,7 +166,6 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   },
   staciw: {
     routes: [],
-    fullAccess: true,
   },
 
   // Regular users with limited access based on their dashboard cards
@@ -286,6 +285,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/layup-plugging',
       '/orders-list',
       '/orders-management',
+      '/finance/invoices',
     ],
   },
 
@@ -295,6 +295,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/layup-plugging',
       '/orders-list',
       '/orders-management',
+      '/finance/invoices',
     ],
   },
 
@@ -356,6 +357,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/layup-plugging',
       '/orders-list',
       '/orders-management',
+      '/finance/invoices',
     ],
   },
 

@@ -26,7 +26,7 @@ interface SummaryData {
     avg30Day: number | null; responseCount30Day: number; lastUpdated: string;
   };
   arAging: { current: number; days30: number; days60: number; days90plus: number; totalOutstanding: number; lastUpdated: string };
-  pipeline: { openCount: number; byStage: Record<string, number>; p2ByStatus: Record<string, number>; lastUpdated: string };
+  pipeline: { openCount: number; totalValue: number; byStage: Record<string, number>; p2ByStatus: Record<string, number>; lastUpdated: string };
   returnRate: { returnCount: number; totalOrders: number; rate: number | null; lastUpdated: string };
 }
 
@@ -469,12 +469,16 @@ export default function FinancialReviewPage() {
                 )}
               </div>
             </div>
-            {/* Live P2 open order pipeline from p2_purchase_orders */}
+            {/* Live P2 pipeline from p2_purchase_orders + p2_purchase_order_items */}
             {summary?.pipeline && (
               <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-3">
                   <div className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide">Open P2 Orders</div>
                   <div className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">{summary.pipeline.openCount}</div>
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 p-3">
+                  <div className="text-xs text-green-600 dark:text-green-400 font-medium uppercase tracking-wide">P2 Pipeline Value</div>
+                  <div className="text-xl font-bold text-green-700 dark:text-green-300 mt-1">{fmt(summary.pipeline.totalValue)}</div>
                 </div>
                 {Object.entries(summary.pipeline.p2ByStatus ?? {}).map(([status, count]) => (
                   <div key={status} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-3">

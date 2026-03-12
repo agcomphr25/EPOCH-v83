@@ -130,21 +130,25 @@ router.get('/summary', async (req, res) => {
       returnRate = { returnCount: rc, totalOrders: tc, rate: tc > 0 ? Math.round((rc / tc) * 1000) / 10 : null };
     } catch (err: any) { console.warn('[financial-review] return rate query failed:', err.message); }
 
-    // Live P2 pipeline — from p2_purchase_orders and projects (all live DB data)
-    let pipelineTotals = { openCount: 0, byStage: {} as Record<string, number>, p2ByStatus: {} as Record<string, number> };
+    // Live P2 pipeline — from p2_purchase_orders, p2_purchase_order_items, and projects
+    let pipelineTotals = { openCount: 0, totalValue: 0, byStage: {} as Record<string, number>, p2ByStatus: {} as Record<string, number> };
     try {
-      // Live P2 open orders from p2_purchase_orders
+      // Live P2 open orders with total value from p2_purchase_order_items
       const p2Rows = await pool.query(`
-        SELECT status, COUNT(*) AS cnt
-        FROM p2_purchase_orders
-        WHERE status NOT IN ('completed', 'cancelled', 'shipped')
-        GROUP BY status
+        SELECT po.status, COUNT(DISTINCT po.id) AS cnt,
+               COALESCE(SUM(poi.total_price), 0) AS total_value
+        FROM p2_purchase_orders po
+        LEFT JOIN p2_purchase_order_items poi ON poi.po_id = po.id
+        WHERE po.status NOT IN ('completed', 'cancelled', 'shipped')
+        GROUP BY po.status
       `) as any[];
       const p2ByStatus: Record<string, number> = {};
       let openCount = 0;
+      let totalValue = 0;
       p2Rows.forEach((r: any) => {
         p2ByStatus[r.status] = Number(r.cnt);
         openCount += Number(r.cnt);
+        totalValue += Number(r.total_value);
       });
 
       // Live project stage breakdown from projects table
@@ -157,7 +161,7 @@ router.get('/summary', async (req, res) => {
       const byStage: Record<string, number> = {};
       projRows.forEach((r: any) => { byStage[r.current_stage] = Number(r.cnt); });
 
-      pipelineTotals = { openCount, byStage, p2ByStatus };
+      pipelineTotals = { openCount, totalValue, byStage, p2ByStatus };
     } catch (err: any) { console.warn('[financial-review] pipeline query failed:', err.message); }
 
     const fetchedAt = new Date().toISOString();

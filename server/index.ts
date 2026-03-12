@@ -551,6 +551,25 @@ async function initializeBackgroundServices() {
           )
         `);
 
+        // Check if cutting_built_packets exists with wrong column types (UUID instead of SERIAL)
+        // Only recreate if table is empty to avoid data loss
+        const bpColCheck = await db.execute(sqlCpT`
+          SELECT data_type FROM information_schema.columns
+          WHERE table_name = 'cutting_built_packets' AND column_name = 'id'
+        `);
+        const bpIdType = (bpColCheck as any)?.rows?.[0]?.data_type;
+        if (bpIdType && bpIdType !== 'integer') {
+          const bpCount = await db.execute(sqlCpT`SELECT COUNT(*)::int AS cnt FROM cutting_built_packets`);
+          const rowCount = (bpCount as any)?.rows?.[0]?.cnt || 0;
+          if (rowCount === 0) {
+            console.log(`⚠️ cutting_built_packets.id is '${bpIdType}' (empty table) — recreating with SERIAL`);
+            await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packet_fabric_sources CASCADE`);
+            await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packets CASCADE`);
+          } else {
+            console.warn(`⚠️ cutting_built_packets.id is '${bpIdType}' with ${rowCount} rows — skipping destructive migration (manual fix required)`);
+          }
+        }
+
         // Create cutting_built_packets if it doesn't exist
         await db.execute(sqlCpT`
           CREATE TABLE IF NOT EXISTS cutting_built_packets (

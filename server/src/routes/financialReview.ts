@@ -36,12 +36,12 @@ router.get('/summary', async (req, res) => {
       currentMonthArRevenue = Number(arRevRows[0]?.current_month_ar) || 0;
     } catch (err: any) { console.warn('[financial-review] AR revenue query failed:', err.message); }
 
-    // OTD — all_orders.shipped_date vs estimated_delivery
+    // OTD — all_orders.shipped_date vs due_date (consistent with OTD widget)
     let otdRows: any[] = [];
     try {
       otdRows = await pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE shipped_date <= estimated_delivery OR estimated_delivery IS NULL) AS on_time,
+          COUNT(*) FILTER (WHERE shipped_date <= due_date OR due_date IS NULL) AS on_time,
           COUNT(*) AS total
         FROM all_orders
         WHERE shipped_date IS NOT NULL
@@ -54,7 +54,7 @@ router.get('/summary', async (req, res) => {
     let ncrRows: any[] = [];
     try {
       ncrRows = await pool.query(`
-        SELECT COUNT(*) AS ncr_count FROM nonconformances
+        SELECT COUNT(*) AS ncr_count FROM nonconformance_records
         WHERE created_at >= NOW() - INTERVAL '3 months'
       `) as any[];
     } catch (err: any) { console.warn('[financial-review] NCR query failed:', err.message); }
@@ -245,7 +245,7 @@ router.get('/live/revenue', async (req, res) => {
     const rows = await pool.query(`
       SELECT
         TO_CHAR(DATE_TRUNC('month', payment_date), 'YYYY-MM') AS month,
-        SUM(amount) AS revenue
+        SUM(payment_amount) AS revenue
       FROM payments
       WHERE payment_date >= NOW() - INTERVAL '6 months'
       GROUP BY 1
@@ -261,13 +261,13 @@ router.get('/live/revenue', async (req, res) => {
 // GET /api/financial-review/live/kpis — OTD %, NCR count, revenue growth
 router.get('/live/kpis', async (req, res) => {
   try {
-    // OTD: orders shipped on or before promised date (last 3 months)
+    // OTD: orders shipped on or before due date (last 3 months)
     const otdRows = await pool.query(`
       SELECT
-        COUNT(*) FILTER (WHERE ship_date <= promise_date OR promise_date IS NULL) AS on_time,
+        COUNT(*) FILTER (WHERE shipped_date <= due_date OR due_date IS NULL) AS on_time,
         COUNT(*) AS total
       FROM all_orders
-      WHERE ship_date IS NOT NULL
+      WHERE shipped_date IS NOT NULL
         AND created_at >= NOW() - INTERVAL '3 months'
         AND status NOT IN ('cancelled', 'draft')
     `) as any[];
@@ -275,16 +275,16 @@ router.get('/live/kpis', async (req, res) => {
     // NCR count (last 3 months)
     const ncrRows = await pool.query(`
       SELECT COUNT(*) AS ncr_count
-      FROM nonconformances
+      FROM nonconformance_records
       WHERE created_at >= NOW() - INTERVAL '3 months'
     `) as any[];
 
     // Revenue: last 3 months vs 3 months before that (for growth)
     const revRows = await pool.query(`
       SELECT
-        SUM(CASE WHEN payment_date >= NOW() - INTERVAL '3 months' THEN amount ELSE 0 END) AS recent,
+        SUM(CASE WHEN payment_date >= NOW() - INTERVAL '3 months' THEN payment_amount ELSE 0 END) AS recent,
         SUM(CASE WHEN payment_date >= NOW() - INTERVAL '6 months'
-                  AND payment_date < NOW() - INTERVAL '3 months' THEN amount ELSE 0 END) AS prior
+                  AND payment_date < NOW() - INTERVAL '3 months' THEN payment_amount ELSE 0 END) AS prior
       FROM payments
       WHERE payment_date >= NOW() - INTERVAL '6 months'
     `) as any[];

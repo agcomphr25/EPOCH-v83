@@ -527,6 +527,8 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
   '/time-clock-admin': ['ADMIN', 'OWNER'],
+  '/financial-review': ['ADMIN', 'OWNER'],
+  '/financial-review/sessions': ['ADMIN', 'OWNER'],
   '/finance/dashboard': ['ADMIN', 'OWNER'],
   '/finance/cost-centers': ['ADMIN', 'OWNER'],
   '/finance/cost-accounting': ['ADMIN', 'OWNER'],

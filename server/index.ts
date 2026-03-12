@@ -582,6 +582,33 @@ async function initializeBackgroundServices() {
         await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS consumed_by TEXT`);
         await db.execute(sqlCpT`ALTER TABLE cutting_built_packets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
 
+        // Fix product_category_id type: early table creation used integer, but cutting_product_categories.id is uuid
+        try {
+          await db.execute(sqlCpT`
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'cutting_built_packets'
+                  AND column_name = 'product_category_id'
+                  AND data_type = 'integer'
+              ) THEN
+                -- Delete any rows with non-castable integer values before type conversion
+                DELETE FROM cutting_built_packet_fabric_sources
+                  WHERE built_packet_id IN (
+                    SELECT id FROM cutting_built_packets WHERE product_category_id IS NOT NULL
+                  );
+                DELETE FROM cutting_built_packets WHERE product_category_id IS NOT NULL;
+                -- Now safe to convert the empty/null column
+                ALTER TABLE cutting_built_packets
+                  ALTER COLUMN product_category_id TYPE uuid USING NULL;
+              END IF;
+            END $$
+          `);
+        } catch (colFixErr: any) {
+          console.warn('⚠️ cutting_built_packets.product_category_id type fix skipped:', colFixErr.message);
+        }
+
         // Create cutting_built_packet_fabric_sources if it doesn't exist
         await db.execute(sqlCpT`
           CREATE TABLE IF NOT EXISTS cutting_built_packet_fabric_sources (
@@ -603,6 +630,35 @@ async function initializeBackgroundServices() {
         `);
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_packet_idx ON cutting_built_packet_fabric_sources(built_packet_id)`);
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx ON cutting_built_packet_fabric_sources(fabric_inventory_id)`);
+
+        // Fix fabric_inventory_id type: early table creation used integer, but cutting_fabric_inventory.id is uuid
+        try {
+          await db.execute(sqlCpT`
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'cutting_built_packet_fabric_sources'
+                  AND column_name = 'fabric_inventory_id'
+                  AND data_type = 'integer'
+              ) THEN
+                -- Clear any non-castable integer references before type conversion
+                UPDATE cutting_built_packet_fabric_sources SET fabric_inventory_id = NULL WHERE fabric_inventory_id IS NOT NULL;
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  ALTER COLUMN fabric_inventory_id TYPE uuid USING NULL;
+              END IF;
+            END $$
+          `);
+        } catch (fabFixErr: any) {
+          console.warn('⚠️ fabric_sources.fabric_inventory_id type fix skipped:', fabFixErr.message);
+        }
+
+        try {
+          await db.execute(sqlCpT`ALTER TABLE cutting_built_packet_fabric_sources ADD COLUMN IF NOT EXISTS component_id UUID`);
+          await db.execute(sqlCpT`ALTER TABLE cutting_built_packet_fabric_sources ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
+        } catch (colAddErr: any) {
+          console.warn('⚠️ fabric_sources column additions skipped:', colAddErr.message);
+        }
 
         console.log('✅ Ensured cutting packet traceability tables exist (sessions, built_packets columns, fabric_sources)');
       } catch (cpTErr: any) {

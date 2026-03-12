@@ -1,8 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { useAuth } from './useAuth';
 
 interface PermissionsResponse {
   permissions: string[];
+}
+
+interface SessionUser {
+  id: number;
+  username: string;
 }
 
 /**
@@ -14,11 +18,15 @@ interface PermissionsResponse {
  *   {can('finance.invoice.delete') && <DeleteButton />}
  */
 export function usePermissions() {
-  const { user } = useAuth();
+  const { data: sessionUser } = useQuery<SessionUser | null>({
+    queryKey: ['/api/auth/session'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   const { data, isLoading } = useQuery<PermissionsResponse>({
     queryKey: ['/api/permissions/me'],
-    enabled: !!user,
+    enabled: !!sessionUser,
     staleTime: 60_000, // cache for 1 minute
   });
 

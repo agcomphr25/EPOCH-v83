@@ -256,7 +256,6 @@ export default function PipelineVisualization() {
               const count = pipelineCounts?.[deptName] ?? 0;
               const orders = pipelineDetails?.[deptName] ?? [];
               const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
-              const isOverloaded = count > 45;
               const deptColor = getDeptColor(deptName);
 
               const upstreamCount = idx > 0 ? deptCounts[idx - 1] : null;
@@ -286,13 +285,15 @@ export default function PipelineVisualization() {
                     }`}
                   >
                     <div
-                      className="w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl text-white"
-                      style={{
-                        backgroundColor: isOverloaded ? '#FFFF00' : deptColor.hex,
-                        color: isOverloaded ? '#000000' : '#FFFFFF',
-                      }}
+                      className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl text-white relative ${
+                        count > 45 ? 'ring-2 ring-yellow-400 ring-offset-1' : ''
+                      }`}
+                      style={{ backgroundColor: deptColor.hex }}
                     >
                       {count}
+                      {count > 45 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">!</span>
+                      )}
                     </div>
 
                     <div className="text-xs font-medium leading-tight">{deptName}</div>
@@ -372,8 +373,8 @@ export default function PipelineVisualization() {
           {/* Pressure + overloaded legend */}
           <div className="flex items-center justify-center gap-4 text-xs text-gray-600 flex-wrap">
             <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: '#FFFF00' }} />
-              <span>Header: &gt;45 Orders</span>
+              <div className="w-3 h-3 rounded border-2 border-yellow-400 bg-gray-300" />
+              <span>Header ring: &gt;45 Orders</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-green-500" />

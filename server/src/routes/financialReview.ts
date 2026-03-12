@@ -11,6 +11,8 @@ router.use(requireFinanceAccess);
 // GET /api/financial-review/summary — aggregated live dashboard data
 router.get('/summary', async (req, res) => {
   try {
+    const dataErrors: string[] = []; // collects any query failures for client visibility
+
     // Revenue (last 6 months) — payments.payment_amount (CC payments)
     let revRows: any[] = [];
     try {
@@ -24,7 +26,7 @@ router.get('/summary', async (req, res) => {
         WHERE payment_date >= NOW() - INTERVAL '6 months'
           AND payment_type = 'credit_card'
       `) as any[];
-    } catch (err: any) { console.warn('[financial-review] revenue query failed:', err.message); }
+    } catch (err: any) { const msg = `revenue query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Current month AR invoice revenue
     let currentMonthArRevenue = 0;
@@ -36,7 +38,7 @@ router.get('/summary', async (req, res) => {
           AND status NOT IN ('VOID', 'void')
       `) as any[];
       currentMonthArRevenue = Number(arRevRows[0]?.current_month_ar) || 0;
-    } catch (err: any) { console.warn('[financial-review] AR revenue query failed:', err.message); }
+    } catch (err: any) { const msg = `AR revenue query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // OTD — all_orders.shipped_date vs due_date (consistent with OTD widget)
     let otdRows: any[] = [];
@@ -50,7 +52,7 @@ router.get('/summary', async (req, res) => {
           AND created_at >= NOW() - INTERVAL '3 months'
           AND status NOT IN ('cancelled', 'draft')
       `) as any[];
-    } catch (err: any) { console.warn('[financial-review] OTD query failed:', err.message); }
+    } catch (err: any) { const msg = `OTD query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // NCR
     let ncrRows: any[] = [];
@@ -59,7 +61,7 @@ router.get('/summary', async (req, res) => {
         SELECT COUNT(*) AS ncr_count FROM nonconformance_records
         WHERE created_at >= NOW() - INTERVAL '3 months'
       `) as any[];
-    } catch (err: any) { console.warn('[financial-review] NCR query failed:', err.message); }
+    } catch (err: any) { const msg = `NCR query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Customer satisfaction — 12-month + 30-day (overall_satisfaction column)
     let csRows: any[] = [];
@@ -70,7 +72,7 @@ router.get('/summary', async (req, res) => {
         WHERE created_at >= NOW() - INTERVAL '12 months'
           AND is_complete = true
       `) as any[];
-    } catch (err: any) { console.warn('[financial-review] CS 12mo query failed:', err.message); }
+    } catch (err: any) { const msg = `CS 12mo query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // AR aging using balance (total_amount - payments allocated) per existing AR aging endpoint pattern
     let arAging = { current: 0, days30: 0, days60: 0, days90plus: 0, totalOutstanding: 0 };
@@ -99,7 +101,7 @@ router.get('/summary', async (req, res) => {
         days90plus: Number(r.days_90plus) || 0,
         totalOutstanding: Number(r.total_outstanding) || 0,
       };
-    } catch (err: any) { console.warn('[financial-review] AR aging query failed:', err.message); }
+    } catch (err: any) { const msg = `AR aging query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Customer satisfaction — 30-day window
     let cs30: any = {};
@@ -111,7 +113,7 @@ router.get('/summary', async (req, res) => {
           AND is_complete = true
       `) as any[];
       cs30 = cs30Rows[0] || {};
-    } catch (err: any) { console.warn('[financial-review] CS 30d query failed:', err.message); }
+    } catch (err: any) { const msg = `CS 30d query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Customer return rate — refund_requests in last 12 months
     let returnRate: { returnCount: number; totalOrders: number; rate: number | null } = { returnCount: 0, totalOrders: 0, rate: null };
@@ -128,7 +130,7 @@ router.get('/summary', async (req, res) => {
       const rc = Number(returnRows[0]?.return_count) || 0;
       const tc = Number(orderRows[0]?.total_orders) || 0;
       returnRate = { returnCount: rc, totalOrders: tc, rate: tc > 0 ? Math.round((rc / tc) * 1000) / 10 : null };
-    } catch (err: any) { console.warn('[financial-review] return rate query failed:', err.message); }
+    } catch (err: any) { const msg = `return rate query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     // Live P2 pipeline — from p2_purchase_orders, p2_purchase_order_items, and projects
     let pipelineTotals = { openCount: 0, totalValue: 0, byStage: {} as Record<string, number>, p2ByStatus: {} as Record<string, number> };
@@ -162,7 +164,7 @@ router.get('/summary', async (req, res) => {
       projRows.forEach((r: any) => { byStage[r.current_stage] = Number(r.cnt); });
 
       pipelineTotals = { openCount, totalValue, byStage, p2ByStatus };
-    } catch (err: any) { console.warn('[financial-review] pipeline query failed:', err.message); }
+    } catch (err: any) { const msg = `pipeline query: ${err.message}`; console.warn('[financial-review]', msg); dataErrors.push(msg); }
 
     const fetchedAt = new Date().toISOString();
 
@@ -201,6 +203,7 @@ router.get('/summary', async (req, res) => {
       arAging: { ...arAging, lastUpdated: fetchedAt },
       pipeline: { ...pipelineTotals, lastUpdated: fetchedAt },
       returnRate: { ...returnRate, lastUpdated: fetchedAt },
+      dataErrors: dataErrors.length > 0 ? dataErrors : undefined,
     });
   } catch (err: any) {
     console.error('financial-review summary error:', err);

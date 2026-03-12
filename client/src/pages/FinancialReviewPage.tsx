@@ -28,6 +28,7 @@ interface SummaryData {
   arAging: { current: number; days30: number; days60: number; days90plus: number; totalOutstanding: number; lastUpdated: string };
   pipeline: { openCount: number; totalValue: number; byStage: Record<string, number>; p2ByStatus: Record<string, number>; lastUpdated: string };
   returnRate: { returnCount: number; totalOrders: number; rate: number | null; lastUpdated: string };
+  dataErrors?: string[];
 }
 
 interface Session {
@@ -233,6 +234,16 @@ export default function FinancialReviewPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-6 py-6 space-y-8 print-content">
+
+          {/* Data source error warning */}
+          {summary?.dataErrors && summary.dataErrors.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <div className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Some data sources could not be loaded — values may be incomplete</div>
+              <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-0.5">
+                {summary.dataErrors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+          )}
 
           {/* ── Revenue & KPI Row ── */}
           <section className="print-section">

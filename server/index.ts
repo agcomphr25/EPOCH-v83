@@ -1959,6 +1959,35 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Projects pipeline migration:', projErr.message);
       }
 
+      // Ensure financial_review_sessions table exists
+      try {
+        const { sql: sqlFR } = await import('drizzle-orm');
+        await db.execute(sqlFR`
+          CREATE TABLE IF NOT EXISTS financial_review_sessions (
+            id SERIAL PRIMARY KEY,
+            month_key TEXT NOT NULL UNIQUE,
+            review_date TEXT,
+            agenda_text TEXT,
+            gross_margin_pct NUMERIC,
+            net_income NUMERIC,
+            cash_balance NUMERIC,
+            cash_forecast_notes TEXT,
+            as_revenue NUMERIC,
+            as_gross_margin_pct NUMERIC,
+            as_net_income NUMERIC,
+            action_items JSONB DEFAULT '[]'::jsonb,
+            bd_pipeline JSONB DEFAULT '[]'::jsonb,
+            risk_opportunity_text TEXT,
+            calendar_events JSONB DEFAULT '[]'::jsonb,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured financial_review_sessions table exists');
+      } catch (frErr: any) {
+        console.warn('⚠️ financial_review_sessions migration:', frErr.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

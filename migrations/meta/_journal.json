@@ -8,6 +8,13 @@
       "when": 1763508421080,
       "tag": "0000_shiny_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773410000000,
+      "tag": "0001_fix_cutting_built_packets_category_uuid",
+      "breakpoints": true
     }
   ]
 }

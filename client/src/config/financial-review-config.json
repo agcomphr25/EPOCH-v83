@@ -1,125 +1,129 @@
 {
+  "version": "2025-02",
+  "description": "Monthly Financial Review — config-driven section schema and sample data",
   "sections": [
     {
-      "id": "cover",
-      "title": "Monthly Business Review",
-      "slideIndex": 1,
-      "type": "manual"
-    },
-    {
-      "id": "agenda",
-      "title": "Agenda",
-      "slideIndex": 2,
-      "type": "manual"
-    },
-    {
-      "id": "financial-header",
-      "title": "Financial Review",
-      "slideIndex": 3,
-      "type": "static"
-    },
-    {
-      "id": "shipments",
-      "title": "# Products Shipped",
-      "slideIndex": 4,
+      "id": "revenue",
+      "title": "Revenue & Financial Summary",
       "type": "live",
-      "endpoint": "/api/financial-review/live/shipments"
+      "icon": "TrendingUp",
+      "source": "summary.revenue",
+      "fields": ["total6Mo", "recent3Mo", "prior3Mo", "growthPct"]
     },
     {
-      "id": "cc-sales",
-      "title": "Credit Card Sales",
-      "slideIndex": 5,
+      "id": "otd",
+      "title": "On-Time Delivery",
       "type": "live",
-      "endpoint": "/api/financial-review/live/revenue"
+      "icon": "CheckCircle",
+      "source": "summary.otdPercent",
+      "target": 95,
+      "unit": "%"
     },
     {
-      "id": "revenue-trend",
-      "title": "Revenue Trend",
-      "slideIndex": 6,
+      "id": "ncr",
+      "title": "Nonconformances",
       "type": "live",
-      "endpoint": "/api/financial-review/live/revenue"
+      "icon": "AlertTriangle",
+      "source": "summary.ncrCount",
+      "target": 5,
+      "comparison": "lt"
     },
     {
-      "id": "financial-highlights",
-      "title": "Combined Financial Highlights",
-      "slideIndex": 7,
-      "type": "mixed",
-      "liveEndpoint": "/api/financial-review/live/revenue",
-      "manualFields": ["gross_margin_pct", "net_income", "cash_balance"]
-    },
-    {
-      "id": "cash-flow",
-      "title": "Cash Flow Projection",
-      "slideIndex": 8,
-      "type": "manual",
-      "manualFields": ["cash_forecast_notes"]
-    },
-    {
-      "id": "as-financials",
-      "title": "AS Financial Highlights",
-      "slideIndex": 9,
-      "type": "manual",
-      "manualFields": ["as_revenue", "as_gross_margin_pct", "as_net_income"]
-    },
-    {
-      "id": "kpis",
-      "title": "Quality Objectives — KPIs",
-      "slideIndex": 10,
+      "id": "customer-satisfaction",
+      "title": "Customer Satisfaction",
       "type": "live",
-      "endpoint": "/api/financial-review/live/kpis"
+      "icon": "Star",
+      "source": "summary.customerSatisfaction",
+      "fields": ["avgScore", "responseCount"],
+      "scale": 5
     },
     {
-      "id": "kpis-cont",
-      "title": "Quality Objectives (cont.)",
-      "slideIndex": 11,
-      "type": "static"
+      "id": "ar-aging",
+      "title": "AR Aging",
+      "type": "live",
+      "icon": "Clock",
+      "source": "summary.arAging",
+      "fields": ["current", "days30", "days60", "days90plus"]
     },
     {
       "id": "action-items",
-      "title": "Action Items Update",
-      "slideIndex": 12,
-      "type": "manual",
-      "manualFields": ["action_items"]
-    },
-    {
-      "id": "customer-score",
-      "title": "Customer Satisfaction Score",
-      "slideIndex": 13,
-      "type": "live",
-      "endpoint": "/api/financial-review/live/customer-score"
+      "title": "Action Items",
+      "type": "session",
+      "icon": "ClipboardList",
+      "sessionField": "action_items",
+      "narrative": [
+        { "item": "Complete AS9100 internal audit", "owner": "Quality", "status": "in_progress", "dueDate": "2026-02-28" },
+        { "item": "Update customer communication templates", "owner": "Sales", "status": "open", "dueDate": "2026-03-15" },
+        { "item": "Review subcontractor qualification records", "owner": "Procurement", "status": "complete", "dueDate": "2026-02-14" }
+      ]
     },
     {
       "id": "bd-pipeline",
       "title": "Business Development Pipeline",
-      "slideIndex": 14,
-      "type": "manual",
-      "manualFields": ["bd_pipeline"]
+      "type": "session",
+      "icon": "BarChart",
+      "sessionField": "bd_pipeline",
+      "narrative": [
+        { "name": "DOD Contract — Rifle Stock", "value": "450000", "pwin": "65", "status": "proposal" },
+        { "name": "OEM Program — Law Enforcement", "value": "280000", "pwin": "40", "status": "prospect" },
+        { "name": "Export Opportunity — Allied Forces", "value": "190000", "pwin": "25", "status": "prospect" }
+      ]
+    },
+    {
+      "id": "production-changes",
+      "title": "Production Changes",
+      "type": "narrative",
+      "icon": "Factory",
+      "narrative": "Review material substitutions, process deviations, and engineering changes approved this period."
+    },
+    {
+      "id": "corrective-actions",
+      "title": "Corrective Actions (CARs)",
+      "type": "narrative",
+      "icon": "ShieldCheck",
+      "narrative": "Open corrective action reports and root cause analysis status for the current period."
+    },
+    {
+      "id": "first-articles",
+      "title": "First Article Inspections",
+      "type": "narrative",
+      "icon": "Search",
+      "narrative": "First article inspections completed or pending for new part numbers introduced this period."
+    },
+    {
+      "id": "calendar-events",
+      "title": "Calendar & Upcoming Events",
+      "type": "session",
+      "icon": "Calendar",
+      "sessionField": "calendar_events",
+      "narrative": [
+        { "term": "short", "event": "Customer delivery window — March 14" },
+        { "term": "mid", "event": "AS9100 surveillance audit — April 2026" },
+        { "term": "long", "event": "New product line launch — Q3 2026" }
+      ]
     },
     {
       "id": "risk-opportunity",
       "title": "Risk & Opportunity",
-      "slideIndex": 15,
-      "type": "manual",
-      "manualFields": ["risk_opportunity_text"]
-    },
-    {
-      "id": "calendar",
-      "title": "Calendar Review",
-      "slideIndex": 16,
-      "type": "manual",
-      "manualFields": ["calendar_events"]
+      "type": "session",
+      "icon": "AlertCircle",
+      "sessionField": "risk_opportunity_text"
     }
   ],
   "liveDataSources": {
+    "summary": "/api/financial-review/summary",
     "shipments": "/api/financial-review/live/shipments",
     "revenue": "/api/financial-review/live/revenue",
     "kpis": "/api/financial-review/live/kpis",
-    "customerScore": "/api/financial-review/live/customer-score",
-    "summary": "/api/financial-review/summary"
+    "customerScore": "/api/financial-review/live/customer-score"
   },
   "printStyles": {
     "hideOnPrint": [".no-print"],
-    "pageBreak": ".slide-container",
+    "sectionBreak": "avoid",
     "pageMargin": "1in"
+  },
+  "accessControl": {
+    "roles": ["admin", "finance", "executive"],
+    "minimumRole": "finance"
   }
 }

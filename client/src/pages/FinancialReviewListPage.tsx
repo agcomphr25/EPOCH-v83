@@ -42,7 +42,7 @@ export default function FinancialReviewListPage() {
       apiRequest('PUT', `/api/financial-review/${newMonth}`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/financial-review'] });
-      navigate(`/financial-review/${newMonth}`);
+      navigate(`/financial-review/sessions/${newMonth}`);
     },
   });
 
@@ -86,7 +86,7 @@ export default function FinancialReviewListPage() {
               <Card
                 key={session.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/financial-review/${session.month_key}`)}
+                onClick={() => navigate(`/financial-review/sessions/${session.month_key}`)}
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-4">

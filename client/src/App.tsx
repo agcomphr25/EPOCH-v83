@@ -73,6 +73,7 @@ import ARAgingPage from './pages/ARAgingPage';
 import ARPaymentsPage from './pages/ARPaymentsPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
+import FinancialReviewPage from './pages/FinancialReviewPage';
 import FinancialReviewListPage from './pages/FinancialReviewListPage';
 import FinancialReviewSlidePage from './pages/FinancialReviewSlidePage';
 import CostCenterManagement from './pages/CostCenterManagement';
@@ -727,8 +728,9 @@ function App() {
                   />
 
                   {/* Financial Review — canonical routes */}
-                  <Route path="/financial-review/:monthKey" component={FinancialReviewSlidePage} />
-                  <Route path="/financial-review" component={FinancialReviewListPage} />
+                  <Route path="/financial-review/sessions/:monthKey" component={FinancialReviewSlidePage} />
+                  <Route path="/financial-review/sessions" component={FinancialReviewListPage} />
+                  <Route path="/financial-review" component={FinancialReviewPage} />
                   {/* Finance Routes */}
                   <Route path="/finance/review/:monthKey" component={FinancialReviewSlidePage} />
                   <Route path="/finance/review" component={FinancialReviewListPage} />

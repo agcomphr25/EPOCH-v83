@@ -168,7 +168,13 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   staciw: {
     routes: [],
     fullAccess: true,
-    deniedRoutes: [],
+    deniedRoutes: [
+      '/finance/ar',
+      '/finance/ar-journal',
+      '/finance/ar-aging',
+      '/finance/ar-payments',
+      '/finance/invoices',
+    ],
   },
 
   // Regular users with limited access based on their dashboard cards

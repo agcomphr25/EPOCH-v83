@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 // widget type is registered on the frontend.
 
 const WIDGET_TYPES = [
+  // ── Metric widgets ────────────────────────────────────────────────────────
   {
     id: 'metric_stat',
     displayName: 'Metric Stat Card',
@@ -15,9 +16,9 @@ const WIDGET_TYPES = [
     requiredProps: ['metricSlug'],
     defaultProps: {},
     propSchema: [
-      { name: 'metricSlug', type: 'metric_slug', label: 'Metric',                    required: true  },
-      { name: 'title',      type: 'string',      label: 'Title override (optional)',  required: false },
-      { name: 'unit',       type: 'string',      label: 'Unit override (optional)',   required: false },
+      { name: 'metricSlug', type: 'metric_slug', label: 'Metric',                   required: true  },
+      { name: 'title',      type: 'string',      label: 'Title override (optional)', required: false },
+      { name: 'unit',       type: 'string',      label: 'Unit override (optional)',  required: false },
     ],
   },
   {
@@ -29,8 +30,145 @@ const WIDGET_TYPES = [
     defaultProps: { label: '' },
     propSchema: [
       { name: 'slugs', type: 'metric_slug_array', label: 'Metrics',       required: true  },
-      { name: 'label', type: 'string',            label: 'Section label', required: false },
+      { name: 'label', type: 'string',             label: 'Section label', required: false },
     ],
+  },
+  {
+    id: 'hero_metric',
+    displayName: 'Hero Metric Card',
+    description: 'Large-format KPI card with progress bar, trend arrow, and accent color.',
+    category: 'metric',
+    requiredProps: ['metricSlug'],
+    defaultProps: {},
+    propSchema: [
+      { name: 'metricSlug', type: 'metric_slug', label: 'Metric', required: true },
+    ],
+  },
+  {
+    id: 'otd_summary',
+    displayName: 'OTD Summary',
+    description: 'On-time delivery percentage and breakdown for the current month.',
+    category: 'metric',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'payment_analytics',
+    displayName: 'Payment Analytics',
+    description: 'Month-to-date revenue summary with phone vs online breakdown.',
+    category: 'metric',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'forecast_accuracy',
+    displayName: 'Forecast Accuracy',
+    description: 'Shows forecast vs. actual completion accuracy with error metrics and trend breakdown.',
+    category: 'metric',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'cc_processing',
+    displayName: 'Credit Card Processing',
+    description: 'YTD credit card volume breakdown (Online vs Phone) from historical data, with recent months detail.',
+    category: 'metric',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'ar_aging',
+    displayName: 'AR Aging Summary',
+    description: 'Outstanding accounts receivable broken down by aging bucket with top customer balances.',
+    category: 'metric',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  // ── Chart widgets ─────────────────────────────────────────────────────────
+  {
+    id: 'shipment_trend',
+    displayName: 'Shipment Trend Chart',
+    description: 'Weekly shipment bar chart with 4-week moving average line overlay.',
+    category: 'chart',
+    requiredProps: [],
+    defaultProps: { weeks: 8 },
+    propSchema: [
+      { name: 'weeks', type: 'number', label: 'Weeks of history', required: false },
+    ],
+  },
+  {
+    id: 'bubble_chart',
+    displayName: 'Stock Model Popularity',
+    description: 'Bubble chart showing stock model popularity by weekly shipments, avg price, and total revenue.',
+    category: 'chart',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'capability_radar',
+    displayName: 'Capability Radar',
+    description: 'Radar chart showing department capacity utilization across Layup, CNC, Finish, Paint, Shipping, and Quality.',
+    category: 'chart',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  // ── Status widgets ────────────────────────────────────────────────────────
+  {
+    id: 'signal_card',
+    displayName: 'Signal Card',
+    description: 'Conditionally styled alert card (green/yellow/red) based on threshold rules.',
+    category: 'status',
+    requiredProps: ['metricSlug'],
+    defaultProps: {},
+    propSchema: [
+      { name: 'metricSlug',      type: 'metric_slug', label: 'Metric',           required: true  },
+      { name: 'warnThreshold',   type: 'number',       label: 'Warn threshold',   required: false },
+      { name: 'dangerThreshold', type: 'number',       label: 'Danger threshold', required: false },
+    ],
+  },
+  {
+    id: 'swim_lane_preview',
+    displayName: 'Swim Lane Preview',
+    description: 'Compact production pipeline visualization with expandable detail sheet.',
+    category: 'status',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'kit_progress',
+    displayName: 'Kit Progress Tracker',
+    description: 'BOM/kit completion tracker with progress bars and bottleneck identification.',
+    category: 'status',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  {
+    id: 'pipeline_board',
+    displayName: 'Project Pipeline',
+    description: 'Compact kanban view of the P2 project pipeline across all stages.',
+    category: 'status',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
+  // ── Table widgets ─────────────────────────────────────────────────────────
+  {
+    id: 'department_status',
+    displayName: 'Department Status',
+    description: 'Consolidated table of all department queues with sparkline trends.',
+    category: 'table',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
   },
 ];
 
@@ -94,6 +232,14 @@ widgetTypesRouter.get('/types', (_req: Request, res: Response) => {
     types: WIDGET_TYPES,
     total: WIDGET_TYPES.length,
   });
+});
+
+// GET /api/widgets/types/:id
+// Returns a single widget type definition.
+widgetTypesRouter.get('/types/:id', (req: Request, res: Response) => {
+  const type = WIDGET_TYPES.find((t) => t.id === req.params.id);
+  if (!type) return res.status(404).json({ error: `Widget type not found: ${req.params.id}` });
+  res.json(type);
 });
 
 // ─── /api/dashboards router ────────────────────────────────────────────────────

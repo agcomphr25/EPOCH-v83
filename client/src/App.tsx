@@ -212,6 +212,7 @@ import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import AdminChecklistManagementPage from './pages/AdminChecklistManagementPage';
 import RolesPermissionsPage from './pages/admin/RolesPermissionsPage';
+import WidgetCatalogPage from './pages/admin/WidgetCatalogPage';
 import ProductionForecastPage from './pages/ProductionForecastPage';
 import ForecastSettings from './pages/ForecastSettings';
 import AccountingPrepPage from './pages/AccountingPrepPage';
@@ -447,6 +448,7 @@ function App() {
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/roles-permissions" component={RolesPermissionsPage} />
+                  <Route path="/admin/widget-catalog" component={WidgetCatalogPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
                   <Route path="/admin/monitored-links" component={MonitoredLinksManager} />
                   <Route path="/admin/communication-logs" component={CommunicationLogsPage} />

@@ -650,7 +650,10 @@ async function initializeBackgroundServices() {
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_packet_idx ON cutting_built_packet_fabric_sources(built_packet_id)`);
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx ON cutting_built_packet_fabric_sources(fabric_inventory_id)`);
 
-        // Fix fabric_inventory_id type: early table creation used integer, but cutting_fabric_inventory.id is uuid
+        // Safe migration: fabric_inventory_id integer → uuid (4-step, no data loss)
+        // If column is already uuid this block is a no-op (guarded by IF EXISTS check).
+        // Backfill path: old integer FK matched cutting_fabric_inventory.inventory_item_id → maps to cutting_fabric_inventory.id (uuid).
+        // Any rows whose integer value has no matching inventory_item_id get fabric_inventory_id = NULL (the reference was already broken).
         try {
           await db.execute(sqlCpT`
             DO $$
@@ -661,10 +664,44 @@ async function initializeBackgroundServices() {
                   AND column_name = 'fabric_inventory_id'
                   AND data_type = 'integer'
               ) THEN
-                -- Clear any non-castable integer references before type conversion
-                UPDATE cutting_built_packet_fabric_sources SET fabric_inventory_id = NULL WHERE fabric_inventory_id IS NOT NULL;
+                -- Step 1: add temporary uuid column alongside the existing integer column
                 ALTER TABLE cutting_built_packet_fabric_sources
-                  ALTER COLUMN fabric_inventory_id TYPE uuid USING NULL;
+                  ADD COLUMN IF NOT EXISTS fabric_inventory_uuid uuid;
+
+                -- Step 2: backfill — map old integer FK to uuid via cutting_fabric_inventory.inventory_item_id
+                UPDATE cutting_built_packet_fabric_sources cbpfs
+                SET fabric_inventory_uuid = fi.id
+                FROM cutting_fabric_inventory fi
+                WHERE fi.inventory_item_id = cbpfs.fabric_inventory_id
+                  AND cbpfs.fabric_inventory_id IS NOT NULL;
+
+                -- Step 3: drop any FK constraint on the old integer column (may or may not exist)
+                DO $inner$
+                BEGIN
+                  ALTER TABLE cutting_built_packet_fabric_sources
+                    DROP CONSTRAINT IF EXISTS cutting_built_packet_fabric_sources_fabric_inventory_id_fkey;
+                EXCEPTION WHEN OTHERS THEN NULL;
+                END $inner$;
+
+                -- Drop the old integer index so we can reuse the name after rename
+                DROP INDEX IF EXISTS cutting_built_packet_sources_inventory_idx;
+
+                -- Step 4: drop old integer column and promote the uuid column
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  DROP COLUMN fabric_inventory_id;
+
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  RENAME COLUMN fabric_inventory_uuid TO fabric_inventory_id;
+
+                -- Re-add FK constraint (references cutting_fabric_inventory.id which is uuid)
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  ADD CONSTRAINT cutting_built_packet_fabric_sources_fabric_inventory_id_fkey
+                  FOREIGN KEY (fabric_inventory_id)
+                  REFERENCES cutting_fabric_inventory(id);
+
+                -- Recreate the index
+                CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx
+                  ON cutting_built_packet_fabric_sources(fabric_inventory_id);
               END IF;
             END $$
           `);

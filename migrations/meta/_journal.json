@@ -15,6 +15,13 @@
       "when": 1773410000000,
       "tag": "0001_fix_cutting_built_packets_category_uuid",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773500000000,
+      "tag": "0002_fix_fabric_sources_inventory_id_uuid",
+      "breakpoints": true
     }
   ]
 }

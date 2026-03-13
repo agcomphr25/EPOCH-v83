@@ -272,6 +272,35 @@ async function initializeBackgroundServices() {
     } else {
       console.log('✅ Database connection successful');
 
+      // ── Pre-deploy: safe integer→uuid / integer→text type fixes ─────────────
+      // These run FIRST before any other boot migration so that subsequent
+      // drizzle-kit push operations never see a stale integer column where the
+      // schema expects uuid/text (which would generate unsafe SET DATA TYPE SQL).
+      // Every migration file is idempotent (DO $$ IF EXISTS guards) — running on
+      // an already-correct database is a complete no-op.
+      try {
+        const { Pool: MigrPool } = await import('pg');
+        const { readFileSync, existsSync } = await import('fs');
+        const { join } = await import('path');
+        const migrPool = new MigrPool({ connectionString: process.env.DATABASE_URL! });
+        const migrationsDir = join(process.cwd(), 'migrations');
+        const safeFiles = [
+          '0001_fix_cutting_built_packets_category_uuid.sql',
+          '0002_fix_fabric_sources_inventory_id_uuid.sql',
+          '0003_comprehensive_integer_to_uuid_audit.sql',
+        ];
+        for (const f of safeFiles) {
+          const filePath = join(migrationsDir, f);
+          if (existsSync(filePath)) {
+            await migrPool.query(readFileSync(filePath, 'utf-8'));
+          }
+        }
+        await migrPool.end();
+        console.log('✅ Pre-deploy integer→uuid migrations applied (or already correct)');
+      } catch (preDeployErr: any) {
+        console.warn('⚠️ Pre-deploy migrations skipped:', preDeployErr.message);
+      }
+
       // One-time migration: Reassign Red Hawk Rifles LLC POs from inactive customer 698 to active customer 547
       try {
         const { sql } = await import('drizzle-orm');

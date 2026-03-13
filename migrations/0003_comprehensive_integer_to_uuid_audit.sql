@@ -825,6 +825,27 @@ END $$;
 
 
 -- ---------------------------------------------------------------------------
+-- 40. all_orders.bom_definition_id
+--    Schema expects text; DB has integer (0 non-null rows — safe to convert).
+--    This is an integer → text conversion (not uuid), included here because
+--    db:push would also generate an unsafe SET DATA TYPE text without USING.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name  = 'all_orders'
+      AND column_name = 'bom_definition_id'
+      AND data_type   = 'integer'
+  ) THEN
+    -- Column is empty (0 non-null rows in production); safe to convert via USING
+    ALTER TABLE all_orders
+      ALTER COLUMN bom_definition_id TYPE text USING bom_definition_id::text;
+  END IF;
+END $$;
+
+
+-- ---------------------------------------------------------------------------
 -- Verify: emit a notice listing any remaining uuid mismatches after this run.
 -- This will appear in the migration output log for audit purposes.
 -- ---------------------------------------------------------------------------
@@ -842,16 +863,16 @@ BEGIN
         'product_category_id','fabric_inventory_id','session_id',
         'component_id','production_line_id','material_id',
         'packet_bom_id','bom_id','reference_bom_id','revision_id',
-        'session_lot_id','rts_sale_id','rts_inventory_id',
+        'session_lot_id','rts_inventory_id',
         'serialized_item_id','material_lot_id','certificate_id',
         'lot_number_id','packing_slip_id','source_quote_id',
-        'canonical_id','bom_definition_id','bom_item_id',
-        'invoice_id','payment_id'
+        'canonical_id','bom_item_id','invoice_id'
       )
       AND c.table_name NOT IN (
-        -- Columns that are legitimately integer (not UUID)
+        -- Tables where the above column names are legitimately integer
         'customer_satisfaction_responses','customer_satisfaction_surveys',
-        'notification_triggers','orders','order_drafts'
+        'notification_triggers','orders','order_drafts',
+        'credit_card_transactions'
       )
   LOOP
     RAISE NOTICE 'Remaining mismatch: %.% is still %', rec.table_name, rec.column_name, rec.data_type;

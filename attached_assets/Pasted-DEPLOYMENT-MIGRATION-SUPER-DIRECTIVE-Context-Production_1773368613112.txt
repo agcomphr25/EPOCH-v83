@@ -1,0 +1,90 @@
+DEPLOYMENT MIGRATION SUPER-DIRECTIVE
+
+Context:
+Production database contains real data across 200+ tables. We cannot use the “Copy development database schema & data to production” option because it would wipe production.
+
+Deployment failures are occurring because many columns in production are still INTEGER while the current application schema expects UUID. PostgreSQL refuses to automatically cast these during migration.
+
+Objective:
+Audit the entire database schema and resolve ALL integer → uuid mismatches in a single safe migration so deployments stop failing repeatedly.
+
+Instructions:
+
+Perform a full schema audit
+Scan the production database for:
+
+foreign key columns using INTEGER
+
+columns ending in _id that are INTEGER
+
+any columns where the dev schema expects UUID but production still has INTEGER
+
+Build a complete mismatch list
+Identify every table + column pair where:
+production column type = integer
+application schema type = uuid
+
+For each mismatch determine table size
+
+Run:
+
+SELECT COUNT(*) FROM table_name;
+
+Apply the correct migration strategy
+
+If table contains ZERO rows:
+
+ALTER TABLE table_name
+ALTER COLUMN column_name TYPE uuid USING NULL;
+
+If table contains DATA:
+
+Use the safe conversion pattern:
+
+ADD new uuid column
+BACKFILL by mapping integer FK → referenced table UUID
+DROP old integer column + constraints
+RENAME new column back to original name
+RECREATE foreign key constraint and index
+
+Example structure:
+
+ALTER TABLE table_name ADD COLUMN column_name_uuid uuid;
+
+-- backfill join to referenced table
+
+ALTER TABLE table_name DROP COLUMN column_name;
+ALTER TABLE table_name RENAME COLUMN column_name_uuid TO column_name;
+
+Make migrations safe and idempotent
+
+Wrap conversions so they only execute if the column is still integer.
+
+Example:
+
+IF EXISTS (
+SELECT 1
+FROM information_schema.columns
+WHERE table_name='table_name'
+AND column_name='column_name'
+AND data_type='integer'
+)
+
+Generate ONE consolidated migration
+
+Create a single migration file that fixes every integer→uuid mismatch discovered in the audit so we do not encounter sequential deployment failures.
+
+Rules:
+
+NEVER drop or reset the production database
+
+NEVER copy development DB to production
+
+NEVER delete existing data
+
+Preserve all foreign key relationships
+
+Migrations must be safe if partially applied
+
+Expected result:
+Production schema becomes fully aligned with the UUID-based schema used by the application, allowing future deployments to run without migration failures.

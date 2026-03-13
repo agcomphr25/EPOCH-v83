@@ -22,6 +22,13 @@
       "when": 1773500000000,
       "tag": "0002_fix_fabric_sources_inventory_id_uuid",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773600000000,
+      "tag": "0003_comprehensive_integer_to_uuid_audit",
+      "breakpoints": true
     }
   ]
 }

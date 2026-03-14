@@ -176,7 +176,7 @@ export default function FinancialReviewSlidePage() {
         {/* Top bar */}
         <div className="no-print bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/financial-review')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/business-review')}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Dashboard
             </Button>
             <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />

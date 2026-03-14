@@ -209,13 +209,13 @@ export default function FinancialReviewPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/financial-review/sessions`)}
+                onClick={() => navigate(`/business-review/sessions`)}
               >
                 Past Reviews <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
               <Button
                 size="sm"
-                onClick={() => navigate(`/financial-review/sessions/${monthKey}`)}
+                onClick={() => navigate(`/business-review/sessions/${monthKey}`)}
               >
                 <Layout className="h-4 w-4 mr-1" /> Presentation Mode
               </Button>
@@ -422,7 +422,7 @@ export default function FinancialReviewPage() {
               </h2>
               <Button
                 size="sm" variant="outline"
-                onClick={() => navigate(`/financial-review/sessions/${monthKey}`)}
+                onClick={() => navigate(`/business-review/sessions/${monthKey}`)}
                 className="no-print"
               >
                 Edit in Slides <ChevronRight className="h-4 w-4 ml-1" />
@@ -606,7 +606,7 @@ export default function FinancialReviewPage() {
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
                 <Users className="h-5 w-5 text-gray-400" /> Past Monthly Reviews
               </h2>
-              <Button variant="outline" size="sm" onClick={() => navigate('/financial-review/sessions')}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/business-review/sessions')}>
                 All Sessions <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -617,7 +617,7 @@ export default function FinancialReviewPage() {
                 return (
                   <button
                     key={s.id}
-                    onClick={() => navigate(`/financial-review/sessions/${s.month_key}`)}
+                    onClick={() => navigate(`/business-review/sessions/${s.month_key}`)}
                     className="text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
                   >
                     <div className="font-medium text-gray-900 dark:text-white">{label}</div>

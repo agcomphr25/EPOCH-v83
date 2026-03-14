@@ -250,7 +250,6 @@ import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
 import MaterialInventoryPage from './pages/MaterialInventoryPage';
-import BusinessReviewPresentation from './pages/BusinessReviewPresentation';
 import FilteredOrdersReport from './pages/FilteredOrdersReport';
 import UrgentOrdersReport from './pages/UrgentOrdersReport';
 import OTDReport from './pages/OTDReport';
@@ -429,7 +428,6 @@ function App() {
                   <Route path="/urgent-orders-report" component={UrgentOrdersReport} />
                   <Route path="/otd-report" component={OTDReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
-                  <Route path="/business-review" component={BusinessReviewPresentation} />
                   <Route path="/analytics" component={AnalyticsDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />
@@ -727,13 +725,10 @@ function App() {
                     component={EnhancedReportsPage}
                   />
 
-                  {/* Financial Review — canonical routes */}
-                  <Route path="/financial-review/sessions/:monthKey" component={FinancialReviewSlidePage} />
-                  <Route path="/financial-review/sessions" component={FinancialReviewListPage} />
-                  <Route path="/financial-review" component={FinancialReviewPage} />
-                  {/* Finance Routes */}
-                  <Route path="/finance/review/:monthKey" component={FinancialReviewSlidePage} />
-                  <Route path="/finance/review" component={FinancialReviewListPage} />
+                  {/* Business Review */}
+                  <Route path="/business-review/sessions/:monthKey" component={FinancialReviewSlidePage} />
+                  <Route path="/business-review/sessions" component={FinancialReviewListPage} />
+                  <Route path="/business-review" component={FinancialReviewPage} />
                   <Route path="/finance/ap-journal" component={APJournalPage} />
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
                   <Route path="/finance/ar-aging" component={ARAgingPage} />

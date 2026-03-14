@@ -802,8 +802,8 @@ export default function Navigation() {
 
   const financeItems = [
     {
-      path: '/financial-review',
-      label: 'Financial Review',
+      path: '/business-review',
+      label: 'Business Review',
       icon: FileSpreadsheet,
       description: 'Monthly slide-format business and financial review',
     },

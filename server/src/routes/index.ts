@@ -2773,11 +2773,27 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'Item not found' });
       }
       
+      const updateFields: any = {
+        status,
+        updatedAt: new Date(),
+      };
+
+      if (status === 'SCRAPPED') {
+        updateFields.scrapReason = reason;
+        updateFields.scrapBy = performedBy || 'System';
+        updateFields.scrapAt = new Date();
+      } else if (status === 'HOLD') {
+        updateFields.holdReason = reason;
+        updateFields.holdBy = performedBy || 'System';
+        updateFields.holdAt = new Date();
+      } else if (status === 'ACTIVE') {
+        updateFields.holdReason = null;
+        updateFields.holdBy = null;
+        updateFields.holdAt = null;
+      }
+
       await db.update(p2SerializedItems)
-        .set({
-          status,
-          updatedAt: new Date(),
-        })
+        .set(updateFields)
         .where(eq(p2SerializedItems.id, itemId));
       
       let eventType = 'NOTE';

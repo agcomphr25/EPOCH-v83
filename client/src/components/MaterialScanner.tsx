@@ -54,12 +54,42 @@ interface MaterialLot {
   storageLocation?: string;
 }
 
+interface FabricRoll {
+  fabricInventoryId?: string;
+  fabricType?: string;
+  lotNumber?: string;
+  batchNumber?: string;
+  rollNumber?: string;
+  supplierPartNumber?: string;
+  internalControlNumber?: string;
+  expirationDate?: string;
+  quantityUsed?: number;
+  isPrimary?: boolean;
+  source?: string;
+  location?: string;
+  squareMeters?: string;
+  receivedDate?: string;
+}
+
+interface BuiltPacket {
+  id: number;
+  barcode: string;
+  packetNumber: number;
+  buildDate: string;
+  status: string;
+  isMixedFabric?: boolean;
+}
+
 interface ValidationResult {
   valid: boolean;
-  lot: MaterialLot;
-  warnings: string[];
-  errors: string[];
-  requiresOverride: boolean;
+  status?: string;
+  message?: string;
+  lot?: MaterialLot;
+  warnings?: string[];
+  errors?: string[];
+  requiresOverride?: boolean;
+  packet?: BuiltPacket;
+  fabricRolls?: FabricRoll[];
 }
 
 interface MaterialScannerProps {
@@ -137,6 +167,47 @@ export default function MaterialScanner({
       return apiRequest(url);
     },
     onSuccess: (result: ValidationResult) => {
+      // Packet barcode: auto-associate all fabric rolls to the traveler
+      if (result.status === 'PACKET' && result.packet && result.fabricRolls) {
+        const { packet, fabricRolls } = result;
+        fabricRolls.forEach((roll, idx) => {
+          const icn =
+            roll.internalControlNumber ||
+            roll.lotNumber ||
+            roll.batchNumber ||
+            roll.rollNumber ||
+            `${packet.barcode}-roll-${idx + 1}`;
+          onMaterialConsumed?.({
+            internalControlNumber: icn,
+            entryMethod: 'barcode',
+            travelerId,
+            travelerStepId,
+            packetBarcode: packet.barcode,
+            packetId: packet.id,
+            fabricInventoryId: roll.fabricInventoryId,
+            updatedLot: {
+              id: roll.fabricInventoryId,
+              internalControlNumber: icn,
+              expirationDate: roll.expirationDate,
+              supplierLotNumber: roll.lotNumber || roll.batchNumber,
+              fabricType: roll.fabricType,
+              materialPartNumber: roll.supplierPartNumber,
+              supplier: roll.source,
+              rollNumber: roll.rollNumber,
+              receivedDate: roll.receivedDate,
+              freezerNumber: roll.location || '',
+              remainingQty: roll.squareMeters,
+              unitOfMeasure: 'sq meters',
+            },
+          });
+        });
+        toast.success(
+          `Packet ${packet.barcode} linked — ${fabricRolls.length} roll${fabricRolls.length !== 1 ? 's' : ''} recorded`
+        );
+        resetScanner();
+        return;
+      }
+
       setValidationResult(result);
       if (result.lot) {
         if (requiredQty) {

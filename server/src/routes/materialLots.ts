@@ -6,7 +6,12 @@ import {
   insertMaterialLotTransactionSchema,
   insertTravelerMaterialConsumptionSchema,
   type InsertMaterialLotTransaction,
+  cuttingBuiltPackets,
+  cuttingBuiltPacketFabricSources,
+  cuttingFabricInventory,
 } from '../../schema';
+import { db } from '../../db';
+import { eq } from 'drizzle-orm';
 
 const router = Router();
 
@@ -85,6 +90,83 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
     const lot = await storage.getMaterialLotByICN(icn);
 
     if (!lot) {
+      // Fallback: try looking up as a built packet barcode
+      const [packet] = await db
+        .select()
+        .from(cuttingBuiltPackets)
+        .where(eq(cuttingBuiltPackets.barcode, icn))
+        .limit(1);
+
+      if (packet) {
+        // Get all fabric sources for this packet, joined with fabric inventory details
+        const sources = await db
+          .select({
+            sourceId: cuttingBuiltPacketFabricSources.id,
+            fabricInventoryId: cuttingBuiltPacketFabricSources.fabricInventoryId,
+            fabricType: cuttingBuiltPacketFabricSources.fabricType,
+            lotNumber: cuttingBuiltPacketFabricSources.lotNumber,
+            batchNumber: cuttingBuiltPacketFabricSources.batchNumber,
+            rollNumber: cuttingBuiltPacketFabricSources.rollNumber,
+            supplierPartNumber: cuttingBuiltPacketFabricSources.supplierPartNumber,
+            internalControlNumber: cuttingBuiltPacketFabricSources.internalControlNumber,
+            expirationDate: cuttingBuiltPacketFabricSources.expirationDate,
+            quantityUsed: cuttingBuiltPacketFabricSources.quantityUsed,
+            isPrimary: cuttingBuiltPacketFabricSources.isPrimary,
+            // Fabric inventory details (may be null if not linked)
+            invId: cuttingFabricInventory.id,
+            invSource: cuttingFabricInventory.source,
+            invFabric: cuttingFabricInventory.fabric,
+            invFabricPartNumber: cuttingFabricInventory.fabricPartNumber,
+            invSupplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+            invInternalControlNumber: cuttingFabricInventory.internalControlNumber,
+            invLotNumber: cuttingFabricInventory.lotNumber,
+            invBatchNumber: cuttingFabricInventory.batchNumber,
+            invRollNumber: cuttingFabricInventory.rollNumber,
+            invExpirationDate: cuttingFabricInventory.expirationDate,
+            invReceivedDate: cuttingFabricInventory.receivedDate,
+            invSquareMeters: cuttingFabricInventory.squareMeters,
+            invLocation: cuttingFabricInventory.location,
+          })
+          .from(cuttingBuiltPacketFabricSources)
+          .leftJoin(
+            cuttingFabricInventory,
+            eq(cuttingBuiltPacketFabricSources.fabricInventoryId, cuttingFabricInventory.id)
+          )
+          .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id));
+
+        const fabricRolls = sources.map(s => ({
+          fabricInventoryId: s.fabricInventoryId,
+          fabricType: s.fabricType || s.invFabric,
+          lotNumber: s.lotNumber || s.invLotNumber,
+          batchNumber: s.batchNumber || s.invBatchNumber,
+          rollNumber: s.rollNumber || s.invRollNumber,
+          supplierPartNumber: s.supplierPartNumber || s.invSupplierPartNumber || s.invFabricPartNumber,
+          internalControlNumber: s.internalControlNumber || s.invInternalControlNumber,
+          expirationDate: s.expirationDate || s.invExpirationDate,
+          quantityUsed: s.quantityUsed,
+          isPrimary: s.isPrimary,
+          source: s.invSource,
+          location: s.invLocation,
+          squareMeters: s.invSquareMeters,
+          receivedDate: s.invReceivedDate,
+        }));
+
+        return res.json({
+          valid: true,
+          status: 'PACKET',
+          message: `Packet ${packet.barcode} found with ${fabricRolls.length} fabric roll(s)`,
+          packet: {
+            id: packet.id,
+            barcode: packet.barcode,
+            packetNumber: packet.packetNumber,
+            buildDate: packet.buildDate,
+            status: packet.status,
+            isMixedFabric: packet.isMixedFabric,
+          },
+          fabricRolls,
+        });
+      }
+
       return res.json({
         valid: false,
         status: 'NOT_FOUND',

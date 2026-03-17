@@ -1371,4 +1371,61 @@ router.get(
   }
 );
 
+// Order → Item Code Lookup
+router.get('/order-lookup', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.query as { orderId?: string };
+    if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+
+    // Get the production order and its specs
+    const orderRows = await pool.query(
+      `SELECT id, order_id, po_number, current_department, production_status, specifications
+       FROM production_orders WHERE order_id = $1 LIMIT 1`,
+      [orderId]
+    );
+    if (orderRows.length === 0) return res.json({ order: null, matches: [] });
+    const order = orderRows[0];
+    const specs = order.specifications || {};
+
+    // Match po_products by specs, scoring each field match
+    const productRows = await pool.query(
+      `SELECT id, product_name, customer_name, material, handedness, stock_model,
+              action_length, action_inlet, bottom_metal, barrel_inlet, qds,
+              swivel_studs, paint_options, texture, flat_top, price, customer_product_number
+       FROM po_products ORDER BY id`
+    );
+
+    const matches = productRows
+      .map((p: any) => {
+        const fields: Record<string, [string, string]> = {
+          stock_model:   [p.stock_model,   specs.stockModel],
+          material:      [p.material,      specs.material],
+          handedness:    [p.handedness,    specs.handedness],
+          action_inlet:  [p.action_inlet,  specs.actionInlet],
+          barrel_inlet:  [p.barrel_inlet,  specs.barrelInlet],
+          bottom_metal:  [p.bottom_metal,  specs.bottomMetal],
+          paint_options: [p.paint_options, specs.paintOptions],
+          texture:       [p.texture,       specs.texture],
+          action_length: [p.action_length, specs.actionLength],
+          qds:           [p.qds,           specs.qds],
+        };
+        const matched: string[] = [];
+        const mismatched: string[] = [];
+        for (const [field, [pVal, sVal]] of Object.entries(fields)) {
+          if (pVal && sVal) {
+            (pVal === sVal ? matched : mismatched).push(field);
+          }
+        }
+        return { ...p, matchedFields: matched, mismatchedFields: mismatched, score: matched.length };
+      })
+      .filter((p: any) => p.score > 0)
+      .sort((a: any, b: any) => b.score - a.score);
+
+    res.json({ order, specs, matches });
+  } catch (error: any) {
+    console.error('Order lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

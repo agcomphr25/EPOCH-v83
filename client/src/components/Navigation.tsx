@@ -339,6 +339,12 @@ export default function Navigation() {
       description: 'Advanced order management and editing for administrators',
     },
     {
+      path: '/admin/order-lookup',
+      label: 'Order Item Lookup',
+      icon: Search,
+      description: 'Find the item code for a production order by matching specifications',
+    },
+    {
       path: '/admin/roles-permissions',
       label: 'Roles & Permissions',
       icon: Shield,

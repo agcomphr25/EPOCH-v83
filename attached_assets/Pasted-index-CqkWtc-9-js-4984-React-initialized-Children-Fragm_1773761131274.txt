@@ -1,0 +1,101 @@
+index-CqkWtc_9.js:4984 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-CqkWtc_9.js:4984 React hooks: {useState: ƒ, useEffect: ƒ}
+index-CqkWtc_9.js:4984 [EPOCH SYNC] Sync engine starting
+index-CqkWtc_9.js:4984 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-CqkWtc_9.js:4981 App component is rendering...
+index-CqkWtc_9.js:4981 Environment: production
+index-CqkWtc_9.js:4981 Base URL: /
+index-CqkWtc_9.js:1540 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-CqkWtc_9.js:1540 [EPOCH] Install prompt captured and ready
+execute:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-CqkWtc_9.js:1549  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-CqkWtc_9.js:1549
+o @ index-CqkWtc_9.js:51
+p @ index-CqkWtc_9.js:51
+start @ index-CqkWtc_9.js:51
+fetch @ index-CqkWtc_9.js:51
+o$ @ index-CqkWtc_9.js:51
+onSubscribe @ index-CqkWtc_9.js:51
+subscribe @ index-CqkWtc_9.js:51
+(anonymous) @ index-CqkWtc_9.js:51
+got @ index-CqkWtc_9.js:38
+Xce @ index-CqkWtc_9.js:40
+n8 @ index-CqkWtc_9.js:40
+j6e @ index-CqkWtc_9.js:40
+MD @ index-CqkWtc_9.js:38
+y7t @ index-CqkWtc_9.js:40
+OP @ index-CqkWtc_9.js:40
+Wot @ index-CqkWtc_9.js:40
+j @ index-CqkWtc_9.js:25
+E @ index-CqkWtc_9.js:25
+index-CqkWtc_9.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-CqkWtc_9.js:235
+o @ index-CqkWtc_9.js:51
+p @ index-CqkWtc_9.js:51
+start @ index-CqkWtc_9.js:51
+fetch @ index-CqkWtc_9.js:51
+o$ @ index-CqkWtc_9.js:51
+onSubscribe @ index-CqkWtc_9.js:51
+subscribe @ index-CqkWtc_9.js:51
+(anonymous) @ index-CqkWtc_9.js:51
+got @ index-CqkWtc_9.js:38
+Xce @ index-CqkWtc_9.js:40
+n8 @ index-CqkWtc_9.js:40
+j6e @ index-CqkWtc_9.js:40
+MD @ index-CqkWtc_9.js:38
+y7t @ index-CqkWtc_9.js:40
+OP @ index-CqkWtc_9.js:40
+Wot @ index-CqkWtc_9.js:40
+j @ index-CqkWtc_9.js:25
+E @ index-CqkWtc_9.js:25
+index-CqkWtc_9.js:235 🌐 API Request to /api/material-lots/validate/MFG-2-712-3 (timeout: 15000ms, deployment: true)
+index-CqkWtc_9.js:235 ✅ API Response from /api/material-lots/validate/MFG-2-712-3: 200
+index-CqkWtc_9.js:4981  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-CqkWtc_9.js:4981
+Xce @ index-CqkWtc_9.js:40
+n8 @ index-CqkWtc_9.js:40
+y7t @ index-CqkWtc_9.js:40
+OP @ index-CqkWtc_9.js:40
+j6e @ index-CqkWtc_9.js:40
+MD @ index-CqkWtc_9.js:38
+(anonymous) @ index-CqkWtc_9.js:40
+index-CqkWtc_9.js:4984 Failed to fetch session for redirect: Error: Not authenticated
+    at index-CqkWtc_9.js:4981:169197
+console.error @ index-CqkWtc_9.js:4984
+(anonymous) @ index-CqkWtc_9.js:4981
+Promise.catch
+(anonymous) @ index-CqkWtc_9.js:4981
+Xce @ index-CqkWtc_9.js:40
+n8 @ index-CqkWtc_9.js:40
+y7t @ index-CqkWtc_9.js:40
+OP @ index-CqkWtc_9.js:40
+j6e @ index-CqkWtc_9.js:40
+MD @ index-CqkWtc_9.js:38
+(anonymous) @ index-CqkWtc_9.js:40
+index-CqkWtc_9.js:1913 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CqkWtc_9.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/EMP002 (timeout: 15000ms, deployment: true)
+index-CqkWtc_9.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/EMP002: 200
+index-CqkWtc_9.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP002/STR2600210 (timeout: 15000ms, deployment: true)
+index-CqkWtc_9.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP002/STR2600210: 200
+index-CqkWtc_9.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-CqkWtc_9.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+index-CqkWtc_9.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-CqkWtc_9.js:235
+o @ index-CqkWtc_9.js:51
+p @ index-CqkWtc_9.js:51
+start @ index-CqkWtc_9.js:51
+fetch @ index-CqkWtc_9.js:51
+o$ @ index-CqkWtc_9.js:51
+onSubscribe @ index-CqkWtc_9.js:51
+subscribe @ index-CqkWtc_9.js:51
+(anonymous) @ index-CqkWtc_9.js:51
+got @ index-CqkWtc_9.js:38
+Xce @ index-CqkWtc_9.js:40
+n8 @ index-CqkWtc_9.js:40
+y7t @ index-CqkWtc_9.js:40
+OP @ index-CqkWtc_9.js:40
+j6e @ index-CqkWtc_9.js:40
+MD @ index-CqkWtc_9.js:38
+(anonymous) @ index-CqkWtc_9.js:40
+index-CqkWtc_9.js:235 🌐 API Request to /api/material-lots/validate/MFG-2-712-3 (timeout: 15000ms, deployment: true)
+index-CqkWtc_9.js:235 ✅ API Response from /api/material-lots/validate/MFG-2-712-3: 200

@@ -9,6 +9,7 @@ import {
   cuttingBuiltPackets,
   cuttingBuiltPacketFabricSources,
   cuttingFabricInventory,
+  manufacturingQueue,
 } from '../../schema';
 import { db } from '../../db';
 import { eq } from 'drizzle-orm';
@@ -165,6 +166,71 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           },
           fabricRolls,
         });
+      }
+
+      // Fallback 2: parse MFG-{queue_id}-{partNumber}-{seq} barcode format
+      const mfgMatch = icn.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
+      if (mfgMatch) {
+        const queueId = parseInt(mfgMatch[1], 10);
+        const [queueItem] = await db
+          .select()
+          .from(manufacturingQueue)
+          .where(eq(manufacturingQueue.id, queueId))
+          .limit(1);
+
+        if (queueItem) {
+          let fabricRolls: any[] = [];
+
+          // Parse stored fabric sources from materialDetails JSON
+          if (queueItem.materialDetails) {
+            try {
+              const stored = JSON.parse(queueItem.materialDetails);
+              if (Array.isArray(stored) && stored.length > 0) {
+                fabricRolls = stored.map((s: any) => ({
+                  fabricInventoryId: s.fabricInventoryId,
+                  fabricType: s.fabricType,
+                  lotNumber: s.lotNumber,
+                  batchNumber: s.batchNumber,
+                  rollNumber: s.rollNumber,
+                  supplierPartNumber: s.supplierPartNumber,
+                  internalControlNumber: s.internalControlNumber,
+                  expirationDate: s.expirationDate,
+                  quantityUsed: s.quantityUsed,
+                  isPrimary: s.isPrimary ?? true,
+                  source: s.source || s.supplier,
+                  squareMeters: s.squareMeters,
+                  receivedDate: s.receivedDate,
+                }));
+              }
+            } catch { /* ignore JSON parse errors */ }
+          }
+
+          // Fallback: use top-level fabric fields if no materialDetails
+          if (fabricRolls.length === 0 && (queueItem.fabricLot || queueItem.fabricBatch || queueItem.fabricRoll)) {
+            fabricRolls = [{
+              lotNumber: queueItem.fabricLot,
+              batchNumber: queueItem.fabricBatch,
+              rollNumber: queueItem.fabricRoll,
+              internalControlNumber: queueItem.fabricLot || queueItem.fabricBatch,
+              isPrimary: true,
+            }];
+          }
+
+          return res.json({
+            valid: true,
+            status: 'PACKET',
+            message: `Manufacturing packet ${icn} linked — ${fabricRolls.length} fabric roll(s)`,
+            packet: {
+              id: queueItem.id,
+              barcode: icn,
+              packetNumber: parseInt(mfgMatch[3] || '1', 10),
+              buildDate: queueItem.completedAt || queueItem.startedAt || new Date().toISOString(),
+              status: queueItem.status,
+              isMixedFabric: fabricRolls.length > 1,
+            },
+            fabricRolls,
+          });
+        }
       }
 
       return res.json({

@@ -255,6 +255,7 @@ export default function TravelerExecution() {
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
   const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
+  const [stepNotes, setStepNotes] = useState('');
   const [resolvedEmployee, setResolvedEmployee] = useState<{ name: string; employeeCode: string; department: string | null } | null>(null);
   const badgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
@@ -616,6 +617,21 @@ export default function TravelerExecution() {
     },
   });
 
+  const saveStepNotesMutation = useMutation({
+    mutationFn: ({ stepId, notes }: { stepId: string; notes: string }) =>
+      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}`, {
+        method: 'PATCH',
+        body: { notes },
+      }),
+    onSuccess: () => {
+      toast({ title: 'Notes saved' });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId] });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error saving notes', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const adminForceCompleteTaskMutation = useMutation({
     mutationFn: async ({ taskId, reason }: { taskId: string; reason: string }) => {
       return apiRequest(`/api/travelers/${travelerId}/admin/force-complete-task`, {
@@ -792,6 +808,10 @@ export default function TravelerExecution() {
   };
 
   const currentStep = steps.find((s) => s.id === currentStepId);
+
+  useEffect(() => {
+    setStepNotes(currentStep?.notes ?? '');
+  }, [currentStepId]);
 
   const allStepsCompleted = steps.every((s) => s.status === 'COMPLETED');
 
@@ -1937,6 +1957,29 @@ export default function TravelerExecution() {
                   </div>
                   );
                 })()}
+
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Department Notes</Label>
+                  <Textarea
+                    placeholder="Add notes for this department step..."
+                    value={stepNotes}
+                    onChange={(e) => setStepNotes(e.target.value)}
+                    rows={3}
+                    className="resize-none"
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={saveStepNotesMutation.isPending || stepNotes === (currentStep.notes ?? '')}
+                    onClick={() => saveStepNotesMutation.mutate({ stepId: currentStep.id, notes: stepNotes })}
+                  >
+                    {saveStepNotesMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                    ) : null}
+                    Save Notes
+                  </Button>
+                </div>
 
                 {currentStep.status === 'COMPLETED' && (
                   <div className="text-center py-8">

@@ -643,6 +643,24 @@ router.get('/:travelerId/steps', async (req: Request, res: Response) => {
   }
 });
 
+// Update step notes
+router.patch('/:travelerId/steps/:stepId', async (req: Request, res: Response) => {
+  try {
+    const { travelerId, stepId } = req.params;
+    const { notes } = req.body;
+    const [updated] = await db
+      .update(travelerSteps)
+      .set({ notes: notes ?? null })
+      .where(and(eq(travelerSteps.id, stepId), eq(travelerSteps.travelerId, travelerId)))
+      .returning();
+    if (!updated) return res.status(404).json({ error: 'Step not found' });
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating step notes:', error);
+    res.status(500).json({ error: 'Failed to update step notes', message: error.message });
+  }
+});
+
 // Start a step
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {

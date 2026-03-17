@@ -1,0 +1,74 @@
+index-DXuKyZya.js:4984 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-DXuKyZya.js:4984 React hooks: {useState: ƒ, useEffect: ƒ}
+index-DXuKyZya.js:4984 [EPOCH SYNC] Sync engine starting
+index-DXuKyZya.js:4984 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DXuKyZya.js:4981 App component is rendering...
+index-DXuKyZya.js:4981 Environment: production
+index-DXuKyZya.js:4981 Base URL: /
+index-DXuKyZya.js:1540 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-DXuKyZya.js:1540 [EPOCH] Install prompt captured and ready
+execute:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-DXuKyZya.js:1549  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-DXuKyZya.js:1549
+o @ index-DXuKyZya.js:51
+p @ index-DXuKyZya.js:51
+start @ index-DXuKyZya.js:51
+fetch @ index-DXuKyZya.js:51
+o$ @ index-DXuKyZya.js:51
+onSubscribe @ index-DXuKyZya.js:51
+subscribe @ index-DXuKyZya.js:51
+(anonymous) @ index-DXuKyZya.js:51
+pot @ index-DXuKyZya.js:38
+Xce @ index-DXuKyZya.js:40
+n8 @ index-DXuKyZya.js:40
+b6e @ index-DXuKyZya.js:40
+MD @ index-DXuKyZya.js:38
+v7t @ index-DXuKyZya.js:40
+OP @ index-DXuKyZya.js:40
+Kot @ index-DXuKyZya.js:40
+j @ index-DXuKyZya.js:25
+E @ index-DXuKyZya.js:25
+index-DXuKyZya.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-DXuKyZya.js:235
+o @ index-DXuKyZya.js:51
+p @ index-DXuKyZya.js:51
+start @ index-DXuKyZya.js:51
+fetch @ index-DXuKyZya.js:51
+o$ @ index-DXuKyZya.js:51
+onSubscribe @ index-DXuKyZya.js:51
+subscribe @ index-DXuKyZya.js:51
+(anonymous) @ index-DXuKyZya.js:51
+pot @ index-DXuKyZya.js:38
+Xce @ index-DXuKyZya.js:40
+n8 @ index-DXuKyZya.js:40
+b6e @ index-DXuKyZya.js:40
+MD @ index-DXuKyZya.js:38
+v7t @ index-DXuKyZya.js:40
+OP @ index-DXuKyZya.js:40
+Kot @ index-DXuKyZya.js:40
+j @ index-DXuKyZya.js:25
+E @ index-DXuKyZya.js:25
+index-DXuKyZya.js:235 🌐 API Request to /api/material-lots/validate/MFG-2-712-3 (timeout: 15000ms, deployment: true)
+index-DXuKyZya.js:235 ✅ API Response from /api/material-lots/validate/MFG-2-712-3: 200
+index-DXuKyZya.js:4981  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-DXuKyZya.js:4981
+Xce @ index-DXuKyZya.js:40
+n8 @ index-DXuKyZya.js:40
+v7t @ index-DXuKyZya.js:40
+OP @ index-DXuKyZya.js:40
+b6e @ index-DXuKyZya.js:40
+MD @ index-DXuKyZya.js:38
+(anonymous) @ index-DXuKyZya.js:40
+index-DXuKyZya.js:4984 Failed to fetch session for redirect: Error: Not authenticated
+    at index-DXuKyZya.js:4981:169197
+console.error @ index-DXuKyZya.js:4984
+(anonymous) @ index-DXuKyZya.js:4981
+Promise.catch
+(anonymous) @ index-DXuKyZya.js:4981
+Xce @ index-DXuKyZya.js:40
+n8 @ index-DXuKyZya.js:40
+v7t @ index-DXuKyZya.js:40
+OP @ index-DXuKyZya.js:40
+b6e @ index-DXuKyZya.js:40
+MD @ index-DXuKyZya.js:38
+(anonymous) @ index-DXuKyZya.js:40

@@ -138,14 +138,18 @@ export default function MaterialScanner({
     },
     onSuccess: (result: ValidationResult) => {
       setValidationResult(result);
-      if (requiredQty) {
-        setQtyToUse(requiredQty.toString());
-      } else {
-        setQtyToUse(result.lot.remainingQty);
+      if (result.lot) {
+        if (requiredQty) {
+          setQtyToUse(requiredQty.toString());
+        } else {
+          setQtyToUse(result.lot.remainingQty);
+        }
       }
-      if (result.errors.length > 0) {
+      if (!result.lot) {
+        toast.error(result.message || 'Material lot not found in system');
+      } else if ((result.errors?.length ?? 0) > 0) {
         toast.error(`Material validation failed: ${result.errors.join(', ')}`);
-      } else if (result.warnings.length > 0) {
+      } else if ((result.warnings?.length ?? 0) > 0) {
         toast(result.warnings.join('. '), { icon: '⚠️' });
       } else {
         toast.success('Material validated successfully');
@@ -457,6 +461,16 @@ export default function MaterialScanner({
 
         {validationResult && (
           <div className="space-y-4">
+            {!validationResult.lot && (
+              <Alert variant="destructive">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle>Material Not Found</AlertTitle>
+                <AlertDescription>
+                  {validationResult.message || 'The scanned barcode was not found in the material lot system. Please verify the label and try again.'}
+                </AlertDescription>
+              </Alert>
+            )}
+            {validationResult.lot && (
             <div className="bg-muted p-4 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-mono font-medium text-lg">
@@ -504,8 +518,9 @@ export default function MaterialScanner({
                 )}
               </div>
             </div>
+            )}
 
-            {validationResult.warnings.length > 0 && (
+            {(validationResult.warnings?.length ?? 0) > 0 && (
               <Alert variant="default" className="border-amber-500 bg-amber-50">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertTitle className="text-amber-800">Warnings</AlertTitle>
@@ -519,7 +534,7 @@ export default function MaterialScanner({
               </Alert>
             )}
 
-            {validationResult.errors.length > 0 && (
+            {(validationResult.errors?.length ?? 0) > 0 && (
               <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
                 <AlertTitle>Validation Errors</AlertTitle>
@@ -538,7 +553,7 @@ export default function MaterialScanner({
               </Alert>
             )}
 
-            {(validationResult.valid || validationResult.requiresOverride) && (
+            {(validationResult.valid || validationResult.requiresOverride) && validationResult.lot && (
               <div className="space-y-4 pt-4 border-t">
                 <div className="space-y-2">
                   <Label htmlFor="qtyToUse">Quantity to Consume</Label>
@@ -596,7 +611,7 @@ export default function MaterialScanner({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {validationResult?.errors.map((e, i) => (
+            {validationResult?.errors?.map((e, i) => (
               <Alert key={i} variant="destructive">
                 <AlertDescription>{e}</AlertDescription>
               </Alert>

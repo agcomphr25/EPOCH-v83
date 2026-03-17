@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, CheckCircle2, XCircle, Star } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const FIELD_LABELS: Record<string, string> = {
   stock_model:   'Stock Model',
@@ -35,6 +35,13 @@ export default function OrderLookupPage() {
   });
 
   const handleSearch = () => setOrderId(input.trim());
+
+  const matches: any[] = data?.matches ?? [];
+  const topScore: number = data?.topScore ?? 0;
+  const maxPossible: number = data?.maxPossible ?? 0;
+  const totalScored: number = data?.totalScored ?? 0;
+  const isPerfect = topScore > 0 && topScore === maxPossible;
+  const isDefinitive = matches.length === 1;
 
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
@@ -97,42 +104,64 @@ export default function OrderLookupPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                Item Code Matches
-                <span className="text-muted-foreground font-normal text-sm ml-2">({data.matches?.length ?? 0} found)</span>
-              </CardTitle>
-              <CardDescription>Sorted by best spec match. Top result is the most likely item code.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {!data.matches?.length ? (
-                <p className="p-4 text-sm text-muted-foreground">No matching item codes found in the product catalog.</p>
-              ) : (
+          {matches.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground">
+                <XCircle className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                <p className="font-medium">No item codes match this order's specifications.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {isPerfect && isDefinitive ? (
+                        <>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          Exact Match Found
+                        </>
+                      ) : isPerfect ? (
+                        <>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          {matches.length} Exact Matches
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                          Closest Match{matches.length > 1 ? 'es' : ''} — Partial
+                        </>
+                      )}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {isPerfect && isDefinitive
+                        ? `All ${maxPossible} scorable spec fields match perfectly.`
+                        : isPerfect
+                        ? `All ${maxPossible} spec fields match. ${matches.length} products share this item code.`
+                        : `Best match is ${topScore}/${maxPossible} spec fields. ${totalScored - matches.length} lower-scoring products filtered out.`}
+                    </p>
+                  </div>
+                  <Badge variant={isPerfect ? 'default' : 'secondary'} className="shrink-0 text-sm px-3 py-1">
+                    {topScore}/{maxPossible}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-8"></TableHead>
                       <TableHead>Item Code</TableHead>
                       <TableHead>Customer</TableHead>
-                      <TableHead>Score</TableHead>
                       <TableHead>Matched Fields</TableHead>
-                      <TableHead>Mismatches</TableHead>
+                      {!isPerfect && <TableHead>Mismatches</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.matches.map((m: any, idx: number) => (
-                      <TableRow key={m.id} className={idx === 0 ? 'bg-green-50 dark:bg-green-950/20' : ''}>
-                        <TableCell>
-                          {idx === 0 && <Star className="h-4 w-4 text-yellow-500 fill-yellow-400" />}
-                        </TableCell>
+                    {matches.map((m: any) => (
+                      <TableRow key={m.id} className={isPerfect ? 'bg-green-50 dark:bg-green-950/20' : ''}>
                         <TableCell className="font-mono font-semibold text-sm">{m.product_name}</TableCell>
                         <TableCell className="text-sm">{m.customer_name || '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant={idx === 0 ? 'default' : 'secondary'}>
-                            {m.score}/{Object.keys(FIELD_LABELS).length}
-                          </Badge>
-                        </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {m.matchedFields.map((f: string) => (
@@ -142,22 +171,24 @@ export default function OrderLookupPage() {
                             ))}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {m.mismatchedFields.map((f: string) => (
-                              <span key={f} className="flex items-center gap-0.5 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded">
-                                <XCircle className="h-3 w-3" /> {FIELD_LABELS[f] ?? f}
-                              </span>
-                            ))}
-                          </div>
-                        </TableCell>
+                        {!isPerfect && (
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {m.mismatchedFields.map((f: string) => (
+                                <span key={f} className="flex items-center gap-0.5 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded">
+                                  <XCircle className="h-3 w-3" /> {FIELD_LABELS[f] ?? f}
+                                </span>
+                              ))}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

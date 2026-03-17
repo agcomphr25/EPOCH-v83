@@ -1395,25 +1395,30 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
        FROM po_products ORDER BY id`
     );
 
-    const matches = productRows
+    // Determine which spec fields the order actually has values for
+    const SCORED_FIELDS: Record<string, string> = {
+      stock_model:   specs.stockModel,
+      material:      specs.material,
+      handedness:    specs.handedness,
+      action_inlet:  specs.actionInlet,
+      barrel_inlet:  specs.barrelInlet,
+      bottom_metal:  specs.bottomMetal,
+      paint_options: specs.paintOptions,
+      texture:       specs.texture,
+      action_length: specs.actionLength,
+      qds:           specs.qds,
+    };
+    // Number of fields the order actually has (the max possible score)
+    const maxPossible = Object.values(SCORED_FIELDS).filter(Boolean).length;
+
+    const scored = productRows
       .map((p: any) => {
-        const fields: Record<string, [string, string]> = {
-          stock_model:   [p.stock_model,   specs.stockModel],
-          material:      [p.material,      specs.material],
-          handedness:    [p.handedness,    specs.handedness],
-          action_inlet:  [p.action_inlet,  specs.actionInlet],
-          barrel_inlet:  [p.barrel_inlet,  specs.barrelInlet],
-          bottom_metal:  [p.bottom_metal,  specs.bottomMetal],
-          paint_options: [p.paint_options, specs.paintOptions],
-          texture:       [p.texture,       specs.texture],
-          action_length: [p.action_length, specs.actionLength],
-          qds:           [p.qds,           specs.qds],
-        };
         const matched: string[] = [];
         const mismatched: string[] = [];
-        for (const [field, [pVal, sVal]] of Object.entries(fields)) {
-          if (pVal && sVal) {
-            (pVal === sVal ? matched : mismatched).push(field);
+        for (const [field, specVal] of Object.entries(SCORED_FIELDS)) {
+          const prodVal = p[field];
+          if (prodVal && specVal) {
+            (prodVal === specVal ? matched : mismatched).push(field);
           }
         }
         return { ...p, matchedFields: matched, mismatchedFields: mismatched, score: matched.length };
@@ -1421,7 +1426,11 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
       .filter((p: any) => p.score > 0)
       .sort((a: any, b: any) => b.score - a.score);
 
-    res.json({ order, specs, matches });
+    // Only return the top-scoring tier — if there's a 10/10, show only 10/10s
+    const topScore = scored.length > 0 ? scored[0].score : 0;
+    const matches = scored.filter((p: any) => p.score === topScore);
+
+    res.json({ order, specs, matches, topScore, maxPossible, totalScored: scored.length });
   } catch (error: any) {
     console.error('Order lookup error:', error);
     res.status(500).json({ error: error.message });

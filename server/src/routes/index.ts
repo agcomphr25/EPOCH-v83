@@ -321,6 +321,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
   
+  // P2 Serialized Items - scrapped list (inline to avoid router mount ordering issues)
+  app.get('/api/p2/serialized-items/scrapped', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2SerializedItems } = await import('../../schema');
+      const { eq, desc } = await import('drizzle-orm');
+      const units = await db.query.p2SerializedItems.findMany({
+        where: eq(p2SerializedItems.status, 'SCRAPPED'),
+        orderBy: (t: any, { desc: d }: any) => [d(t.scrapAt)],
+      });
+      res.json(units);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch scrapped items' });
+    }
+  });
+
   // P2 Serialized Items routes (finalize, batch assign SKU/drawing)
   app.use('/api/p2/serialized-items', p2SerializedItemsRoutes);
   

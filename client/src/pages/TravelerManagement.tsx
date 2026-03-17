@@ -120,6 +120,7 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED: 'bg-green-100 text-green-800',
   BLOCKED: 'bg-red-100 text-red-800',
   CANCELED: 'bg-yellow-100 text-yellow-800',
+  SCRAPPED: 'bg-orange-100 text-orange-800',
 };
 
 const STATUS_ICONS: Record<string, any> = {
@@ -128,6 +129,7 @@ const STATUS_ICONS: Record<string, any> = {
   COMPLETED: CheckCircle,
   BLOCKED: AlertTriangle,
   CANCELED: XCircle,
+  SCRAPPED: Trash2,
 };
 
 export default function TravelerManagement() {
@@ -502,6 +504,7 @@ export default function TravelerManagement() {
     inProgress: travelers.filter((t) => t.status === 'IN_PROGRESS').length,
     completed: travelers.filter((t) => t.status === 'COMPLETED').length,
     blocked: travelers.filter((t) => t.status === 'BLOCKED').length,
+    scrapped: travelers.filter((t) => t.status === 'SCRAPPED').length,
   };
 
   if (isLoading) {
@@ -527,7 +530,7 @@ export default function TravelerManagement() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="py-4">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
@@ -568,6 +571,14 @@ export default function TravelerManagement() {
             <p className="text-2xl font-bold text-red-600" data-testid="stat-blocked">{stats.blocked}</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="py-4">
+            <CardTitle className="text-sm font-medium text-orange-500">Scrapped</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-2xl font-bold text-orange-600" data-testid="stat-scrapped">{stats.scrapped}</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -602,6 +613,7 @@ export default function TravelerManagement() {
                   <SelectItem value="COMPLETED">Completed</SelectItem>
                   <SelectItem value="BLOCKED">Blocked</SelectItem>
                   <SelectItem value="CANCELED">Canceled</SelectItem>
+                  <SelectItem value="SCRAPPED">Scrapped</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -635,7 +647,7 @@ export default function TravelerManagement() {
               ) : (
                 filteredTravelers.map((traveler) => {
                   const StatusIcon = STATUS_ICONS[traveler.status] || FileText;
-                  const isTerminal = traveler.status === 'COMPLETED' || traveler.status === 'CANCELED';
+                  const isTerminal = traveler.status === 'COMPLETED' || traveler.status === 'CANCELED' || traveler.status === 'SCRAPPED';
                   return (
                     <TableRow key={traveler.id} data-testid={`row-traveler-${traveler.id}`}>
                       <TableCell className="font-mono font-medium">

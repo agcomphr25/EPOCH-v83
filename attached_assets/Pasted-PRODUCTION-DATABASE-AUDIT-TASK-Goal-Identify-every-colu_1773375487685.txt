@@ -1,0 +1,99 @@
+PRODUCTION DATABASE AUDIT TASK
+
+Goal:
+Identify every column in the PRODUCTION database that will cause deployment failures due to PostgreSQL refusing to cast INTEGER → UUID automatically.
+
+Context:
+Deployments are failing with errors like:
+
+ALTER TABLE cutting_built_packet_fabric_sources
+ALTER COLUMN fabric_inventory_id SET DATA TYPE uuid
+
+column cannot be cast automatically to type uuid.
+
+We need a full audit of the production database to identify all columns that could trigger this issue before migrations run.
+
+IMPORTANT RULES:
+
+Connect to the PRODUCTION database only
+
+Do NOT modify any schema or data
+
+This is a read-only inspection
+
+Return a structured report
+
+Step 1 — Find all INTEGER foreign keys
+
+Run:
+
+SELECT
+tc.table_name,
+kcu.column_name,
+ccu.table_name AS referenced_table,
+cols.data_type
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+ON ccu.constraint_name = tc.constraint_name
+JOIN information_schema.columns cols
+ON cols.table_name = tc.table_name
+AND cols.column_name = kcu.column_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+AND cols.data_type = 'integer'
+ORDER BY tc.table_name;
+
+Step 2 — Find ALL _id columns still using INTEGER
+
+Run:
+
+SELECT
+table_name,
+column_name,
+data_type
+FROM information_schema.columns
+WHERE column_name LIKE '%_id'
+AND data_type = 'integer'
+AND table_schema = 'public'
+ORDER BY table_name;
+
+Step 3 — Determine which tables contain data
+
+For every table returned in steps 1 or 2 run:
+
+SELECT COUNT(*) FROM table_name;
+
+Step 4 — Produce a final report
+
+Return a table structured like:
+
+table_name
+column_name
+referenced_table (if FK)
+data_type
+row_count
+
+Step 5 — Classify each issue
+
+Mark each row as:
+
+SAFE_TO_DROP
+(row_count = 0)
+
+REQUIRES_MIGRATION
+(row_count > 0)
+
+Step 6 — Output summary
+
+Provide:
+
+Total number of problematic columns
+
+List of tables safe to drop
+
+List of tables requiring safe migration
+
+Any columns that appear inconsistent with the Drizzle schema
+
+Do NOT apply fixes yet — this step is only discovery.

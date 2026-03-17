@@ -272,6 +272,35 @@ async function initializeBackgroundServices() {
     } else {
       console.log('✅ Database connection successful');
 
+      // ── Pre-deploy: safe integer→uuid / integer→text type fixes ─────────────
+      // These run FIRST before any other boot migration so that subsequent
+      // drizzle-kit push operations never see a stale integer column where the
+      // schema expects uuid/text (which would generate unsafe SET DATA TYPE SQL).
+      // Every migration file is idempotent (DO $$ IF EXISTS guards) — running on
+      // an already-correct database is a complete no-op.
+      try {
+        const { Pool: MigrPool } = await import('pg');
+        const { readFileSync, existsSync } = await import('fs');
+        const { join } = await import('path');
+        const migrPool = new MigrPool({ connectionString: process.env.DATABASE_URL! });
+        const migrationsDir = join(process.cwd(), 'migrations');
+        const safeFiles = [
+          '0001_fix_cutting_built_packets_category_uuid.sql',
+          '0002_fix_fabric_sources_inventory_id_uuid.sql',
+          '0003_comprehensive_integer_to_uuid_audit.sql',
+        ];
+        for (const f of safeFiles) {
+          const filePath = join(migrationsDir, f);
+          if (existsSync(filePath)) {
+            await migrPool.query(readFileSync(filePath, 'utf-8'));
+          }
+        }
+        await migrPool.end();
+        console.log('✅ Pre-deploy integer→uuid migrations applied (or already correct)');
+      } catch (preDeployErr: any) {
+        console.warn('⚠️ Pre-deploy migrations skipped:', preDeployErr.message);
+      }
+
       // One-time migration: Reassign Red Hawk Rifles LLC POs from inactive customer 698 to active customer 547
       try {
         const { sql } = await import('drizzle-orm');
@@ -650,7 +679,10 @@ async function initializeBackgroundServices() {
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_packet_idx ON cutting_built_packet_fabric_sources(built_packet_id)`);
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx ON cutting_built_packet_fabric_sources(fabric_inventory_id)`);
 
-        // Fix fabric_inventory_id type: early table creation used integer, but cutting_fabric_inventory.id is uuid
+        // Safe migration: fabric_inventory_id integer → uuid (4-step, no data loss)
+        // If column is already uuid this block is a no-op (guarded by IF EXISTS check).
+        // Backfill path: old integer FK matched cutting_fabric_inventory.inventory_item_id → maps to cutting_fabric_inventory.id (uuid).
+        // Any rows whose integer value has no matching inventory_item_id get fabric_inventory_id = NULL (the reference was already broken).
         try {
           await db.execute(sqlCpT`
             DO $$
@@ -661,10 +693,44 @@ async function initializeBackgroundServices() {
                   AND column_name = 'fabric_inventory_id'
                   AND data_type = 'integer'
               ) THEN
-                -- Clear any non-castable integer references before type conversion
-                UPDATE cutting_built_packet_fabric_sources SET fabric_inventory_id = NULL WHERE fabric_inventory_id IS NOT NULL;
+                -- Step 1: add temporary uuid column alongside the existing integer column
                 ALTER TABLE cutting_built_packet_fabric_sources
-                  ALTER COLUMN fabric_inventory_id TYPE uuid USING NULL;
+                  ADD COLUMN IF NOT EXISTS fabric_inventory_uuid uuid;
+
+                -- Step 2: backfill — map old integer FK to uuid via cutting_fabric_inventory.inventory_item_id
+                UPDATE cutting_built_packet_fabric_sources cbpfs
+                SET fabric_inventory_uuid = fi.id
+                FROM cutting_fabric_inventory fi
+                WHERE fi.inventory_item_id = cbpfs.fabric_inventory_id
+                  AND cbpfs.fabric_inventory_id IS NOT NULL;
+
+                -- Step 3: drop any FK constraint on the old integer column (may or may not exist)
+                DO $inner$
+                BEGIN
+                  ALTER TABLE cutting_built_packet_fabric_sources
+                    DROP CONSTRAINT IF EXISTS cutting_built_packet_fabric_sources_fabric_inventory_id_fkey;
+                EXCEPTION WHEN OTHERS THEN NULL;
+                END $inner$;
+
+                -- Drop the old integer index so we can reuse the name after rename
+                DROP INDEX IF EXISTS cutting_built_packet_sources_inventory_idx;
+
+                -- Step 4: drop old integer column and promote the uuid column
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  DROP COLUMN fabric_inventory_id;
+
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  RENAME COLUMN fabric_inventory_uuid TO fabric_inventory_id;
+
+                -- Re-add FK constraint (references cutting_fabric_inventory.id which is uuid)
+                ALTER TABLE cutting_built_packet_fabric_sources
+                  ADD CONSTRAINT cutting_built_packet_fabric_sources_fabric_inventory_id_fkey
+                  FOREIGN KEY (fabric_inventory_id)
+                  REFERENCES cutting_fabric_inventory(id);
+
+                -- Recreate the index
+                CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx
+                  ON cutting_built_packet_fabric_sources(fabric_inventory_id);
               END IF;
             END $$
           `);
@@ -1957,6 +2023,35 @@ async function initializeBackgroundServices() {
         console.log('✅ Ensured projects table has pipeline stage columns and flexible step statuses');
       } catch (projErr: any) {
         console.warn('⚠️ Projects pipeline migration:', projErr.message);
+      }
+
+      // Ensure financial_review_sessions table exists
+      try {
+        const { sql: sqlFR } = await import('drizzle-orm');
+        await db.execute(sqlFR`
+          CREATE TABLE IF NOT EXISTS financial_review_sessions (
+            id SERIAL PRIMARY KEY,
+            month_key TEXT NOT NULL UNIQUE,
+            review_date TEXT,
+            agenda_text TEXT,
+            gross_margin_pct NUMERIC,
+            net_income NUMERIC,
+            cash_balance NUMERIC,
+            cash_forecast_notes TEXT,
+            as_revenue NUMERIC,
+            as_gross_margin_pct NUMERIC,
+            as_net_income NUMERIC,
+            action_items JSONB DEFAULT '[]'::jsonb,
+            bd_pipeline JSONB DEFAULT '[]'::jsonb,
+            risk_opportunity_text TEXT,
+            calendar_events JSONB DEFAULT '[]'::jsonb,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured financial_review_sessions table exists');
+      } catch (frErr: any) {
+        console.warn('⚠️ financial_review_sessions migration:', frErr.message);
       }
 
       // Seed default health check types and config if not present

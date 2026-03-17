@@ -203,7 +203,7 @@ export const allOrders = pgTable('all_orders', {
   qdSameSideConfirmedAt: timestamp('qd_same_side_confirmed_at'), // When it was confirmed
   // RTS Order Tracking
   isRtsOrder: boolean('is_rts_order').default(false), // True if this order was created from RTS inventory sale
-  rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
+  rtsSaleId: text('rts_sale_id'), // Reference to RTS sale if applicable (stored as varchar in DB)
   // BOM Reference for Costing and MRP
   bomDefinitionId: text('bom_definition_id'), // Store BOM definition ID as text for production compatibility
   // Production Queue Eligibility

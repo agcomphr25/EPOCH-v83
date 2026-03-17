@@ -157,6 +157,7 @@ import arPaymentsRoutes from './arPayments';
 import permissionsRoutes from './permissions';
 import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
+import financialReviewRoutes from './financialReview';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Temporary debug route - raw order data inspector
@@ -617,6 +618,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/permissions', permissionsRoutes);
 
   app.use('/api/control-tower', controlTowerRoutes);
+
+  // Financial Review routes (monthly business review slide navigator)
+  app.use('/api/financial-review', financialReviewRoutes);
 
   // Offline mutation replay endpoint
   app.use('/api/offline', offlineReplayRoutes);

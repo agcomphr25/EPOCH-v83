@@ -349,19 +349,18 @@ export default function P2ProductionQueue() {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
               font-family: Arial, sans-serif;
-              width: 8.5in;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
             .labels-sheet {
-              width: 8.125in;
-              height: 10in;
-              margin: 0 auto;
+              width: 8.5in;
+              height: 11in;
+              padding: 0.5in 0.1875in;
               display: grid;
-              grid-template-columns: 2.625in 2.625in 2.625in;
+              grid-template-columns: repeat(3, 2.625in);
               grid-template-rows: repeat(10, 1in);
               column-gap: 0.125in;
-              row-gap: 0in;
+              row-gap: 0;
               align-content: start;
               page-break-after: always;
             }
@@ -390,15 +389,12 @@ export default function P2ProductionQueue() {
             .line4 { font-size: 5pt; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.1; }
             .line5 { height: 20px; display: flex; justify-content: center; align-items: center; }
             .line5 canvas { max-width: 100%; height: 18px !important; }
-            @media screen {
-              body { padding: 0.5in 0.1875in; }
-            }
             @media print {
-              html, body { width: 8.5in; height: 11in; }
+              html, body { width: 8.5in; height: 11in; margin: 0; padding: 0; }
               .avery-label { border: none; }
               @page {
-                size: 8.5in 11in;
-                margin: 0.5in 0.1875in 0.5in 0.1875in;
+                size: letter;
+                margin: 0;
               }
             }
           </style>

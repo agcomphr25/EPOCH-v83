@@ -73,6 +73,9 @@ import ARAgingPage from './pages/ARAgingPage';
 import ARPaymentsPage from './pages/ARPaymentsPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
+import FinancialReviewPage from './pages/FinancialReviewPage';
+import FinancialReviewListPage from './pages/FinancialReviewListPage';
+import FinancialReviewSlidePage from './pages/FinancialReviewSlidePage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
@@ -247,7 +250,6 @@ import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
 import MaterialInventoryPage from './pages/MaterialInventoryPage';
-import BusinessReviewPresentation from './pages/BusinessReviewPresentation';
 import FilteredOrdersReport from './pages/FilteredOrdersReport';
 import UrgentOrdersReport from './pages/UrgentOrdersReport';
 import OTDReport from './pages/OTDReport';
@@ -426,7 +428,6 @@ function App() {
                   <Route path="/urgent-orders-report" component={UrgentOrdersReport} />
                   <Route path="/otd-report" component={OTDReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
-                  <Route path="/business-review" component={BusinessReviewPresentation} />
                   <Route path="/analytics" component={AnalyticsDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />
@@ -724,7 +725,10 @@ function App() {
                     component={EnhancedReportsPage}
                   />
 
-                  {/* Finance Routes */}
+                  {/* Business Review */}
+                  <Route path="/business-review/sessions/:monthKey" component={FinancialReviewSlidePage} />
+                  <Route path="/business-review/sessions" component={FinancialReviewListPage} />
+                  <Route path="/business-review" component={FinancialReviewPage} />
                   <Route path="/finance/ap-journal" component={APJournalPage} />
                   <Route path="/finance/ar-journal" component={ARJournalPage} />
                   <Route path="/finance/ar-aging" component={ARAgingPage} />

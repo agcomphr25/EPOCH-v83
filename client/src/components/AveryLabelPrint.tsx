@@ -302,30 +302,26 @@ export function AveryLabelPrint({
 
                 /* Grid layout: 3 cols x 10 rows with exact Avery 8160 column gap of 0.125" */
                 .labels-container {
+                  width: 8.5in;
+                  padding: 0.5in 0.1875in;
                   display: grid;
                   grid-template-columns: repeat(3, 2.625in);
+                  grid-template-rows: repeat(10, 1in);
                   column-gap: 0.125in;
                   row-gap: 0;
-                  width: 8.125in; /* 3*2.625 + 2*0.125 = 8.125in (matches content area) */
-                  margin: 0 auto;
                 }
 
                 @media print {
-                  body { margin: 0; padding: 0; }
+                  html, body { width: 8.5in; height: 11in; margin: 0; padding: 0; }
                   .avery-label {
                     border: none;
                     margin: 0;
                     width: 2.625in;
                     height: 1in;
                   }
-                  .labels-container {
-                    margin: 0;
-                    width: 100%;
-                  }
-                  /* Avery 8160: 3 cols x 10 rows, 30 per sheet */
                   @page {
                     size: letter;
-                    margin: 0.5in 0.1875in 0.5in 0.1875in;
+                    margin: 0;
                   }
                 }
 

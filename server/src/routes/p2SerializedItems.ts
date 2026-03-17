@@ -27,6 +27,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/scrapped', async (req, res) => {
+  try {
+    const units = await db.query.p2SerializedItems.findMany({
+      where: eq(p2SerializedItems.status, 'SCRAPPED'),
+      orderBy: (t, { desc }) => [desc(t.scrapAt)],
+    });
+
+    res.json(units);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to fetch scrapped items' });
+  }
+});
+
 router.get('/shipping-queue', async (req, res) => {
   try {
     const SHIPPING_PIPELINE_DEPTS = ['Final QC', 'Shipping QC', 'Shipping', 'COMPLETED', 'Quality Control'];

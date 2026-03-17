@@ -28,6 +28,7 @@ import {
   Users,
   Pencil,
   Trash2,
+  XCircle,
   Mail,
   Phone,
   Building,
@@ -50,6 +51,7 @@ import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
+import P2ScrappedItemsTab from '@/components/p2/P2ScrappedItemsTab';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -383,7 +385,7 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-12">
+        <TabsList className="flex flex-wrap w-full">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
@@ -431,6 +433,10 @@ export default function P2ControlCenter() {
           <TabsTrigger value="certifications" className="flex items-center gap-2" data-testid="tab-certifications">
             <Award className="h-4 w-4" />
             Certs
+          </TabsTrigger>
+          <TabsTrigger value="scrapped" className="flex items-center gap-2" data-testid="tab-scrapped">
+            <XCircle className="h-4 w-4" />
+            Scrapped
           </TabsTrigger>
         </TabsList>
 
@@ -543,6 +549,10 @@ export default function P2ControlCenter() {
 
         <TabsContent value="certifications">
           <P2CertificationsManager />
+        </TabsContent>
+
+        <TabsContent value="scrapped">
+          <P2ScrappedItemsTab />
         </TabsContent>
       </Tabs>
     </div>

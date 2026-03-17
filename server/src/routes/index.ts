@@ -1919,26 +1919,32 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { 
         customerId, customerPONumber, dueDate, 
         toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
-        assignedToId, assignedToName, productionLeadId, productionLeadName 
+        assignedToId, assignedToName, productionLeadId, productionLeadName,
+        customerName: bodyCustomerName, poDate: bodyPoDate, status: bodyStatus,
+        sourceQuoteId,
       } = req.body;
       
-      // Get customer info by customer ID (text field like "STR-001")
-      const customer = await storage.getP2CustomerByCustomerId(customerId);
-      if (!customer) {
-        return res.status(400).json({ error: 'Customer not found' });
+      // Use the customer-provided PO number — accept either field name
+      const poNumber = customerPONumber || req.body.poNumber;
+      if (!poNumber) {
+        return res.status(400).json({ error: 'PO number is required' });
       }
-      
-      // Use the customer-provided PO number directly
-      const poNumber = customerPONumber;
+
+      // Accept either dueDate (wizard) or expectedDelivery (manager form)
+      const resolvedExpectedDelivery = dueDate || req.body.expectedDelivery || null;
+
+      // Get customer info — may not exist when submitted from manager with customerId + customerName inline
+      let customer = await storage.getP2CustomerByCustomerId(customerId);
+      const resolvedCustomerName = customer?.customerName || bodyCustomerName || customerId;
       
       // Build the complete PO data with all required fields
       const poData = {
         poNumber,
-        customerId: customer.customerId,
-        customerName: customer.customerName,
-        poDate: new Date().toISOString().split('T')[0],
-        expectedDelivery: dueDate,
-        status: 'OPEN',
+        customerId: customer?.customerId || customerId,
+        customerName: resolvedCustomerName,
+        poDate: bodyPoDate || new Date().toISOString().split('T')[0],
+        expectedDelivery: resolvedExpectedDelivery,
+        status: bodyStatus || 'OPEN',
         notes: notes || toleranceNotes || null,
         toleranceAuthorizerId: toleranceAuthorizerId || null,
         toleranceAuthorizerName: toleranceAuthorizerName || null,

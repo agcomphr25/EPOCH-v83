@@ -1,0 +1,30 @@
+index-CR8RovTN.js:4997 React initialized: Object
+index-CR8RovTN.js:4997 React hooks: Object
+index-CR8RovTN.js:4997 [EPOCH SYNC] Sync engine starting
+index-CR8RovTN.js:4997 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-CR8RovTN.js:4994 App component is rendering...
+index-CR8RovTN.js:4994 Environment: production
+index-CR8RovTN.js:4994 Base URL: /
+index-CR8RovTN.js:1545 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-CR8RovTN.js:1545 [EPOCH] Install prompt captured and ready
+/login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CR8RovTN.js:1922 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CR8RovTN.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/EMP002 (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/EMP002: 200
+index-CR8RovTN.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP002/STR2600210 (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP002/STR2600210: 200
+index-CR8RovTN.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CR8RovTN.js:235 🌐 API Request to /api/travelers/14190c75-4682-405b-a797-d87937e0e0c8/tasks/598bbe8b-dfc8-4343-80ba-1be55869549e/complete (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/travelers/14190c75-4682-405b-a797-d87937e0e0c8/tasks/598bbe8b-dfc8-4343-80ba-1be55869549e/complete: 200
+execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+index-CR8RovTN.js:235 🌐 API Request to /api/travelers/14190c75-4682-405b-a797-d87937e0e0c8/steps/0b8105da-d7c5-4f13-a082-7f45945a5115/sign (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/travelers/14190c75-4682-405b-a797-d87937e0e0c8/steps/0b8105da-d7c5-4f13-a082-7f45945a5115/sign: 200
+execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) null
+index-CR8RovTN.js:235 🌐 API Request to /api/travelers/14190c75-4682-405b-a797-d87937e0e0c8/steps/cbf3feae-1dcd-4428-baa7-e16b9e2d0c0c/start (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/travelers/14190c75-4682-405b-a797-d87937e0e0c8/steps/cbf3feae-1dcd-4428-baa7-e16b9e2d0c0c/start: 200
+index-CR8RovTN.js:235 🌐 API Request to /api/material-lots/validate/MFG-2-712-3 (timeout: 15000ms, deployment: true)
+index-CR8RovTN.js:235 ✅ API Response from /api/material-lots/validate/MFG-2-712-3: 200

@@ -225,23 +225,19 @@ router.get('/download/:attachmentId', sessionAwareAuth, async (req, res) => {
     
     if (normalizedDownloadPath && normalizedDownloadPath.startsWith('/objects/')) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedDownloadPath);
-        
-        if (forceDownload) {
-          res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.originalFileName)}"`);
-        } else {
-          res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.originalFileName)}"`);
-        }
-        res.setHeader('Content-Type', attachment.mimeType);
+        const buffer = await objectStorageService.downloadAsBuffer(normalizedDownloadPath);
 
-        const stream = await objectFile.getReadableStream();
-        stream.pipe(res);
+        const disposition = forceDownload ? 'attachment' : 'inline';
+        res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(attachment.originalFileName)}"`);
+        res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Length', buffer.length);
+        return res.send(buffer);
       } catch (cloudError) {
-        console.error('Error streaming from cloud storage:', cloudError);
-        res.status(500).json({ error: 'Failed to retrieve file from cloud storage' });
+        console.error('Error downloading from cloud storage:', cloudError);
+        return res.status(500).json({ error: 'Failed to retrieve file from cloud storage' });
       }
     } else {
-      res.status(404).json({ error: 'File not found' });
+      return res.status(404).json({ error: 'File not found' });
     }
   } catch (error) {
     console.error('Error downloading project step attachment:', error);

@@ -532,6 +532,12 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                           <CheckCircle className="w-3 h-3" />
                           Shipment Created
                         </Badge>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" asChild>
+                          <Link to={`/p2/shipments/${shipment.lotId}`}>
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            View Shipment
+                          </Link>
+                        </Button>
                         <Link to={`/p2/shipments/${shipment.lotId}`}>
                           <Badge variant="outline" className="text-xs font-mono text-muted-foreground hover:underline cursor-pointer">
                             {shipment.lotNumber}

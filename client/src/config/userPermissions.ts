@@ -150,6 +150,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/order-heat-map',
   '/fabric-inventory',
   '/tickets',
+  '/app/production/stations',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
@@ -265,6 +266,17 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-management',
       '/employee-portal',
       '/inventory/parts-request',
+    ],
+  },
+
+  chasew: {
+    routes: [
+      '/chasew-dashboard',
+      '/projects',
+      '/projects/pipeline',
+      '/media-library',
+      '/p2-control-center',
+      '/app/production/stations',
     ],
   },
 

@@ -55,11 +55,12 @@ router.post('/lots', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Some serial IDs not found' });
     }
 
-    const unfinalized = serials.filter((s) => !s.finalizedAt);
-    if (unfinalized.length > 0) {
+    // Guard: all serials must be COMPLETED and finalized
+    const notReady = serials.filter((s) => s.status !== 'COMPLETED' || !s.finalizedAt);
+    if (notReady.length > 0) {
       return res.status(400).json({
-        error: 'All serials must be finalized before creating a lot',
-        items: unfinalized.map((s) => s.serialNumber),
+        error: 'All selected serials must be completed and finalized before shipment',
+        items: notReady.map((s) => s.serialNumber),
       });
     }
 
@@ -68,6 +69,18 @@ router.post('/lots', async (req: Request, res: Response) => {
       return res.status(400).json({
         error: 'All serials must belong to the same PO',
         found: poNumbers,
+      });
+    }
+
+    // Guard: serial reuse — reject if any serial already exists in another lot
+    const existingLots = await pool.query<{ id: string; lot_number: string }>(
+      `SELECT id, lot_number FROM p2_lot_numbers WHERE serialized_item_ids ?| $1::text[]`,
+      [input.serialIds]
+    );
+    if (existingLots.length > 0) {
+      return res.status(409).json({
+        error: 'One or more serial numbers already assigned to an existing shipment lot',
+        lots: existingLots.map((r) => r.lot_number),
       });
     }
 
@@ -139,6 +152,11 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
       .from(p2LotNumbers)
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    // Guard: one packing slip per lot
+    if (lot.packingSlipId) {
+      return res.status(409).json({ error: 'Packing slip already exists for this lot' });
+    }
 
     const serialIds = (lot.serializedItemIds as string[]) || [];
     const serials = await db
@@ -498,6 +516,11 @@ router.post('/certificates', async (req: Request, res: Response) => {
       .from(p2LotNumbers)
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    // Guard: one certificate per lot
+    if (lot.certificateId) {
+      return res.status(409).json({ error: 'Certificate already exists for this lot' });
+    }
 
     const serialIds = (lot.serializedItemIds as string[]) || [];
     const serials = await db

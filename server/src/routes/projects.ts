@@ -292,6 +292,54 @@ router.post('/notifications/:recipientId/mark-all-read', async (req, res) => {
   }
 });
 
+router.post('/:id/link-po', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schema = z.object({ poId: z.number().int().positive() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid request: poId (number) required' });
+    }
+    const { poId } = parsed.data;
+
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    if (project.poId) {
+      return res.status(409).json({ message: 'Project already has a PO linked' });
+    }
+
+    // Validate PO exists
+    const poRows = await pool.query<{ id: number; po_number: string }>(
+      `SELECT id, po_number FROM p2_purchase_orders WHERE id = $1`,
+      [poId]
+    );
+    if (poRows.length === 0) return res.status(404).json({ message: 'PO not found' });
+
+    // Ensure no other project already uses this poId
+    const conflictRows = await pool.query<{ id: string }>(
+      `SELECT id FROM projects WHERE po_id = $1 LIMIT 1`,
+      [poId]
+    );
+    if (conflictRows.length > 0) {
+      return res.status(409).json({ message: 'Another project is already linked to this PO' });
+    }
+
+    const updated = await storage.updateProject(id, { poId } as any);
+
+    await storage.createProjectActivityLog({
+      projectId: id,
+      activityType: 'project_updated',
+      description: `Linked to PO ${poRows[0].po_number}`,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error linking PO to project:', error);
+    res.status(500).json({ message: 'Failed to link PO' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;

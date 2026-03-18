@@ -109,6 +109,13 @@ interface Employee {
   userRole: string;
 }
 
+interface P2PurchaseOrder {
+  id: number;
+  poNumber: string;
+  customerName: string;
+  status: string;
+}
+
 interface StepAttachment {
   id: number;
   projectId: string;
@@ -246,6 +253,29 @@ export default function ProjectDetailPage() {
 
   const { data: p2Customers = [] } = useQuery<P2Customer[]>({
     queryKey: ['/api/p2-customers-bypass'],
+  });
+
+  const { data: p2PurchaseOrders = [] } = useQuery<P2PurchaseOrder[]>({
+    queryKey: ['/api/p2-purchase-orders-bypass'],
+    enabled: !project?.poId,
+  });
+
+  const [linkPoId, setLinkPoId] = useState<string>('');
+  const [linkPoSearch, setLinkPoSearch] = useState('');
+
+  const linkPoMutation = useMutation({
+    mutationFn: (poId: number) =>
+      apiRequest('POST', `/api/projects/${id}/link-po`, { poId }),
+    onSuccess: () => {
+      toast({ title: 'PO linked', description: 'Purchase order successfully linked to this project.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
+      setLinkPoId('');
+      setLinkPoSearch('');
+    },
+    onError: (err: any) => {
+      toast({ title: 'Link failed', description: err?.message || 'Failed to link PO.', variant: 'destructive' });
+    },
   });
 
   const { data: allStepAttachments = [] } = useQuery<StepAttachment[]>({
@@ -1005,10 +1035,47 @@ export default function ProjectDetailPage() {
             </Card>
           ) : !project?.poId ? (
             <Card>
-              <CardContent className="py-12 text-center space-y-2">
-                <Package className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                <p className="text-muted-foreground font-medium">No PO linked to this project.</p>
-                <p className="text-sm text-muted-foreground">Link a purchase order to see traceability data.</p>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Package className="h-4 w-4" /> Link Purchase Order
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">Connect a PO to enable shipment traceability for this project.</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Search POs</Label>
+                  <Input
+                    placeholder="Filter by PO number or customer…"
+                    value={linkPoSearch}
+                    onChange={(e) => setLinkPoSearch(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Purchase Order</Label>
+                  <Select value={linkPoId} onValueChange={setLinkPoId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a purchase order" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {p2PurchaseOrders
+                        .filter(po => {
+                          const q = linkPoSearch.toLowerCase();
+                          return !q || po.poNumber?.toLowerCase().includes(q) || po.customerName?.toLowerCase().includes(q);
+                        })
+                        .map(po => (
+                          <SelectItem key={po.id} value={po.id.toString()}>
+                            {po.poNumber} — {po.customerName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  disabled={!linkPoId || linkPoMutation.isPending}
+                  onClick={() => linkPoMutation.mutate(parseInt(linkPoId))}
+                >
+                  {linkPoMutation.isPending ? 'Linking…' : 'Link PO'}
+                </Button>
               </CardContent>
             </Card>
           ) : (

@@ -75,6 +75,11 @@ interface ActivityLog {
   createdAt: string;
 }
 
+interface P2Customer {
+  customerId: string;
+  customerName: string;
+}
+
 interface Project {
   id: string;
   projectCode: string;
@@ -237,6 +242,10 @@ export default function ProjectDetailPage() {
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
+  });
+
+  const { data: p2Customers = [] } = useQuery<P2Customer[]>({
+    queryKey: ['/api/p2-customers-bypass'],
   });
 
   const { data: allStepAttachments = [] } = useQuery<StepAttachment[]>({
@@ -550,6 +559,7 @@ export default function ProjectDetailPage() {
         <Button variant="outline" onClick={() => {
           setEditData({
             projectName: project.projectName,
+            customerId: project.customerId,
             description: project.description || '',
             targetShipDate: project.targetShipDate || '',
             projectManagerId: project.projectManagerId,

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -112,8 +112,10 @@ interface Employee {
 interface P2PurchaseOrder {
   id: number;
   poNumber: string;
+  customerId: string;
   customerName: string;
   status: string;
+  createdAt?: string;
 }
 
 interface StepAttachment {
@@ -262,6 +264,17 @@ export default function ProjectDetailPage() {
 
   const [linkPoId, setLinkPoId] = useState<string>('');
   const [linkPoSearch, setLinkPoSearch] = useState('');
+  const [showManualLink, setShowManualLink] = useState(false);
+
+  const suggestedPo = useMemo(() => {
+    if (!project || p2PurchaseOrders.length === 0) return null;
+    const sameCustomer = p2PurchaseOrders.filter(po => po.customerId === project.customerId);
+    const pool = sameCustomer.length > 0 ? sameCustomer : p2PurchaseOrders;
+    return pool.slice().sort((a, b) => {
+      if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return b.id - a.id;
+    })[0] ?? null;
+  }, [project, p2PurchaseOrders]);
 
   const linkPoMutation = useMutation({
     mutationFn: (poId: number) =>
@@ -272,6 +285,7 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
       setLinkPoId('');
       setLinkPoSearch('');
+      setShowManualLink(false);
     },
     onError: (err: any) => {
       toast({ title: 'Link failed', description: err?.message || 'Failed to link PO.', variant: 'destructive' });
@@ -1042,40 +1056,71 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-muted-foreground">Connect a PO to enable shipment traceability for this project.</p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Search POs</Label>
-                  <Input
-                    placeholder="Filter by PO number or customer…"
-                    value={linkPoSearch}
-                    onChange={(e) => setLinkPoSearch(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Purchase Order</Label>
-                  <Select value={linkPoId} onValueChange={setLinkPoId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a purchase order" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {p2PurchaseOrders
-                        .filter(po => {
-                          const q = linkPoSearch.toLowerCase();
-                          return !q || po.poNumber?.toLowerCase().includes(q) || po.customerName?.toLowerCase().includes(q);
-                        })
-                        .map(po => (
-                          <SelectItem key={po.id} value={po.id.toString()}>
-                            {po.poNumber} — {po.customerName}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  disabled={!linkPoId || linkPoMutation.isPending}
-                  onClick={() => linkPoMutation.mutate(parseInt(linkPoId))}
-                >
-                  {linkPoMutation.isPending ? 'Linking…' : 'Link PO'}
-                </Button>
+                {suggestedPo && !showManualLink ? (
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 p-4 space-y-1">
+                      <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">Suggested PO</p>
+                      <p className="font-semibold text-blue-900 dark:text-blue-100 font-mono">{suggestedPo.poNumber}</p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300">{suggestedPo.customerName}</p>
+                      {suggestedPo.customerId === project?.customerId && (
+                        <p className="text-xs text-blue-500 dark:text-blue-400">Matched on customer</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => linkPoMutation.mutate(suggestedPo.id)}
+                        disabled={linkPoMutation.isPending}
+                      >
+                        {linkPoMutation.isPending ? 'Linking…' : 'Accept'}
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowManualLink(true)}>
+                        Choose Different
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {showManualLink && suggestedPo && (
+                      <Button variant="ghost" size="sm" className="text-muted-foreground -mb-2" onClick={() => setShowManualLink(false)}>
+                        ← Back to suggestion
+                      </Button>
+                    )}
+                    <div className="space-y-2">
+                      <Label>Search POs</Label>
+                      <Input
+                        placeholder="Filter by PO number or customer…"
+                        value={linkPoSearch}
+                        onChange={(e) => setLinkPoSearch(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Purchase Order</Label>
+                      <Select value={linkPoId} onValueChange={setLinkPoId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a purchase order" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {p2PurchaseOrders
+                            .filter(po => {
+                              const q = linkPoSearch.toLowerCase();
+                              return !q || po.poNumber?.toLowerCase().includes(q) || po.customerName?.toLowerCase().includes(q);
+                            })
+                            .map(po => (
+                              <SelectItem key={po.id} value={po.id.toString()}>
+                                {po.poNumber} — {po.customerName}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      disabled={!linkPoId || linkPoMutation.isPending}
+                      onClick={() => linkPoMutation.mutate(parseInt(linkPoId))}
+                    >
+                      {linkPoMutation.isPending ? 'Linking…' : 'Link PO'}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : (

@@ -16,6 +16,29 @@ import {
 
 const router = Router();
 
+function buildCustomerAddress(customer: {
+  customerName: string;
+  shippingCompanyName?: string | null;
+  shippingContactName?: string | null;
+  shippingAddress?: string | null;
+  shippingAddress2?: string | null;
+  shippingCity?: string | null;
+  shippingState?: string | null;
+  shippingZip?: string | null;
+}): string {
+  return [
+    customer.shippingCompanyName || customer.customerName,
+    customer.shippingContactName,
+    customer.shippingAddress,
+    customer.shippingAddress2,
+    [customer.shippingCity, customer.shippingState, customer.shippingZip]
+      .filter(Boolean)
+      .join(', '),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 async function generateSequentialId(
   _prefix: string,
   table: string,
@@ -183,20 +206,7 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
       .from(p2Customers)
       .where(eq(p2Customers.customerId, lot.customerId || ''));
 
-    let customerAddress = '';
-    if (customer) {
-      customerAddress = [
-        customer.shippingCompanyName || customer.customerName,
-        customer.shippingContactName,
-        customer.shippingAddress,
-        customer.shippingAddress2,
-        [customer.shippingCity, customer.shippingState, customer.shippingZip]
-          .filter(Boolean)
-          .join(', '),
-      ]
-        .filter(Boolean)
-        .join('\n');
-    }
+    const customerAddress = customer ? buildCustomerAddress(customer) : '';
 
     const packingSlipNumber = await generateSequentialId(
       'PS',
@@ -530,18 +540,7 @@ router.post('/certificates', async (req: Request, res: Response) => {
       .from(p2Customers)
       .where(eq(p2Customers.customerId, lot.customerId || ''));
 
-    let customerAddress = '';
-    if (customer) {
-      customerAddress = [
-        customer.shippingCompanyName || customer.customerName,
-        customer.shippingAddress,
-        [customer.shippingCity, customer.shippingState, customer.shippingZip]
-          .filter(Boolean)
-          .join(', '),
-      ]
-        .filter(Boolean)
-        .join('\n');
-    }
+    const customerAddress = customer ? buildCustomerAddress(customer) : '';
 
     const manufacturingDate =
       (serials.map((s) => s.completedAt).filter(Boolean).sort().pop() as Date | null) ||

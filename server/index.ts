@@ -1945,6 +1945,27 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ AR tables migration:', arErr.message);
       }
 
+      // Add shipment traceability columns to ar_invoices
+      try {
+        const { sql: sqlArLink } = await import('drizzle-orm');
+        await db.execute(sqlArLink`
+          ALTER TABLE ar_invoices
+          ADD COLUMN IF NOT EXISTS lot_id UUID REFERENCES p2_lot_numbers(id)
+        `);
+        await db.execute(sqlArLink`
+          ALTER TABLE ar_invoices
+          ADD COLUMN IF NOT EXISTS packing_slip_id UUID REFERENCES p2_packing_slips(id)
+        `);
+        await db.execute(sqlArLink`
+          CREATE INDEX IF NOT EXISTS ar_invoices_lot_id_idx
+          ON ar_invoices (lot_id)
+          WHERE lot_id IS NOT NULL
+        `);
+        console.log('✅ Ensured ar_invoices has lot_id and packing_slip_id traceability columns');
+      } catch (arLinkErr: any) {
+        console.warn('⚠️ ar_invoices traceability columns warning:', arLinkErr?.message);
+      }
+
       // Ensure capability-based permission system tables exist
       try {
         const { sql: sqlPerm } = await import('drizzle-orm');

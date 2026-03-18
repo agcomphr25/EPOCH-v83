@@ -13432,19 +13432,23 @@ export const arInvoices = pgTable('ar_invoices', {
   invoiceDate: date('invoice_date').notNull(),
   dueDate: date('due_date'),
   terms: text('terms'),
-  poId: text('po_id'),
+  poId: text('po_id'),         // kept — free-text PO reference from legacy flow
   poOverride: text('po_override'),
   subtotal: numeric('subtotal').notNull(),
   taxAmount: numeric('tax_amount').notNull().default('0'),
   totalAmount: numeric('total_amount').notNull(),
   status: text('status').notNull().default('OPEN'),
   notes: text('notes'),
+  // Shipment traceability — populated when invoice is raised against a specific shipment
+  lotId: uuid('lot_id').references(() => p2LotNumbers.id),
+  packingSlipId: uuid('packing_slip_id').references(() => p2PackingSlips.id),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   customerIdx: index('ar_invoices_customer_id_idx').on(table.customerId),
   invoiceNumberIdx: index('ar_invoices_invoice_number_idx').on(table.invoiceNumber),
+  lotIdIdx: index('ar_invoices_lot_id_idx').on(table.lotId),
 }));
 
 export const insertArInvoiceSchema = createInsertSchema(arInvoices).omit({

@@ -2078,6 +2078,21 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Projects pipeline migration:', projErr.message);
       }
 
+      // Enforce 1:1 project ↔ PO relationship via unique index on projects.po_id
+      // NULL values are always allowed (project not yet linked to a PO);
+      // only non-NULL duplicates are rejected.
+      try {
+        const { sql: sqlProjPO } = await import('drizzle-orm');
+        await db.execute(sqlProjPO`
+          CREATE UNIQUE INDEX IF NOT EXISTS projects_po_id_unique
+          ON projects (po_id)
+          WHERE po_id IS NOT NULL
+        `);
+        console.log('✅ Enforced projects.po_id unique constraint (1:1 with PO)');
+      } catch (projPoErr: any) {
+        console.warn('⚠️ projects.po_id unique constraint warning:', projPoErr?.message);
+      }
+
       // Ensure financial_review_sessions table exists
       try {
         const { sql: sqlFR } = await import('drizzle-orm');

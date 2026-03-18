@@ -919,7 +919,15 @@ export default function ProjectDetailPage() {
             <DialogTitle>Project Settings</DialogTitle>
             <DialogDescription>Update project details and configuration</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="overflow-y-auto max-h-[65vh] space-y-4 py-4 pr-1">
+            <div className="space-y-2">
+              <Label>Project #</Label>
+              <Input
+                value={editData.projectCode || project?.projectCode || ''}
+                readOnly
+                className="bg-muted text-muted-foreground cursor-default"
+              />
+            </div>
             <div className="space-y-2">
               <Label>Project Name</Label>
               <Input

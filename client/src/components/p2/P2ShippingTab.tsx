@@ -142,6 +142,25 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
     });
   }, [existingShipmentRows, poIdToNumber]);
 
+  // Auto-populate SKU + Drawing Name from first unit's partNumber / partName when a PO is expanded
+  useEffect(() => {
+    if (!expandedPO) return;
+    const group = poGroups.find((g) => g.poNumber === expandedPO);
+    if (!group) return;
+    const unfinalized = group.units.filter(
+      (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
+    );
+    if (unfinalized.length === 0) return;
+    const sample = unfinalized[0];
+    setSkuInputs((prev) => ({ ...prev, [expandedPO]: prev[expandedPO] || sample.partNumber || '' }));
+    setDrawingInputs((prev) => ({ ...prev, [expandedPO]: prev[expandedPO] || sample.partName || '' }));
+    // Also auto-select all unfinalized units
+    setFinalizationSelections((prev) => ({
+      ...prev,
+      [expandedPO]: prev[expandedPO]?.size ? prev[expandedPO] : new Set(unfinalized.map((u) => u.id)),
+    }));
+  }, [expandedPO, poGroups]);
+
   // Auto-select and open modal when navigated here from the dashboard with a ?po= param
   useEffect(() => {
     if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;

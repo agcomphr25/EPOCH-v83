@@ -61,6 +61,7 @@ type CustomerSummary = {
   customerName: string;
   totalUnits: number;
   readyCount: number;
+  needsFinalizationCount: number;
   poCount: number;
 };
 
@@ -104,10 +105,11 @@ export default function P2ReadyToShipDashboard() {
 
       // Customer group
       if (!byCust[u.customerName]) {
-        byCust[u.customerName] = { customerName: u.customerName, totalUnits: 0, readyCount: 0, poCount: 0 };
+        byCust[u.customerName] = { customerName: u.customerName, totalUnits: 0, readyCount: 0, needsFinalizationCount: 0, poCount: 0 };
       }
       byCust[u.customerName].totalUnits++;
       if (isReady) byCust[u.customerName].readyCount++;
+      if (needsFinalization) byCust[u.customerName].needsFinalizationCount++;
     }
 
     // Count POs per customer
@@ -277,6 +279,16 @@ export default function P2ReadyToShipDashboard() {
                         <ExternalLink className="h-3 w-3 mr-1" />
                         View
                       </Button>
+                      {po.needsFinalizationCount > 0 && po.readyCount === 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={() => setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`)}
+                        >
+                          <AlertTriangle className="h-3 w-3 mr-1" />Finalize {po.needsFinalizationCount}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         disabled={po.readyCount === 0}
@@ -317,9 +329,13 @@ export default function P2ReadyToShipDashboard() {
                   <Badge className="w-full justify-center text-xs bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400">
                     {c.readyCount} ready to ship
                   </Badge>
+                ) : c.needsFinalizationCount > 0 ? (
+                  <Badge variant="outline" className="w-full justify-center text-xs bg-amber-50 text-amber-700 border-amber-300">
+                    {c.needsFinalizationCount} need finalization
+                  </Badge>
                 ) : (
                   <Badge variant="outline" className="w-full justify-center text-xs text-muted-foreground">
-                    None ready
+                    In production
                   </Badge>
                 )}
               </div>

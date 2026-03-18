@@ -1330,6 +1330,24 @@ export default function ProjectDetailPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label>Customer</Label>
+              <Select
+                value={editData.customerId || ''}
+                onValueChange={(value) => setEditData({ ...editData, customerId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {p2Customers.map((customer) => (
+                    <SelectItem key={customer.customerId} value={customer.customerId}>
+                      {customer.customerName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Status</Label>
               <Select 
                 value={editData.status} 

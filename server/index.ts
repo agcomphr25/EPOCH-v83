@@ -6,7 +6,7 @@ import fs from 'fs';
 import cron from 'node-cron';
 import { createServer } from 'http';
 import { setupVite, serveStatic, log } from './vite';
-import { db } from './db';
+import { db, pool } from './db';
 import { authenticateToken } from './middleware/auth';
 import { notificationManager } from './src/services/notificationManager';
 
@@ -2091,6 +2091,54 @@ async function initializeBackgroundServices() {
         console.log('✅ Enforced projects.po_id unique constraint (1:1 with PO)');
       } catch (projPoErr: any) {
         console.warn('⚠️ projects.po_id unique constraint warning:', projPoErr?.message);
+      }
+
+      // Backfill missing workflow steps for projects that have fewer than 5 steps
+      // (repairs projects created before step-init was reliable, e.g. PRJ-007)
+      try {
+        const STEP_TYPES = [
+          { type: 'rfq_risk_assessment', order: 1 },
+          { type: 'quote',               order: 2 },
+          { type: 'purchase_review_checklist', order: 3 },
+          { type: 'preproduction_checklist',   order: 4 },
+          { type: 'p2_order',            order: 5 },
+        ];
+
+        const projectsMissingSteps = await pool.query<{ id: string; project_code: string }>(
+          `SELECT p.id, p.project_code
+           FROM projects p
+           WHERE (SELECT COUNT(*) FROM project_steps ps WHERE ps.project_id = p.id) < 5`
+        );
+
+        let repairedCount = 0;
+        for (const proj of projectsMissingSteps as any[]) {
+          const existingSteps = await pool.query<{ step_type: string }>(
+            'SELECT step_type FROM project_steps WHERE project_id = $1',
+            [proj.id]
+          );
+          const existingTypes = new Set((existingSteps as any[]).map((r: any) => r.step_type));
+
+          for (const st of STEP_TYPES) {
+            if (!existingTypes.has(st.type)) {
+              await pool.query(
+                `INSERT INTO project_steps (id, project_id, step_type, step_order, status, started_at, created_at, updated_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())`,
+                [proj.id, st.type, st.order,
+                 st.order === 1 ? 'in_progress' : 'pending',
+                 st.order === 1 ? new Date() : null]
+              );
+              repairedCount++;
+            }
+          }
+        }
+
+        if (repairedCount > 0) {
+          console.log(`✅ Backfilled ${repairedCount} missing workflow step(s) across ${projectsMissingSteps.length} project(s)`);
+        } else {
+          console.log('✅ All project workflow steps are intact');
+        }
+      } catch (stepBackfillErr: any) {
+        console.warn('⚠️ Project step backfill warning:', stepBackfillErr?.message);
       }
 
       // Ensure financial_review_sessions table exists

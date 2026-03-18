@@ -486,6 +486,7 @@ export default function ProjectDetailPage() {
   }
 
   const getProgress = () => {
+    if (!project.steps.length) return 0;
     const completed = project.steps.filter(s => s.status === 'completed').length;
     return Math.round((completed / project.steps.length) * 100);
   };
@@ -624,6 +625,18 @@ export default function ProjectDetailPage() {
               <CardDescription>Track progress through each step of the P2 workflow</CardDescription>
             </CardHeader>
             <CardContent>
+              {project.steps.length === 0 ? (
+                <div className="text-center py-10 space-y-3">
+                  <AlertCircle className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                  <p className="font-medium text-muted-foreground">Workflow steps are being initialized…</p>
+                  <p className="text-sm text-muted-foreground">
+                    This usually resolves on the next page load. If it persists, please contact your administrator.
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                    Refresh
+                  </Button>
+                </div>
+              ) : (
               <div className="relative">
                 {project.steps.map((step, index) => {
                   const config = STEP_CONFIG[step.stepType];
@@ -929,6 +942,7 @@ export default function ProjectDetailPage() {
                   );
                 })}
               </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

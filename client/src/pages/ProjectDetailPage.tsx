@@ -827,11 +827,11 @@ export default function ProjectDetailPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => window.open(config?.route, '_blank')}
+                                  onClick={() => config?.route && setLocation(config.route)}
                                   data-testid={`button-open-${step.stepType}`}
                                 >
                                   <ExternalLink className="mr-1 h-4 w-4" />
-                                  Start
+                                  Open Form
                                 </Button>
                                 <Button
                                   variant="outline"
@@ -886,7 +886,7 @@ export default function ProjectDetailPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => window.open(config?.route, '_blank')}
+                                  onClick={() => config?.route && setLocation(config.route)}
                                   data-testid={`button-view-${step.stepType}`}
                                 >
                                   <Eye className="mr-1 h-4 w-4" />
@@ -968,7 +968,10 @@ export default function ProjectDetailPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => startStepMutation.mutate(step.id)}
+                                  onClick={() => {
+                                    startStepMutation.mutate(step.id);
+                                    if (config?.route) setLocation(config.route);
+                                  }}
                                   disabled={startStepMutation.isPending}
                                 >
                                   <Clock className="mr-1 h-4 w-4" />

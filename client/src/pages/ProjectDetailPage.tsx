@@ -788,33 +788,33 @@ export default function ProjectDetailPage() {
                                       <LinkIcon className="mr-1 h-4 w-4" />
                                       {linkedId ? 'Edit Link' : 'Link'}
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-amber-600"
-                                      onClick={() => reopenStepMutation.mutate(step.id)}
-                                      disabled={reopenStepMutation.isPending}
-                                    >
-                                      Reopen
-                                    </Button>
                                   </>
                                 )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-amber-600"
+                                  onClick={() => reopenStepMutation.mutate(step.id)}
+                                  disabled={reopenStepMutation.isPending}
+                                  data-testid={`button-reopen-${step.stepType}`}
+                                >
+                                  Reopen
+                                </Button>
                               </>
                             )}
                             {step.status === 'skipped' && (
                               <>
                                 <Badge variant="secondary" className="text-gray-500 text-xs">Skipped</Badge>
-                                {isAdmin && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-amber-600"
-                                    onClick={() => reopenStepMutation.mutate(step.id)}
-                                    disabled={reopenStepMutation.isPending}
-                                  >
-                                    Reopen
-                                  </Button>
-                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-amber-600"
+                                  onClick={() => reopenStepMutation.mutate(step.id)}
+                                  disabled={reopenStepMutation.isPending}
+                                  data-testid={`button-reopen-skipped-${step.stepType}`}
+                                >
+                                  Reopen
+                                </Button>
                               </>
                             )}
                             {(step.status === 'pending' || step.status === 'blocked') && (
@@ -906,20 +906,19 @@ export default function ProjectDetailPage() {
                                       >
                                         <Download className="h-4 w-4" />
                                       </Button>
-                                      {isAdmin && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-red-600 hover:text-red-700"
-                                          onClick={() => {
-                                            setSelectedStep(step);
-                                            deleteAttachmentMutation.mutate(attachment.id);
-                                          }}
-                                          data-testid={`button-delete-attachment-${attachment.id}`}
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-red-600 hover:text-red-700"
+                                        onClick={() => {
+                                          setSelectedStep(step);
+                                          deleteAttachmentMutation.mutate(attachment.id);
+                                        }}
+                                        title="Delete document"
+                                        data-testid={`button-delete-attachment-${attachment.id}`}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
                                     </div>
                                   </div>
                                 ))}

@@ -144,6 +144,43 @@ router.post('/lots', async (req: Request, res: Response) => {
 });
 
 // ============================================================
+// GET /api/p2/lots/existing-shipments — all lots that have packing slips
+// Returns map-friendly array: [{ poId, lotId, lotNumber, slipId, slipNumber, certId?, certNumber? }]
+// Must appear BEFORE /lots/:id so Express doesn't match 'existing-shipments' as an :id param
+// ============================================================
+router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
+  try {
+    const rows = await pool.query<{
+      po_id: number;
+      lot_id: string;
+      lot_number: string;
+      slip_id: string;
+      slip_number: string;
+      cert_id: string | null;
+      cert_number: string | null;
+    }>(`
+      SELECT
+        l.po_id,
+        l.id           AS lot_id,
+        l.lot_number,
+        ps.id          AS slip_id,
+        ps.packing_slip_number AS slip_number,
+        cc.id          AS cert_id,
+        cc.certificate_number  AS cert_number
+      FROM p2_lot_numbers l
+      JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
+      LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
+      WHERE l.po_id IS NOT NULL AND l.packing_slip_id IS NOT NULL
+      ORDER BY l.created_at DESC
+    `);
+    return res.json(rows);
+  } catch (err: any) {
+    console.error('existing-shipments error:', err);
+    return res.status(500).json({ error: 'Failed to fetch existing shipments' });
+  }
+});
+
+// ============================================================
 // GET /api/p2/lots/:id
 // ============================================================
 router.get('/lots/:id', async (req: Request, res: Response) => {

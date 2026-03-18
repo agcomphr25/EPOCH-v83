@@ -97,6 +97,51 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
     refetchInterval: 15000,
   });
 
+  type ExistingShipmentRow = {
+    po_id: number;
+    lot_id: string;
+    lot_number: string;
+    slip_id: string;
+    slip_number: string;
+    cert_id: string | null;
+    cert_number: string | null;
+  };
+
+  const { data: existingShipmentRows = [] } = useQuery<ExistingShipmentRow[]>({
+    queryKey: ['/api/p2/lots/existing-shipments'],
+  });
+
+  // Build poId → poNumber lookup from the live shipping queue
+  const poIdToNumber = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const u of shippingUnits) {
+      if (u.poId && u.poNumber) map[u.poId] = u.poNumber;
+    }
+    return map;
+  }, [shippingUnits]);
+
+  // Pre-populate createdShipments from server data so packing slip links survive navigation
+  useEffect(() => {
+    if (!existingShipmentRows.length || !Object.keys(poIdToNumber).length) return;
+    setCreatedShipments((prev) => {
+      const next = { ...prev };
+      for (const row of existingShipmentRows) {
+        const poNumber = poIdToNumber[row.po_id];
+        if (poNumber && !next[poNumber]) {
+          next[poNumber] = {
+            lotId: row.lot_id,
+            lotNumber: row.lot_number,
+            slipId: row.slip_id,
+            slipNumber: row.slip_number,
+            certId: row.cert_id ?? undefined,
+            certNumber: row.cert_number ?? undefined,
+          };
+        }
+      }
+      return next;
+    });
+  }, [existingShipmentRows, poIdToNumber]);
+
   // Auto-select and open modal when navigated here from the dashboard with a ?po= param
   useEffect(() => {
     if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;
@@ -275,6 +320,7 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
       }));
       setSelectedSerials((prev) => ({ ...prev, [poNumber]: new Set() }));
       setExpandedPO((prev) => (prev === poNumber ? null : prev));
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
       toast({
         title: 'Shipment Created',
         description: `Lot ${lot.lotNumber} · Packing slip ${slip.packingSlipNumber} generated.`,

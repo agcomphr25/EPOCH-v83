@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,10 +97,18 @@ interface PartRouting {
 }
 
 export default function P2ControlCenter() {
+  const [location] = useLocation();
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [location]);
+
   const [showPOWizard, setShowPOWizard] = useState(false);
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);

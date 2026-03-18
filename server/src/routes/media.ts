@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, pool } from '../../db';
-import { mediaLibrary, mediaAttachments, mediaFolders } from '../../schema';
+import { mediaLibrary, mediaAttachments, mediaFolders, onboardingSessionDocuments, onboardingSessionCaptures } from '../../schema';
 import { eq, desc, and, ilike, or, inArray, sql, isNull } from 'drizzle-orm';
 import multer from 'multer';
 import path from 'path';
@@ -630,7 +630,16 @@ router.delete('/:id', async (req, res) => {
     // Note: Cloud storage files could also be deleted here if needed
     // For now, we'll leave orphaned cloud files (they can be cleaned up later)
 
-    // Delete from database (attachments will cascade)
+    // Null out references in tables that lack ON DELETE CASCADE/SET NULL
+    await db.update(onboardingSessionDocuments)
+      .set({ mediaItemId: null })
+      .where(eq(onboardingSessionDocuments.mediaItemId, req.params.id));
+
+    await db.update(onboardingSessionCaptures)
+      .set({ mediaItemId: null })
+      .where(eq(onboardingSessionCaptures.mediaItemId, req.params.id));
+
+    // Delete from database (media_attachments and signature_requests cascade/set-null automatically)
     await db.delete(mediaLibrary).where(eq(mediaLibrary.id, req.params.id));
 
     res.json({ success: true });

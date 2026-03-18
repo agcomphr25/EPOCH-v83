@@ -17,19 +17,21 @@ import {
 const router = Router();
 
 async function generateSequentialId(
-  prefix: string,
+  _prefix: string,
   table: string,
   column: string
 ): Promise<string> {
   const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-  const pattern = `${prefix}-${dateStr}-%`;
+  // Format: YYMMDD-XX  (e.g. 260318-01)
+  const iso = today.toISOString(); // 2026-03-18T...
+  const dateStr = iso.slice(2, 4) + iso.slice(5, 7) + iso.slice(8, 10); // YYMMDD
+  const pattern = `${dateStr}-%`;
   const rows = await pool.query(
     `SELECT COUNT(*) as count FROM ${table} WHERE ${column} LIKE $1`,
     [pattern]
   );
-  const seq = (parseInt(rows[0].count) + 1).toString().padStart(4, '0');
-  return `${prefix}-${dateStr}-${seq}`;
+  const seq = (parseInt(rows[0].count) + 1).toString().padStart(2, '0');
+  return `${dateStr}-${seq}`;
 }
 
 // ============================================================
@@ -634,22 +636,15 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     });
     y -= 26;
 
-    // Cert # top-right
+    // Date top-right (cert number is used for association only, not displayed)
     const certDate = new Date().toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
-    page.drawText(`Cert #: ${cert.certificateNumber}`, {
-      x: width - margin - 160,
-      y: height - margin,
-      size: 8.5,
-      font,
-      color: gray,
-    });
     page.drawText(`Date: ${certDate}`, {
       x: width - margin - 160,
-      y: height - margin - 12,
+      y: height - margin,
       size: 8.5,
       font,
       color: gray,

@@ -1,0 +1,252 @@
+COPY-PASTE PROMPT: P2 SHIPPING IMPLEMENTATION AUDIT (POST-BUILD)
+You are performing a POST-IMPLEMENTATION audit of the P2 shipping + document generation system in EPOCH.
+
+This is a READ-ONLY audit. Do NOT modify code.
+
+========================================
+OBJECTIVE
+========================================
+
+Determine:
+
+1. What has been successfully implemented
+2. What is partially implemented or incorrectly wired
+3. What is missing or broken
+4. Whether the system is production-ready
+
+Focus specifically on:
+
+- Lot creation from serials
+- Packing slip creation
+- Certificate of Conformance (CoC)
+- PDF generation
+- UI wiring
+
+========================================
+PART 1 — ENDPOINT INVENTORY
+========================================
+
+Search for all endpoints related to:
+
+- /api/p2/lots
+- /api/p2/packing-slips
+- /api/p2/certificates
+- /api/p2/serialized-items
+
+For each endpoint found:
+
+Document:
+- Route path
+- HTTP method
+- File location
+- Request payload
+- Response structure
+- Whether it is COMPLETE, PARTIAL, or STUB
+
+========================================
+PART 2 — LOT CREATION FLOW
+========================================
+
+Find:
+
+- Where POST /api/p2/lots is implemented
+
+Verify:
+
+1. Does it:
+   - Accept serialIds[]
+   - Validate serial status (COMPLETED + finalized)
+   - Ensure same PO grouping
+
+2. Does it:
+   - Generate lot_number correctly
+   - Insert into p2_lot_numbers
+
+3. Does it:
+   - Store serialized_item_ids correctly
+
+Answer:
+- Is lot creation FULLY WORKING, PARTIAL, or MISSING?
+
+========================================
+PART 3 — PACKING SLIP CREATION
+========================================
+
+Find:
+
+- POST /api/p2/packing-slips
+
+Verify:
+
+1. Does it:
+   - Accept lotId
+   - Fetch serials from lot
+   - Group by part_number
+
+2. Does it:
+   - Build line_items JSON correctly:
+     {
+       partNumber,
+       partName,
+       quantity,
+       serialNumbers[]
+     }
+
+3. Does it:
+   - Pull customer address from p2_customers
+
+4. Does it:
+   - Update p2_lot_numbers.packing_slip_id
+
+Answer:
+- FULLY WORKING, PARTIAL, or MISSING?
+
+========================================
+PART 4 — COC CREATION
+========================================
+
+Find:
+
+- POST /api/p2/certificates
+
+Verify:
+
+1. Does it:
+   - Accept lotId
+   - Pull serial list
+   - Derive:
+     - quantity
+     - part_number
+     - completed_at (manufacture date)
+
+2. Does it:
+   - Insert into p2_certificates_of_conformance
+
+3. Does it:
+   - Link back to lot (certificate_id)
+
+Answer:
+- FULLY WORKING, PARTIAL, or MISSING?
+
+========================================
+PART 5 — PDF GENERATION
+========================================
+
+Find:
+
+- GET /api/p2/packing-slips/:id/pdf
+- GET /api/p2/certificates/:id/pdf
+
+Verify:
+
+1. Are these endpoints implemented?
+2. Do they use pdf-lib?
+3. Do they:
+   - return valid PDF buffers
+   - set correct headers
+
+4. Do they include required fields:
+   - packing slip: PO, customer, serials, lot
+   - CoC: part, serials, compliance text
+
+Answer:
+- FULLY WORKING, PARTIAL, or MISSING?
+
+========================================
+PART 6 — UI WIRING (CRITICAL)
+========================================
+
+Search in:
+
+- P2ShippingTab
+- P2PackingSlipViewer
+- Any shipping-related components
+
+Verify:
+
+1. Serial Selection:
+   - Are there checkboxes for serials?
+   - Can user select multiple?
+
+2. Actions:
+   - "Create Shipment" / "Create Lot"
+   - "Generate Packing Slip"
+   - "Generate CoC"
+
+3. API calls:
+   - Are endpoints actually being called?
+   - Are responses handled?
+
+4. Navigation:
+   - Does it route to /p2/packing-slip/:id?
+
+Answer:
+- FULLY WIRED, PARTIAL, or NOT WIRED
+
+========================================
+PART 7 — DATA FLOW VALIDATION
+========================================
+
+Trace the FULL flow:
+
+serials → lot → packing slip → CoC
+
+Answer:
+
+- Can a user:
+  1. select serials
+  2. create lot
+  3. generate packing slip
+  4. generate CoC
+  5. view/download PDFs
+
+If ANY step is broken, identify exactly where.
+
+========================================
+PART 8 — DATA INTEGRITY RISKS
+========================================
+
+Check for:
+
+- Duplicate lot creation
+- Serial reuse across lots
+- Missing foreign key updates
+- Quantity mismatches (should always = serial count)
+- Null or missing required fields
+
+List ALL risks found.
+
+========================================
+PART 9 — REDUNDANCY / BAD PATTERNS
+========================================
+
+Identify:
+
+- Duplicate logic across endpoints
+- Re-querying instead of using lot as source of truth
+- Any new tables that should NOT exist
+- Any violations of:
+  "lot = shipment grouping"
+
+========================================
+PART 10 — FINAL STATUS
+========================================
+
+Provide:
+
+1. % completion (estimate)
+2. What is production-ready
+3. What must be fixed before release
+4. Top 5 highest-priority issues
+
+========================================
+OUTPUT FORMAT
+========================================
+
+Return:
+
+1. Endpoint status table
+2. UI wiring status
+3. Data flow diagram (text)
+4. Critical issues list
+5. Recommended next steps (ordered)

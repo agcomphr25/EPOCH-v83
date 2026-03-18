@@ -786,9 +786,9 @@ router.get('/:id/traceability', async (req, res) => {
 
     // PO details
     const poRows = await pool.query<{
-      id: number; po_number: string; customer_name: string; status: string; created_at: string;
+      id: number; po_number: string; customer_name: string; customer_id: string; status: string; created_at: string;
     }>(
-      `SELECT id, po_number, customer_name, status, created_at
+      `SELECT id, po_number, customer_name, customer_id, status, created_at
        FROM p2_purchase_orders WHERE id = $1 LIMIT 1`,
       [project.poId]
     );

@@ -62,9 +62,10 @@ function formatCurrency(amount: string | number) {
 
 export default function InvoicesPage() {
   const [, setLocation] = useLocation();
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [customerFilter, setCustomerFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const urlParams = new URLSearchParams(window.location.search);
+  const [statusFilter, setStatusFilter] = useState(urlParams.get('status') || 'all');
+  const [customerFilter, setCustomerFilter] = useState(urlParams.get('customerId') || 'all');
+  const [searchTerm, setSearchTerm] = useState(urlParams.get('search') || '');
 
   const queryParams = new URLSearchParams();
   if (statusFilter && statusFilter !== 'all') queryParams.set('status', statusFilter);

@@ -152,7 +152,7 @@ interface TraceabilitySerial {
 interface TraceabilityData {
   hasShipment: boolean;
   po: {
-    id: number; po_number: string; customer_name: string; status: string; created_at: string;
+    id: number; po_number: string; customer_name: string; customer_id: string; status: string; created_at: string;
   } | null;
   lot: {
     id: string; lot_number: string; status: string;
@@ -1556,24 +1556,39 @@ export default function ProjectDetailPage() {
 
                     {traceability.invoice ? (
                       <div className="flex items-center justify-between py-2 px-3 rounded-lg border">
-                        <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setLocation(`/finance/invoices/${traceability.invoice!.id}`)}
+                          className="flex items-center gap-3 text-left hover:opacity-70 transition-opacity"
+                        >
                           <Receipt className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <p className="text-sm font-medium">Invoice</p>
+                            <p className="text-sm font-medium text-primary hover:underline">Invoice</p>
                             <p className="text-xs text-muted-foreground font-mono">{traceability.invoice.invoice_number}</p>
                           </div>
-                        </div>
+                        </button>
                         <div className="flex items-center gap-2">
                           <Badge variant={traceability.invoice.status === 'PAID' ? 'default' : 'secondary'} className="text-xs">
                             {traceability.invoice.status}
                           </Badge>
                           <span className="text-sm font-medium">${Number(traceability.invoice.total_amount).toLocaleString()}</span>
+                          <Button size="sm" variant="ghost" title="Open invoice"
+                            onClick={() => setLocation(`/finance/invoices/${traceability.invoice!.id}`)}>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-3 py-2 px-3 rounded-lg border text-muted-foreground">
-                        <Receipt className="h-4 w-4" />
-                        <p className="text-sm">Invoice — not yet raised</p>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg border text-muted-foreground">
+                        <div className="flex items-center gap-3">
+                          <Receipt className="h-4 w-4" />
+                          <p className="text-sm">Invoice — not yet raised</p>
+                        </div>
+                        {traceability.po?.customer_id && (
+                          <Button size="sm" variant="ghost" className="text-xs gap-1.5"
+                            onClick={() => setLocation(`/finance/invoices?customerId=${traceability.po!.customer_id}`)}>
+                            <ExternalLink className="h-3 w-3" /> View customer invoices
+                          </Button>
+                        )}
                       </div>
                     )}
 

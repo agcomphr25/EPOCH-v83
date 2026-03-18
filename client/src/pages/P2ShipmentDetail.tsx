@@ -81,7 +81,7 @@ interface SerializedItem {
   part_name: string | null;
   status: string;
   barcode: string | null;
-  manufactured_date: string | null;
+  completed_at: string | null;
 }
 
 interface Invoice {

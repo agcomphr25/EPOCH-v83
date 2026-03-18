@@ -980,7 +980,7 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       const placeholders = itemIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
       serializedItems = await pool.query(
         `SELECT id, serial_number, part_number, part_name, status, barcode,
-                manufactured_date, po_id
+                completed_at, po_id
          FROM p2_serialized_items WHERE id IN (${placeholders})
          ORDER BY serial_number`,
         itemIds

@@ -123,7 +123,8 @@ router.post('/lots', async (req: Request, res: Response) => {
         partName: first.partName,
         customerId: first.customerId,
         customerName: first.customerName,
-        poNumber: first.poNumber,
+        poNumber: first.poNumber, // kept for display/legacy
+        poId: first.poId,         // hard FK — serial already carries the integer po_id
         quantity: serials.length,
         serializedItemIds: input.serialIds,
         barcodes: serials.map((s) => s.barcode),

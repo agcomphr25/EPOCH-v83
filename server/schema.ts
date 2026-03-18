@@ -5090,7 +5090,8 @@ export const p2LotNumbers = pgTable('p2_lot_numbers', {
   partName: text('part_name'),
   customerId: text('customer_id'),
   customerName: text('customer_name'),
-  poNumber: text('po_number'),
+  poNumber: text('po_number'), // Kept as denormalized text for display/legacy
+  poId: integer('po_id').references(() => p2PurchaseOrders.id), // Hard FK — replaces fragile text join
   quantity: integer('quantity').default(1),
   serializedItemIds: jsonb('serialized_item_ids'), // Array of serialized item UUIDs in this lot
   barcodes: jsonb('barcodes'), // Array of barcodes in this lot for easy reference

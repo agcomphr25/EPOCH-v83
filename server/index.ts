@@ -900,6 +900,25 @@ async function initializeBackgroundServices() {
         // Columns may already exist
       }
 
+      // Ensure p2_lot_numbers has po_id FK column and backfill from po_number
+      try {
+        const { sql: sqlLot } = await import('drizzle-orm');
+        await db.execute(sqlLot`
+          ALTER TABLE p2_lot_numbers
+          ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)
+        `);
+        await db.execute(sqlLot`
+          UPDATE p2_lot_numbers l
+          SET po_id = po.id
+          FROM p2_purchase_orders po
+          WHERE l.po_number = po.po_number
+            AND l.po_id IS NULL
+        `);
+        console.log('✅ Ensured p2_lot_numbers has po_id FK (backfilled from po_number)');
+      } catch (lotPoIdError: any) {
+        console.warn('⚠️ p2_lot_numbers po_id migration warning:', lotPoIdError?.message);
+      }
+
       // Ensure production_orders has canonical material + source snapshot columns
       try {
         const { sql: sqlPO } = await import('drizzle-orm');

@@ -1,0 +1,154 @@
+PROMPT 1 — BUILD TRACEABILITY TAB
+You are implementing the "Traceability" tab in the P2 Project Profile.
+
+This is a BUILD task.
+
+========================================
+OBJECTIVE
+========================================
+
+Display full cradle-to-grave data for a project:
+
+- Shipment (lot + packing slip)
+- Serial numbers
+- Documents (CoC, invoice)
+
+========================================
+DATA FLOW
+========================================
+
+Given:
+
+project.id
+
+----------------------------------------
+
+1. Get project:
+
+SELECT * FROM projects WHERE id = $1
+
+----------------------------------------
+
+2. Get PO:
+
+SELECT * FROM p2_purchase_orders
+WHERE id = project.po_id
+
+----------------------------------------
+
+3. Get lot:
+
+SELECT * FROM p2_lot_numbers
+WHERE po_id = project.po_id
+ORDER BY created_at DESC
+LIMIT 1
+
+----------------------------------------
+
+4. Get packing slip:
+
+SELECT * FROM p2_packing_slips
+WHERE lot_number_id = lot.id
+
+----------------------------------------
+
+5. Get certificate:
+
+SELECT * FROM p2_certificates_of_conformance
+WHERE lot_number_id = lot.id
+
+----------------------------------------
+
+6. Get invoice (optional):
+
+SELECT * FROM arInvoices
+WHERE lot_id = lot.id
+OR packing_slip_id = packing_slip.id
+
+----------------------------------------
+
+7. Get serials:
+
+SELECT * FROM p2_serialized_items
+WHERE po_id = project.po_id
+ORDER BY serial_number
+
+========================================
+UI STRUCTURE
+========================================
+
+Add new tab:
+
+"Traceability"
+
+----------------------------------------
+
+SECTION 1 — SHIPMENT SUMMARY
+
+Display:
+
+- Packing Slip #
+- Lot #
+- Status
+- Ship date
+
+Buttons:
+
+- View Packing Slip
+- Download PDF (/api/p2/packing-slips/:id/pdf)
+- View CoC
+- View Invoice (if exists)
+
+----------------------------------------
+
+SECTION 2 — SERIALIZED ITEMS
+
+Group by:
+
+partNumber
+
+Display:
+
+- Part name
+- Quantity
+- Serial numbers list
+
+----------------------------------------
+
+SECTION 3 — PRODUCTION STATUS
+
+Calculate:
+
+- total serials
+- completed (completedAt != null)
+- finalized (finalizedAt != null)
+
+----------------------------------------
+
+SECTION 4 — DOCUMENTS
+
+List:
+
+- Packing Slip
+- CoC
+- Invoice
+- Existing attached project docs
+
+========================================
+RULES
+========================================
+
+- DO NOT duplicate backend logic
+- Use existing endpoints where possible
+- Keep UI clean and readable
+- Handle missing lot (project not yet shipped)
+
+========================================
+OUTPUT
+========================================
+
+Return:
+
+1. New tab UI
+2. Data fetching logic
+3. Any assumptions

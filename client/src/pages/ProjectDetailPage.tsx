@@ -36,7 +36,15 @@ import {
   Trash2,
   Eye,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Package,
+  Hash,
+  Truck,
+  Award,
+  Receipt,
+  Layers,
+  CheckSquare,
+  Tag
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -108,6 +116,42 @@ interface StepAttachment {
   uploadedBy: number | null;
   notes: string | null;
   createdAt: string;
+}
+
+interface TraceabilitySerial {
+  id: string;
+  serial_number: string;
+  barcode: string;
+  part_number: string;
+  part_name: string;
+  status: string;
+  completed_at: string | null;
+  finalized_at: string | null;
+  current_department: string;
+  sku: string | null;
+  sequence_number: number;
+}
+
+interface TraceabilityData {
+  hasShipment: boolean;
+  lot: {
+    id: string; lot_number: string; status: string;
+    shipped_at: string | null; created_at: string; quantity: number; po_number: string;
+  } | null;
+  packingSlip: {
+    id: string; packing_slip_number: string; status: string;
+    ship_date: string | null; carrier: string | null; tracking_number: string | null;
+    total_quantity: number; created_at: string;
+  } | null;
+  certificate: {
+    id: string; certificate_number: string; status: string;
+    approved_at: string | null; issued_at: string | null; created_at: string;
+  } | null;
+  invoice: {
+    id: string; invoice_number: string; status: string;
+    total_amount: string; invoice_date: string; created_at: string;
+  } | null;
+  serials: TraceabilitySerial[];
 }
 
 const STEP_CONFIG: Record<string, { label: string; route: string; icon: typeof FileText }> = {
@@ -194,6 +238,12 @@ export default function ProjectDetailPage() {
 
   const { data: allStepAttachments = [] } = useQuery<StepAttachment[]>({
     queryKey: ['/api/project-step-attachments/by-project', id],
+    enabled: !!id,
+  });
+
+  const { data: traceability, isLoading: isLoadingTraceability } = useQuery<TraceabilityData>({
+    queryKey: ['/api/projects', id, 'traceability'],
+    queryFn: () => fetch(`/api/projects/${id}/traceability`).then(r => r.json()),
     enabled: !!id,
   });
 
@@ -561,6 +611,7 @@ export default function ProjectDetailPage() {
         <TabsList>
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
+          <TabsTrigger value="traceability" data-testid="tab-traceability">Traceability</TabsTrigger>
         </TabsList>
 
         <TabsContent value="workflow" className="space-y-4">
@@ -910,6 +961,323 @@ export default function ProjectDetailPage() {
               </ScrollArea>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── TRACEABILITY TAB ── */}
+        <TabsContent value="traceability" className="space-y-4">
+          {isLoadingTraceability ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Loading traceability data…
+              </CardContent>
+            </Card>
+          ) : !traceability ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Unable to load traceability data.
+              </CardContent>
+            </Card>
+          ) : !project?.poId ? (
+            <Card>
+              <CardContent className="py-12 text-center space-y-2">
+                <Package className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                <p className="text-muted-foreground font-medium">No PO linked to this project.</p>
+                <p className="text-sm text-muted-foreground">Link a purchase order to see traceability data.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* ── SECTION 1: Shipment Summary ── */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Truck className="h-4 w-4" /> Shipment Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!traceability.hasShipment || !traceability.lot ? (
+                    <div className="text-center py-6 space-y-2">
+                      <Clock className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                      <p className="text-muted-foreground font-medium">Not yet shipped</p>
+                      <p className="text-sm text-muted-foreground">No lot has been created for this PO.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Lot #</p>
+                          <p className="font-mono font-medium text-sm">{traceability.lot.lot_number}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Packing Slip</p>
+                          <p className="font-mono font-medium text-sm">
+                            {traceability.packingSlip?.packing_slip_number ?? '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Status</p>
+                          <Badge variant={traceability.lot.status === 'SHIPPED' ? 'default' : 'secondary'}>
+                            {traceability.lot.status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Ship Date</p>
+                          <p className="text-sm">
+                            {traceability.packingSlip?.ship_date
+                              ? format(new Date(traceability.packingSlip.ship_date), 'MMM d, yyyy')
+                              : traceability.lot.shipped_at
+                                ? format(new Date(traceability.lot.shipped_at), 'MMM d, yyyy')
+                                : '—'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {(traceability.packingSlip?.carrier || traceability.packingSlip?.tracking_number) && (
+                        <div className="grid grid-cols-2 gap-4">
+                          {traceability.packingSlip.carrier && (
+                            <div>
+                              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Carrier</p>
+                              <p className="text-sm">{traceability.packingSlip.carrier}</p>
+                            </div>
+                          )}
+                          {traceability.packingSlip.tracking_number && (
+                            <div>
+                              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Tracking #</p>
+                              <p className="font-mono text-sm">{traceability.packingSlip.tracking_number}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {traceability.packingSlip && (
+                          <>
+                            <Button size="sm" variant="outline" asChild>
+                              <a
+                                href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <Download className="h-3.5 w-3.5 mr-1.5" />
+                                Download Packing Slip PDF
+                              </a>
+                            </Button>
+                          </>
+                        )}
+                        {traceability.certificate && (
+                          <Badge variant="outline" className="px-3 py-1.5 text-xs">
+                            <Award className="h-3 w-3 mr-1.5" />
+                            CoC {traceability.certificate.certificate_number} · {traceability.certificate.status}
+                          </Badge>
+                        )}
+                        {traceability.invoice && (
+                          <Badge variant="outline" className="px-3 py-1.5 text-xs">
+                            <Receipt className="h-3 w-3 mr-1.5" />
+                            Invoice {traceability.invoice.invoice_number} · ${Number(traceability.invoice.total_amount).toLocaleString()}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ── SECTION 2: Serialized Items ── */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Hash className="h-4 w-4" /> Serialized Items
+                  </CardTitle>
+                  <CardDescription>
+                    {traceability.serials.length} serial{traceability.serials.length !== 1 ? 's' : ''} across this PO
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {traceability.serials.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">No serialized items found.</p>
+                  ) : (
+                    <div className="space-y-5">
+                      {Object.entries(
+                        traceability.serials.reduce<Record<string, TraceabilitySerial[]>>((acc, s) => {
+                          const key = `${s.part_number}||${s.part_name}`;
+                          if (!acc[key]) acc[key] = [];
+                          acc[key].push(s);
+                          return acc;
+                        }, {})
+                      ).map(([key, items]) => {
+                        const [partNumber, partName] = key.split('||');
+                        return (
+                          <div key={key} className="border rounded-lg p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-medium text-sm">{partName}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{partNumber}</p>
+                              </div>
+                              <Badge variant="secondary">{items.length} unit{items.length !== 1 ? 's' : ''}</Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {items.map(s => (
+                                <span
+                                  key={s.id}
+                                  title={`${s.status} · ${s.current_department}`}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono border
+                                    ${s.finalized_at
+                                      ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300'
+                                      : s.completed_at
+                                        ? 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300'
+                                        : 'bg-muted border-border text-muted-foreground'
+                                    }`}
+                                >
+                                  {s.serial_number}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300 mr-1 align-middle" />finalized &nbsp;
+                              <span className="inline-block w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 mr-1 align-middle" />completed &nbsp;
+                              <span className="inline-block w-3 h-3 rounded-sm bg-muted border mr-1 align-middle" />in progress
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ── SECTION 3: Production Status ── */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Layers className="h-4 w-4" /> Production Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const total = traceability.serials.length;
+                    const completed = traceability.serials.filter(s => s.completed_at).length;
+                    const finalized = traceability.serials.filter(s => s.finalized_at).length;
+                    const completedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                    const finalizedPct = total > 0 ? Math.round((finalized / total) * 100) : 0;
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div className="rounded-lg border p-3">
+                            <p className="text-2xl font-bold">{total}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Total Serials</p>
+                          </div>
+                          <div className="rounded-lg border p-3 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
+                            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{completed}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Completed</p>
+                          </div>
+                          <div className="rounded-lg border p-3 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
+                            <p className="text-2xl font-bold text-green-700 dark:text-green-300">{finalized}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Finalized</p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Completed</span><span>{completedPct}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${completedPct}%` }} />
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Finalized</span><span>{finalizedPct}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${finalizedPct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* ── SECTION 4: Documents ── */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4" /> Documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {traceability.packingSlip ? (
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <Tag className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">Packing Slip</p>
+                            <p className="text-xs text-muted-foreground font-mono">{traceability.packingSlip.packing_slip_number}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={traceability.packingSlip.status === 'SHIPPED' ? 'default' : 'secondary'} className="text-xs">
+                            {traceability.packingSlip.status}
+                          </Badge>
+                          <Button size="sm" variant="ghost" asChild>
+                            <a href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`} target="_blank" rel="noreferrer">
+                              <Download className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 py-2 px-3 rounded-lg border text-muted-foreground">
+                        <Tag className="h-4 w-4" />
+                        <p className="text-sm">Packing Slip — not yet generated</p>
+                      </div>
+                    )}
+
+                    {traceability.certificate ? (
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <Award className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">Certificate of Conformance</p>
+                            <p className="text-xs text-muted-foreground font-mono">{traceability.certificate.certificate_number}</p>
+                          </div>
+                        </div>
+                        <Badge variant={traceability.certificate.status === 'ISSUED' ? 'default' : 'secondary'} className="text-xs">
+                          {traceability.certificate.status}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 py-2 px-3 rounded-lg border text-muted-foreground">
+                        <Award className="h-4 w-4" />
+                        <p className="text-sm">Certificate of Conformance — not yet generated</p>
+                      </div>
+                    )}
+
+                    {traceability.invoice ? (
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <Receipt className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">Invoice</p>
+                            <p className="text-xs text-muted-foreground font-mono">{traceability.invoice.invoice_number}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={traceability.invoice.status === 'PAID' ? 'default' : 'secondary'} className="text-xs">
+                            {traceability.invoice.status}
+                          </Badge>
+                          <span className="text-sm font-medium">${Number(traceability.invoice.total_amount).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 py-2 px-3 rounded-lg border text-muted-foreground">
+                        <Receipt className="h-4 w-4" />
+                        <p className="text-sm">Invoice — not yet raised</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
 

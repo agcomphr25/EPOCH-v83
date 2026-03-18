@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
+import { db, pool } from '../../db';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 
@@ -692,6 +693,113 @@ router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
   } catch (error) {
     console.error('Error reopening project step:', error);
     res.status(500).json({ message: 'Failed to reopen project step' });
+  }
+});
+
+// GET /api/projects/:id/traceability — full cradle-to-grave data for a project
+router.get('/:id/traceability', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    if (!project.poId) {
+      return res.json({ hasShipment: false, serials: [], project });
+    }
+
+    // Lot — most recent for this PO
+    const lots = await pool.query<{
+      id: string; lot_number: string; status: string; shipped_at: string | null;
+      created_at: string; quantity: number; po_number: string;
+    }>(
+      `SELECT id, lot_number, status, shipped_at, created_at, quantity, po_number
+       FROM p2_lot_numbers
+       WHERE po_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [project.poId]
+    );
+    const lot = lots[0] ?? null;
+
+    let packingSlip: any = null;
+    let certificate: any = null;
+    let invoice: any = null;
+
+    if (lot) {
+      // Packing slip
+      const slips = await pool.query<{
+        id: string; packing_slip_number: string; status: string;
+        ship_date: string | null; carrier: string | null; tracking_number: string | null;
+        total_quantity: number; created_at: string;
+      }>(
+        `SELECT id, packing_slip_number, status, ship_date, carrier, tracking_number,
+                total_quantity, created_at
+         FROM p2_packing_slips
+         WHERE lot_number_id = $1
+         LIMIT 1`,
+        [lot.id]
+      );
+      packingSlip = slips[0] ?? null;
+
+      // Certificate of Conformance
+      const cocs = await pool.query<{
+        id: string; certificate_number: string; status: string;
+        approved_at: string | null; issued_at: string | null; created_at: string;
+      }>(
+        `SELECT id, certificate_number, status, approved_at, issued_at, created_at
+         FROM p2_certificates_of_conformance
+         WHERE lot_number_id = $1
+         LIMIT 1`,
+        [lot.id]
+      );
+      certificate = cocs[0] ?? null;
+
+      // Invoice (optional — linked via lot_id or packing_slip_id)
+      const invoiceParams: any[] = [lot.id];
+      let invoiceWhere = `WHERE lot_id = $1`;
+      if (packingSlip) {
+        invoiceWhere += ` OR packing_slip_id = $2`;
+        invoiceParams.push(packingSlip.id);
+      }
+      const invoices = await pool.query<{
+        id: string; invoice_number: string; status: string;
+        total_amount: string; invoice_date: string; created_at: string;
+      }>(
+        `SELECT id, invoice_number, status, total_amount, invoice_date, created_at
+         FROM ar_invoices ${invoiceWhere}
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        invoiceParams
+      );
+      invoice = invoices[0] ?? null;
+    }
+
+    // Serialized items for this PO
+    const serials = await pool.query<{
+      id: string; serial_number: string; barcode: string; part_number: string;
+      part_name: string; status: string; completed_at: string | null; finalized_at: string | null;
+      current_department: string; sku: string | null; sequence_number: number;
+    }>(
+      `SELECT id, serial_number, barcode, part_number, part_name, status,
+              completed_at, finalized_at, current_department, sku, sequence_number
+       FROM p2_serialized_items
+       WHERE po_id = $1
+       ORDER BY part_number, sequence_number`,
+      [project.poId]
+    );
+
+    return res.json({
+      hasShipment: !!lot,
+      project,
+      lot,
+      packingSlip,
+      certificate,
+      invoice,
+      serials,
+    });
+  } catch (err: any) {
+    console.error('Error fetching project traceability:', err);
+    res.status(500).json({ message: 'Failed to fetch traceability data' });
   }
 });
 

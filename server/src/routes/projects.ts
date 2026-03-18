@@ -756,8 +756,18 @@ router.get('/:id/traceability', async (req, res) => {
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
     if (!project.poId) {
-      return res.json({ hasShipment: false, serials: [], project });
+      return res.json({ hasShipment: false, serials: [], project, po: null });
     }
+
+    // PO details
+    const poRows = await pool.query<{
+      id: number; po_number: string; customer_name: string; status: string; created_at: string;
+    }>(
+      `SELECT id, po_number, customer_name, status, created_at
+       FROM p2_purchase_orders WHERE id = $1 LIMIT 1`,
+      [project.poId]
+    );
+    const po = poRows[0] ?? null;
 
     // Lot — most recent for this PO
     const lots = await pool.query<{
@@ -843,6 +853,7 @@ router.get('/:id/traceability', async (req, res) => {
     return res.json({
       hasShipment: !!lot,
       project,
+      po,
       lot,
       packingSlip,
       certificate,

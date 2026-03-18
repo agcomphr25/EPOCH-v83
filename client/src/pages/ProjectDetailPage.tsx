@@ -148,6 +148,9 @@ interface TraceabilitySerial {
 
 interface TraceabilityData {
   hasShipment: boolean;
+  po: {
+    id: number; po_number: string; customer_name: string; status: string; created_at: string;
+  } | null;
   lot: {
     id: string; lot_number: string; status: string;
     shipped_at: string | null; created_at: string; quantity: number; po_number: string;
@@ -1125,6 +1128,39 @@ export default function ProjectDetailPage() {
             </Card>
           ) : (
             <>
+              {/* ── SECTION 0: Linked PO ── */}
+              {traceability.po && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Receipt className="h-4 w-4" /> Linked Purchase Order
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">PO Number</p>
+                        <p className="font-mono font-semibold text-sm">{traceability.po.po_number}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Customer</p>
+                        <p className="text-sm">{traceability.po.customer_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Status</p>
+                        <Badge variant={traceability.po.status === 'COMPLETE' ? 'default' : 'secondary'} className="text-xs">
+                          {traceability.po.status}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">PO Date</p>
+                        <p className="text-sm">{format(new Date(traceability.po.created_at), 'MMM d, yyyy')}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* ── SECTION 1: Shipment Summary ── */}
               <Card>
                 <CardHeader className="pb-3">
@@ -1355,8 +1391,13 @@ export default function ProjectDetailPage() {
                           <Badge variant={traceability.packingSlip.status === 'SHIPPED' ? 'default' : 'secondary'} className="text-xs">
                             {traceability.packingSlip.status}
                           </Badge>
-                          <Button size="sm" variant="ghost" asChild>
+                          <Button size="sm" variant="ghost" title="Preview PDF" asChild>
                             <a href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`} target="_blank" rel="noreferrer">
+                              <Eye className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Download PDF" asChild>
+                            <a href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`} download>
                               <Download className="h-3.5 w-3.5" />
                             </a>
                           </Button>
@@ -1378,9 +1419,21 @@ export default function ProjectDetailPage() {
                             <p className="text-xs text-muted-foreground font-mono">{traceability.certificate.certificate_number}</p>
                           </div>
                         </div>
-                        <Badge variant={traceability.certificate.status === 'ISSUED' ? 'default' : 'secondary'} className="text-xs">
-                          {traceability.certificate.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={traceability.certificate.status === 'ISSUED' ? 'default' : 'secondary'} className="text-xs">
+                            {traceability.certificate.status}
+                          </Badge>
+                          <Button size="sm" variant="ghost" title="Preview PDF" asChild>
+                            <a href={`/api/p2/certificates/${traceability.certificate.id}/pdf`} target="_blank" rel="noreferrer">
+                              <Eye className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Download PDF" asChild>
+                            <a href={`/api/p2/certificates/${traceability.certificate.id}/pdf`} download>
+                              <Download className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-3 py-2 px-3 rounded-lg border text-muted-foreground">

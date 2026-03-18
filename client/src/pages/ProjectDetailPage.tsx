@@ -326,6 +326,8 @@ export default function ProjectDetailPage() {
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [mediaSearch, setMediaSearch] = useState('');
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewTitle, setPdfPreviewTitle] = useState<string>('');
 
   const { data: projectDocs = [] } = useQuery<ProjectDoc[]>({
     queryKey: ['/api/projects', id, 'documents'],
@@ -1227,7 +1229,12 @@ export default function ProjectDetailPage() {
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">PO Number</p>
-                        <p className="font-mono font-semibold text-sm">{traceability.po.po_number}</p>
+                        <button
+                          onClick={() => setLocation(`/p2-control-center?tab=pos`)}
+                          className="font-mono font-semibold text-sm text-primary hover:underline cursor-pointer"
+                        >
+                          {traceability.po.po_number}
+                        </button>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Customer</p>
@@ -1593,10 +1600,9 @@ export default function ProjectDetailPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
-                              <Button size="sm" variant="ghost" title="Preview" asChild>
-                                <a href={`/api/projects/${id}/documents/${doc.id}/file`} target="_blank" rel="noreferrer">
-                                  <Eye className="h-3.5 w-3.5" />
-                                </a>
+                              <Button size="sm" variant="ghost" title="Preview"
+                                onClick={() => { setPdfPreviewUrl(`/api/projects/${id}/documents/${doc.id}/file`); setPdfPreviewTitle(doc.label || doc.original_file_name); }}>
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                               <Button size="sm" variant="ghost" title="Download" asChild>
                                 <a href={`/api/projects/${id}/documents/${doc.id}/file`} download={doc.original_file_name}>
@@ -1619,6 +1625,34 @@ export default function ProjectDetailPage() {
             </>
           )}
         </TabsContent>
+
+        {/* ── PDF Preview Dialog ── */}
+        <Dialog open={!!pdfPreviewUrl} onOpenChange={(open) => { if (!open) setPdfPreviewUrl(null); }}>
+          <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0">
+            <DialogHeader className="px-4 pt-4 pb-2 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <DialogTitle className="flex items-center gap-2 text-base truncate">
+                  <FileText className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{pdfPreviewTitle}</span>
+                </DialogTitle>
+                <Button size="sm" variant="outline" asChild className="flex-shrink-0 ml-4">
+                  <a href={pdfPreviewUrl ?? ''} download>
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> Download
+                  </a>
+                </Button>
+              </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden px-4 pb-4">
+              {pdfPreviewUrl && (
+                <iframe
+                  src={pdfPreviewUrl}
+                  className="w-full h-full rounded-lg border"
+                  title={pdfPreviewTitle}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ── Attach Document Dialog ── */}
         <Dialog open={showAttachDoc} onOpenChange={setShowAttachDoc}>

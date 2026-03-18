@@ -483,8 +483,9 @@ export default function P2ShippingTab() {
 
                     {/* ── Unit table ── */}
                     <div className="border rounded-lg overflow-hidden">
+                      <div className="overflow-y-auto max-h-[560px]">
                       <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
+                        <thead className="bg-muted/50 sticky top-0 z-10">
                           <tr>
                             {showCheckboxCol && (
                               <th className="px-3 py-2 w-10 text-center">
@@ -593,6 +594,7 @@ export default function P2ShippingTab() {
                           })}
                         </tbody>
                       </table>
+                      </div>
                     </div>
 
                     {/* Column legend */}

@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, Calendar, Clock, ExternalLink, FileText, MoreVertical, Package } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, ExternalLink, FileText, LayoutDashboard, MoreVertical, Package } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -312,6 +312,10 @@ export default function P2PipelineBoardPage() {
             {projects.length} active project{projects.length !== 1 ? 's' : ''} across {PIPELINE_STAGES.length} stages
           </p>
         </div>
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setLocation('/projects')}>
+          <LayoutDashboard className="h-4 w-4 mr-2" />
+          Project Dashboard
+        </Button>
       </div>
 
       <DndContext

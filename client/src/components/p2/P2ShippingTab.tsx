@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import ShipmentSummaryModal from './ShipmentSummaryModal';
 
 type SerializedUnit = {
   id: string;
@@ -84,6 +85,8 @@ export default function P2ShippingTab() {
   const [createdShipments, setCreatedShipments] = useState<Record<string, CreatedShipment>>({});
   const [creatingShipmentFor, setCreatingShipmentFor] = useState<string | null>(null);
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
+  const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
+  const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
 
   const { data: shippingUnits = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
     queryKey: ['/api/p2/serialized-items/shipping-queue'],
@@ -305,6 +308,22 @@ export default function P2ShippingTab() {
 
   return (
     <div className="space-y-6">
+      {summaryModalPO && (
+        <ShipmentSummaryModal
+          serials={summaryModalSerials}
+          onConfirm={() => {
+            const po = summaryModalPO;
+            setSummaryModalPO(null);
+            setSummaryModalSerials([]);
+            handleCreateShipment(po);
+          }}
+          onCancel={() => {
+            setSummaryModalPO(null);
+            setSummaryModalSerials([]);
+          }}
+        />
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-4">
         <Card><div className="pt-4 pb-3 text-center"><div className="text-2xl font-bold">{summary.poCount}</div><div className="text-xs text-muted-foreground">POs with Units</div></div></Card>
@@ -623,7 +642,11 @@ export default function P2ShippingTab() {
                         <Button
                           size="sm"
                           disabled={shipSelectedCount === 0 || creatingShipmentFor === group.poNumber}
-                          onClick={() => handleCreateShipment(group.poNumber)}
+                          onClick={() => {
+                            const selected = group.units.filter((u) => shipSelForPO.has(u.id));
+                            setSummaryModalSerials(selected);
+                            setSummaryModalPO(group.poNumber);
+                          }}
                           className="bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           {creatingShipmentFor === group.poNumber ? (

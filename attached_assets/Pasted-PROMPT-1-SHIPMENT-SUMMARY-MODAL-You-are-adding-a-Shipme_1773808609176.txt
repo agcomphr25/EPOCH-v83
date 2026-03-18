@@ -1,0 +1,129 @@
+PROMPT 1 — SHIPMENT SUMMARY MODAL
+You are adding a Shipment Summary Modal to the P2 shipping workflow.
+
+This is a BUILD task.
+
+========================================
+OBJECTIVE
+========================================
+
+Before creating a shipment (lot), show a modal that summarizes:
+
+- Customer
+- PO number
+- Total quantity
+- Grouped line items (by part number)
+- Serial numbers
+- Lot preview
+
+User must CONFIRM before shipment is created.
+
+========================================
+FILE TO MODIFY
+========================================
+
+client/src/components/p2/P2ShippingTab.tsx
+
+Create new component:
+
+client/src/components/p2/ShipmentSummaryModal.tsx
+
+========================================
+MODAL INPUT
+========================================
+
+Props:
+
+{
+  serials: SerializedItem[]
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+========================================
+MODAL CONTENT
+========================================
+
+1. HEADER
+- "Shipment Summary"
+- Customer name
+- PO number
+- Total units
+
+2. GROUPED ITEMS
+
+Group serials by:
+
+partNumber
+
+Display:
+
+Part Number
+Part Name
+Quantity
+List of serial numbers
+
+========================================
+GROUPING LOGIC
+========================================
+
+Group by:
+
+serial.partNumber
+
+Example:
+
+const grouped = groupBy(serials, s => s.partNumber)
+
+========================================
+LOT PREVIEW
+========================================
+
+Display:
+
+"Lot will be generated upon confirmation"
+
+(Optional: show placeholder like LOT-YYYYMMDD-XXXX)
+
+========================================
+ACTIONS
+========================================
+
+Buttons:
+
+- Confirm Shipment → calls onConfirm
+- Cancel → calls onCancel
+
+========================================
+INTEGRATION
+========================================
+
+In P2ShippingTab:
+
+1. Replace direct call to create lot
+2. When user clicks "Create Shipment":
+   - open modal
+   - pass selected serials
+
+3. On confirm:
+   - call existing lot creation API
+   - close modal
+
+========================================
+RULES
+========================================
+
+- DO NOT change backend
+- DO NOT duplicate logic
+- Keep modal simple and clean
+- Use existing styling system
+
+========================================
+OUTPUT
+========================================
+
+Return:
+
+1. New modal component
+2. Updated P2ShippingTab integration
+3. Any helper functions added

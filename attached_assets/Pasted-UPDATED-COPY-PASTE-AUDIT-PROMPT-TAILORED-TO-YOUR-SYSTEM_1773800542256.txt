@@ -1,0 +1,244 @@
+UPDATED COPY-PASTE AUDIT PROMPT (TAILORED TO YOUR SYSTEM)
+
+This is now MUCH sharper and aligned to your reality:
+
+🧾 PROMPT: EPOCH P2 Shipping + Document Generation Audit (REFINED)
+You are performing a targeted system audit of the EPOCH codebase to implement P2 shipping enhancements and document generation.
+
+This is a READ-ONLY audit. Do NOT modify code.
+
+========================================
+OBJECTIVE
+========================================
+
+Prepare to implement:
+
+1. "Start Production" state tracking (manual trigger)
+2. Shipment creation using EXISTING serial numbers
+3. Serial number selection UI for packing
+4. Packing Slip PDF generation
+5. Certificate of Conformance (CoC) PDF generation
+
+IMPORTANT CONTEXT:
+- Serial numbers ALREADY EXIST in the system
+- "Ready to Ship" is controlled by a MANUAL STATUS TOGGLE
+- Shipping domain ALREADY EXISTS (separate from P1)
+- Lot numbers are derived per shipment grouping (per PO)
+- A CENTRAL PDF SYSTEM already exists and should be reused
+
+========================================
+PART 1 — SERIAL NUMBER SOURCE OF TRUTH
+========================================
+
+Search for:
+
+- "serial"
+- "serialized"
+- "unit"
+- "instance"
+
+Document:
+
+1. The EXACT table(s) where serial numbers are stored
+2. Schema (columns + types)
+3. Relationships:
+   - linked to production_orders?
+   - linked to order_items?
+   - linked to inventory?
+
+4. Status fields:
+   - Is there a field indicating:
+     - ready_to_ship
+     - complete
+     - qc_passed
+
+Answer clearly:
+- How do we query "ALL SERIAL NUMBERS AVAILABLE TO SHIP"?
+
+========================================
+PART 2 — PRODUCTION STATUS ("START PRODUCTION")
+========================================
+
+Locate:
+
+- production_orders
+- work_orders
+- travelers
+
+Document:
+
+- Current status system
+- Fields for:
+  - planned
+  - in_progress
+  - completed
+
+Answer:
+- Where should a "Start Production" action live?
+- Is there already a field we can reuse for:
+  - started_at
+  - started_by
+  - status = in_progress
+
+========================================
+PART 3 — EXISTING SHIPPING DOMAIN (CRITICAL)
+========================================
+
+Search for:
+
+- shipment
+- packing
+- fulfillment
+
+Document ALL:
+
+1. Shipment-related tables
+2. Schema (columns + relationships)
+3. Differences between:
+   - P1 shipping
+   - P2 shipping (if applicable)
+
+Answer:
+- Can shipments already store:
+  - multiple items?
+  - serial numbers?
+
+- If serials are NOT currently stored:
+  - how are quantities tracked?
+
+========================================
+PART 4 — LOT NUMBER HANDLING
+========================================
+
+Search for:
+
+- "lot"
+- "batch"
+
+Document:
+
+- Where lot numbers are currently stored
+- Whether they are:
+  - tied to production
+  - tied to inventory
+  - tied to shipment
+
+Answer:
+- Can a single shipment contain MULTIPLE LOTS (per PO)?
+- Where should lot number be generated or stored for P2?
+
+========================================
+PART 5 — CUSTOMER + PO DATA
+========================================
+
+Locate:
+
+- sales_orders
+- customers
+- addresses
+
+Document:
+
+- How to retrieve:
+  - customer name
+  - ship-to address
+  - PO number
+
+- Address structure:
+  - JSON vs normalized
+
+========================================
+PART 6 — CENTRAL PDF SYSTEM (VERY IMPORTANT)
+========================================
+
+Search for:
+
+- pdf
+- document
+- print
+- template
+
+Identify:
+
+1. PDF generation mechanism (library or service)
+2. Existing templates (if any)
+3. Entry point for generating PDFs
+
+Answer:
+- How do we plug in:
+  - Packing Slip template
+  - CoC template
+
+========================================
+PART 7 — UI ENTRY POINTS
+========================================
+
+Find:
+
+- Production dashboards
+- Order detail pages
+- Shipping pages
+
+Answer:
+- Where should:
+  - "Create Shipment"
+  - "Select Serial Numbers"
+  - "Generate Documents"
+
+live in the UI?
+
+========================================
+PART 8 — GAP ANALYSIS (FOCUSED)
+========================================
+
+Provide a CLEAR summary:
+
+1. What already exists:
+   - serialization
+   - shipping
+   - PDF system
+
+2. What is missing:
+   - serial selection in shipments?
+   - document templates?
+   - lot assignment at shipment level?
+
+3. Minimal additions required:
+   - new fields?
+   - new tables?
+   - new endpoints?
+
+========================================
+PART 9 — IMPLEMENTATION PLAN
+========================================
+
+Propose a phased plan:
+
+PHASE 1:
+- Enable "Start Production"
+
+PHASE 2:
+- Enable selecting serial numbers for shipment
+
+PHASE 3:
+- Generate Packing Slip PDF
+
+PHASE 4:
+- Generate CoC PDF (auto from same data)
+
+IMPORTANT:
+- Avoid duplicating existing systems
+- Reuse serialization, shipping, and PDF infrastructure wherever possible
+
+========================================
+OUTPUT FORMAT
+========================================
+
+Return:
+
+1. Table inventory (grouped by domain)
+2. Current data flow (production → shipment)
+3. Exact query to fetch "ready to ship serials"
+4. Missing pieces
+5. Recommended schema changes (minimal)
+6. Step-by-step implementation plan

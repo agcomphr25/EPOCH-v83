@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid, Hash, ExternalLink, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ProjectStep {
@@ -55,6 +55,17 @@ interface Employee {
   id: number;
   name: string;
   userRole: string;
+}
+
+interface SerialSearchResult {
+  serial_number: string;
+  part_number: string;
+  part_name: string;
+  po_id: number;
+  po_number: string;
+  project_id: string | null;
+  project_code: string | null;
+  project_name: string | null;
 }
 
 const STEP_LABELS: Record<string, string> = {
@@ -102,6 +113,13 @@ export default function ProjectsPage() {
   const [customerFilter, setCustomerFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('active_only');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  // Serial number search
+  const [serialRawInput, setSerialRawInput] = useState('');
+  const [serialQuery, setSerialQuery] = useState('');
+  const [isSerialDropdownOpen, setIsSerialDropdownOpen] = useState(false);
+  const serialDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const serialContainerRef = useRef<HTMLDivElement>(null);
   const [newProject, setNewProject] = useState({
     projectName: '',
     customerId: '',
@@ -122,6 +140,46 @@ export default function ProjectsPage() {
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
   });
+
+  const { data: serialResults = [], isFetching: isSearchingSerials } = useQuery<SerialSearchResult[]>({
+    queryKey: ['/api/p2/serial-search', serialQuery],
+    queryFn: () => fetch(`/api/p2/serial-search?q=${encodeURIComponent(serialQuery)}`).then(r => r.json()),
+    enabled: serialQuery.length >= 2,
+  });
+
+  // Close serial dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (serialContainerRef.current && !serialContainerRef.current.contains(e.target as Node)) {
+        setIsSerialDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSerialInput = (value: string) => {
+    setSerialRawInput(value);
+    if (serialDebounceRef.current) clearTimeout(serialDebounceRef.current);
+    if (!value.trim()) {
+      setSerialQuery('');
+      setIsSerialDropdownOpen(false);
+      return;
+    }
+    serialDebounceRef.current = setTimeout(() => {
+      setSerialQuery(value.trim());
+      setIsSerialDropdownOpen(true);
+    }, 300);
+  };
+
+  const handleSerialResultClick = (result: SerialSearchResult) => {
+    setIsSerialDropdownOpen(false);
+    setSerialRawInput('');
+    setSerialQuery('');
+    if (result.project_id) {
+      setLocation(`/projects/${result.project_id}?tab=traceability`);
+    }
+  };
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: typeof newProject) => {
@@ -195,6 +253,76 @@ export default function ProjectsPage() {
             New Project
           </Button>
         </div>
+      </div>
+
+      {/* Serial number lookup */}
+      <div className="relative" ref={serialContainerRef}>
+        <div className="relative">
+          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search serial number…"
+            value={serialRawInput}
+            onChange={(e) => handleSerialInput(e.target.value)}
+            onFocus={() => serialQuery.length >= 2 && setIsSerialDropdownOpen(true)}
+            className="pl-10 pr-8"
+            data-testid="input-serial-search"
+          />
+          {serialRawInput && (
+            <button
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => { setSerialRawInput(''); setSerialQuery(''); setIsSerialDropdownOpen(false); }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Results dropdown */}
+        {isSerialDropdownOpen && serialQuery.length >= 2 && (
+          <div className="absolute z-50 top-full mt-1 left-0 right-0 min-w-[340px] bg-popover border rounded-lg shadow-lg overflow-hidden">
+            {isSearchingSerials ? (
+              <div className="px-4 py-3 text-sm text-muted-foreground">Searching…</div>
+            ) : serialResults.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-muted-foreground">No serials found matching "{serialQuery}"</div>
+            ) : (
+              <ul>
+                {serialResults.map((r) => (
+                  <li key={r.serial_number}>
+                    <button
+                      className={`w-full text-left px-4 py-3 hover:bg-accent transition-colors border-b last:border-0 ${!r.project_id ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                      onClick={() => handleSerialResultClick(r)}
+                      disabled={!r.project_id}
+                      title={!r.project_id ? 'No project linked to this PO' : undefined}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-medium text-sm">{r.serial_number}</span>
+                            <span className="text-xs text-muted-foreground truncate">{r.part_number}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                            <span className="truncate">{r.part_name}</span>
+                            <span className="shrink-0">· PO {r.po_number}</span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          {r.project_id ? (
+                            <div className="flex items-center gap-1 text-xs text-blue-600">
+                              <span className="font-medium">{r.project_code}</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No project</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4 flex-wrap">

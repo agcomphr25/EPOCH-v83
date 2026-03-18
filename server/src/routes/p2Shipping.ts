@@ -835,4 +835,45 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/p2/serial-search?q=XXXX — partial serial number search with project linkage
+router.get('/serial-search', async (req: Request, res: Response) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    if (!q) return res.json([]);
+
+    const rows = await pool.query<{
+      serial_number: string;
+      part_number: string;
+      part_name: string;
+      po_id: number;
+      po_number: string;
+      project_id: string | null;
+      project_code: string | null;
+      project_name: string | null;
+    }>(
+      `SELECT
+         si.serial_number,
+         si.part_number,
+         si.part_name,
+         si.po_id,
+         po.po_number,
+         p.id        AS project_id,
+         p.project_code,
+         p.project_name
+       FROM p2_serialized_items si
+       JOIN p2_purchase_orders po ON po.id = si.po_id
+       LEFT JOIN projects p ON p.po_id = po.id
+       WHERE si.serial_number ILIKE '%' || $1 || '%'
+       ORDER BY si.serial_number
+       LIMIT 10`,
+      [q]
+    );
+
+    return res.json(rows);
+  } catch (err: any) {
+    console.error('Serial search error:', err);
+    return res.status(500).json({ error: 'Serial search failed' });
+  }
+});
+
 export default router;

@@ -205,6 +205,9 @@ const STEP_STATUS_COLORS: Record<string, string> = {
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+
+  // Read ?tab= from URL to support deep-links (e.g. from serial search)
+  const initialTab = new URLSearchParams(window.location.search).get('tab') ?? 'workflow';
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -607,7 +610,7 @@ export default function ProjectDetailPage() {
         <Progress value={getProgress()} className="h-3" />
       </div>
 
-      <Tabs defaultValue="workflow" className="space-y-4">
+      <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>

@@ -1183,18 +1183,6 @@ export default function Navigation() {
       icon: BarChart3,
       description: 'Estimated department progression and ship dates',
     },
-    {
-      path: '/projects',
-      label: 'Projects',
-      icon: FolderKanban,
-      description: 'Multi-step project workflow tracking',
-    },
-    {
-      path: '/projects/pipeline',
-      label: 'Pipeline Board',
-      icon: FolderKanban,
-      description: 'Kanban view of project pipeline stages',
-    },
   ];
 
   const centralStorageItems = [

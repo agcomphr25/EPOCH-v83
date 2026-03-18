@@ -59,7 +59,7 @@ function ProjectCard({ project, onNavigate }: { project: PipelineProject; onNavi
 
   return (
     <div
-      className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 cursor-pointer hover:shadow-sm transition-shadow"
+      className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 cursor-pointer select-none hover:shadow-md hover:-translate-y-px hover:border-primary/40 hover:bg-primary/[0.02] active:scale-[0.98] active:translate-y-0 transition-all duration-150 ease-out"
       onClick={() => onNavigate(`/projects/${project.projectId}`)}
     >
       <p className="font-semibold text-xs truncate text-gray-900 dark:text-gray-100">{project.projectCode}</p>

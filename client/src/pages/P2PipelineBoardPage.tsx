@@ -86,14 +86,25 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
 
   const style = {
     transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.35 : 1,
+    transition: isDragging ? 'none' : undefined,
   };
 
   const daysInStage = getDaysInStage(project.stageUpdatedAt);
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card className={`cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow ${isDragging ? 'ring-2 ring-primary' : ''}`}>
+      <Card
+        onClick={() => onNavigate(`/projects/${project.projectId}`)}
+        className={[
+          'cursor-pointer select-none',
+          'shadow-sm border border-gray-200 dark:border-gray-700',
+          'hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.02]',
+          'active:scale-[0.98] active:shadow-md active:translate-y-0',
+          'transition-all duration-150 ease-out',
+          isDragging ? 'ring-2 ring-primary shadow-xl' : '',
+        ].join(' ')}
+      >
         <CardContent className="p-3 space-y-2">
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
@@ -102,21 +113,36 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1 -mt-1 flex-shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 -mr-1 -mt-1 flex-shrink-0 opacity-0 group-hover:opacity-100"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate(`/projects/${project.projectId}`)}>
+                <DropdownMenuItem
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); onNavigate(`/projects/${project.projectId}`); }}
+                >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open Project
                 </DropdownMenuItem>
-                <DropdownMenuItem onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate('/p2-quote-form')}>
+                <DropdownMenuItem
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); onNavigate('/p2-quote-form'); }}
+                >
                   <FileText className="mr-2 h-4 w-4" />
                   Open Quote
                 </DropdownMenuItem>
                 {project.poId && (
-                  <DropdownMenuItem onPointerDown={(e) => e.stopPropagation()} onClick={() => onNavigate('/p2-control-center')}>
+                  <DropdownMenuItem
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); onNavigate('/p2-control-center'); }}
+                  >
                     <Package className="mr-2 h-4 w-4" />
                     Open PO
                   </DropdownMenuItem>

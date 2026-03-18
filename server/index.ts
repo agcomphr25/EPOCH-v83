@@ -919,6 +919,19 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_lot_numbers po_id migration warning:', lotPoIdError?.message);
       }
 
+      // GIN index on serialized_item_ids for fast JSONB containment lookups
+      try {
+        const { sql: sqlGin } = await import('drizzle-orm');
+        await db.execute(sqlGin`
+          CREATE INDEX IF NOT EXISTS p2_lot_numbers_serial_ids_gin
+          ON p2_lot_numbers
+          USING GIN (serialized_item_ids jsonb_path_ops)
+        `);
+        console.log('✅ Ensured p2_lot_numbers GIN index on serialized_item_ids');
+      } catch (ginError: any) {
+        console.warn('⚠️ p2_lot_numbers GIN index warning:', ginError?.message);
+      }
+
       // Ensure production_orders has canonical material + source snapshot columns
       try {
         const { sql: sqlPO } = await import('drizzle-orm');

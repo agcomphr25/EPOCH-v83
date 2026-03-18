@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -1232,8 +1233,17 @@ export default function ProjectDetailPage() {
                                 target="_blank"
                                 rel="noreferrer"
                               >
+                                <Eye className="h-3.5 w-3.5 mr-1.5" />
+                                Preview Packing Slip
+                              </a>
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                              <a
+                                href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`}
+                                download
+                              >
                                 <Download className="h-3.5 w-3.5 mr-1.5" />
-                                Download Packing Slip PDF
+                                Download PDF
                               </a>
                             </Button>
                           </>
@@ -1257,67 +1267,71 @@ export default function ProjectDetailPage() {
               </Card>
 
               {/* ── SECTION 2: Serialized Items ── */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Hash className="h-4 w-4" /> Serialized Items
-                  </CardTitle>
-                  <CardDescription>
-                    {traceability.serials.length} serial{traceability.serials.length !== 1 ? 's' : ''} across this PO
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {traceability.serials.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-4">No serialized items found.</p>
-                  ) : (
-                    <div className="space-y-5">
-                      {Object.entries(
-                        traceability.serials.reduce<Record<string, TraceabilitySerial[]>>((acc, s) => {
-                          const key = `${s.part_number}||${s.part_name}`;
-                          if (!acc[key]) acc[key] = [];
-                          acc[key].push(s);
-                          return acc;
-                        }, {})
-                      ).map(([key, items]) => {
-                        const [partNumber, partName] = key.split('||');
-                        return (
-                          <div key={key} className="border rounded-lg p-4 space-y-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-medium text-sm">{partName}</p>
-                                <p className="text-xs text-muted-foreground font-mono">{partNumber}</p>
+              <Accordion type="single" collapsible className="border rounded-lg bg-card text-card-foreground shadow-sm">
+                <AccordionItem value="serials" className="border-0">
+                  <div className="px-6">
+                    <AccordionTrigger className="hover:no-underline gap-3 py-4">
+                      <div className="flex items-center gap-2 text-base font-semibold">
+                        <Hash className="h-4 w-4" /> Serialized Items
+                        <span className="text-sm font-normal text-muted-foreground">
+                          ({traceability.serials.length} serial{traceability.serials.length !== 1 ? 's' : ''})
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                  </div>
+                  <AccordionContent className="px-6 pb-4 pt-0">
+                    {traceability.serials.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">No serialized items found.</p>
+                    ) : (
+                      <div className="space-y-5">
+                        {Object.entries(
+                          traceability.serials.reduce<Record<string, TraceabilitySerial[]>>((acc, s) => {
+                            const key = `${s.part_number}||${s.part_name}`;
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(s);
+                            return acc;
+                          }, {})
+                        ).map(([key, items]) => {
+                          const [partNumber, partName] = key.split('||');
+                          return (
+                            <div key={key} className="border rounded-lg p-4 space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-medium text-sm">{partName}</p>
+                                  <p className="text-xs text-muted-foreground font-mono">{partNumber}</p>
+                                </div>
+                                <Badge variant="secondary">{items.length} unit{items.length !== 1 ? 's' : ''}</Badge>
                               </div>
-                              <Badge variant="secondary">{items.length} unit{items.length !== 1 ? 's' : ''}</Badge>
+                              <div className="flex flex-wrap gap-1.5">
+                                {items.map(s => (
+                                  <span
+                                    key={s.id}
+                                    title={`${s.status} · ${s.current_department}`}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono border
+                                      ${s.finalized_at
+                                        ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300'
+                                        : s.completed_at
+                                          ? 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300'
+                                          : 'bg-muted border-border text-muted-foreground'
+                                      }`}
+                                  >
+                                    {s.serial_number}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300 mr-1 align-middle" />finalized &nbsp;
+                                <span className="inline-block w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 mr-1 align-middle" />completed &nbsp;
+                                <span className="inline-block w-3 h-3 rounded-sm bg-muted border mr-1 align-middle" />in progress
+                              </p>
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {items.map(s => (
-                                <span
-                                  key={s.id}
-                                  title={`${s.status} · ${s.current_department}`}
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono border
-                                    ${s.finalized_at
-                                      ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300'
-                                      : s.completed_at
-                                        ? 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300'
-                                        : 'bg-muted border-border text-muted-foreground'
-                                    }`}
-                                >
-                                  {s.serial_number}
-                                </span>
-                              ))}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300 mr-1 align-middle" />finalized &nbsp;
-                              <span className="inline-block w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 mr-1 align-middle" />completed &nbsp;
-                              <span className="inline-block w-3 h-3 rounded-sm bg-muted border mr-1 align-middle" />in progress
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
 
               {/* ── SECTION 3: Production Status ── */}
               <Card>

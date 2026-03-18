@@ -131,6 +131,7 @@ import LAURIETTestDashboard from './pages/LAURIETTestDashboard';
 import TIMSTestDashboard from './pages/TIMSTestDashboard';
 import WatchRulesPage from './pages/WatchRulesPage';
 import BRADWTestDashboard from './pages/BRADWTestDashboard';
+import CHASEWTestDashboard from './pages/CHASEWTestDashboard';
 import FALEESHAHTestDashboard from './pages/FALEESHAHTestDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
 import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
@@ -670,6 +671,10 @@ function App() {
                   <Route
                     path="/bradw-dashboard"
                     component={BRADWTestDashboard}
+                  />
+                  <Route
+                    path="/chasew-dashboard"
+                    component={CHASEWTestDashboard}
                   />
                   <Route
                     path="/faleeshah-dashboard"

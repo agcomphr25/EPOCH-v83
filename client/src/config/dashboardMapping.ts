@@ -16,6 +16,7 @@ export const DASHBOARD_ROUTES: Record<string, string> = {
   angiet: '/angiet-dashboard',
   blaket: '/blaket-dashboard',
   bradw: '/bradw-dashboard',
+  chasew: '/chasew-dashboard',
   darleneb: '/darleneb-dashboard',
   faleeshah: '/faleeshah-dashboard',
   halls: '/halls-dashboard',

@@ -994,6 +994,12 @@ export default function Navigation() {
       description: 'Gunsmith queue, orders, and employee portal dashboard',
     },
     {
+      path: '/chasew-dashboard',
+      label: 'ChaseW Dashboard',
+      icon: Users,
+      description: 'Projects, central storage, and P2 customers dashboard',
+    },
+    {
       path: '/faleeshah-dashboard',
       label: 'FALEESHAH Dashboard',
       icon: Shield,

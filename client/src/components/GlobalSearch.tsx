@@ -154,7 +154,7 @@ export default function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) 
             <Input
               ref={inputRef}
               type="text"
-              placeholder="Search customers, orders, vendors, vendor POs, employees, inventory, reference docs, central storage..."
+              placeholder="Search customers, orders, vendors, employees, inventory, P2 serial #s, reference docs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleKeyDown}

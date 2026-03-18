@@ -312,6 +312,72 @@ router.get('/global-search', async (req, res) => {
       console.log('⚠️ Signed documents search failed:', err.message);
     }
 
+    // Search P2 Serialized Items — serial number, barcode, part number
+    try {
+      const serialResults = await db.execute(sql`
+        SELECT
+          si.id,
+          si.serial_number,
+          si.barcode,
+          si.part_number,
+          si.part_name,
+          si.status,
+          si.current_department,
+          si.completed_at,
+          si.finalized_at,
+          po.po_number,
+          po.customer_name,
+          ln.id   AS lot_id,
+          ln.lot_number
+        FROM p2_serialized_items si
+        LEFT JOIN p2_purchase_orders po ON po.id = si.po_id
+        LEFT JOIN LATERAL (
+          SELECT id, lot_number
+          FROM p2_lot_numbers
+          WHERE po_id = si.po_id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) ln ON true
+        WHERE
+          si.serial_number ILIKE ${searchTerm} OR
+          si.barcode       ILIKE ${searchTerm} OR
+          si.part_number   ILIKE ${searchTerm}
+        ORDER BY si.serial_number
+        LIMIT 20
+      `);
+
+      serialResults.rows.forEach((s: any) => {
+        const statusLabel = s.finalized_at ? 'Finalized'
+          : s.completed_at ? 'Completed'
+          : s.status || 'In Progress';
+        const matchedValue = s.serial_number || s.barcode || s.part_number || '';
+        const matchedField = s.serial_number?.toLowerCase().includes(query.trim().toLowerCase())
+          ? 'Serial Number'
+          : s.barcode?.toLowerCase().includes(query.trim().toLowerCase())
+            ? 'Barcode'
+            : 'Part Number';
+        results.push({
+          type: 'P2 Serial',
+          id: s.id,
+          title: s.serial_number || s.barcode || 'Unknown Serial',
+          subtitle: [
+            s.part_name || s.part_number,
+            s.po_number ? `PO: ${s.po_number}` : null,
+            s.customer_name || null,
+            `Status: ${statusLabel}`,
+            s.current_department ? `Dept: ${s.current_department}` : null,
+          ].filter(Boolean).join(' • '),
+          matchedField,
+          matchedValue,
+          url: s.lot_id ? `/p2/shipments/${s.lot_id}` : '/p2-control-center',
+          icon: '🏷️',
+        });
+      });
+      console.log(`✅ Found ${serialResults.rows.length} P2 serials`);
+    } catch (err: any) {
+      console.log('⚠️ P2 serial search failed:', err.message);
+    }
+
     console.log(`🎯 Global Search - Returning ${results.length} total results`);
     
     return res.json({

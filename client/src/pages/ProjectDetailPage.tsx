@@ -618,7 +618,7 @@ export default function ProjectDetailPage() {
                                   data-testid={`button-open-${step.stepType}`}
                                 >
                                   <ExternalLink className="mr-1 h-4 w-4" />
-                                  Open Form
+                                  Start
                                 </Button>
                                 <Button
                                   variant="outline"

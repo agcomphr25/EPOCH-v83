@@ -4,6 +4,31 @@ import { storage } from '../../storage';
 import { db, pool } from '../../db';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+
+// ── Project document upload setup ──────────────────────────────────────────
+const projectDocsDir = path.join(process.cwd(), 'uploads', 'project-documents');
+if (!fs.existsSync(projectDocsDir)) fs.mkdirSync(projectDocsDir, { recursive: true });
+
+const projectDocStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, projectDocsDir),
+  filename: (_req, file, cb) => {
+    const hash = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}_${hash}${ext}`);
+  },
+});
+const uploadProjectDoc = multer({
+  storage: projectDocStorage,
+  limits: { fileSize: 30 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 const router = Router();
 
@@ -863,6 +888,127 @@ router.get('/:id/traceability', async (req, res) => {
   } catch (err: any) {
     console.error('Error fetching project traceability:', err);
     res.status(500).json({ message: 'Failed to fetch traceability data' });
+  }
+});
+
+// ── Project Documents (manual attachments) ────────────────────────────────
+
+// GET /api/projects/:id/documents — list all manual attachments
+router.get('/:id/documents', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = await pool.query<{
+      id: number; project_id: string; label: string | null; original_file_name: string;
+      file_name: string | null; mime_type: string; file_size: number | null;
+      media_library_id: number | null; uploaded_by: string | null; created_at: string;
+    }>(
+      `SELECT id, project_id, label, original_file_name, file_name, mime_type, file_size,
+              media_library_id, uploaded_by, created_at
+       FROM project_documents WHERE project_id = $1 ORDER BY created_at DESC`,
+      [id]
+    );
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ message: 'Failed to list project documents' });
+  }
+});
+
+// POST /api/projects/:id/documents/upload — upload a file from the user's computer
+router.post('/:id/documents/upload', uploadProjectDoc.single('file'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { label, uploadedBy } = req.body;
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+    const rows = await pool.query<{ id: number }>(
+      `INSERT INTO project_documents
+         (project_id, label, original_file_name, file_name, file_path, mime_type, file_size, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [id, label || null, req.file.originalname, req.file.filename,
+       req.file.path, req.file.mimetype, req.file.size, uploadedBy || null]
+    );
+    res.json({ id: rows[0].id, message: 'Document uploaded' });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Failed to upload document' });
+  }
+});
+
+// POST /api/projects/:id/documents/link — link a file from Central Storage
+router.post('/:id/documents/link', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { mediaLibraryId, label } = req.body;
+    if (!mediaLibraryId) return res.status(400).json({ message: 'mediaLibraryId required' });
+
+    const mediaRows = await pool.query<{
+      filename: string; mime_type: string; file_size: number;
+    }>(
+      `SELECT filename, mime_type, file_size FROM media_library WHERE id = $1`,
+      [mediaLibraryId]
+    );
+    if (!mediaRows[0]) return res.status(404).json({ message: 'Media item not found' });
+    const media = mediaRows[0];
+
+    const rows = await pool.query<{ id: number }>(
+      `INSERT INTO project_documents
+         (project_id, label, original_file_name, media_library_id, mime_type, file_size)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [id, label || null, media.filename, mediaLibraryId, media.mime_type, media.file_size]
+    );
+    res.json({ id: rows[0].id, message: 'Document linked' });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Failed to link document' });
+  }
+});
+
+// DELETE /api/projects/:id/documents/:docId — remove an attachment
+router.delete('/:id/documents/:docId', async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+    const rows = await pool.query<{ file_path: string | null; media_library_id: number | null }>(
+      `DELETE FROM project_documents WHERE id = $1 AND project_id = $2
+       RETURNING file_path, media_library_id`,
+      [docId, id]
+    );
+    if (!rows[0]) return res.status(404).json({ message: 'Document not found' });
+    // Delete physical file if it was a direct upload
+    if (rows[0].file_path && fs.existsSync(rows[0].file_path)) {
+      fs.unlinkSync(rows[0].file_path);
+    }
+    res.json({ message: 'Document removed' });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Failed to remove document' });
+  }
+});
+
+// GET /api/projects/:id/documents/:docId/file — serve the file (preview/download)
+router.get('/:id/documents/:docId/file', async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+    const rows = await pool.query<{
+      file_path: string | null; file_name: string | null; original_file_name: string;
+      mime_type: string; media_library_id: number | null;
+    }>(
+      `SELECT file_path, file_name, original_file_name, mime_type, media_library_id
+       FROM project_documents WHERE id = $1 AND project_id = $2`,
+      [docId, id]
+    );
+    const doc = rows[0];
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+    if (doc.media_library_id) {
+      // Redirect to existing media serve endpoint
+      return res.redirect(`/api/media/${doc.media_library_id}/download`);
+    }
+
+    if (!doc.file_path || !fs.existsSync(doc.file_path)) {
+      return res.status(404).json({ message: 'File not found on disk' });
+    }
+    res.set('Content-Type', doc.mime_type || 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${doc.original_file_name}"`);
+    res.sendFile(path.resolve(doc.file_path));
+  } catch (err: any) {
+    res.status(500).json({ message: 'Failed to serve document' });
   }
 });
 

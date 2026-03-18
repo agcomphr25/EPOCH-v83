@@ -2183,6 +2183,28 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_lot_numbers shipment columns migration:', lotColErr?.message);
       }
 
+      // Ensure project_documents table exists (manual PDF attachments on traceability tab)
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS project_documents (
+            id                SERIAL PRIMARY KEY,
+            project_id        UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            label             TEXT,
+            original_file_name TEXT NOT NULL,
+            file_name         TEXT,
+            file_path         TEXT,
+            media_library_id  INTEGER,
+            mime_type         TEXT DEFAULT 'application/pdf',
+            file_size         INTEGER,
+            uploaded_by       TEXT,
+            created_at        TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured project_documents table exists');
+      } catch (pdErr: any) {
+        console.warn('⚠️ project_documents migration:', pdErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

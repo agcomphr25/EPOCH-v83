@@ -36,6 +36,8 @@ import {
   Download,
   Trash2,
   Eye,
+  Search,
+  HardDrive,
   ChevronDown,
   ChevronUp,
   Package,
@@ -305,6 +307,90 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/projects', id, 'traceability'],
     queryFn: () => fetch(`/api/projects/${id}/traceability`).then(r => r.json()),
     enabled: !!id,
+  });
+
+  // ── Project manual document attachments ──
+  interface ProjectDoc {
+    id: number; project_id: string; label: string | null; original_file_name: string;
+    file_name: string | null; mime_type: string; file_size: number | null;
+    media_library_id: number | null; uploaded_by: string | null; created_at: string;
+  }
+  interface MediaItem {
+    id: number; filename: string; title: string | null; mimeType: string;
+    fileSize: number | null; category: string | null; capturedByName: string | null;
+  }
+
+  const [showAttachDoc, setShowAttachDoc] = useState(false);
+  const [attachTab, setAttachTab] = useState<'upload' | 'storage'>('upload');
+  const [attachLabel, setAttachLabel] = useState('');
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [mediaSearch, setMediaSearch] = useState('');
+  const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+
+  const { data: projectDocs = [] } = useQuery<ProjectDoc[]>({
+    queryKey: ['/api/projects', id, 'documents'],
+    queryFn: () => fetch(`/api/projects/${id}/documents`).then(r => r.json()),
+    enabled: !!id,
+  });
+
+  const { data: mediaSearchResults = [] } = useQuery<MediaItem[]>({
+    queryKey: ['/api/media', mediaSearch],
+    queryFn: () => fetch(`/api/media?search=${encodeURIComponent(mediaSearch)}`).then(r => r.json()),
+    enabled: mediaSearch.length >= 2,
+  });
+
+  const uploadDocMutation = useMutation({
+    mutationFn: async ({ file, label }: { file: File; label: string }) => {
+      const form = new FormData();
+      form.append('file', file);
+      if (label) form.append('label', label);
+      if (currentUser?.username) form.append('uploadedBy', currentUser.username);
+      const res = await fetch(`/api/projects/${id}/documents/upload`, { method: 'POST', body: form, credentials: 'include' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'documents'] });
+      setShowAttachDoc(false);
+      setAttachFile(null);
+      setAttachLabel('');
+      toast({ title: 'Document uploaded' });
+    },
+    onError: (err: any) => toast({ title: 'Upload failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const linkDocMutation = useMutation({
+    mutationFn: async ({ mediaLibraryId, label }: { mediaLibraryId: number; label: string }) => {
+      const res = await fetch(`/api/projects/${id}/documents/link`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaLibraryId, label }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'documents'] });
+      setShowAttachDoc(false);
+      setSelectedMediaId(null);
+      setAttachLabel('');
+      setMediaSearch('');
+      toast({ title: 'Document linked from Central Storage' });
+    },
+    onError: (err: any) => toast({ title: 'Link failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (docId: number) => {
+      const res = await fetch(`/api/projects/${id}/documents/${docId}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'documents'] });
+      toast({ title: 'Document removed' });
+    },
+    onError: (err: any) => toast({ title: 'Remove failed', description: err.message, variant: 'destructive' }),
   });
 
   const getAttachmentsForStep = (stepId: string) => {
@@ -1386,9 +1472,14 @@ export default function ProjectDetailPage() {
               {/* ── SECTION 4: Documents ── */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-4 w-4" /> Documents
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileText className="h-4 w-4" /> Documents
+                    </CardTitle>
+                    <Button size="sm" variant="outline" onClick={() => { setShowAttachDoc(true); setAttachTab('upload'); setAttachLabel(''); setAttachFile(null); setMediaSearch(''); setSelectedMediaId(null); }}>
+                      <Paperclip className="h-3.5 w-3.5 mr-1.5" /> Attach
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
@@ -1478,12 +1569,152 @@ export default function ProjectDetailPage() {
                         <p className="text-sm">Invoice — not yet raised</p>
                       </div>
                     )}
+
+                    {/* ── Manual attachments ── */}
+                    {projectDocs.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 pt-2">
+                          <div className="flex-1 border-t" />
+                          <span className="text-xs text-muted-foreground px-2">Manual Attachments</span>
+                          <div className="flex-1 border-t" />
+                        </div>
+                        {projectDocs.map(doc => (
+                          <div key={doc.id} className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                            <div className="flex items-center gap-3">
+                              <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{doc.label || doc.original_file_name}</p>
+                                {doc.label && (
+                                  <p className="text-xs text-muted-foreground font-mono truncate">{doc.original_file_name}</p>
+                                )}
+                                {doc.uploaded_by && (
+                                  <p className="text-xs text-muted-foreground">by {doc.uploaded_by}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button size="sm" variant="ghost" title="Preview" asChild>
+                                <a href={`/api/projects/${id}/documents/${doc.id}/file`} target="_blank" rel="noreferrer">
+                                  <Eye className="h-3.5 w-3.5" />
+                                </a>
+                              </Button>
+                              <Button size="sm" variant="ghost" title="Download" asChild>
+                                <a href={`/api/projects/${id}/documents/${doc.id}/file`} download={doc.original_file_name}>
+                                  <Download className="h-3.5 w-3.5" />
+                                </a>
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" title="Remove"
+                                onClick={() => deleteDocMutation.mutate(doc.id)}
+                                disabled={deleteDocMutation.isPending}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             </>
           )}
         </TabsContent>
+
+        {/* ── Attach Document Dialog ── */}
+        <Dialog open={showAttachDoc} onOpenChange={setShowAttachDoc}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Attach Document</DialogTitle>
+            </DialogHeader>
+            <Tabs value={attachTab} onValueChange={(v) => setAttachTab(v as 'upload' | 'storage')}>
+              <TabsList className="w-full">
+                <TabsTrigger value="upload" className="flex-1">
+                  <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload File
+                </TabsTrigger>
+                <TabsTrigger value="storage" className="flex-1">
+                  <HardDrive className="h-3.5 w-3.5 mr-1.5" /> Central Storage
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="upload" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Label (optional)</Label>
+                  <Input placeholder="e.g. Manual CoC, Signed Drawing…" value={attachLabel} onChange={e => setAttachLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>File <span className="text-muted-foreground text-xs">(PDF, JPG, PNG, TIFF — max 30 MB)</span></Label>
+                  <div className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => document.getElementById('proj-doc-file-input')?.click()}>
+                    {attachFile ? (
+                      <div className="space-y-1">
+                        <FileText className="mx-auto h-8 w-8 text-primary" />
+                        <p className="text-sm font-medium">{attachFile.name}</p>
+                        <p className="text-xs text-muted-foreground">{(attachFile.size / 1024).toFixed(0)} KB</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <Upload className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                        <p className="text-sm text-muted-foreground">Click to select a file</p>
+                      </div>
+                    )}
+                    <input id="proj-doc-file-input" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.tiff"
+                      onChange={e => setAttachFile(e.target.files?.[0] ?? null)} />
+                  </div>
+                </div>
+                <Button className="w-full" disabled={!attachFile || uploadDocMutation.isPending}
+                  onClick={() => attachFile && uploadDocMutation.mutate({ file: attachFile, label: attachLabel })}>
+                  {uploadDocMutation.isPending ? 'Uploading…' : 'Upload Document'}
+                </Button>
+              </TabsContent>
+
+              <TabsContent value="storage" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Label (optional)</Label>
+                  <Input placeholder="e.g. Reference Drawing, Approved CoC…" value={attachLabel} onChange={e => setAttachLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Search Central Storage</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Search by filename or title…" value={mediaSearch}
+                      onChange={e => { setMediaSearch(e.target.value); setSelectedMediaId(null); }} />
+                  </div>
+                </div>
+                {mediaSearch.length >= 2 && (
+                  <ScrollArea className="h-48 border rounded-lg">
+                    {mediaSearchResults.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">No files found</p>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {mediaSearchResults.map(m => (
+                          <div key={m.id}
+                            onClick={() => setSelectedMediaId(m.id)}
+                            className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors
+                              ${selectedMediaId === m.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted'}`}>
+                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{m.title || m.filename}</p>
+                              {m.title && <p className="text-xs text-muted-foreground truncate font-mono">{m.filename}</p>}
+                              {m.category && <Badge variant="secondary" className="text-xs mt-0.5">{m.category}</Badge>}
+                            </div>
+                            {selectedMediaId === m.id && <Eye className="h-4 w-4 text-primary flex-shrink-0" />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                )}
+                {mediaSearch.length > 0 && mediaSearch.length < 2 && (
+                  <p className="text-xs text-muted-foreground">Type at least 2 characters to search</p>
+                )}
+                <Button className="w-full" disabled={!selectedMediaId || linkDocMutation.isPending}
+                  onClick={() => selectedMediaId && linkDocMutation.mutate({ mediaLibraryId: selectedMediaId, label: attachLabel })}>
+                  {linkDocMutation.isPending ? 'Linking…' : 'Attach from Central Storage'}
+                </Button>
+              </TabsContent>
+            </Tabs>
+          </DialogContent>
+        </Dialog>
       </Tabs>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

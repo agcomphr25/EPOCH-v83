@@ -54,9 +54,43 @@ import {
   ArrowRight,
   Barcode,
   ChevronDown,
+  ChevronRight,
+  Pencil,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeInputField } from "@/components/BarcodeInputField";
+
+type BuiltPacketFabricSource = {
+  id: number;
+  builtPacketId: number;
+  fabricInventoryId: string | null;
+  fabricType: string | null;
+  lotNumber: string | null;
+  batchNumber: string | null;
+  rollNumber: string | null;
+  supplierPartNumber: string | null;
+  internalControlNumber: string | null;
+  expirationDate: string | null;
+  quantityUsed: number;
+  isPrimary: boolean;
+  createdAt: string;
+};
+
+type BuiltPacket = {
+  id: number;
+  barcode: string;
+  packetNumber: number;
+  buildDate: string;
+  status: string;
+  isMixedFabric: boolean;
+  fabricSourceCount: number;
+  notes: string | null;
+  createdBy: string | null;
+  allocatedToOrder: string | null;
+  categoryName: string | null;
+  fabricSources: BuiltPacketFabricSource[];
+};
 
 type FabricInventoryItem = {
   id: string;
@@ -200,8 +234,49 @@ export default function CuttingOperatorDashboard() {
     generatedBarcode: '',
   });
 
+  const [expandedPacketId, setExpandedPacketId] = useState<number | null>(null);
+  const [editFabricSourceOpen, setEditFabricSourceOpen] = useState(false);
+  const [editingSource, setEditingSource] = useState<BuiltPacketFabricSource | null>(null);
+  const [editingPacketId, setEditingPacketId] = useState<number | null>(null);
+  const [fabricSourceForm, setFabricSourceForm] = useState({
+    fabricType: '',
+    lotNumber: '',
+    batchNumber: '',
+    rollNumber: '',
+    supplierPartNumber: '',
+    internalControlNumber: '',
+    expirationDate: '',
+  });
+
   const { data: currentUser } = useQuery<{ username: string }>({
     queryKey: ['currentUser'],
+  });
+
+  const { data: builtPackets = [], isLoading: loadingBuiltPackets, refetch: refetchBuiltPackets } = useQuery<BuiltPacket[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/built-packets'],
+    queryFn: async () => {
+      const res = await fetch('/api/cutting-table-mfg-queue/built-packets?limit=50');
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const updateFabricSourceMutation = useMutation({
+    mutationFn: async ({ packetId, sourceId, data }: { packetId: number; sourceId: number; data: Record<string, string> }) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/built-packets/${packetId}/fabric-sources/${sourceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
+      setEditFabricSourceOpen(false);
+      setEditingSource(null);
+      toast({ title: 'Fabric updated', description: 'Fabric source information has been updated.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update fabric source.', variant: 'destructive' });
+    },
   });
 
   const { data: packetBOMs = [] } = useQuery<PacketBOM[]>({
@@ -2159,6 +2234,210 @@ export default function CuttingOperatorDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Made Packets — view & edit fabric traceability */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-purple-500/10">
+                <History className="h-4 w-4 text-purple-500" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Made Packets</CardTitle>
+                <CardDescription className="text-xs">View and correct fabric traceability on completed packets</CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetchBuiltPackets()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingBuiltPackets ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
+          ) : builtPackets.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">No built packets found.</div>
+          ) : (
+            <div className="space-y-1">
+              {builtPackets.map((packet) => (
+                <div key={packet.id} className="border rounded-lg overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+                    onClick={() => setExpandedPacketId(expandedPacketId === packet.id ? null : packet.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {expandedPacketId === packet.id ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{packet.categoryName || 'Packet'} #{packet.packetNumber}</span>
+                          <Badge variant={packet.status === 'AVAILABLE' ? 'secondary' : packet.status === 'CONSUMED' ? 'outline' : 'default'} className="text-xs">
+                            {packet.status}
+                          </Badge>
+                          {packet.isMixedFabric && (
+                            <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">Mixed Fabric</Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {packet.barcode} · Built {new Date(packet.buildDate).toLocaleDateString()} by {packet.createdBy || 'unknown'}
+                          {packet.allocatedToOrder && ` · Order: ${packet.allocatedToOrder}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground shrink-0">
+                      {packet.fabricSources.length} fabric {packet.fabricSources.length === 1 ? 'source' : 'sources'}
+                    </div>
+                  </button>
+
+                  {expandedPacketId === packet.id && (
+                    <div className="border-t bg-muted/20 px-4 py-3">
+                      {packet.fabricSources.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic">No fabric source records for this packet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {packet.fabricSources.map((source) => (
+                            <div key={source.id} className="flex items-start justify-between gap-3 bg-background border rounded p-3">
+                              <div className="space-y-0.5 text-sm">
+                                <div className="font-medium">{source.fabricType || 'Unknown fabric'}</div>
+                                <div className="text-muted-foreground text-xs flex flex-wrap gap-x-3 gap-y-0.5">
+                                  {source.lotNumber && <span>Lot: {source.lotNumber}</span>}
+                                  {source.batchNumber && <span>Batch: {source.batchNumber}</span>}
+                                  {source.rollNumber && <span>Roll: {source.rollNumber}</span>}
+                                  {source.internalControlNumber && <span>ICN: {source.internalControlNumber}</span>}
+                                  {source.supplierPartNumber && <span>Supplier P/N: {source.supplierPartNumber}</span>}
+                                  {source.expirationDate && <span>Exp: {new Date(source.expirationDate).toLocaleDateString()}</span>}
+                                  <span>Qty used: {source.quantityUsed}</span>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="shrink-0"
+                                onClick={() => {
+                                  setEditingSource(source);
+                                  setEditingPacketId(packet.id);
+                                  setFabricSourceForm({
+                                    fabricType: source.fabricType || '',
+                                    lotNumber: source.lotNumber || '',
+                                    batchNumber: source.batchNumber || '',
+                                    rollNumber: source.rollNumber || '',
+                                    supplierPartNumber: source.supplierPartNumber || '',
+                                    internalControlNumber: source.internalControlNumber || '',
+                                    expirationDate: source.expirationDate || '',
+                                  });
+                                  setEditFabricSourceOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3 mr-1" />
+                                Edit
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Fabric Source Dialog */}
+      <Dialog open={editFabricSourceOpen} onOpenChange={(open) => { setEditFabricSourceOpen(open); if (!open) setEditingSource(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              Edit Fabric Source
+            </DialogTitle>
+            <DialogDescription>Update the fabric traceability information for this packet.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Fabric Type</Label>
+                <Input
+                  value={fabricSourceForm.fabricType}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, fabricType: e.target.value }))}
+                  placeholder="e.g. Carbon Fiber"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Roll Number</Label>
+                <Input
+                  value={fabricSourceForm.rollNumber}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, rollNumber: e.target.value }))}
+                  placeholder="Roll #"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Lot Number</Label>
+                <Input
+                  value={fabricSourceForm.lotNumber}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, lotNumber: e.target.value }))}
+                  placeholder="Lot #"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Batch Number</Label>
+                <Input
+                  value={fabricSourceForm.batchNumber}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, batchNumber: e.target.value }))}
+                  placeholder="Batch #"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Internal Control #</Label>
+                <Input
+                  value={fabricSourceForm.internalControlNumber}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, internalControlNumber: e.target.value }))}
+                  placeholder="ICN"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Supplier P/N</Label>
+                <Input
+                  value={fabricSourceForm.supplierPartNumber}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, supplierPartNumber: e.target.value }))}
+                  placeholder="Supplier part #"
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Expiration Date</Label>
+                <Input
+                  type="date"
+                  value={fabricSourceForm.expirationDate}
+                  onChange={(e) => setFabricSourceForm(prev => ({ ...prev, expirationDate: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditFabricSourceOpen(false); setEditingSource(null); }}>
+              Cancel
+            </Button>
+            <Button
+              disabled={updateFabricSourceMutation.isPending}
+              onClick={() => {
+                if (!editingSource || !editingPacketId) return;
+                updateFabricSourceMutation.mutate({
+                  packetId: editingPacketId,
+                  sourceId: editingSource.id,
+                  data: fabricSourceForm,
+                });
+              }}
+            >
+              {updateFabricSourceMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isCuttingWorkflowOpen} onOpenChange={setIsCuttingWorkflowOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

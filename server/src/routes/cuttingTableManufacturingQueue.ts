@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory } from '../../schema';
-import { eq, and, or, asc, inArray, like } from 'drizzle-orm';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories } from '../../schema';
+import { eq, and, or, asc, desc, inArray, like } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -1407,6 +1407,103 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error validating material:', error);
     res.status(500).json({ error: 'Failed to validate material' });
+  }
+});
+
+// Get built packets with their fabric sources (for operator review/edit)
+router.get('/built-packets', async (req: Request, res: Response) => {
+  try {
+    const { limit = '50', offset = '0', status } = req.query;
+
+    const packets = await db
+      .select({
+        id: cuttingBuiltPackets.id,
+        barcode: cuttingBuiltPackets.barcode,
+        packetNumber: cuttingBuiltPackets.packetNumber,
+        buildDate: cuttingBuiltPackets.buildDate,
+        status: cuttingBuiltPackets.status,
+        isMixedFabric: cuttingBuiltPackets.isMixedFabric,
+        fabricSourceCount: cuttingBuiltPackets.fabricSourceCount,
+        notes: cuttingBuiltPackets.notes,
+        createdBy: cuttingBuiltPackets.createdBy,
+        allocatedToOrder: cuttingBuiltPackets.allocatedToOrder,
+        categoryName: cuttingProductCategories.categoryName,
+      })
+      .from(cuttingBuiltPackets)
+      .leftJoin(cuttingProductCategories, eq(cuttingProductCategories.id, cuttingBuiltPackets.productCategoryId))
+      .where(status ? eq(cuttingBuiltPackets.status, status as string) : undefined)
+      .orderBy(desc(cuttingBuiltPackets.buildDate))
+      .limit(parseInt(limit as string))
+      .offset(parseInt(offset as string));
+
+    const packetIds = packets.map(p => p.id);
+    let fabricSources: any[] = [];
+    if (packetIds.length > 0) {
+      const sources = await db
+        .select()
+        .from(cuttingBuiltPacketFabricSources)
+        .where(inArray(cuttingBuiltPacketFabricSources.builtPacketId, packetIds));
+      fabricSources = sources;
+    }
+
+    const result = packets.map(packet => ({
+      ...packet,
+      fabricSources: fabricSources.filter(s => s.builtPacketId === packet.id),
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching built packets:', error);
+    res.status(500).json({ error: 'Failed to fetch built packets' });
+  }
+});
+
+// Update a fabric source for a built packet (e.g. correct lot/roll/batch number)
+router.patch('/built-packets/:packetId/fabric-sources/:sourceId', async (req: Request, res: Response) => {
+  try {
+    const { packetId, sourceId } = req.params;
+    const {
+      fabricType,
+      lotNumber,
+      batchNumber,
+      rollNumber,
+      supplierPartNumber,
+      internalControlNumber,
+      expirationDate,
+      quantityUsed,
+    } = req.body;
+
+    const existing = await db.query.cuttingBuiltPacketFabricSources.findFirst({
+      where: and(
+        eq(cuttingBuiltPacketFabricSources.id, parseInt(sourceId)),
+        eq(cuttingBuiltPacketFabricSources.builtPacketId, parseInt(packetId))
+      ),
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric source not found' });
+    }
+
+    const updateData: Partial<typeof existing> = {};
+    if (fabricType !== undefined) updateData.fabricType = fabricType;
+    if (lotNumber !== undefined) updateData.lotNumber = lotNumber;
+    if (batchNumber !== undefined) updateData.batchNumber = batchNumber;
+    if (rollNumber !== undefined) updateData.rollNumber = rollNumber;
+    if (supplierPartNumber !== undefined) updateData.supplierPartNumber = supplierPartNumber;
+    if (internalControlNumber !== undefined) updateData.internalControlNumber = internalControlNumber;
+    if (expirationDate !== undefined) updateData.expirationDate = expirationDate;
+    if (quantityUsed !== undefined) updateData.quantityUsed = parseInt(quantityUsed);
+
+    const [updated] = await db
+      .update(cuttingBuiltPacketFabricSources)
+      .set(updateData)
+      .where(eq(cuttingBuiltPacketFabricSources.id, parseInt(sourceId)))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating fabric source:', error);
+    res.status(500).json({ error: 'Failed to update fabric source' });
   }
 });
 

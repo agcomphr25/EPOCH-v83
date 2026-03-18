@@ -20,6 +20,7 @@ import {
   FileText,
   Download,
   ClipboardCheck,
+  Zap,
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -405,12 +406,36 @@ export default function P2ShippingTab() {
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
                         <span>{group.totalUnits} unit(s)</span>
-                        <span className="text-green-600">{group.readyToShip} completed</span>
+                        <span className="text-green-600">{finalizedUnits.length} ready</span>
+                        {completedUnfinalized.length > 0 && (
+                          <span className="text-amber-600">{completedUnfinalized.length} need finalization</span>
+                        )}
                         {group.inProduction > 0 && <span className="text-blue-600">{group.inProduction} in production</span>}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Ship All Ready — batch action */}
+                    {!shipment && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={finalizedUnits.length === 0}
+                        className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20 text-xs h-7 px-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSerials((prev) => ({
+                            ...prev,
+                            [group.poNumber]: new Set(finalizedUnits.map((u) => u.id)),
+                          }));
+                          setSummaryModalSerials(finalizedUnits);
+                          setSummaryModalPO(group.poNumber);
+                        }}
+                      >
+                        <Zap className="w-3 h-3 mr-1" />
+                        Ship All Ready ({finalizedUnits.length})
+                      </Button>
+                    )}
                     {allCompletedFinalized ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
                         <CheckCircle className="w-3 h-3 mr-1" />Ready to Ship

@@ -263,7 +263,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
 
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]);
+    let page = pdfDoc.addPage([612, 792]);
     const { width, height } = page.getSize();
     const margin = 50;
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -398,12 +398,9 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       const rowHeight = Math.max(16, serialRows * 11 + 6);
 
       if (y - rowHeight < margin + 70) {
-        const np = pdfDoc.addPage([612, 792]);
+        page = pdfDoc.addPage([612, 792]);
         y = 792 - margin;
         rowAlt = false;
-        if (rowAlt) {
-          np.drawRectangle({ x: margin, y: y - rowHeight, width: usableWidth, height: rowHeight, color: rowBg });
-        }
       }
 
       if (rowAlt) {

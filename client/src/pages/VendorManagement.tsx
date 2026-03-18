@@ -298,7 +298,7 @@ export default function VendorManagement() {
     mutationFn: async (data: VendorFormData) => {
       const vendor = (await apiRequest('/api/vendors', {
         method: 'POST',
-        body: data,
+        body: { ...data, skipValidation: true }, // TODO: re-enable address validation when ready
       })) as Vendor;
 
       // Create pending contacts if any
@@ -344,7 +344,7 @@ export default function VendorManagement() {
     mutationFn: async ({ id, data }: { id: number; data: VendorFormData }) => {
       return await apiRequest(`/api/vendors/${id}`, {
         method: 'PUT',
-        body: data,
+        body: { ...data, skipValidation: true }, // TODO: re-enable address validation when ready
       });
     },
     onSuccess: () => {

@@ -1903,14 +1903,21 @@ export default function VendorManagement() {
 
               {/* Tab 4: Evaluation & Notes */}
               <TabsContent value="evaluation" className="space-y-4 mt-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4 mb-4">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Monthly Vendor Evaluations (2025)</h4>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Track monthly performance scores for Quality, Cost, Delivery, and Response (1-5 scale).
-                  </p>
-                </div>
-
-                {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
+                {form.watch('approvalLevel') === 'A' ? (
+                  <>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4 mb-4">
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Monthly Vendor Evaluations (2025)</h4>
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        Track monthly performance scores for Quality, Cost, Delivery, and Response (1-5 scale).
+                      </p>
+                    </div>
+                    {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
+                  </>
+                ) : (
+                  <div className="bg-muted/50 border border-dashed rounded-md p-4 text-sm text-muted-foreground">
+                    Monthly evaluations are only required for <strong>Approval Level A</strong> vendors. This vendor is currently set to Level <strong>{form.watch('approvalLevel') || '—'}</strong>.
+                  </div>
+                )}
 
                 <Form {...form}>
                   <form

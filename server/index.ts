@@ -2170,6 +2170,19 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ financial_review_sessions migration:', frErr.message);
       }
 
+      // Ensure p2_lot_numbers has shipment detail columns
+      try {
+        await pool.query(`
+          ALTER TABLE p2_lot_numbers
+            ADD COLUMN IF NOT EXISTS bill_of_lading_url TEXT,
+            ADD COLUMN IF NOT EXISTS tracking_number    TEXT,
+            ADD COLUMN IF NOT EXISTS carrier            TEXT
+        `);
+        console.log('✅ Ensured p2_lot_numbers has shipment detail columns (BoL, tracking, carrier)');
+      } catch (lotColErr: any) {
+        console.warn('⚠️ p2_lot_numbers shipment columns migration:', lotColErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

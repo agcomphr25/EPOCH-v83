@@ -13,6 +13,11 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   COMPANY_INFO,
 } from '../../utils/pdf/pdfConfig';
+import multer from 'multer';
+import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
+
+const upload = multer({ storage: multer.memoryStorage() });
+const objectStorageService = new ObjectStorageService();
 
 const router = Router();
 
@@ -869,6 +874,206 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('CoC PDF error:', err);
     return res.status(500).json({ error: 'Failed to generate CoC PDF' });
+  }
+});
+
+// ─── Shipment Detail endpoints ─────────────────────────────────────────────
+
+// GET /api/p2/shipments/:lotId — full shipment detail record
+router.get('/shipments/:lotId', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+
+    const lotRows = await pool.query<{
+      id: string; lot_number: string; lot_type: string;
+      part_number: string | null; part_name: string | null;
+      customer_id: string | null; customer_name: string | null;
+      po_number: string | null; po_id: number | null;
+      quantity: number | null;
+      serialized_item_ids: any;
+      status: string;
+      closed_at: string | null; closed_by: string | null;
+      shipped_at: string | null; shipped_by: string | null;
+      packing_slip_id: string | null; certificate_id: string | null;
+      notes: string | null;
+      tracking_number: string | null; carrier: string | null;
+      bill_of_lading_url: string | null;
+      created_by: string; created_at: string;
+    }>(
+      `SELECT id, lot_number, lot_type, part_number, part_name,
+              customer_id, customer_name, po_number, po_id, quantity,
+              serialized_item_ids, status, closed_at, closed_by,
+              shipped_at, shipped_by, packing_slip_id, certificate_id, notes,
+              tracking_number, carrier, bill_of_lading_url,
+              created_by, created_at
+       FROM p2_lot_numbers WHERE id = $1`,
+      [lotId]
+    );
+
+    if (lotRows.length === 0) return res.status(404).json({ error: 'Lot not found' });
+    const lot = lotRows[0];
+
+    // Fetch packing slip if linked
+    let packingSlip: any = null;
+    if (lot.packing_slip_id) {
+      const psRows = await pool.query(
+        `SELECT id, packing_slip_number, lot_number, customer_id, customer_name,
+                po_number, invoice_number, ship_date, shipment_number, carrier,
+                tracking_number, line_items, total_quantity, packed_by,
+                verified_by, status, notes, created_at
+         FROM p2_packing_slips WHERE id = $1`,
+        [lot.packing_slip_id]
+      );
+      if (psRows.length) packingSlip = psRows[0];
+    }
+
+    // Fetch certificate if linked
+    let certificate: any = null;
+    if (lot.certificate_id) {
+      const certRows = await pool.query(
+        `SELECT id, certificate_number, lot_number, customer_id, customer_name,
+                po_number, part_number, part_name, quantity, serial_numbers,
+                manufacturing_date, ship_date, status, approved_by, approved_at,
+                issued_at, created_at
+         FROM p2_certificates_of_conformance WHERE id = $1`,
+        [lot.certificate_id]
+      );
+      if (certRows.length) certificate = certRows[0];
+    }
+
+    // Fetch serialized items in this lot
+    let serializedItems: any[] = [];
+    const itemIds = Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [];
+    if (itemIds.length > 0) {
+      const placeholders = itemIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
+      serializedItems = await pool.query(
+        `SELECT id, serial_number, part_number, part_name, status, barcode,
+                manufactured_date, po_id
+         FROM p2_serialized_items WHERE id IN (${placeholders})
+         ORDER BY serial_number`,
+        itemIds
+      );
+    }
+
+    // Fetch invoice if linked to this lot
+    const invoiceRows = await pool.query(
+      `SELECT id, invoice_number, invoice_date, due_date, total_amount, status
+       FROM ar_invoices WHERE lot_id = $1 LIMIT 1`,
+      [lotId]
+    );
+    const invoice = invoiceRows.length ? invoiceRows[0] : null;
+
+    return res.json({ lot, packingSlip, certificate, serializedItems, invoice });
+  } catch (err: any) {
+    console.error('Shipment detail error:', err);
+    return res.status(500).json({ error: 'Failed to load shipment detail' });
+  }
+});
+
+// PATCH /api/p2/shipments/:lotId — update tracking, carrier, notes; optionally mark shipped
+router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const { trackingNumber, carrier, notes, markShipped, shippedBy } = req.body;
+
+    const setClauses: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+
+    if (trackingNumber !== undefined) { setClauses.push(`tracking_number = $${idx++}`); vals.push(trackingNumber || null); }
+    if (carrier !== undefined) { setClauses.push(`carrier = $${idx++}`); vals.push(carrier || null); }
+    if (notes !== undefined) { setClauses.push(`notes = $${idx++}`); vals.push(notes || null); }
+    if (markShipped) {
+      setClauses.push(`status = $${idx++}`); vals.push('SHIPPED');
+      setClauses.push(`shipped_at = $${idx++}`); vals.push(new Date().toISOString());
+      setClauses.push(`shipped_by = $${idx++}`); vals.push(shippedBy || 'system');
+    }
+    setClauses.push(`updated_at = NOW()`);
+
+    if (setClauses.length === 1) return res.status(400).json({ error: 'No fields to update' });
+
+    vals.push(lotId);
+    await pool.query(
+      `UPDATE p2_lot_numbers SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+      vals
+    );
+
+    // Also update packing slip tracking/carrier if it exists
+    if (trackingNumber !== undefined || carrier !== undefined) {
+      const lotRow = await pool.query<{ packing_slip_id: string | null }>(
+        `SELECT packing_slip_id FROM p2_lot_numbers WHERE id = $1`, [lotId]
+      );
+      if (lotRow[0]?.packing_slip_id) {
+        const psUpdates: string[] = [];
+        const psVals: any[] = [];
+        let psIdx = 1;
+        if (trackingNumber !== undefined) { psUpdates.push(`tracking_number = $${psIdx++}`); psVals.push(trackingNumber || null); }
+        if (carrier !== undefined) { psUpdates.push(`carrier = $${psIdx++}`); psVals.push(carrier || null); }
+        if (markShipped) {
+          psUpdates.push(`status = $${psIdx++}`); psVals.push('SHIPPED');
+          psUpdates.push(`ship_date = $${psIdx++}`); psVals.push(new Date().toISOString());
+        }
+        if (psUpdates.length) {
+          psVals.push(lotRow[0].packing_slip_id);
+          await pool.query(
+            `UPDATE p2_packing_slips SET ${psUpdates.join(', ')} WHERE id = $${psIdx}`,
+            psVals
+          );
+        }
+      }
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('Shipment update error:', err);
+    return res.status(500).json({ error: 'Failed to update shipment' });
+  }
+});
+
+// POST /api/p2/shipments/:lotId/upload-bol — upload Bill of Lading PDF/image
+router.post('/shipments/:lotId/upload-bol', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const storagePath = await objectStorageService.uploadBuffer(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    await pool.query(
+      `UPDATE p2_lot_numbers SET bill_of_lading_url = $1, updated_at = NOW() WHERE id = $2`,
+      [storagePath, lotId]
+    );
+
+    return res.json({ success: true, billOfLadingUrl: storagePath });
+  } catch (err: any) {
+    console.error('BoL upload error:', err);
+    return res.status(500).json({ error: 'Failed to upload bill of lading' });
+  }
+});
+
+// GET /api/p2/shipments/:lotId/bill-of-lading — stream BoL file back to client
+router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const rows = await pool.query<{ bill_of_lading_url: string | null }>(
+      `SELECT bill_of_lading_url FROM p2_lot_numbers WHERE id = $1`, [lotId]
+    );
+    const bolUrl = rows[0]?.bill_of_lading_url;
+    if (!bolUrl) return res.status(404).json({ error: 'No bill of lading attached' });
+
+    const buffer = await objectStorageService.downloadAsBuffer(bolUrl);
+    const ext = bolUrl.split('.').pop()?.toLowerCase();
+    const contentType = ext === 'pdf' ? 'application/pdf'
+      : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
+    res.set('Content-Type', contentType);
+    res.set('Content-Disposition', `inline; filename="bill-of-lading"`);
+    return res.send(buffer);
+  } catch (err: any) {
+    console.error('BoL download error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve bill of lading' });
   }
 });
 

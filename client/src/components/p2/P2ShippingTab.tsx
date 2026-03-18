@@ -21,6 +21,7 @@ import {
   Download,
   ClipboardCheck,
   Zap,
+  ExternalLink,
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -807,6 +808,13 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                             onClick={() => window.open(`/p2/packing-slip/${shipment.slipId}`, '_blank')}
                           >
                             <FileText className="w-3 h-3 mr-1" />View Packing Slip
+                          </Button>
+                          <Button
+                            size="sm" variant="outline"
+                            className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                            onClick={() => window.location.href = `/p2/shipments/${shipment.lotId}`}
+                          >
+                            <ExternalLink className="w-3 h-3 mr-1" />Shipment Detail
                           </Button>
                           {shipment.certId ? (
                             <Button

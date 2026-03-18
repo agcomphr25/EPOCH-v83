@@ -105,6 +105,7 @@ import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
 import P2CertificateViewer from './pages/P2CertificateViewer';
+import P2ShipmentDetail from './pages/P2ShipmentDetail';
 import P2TestReportViewer from './pages/P2TestReportViewer';
 import P2ReadyToShipDashboard from './pages/P2ReadyToShipDashboard';
 import POProductsPage from './pages/POProductsPage';
@@ -836,6 +837,7 @@ function App() {
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
                   <Route path="/p2/packing-slip/:id" component={P2PackingSlipViewer} />
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
+                  <Route path="/p2/shipments/:lotId" component={P2ShipmentDetail} />
                   <Route path="/p2/ready-to-ship" component={P2ReadyToShipDashboard} />
                   <Route path="/p2/test-report/:id" component={P2TestReportViewer} />
                   <Route path="/p2-production-queue">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>

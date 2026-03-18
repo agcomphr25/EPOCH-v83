@@ -170,6 +170,8 @@ export default function FabricInventoryPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDepleteDialogOpen, setIsDepleteDialogOpen] = useState(false);
+  const [isReactivateDialogOpen, setIsReactivateDialogOpen] = useState(false);
+  const [reactivateSquareMeters, setReactivateSquareMeters] = useState("");
   const [selectedItem, setSelectedItem] = useState<FabricInventory | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "depleted">("active");
@@ -457,6 +459,25 @@ export default function FabricInventoryPage() {
     setIsEditDialogOpen(true);
   };
 
+  const reactivateMutation = useMutation({
+    mutationFn: async ({ id, squareMeters }: { id: string; squareMeters: string }) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${id}/reactivate`, {
+        method: 'POST',
+        body: JSON.stringify({ squareMeters }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Roll reactivated and set to active" });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      setIsReactivateDialogOpen(false);
+      setSelectedItem(null);
+      setReactivateSquareMeters("");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reactivate roll", variant: "destructive" });
+    },
+  });
+
   const handleDelete = (item: FabricInventory) => {
     setSelectedItem(item);
     setIsDeleteDialogOpen(true);
@@ -465,6 +486,12 @@ export default function FabricInventoryPage() {
   const handleDeplete = (item: FabricInventory) => {
     setSelectedItem(item);
     setIsDepleteDialogOpen(true);
+  };
+
+  const handleReactivate = (item: FabricInventory) => {
+    setSelectedItem(item);
+    setReactivateSquareMeters(item.squareMeters ? String(item.squareMeters) : "");
+    setIsReactivateDialogOpen(true);
   };
 
   const handlePrintLabel = async (item: FabricInventory) => {
@@ -1472,6 +1499,18 @@ export default function FabricInventoryPage() {
                                         <Archive className="h-4 w-4" />
                                       </Button>
                                     )}
+                                    {item.status === 'depleted' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleReactivate(item)}
+                                        title="Reactivate Roll"
+                                        className="text-green-600 hover:text-green-800"
+                                        data-testid={`button-reactivate-${item.id}`}
+                                      >
+                                        <RefreshCw className="h-4 w-4" />
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -1605,6 +1644,49 @@ export default function FabricInventoryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isReactivateDialogOpen} onOpenChange={(open) => {
+        setIsReactivateDialogOpen(open);
+        if (!open) { setSelectedItem(null); setReactivateSquareMeters(""); }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reactivate Roll</DialogTitle>
+            <DialogDescription>
+              Reactivating "{selectedItem?.fabric}" (Roll: {selectedItem?.rollNumber || 'N/A'}, Batch: {selectedItem?.batchNumber || 'N/A'}) will set its status back to active.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3 space-y-3">
+            <div>
+              <Label htmlFor="reactivate-sq-meters">Remaining Square Meters</Label>
+              <Input
+                id="reactivate-sq-meters"
+                type="number"
+                min="0"
+                step="0.01"
+                value={reactivateSquareMeters}
+                onChange={(e) => setReactivateSquareMeters(e.target.value)}
+                placeholder="Enter remaining quantity"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Set the remaining quantity for this roll. Leave blank to keep the existing value.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setIsReactivateDialogOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-green-600 text-white hover:bg-green-700"
+              disabled={reactivateMutation.isPending}
+              onClick={() => selectedItem && reactivateMutation.mutate({ id: selectedItem.id, squareMeters: reactivateSquareMeters })}
+              data-testid="button-confirm-reactivate"
+            >
+              {reactivateMutation.isPending ? "Reactivating..." : "Reactivate Roll"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Batch Print Dialog */}
       <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>

@@ -888,6 +888,39 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
   }
 });
 
+router.post('/fabric-inventory/:id/reactivate', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const { squareMeters } = req.body;
+    const reactivatedBy = (req as any).user?.username || 'unknown';
+
+    const updateData: any = {
+      status: 'active',
+      depletedAt: null,
+      depletedBy: null,
+    };
+    if (squareMeters !== undefined && squareMeters !== null && squareMeters !== '') {
+      const qty = parseFloat(squareMeters);
+      if (!isNaN(qty) && qty >= 0) {
+        updateData.squareMeters = String(qty);
+        updateData.quantityInStock = qty;
+      }
+    }
+
+    const inventory = await storage.updateCuttingFabricInventory(rollId, updateData);
+
+    res.json({
+      success: true,
+      message: 'Roll reactivated successfully',
+      rollId,
+      reactivatedBy,
+    });
+  } catch (error) {
+    console.error('Error reactivating fabric roll:', error);
+    res.status(500).json({ error: 'Failed to reactivate fabric roll' });
+  }
+});
+
 router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
   try {
     const rollId = req.params.id;

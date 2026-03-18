@@ -44,6 +44,7 @@ router.get('/shipping-queue', async (req, res) => {
   try {
     const SHIPPING_PIPELINE_DEPTS = ['Final QC', 'Shipping QC', 'Shipping', 'COMPLETED', 'Quality Control'];
 
+    // Fetch all pipeline-eligible serials (Drizzle gives us camelCase fields)
     const units = await db.query.p2SerializedItems.findMany({
       where: or(
         and(
@@ -59,7 +60,19 @@ router.get('/shipping-queue', async (req, res) => {
       orderBy: (t, { asc }) => [asc(t.poNumber), asc(t.sequenceNumber)],
     });
 
-    res.json(units);
+    // Build a set of all serial IDs already assigned to a lot.
+    // pg automatically parses the JSONB column into a JS array of strings.
+    const lotRows = await pool.query<{ serialized_item_ids: string[] | null }>(
+      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+    );
+    const shippedIds = new Set<string>(
+      lotRows.flatMap((r) => r.serialized_item_ids ?? [])
+    );
+
+    // Exclude any serial already in a lot — prevents re-shipment
+    const unshipped = units.filter((u) => !shippedIds.has(u.id));
+
+    res.json(unshipped);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to fetch shipping queue' });
   }

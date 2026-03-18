@@ -238,14 +238,13 @@ export default function P2ShippingTab() {
     });
   };
 
-  const handleCreateShipment = async (poNumber: string) => {
-    const sel = selectedSerials[poNumber];
-    if (!sel || sel.size === 0) return;
+  const handleCreateShipment = async (poNumber: string, serialIds: string[]) => {
+    if (serialIds.length === 0) return;
     setCreatingShipmentFor(poNumber);
     try {
       const lot = await apiRequest('/api/p2/lots', {
         method: 'POST',
-        body: JSON.stringify({ serialIds: Array.from(sel), createdBy: 'shipping' }),
+        body: JSON.stringify({ serialIds, createdBy: 'shipping' }),
       });
       const slip = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
@@ -313,10 +312,11 @@ export default function P2ShippingTab() {
         <ShipmentSummaryModal
           serials={summaryModalSerials}
           onConfirm={() => {
-            const po = summaryModalPO;
+            const po = summaryModalPO!;
+            const ids = summaryModalSerials.map((s) => s.id);
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
-            handleCreateShipment(po);
+            handleCreateShipment(po, ids);
           }}
           onCancel={() => {
             setSummaryModalPO(null);

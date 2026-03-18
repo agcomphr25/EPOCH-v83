@@ -532,11 +532,9 @@ export default function P2ControlCenter() {
 
         <TabsContent value="shipping" className="space-y-4">
           <div className="flex justify-end">
-            <Link href="/p2/ready-to-ship">
-              <a className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                Ready to Ship Dashboard
-              </a>
+            <Link href="/p2/ready-to-ship" className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              Ready to Ship Dashboard
             </Link>
           </div>
           <P2ShippingTab initialPO={poFromUrl} />

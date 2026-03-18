@@ -74,7 +74,13 @@ export default function P2ShippingTab() {
   const [finalizingPO, setFinalizingPO] = useState<string | null>(null);
   const [skuInputs, setSkuInputs] = useState<Record<string, string>>({});
   const [drawingInputs, setDrawingInputs] = useState<Record<string, string>>({});
+
+  // Checkboxes for selecting which unfinalized units to finalize
+  const [finalizationSelections, setFinalizationSelections] = useState<Record<string, Set<string>>>({});
+
+  // Checkboxes for selecting which finalized units to include in a shipment
   const [selectedSerials, setSelectedSerials] = useState<Record<string, Set<string>>>({});
+
   const [createdShipments, setCreatedShipments] = useState<Record<string, CreatedShipment>>({});
   const [creatingShipmentFor, setCreatingShipmentFor] = useState<string | null>(null);
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
@@ -86,7 +92,6 @@ export default function P2ShippingTab() {
 
   const poGroups = useMemo(() => {
     const groups: Record<string, POGroup> = {};
-
     for (const unit of shippingUnits) {
       const key = unit.poNumber;
       if (!groups[key]) {
@@ -112,7 +117,6 @@ export default function P2ShippingTab() {
         groups[key].inProduction++;
       }
     }
-
     return Object.values(groups).sort((a, b) => {
       const aReady = a.readyToShip > 0 && a.finalizedCount < a.readyToShip ? 0 : 1;
       const bReady = b.readyToShip > 0 && b.finalizedCount < b.readyToShip ? 0 : 1;
@@ -149,7 +153,7 @@ export default function P2ShippingTab() {
         body: JSON.stringify(data),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
       toast({ title: 'Units Finalized', description: 'SKU and drawing name assigned successfully.' });
       setFinalizingPO(null);
@@ -161,10 +165,11 @@ export default function P2ShippingTab() {
         description: rd?.error || error.message || 'Failed to finalize units',
         variant: 'destructive',
       });
+      setFinalizingPO(null);
     },
   });
 
-  const handleFinalize = (poNumber: string, group: POGroup) => {
+  const handleFinalize = (poNumber: string) => {
     const sku = skuInputs[poNumber]?.trim();
     const drawing = drawingInputs[poNumber]?.trim();
     if (!sku || !drawing) {
@@ -175,67 +180,75 @@ export default function P2ShippingTab() {
       });
       return;
     }
-    const eligibleUnits = group.units.filter(
-      (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
-    );
-    if (eligibleUnits.length === 0) {
-      toast({ title: 'Nothing to Finalize', description: 'All completed units are already finalized.' });
+    const sel = finalizationSelections[poNumber];
+    if (!sel || sel.size === 0) {
+      toast({
+        title: 'No Units Selected',
+        description: 'Check the boxes next to the units you want to finalize.',
+        variant: 'destructive',
+      });
       return;
     }
     setFinalizingPO(poNumber);
     finalizeMutation.mutate({
-      serializedItemIds: eligibleUnits.map((u) => u.id),
+      serializedItemIds: Array.from(sel),
       sku,
       drawingName: drawing,
       performedBy: 'shipping',
     });
   };
 
-  const toggleSerial = (poNumber: string, serialId: string) => {
-    setSelectedSerials((prev) => {
+  // ── Finalization selection helpers ──
+  const toggleFinalizationSerial = (poNumber: string, serialId: string) => {
+    setFinalizationSelections((prev) => {
       const current = new Set(prev[poNumber] ?? []);
-      if (current.has(serialId)) {
-        current.delete(serialId);
-      } else {
-        current.add(serialId);
-      }
+      if (current.has(serialId)) current.delete(serialId);
+      else current.add(serialId);
       return { ...prev, [poNumber]: current };
     });
   };
 
-  const toggleSelectAll = (poNumber: string, finalizedIds: string[]) => {
+  const toggleSelectAllUnfinalized = (poNumber: string, ids: string[]) => {
+    setFinalizationSelections((prev) => {
+      const current = prev[poNumber] ?? new Set<string>();
+      const allSelected = ids.every((id) => current.has(id));
+      return { ...prev, [poNumber]: new Set(allSelected ? [] : ids) };
+    });
+  };
+
+  // ── Shipment selection helpers ──
+  const toggleShipSerial = (poNumber: string, serialId: string) => {
+    setSelectedSerials((prev) => {
+      const current = new Set(prev[poNumber] ?? []);
+      if (current.has(serialId)) current.delete(serialId);
+      else current.add(serialId);
+      return { ...prev, [poNumber]: current };
+    });
+  };
+
+  const toggleSelectAllFinalized = (poNumber: string, ids: string[]) => {
     setSelectedSerials((prev) => {
       const current = prev[poNumber] ?? new Set<string>();
-      const allSelected = finalizedIds.every((id) => current.has(id));
-      const next = new Set(allSelected ? [] : finalizedIds);
-      return { ...prev, [poNumber]: next };
+      const allSelected = ids.every((id) => current.has(id));
+      return { ...prev, [poNumber]: new Set(allSelected ? [] : ids) };
     });
   };
 
   const handleCreateShipment = async (poNumber: string) => {
     const sel = selectedSerials[poNumber];
     if (!sel || sel.size === 0) return;
-
     setCreatingShipmentFor(poNumber);
     try {
       const lotRes = await apiRequest('/api/p2/lots', {
         method: 'POST',
-        body: JSON.stringify({
-          serialIds: Array.from(sel),
-          createdBy: 'shipping',
-        }),
+        body: JSON.stringify({ serialIds: Array.from(sel), createdBy: 'shipping' }),
       });
       const lot = await lotRes.json();
-
       const slipRes = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
-        body: JSON.stringify({
-          lotId: lot.id,
-          createdBy: 'shipping',
-        }),
+        body: JSON.stringify({ lotId: lot.id, createdBy: 'shipping' }),
       });
       const slip = await slipRes.json();
-
       setCreatedShipments((prev) => ({
         ...prev,
         [poNumber]: { lotId: lot.id, slipId: slip.id, slipNumber: slip.packingSlipNumber },
@@ -243,11 +256,7 @@ export default function P2ShippingTab() {
       setSelectedSerials((prev) => ({ ...prev, [poNumber]: new Set() }));
       toast({ title: 'Shipment Created', description: `Packing slip ${slip.packingSlipNumber} generated.` });
     } catch (err: any) {
-      toast({
-        title: 'Shipment Failed',
-        description: err?.message || 'Failed to create shipment',
-        variant: 'destructive',
-      });
+      toast({ title: 'Shipment Failed', description: err?.message || 'Failed to create shipment', variant: 'destructive' });
     } finally {
       setCreatingShipmentFor(null);
     }
@@ -256,40 +265,27 @@ export default function P2ShippingTab() {
   const handleGenerateCoC = async (poNumber: string) => {
     const shipment = createdShipments[poNumber];
     if (!shipment) return;
-
     setGeneratingCertFor(poNumber);
     try {
       const certRes = await apiRequest('/api/p2/certificates', {
         method: 'POST',
-        body: JSON.stringify({
-          lotId: shipment.lotId,
-          createdBy: 'shipping',
-        }),
+        body: JSON.stringify({ lotId: shipment.lotId, createdBy: 'shipping' }),
       });
       const cert = await certRes.json();
-
       setCreatedShipments((prev) => ({
         ...prev,
         [poNumber]: { ...prev[poNumber], certId: cert.id, certNumber: cert.certificateNumber },
       }));
       toast({ title: 'CoC Generated', description: `Certificate ${cert.certificateNumber} created.` });
     } catch (err: any) {
-      toast({
-        title: 'CoC Failed',
-        description: err?.message || 'Failed to generate certificate',
-        variant: 'destructive',
-      });
+      toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
     } finally {
       setGeneratingCertFor(null);
     }
   };
 
   const summary = useMemo(() => {
-    let totalUnits = 0;
-    let finalized = 0;
-    let readyToShip = 0;
-    let needsFinalization = 0;
-
+    let totalUnits = 0, finalized = 0, readyToShip = 0, needsFinalization = 0;
     for (const g of poGroups) {
       totalUnits += g.totalUnits;
       finalized += g.finalizedCount;
@@ -298,7 +294,6 @@ export default function P2ShippingTab() {
         (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
       ).length;
     }
-
     return { totalUnits, finalized, readyToShip, needsFinalization, poCount: poGroups.length };
   }, [poGroups]);
 
@@ -313,37 +308,12 @@ export default function P2ShippingTab() {
 
   return (
     <div className="space-y-6">
+      {/* Summary cards */}
       <div className="grid grid-cols-4 gap-4">
-        <Card>
-          <div className="pt-4 pb-3 text-center">
-            <div className="text-2xl font-bold">{summary.poCount}</div>
-            <div className="text-xs text-muted-foreground">POs with Units</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="pt-4 pb-3 text-center">
-            <div className="text-2xl font-bold">{summary.totalUnits}</div>
-            <div className="text-xs text-muted-foreground">Total Units</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="pt-4 pb-3 text-center">
-            <div className="text-2xl font-bold text-green-600">{summary.finalized}</div>
-            <div className="text-xs text-muted-foreground">Finalized</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="pt-4 pb-3 text-center">
-            <div
-              className={`text-2xl font-bold ${
-                summary.needsFinalization > 0 ? 'text-amber-600' : 'text-green-600'
-              }`}
-            >
-              {summary.needsFinalization}
-            </div>
-            <div className="text-xs text-muted-foreground">Needs Finalization</div>
-          </div>
-        </Card>
+        <Card><div className="pt-4 pb-3 text-center"><div className="text-2xl font-bold">{summary.poCount}</div><div className="text-xs text-muted-foreground">POs with Units</div></div></Card>
+        <Card><div className="pt-4 pb-3 text-center"><div className="text-2xl font-bold">{summary.totalUnits}</div><div className="text-xs text-muted-foreground">Total Units</div></div></Card>
+        <Card><div className="pt-4 pb-3 text-center"><div className="text-2xl font-bold text-green-600">{summary.finalized}</div><div className="text-xs text-muted-foreground">Finalized</div></div></Card>
+        <Card><div className="pt-4 pb-3 text-center"><div className={`text-2xl font-bold ${summary.needsFinalization > 0 ? 'text-amber-600' : 'text-green-600'}`}>{summary.needsFinalization}</div><div className="text-xs text-muted-foreground">Needs Finalization</div></div></Card>
       </div>
 
       <div className="flex items-center gap-3">
@@ -368,9 +338,7 @@ export default function P2ShippingTab() {
             {searchTerm ? 'No matching POs found' : 'No units in shipping pipeline'}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {searchTerm
-              ? 'Try a different search term'
-              : 'Units will appear here when they reach Final QC, Shipping, or are completed'}
+            {searchTerm ? 'Try a different search term' : 'Units will appear here when they reach Final QC, Shipping, or are completed'}
           </p>
         </div>
       ) : (
@@ -380,80 +348,64 @@ export default function P2ShippingTab() {
             const completedUnfinalized = group.units.filter(
               (u) => u.completedAt && (!u.finalizedAt || !u.sku || !u.drawingName)
             );
-            const allCompletedFinalized =
-              completedUnfinalized.length === 0 && group.readyToShip > 0;
+            const finalizedUnits = group.units.filter(
+              (u) => !!(u.finalizedAt && u.sku && u.drawingName)
+            );
+            const allCompletedFinalized = completedUnfinalized.length === 0 && group.readyToShip > 0;
             const statusColor = allCompletedFinalized
               ? 'border-green-200 dark:border-green-800'
               : completedUnfinalized.length > 0
               ? 'border-amber-200 dark:border-amber-800'
               : 'border-border';
 
-            const finalizedUnits = group.units.filter(
-              (u) => !!(u.finalizedAt && u.sku && u.drawingName)
-            );
+            const unfinalizedIds = completedUnfinalized.map((u) => u.id);
             const finalizedIds = finalizedUnits.map((u) => u.id);
-            const selectionForPO = selectedSerials[group.poNumber] ?? new Set<string>();
-            const selectedCount = selectionForPO.size;
+            const finSelForPO = finalizationSelections[group.poNumber] ?? new Set<string>();
+            const shipSelForPO = selectedSerials[group.poNumber] ?? new Set<string>();
+            const finalizeSelectedCount = finSelForPO.size;
+            const shipSelectedCount = shipSelForPO.size;
             const shipment = createdShipments[group.poNumber];
+
+            // Show checkbox column whenever there are any actionable rows
+            const showCheckboxCol = unfinalizedIds.length > 0 || finalizedIds.length > 0;
 
             return (
               <Card key={group.poNumber} className={statusColor}>
+                {/* PO header row */}
                 <div
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-accent/30 transition-colors"
                   onClick={() => setExpandedPO(isExpanded ? null : group.poNumber)}
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className="flex items-center justify-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                      )}
+                    <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                      {isExpanded
+                        ? <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
                     </div>
                     <div>
                       <div className="font-medium text-sm flex items-center gap-2">
                         {group.poNumber}
-                        <span className="text-muted-foreground font-normal">
-                          — {group.customerName}
-                        </span>
+                        <span className="text-muted-foreground font-normal">— {group.customerName}</span>
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
                         <span>{group.totalUnits} unit(s)</span>
                         <span className="text-green-600">{group.readyToShip} completed</span>
-                        {group.inProduction > 0 && (
-                          <span className="text-blue-600">{group.inProduction} in production</span>
-                        )}
+                        {group.inProduction > 0 && <span className="text-blue-600">{group.inProduction} in production</span>}
                       </div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
                     {allCompletedFinalized ? (
-                      <Badge
-                        variant="outline"
-                        className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400"
-                      >
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Ready to Ship
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
+                        <CheckCircle className="w-3 h-3 mr-1" />Ready to Ship
                       </Badge>
                     ) : completedUnfinalized.length > 0 ? (
-                      <Badge
-                        variant="outline"
-                        className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400"
-                      >
-                        <Shield className="w-3 h-3 mr-1" />
-                        {completedUnfinalized.length} Need Finalization
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400">
+                        <Shield className="w-3 h-3 mr-1" />{completedUnfinalized.length} Need Finalization
                       </Badge>
                     ) : (
-                      <Badge
-                        variant="outline"
-                        className="bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400"
-                      >
-                        <Loader2 className="w-3 h-3 mr-1" />
-                        In Production
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400">
+                        <Loader2 className="w-3 h-3 mr-1" />In Production
                       </Badge>
                     )}
                     <Badge variant="secondary" className="text-xs">
@@ -464,187 +416,177 @@ export default function P2ShippingTab() {
 
                 {isExpanded && (
                   <CardContent className="pt-0 pb-4 space-y-4">
+
+                    {/* ── Finalization panel ── */}
                     {completedUnfinalized.length > 0 && (
                       <div className="p-4 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg space-y-3">
-                        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
-                          <Shield className="w-4 h-4" />
-                          {completedUnfinalized.length} completed unit(s) need SKU/Drawing
-                          assignment
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
+                            <Shield className="w-4 h-4" />
+                            Assign SKU &amp; Drawing to selected units
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="text-xs text-amber-600 hover:text-amber-800 underline"
+                              onClick={() => toggleSelectAllUnfinalized(group.poNumber, unfinalizedIds)}
+                            >
+                              {unfinalizedIds.every((id) => finSelForPO.has(id)) ? 'Deselect All' : 'Select All'}
+                            </button>
+                            {finalizeSelectedCount > 0 && (
+                              <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-xs">
+                                {finalizeSelectedCount} selected
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <Label
-                              htmlFor={`sku-${group.poNumber}`}
-                              className="text-xs font-medium"
-                            >
-                              SKU *
-                            </Label>
+                            <Label htmlFor={`sku-${group.poNumber}`} className="text-xs font-medium">SKU *</Label>
                             <Input
                               id={`sku-${group.poNumber}`}
                               placeholder="Enter SKU"
                               value={skuInputs[group.poNumber] || ''}
-                              onChange={(e) =>
-                                setSkuInputs((prev) => ({
-                                  ...prev,
-                                  [group.poNumber]: e.target.value,
-                                }))
-                              }
+                              onChange={(e) => setSkuInputs((prev) => ({ ...prev, [group.poNumber]: e.target.value }))}
                               className="h-8 text-sm"
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label
-                              htmlFor={`drawing-${group.poNumber}`}
-                              className="text-xs font-medium"
-                            >
-                              Drawing Name *
-                            </Label>
+                            <Label htmlFor={`drawing-${group.poNumber}`} className="text-xs font-medium">Drawing Name *</Label>
                             <Input
                               id={`drawing-${group.poNumber}`}
                               placeholder="Enter drawing name"
                               value={drawingInputs[group.poNumber] || ''}
-                              onChange={(e) =>
-                                setDrawingInputs((prev) => ({
-                                  ...prev,
-                                  [group.poNumber]: e.target.value,
-                                }))
-                              }
+                              onChange={(e) => setDrawingInputs((prev) => ({ ...prev, [group.poNumber]: e.target.value }))}
                               className="h-8 text-sm"
                             />
                           </div>
                         </div>
                         <Button
                           size="sm"
-                          onClick={() => handleFinalize(group.poNumber, group)}
-                          disabled={
-                            finalizeMutation.isPending && finalizingPO === group.poNumber
-                          }
-                          className="bg-amber-600 hover:bg-amber-700 text-white"
+                          onClick={() => handleFinalize(group.poNumber)}
+                          disabled={(finalizeMutation.isPending && finalizingPO === group.poNumber) || finalizeSelectedCount === 0}
+                          className="bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50"
                         >
                           {finalizeMutation.isPending && finalizingPO === group.poNumber ? (
-                            <>
-                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                              Finalizing...
-                            </>
+                            <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Finalizing...</>
                           ) : (
-                            <>
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Finalize {completedUnfinalized.length} Unit(s)
+                            <><CheckCircle className="w-3 h-3 mr-1" />
+                              {finalizeSelectedCount > 0
+                                ? `Finalize ${finalizeSelectedCount} Unit(s)`
+                                : 'Select units below to finalize'}
                             </>
                           )}
                         </Button>
                       </div>
                     )}
 
+                    {/* ── Unit table ── */}
                     <div className="border rounded-lg overflow-hidden">
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50">
                           <tr>
-                            {finalizedIds.length > 0 && (
-                              <th className="px-3 py-2 w-8">
-                                <Checkbox
-                                  checked={
-                                    finalizedIds.length > 0 &&
-                                    finalizedIds.every((id) => selectionForPO.has(id))
-                                  }
-                                  onCheckedChange={() =>
-                                    toggleSelectAll(group.poNumber, finalizedIds)
-                                  }
-                                  aria-label="Select all finalized"
-                                />
+                            {showCheckboxCol && (
+                              <th className="px-3 py-2 w-10 text-center">
+                                {/* Header checkbox selects all finalized for shipment */}
+                                {finalizedIds.length > 0 ? (
+                                  <Checkbox
+                                    checked={finalizedIds.length > 0 && finalizedIds.every((id) => shipSelForPO.has(id))}
+                                    onCheckedChange={() => toggleSelectAllFinalized(group.poNumber, finalizedIds)}
+                                    aria-label="Select all finalized for shipment"
+                                    title="Select all finalized (for shipment)"
+                                  />
+                                ) : (
+                                  <span className="w-4 h-4 inline-block" />
+                                )}
                               </th>
                             )}
-                            <th className="px-3 py-2 text-left font-medium text-xs">Barcode</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs">Serial / Barcode</th>
                             <th className="px-3 py-2 text-left font-medium text-xs">Part</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">Department</th>
+                            <th className="px-3 py-2 text-left font-medium text-xs">Dept</th>
                             <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
                             <th className="px-3 py-2 text-left font-medium text-xs">SKU</th>
                             <th className="px-3 py-2 text-left font-medium text-xs">Drawing</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">Finalized</th>
+                            <th className="px-3 py-2 text-center font-medium text-xs w-20">Finalized</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {group.units.map((unit) => {
-                            const isFinalized = !!(
-                              unit.finalizedAt &&
-                              unit.sku &&
-                              unit.drawingName
-                            );
+                            const isFinalized = !!(unit.finalizedAt && unit.sku && unit.drawingName);
                             const isCompleted = !!unit.completedAt;
-                            const isSelected = selectionForPO.has(unit.id);
+                            const isNeedingFinalization = isCompleted && !isFinalized;
+
+                            // Which set controls this row
+                            const isSelectedForFinalize = finSelForPO.has(unit.id);
+                            const isSelectedForShip = shipSelForPO.has(unit.id);
+
+                            const rowBg = isSelectedForShip
+                              ? 'bg-blue-50/60 dark:bg-blue-900/20'
+                              : isSelectedForFinalize
+                              ? 'bg-amber-50/80 dark:bg-amber-900/20'
+                              : isFinalized
+                              ? 'bg-green-50/50 dark:bg-green-900/10'
+                              : isCompleted
+                              ? 'bg-amber-50/30 dark:bg-amber-900/5'
+                              : '';
 
                             return (
-                              <tr
-                                key={unit.id}
-                                className={
-                                  isSelected
-                                    ? 'bg-blue-50/60 dark:bg-blue-900/20'
-                                    : isFinalized
-                                    ? 'bg-green-50/50 dark:bg-green-900/10'
-                                    : isCompleted
-                                    ? 'bg-amber-50/50 dark:bg-amber-900/10'
-                                    : ''
-                                }
-                              >
-                                {finalizedIds.length > 0 && (
-                                  <td className="px-3 py-2">
+                              <tr key={unit.id} className={rowBg}>
+                                {showCheckboxCol && (
+                                  <td className="px-3 py-2 text-center">
                                     {isFinalized ? (
+                                      // Blue checkbox — select for shipment
                                       <Checkbox
-                                        checked={isSelected}
-                                        onCheckedChange={() =>
-                                          toggleSerial(group.poNumber, unit.id)
-                                        }
-                                        aria-label={`Select ${unit.serialNumber}`}
+                                        checked={isSelectedForShip}
+                                        onCheckedChange={() => toggleShipSerial(group.poNumber, unit.id)}
+                                        aria-label={`Select ${unit.serialNumber} for shipment`}
+                                        className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                      />
+                                    ) : isNeedingFinalization ? (
+                                      // Amber checkbox — select for finalization
+                                      <Checkbox
+                                        checked={isSelectedForFinalize}
+                                        onCheckedChange={() => toggleFinalizationSerial(group.poNumber, unit.id)}
+                                        aria-label={`Select ${unit.serialNumber} for finalization`}
+                                        className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
                                       />
                                     ) : (
                                       <span className="w-4 h-4 inline-block" />
                                     )}
                                   </td>
                                 )}
-                                <td className="px-3 py-2 font-mono text-xs">{unit.barcode}</td>
+                                <td className="px-3 py-2">
+                                  <div className="font-mono text-xs">{unit.barcode}</div>
+                                  <div className="text-[10px] text-muted-foreground">{unit.serialNumber}</div>
+                                </td>
                                 <td className="px-3 py-2 text-xs">
                                   <div>{unit.partNumber}</div>
-                                  <div className="text-muted-foreground text-[10px]">
-                                    {unit.partName}
-                                  </div>
+                                  <div className="text-muted-foreground text-[10px]">{unit.partName}</div>
                                 </td>
                                 <td className="px-3 py-2 text-xs">{unit.currentDepartment}</td>
                                 <td className="px-3 py-2">
-                                  <span
-                                    className={`text-xs px-1.5 py-0.5 rounded ${
-                                      isCompleted
-                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                        : unit.status === 'HOLD'
-                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                    }`}
-                                  >
+                                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                    isCompleted
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                      : unit.status === 'HOLD'
+                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                  }`}>
                                     {isCompleted ? 'COMPLETED' : unit.status}
                                   </span>
-                                  {!isCompleted && unit.status === 'ACTIVE' && (
-                                    <span className="ml-1 text-[10px] text-muted-foreground">
-                                      (in production)
-                                    </span>
-                                  )}
                                 </td>
                                 <td className="px-3 py-2 text-xs">
-                                  {unit.sku || (
-                                    <span className="text-muted-foreground italic">—</span>
-                                  )}
+                                  {unit.sku || <span className="text-muted-foreground italic">—</span>}
                                 </td>
                                 <td className="px-3 py-2 text-xs">
-                                  {unit.drawingName || (
-                                    <span className="text-muted-foreground italic">—</span>
-                                  )}
+                                  {unit.drawingName || <span className="text-muted-foreground italic">—</span>}
                                 </td>
-                                <td className="px-3 py-2">
-                                  {isFinalized ? (
-                                    <CheckCircle className="w-4 h-4 text-green-500" />
-                                  ) : isCompleted ? (
-                                    <AlertTriangle className="w-4 h-4 text-amber-500" />
-                                  ) : (
-                                    <span className="text-[10px] text-muted-foreground">—</span>
-                                  )}
+                                <td className="px-3 py-2 text-center">
+                                  {isFinalized
+                                    ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+                                    : isCompleted
+                                    ? <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />
+                                    : <span className="text-[10px] text-muted-foreground">—</span>}
                                 </td>
                               </tr>
                             );
@@ -653,34 +595,48 @@ export default function P2ShippingTab() {
                       </table>
                     </div>
 
+                    {/* Column legend */}
+                    {showCheckboxCol && (unfinalizedIds.length > 0 || finalizedIds.length > 0) && (
+                      <div className="flex items-center gap-4 text-[11px] text-muted-foreground px-1">
+                        {unfinalizedIds.length > 0 && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-sm border border-amber-400 bg-amber-100 inline-block" />
+                            Amber checkbox = select to finalize
+                          </span>
+                        )}
+                        {finalizedIds.length > 0 && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-sm border border-blue-400 bg-blue-100 inline-block" />
+                            Blue checkbox = select for shipment
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Create Shipment bar ── */}
                     {finalizedIds.length > 0 && !shipment && (
                       <div className="flex items-center justify-between p-3 bg-muted/30 border rounded-lg">
                         <div className="text-sm text-muted-foreground">
-                          {selectedCount > 0
-                            ? `${selectedCount} unit(s) selected for shipment`
-                            : `${finalizedIds.length} finalized unit(s) available — select to create shipment`}
+                          {shipSelectedCount > 0
+                            ? `${shipSelectedCount} finalized unit(s) selected for shipment`
+                            : `${finalizedIds.length} finalized unit(s) available — check blue boxes to create a shipment`}
                         </div>
                         <Button
                           size="sm"
-                          disabled={selectedCount === 0 || creatingShipmentFor === group.poNumber}
+                          disabled={shipSelectedCount === 0 || creatingShipmentFor === group.poNumber}
                           onClick={() => handleCreateShipment(group.poNumber)}
                           className="bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           {creatingShipmentFor === group.poNumber ? (
-                            <>
-                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                              Creating...
-                            </>
+                            <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Creating...</>
                           ) : (
-                            <>
-                              <Truck className="w-3 h-3 mr-1" />
-                              Create Shipment ({selectedCount})
-                            </>
+                            <><Truck className="w-3 h-3 mr-1" />Create Shipment ({shipSelectedCount})</>
                           )}
                         </Button>
                       </div>
                     )}
 
+                    {/* ── Created shipment documents ── */}
                     {shipment && (
                       <div className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
@@ -689,62 +645,38 @@ export default function P2ShippingTab() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
-                            size="sm"
-                            variant="outline"
+                            size="sm" variant="outline"
                             className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() =>
-                              window.open(`/api/p2/packing-slips/${shipment.slipId}/pdf`, '_blank')
-                            }
+                            onClick={() => window.open(`/api/p2/packing-slips/${shipment.slipId}/pdf`, '_blank')}
                           >
-                            <Download className="w-3 h-3 mr-1" />
-                            Packing Slip PDF
+                            <Download className="w-3 h-3 mr-1" />Packing Slip PDF
                           </Button>
-
                           <Button
-                            size="sm"
-                            variant="outline"
+                            size="sm" variant="outline"
                             className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() =>
-                              window.open(`/p2/packing-slip/${shipment.slipId}`, '_blank')
-                            }
+                            onClick={() => window.open(`/p2/packing-slip/${shipment.slipId}`, '_blank')}
                           >
-                            <FileText className="w-3 h-3 mr-1" />
-                            View Packing Slip
+                            <FileText className="w-3 h-3 mr-1" />View Packing Slip
                           </Button>
-
                           {shipment.certId ? (
                             <Button
-                              size="sm"
-                              variant="outline"
+                              size="sm" variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                              onClick={() =>
-                                window.open(
-                                  `/api/p2/certificates/${shipment.certId}/pdf`,
-                                  '_blank'
-                                )
-                              }
+                              onClick={() => window.open(`/api/p2/certificates/${shipment.certId}/pdf`, '_blank')}
                             >
-                              <Download className="w-3 h-3 mr-1" />
-                              CoC PDF — {shipment.certNumber}
+                              <Download className="w-3 h-3 mr-1" />CoC PDF — {shipment.certNumber}
                             </Button>
                           ) : (
                             <Button
-                              size="sm"
-                              variant="outline"
+                              size="sm" variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50"
                               disabled={generatingCertFor === group.poNumber}
                               onClick={() => handleGenerateCoC(group.poNumber)}
                             >
                               {generatingCertFor === group.poNumber ? (
-                                <>
-                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                  Generating...
-                                </>
+                                <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
                               ) : (
-                                <>
-                                  <ClipboardCheck className="w-3 h-3 mr-1" />
-                                  Generate CoC
-                                </>
+                                <><ClipboardCheck className="w-3 h-3 mr-1" />Generate CoC</>
                               )}
                             </Button>
                           )}
@@ -756,9 +688,7 @@ export default function P2ShippingTab() {
                       <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
                           <Truck className="w-4 h-4" />
-                          <span className="font-medium">
-                            All completed units finalized — select units above to create shipment
-                          </span>
+                          <span className="font-medium">All units finalized — check blue boxes above to select for shipment</span>
                         </div>
                         <Badge variant="outline" className="text-green-700 border-green-300">
                           {group.readyToShip} unit(s) ready

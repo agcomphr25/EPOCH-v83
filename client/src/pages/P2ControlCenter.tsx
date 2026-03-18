@@ -97,7 +97,9 @@ interface PartRouting {
 }
 
 export default function P2ControlCenter() {
-  const tabFromUrl = new URLSearchParams(window.location.search).get('tab');
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabFromUrl = urlParams.get('tab');
+  const poFromUrl = urlParams.get('po') || undefined;
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
   const [showPOWizard, setShowPOWizard] = useState(false);
   const [showBOMWizard, setShowBOMWizard] = useState(false);
@@ -537,7 +539,7 @@ export default function P2ControlCenter() {
               </a>
             </Link>
           </div>
-          <P2ShippingTab />
+          <P2ShippingTab initialPO={poFromUrl} />
         </TabsContent>
 
         <TabsContent value="travelers">

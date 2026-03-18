@@ -27,9 +27,6 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import ShipmentSummaryModal from '@/components/p2/ShipmentSummaryModal';
 
 type SerializedUnit = {
   id: string;
@@ -69,11 +66,7 @@ type CustomerSummary = {
 
 export default function P2ReadyToShipDashboard() {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const [search, setSearch] = useState('');
-  const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
-  const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
-  const [creatingShipmentFor, setCreatingShipmentFor] = useState<string | null>(null);
 
   const { data: units = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
     queryKey: ['/api/p2/serialized-items/shipping-queue'],
@@ -143,51 +136,11 @@ export default function P2ReadyToShipDashboard() {
 
   const handleShipAll = (po: POSummary) => {
     if (po.readyUnits.length === 0) return;
-    setSummaryModalSerials(po.readyUnits);
-    setSummaryModalPO(po.poNumber);
-  };
-
-  const handleConfirmShipment = async () => {
-    const po = summaryModalPO;
-    if (!po) return;
-    const serials = summaryModalSerials;
-    setSummaryModalPO(null);
-    setSummaryModalSerials([]);
-    setCreatingShipmentFor(po);
-    try {
-      const lot = await apiRequest('/api/p2/lots', {
-        method: 'POST',
-        body: JSON.stringify({ serialIds: serials.map((s) => s.id), createdBy: 'shipping' }),
-      });
-      const slip = await apiRequest('/api/p2/packing-slips', {
-        method: 'POST',
-        body: JSON.stringify({ lotId: lot.id, createdBy: 'shipping' }),
-      });
-      toast({
-        title: 'Shipment Created',
-        description: `Packing slip ${slip.packingSlipNumber} generated. View it in the Shipping tab.`,
-      });
-      refetch();
-    } catch (err: any) {
-      toast({
-        title: 'Shipment Failed',
-        description: err?.message || 'Failed to create shipment',
-        variant: 'destructive',
-      });
-    } finally {
-      setCreatingShipmentFor(null);
-    }
+    setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`);
   };
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-6xl">
-      {summaryModalPO && (
-        <ShipmentSummaryModal
-          serials={summaryModalSerials}
-          onConfirm={handleConfirmShipment}
-          onCancel={() => { setSummaryModalPO(null); setSummaryModalSerials([]); }}
-        />
-      )}
 
       {/* Header */}
       <div className="flex items-center gap-4">
@@ -319,22 +272,18 @@ export default function P2ReadyToShipDashboard() {
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs"
-                        onClick={() => setLocation('/p2-control-center?tab=shipping')}
+                        onClick={() => setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`)}
                       >
                         <ExternalLink className="h-3 w-3 mr-1" />
                         View
                       </Button>
                       <Button
                         size="sm"
-                        disabled={po.readyCount === 0 || creatingShipmentFor === po.poNumber}
+                        disabled={po.readyCount === 0}
                         className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
                         onClick={() => handleShipAll(po)}
                       >
-                        {creatingShipmentFor === po.poNumber ? (
-                          <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Creating...</>
-                        ) : (
-                          <><Zap className="h-3 w-3 mr-1" />Ship All Ready</>
-                        )}
+                        <Zap className="h-3 w-3 mr-1" />Ship All Ready
                       </Button>
                     </div>
                   </TableCell>

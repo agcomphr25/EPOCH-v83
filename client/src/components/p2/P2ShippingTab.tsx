@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -69,7 +69,7 @@ type CreatedShipment = {
   certNumber?: string;
 };
 
-export default function P2ShippingTab() {
+export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedPO, setExpandedPO] = useState<string | null>(null);
@@ -89,10 +89,28 @@ export default function P2ShippingTab() {
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
 
+  const autoTriggered = useRef(false);
+
   const { data: shippingUnits = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
     queryKey: ['/api/p2/serialized-items/shipping-queue'],
     refetchInterval: 15000,
   });
+
+  // Auto-select and open modal when navigated here from the dashboard with a ?po= param
+  useEffect(() => {
+    if (!initialPO || autoTriggered.current || shippingUnits.length === 0) return;
+    const readyForPO = shippingUnits.filter(
+      (u) => u.poNumber === initialPO &&
+             u.status === 'COMPLETED' &&
+             !!(u.finalizedAt && u.sku && u.drawingName)
+    );
+    if (readyForPO.length === 0) return;
+    autoTriggered.current = true;
+    setExpandedPO(initialPO);
+    setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(readyForPO.map((u) => u.id)) }));
+    setSummaryModalSerials(readyForPO);
+    setSummaryModalPO(initialPO);
+  }, [initialPO, shippingUnits]);
 
   const poGroups = useMemo(() => {
     const groups: Record<string, POGroup> = {};

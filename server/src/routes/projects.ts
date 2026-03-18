@@ -88,7 +88,9 @@ router.get('/', async (req, res) => {
           return {
             ...project,
             steps,
-            customer: customer || null,
+            customer: customer
+              ? { id: customer.id, customerId: customer.customerId, name: customer.customerName }
+              : null,
             projectManager,
             attachmentCount: attachments.length,
           };
@@ -359,7 +361,9 @@ router.get('/:id', async (req, res) => {
     res.json({
       ...project,
       steps,
-      customer,
+      customer: customer
+        ? { id: customer.id, customerId: customer.customerId, name: customer.customerName }
+        : null,
       projectManager,
       activityLog,
     });

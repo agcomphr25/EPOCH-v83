@@ -1,0 +1,276 @@
+COPY-PASTE PROMPT — FULL P2 TRACEABILITY + SHIPPING AUDIT
+You are performing a FULL SYSTEM AUDIT of the P2 Projects + Shipping + Traceability architecture in EPOCH.
+
+This is a READ-ONLY audit. Do NOT modify code.
+
+========================================
+OBJECTIVE
+========================================
+
+Completely understand:
+
+1. How Projects relate to POs
+2. How POs relate to:
+   - serialized items
+   - lots
+   - packing slips
+   - certificates
+   - invoices
+3. Whether "cradle-to-grave traceability" is fully achievable
+4. Whether recent UI features (modal, batch shipment, dashboard) are correctly wired
+
+========================================
+PART 1 — PROJECT DOMAIN (SOURCE OF TRUTH)
+========================================
+
+Locate:
+
+- projects table (or p2_projects)
+
+Document:
+
+1. Full schema
+2. Fields:
+   - id
+   - project_number
+   - po_id or po_number
+   - customer
+   - status
+
+Answer:
+
+- Is there a direct link:
+  project → p2_purchase_orders ?
+
+If NOT:
+- explain how project connects to PO
+
+========================================
+PART 2 — PO DOMAIN
+========================================
+
+Locate:
+
+- p2_purchase_orders
+
+Document:
+
+1. Schema
+2. Whether it includes:
+   - project_id
+   - po_number
+   - customer_id
+
+Answer:
+
+- Confirm 1:1 relationship:
+  Project ↔ PO
+
+========================================
+PART 3 — SERIAL TRACEABILITY
+========================================
+
+Locate:
+
+- p2_serialized_items
+
+Document:
+
+1. Schema
+2. Key fields:
+   - serial_number
+   - po_id
+   - status
+   - finalized_at
+   - completed_at
+
+Answer:
+
+- Can we reliably go:
+  serial → PO → project ?
+
+========================================
+PART 4 — LOT / SHIPMENT LAYER
+========================================
+
+Locate:
+
+- p2_lot_numbers
+
+Document:
+
+1. Schema
+2. Key fields:
+   - serialized_item_ids
+   - po_number
+   - packing_slip_id
+   - certificate_id
+
+Answer:
+
+- Does lot correctly represent shipment grouping?
+- Can we go:
+  lot → PO → project ?
+
+========================================
+PART 5 — DOCUMENT LAYER
+========================================
+
+Locate:
+
+- p2_packing_slips
+- p2_certificates_of_conformance
+- finance/invoices
+
+Document:
+
+1. Schema for each
+2. How they link to:
+   - lot
+   - PO
+   - project
+
+Answer:
+
+- Can we go:
+  packing slip → lot → PO → project ?
+
+========================================
+PART 6 — CURRENT TRACEABILITY PATH
+========================================
+
+Construct FULL path:
+
+Project
+ → PO
+ → Serials
+ → Lot
+ → Packing Slip
+ → CoC
+ → Invoice
+
+Answer:
+
+- Is this path COMPLETE?
+- Where are the breaks or missing joins?
+
+========================================
+PART 7 — UI AUDIT (NEW FEATURES)
+========================================
+
+Check:
+
+1. ShipmentSummaryModal
+2. Batch Shipment (Ship All Ready)
+3. Ready-to-Ship Dashboard
+
+For each:
+
+Document:
+- file location
+- how it fetches data
+- how it triggers backend
+
+Answer:
+
+- Are these using consistent logic?
+- Is any logic duplicated?
+
+========================================
+PART 8 — SHIPMENT CREATION FLOW
+========================================
+
+Trace full flow:
+
+UI → API → DB
+
+Answer:
+
+- Does modal pass correct serials?
+- Does backend validate correctly?
+- Does packing slip always match lot?
+
+========================================
+PART 9 — SERIAL SEARCH READINESS
+========================================
+
+Answer:
+
+- Can we build serial search WITHOUT schema changes?
+
+Check:
+
+- Does serial table have po_id?
+- Does PO connect to project?
+
+If yes:
+- confirm search is feasible
+
+If no:
+- identify missing link
+
+========================================
+PART 10 — DATA INTEGRITY RISKS
+========================================
+
+Check for:
+
+- Serial reuse across lots
+- Missing project ↔ PO link
+- Packing slips without lot
+- Lots without PO
+- Documents not linked to project
+
+List ALL risks.
+
+========================================
+PART 11 — PERFORMANCE CONSIDERATIONS
+========================================
+
+Assume:
+
+~100 serials per project
+
+Answer:
+
+- Are queries efficient?
+- Any N+1 query risks?
+- Any large JSON fields (serialized_item_ids) causing issues?
+
+========================================
+PART 12 — FINAL ASSESSMENT
+========================================
+
+Provide:
+
+1. % readiness for cradle-to-grave traceability
+2. What works perfectly
+3. What is partially implemented
+4. What is missing
+
+========================================
+PART 13 — RECOMMENDED ARCHITECTURE (IMPORTANT)
+========================================
+
+Based on findings:
+
+Propose:
+
+1. Clean relationship model
+2. Whether to:
+   - rely on PO joins
+   - or introduce project_id in other tables
+
+3. Minimal changes required
+
+========================================
+OUTPUT FORMAT
+========================================
+
+Return:
+
+1. Table relationship diagram (text)
+2. Traceability path (step-by-step)
+3. UI wiring status
+4. Critical issues list
+5. Recommended fixes (ordered by priority)

@@ -239,16 +239,14 @@ export default function P2ShippingTab() {
     if (!sel || sel.size === 0) return;
     setCreatingShipmentFor(poNumber);
     try {
-      const lotRes = await apiRequest('/api/p2/lots', {
+      const lot = await apiRequest('/api/p2/lots', {
         method: 'POST',
         body: JSON.stringify({ serialIds: Array.from(sel), createdBy: 'shipping' }),
       });
-      const lot = await lotRes.json();
-      const slipRes = await apiRequest('/api/p2/packing-slips', {
+      const slip = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
         body: JSON.stringify({ lotId: lot.id, createdBy: 'shipping' }),
       });
-      const slip = await slipRes.json();
       setCreatedShipments((prev) => ({
         ...prev,
         [poNumber]: { lotId: lot.id, slipId: slip.id, slipNumber: slip.packingSlipNumber },
@@ -267,11 +265,10 @@ export default function P2ShippingTab() {
     if (!shipment) return;
     setGeneratingCertFor(poNumber);
     try {
-      const certRes = await apiRequest('/api/p2/certificates', {
+      const cert = await apiRequest('/api/p2/certificates', {
         method: 'POST',
         body: JSON.stringify({ lotId: shipment.lotId, createdBy: 'shipping' }),
       });
-      const cert = await certRes.json();
       setCreatedShipments((prev) => ({
         ...prev,
         [poNumber]: { ...prev[poNumber], certId: cert.id, certNumber: cert.certificateNumber },

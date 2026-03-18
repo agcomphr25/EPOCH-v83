@@ -100,7 +100,7 @@ export default function ProjectsPage() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('active_only');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newProject, setNewProject] = useState({
     projectName: '',
@@ -154,7 +154,10 @@ export default function ProjectsPage() {
       project.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCustomer = customerFilter === 'all' || project.customerId === customerFilter;
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter || project.currentStage === statusFilter;
+    const matchesStatus = statusFilter === 'all'
+      || (statusFilter === 'active_only' && project.status !== 'cancelled')
+      || project.status === statusFilter
+      || project.currentStage === statusFilter;
     
     return matchesSearch && matchesCustomer && matchesStatus;
   });
@@ -225,6 +228,7 @@ export default function ProjectsPage() {
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="active_only">All (Excl. Cancelled)</SelectItem>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="won">Won</SelectItem>

@@ -109,6 +109,7 @@ import mrpRoutes from './mrp';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
+import p2ShippingRoutes from './p2Shipping';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import checklistManagementRoutes from './checklistManagement';
 import forecastRoutes from './forecast';
@@ -317,6 +318,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // P2 Layup Schedule routes (MUST come before P2 customer routes to avoid /:id catch-all)
   app.use('/api/p2', p2LayupSchedulesRoutes);
+  app.use('/api/p2', p2ShippingRoutes);
   
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);

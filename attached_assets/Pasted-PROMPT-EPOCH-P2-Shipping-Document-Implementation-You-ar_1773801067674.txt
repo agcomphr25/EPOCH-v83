@@ -1,0 +1,243 @@
+PROMPT: EPOCH P2 Shipping + Document Implementation
+You are implementing the P2 shipping + document generation system in EPOCH.
+
+This is a BUILD task. Modify code.
+
+========================================
+SYSTEM TRUTH (DO NOT VIOLATE)
+========================================
+
+- Serial numbers already exist in p2_serialized_items
+- Items are eligible for shipping when:
+  status = 'COMPLETED' AND finalized_at IS NOT NULL
+
+- p2_lot_numbers is the CORE shipment grouping entity
+- p2_packing_slips and p2_certificates_of_conformance already exist
+- pdf-lib is the ONLY approved PDF system
+- DO NOT introduce new tables
+- DO NOT use @pdfme
+
+========================================
+GOAL
+========================================
+
+Implement full flow:
+
+User selects serial numbers →
+Create lot →
+Create packing slip →
+Generate PDF →
+Generate CoC →
+
+========================================
+PHASE 1 — SERIAL SELECTION UI
+========================================
+
+Modify P2ShippingTab:
+
+1. For each PO group:
+   - Display all finalized serials
+   - Add checkbox per serial
+
+2. Add:
+   - "Select All"
+   - "Create Shipment" button
+
+3. Button enabled only when:
+   - at least 1 serial selected
+
+4. On click:
+   - POST selected serial IDs to /api/p2/lots
+
+========================================
+PHASE 2 — CREATE LOT ENDPOINT
+========================================
+
+Create:
+
+POST /api/p2/lots
+
+Input:
+{
+  serialIds: string[]
+}
+
+Logic:
+
+1. Fetch serial records
+2. Validate:
+   - all belong to same PO
+   - all are finalized
+
+3. Generate lot_number:
+   format: LOT-YYYYMMDD-XXXX
+   (increment sequence for same day)
+
+4. Insert into p2_lot_numbers:
+   - serialized_item_ids = serialIds
+   - barcodes = from serial records
+   - po_number, customer_id, customer_name
+   - lot_type = 'SHIPPING'
+
+5. Return lot_id
+
+========================================
+PHASE 3 — CREATE PACKING SLIP
+========================================
+
+Create:
+
+POST /api/p2/packing-slips
+
+Input:
+{
+  lotId: string
+}
+
+Logic:
+
+1. Fetch lot
+2. Fetch all serials in lot
+3. Group by:
+   - part_number
+
+4. Build lineItems:
+[
+  {
+    partNumber,
+    partName,
+    quantity,
+    serialNumbers[]
+  }
+]
+
+5. Fetch customer address from p2_customers
+
+6. Insert into p2_packing_slips:
+   - lot_id
+   - line_items
+   - customer_name
+   - customer_address
+   - po_number
+
+7. Update p2_lot_numbers.packing_slip_id
+
+8. Return packing_slip_id
+
+========================================
+PHASE 4 — PACKING SLIP PDF
+========================================
+
+Create:
+
+GET /api/p2/packing-slips/:id/pdf
+
+Use pdf-lib
+
+Layout must include:
+
+- Header:
+  company name
+  packing slip #
+  date
+
+- Ship To:
+  customer name + address
+
+- Table:
+  PO #
+  Part #
+  Description
+  Quantity
+  Lot #
+  Serial Numbers
+
+- Footer:
+  packed_by (leave blank)
+  tracking #
+
+Return PDF buffer
+
+========================================
+PHASE 5 — CERTIFICATE OF CONFORMANCE
+========================================
+
+Create:
+
+POST /api/p2/certificates
+
+Input:
+{
+  lotId: string
+}
+
+Logic:
+
+1. Fetch lot + serials
+2. Extract:
+   - part_number
+   - quantity
+   - serial list
+   - completed_at → manufacture date
+
+3. Insert into p2_certificates_of_conformance
+
+4. Update lot.certificate_id
+
+========================================
+PHASE 6 — COC PDF
+========================================
+
+Create:
+
+GET /api/p2/certificates/:id/pdf
+
+Use pdf-lib
+
+Layout:
+
+- Title: CERTIFICATE OF CONFORMANCE
+- Customer info
+- PO #
+- Part #
+- Lot #
+- Quantity
+- Serial Numbers
+- Date manufactured
+- Date shipped
+- Compliance statement text
+- Signature line (blank)
+
+========================================
+PHASE 7 — UI WIRING
+========================================
+
+After lot creation:
+
+1. Auto-create packing slip
+2. Show:
+   - "View Packing Slip"
+   - "Download PDF"
+
+3. Add:
+   - "Generate CoC" button
+
+========================================
+RULES
+========================================
+
+- DO NOT duplicate data unnecessarily
+- ALWAYS derive quantity from serial count
+- ALWAYS use existing tables
+- KEEP logic simple and linear
+
+========================================
+OUTPUT
+========================================
+
+Return:
+
+1. New endpoints created
+2. Files modified
+3. UI changes made
+4. Any assumptions

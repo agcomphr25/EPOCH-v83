@@ -48,12 +48,16 @@ export default function P2PackingSlipViewer() {
   const packingSlipId = params?.id;
 
   const { data: packingSlip, isLoading, error } = useQuery<PackingSlipData>({
-    queryKey: [`/api/p2-traveler-viewer/packing-slip/${packingSlipId}`],
+    queryKey: ['/api/p2/packing-slips', packingSlipId],
     enabled: !!packingSlipId,
   });
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = () => {
+    window.open(`/api/p2/packing-slips/${packingSlipId}/pdf`, '_blank');
   };
 
   if (isLoading) {
@@ -95,6 +99,10 @@ export default function P2PackingSlipViewer() {
           <Button variant="outline" onClick={handlePrint} data-testid="button-print">
             <Printer className="h-4 w-4 mr-2" />
             Print
+          </Button>
+          <Button variant="outline" onClick={handleDownloadPdf} data-testid="button-download-pdf">
+            <Download className="h-4 w-4 mr-2" />
+            Download PDF
           </Button>
         </div>
       </div>

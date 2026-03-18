@@ -63,6 +63,7 @@ type POGroup = {
 
 type CreatedShipment = {
   lotId: string;
+  lotNumber: string;
   slipId: string;
   slipNumber: string;
   certId?: string;
@@ -270,10 +271,14 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
       });
       setCreatedShipments((prev) => ({
         ...prev,
-        [poNumber]: { lotId: lot.id, slipId: slip.id, slipNumber: slip.packingSlipNumber },
+        [poNumber]: { lotId: lot.id, lotNumber: lot.lotNumber, slipId: slip.id, slipNumber: slip.packingSlipNumber },
       }));
       setSelectedSerials((prev) => ({ ...prev, [poNumber]: new Set() }));
-      toast({ title: 'Shipment Created', description: `Packing slip ${slip.packingSlipNumber} generated.` });
+      setExpandedPO((prev) => (prev === poNumber ? null : prev));
+      toast({
+        title: 'Shipment Created',
+        description: `Lot ${lot.lotNumber} · Packing slip ${slip.packingSlipNumber} generated.`,
+      });
     } catch (err: any) {
       toast({ title: 'Shipment Failed', description: err?.message || 'Failed to create shipment', variant: 'destructive' });
     } finally {
@@ -454,7 +459,17 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                         Ship All Ready ({finalizedUnits.length})
                       </Button>
                     )}
-                    {allCompletedFinalized ? (
+                    {shipment ? (
+                      <>
+                        <Badge className="bg-green-600 text-white text-xs gap-1">
+                          <CheckCircle className="w-3 h-3" />
+                          Shipment Created
+                        </Badge>
+                        <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
+                          {shipment.lotNumber}
+                        </Badge>
+                      </>
+                    ) : allCompletedFinalized ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
                         <CheckCircle className="w-3 h-3 mr-1" />Ready to Ship
                       </Badge>
@@ -467,9 +482,11 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                         <Loader2 className="w-3 h-3 mr-1" />In Production
                       </Badge>
                     )}
-                    <Badge variant="secondary" className="text-xs">
-                      {group.finalizedCount}/{group.totalUnits} finalized
-                    </Badge>
+                    {!shipment && (
+                      <Badge variant="secondary" className="text-xs">
+                        {group.finalizedCount}/{group.totalUnits} finalized
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
@@ -706,7 +723,10 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                       <div className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
                           <CheckCircle className="w-4 h-4" />
-                          Shipment created — {shipment.slipNumber}
+                          Shipment Created
+                          <span className="font-mono font-normal text-xs text-green-600/80 dark:text-green-400/70">
+                            Lot {shipment.lotNumber} · {shipment.slipNumber}
+                          </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Button

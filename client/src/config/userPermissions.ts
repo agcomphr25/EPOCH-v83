@@ -279,6 +279,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/p2/shipments',
       '/p2/packing-slip',
       '/p2/certificate',
+      '/rfq-risk-assessment',
       '/app/production/stations',
     ],
   },

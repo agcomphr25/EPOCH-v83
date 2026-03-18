@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { Link } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -531,9 +532,11 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                           <CheckCircle className="w-3 h-3" />
                           Shipment Created
                         </Badge>
-                        <Badge variant="outline" className="text-xs font-mono text-muted-foreground">
-                          {shipment.lotNumber}
-                        </Badge>
+                        <Link to={`/p2/shipments/${shipment.lotId}`}>
+                          <Badge variant="outline" className="text-xs font-mono text-muted-foreground hover:underline cursor-pointer">
+                            {shipment.lotNumber}
+                          </Badge>
+                        </Link>
                       </>
                     ) : allCompletedFinalized ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
@@ -791,7 +794,14 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
                           <CheckCircle className="w-4 h-4" />
                           Shipment Created
                           <span className="font-mono font-normal text-xs text-green-600/80 dark:text-green-400/70">
-                            Lot {shipment.lotNumber} · {shipment.slipNumber}
+                            Lot{' '}
+                            <Link
+                              to={`/p2/shipments/${shipment.lotId}`}
+                              className="hover:underline cursor-pointer"
+                            >
+                              {shipment.lotNumber}
+                            </Link>
+                            {' '}· {shipment.slipNumber}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">

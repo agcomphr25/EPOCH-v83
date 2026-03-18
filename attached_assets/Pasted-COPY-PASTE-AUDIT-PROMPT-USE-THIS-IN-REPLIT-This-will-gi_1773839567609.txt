@@ -1,0 +1,168 @@
+COPY-PASTE AUDIT PROMPT (USE THIS IN REPLIT)
+
+This will give you a complete answer in one pass
+
+You are performing a READ-ONLY audit.
+
+DO NOT modify any code or data.
+
+========================================
+OBJECTIVE
+========================================
+
+Determine whether an EXISTING packing slip / shipment
+is properly linked to a project.
+
+We are validating the full chain:
+
+Packing Slip → Lot → PO → Project
+
+========================================
+INPUT
+========================================
+
+Use one of the following (whichever is easiest to identify):
+
+- packing slip number
+- lot number
+- PO number (Strata-G example)
+
+========================================
+STEP 1 — FIND PACKING SLIP
+========================================
+
+SELECT *
+FROM p2_packing_slips
+WHERE packing_slip_number = $1
+   OR lot_number = $1
+   OR po_number = $1;
+
+----------------------------------------
+
+Extract:
+
+- id
+- lot_number_id
+- lot_number
+- po_number
+
+========================================
+STEP 2 — FIND LOT
+========================================
+
+SELECT *
+FROM p2_lot_numbers
+WHERE id = packingSlip.lot_number_id;
+
+----------------------------------------
+
+Check:
+
+- lot.id
+- lot.lot_number
+- lot.po_id   ← CRITICAL
+- lot.po_number
+
+========================================
+STEP 3 — FIND PO
+========================================
+
+SELECT *
+FROM p2_purchase_orders
+WHERE id = lot.po_id
+   OR po_number = lot.po_number;
+
+----------------------------------------
+
+Extract:
+
+- po.id
+- po.po_number
+
+========================================
+STEP 4 — FIND PROJECT
+========================================
+
+SELECT *
+FROM projects
+WHERE po_id = po.id;
+
+----------------------------------------
+
+Extract:
+
+- project.id
+- project.project_code
+
+========================================
+STEP 5 — VALIDATE CHAIN
+========================================
+
+Answer clearly:
+
+1. Does packing slip resolve to a lot?
+2. Does lot have po_id populated?
+3. Does po_id match a project?
+4. Is there exactly ONE project?
+5. If broken — WHERE is the break?
+
+========================================
+STEP 6 — EDGE CASE DETECTION
+========================================
+
+Check for:
+
+- lot.po_id IS NULL
+- project.po_id IS NULL
+- multiple projects using same po_id
+- packing slip without valid lot
+- po_number mismatch between tables
+
+========================================
+STEP 7 — CONCLUSION
+========================================
+
+Return:
+
+CASE A — Fully linked:
+"Shipment is already linked to project via PO — no action needed"
+
+CASE B — Missing po_id on lot:
+"Lot exists but po_id is NULL — needs backfill"
+
+CASE C — Project not linked to PO:
+"Project exists but po_id not set — needs update"
+
+CASE D — No project exists:
+"Shipment is valid but no project exists for this PO"
+
+========================================
+STEP 8 — RECOMMENDED FIX (IF NEEDED)
+========================================
+
+Provide EXACT SQL to fix the issue, but DO NOT run it.
+
+Example:
+
+UPDATE p2_lot_numbers
+SET po_id = X
+WHERE id = Y;
+
+or
+
+UPDATE projects
+SET po_id = X
+WHERE id = Y;
+
+========================================
+OUTPUT FORMAT
+========================================
+
+1. Data found at each step
+2. Where the chain breaks (if any)
+3. Exact fix required (SQL only, not executed)
+4. Final conclusion
+
+DO NOT modify data.
+DO NOT guess.
+TRACE the exact records.

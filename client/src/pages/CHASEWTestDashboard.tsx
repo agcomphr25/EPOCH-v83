@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FolderKanban, HardDrive, Users, GitBranch } from 'lucide-react';
+import { FolderKanban, HardDrive, Users, GitBranch, Factory } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
 
@@ -32,6 +32,15 @@ const navCards = [
     title: 'P2 Customers',
     subtitle: 'P2 Control Center & customers',
   },
+  {
+    href: '/app/production/stations',
+    icon: Factory,
+    iconColor: 'text-orange-600',
+    hoverBorder: 'hover:border-orange-200',
+    bg: 'bg-orange-50 dark:bg-orange-950/30',
+    title: 'Production Stations',
+    subtitle: 'View and manage production stations',
+  },
 ];
 
 export default function CHASEWTestDashboard() {
@@ -56,7 +65,7 @@ export default function CHASEWTestDashboard() {
       </div>
 
       {/* Quick Nav Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {navCards.map((card) => (
           <Link key={card.href} href={card.href}>
             <Card className={`hover:shadow-lg transition-all cursor-pointer border-2 ${card.hoverBorder} h-full`}>

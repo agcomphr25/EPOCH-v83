@@ -24,13 +24,13 @@ const navCards = [
     subtitle: 'Media library & reference docs',
   },
   {
-    href: '/p2-control-center',
+    href: '/p2-control-center?tab=customers',
     icon: Users,
     iconColor: 'text-emerald-600',
     hoverBorder: 'hover:border-emerald-200',
     bg: 'bg-emerald-50 dark:bg-emerald-950/30',
     title: 'P2 Customers',
-    subtitle: 'P2 Control Center & customers',
+    subtitle: 'Manage P2 customer accounts',
   },
   {
     href: '/app/production/stations',

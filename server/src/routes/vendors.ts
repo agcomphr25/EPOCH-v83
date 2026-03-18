@@ -86,26 +86,28 @@ const vendorDocumentUpload = multer({
   },
 });
 
-// Helper function to sync vendor-level scores from monthly evaluations
+// Helper function to sync vendor-level scores from quarterly evaluations
 async function syncVendorScoresFromEvaluations(vendorId: number) {
-  // Get current month and year
+  // Get current quarter and year
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
+  // Quarters are stored by their start month: Q1=1, Q2=4, Q3=7, Q4=10
+  const currentQuarterStartMonth = currentMonth <= 3 ? 1 : currentMonth <= 6 ? 4 : currentMonth <= 9 ? 7 : 10;
   
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
   
-  // Check if there's an evaluation record for the CURRENT month
-  // A vendor is considered "evaluated" if they have any evaluation record for the current month,
+  // Check if there's an evaluation record for the CURRENT quarter
+  // A vendor is considered "evaluated" if they have any evaluation record for the current quarter,
   // even if all scores are N/A (null) - the record existence is what matters
-  const currentMonthEval = allEvaluations.find(ev => 
+  const currentQuarterEval = allEvaluations.find(ev => 
     ev.year === currentYear && 
-    ev.month === currentMonth
+    ev.month === currentQuarterStartMonth
   );
   
-  // Set evaluated=true if current month has ANY evaluation record (scores or N/A)
-  const isEvaluated = !!currentMonthEval;
+  // Set evaluated=true if current quarter has ANY evaluation record (scores or N/A)
+  const isEvaluated = !!currentQuarterEval;
   
   // Get the latest evaluation for displaying scores (not necessarily current month)
   const evaluationsWithScores = allEvaluations.filter(ev => 
@@ -564,7 +566,7 @@ router.get('/evaluations/ytd-summary', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/vendors/:vendorId/evaluations - Get monthly evaluations for a vendor
+// GET /api/vendors/:vendorId/evaluations - Get quarterly evaluations for a vendor
 router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
   try {
     const vendorId = parseInt(req.params.vendorId);
@@ -600,7 +602,7 @@ router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/vendors/:vendorId/evaluations - Create or update a monthly evaluation
+// POST /api/vendors/:vendorId/evaluations - Create or update a quarterly evaluation
 router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
   try {
     const vendorId = parseInt(req.params.vendorId);
@@ -762,27 +764,20 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
 
       results.matched++;
 
-      // Extract monthly scores from CSV columns
-      const months = [
-        { name: 'Jan', num: 1 },
-        { name: 'Feb', num: 2 },
-        { name: 'Mar', num: 3 },
-        { name: 'Apr', num: 4 },
-        { name: 'May', num: 5 },
-        { name: 'Jun', num: 6 },
-        { name: 'Jul', num: 7 },
-        { name: 'Aug', num: 8 },
-        { name: 'Sep', num: 9 },
-        { name: 'Oct', num: 10 },
-        { name: 'Nov', num: 11 },
-        { name: 'Dec', num: 12 },
+      // Extract quarterly scores from CSV columns (stored by quarter start month)
+      const importYear = new Date().getFullYear();
+      const quarters = [
+        { name: 'Q1', num: 1 },  // stored as month=1
+        { name: 'Q2', num: 4 },  // stored as month=4
+        { name: 'Q3', num: 7 },  // stored as month=7
+        { name: 'Q4', num: 10 }, // stored as month=10
       ];
 
-      for (const month of months) {
-        const qualityKey = `${month.name}- Quality`;
-        const costKey = `${month.name}- Cost`;
-        const deliveryKey = `${month.name}- Delivery`;
-        const responseKey = `${month.name}- Response`;
+      for (const quarter of quarters) {
+        const qualityKey = `${quarter.name}- Quality`;
+        const costKey = `${quarter.name}- Cost`;
+        const deliveryKey = `${quarter.name}- Delivery`;
+        const responseKey = `${quarter.name}- Response`;
 
         const qualityScore = row[qualityKey] ? parseInt(row[qualityKey]) : null;
         const costScore = row[costKey] ? parseInt(row[costKey]) : null;
@@ -793,7 +788,7 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
         if (qualityScore || costScore || deliveryScore || responseScore) {
           try {
             // Check if evaluation already exists
-            const existing = await storage.getVendorMonthlyEvaluation(matchedVendor.id, month.num, 2025);
+            const existing = await storage.getVendorMonthlyEvaluation(matchedVendor.id, quarter.num, importYear);
 
             if (existing) {
               // Update existing
@@ -807,8 +802,8 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
               // Create new
               await storage.createVendorMonthlyEvaluation({
                 vendorId: matchedVendor.id,
-                month: month.num,
-                year: 2025,
+                month: quarter.num,
+                year: importYear,
                 qualityScore,
                 costScore,
                 deliveryScore,
@@ -819,7 +814,7 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
           } catch (error) {
             results.errors.push({
               vendor: vendorName,
-              month: month.name,
+              quarter: quarter.name,
               error: error instanceof Error ? error.message : 'Unknown error',
             });
           }
@@ -834,7 +829,7 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/vendors/reset-monthly-evaluations - Manually reset all vendor evaluations
+// POST /api/vendors/reset-monthly-evaluations - Manually reset all vendor quarterly evaluations
 router.post('/reset-monthly-evaluations', async (req: Request, res: Response) => {
   try {
     console.log('🔄 Manual vendor evaluation reset requested...');

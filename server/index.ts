@@ -2062,10 +2062,10 @@ async function initializeBackgroundServices() {
       await ensureTrackingPipelineHealthCheckExists();
     }
 
-    // Set up monthly vendor evaluation reset
-    cron.schedule('1 0 1 * *', async () => {
+    // Set up quarterly vendor evaluation reset (runs on Jan 1, Apr 1, Jul 1, Oct 1)
+    cron.schedule('1 0 1 1,4,7,10 *', async () => {
       try {
-        console.log('🔄 Running monthly vendor evaluation reset...');
+        console.log('🔄 Running quarterly vendor evaluation reset...');
         const { vendors } = await import('./schema');
         
         const result = await db
@@ -2086,7 +2086,7 @@ async function initializeBackgroundServices() {
       }
     });
     
-    console.log('📅 Monthly vendor evaluation reset scheduled (1st of each month at 12:01 AM)');
+    console.log('📅 Quarterly vendor evaluation reset scheduled (Jan 1, Apr 1, Jul 1, Oct 1 at 12:01 AM)');
 
     // Set up daily follow-up order reminder check
     cron.schedule('0 9 * * *', async () => {

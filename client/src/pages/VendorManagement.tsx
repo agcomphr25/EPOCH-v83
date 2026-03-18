@@ -1906,9 +1906,9 @@ export default function VendorManagement() {
                 {form.watch('approvalLevel') === 'A' ? (
                   <>
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4 mb-4">
-                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Monthly Vendor Evaluations (2025)</h4>
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Quarterly Vendor Evaluations</h4>
                       <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Track monthly performance scores for Quality, Cost, Delivery, and Response (1-5 scale).
+                        Track quarterly performance scores for Quality, Cost, Delivery, and Response (1-5 scale). Evaluations are due each quarter (Q1: Jan–Mar, Q2: Apr–Jun, Q3: Jul–Sep, Q4: Oct–Dec).
                       </p>
                     </div>
                     {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
@@ -2447,27 +2447,20 @@ export default function VendorManagement() {
 // Monthly Evaluations Table Component
 function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
   const { toast } = useToast();
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [editingCell, setEditingCell] = useState<{month: number; field: string} | null>(null);
   const [cellValue, setCellValue] = useState('');
   const [pendingChanges, setPendingChanges] = useState<Map<string, any>>(new Map());
 
-  const months = [
-    { name: 'Jan', num: 1 },
-    { name: 'Feb', num: 2 },
-    { name: 'Mar', num: 3 },
-    { name: 'Apr', num: 4 },
-    { name: 'May', num: 5 },
-    { name: 'Jun', num: 6 },
-    { name: 'Jul', num: 7 },
-    { name: 'Aug', num: 8 },
-    { name: 'Sep', num: 9 },
-    { name: 'Oct', num: 10 },
-    { name: 'Nov', num: 11 },
-    { name: 'Dec', num: 12 },
+  // Quarters represented by their starting month (Jan=1, Apr=4, Jul=7, Oct=10)
+  const quarters = [
+    { name: 'Q1', num: 1, label: 'Jan–Mar' },
+    { name: 'Q2', num: 4, label: 'Apr–Jun' },
+    { name: 'Q3', num: 7, label: 'Jul–Sep' },
+    { name: 'Q4', num: 10, label: 'Oct–Dec' },
   ];
 
-  // Fetch monthly evaluations
+  // Fetch quarterly evaluations
   const { data: evaluations = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ['/api/vendors', vendorId, 'evaluations', selectedYear],
     queryFn: async () => {
@@ -2659,9 +2652,9 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2025">2025</SelectItem>
-              <SelectItem value="2026">2026</SelectItem>
+              {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -2681,7 +2674,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
               disabled={saveAllEvaluationsMutation.isPending}
               data-testid="button-save-all"
             >
-              {saveAllEvaluationsMutation.isPending ? 'Saving...' : `Save All (${pendingChanges.size} month${pendingChanges.size > 1 ? 's' : ''})`}
+              {saveAllEvaluationsMutation.isPending ? 'Saving...' : `Save All (${pendingChanges.size} quarter${pendingChanges.size > 1 ? 's' : ''})`}
             </Button>
           </div>
         )}
@@ -2692,9 +2685,10 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
           <thead>
             <tr className="bg-gray-100 dark:bg-gray-800">
               <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Criteria</th>
-              {months.map((month) => (
-                <th key={month.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center w-16">
-                  {month.name}
+              {quarters.map((q) => (
+                <th key={q.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center w-28">
+                  <div className="font-semibold">{q.name}</div>
+                  <div className="text-xs font-normal text-gray-500 dark:text-gray-400">{q.label}</div>
                 </th>
               ))}
             </tr>
@@ -2702,43 +2696,43 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
           <tbody>
             <tr>
               <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Quality</td>
-              {months.map((month) => (
-                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(month.num, 'qualityScore')}
+              {quarters.map((q) => (
+                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(q.num, 'qualityScore')}
                 </td>
               ))}
             </tr>
             <tr className="bg-gray-50 dark:bg-gray-900/50">
               <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Cost</td>
-              {months.map((month) => (
-                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(month.num, 'costScore')}
+              {quarters.map((q) => (
+                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(q.num, 'costScore')}
                 </td>
               ))}
             </tr>
             <tr>
               <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Delivery</td>
-              {months.map((month) => (
-                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(month.num, 'deliveryScore')}
+              {quarters.map((q) => (
+                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(q.num, 'deliveryScore')}
                 </td>
               ))}
             </tr>
             <tr className="bg-gray-50 dark:bg-gray-900/50">
               <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Response</td>
-              {months.map((month) => (
-                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(month.num, 'responseScore')}
+              {quarters.map((q) => (
+                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(q.num, 'responseScore')}
                 </td>
               ))}
             </tr>
             <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
               <td className="border border-gray-300 dark:border-gray-600 p-2">Total</td>
-              {months.map((month) => {
-                const evaluation = getEvaluationForMonth(month.num);
+              {quarters.map((q) => {
+                const evaluation = getEvaluationForMonth(q.num);
                 const total = evaluation?.totalScore || 0;
                 return (
-                  <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center" data-testid={`total-${month.num}`}>
+                  <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center" data-testid={`total-${q.num}`}>
                     {total > 0 ? total : '-'}
                   </td>
                 );
@@ -2750,7 +2744,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
       <div className="text-xs text-gray-500 dark:text-gray-400">
         <p>• Click any cell to edit the score (1-5)</p>
-        <p>• Press Enter to save, Escape to cancel</p>
+        <p>• Scores represent the full quarter (Q1 = Jan–Mar, etc.)</p>
         <p>• Total score is calculated automatically</p>
       </div>
     </div>

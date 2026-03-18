@@ -38,7 +38,7 @@ const navCards = [
     iconColor: 'text-orange-600',
     hoverBorder: 'hover:border-orange-200',
     bg: 'bg-orange-50 dark:bg-orange-950/30',
-    title: 'Production Stations',
+    title: 'Timer Station',
     subtitle: 'View and manage production stations',
   },
 ];

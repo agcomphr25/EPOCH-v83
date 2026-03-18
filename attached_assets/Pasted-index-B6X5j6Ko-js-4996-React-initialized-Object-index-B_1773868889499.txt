@@ -1,0 +1,41 @@
+index-B6X5j6Ko.js:4996 React initialized: Object
+index-B6X5j6Ko.js:4996 React hooks: Object
+index-B6X5j6Ko.js:4996 [EPOCH SYNC] Sync engine starting
+index-B6X5j6Ko.js:4996 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-B6X5j6Ko.js:4993 App component is rendering...
+index-B6X5j6Ko.js:4993 Environment: production
+index-B6X5j6Ko.js:4993 Base URL: /
+index-B6X5j6Ko.js:1550 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-B6X5j6Ko.js:1550 [EPOCH] Install prompt captured and ready
+fabric-inventory:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-B6X5j6Ko.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/6566fb66-bfec-445b-8a60-e7b209dd4810/deplete (timeout: 15000ms, deployment: true)
+index-B6X5j6Ko.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/6566fb66-bfec-445b-8a60-e7b209dd4810/deplete: 200
+index-B6X5j6Ko.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/ba9c8f28-dbce-4d5d-aaf1-e67f68cf2f68 (timeout: 15000ms, deployment: true)
+index-B6X5j6Ko.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/ba9c8f28-dbce-4d5d-aaf1-e67f68cf2f68: 200
+index-B6X5j6Ko.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/3b51da86-248b-432a-8dea-75d48d5195a2 (timeout: 15000ms, deployment: true)
+index-B6X5j6Ko.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/3b51da86-248b-432a-8dea-75d48d5195a2: 200
+index-B6X5j6Ko.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/ba9c8f28-dbce-4d5d-aaf1-e67f68cf2f68 (timeout: 15000ms, deployment: true)
+index-B6X5j6Ko.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/ba9c8f28-dbce-4d5d-aaf1-e67f68cf2f68: 200
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+api/p2/control-center/pending-actions:1  Failed to load resource: the server responded with a status of 404 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+api/p2/control-center/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/p2/serialized-items/scrapped:1  Failed to load resource: the server responded with a status of 429 ()
+api/travelers:1  Failed to load resource: the server responded with a status of 429 ()
+index-B6X5j6Ko.js:4996 [EPOCH SYNC] Connection restored — triggering sync
+index-B6X5j6Ko.js:4996 [EPOCH SYNC] Offline — skipping queue processing
+index-B6X5j6Ko.js:4996 [EPOCH SYNC] Connection restored — triggering sync
+index-B6X5j6Ko.js:1559 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=6dfb7913dcdecb13192e60ac200e23a1dd737f3e596768e930eab27ead9b77c5' failed: 
+(anonymous) @ index-B6X5j6Ko.js:1559
+index-B6X5j6Ko.js:1559 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=6dfb7913dcdecb13192e60ac200e23a1dd737f3e596768e930eab27ead9b77c5' failed: 
+(anonymous) @ index-B6X5j6Ko.js:1559
+index-B6X5j6Ko.js:235 🌐 API Request to /api/p2/purchase-orders/15/items (timeout: 15000ms, deployment: true)
+index-B6X5j6Ko.js:235 ✅ API Response from /api/p2/purchase-orders/15/items: 200
+index-B6X5j6Ko.js:235 🌐 API Request to /api/p2/changes (timeout: 15000ms, deployment: true)
+api/p2/changes:1  Failed to load resource: the server responded with a status of 500 ()
+index-B6X5j6Ko.js:235 ✅ API Response from /api/p2/changes: 500
+index-B6X5j6Ko.js:4996 API error raw body: {"error":"Failed to create production change"}
+console.error @ index-B6X5j6Ko.js:4996
+index-B6X5j6Ko.js:4996 💥 API Request failed for /api/p2/changes: Error: Failed to create production change
+    at Oe (index-B6X5j6Ko.js:235:6362)
+console.error @ index-B6X5j6Ko.js:4996

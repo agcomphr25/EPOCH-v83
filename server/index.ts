@@ -2205,6 +2205,81 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ project_documents migration:', pdErr?.message);
       }
 
+      // Ensure p2_production_changes and p2_traveler_changes tables exist
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS p2_production_changes (
+            id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            change_number              TEXT NOT NULL UNIQUE,
+            change_type                TEXT NOT NULL,
+            scope                      TEXT NOT NULL DEFAULT 'PO',
+            part_number                TEXT,
+            po_id                      INTEGER REFERENCES p2_purchase_orders(id),
+            routing_id                 UUID,
+            current_revision           TEXT,
+            proposed_change            TEXT NOT NULL,
+            reason                     TEXT NOT NULL,
+            risk_assessment            TEXT,
+            requires_customer_approval BOOLEAN DEFAULT false,
+            status                     TEXT NOT NULL DEFAULT 'DRAFT',
+            submitted_by_id            INTEGER REFERENCES employees(id),
+            submitted_by_name          TEXT,
+            submitted_at               TIMESTAMPTZ,
+            approved_by_id             INTEGER REFERENCES employees(id),
+            approved_by_name           TEXT,
+            approved_at                TIMESTAMPTZ,
+            rejected_by_id             INTEGER REFERENCES employees(id),
+            rejected_by_name           TEXT,
+            rejected_at                TIMESTAMPTZ,
+            rejection_reason           TEXT,
+            implemented_at             TIMESTAMPTZ,
+            effective_date             DATE,
+            notes                      TEXT,
+            created_at                 TIMESTAMPTZ DEFAULT NOW(),
+            updated_at                 TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_po_id_idx ON p2_production_changes(po_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_status_idx ON p2_production_changes(status)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_type_idx ON p2_production_changes(change_type)`);
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS p2_traveler_changes (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            change_number       TEXT NOT NULL UNIQUE,
+            traveler_id         UUID NOT NULL,
+            serialized_item_id  UUID REFERENCES p2_serialized_items(id),
+            change_category     TEXT NOT NULL,
+            description         TEXT NOT NULL,
+            affected_step_ids   JSONB DEFAULT '[]'::jsonb,
+            justification       TEXT NOT NULL,
+            quality_impact      TEXT,
+            status              TEXT NOT NULL DEFAULT 'PENDING',
+            blocks_traveler     BOOLEAN DEFAULT false,
+            authorized_by_id    INTEGER REFERENCES employees(id),
+            authorized_by_name  TEXT,
+            authorization_date  TIMESTAMPTZ,
+            rejected_by_id      INTEGER REFERENCES employees(id),
+            rejected_by_name    TEXT,
+            rejected_at         TIMESTAMPTZ,
+            rejection_reason    TEXT,
+            notes               TEXT,
+            created_by_id       INTEGER REFERENCES employees(id),
+            created_by_name     TEXT,
+            created_at          TIMESTAMPTZ DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_traveler_changes_traveler_id_idx ON p2_traveler_changes(traveler_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_traveler_changes_item_id_idx ON p2_traveler_changes(serialized_item_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_traveler_changes_status_idx ON p2_traveler_changes(status)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS p2_traveler_changes_category_idx ON p2_traveler_changes(change_category)`);
+
+        console.log('✅ Ensured p2_production_changes and p2_traveler_changes tables exist');
+      } catch (p2ChangesErr: any) {
+        console.warn('⚠️ p2 changes tables migration:', p2ChangesErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

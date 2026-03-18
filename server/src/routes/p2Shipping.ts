@@ -877,7 +877,39 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
   }
 });
 
-// ─── Shipment Detail endpoints ─────────────────────────────────────────────
+// ─── Shipment History / Detail endpoints ───────────────────────────────────
+
+// GET /api/p2/shipments — all lots with packing slip link, newest first
+router.get('/shipments', async (req: Request, res: Response) => {
+  try {
+    const rows = await pool.query(
+      `SELECT
+         l.id,
+         l.lot_number,
+         l.po_number,
+         l.po_id,
+         l.customer_name,
+         l.part_number,
+         l.part_name,
+         l.quantity,
+         l.status,
+         l.tracking_number,
+         l.carrier,
+         l.shipped_at,
+         l.created_at,
+         ps.id AS packing_slip_id,
+         ps.packing_slip_number
+       FROM p2_lot_numbers l
+       LEFT JOIN p2_packing_slips ps ON ps.lot_number_id = l.id
+       ORDER BY l.created_at DESC
+       LIMIT 500`
+    );
+    return res.json(rows);
+  } catch (err: any) {
+    console.error('Shipment history error:', err);
+    return res.status(500).json({ error: 'Failed to load shipment history' });
+  }
+});
 
 // GET /api/p2/shipments/:lotId — full shipment detail record
 router.get('/shipments/:lotId', async (req: Request, res: Response) => {

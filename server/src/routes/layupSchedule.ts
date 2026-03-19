@@ -1418,7 +1418,7 @@ router.get('/weeks', async (req: Request, res: Response) => {
         COUNT(DISTINCT CASE WHEN order_id LIKE 'PO-%' THEN order_id END) AS po_order_count,
         COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count,
         ARRAY_AGG(DISTINCT order_id ORDER BY order_id) AS order_ids,
-        ARRAY_AGG(DISTINCT TO_CHAR(layup_day, 'YYYY-MM-DD') ORDER BY layup_day) AS schedule_days
+        ARRAY_AGG(DISTINCT TO_CHAR(layup_day, 'YYYY-MM-DD') ORDER BY TO_CHAR(layup_day, 'YYYY-MM-DD')) AS schedule_days
       FROM layup_schedule
       WHERE layup_day IS NOT NULL
       GROUP BY DATE_TRUNC('week', layup_day)

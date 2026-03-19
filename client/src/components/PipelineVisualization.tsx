@@ -4,10 +4,12 @@ import { useLocation } from 'wouter';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { PIPELINE_DEPARTMENTS, DEPARTMENT_COLORS, type PipelineDepartment } from '@/constants/pipelineDepartments';
 import { calculateFlowPressure, type PressureLevel } from '@/utils/calculateFlowPressure';
+import { Filter } from 'lucide-react';
 
 type ScheduleStatus =
   | 'on-schedule'
@@ -112,18 +114,29 @@ const FlowPressureIndicator = ({
 };
 
 // ── Order pixel (high-volume) ─────────────────────────────────────────────────
-const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => void }) => {
-  const deptColor = getDeptColor(order.expectedDepartment);
+const OrderPixel = ({
+  order,
+  currentDept,
+  onClick,
+}: {
+  order: OrderDetail;
+  currentDept: string;
+  onClick?: () => void;
+}) => {
+  const isCorrectDept =
+    order.expectedDepartment &&
+    order.expectedDepartment.toLowerCase() === currentDept.toLowerCase();
+  const deptColor = isCorrectDept ? { hex: '#D1D5DB' } : getDeptColor(order.expectedDepartment);
   const hasProblem = order.scheduleStatus !== 'on-schedule';
 
   return (
     <div
       className={`w-2.5 h-2.5 cursor-pointer hover:scale-150 transition-transform rounded-sm ${
-        hasProblem ? `border ${statusBorderColors[order.scheduleStatus]}` : ''
+        hasProblem && !isCorrectDept ? `border ${statusBorderColors[order.scheduleStatus]}` : ''
       }`}
       style={{ backgroundColor: deptColor.hex }}
       onClick={onClick}
-      title={`${getDisplayOrderId(order)} - Expected: ${order.expectedDepartment || 'N/A'} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+      title={`${getDisplayOrderId(order)} - Expected: ${order.expectedDepartment || 'N/A'} - ${order.scheduleStatus} (${order.daysInDept} days)${isCorrectDept ? ' ✓ In correct dept' : ' ⚠ Wrong dept'}`}
     />
   );
 };
@@ -131,27 +144,33 @@ const OrderPixel = ({ order, onClick }: { order: OrderDetail; onClick?: () => vo
 // ── Order chip (low-volume) ───────────────────────────────────────────────────
 const OrderChip = ({
   order,
+  currentDept,
   onClick,
   getModelDisplayName,
 }: {
   order: OrderDetail;
+  currentDept: string;
   onClick?: () => void;
   getModelDisplayName?: (modelId: string) => string;
 }) => {
-  const deptColor = getDeptColor(order.expectedDepartment);
+  const isCorrectDept =
+    order.expectedDepartment &&
+    order.expectedDepartment.toLowerCase() === currentDept.toLowerCase();
+  const deptColor = isCorrectDept ? { hex: '#E5E7EB' } : getDeptColor(order.expectedDepartment);
+  const textColor = isCorrectDept ? 'text-gray-600' : 'text-white';
   const hasProblem = order.scheduleStatus !== 'on-schedule';
 
   return (
     <div
-      className={`relative px-2 py-1 rounded text-xs cursor-pointer hover:brightness-110 transition-all text-white font-medium ${
-        hasProblem ? `border-2 ${statusBorderColors[order.scheduleStatus]}` : 'border border-transparent'
+      className={`relative px-2 py-1 rounded text-xs cursor-pointer hover:brightness-95 transition-all ${textColor} font-medium ${
+        !isCorrectDept && hasProblem ? `border-2 ${statusBorderColors[order.scheduleStatus]}` : 'border border-transparent'
       }`}
       style={{ backgroundColor: deptColor.hex }}
       onClick={onClick}
-      title={`${getDisplayOrderId(order)} - Expected: ${order.expectedDepartment || 'N/A'} - ${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)`}
+      title={`${getDisplayOrderId(order)} - Expected: ${order.expectedDepartment || 'N/A'} - ${getModelDisplayName ? getModelDisplayName(order.modelId) : order.modelId} - ${order.scheduleStatus} (${order.daysInDept} days)${isCorrectDept ? ' ✓ In correct dept' : ' ⚠ Wrong dept'}`}
     >
       {getDisplayOrderId(order)}
-      {hasProblem && (
+      {!isCorrectDept && hasProblem && (
         <span
           className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${statusDotColors[order.scheduleStatus]}`}
         />
@@ -162,31 +181,57 @@ const OrderChip = ({
 
 // ── Department visualization ──────────────────────────────────────────────────
 const DepartmentVisualization = ({
+  department,
   orders,
   getModelDisplayName,
   onOrderClick,
+  showOnlyCorrect,
 }: {
   department: string;
   orders: OrderDetail[];
   getModelDisplayName: (modelId: string) => string;
   onOrderClick: (orderId: string) => void;
+  showOnlyCorrect: boolean;
 }) => {
-  const count = orders.length;
+  const visibleOrders = showOnlyCorrect
+    ? orders.filter(
+        (o) =>
+          o.expectedDepartment &&
+          o.expectedDepartment.toLowerCase() === department.toLowerCase()
+      )
+    : orders;
+
+  const count = visibleOrders.length;
+
+  if (count === 0) {
+    return (
+      <div className="text-xs text-gray-400 italic text-center py-2">
+        {showOnlyCorrect ? 'None in correct dept' : 'No orders'}
+      </div>
+    );
+  }
+
   if (count > 20) {
     return (
       <div className="grid grid-cols-10 gap-1">
-        {orders.map((order) => (
-          <OrderPixel key={order.orderId} order={order} onClick={() => onOrderClick(order.orderId)} />
+        {visibleOrders.map((order) => (
+          <OrderPixel
+            key={order.orderId}
+            order={order}
+            currentDept={department}
+            onClick={() => onOrderClick(order.orderId)}
+          />
         ))}
       </div>
     );
   }
   return (
     <div className="flex flex-wrap gap-1">
-      {orders.map((order) => (
+      {visibleOrders.map((order) => (
         <OrderChip
           key={order.orderId}
           order={order}
+          currentDept={department}
           getModelDisplayName={getModelDisplayName}
           onClick={() => onOrderClick(order.orderId)}
         />
@@ -198,6 +243,7 @@ const DepartmentVisualization = ({
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PipelineVisualization() {
   const [, navigate] = useLocation();
+  const [showOnlyCorrect, setShowOnlyCorrect] = useState(false);
 
   const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
     queryKey: ['/api/orders/pipeline-counts'],
@@ -243,9 +289,21 @@ export default function PipelineVisualization() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           Production Pipeline Overview
-          <Badge variant="outline" className="text-sm">
-            {totalOrders} Active Orders
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showOnlyCorrect ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowOnlyCorrect((v) => !v)}
+              className="text-xs h-7 gap-1"
+              title={showOnlyCorrect ? 'Showing only orders in their correct department' : 'Showing all orders'}
+            >
+              <Filter className="h-3 w-3" />
+              {showOnlyCorrect ? 'Correct Dept Only' : 'Show All'}
+            </Button>
+            <Badge variant="outline" className="text-sm">
+              {totalOrders} Active Orders
+            </Badge>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -265,6 +323,13 @@ export default function PipelineVisualization() {
                   ? calculateFlowPressure(upstreamCount, count)
                   : null;
               const isHighPressureTarget = upstreamPressure?.pressureLevel === 'HIGH';
+
+              const correctCount = orders.filter(
+                (o) =>
+                  o.expectedDepartment &&
+                  o.expectedDepartment.toLowerCase() === deptName.toLowerCase()
+              ).length;
+              const wrongCount = orders.length - correctCount;
 
               return (
                 <React.Fragment key={deptName}>
@@ -298,12 +363,19 @@ export default function PipelineVisualization() {
 
                     <div className="text-xs font-medium leading-tight">{deptName}</div>
 
+                    {wrongCount > 0 && (
+                      <div className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold">
+                        {wrongCount} wrong dept
+                      </div>
+                    )}
+
                     <div className="min-h-[60px] p-2 bg-gray-50 dark:bg-gray-800/50 rounded border overflow-hidden">
                       <DepartmentVisualization
                         department={deptName}
                         orders={orders}
                         getModelDisplayName={getModelDisplayName}
                         onOrderClick={handleOrderClick}
+                        showOnlyCorrect={showOnlyCorrect}
                       />
                     </div>
 
@@ -333,8 +405,14 @@ export default function PipelineVisualization() {
         <div className="mt-4 space-y-3">
           {/* Department color legend */}
           <div>
-            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">Department Colors (card = forecast expected dept)</div>
+            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">
+              Card color = forecast expected dept. Grey = order is in its correct dept. Colored = order is in wrong dept.
+            </div>
             <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-gray-200 border border-gray-400" />
+                <span>Correct dept (grey)</span>
+              </div>
               {PIPELINE_DEPARTMENTS.map((dept) => {
                 const color = getDeptColor(dept);
                 return (
@@ -349,7 +427,7 @@ export default function PipelineVisualization() {
 
           {/* Schedule status legend */}
           <div>
-            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">Schedule Status (border / dot indicator)</div>
+            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">Schedule Status (border / dot indicator — only on wrong-dept cards)</div>
             <div className="flex items-center justify-center gap-4 text-xs flex-wrap">
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded bg-gray-300" />

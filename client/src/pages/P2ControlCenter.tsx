@@ -78,6 +78,7 @@ interface Traveler {
   partNumber: string;
   partName: string | null;
   workOrderId: string | null;
+  serialNumber: string | null;
   status: string;
   quantity: number;
   routingName: string | null;
@@ -826,7 +827,7 @@ function P2TravelersTab() {
                 <TableRow>
                   <TableHead>Traveler #</TableHead>
                   <TableHead>Part Number</TableHead>
-                  <TableHead>Work Order</TableHead>
+                  <TableHead>Serial #</TableHead>
                   <TableHead>Routing</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>Status</TableHead>
@@ -861,7 +862,7 @@ function P2TravelersTab() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{traveler.workOrderId || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm">{traveler.serialNumber || '-'}</TableCell>
                       <TableCell>
                         {traveler.routingName ? (
                           <div>

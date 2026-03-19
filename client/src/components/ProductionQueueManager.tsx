@@ -383,6 +383,7 @@ export default function ProductionQueueManager() {
       // Refresh queues
       queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p1-po-queue/purchase-orders/open'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/weeks'] });
     },
     onError: (error: any) => {
       toast({

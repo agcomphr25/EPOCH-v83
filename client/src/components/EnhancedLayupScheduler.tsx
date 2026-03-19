@@ -332,6 +332,9 @@ export default function EnhancedLayupScheduler() {
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
       });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/layup-schedule/weeks'],
+      });
     },
     onError: (error: any) => {
       toast({

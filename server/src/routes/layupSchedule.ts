@@ -767,7 +767,12 @@ router.post('/save', async (req: Request, res: Response) => {
     try {
       // Start transaction on dedicated client
       await client.query('BEGIN');
-      // Derive the distinct layup_day values from the incoming entries
+      // Collect the specific order IDs being saved (used for targeted delete)
+      const orderIdsToReplace = entries
+        .map((e: any) => e.orderId)
+        .filter(Boolean);
+
+      // Also derive layup days for logging purposes
       const layupDaysSet = new Set(entries.map((e: any) => {
         const scheduledDate = typeof e.scheduledDate === 'string' 
           ? new Date(e.scheduledDate) 
@@ -777,15 +782,16 @@ router.post('/save', async (req: Request, res: Response) => {
       const layupDays = Array.from(layupDaysSet);
       
       console.log(`📅 Target layup days for this save: ${layupDays.join(', ')}`);
+      console.log(`📋 Replacing ${orderIdsToReplace.length} specific orders (preserving all other orders on those days)`);
       
-      // Get existing schedule ONLY for the specific days being saved (to decrement PO item counts)
+      // Get existing schedule ONLY for the specific order IDs being replaced (to decrement PO item counts)
       const existingResult = await client.query(
         `
         SELECT order_id 
         FROM layup_schedule 
-        WHERE layup_day = ANY($1::date[])
+        WHERE order_id = ANY($1::text[])
       `,
-        [layupDays]
+        [orderIdsToReplace]
       );
       
       // Handle result - client.query returns { rows: [...] }
@@ -824,16 +830,16 @@ router.post('/save', async (req: Request, res: Response) => {
         }
       }
       
-      // Clear existing schedule ONLY for the specific days being saved (not entire week)
+      // Clear ONLY the specific order IDs being replaced (preserves other orders on those days)
       await client.query(
         `
         DELETE FROM layup_schedule 
-        WHERE layup_day = ANY($1::date[])
+        WHERE order_id = ANY($1::text[])
       `,
-        [layupDays]
+        [orderIdsToReplace]
       );
       
-      console.log(`🗑️ Cleared existing entries for days: ${layupDays.join(', ')} (preserving other days in the week)`);
+      console.log(`🗑️ Cleared ${orderIdsToReplace.length} existing entries for replacement (other orders on days [${layupDays.join(', ')}] preserved)`);
 
       let savedCount = 0;
       let progressedCount = 0;
@@ -1404,15 +1410,15 @@ router.get('/weeks', async (req: Request, res: Response) => {
     
     const weeks = await pool.query(`
       SELECT 
-        DATE_TRUNC('week', layup_day)::date AS week_start,
-        MIN(layup_day)::date AS first_day,
-        MAX(layup_day)::date AS last_day,
+        TO_CHAR(DATE_TRUNC('week', layup_day), 'YYYY-MM-DD') AS week_start,
+        TO_CHAR(MIN(layup_day), 'YYYY-MM-DD') AS first_day,
+        TO_CHAR(MAX(layup_day), 'YYYY-MM-DD') AS last_day,
         MIN(created_at) AS created_at,
         COUNT(DISTINCT order_id) AS order_count,
         COUNT(DISTINCT CASE WHEN order_id LIKE 'PO-%' THEN order_id END) AS po_order_count,
         COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count,
         ARRAY_AGG(DISTINCT order_id ORDER BY order_id) AS order_ids,
-        ARRAY_AGG(DISTINCT layup_day ORDER BY layup_day) AS schedule_days
+        ARRAY_AGG(DISTINCT TO_CHAR(layup_day, 'YYYY-MM-DD') ORDER BY layup_day) AS schedule_days
       FROM layup_schedule
       WHERE layup_day IS NOT NULL
       GROUP BY DATE_TRUNC('week', layup_day)
@@ -1520,7 +1526,15 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     
     // Build unified schedule items with details
     const scheduledItems = scheduleEntries.map((entry: any) => {
-      const dayOfWeek = getDay(new Date(entry.scheduled_date));
+      // Use local-midnight date parsing to avoid UTC-offset day-of-week errors on non-UTC servers
+      const dateStr = typeof entry.scheduled_date === 'string'
+        ? entry.scheduled_date.split('T')[0]
+        : (entry.scheduled_date instanceof Date
+            ? entry.scheduled_date.toISOString().split('T')[0]
+            : String(entry.scheduled_date));
+      const dateParts = dateStr.split('-').map(Number);
+      const localDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+      const dayOfWeek = getDay(localDate);
       const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
       
       if (entry.order_id.startsWith('PO-')) {

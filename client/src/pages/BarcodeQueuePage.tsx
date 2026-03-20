@@ -911,7 +911,7 @@ export default function BarcodeQueuePage() {
               const materialType = order.materialCanonical || orderLabels.materialLabel;
               const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
               const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
-              const hasBDL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('bdl');
+              const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
 
               return (
                 <Card
@@ -974,7 +974,7 @@ export default function BarcodeQueuePage() {
                             </Badge>
                             {lopVal && <Badge variant="outline" className="text-xs border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
                             {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
-                            {hasBDL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">BDL</Badge>}
+                            {hasADL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
                           </div>
                           <div className="flex gap-1 pt-1">
                             <Link href={`/order-entry?draft=${order.orderId}`}>
@@ -1028,7 +1028,7 @@ export default function BarcodeQueuePage() {
                   const materialType = order.materialCanonical || orderLabels.materialLabel;
                   const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                   const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
-                  const hasBDL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('bdl');
+                  const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
 
                   return (
                     <tr
@@ -1071,7 +1071,7 @@ export default function BarcodeQueuePage() {
                           {isTikka && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-600 text-purple-700 bg-purple-50">Tikka</Badge>}
                           {lopVal && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
                           {hasHeavyFill && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
-                          {hasBDL && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-600 text-violet-700 bg-violet-50 font-semibold">BDL</Badge>}
+                          {hasADL && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
                         </div>
                       </td>
                       <td className="px-3 py-2">
@@ -1159,7 +1159,7 @@ export default function BarcodeQueuePage() {
                       const materialType = order.materialCanonical || orderLabels.materialLabel;
                       const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                       const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
-                      const hasBDL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('bdl');
+                      const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
 
                       return (
                         <Card
@@ -1288,7 +1288,7 @@ export default function BarcodeQueuePage() {
                                     </Badge>
                                     {lopVal && <Badge variant="outline" className="text-xs border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
                                     {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
-                                    {hasBDL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">BDL</Badge>}
+                                    {hasADL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
                                   </div>
 
                                   {/* Collapsible Details */}

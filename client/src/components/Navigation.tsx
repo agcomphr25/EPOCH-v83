@@ -575,6 +575,12 @@ export default function Navigation() {
       description: 'Multi-user calendar system',
     },
     {
+      path: '/awaiting-signature',
+      label: 'Awaiting Signature',
+      icon: FilePenLine,
+      description: 'Orders pending customer signature',
+    },
+    {
       path: '/shipping-tracker',
       label: 'Shipping Tracker',
       icon: Package,

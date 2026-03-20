@@ -32,11 +32,11 @@ interface AuditOrder {
 export default function ShippingStatusAuditPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [queryParams, setQueryParams] = useState<{ startDate: string; endDate: string } | null>(null);
+  const [queryParams, setQueryParams] = useState<{ startDate: string; endDate: string }>({ startDate: '', endDate: '' });
 
   const { data, isLoading, isFetching } = useQuery<{ success: boolean; orders: AuditOrder[]; total: number }>({
-    queryKey: ['/api/admin/shipping-status-audit', queryParams?.startDate, queryParams?.endDate],
-    enabled: queryParams !== null,
+    queryKey: ['/api/admin/shipping-status-audit', queryParams.startDate, queryParams.endDate],
+    enabled: true,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (queryParams?.startDate) params.set('startDate', queryParams.startDate);
@@ -137,9 +137,8 @@ export default function ShippingStatusAuditPage() {
         </CardContent>
       </Card>
 
-      {queryParams !== null && (
-        <Card>
-          <CardHeader>
+      <Card>
+        <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-yellow-500" />
@@ -211,8 +210,7 @@ export default function ShippingStatusAuditPage() {
               )}
             </CardContent>
           )}
-        </Card>
-      )}
+      </Card>
     </div>
   );
 }

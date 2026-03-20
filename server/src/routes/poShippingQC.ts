@@ -804,7 +804,9 @@ router.get('/oem-shipments', async (req, res) => {
           sr.created_at,
           sr.created_by,
           sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
-          COUNT(si.id) as item_count,
+          SUM(si.quantity) as item_count,
+          SUM(CASE WHEN COALESCE(poi.item_type, 'stock_model') = 'stock_model' THEN si.quantity ELSE 0 END) as stock_count,
+          SUM(CASE WHEN COALESCE(poi.item_type, 'stock_model') != 'stock_model' THEN si.quantity ELSE 0 END) as accessory_count,
           COUNT(DISTINCT COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)) as po_count,
           json_agg(
             json_build_object(
@@ -812,21 +814,16 @@ router.get('/oem-shipments', async (req, res) => {
               'poItemId', si.po_item_id,
               'orderId', si.order_id,
               'quantity', si.quantity,
-              'description', COALESCE(NULLIF(si.description, ''), prod_ord.item_name, COALESCE(poi.stock_model_name, poi.item_name)),
+              'description', COALESCE(NULLIF(si.description, ''), COALESCE(poi.stock_model_name, poi.item_name), prod_ord.item_name),
               'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number),
-              'hasPackingSlip', si.packing_slip_base64 IS NOT NULL
+              'hasPackingSlip', si.packing_slip_base64 IS NOT NULL,
+              'itemType', COALESCE(poi.item_type, 'stock_model')
             ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr
         LEFT JOIN shipment_items si ON sr.id = si.shipment_id
         LEFT JOIN production_orders prod_ord ON si.order_id = prod_ord.order_id
-        LEFT JOIN purchase_order_items poi ON poi.id = (
-          CASE 
-            WHEN si.order_id LIKE 'PO-%' AND SPLIT_PART(si.order_id, '-', 2) ~ '^[0-9]+$' 
-            THEN CAST(SPLIT_PART(si.order_id, '-', 2) AS INTEGER)
-            ELSE NULL 
-          END
-        )
+        LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
         LEFT JOIN purchase_orders po ON poi.po_id = po.id
         WHERE ${conditions.join(' AND ')}
         GROUP BY sr.id
@@ -865,6 +862,53 @@ router.get('/oem-shipments', async (req, res) => {
   } catch (error: any) {
     console.error('❌ Error fetching OEM shipments:', error);
     res.status(500).json({ _error: 'Failed to fetch OEM shipments', details: error.message });
+  }
+});
+
+// GET /api/po-orders/oem-shipments/stats
+// Returns weekly and monthly stock vs accessory totals for the summary card
+router.get('/oem-shipments/stats', async (req, res) => {
+  try {
+    const statsResult = await pool.query(`
+      SELECT
+        COALESCE(SUM(CASE 
+          WHEN sr.created_at >= date_trunc('week', NOW()) 
+            AND COALESCE(poi.item_type, 'stock_model') = 'stock_model' 
+          THEN si.quantity ELSE 0 END), 0) AS stocks_this_week,
+        COALESCE(SUM(CASE 
+          WHEN sr.created_at >= date_trunc('week', NOW()) 
+            AND COALESCE(poi.item_type, 'stock_model') != 'stock_model' 
+          THEN si.quantity ELSE 0 END), 0) AS accessories_this_week,
+        COALESCE(SUM(CASE 
+          WHEN sr.created_at >= date_trunc('month', NOW()) 
+            AND COALESCE(poi.item_type, 'stock_model') = 'stock_model' 
+          THEN si.quantity ELSE 0 END), 0) AS stocks_this_month,
+        COALESCE(SUM(CASE 
+          WHEN sr.created_at >= date_trunc('month', NOW()) 
+            AND COALESCE(poi.item_type, 'stock_model') != 'stock_model' 
+          THEN si.quantity ELSE 0 END), 0) AS accessories_this_month,
+        COALESCE(SUM(CASE 
+          WHEN COALESCE(poi.item_type, 'stock_model') = 'stock_model' 
+          THEN si.quantity ELSE 0 END), 0) AS stocks_all_time,
+        COALESCE(SUM(CASE 
+          WHEN COALESCE(poi.item_type, 'stock_model') != 'stock_model' 
+          THEN si.quantity ELSE 0 END), 0) AS accessories_all_time
+      FROM shipment_records sr
+      JOIN shipment_items si ON si.shipment_id = sr.id
+      LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+    `);
+    const row = (Array.isArray(statsResult) ? statsResult : statsResult.rows || statsResult)[0] || {};
+    res.json({
+      stocksThisWeek: parseInt(row.stocks_this_week || '0', 10),
+      accessoriesThisWeek: parseInt(row.accessories_this_week || '0', 10),
+      stocksThisMonth: parseInt(row.stocks_this_month || '0', 10),
+      accessoriesThisMonth: parseInt(row.accessories_this_month || '0', 10),
+      stocksAllTime: parseInt(row.stocks_all_time || '0', 10),
+      accessoriesAllTime: parseInt(row.accessories_all_time || '0', 10),
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching OEM shipment stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats', details: error.message });
   }
 });
 

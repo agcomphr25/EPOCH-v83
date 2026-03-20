@@ -16,6 +16,9 @@ import {
   Pencil,
   Check,
   Undo2,
+  BarChart3,
+  Layers,
+  Wrench,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +50,7 @@ interface ShipmentItem {
   description: string;
   poNumber: string;
   hasPackingSlip: boolean;
+  itemType: 'stock_model' | 'custom_model' | string;
 }
 
 interface Shipment {
@@ -67,8 +71,19 @@ interface Shipment {
   created_by: string;
   has_shipping_label: boolean;
   item_count: number;
+  stock_count: number;
+  accessory_count: number;
   po_count: number;
   items: ShipmentItem[];
+}
+
+interface OEMStats {
+  stocksThisWeek: number;
+  accessoriesThisWeek: number;
+  stocksThisMonth: number;
+  accessoriesThisMonth: number;
+  stocksAllTime: number;
+  accessoriesAllTime: number;
 }
 
 interface PaginationInfo {
@@ -140,6 +155,17 @@ export default function OEMShipmentsPage() {
 
   const shipments = data?.shipments || [];
   const pagination = data?.pagination;
+
+  // Fetch weekly/monthly stats
+  const { data: stats } = useQuery<OEMStats>({
+    queryKey: ['/api/po-orders/oem-shipments/stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/po-orders/oem-shipments/stats', { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch stats');
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
 
   const handleSearch = () => {
     setSearch(searchInput);
@@ -516,6 +542,54 @@ export default function OEMShipmentsPage() {
         </CardContent>
       </Card>
 
+      {/* Stats Summary Card */}
+      {stats && (
+        <Card className="bg-gradient-to-r from-slate-50 to-blue-50 border-blue-200 dark:from-slate-900 dark:to-blue-950 dark:border-blue-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              Shipment Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* This Week — Stocks */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-blue-100 dark:border-blue-900">
+                <div className="flex items-center gap-2 mb-1">
+                  <Layers className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Stocks — This Week</span>
+                </div>
+                <div className="text-3xl font-bold text-blue-600">{stats.stocksThisWeek}</div>
+              </div>
+              {/* This Week — Metal Accessories */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-orange-100 dark:border-orange-900">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wrench className="h-4 w-4 text-orange-500" />
+                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Metal Accessories — This Week</span>
+                </div>
+                <div className="text-3xl font-bold text-orange-600">{stats.accessoriesThisWeek}</div>
+              </div>
+              {/* This Month — Stocks */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-blue-100 dark:border-blue-900">
+                <div className="flex items-center gap-2 mb-1">
+                  <Layers className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Stocks — This Month</span>
+                </div>
+                <div className="text-3xl font-bold text-blue-600">{stats.stocksThisMonth}</div>
+              </div>
+              {/* This Month — Metal Accessories */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-orange-100 dark:border-orange-900">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wrench className="h-4 w-4 text-orange-500" />
+                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Metal Accessories — This Month</span>
+                </div>
+                <div className="text-3xl font-bold text-orange-600">{stats.accessoriesThisMonth}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Loading State */}
       {isLoading && (
         <div className="text-center py-12">
@@ -543,7 +617,7 @@ export default function OEMShipmentsPage() {
       {!isLoading && shipments.length > 0 && viewMode === 'date' && (
         <div className="space-y-6">
           {Object.entries(shipmentsByDate)
-            .sort((a, b) => b[0].localeCompare(a[0]))
+            .sort((a, b) => (b[0] || '').localeCompare(a[0] || ''))
             .map(([dateKey, { displayDate, shipments: dateShipments }]) => (
               <div key={dateKey} className="space-y-3">
                 <div 
@@ -556,8 +630,13 @@ export default function OEMShipmentsPage() {
                     <Badge variant="secondary">
                       {dateShipments.length} shipment{dateShipments.length !== 1 ? 's' : ''}
                     </Badge>
-                    <Badge variant="outline">
-                      {dateShipments.reduce((sum, s) => sum + s.item_count, 0)} items
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
+                      <Layers className="h-3 w-3 mr-1" />
+                      {dateShipments.reduce((sum, s) => sum + (s.stock_count || 0), 0)} stocks
+                    </Badge>
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
+                      <Wrench className="h-3 w-3 mr-1" />
+                      {dateShipments.reduce((sum, s) => sum + (s.accessory_count || 0), 0)} accessories
                     </Badge>
                   </div>
                   {expandedDates.has(dateKey) ? (
@@ -578,15 +657,24 @@ export default function OEMShipmentsPage() {
                           <CardHeader className="bg-gray-50 dark:bg-gray-800/50 pb-4">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
+                                <div className="flex items-center gap-3 mb-2 flex-wrap">
                                   <Truck className="h-5 w-5 text-blue-600" />
                                   <h3 className="text-lg font-semibold">{shipment.customer_name}</h3>
                                   <Badge variant="secondary">
                                     {shipment.po_count} PO{shipment.po_count !== 1 ? 's' : ''}
                                   </Badge>
-                                  <Badge variant="outline">
-                                    {shipment.item_count} Item{shipment.item_count !== 1 ? 's' : ''}
-                                  </Badge>
+                                  {(shipment.stock_count || 0) > 0 && (
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
+                                      <Layers className="h-3 w-3 mr-1" />
+                                      {shipment.stock_count} Stock{shipment.stock_count !== 1 ? 's' : ''}
+                                    </Badge>
+                                  )}
+                                  {(shipment.accessory_count || 0) > 0 && (
+                                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
+                                      <Wrench className="h-3 w-3 mr-1" />
+                                      {shipment.accessory_count} Accessor{shipment.accessory_count !== 1 ? 'ies' : 'y'}
+                                    </Badge>
+                                  )}
                                 </div>
                                 
                                 {/* PO Numbers and Items Summary */}
@@ -737,7 +825,20 @@ export default function OEMShipmentsPage() {
                                           </span>
                                         </td>
                                         <td className="p-3 font-mono text-xs">{item.orderId}</td>
-                                        <td className="p-3">{item.description}</td>
+                                        <td className="p-3">
+                                          <div className="flex items-center gap-2">
+                                            <span>{item.description || item.orderId}</span>
+                                            {item.itemType === 'custom_model' ? (
+                                              <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
+                                                <Wrench className="h-2.5 w-2.5 mr-1" />Metal
+                                              </Badge>
+                                            ) : (
+                                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
+                                                <Layers className="h-2.5 w-2.5 mr-1" />Stock
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </td>
                                         <td className="p-3 text-center">
                                           <Badge variant="outline">{item.quantity}</Badge>
                                         </td>
@@ -774,10 +875,10 @@ export default function OEMShipmentsPage() {
         <div className="space-y-4">
           {Object.values(itemsByPO)
             .sort((a, b) => {
-              const aNum = parseInt(a.poNumber) || 0;
-              const bNum = parseInt(b.poNumber) || 0;
+              const aNum = parseInt(a.poNumber || '0') || 0;
+              const bNum = parseInt(b.poNumber || '0') || 0;
               if (aNum !== bNum) return bNum - aNum;
-              return a.poNumber.localeCompare(b.poNumber);
+              return (a.poNumber || '').localeCompare(b.poNumber || '');
             })
             .map((poGroup) => (
               <Card key={poGroup.poNumber} className="overflow-hidden">
@@ -934,15 +1035,24 @@ export default function OEMShipmentsPage() {
                 <CardHeader className="bg-gray-50 dark:bg-gray-800/50 pb-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <Truck className="h-5 w-5 text-blue-600" />
                         <h3 className="text-lg font-semibold">{shipment.customer_name}</h3>
                         <Badge variant="secondary">
                           {shipment.po_count} PO{shipment.po_count !== 1 ? 's' : ''}
                         </Badge>
-                        <Badge variant="outline">
-                          {shipment.item_count} Item{shipment.item_count !== 1 ? 's' : ''}
-                        </Badge>
+                        {(shipment.stock_count || 0) > 0 && (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
+                            <Layers className="h-3 w-3 mr-1" />
+                            {shipment.stock_count} Stock{shipment.stock_count !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                        {(shipment.accessory_count || 0) > 0 && (
+                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
+                            <Wrench className="h-3 w-3 mr-1" />
+                            {shipment.accessory_count} Accessor{shipment.accessory_count !== 1 ? 'ies' : 'y'}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* PO Numbers and Items Summary */}
@@ -1101,7 +1211,20 @@ export default function OEMShipmentsPage() {
                               <td className="p-3">
                                 <span className="font-mono text-xs">{item.orderId}</span>
                               </td>
-                              <td className="p-3">{item.description}</td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <span>{item.description || item.orderId}</span>
+                                  {item.itemType === 'custom_model' ? (
+                                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
+                                      <Wrench className="h-2.5 w-2.5 mr-1" />Metal
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
+                                      <Layers className="h-2.5 w-2.5 mr-1" />Stock
+                                    </Badge>
+                                  )}
+                                </div>
+                              </td>
                               <td className="p-3 text-center">
                                 <Badge variant="outline">{item.quantity}</Badge>
                               </td>

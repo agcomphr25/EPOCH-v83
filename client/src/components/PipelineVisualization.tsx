@@ -343,17 +343,17 @@ const DepartmentFocusPanel = ({
                   {orders.map((order) => (
                     <div
                       key={order.orderId}
-                      className={`px-2 py-0.5 rounded text-xs cursor-pointer font-medium transition-all hover:brightness-90 text-white border ${
-                        order.scheduleStatus !== 'on-schedule'
-                          ? statusBorderColors[order.scheduleStatus]
-                          : 'border-transparent'
+                      className={`px-2 py-0.5 rounded text-xs cursor-pointer font-medium transition-all border ${
+                        isBehind
+                          ? `text-white hover:brightness-90 ${order.scheduleStatus !== 'on-schedule' ? statusBorderColors[order.scheduleStatus] : 'border-transparent'}`
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
                       }`}
-                      style={{ backgroundColor: currentColor.hex }}
+                      style={isBehind ? { backgroundColor: currentColor.hex } : {}}
                       onClick={() => onOrderClick(order.orderId)}
                       title={`${getDisplayOrderId(order)} — ${getModelDisplayName(order.modelId)} — ${order.scheduleStatus} — ${order.daysInDept} days in dept`}
                     >
                       <span>{getDisplayOrderId(order)}</span>
-                      {order.scheduleStatus !== 'on-schedule' && (
+                      {isBehind && order.scheduleStatus !== 'on-schedule' && (
                         <span className={`ml-1 inline-block w-1.5 h-1.5 rounded-full ${statusDotColors[order.scheduleStatus]}`} />
                       )}
                     </div>

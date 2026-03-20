@@ -215,10 +215,9 @@ export default function ShippingTracker() {
     const weekLabel = formatOperationalWeekRange(stat.week, stat.year);
 
     const weekOrders = orders
-      .filter((o) => o.status === 'FULFILLED')
+      .filter((o) => o.status === 'FULFILLED' && o.shippedDate)
       .filter((o) => {
-        const d = o.shippedDate ? new Date(o.shippedDate) : null;
-        if (!d) return stat.orders.includes(o.orderId);
+        const d = new Date(o.shippedDate!);
         return d >= weekStart && d <= weekEnd;
       })
       .sort((a, b) => {
@@ -450,10 +449,10 @@ export default function ShippingTracker() {
     >();
 
     orders
-      .filter((order) => order.status === 'FULFILLED')
+      .filter((order) => order.status === 'FULFILLED' && order.shippedDate)
       .forEach((order) => {
-        // Use shippedDate as the fulfillment date (fallback to updatedAt for older records)
-        const fulfillmentDate = new Date(order.shippedDate || order.updatedAt);
+        // Only use orders with an actual shipped date — never fall back to updatedAt
+        const fulfillmentDate = new Date(order.shippedDate!);
         
         // Directly compute operational week and year (no looping)
         const weekInfo = getShippingWeekInfo(fulfillmentDate);

@@ -50,6 +50,7 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  Printer,
 } from 'lucide-react';
 import {
   getCurrentOperationalWeek,
@@ -204,6 +205,78 @@ export default function ShippingTracker() {
   const handleDeleteTracking = (order: Order) => {
     if (confirm(`Are you sure you want to delete the tracking number for order ${order.orderId}?`)) {
       deleteTrackingMutation.mutate(order.orderId);
+    }
+  };
+
+  const handlePrintWeek = (stat: WeeklyStats) => {
+    if (!orders) return;
+    const weekStart = getOperationalWeekStart(stat.week, stat.year);
+    const weekEnd = getOperationalWeekEnd(stat.week, stat.year);
+    const weekLabel = formatOperationalWeekRange(stat.week, stat.year);
+
+    const weekOrders = orders
+      .filter((o) => o.status === 'FULFILLED')
+      .filter((o) => {
+        const d = o.shippedDate ? new Date(o.shippedDate) : null;
+        if (!d) return stat.orders.includes(o.orderId);
+        return d >= weekStart && d <= weekEnd;
+      })
+      .sort((a, b) => {
+        if (!a.shippedDate && !b.shippedDate) return 0;
+        if (!a.shippedDate) return 1;
+        if (!b.shippedDate) return -1;
+        return new Date(a.shippedDate).getTime() - new Date(b.shippedDate).getTime();
+      });
+
+    const rows = weekOrders.map((o) => {
+      const customer = customers?.find((c) => String(c.id) === String(o.customerId));
+      return `
+        <tr>
+          <td>${o.orderId}</td>
+          <td>${customer?.name || 'Unknown'}</td>
+          <td>${o.trackingNumber || '—'}</td>
+          <td>${o.shippedDate ? format(new Date(o.shippedDate), 'MMM d, yyyy') : '—'}</td>
+          <td>${o.shippingCarrier || '—'}</td>
+          <td>${o.customerNotified ? 'Yes' : 'No'}</td>
+        </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Shipping Report — Week ${stat.week}, ${stat.year}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #555; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: #1e40af; color: #fff; padding: 6px 10px; text-align: left; }
+    td { padding: 5px 10px; border-bottom: 1px solid #e5e7eb; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .footer { margin-top: 16px; font-size: 11px; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Shipping Report — Week ${stat.week}, ${stat.year}</h1>
+  <div class="subtitle">${weekLabel} &nbsp;|&nbsp; ${weekOrders.length} order${weekOrders.length !== 1 ? 's' : ''} shipped</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Order #</th><th>Customer</th><th>Tracking Number</th>
+        <th>Shipped Date</th><th>Carrier</th><th>Notified</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">Printed ${format(new Date(), 'MMM d, yyyy h:mm a')} — AG Composites EPOCH</div>
+  <script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
     }
   };
 
@@ -660,12 +733,89 @@ export default function ShippingTracker() {
         </CardContent>
       </Card>
 
-      {/* Accordion Section for Shipping Details and All Weeks */}
+      {/* Accordion Section for All Weeks and Shipping Details */}
       <Accordion
         type="multiple"
         className="space-y-4"
-        defaultValue={['shipping-details']}
+        defaultValue={['all-weeks', 'shipping-details']}
       >
+        {/* All Weeks Accordion — shown first */}
+        <AccordionItem value="all-weeks" className="border rounded-lg">
+          <AccordionTrigger className="px-6 hover:no-underline">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              <span className="font-semibold">All Weeks</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6">
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500">
+                Loading shipping data...
+              </div>
+            ) : weeklyStats.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No fulfilled orders found
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Week</TableHead>
+                    <TableHead>Date Range</TableHead>
+                    <TableHead>Stocks Shipped</TableHead>
+                    <TableHead>Orders</TableHead>
+                    <TableHead className="w-24">Print</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {weeklyStats.map((stat) => (
+                    <TableRow
+                      key={`${stat.year}-W${stat.week}`}
+                      className={
+                        stat.week === currentWeek && stat.year === currentOpYear
+                          ? 'bg-blue-50'
+                          : ''
+                      }
+                    >
+                      <TableCell className="font-medium">
+                        Week {stat.week}, {stat.year}
+                        {stat.week === currentWeek &&
+                          stat.year === currentOpYear && (
+                            <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
+                              Current
+                            </span>
+                          )}
+                      </TableCell>
+                      <TableCell>
+                        {formatOperationalWeekRange(stat.week, stat.year)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-lg font-semibold text-blue-600">
+                          {stat.stocksShipped}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {stat.orders.join(', ')}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 gap-1"
+                          onClick={() => handlePrintWeek(stat)}
+                        >
+                          <Printer className="h-3 w-3" />
+                          <span className="text-xs">Print</span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
         {/* Shipping Details Accordion */}
         <AccordionItem value="shipping-details" className="border rounded-lg">
           <AccordionTrigger className="px-6 hover:no-underline">
@@ -915,71 +1065,6 @@ export default function ShippingTracker() {
               <div className="text-center py-8 text-gray-500">
                 Enter a search term to view detailed shipping information
               </div>
-            )}
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* All Weeks Accordion */}
-        <AccordionItem value="all-weeks" className="border rounded-lg">
-          <AccordionTrigger className="px-6 hover:no-underline">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              <span className="font-semibold">All Weeks</span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="px-6 pb-6">
-            {isLoading ? (
-              <div className="text-center py-8 text-gray-500">
-                Loading shipping data...
-              </div>
-            ) : weeklyStats.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No fulfilled orders found
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Week</TableHead>
-                    <TableHead>Date Range</TableHead>
-                    <TableHead>Stocks Shipped</TableHead>
-                    <TableHead>Orders</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {weeklyStats.map((stat) => (
-                    <TableRow
-                      key={`${stat.year}-W${stat.week}`}
-                      className={
-                        stat.week === currentWeek && stat.year === currentOpYear
-                          ? 'bg-blue-50'
-                          : ''
-                      }
-                    >
-                      <TableCell className="font-medium">
-                        Week {stat.week}, {stat.year}
-                        {stat.week === currentWeek &&
-                          stat.year === currentOpYear && (
-                            <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
-                              Current
-                            </span>
-                          )}
-                      </TableCell>
-                      <TableCell>
-                        {formatOperationalWeekRange(stat.week, stat.year)}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-lg font-semibold text-blue-600">
-                          {stat.stocksShipped}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {stat.orders.join(', ')}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             )}
           </AccordionContent>
         </AccordionItem>

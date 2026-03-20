@@ -18,7 +18,7 @@ const router = Router();
 // Refund Approval Authorization Guard
 // ---------------------------------------------
 function requireRefundApprovalRole(req: any, res: any): boolean {
-  const user = req.session?.user;
+  const user = req.user;
   const role = user?.role;
 
   if (!role || !['ADMIN', 'OWNER'].includes(role)) {
@@ -217,8 +217,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 
     // REMOVED: Credit card transaction check since manual processing handles all payment types
 
-    // For now, we'll use a hardcoded manager. In production, this would come from auth
-    const approvedBy = 'MANAGER'; // TODO: Get from authentication context
+    const approvedBy = (req as any).user?.username || 'unknown';
 
     // Update the refund request status to APPROVED first
     const [updatedRequest] = await db
@@ -286,8 +285,7 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Rejection reason is required' });
     }
 
-    // For now, we'll use a hardcoded manager. In production, this would come from auth
-    const approvedBy = 'MANAGER'; // TODO: Get from authentication context
+    const approvedBy = (req as any).user?.username || 'unknown';
 
     const [updatedRequest] = await db
       .update(refundRequests)

@@ -96,7 +96,7 @@ const kickbackFormSchema = z.object({
 
 type KickbackFormData = z.infer<typeof kickbackFormSchema>;
 
-type ViewMode = 'grouped' | 'flat';
+type ViewMode = 'grouped' | 'flat' | 'list';
 
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -765,6 +765,20 @@ export default function BarcodeQueuePage() {
               <List className="h-3.5 w-3.5" />
               All Orders
             </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l ${
+                viewMode === 'list'
+                  ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              <List className="h-3.5 w-3.5 rotate-90 hidden" />
+              <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/>
+              </svg>
+              List
+            </button>
           </div>
         </div>
 
@@ -974,6 +988,118 @@ export default function BarcodeQueuePage() {
                 </Card>
               );
             })}
+          </div>
+        </div>
+      ) : viewMode === 'list' ? (
+        /* ── Compact list view ──────────────────────────────────────────── */
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm font-medium text-muted-foreground">
+              All {flatSortedOrders.length} orders · sorted by due date (latest first)
+            </span>
+          </div>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-900/40 border-b">
+                <tr>
+                  <th className="w-8 px-3 py-2"><Checkbox checked={selectAll} onCheckedChange={toggleSelectAll} /></th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400">Order</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400">Model</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400">Material</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400">Action</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400">Due Date</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400">PO</th>
+                  <th className="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {flatSortedOrders.map((order: any, idx: number) => {
+                  const isSelected = selectedOrders.has(order.orderId);
+                  const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                  const orderLabels = deriveOrderLabels(order);
+                  const actionLength = orderLabels.actionLengthRaw;
+                  const isTikka = orderLabels.isTikka;
+                  const materialType = order.materialCanonical || orderLabels.materialLabel;
+
+                  return (
+                    <tr
+                      key={order.orderId}
+                      id={`order-${order.orderId}`}
+                      onClick={() => toggleOrderSelection(order.orderId)}
+                      className={`cursor-pointer transition-colors ${
+                        highlightedOrderId === order.orderId
+                          ? 'bg-yellow-50 dark:bg-yellow-900/20'
+                          : isSelected
+                            ? 'bg-blue-50 dark:bg-blue-900/20'
+                            : isOverdue
+                              ? 'bg-red-50 dark:bg-red-900/10'
+                              : idx % 2 === 0
+                                ? 'bg-white dark:bg-slate-950'
+                                : 'bg-slate-50/60 dark:bg-slate-900/20'
+                      } hover:bg-slate-100 dark:hover:bg-slate-800/40`}
+                    >
+                      <td className="px-3 py-2">
+                        <Checkbox checked={isSelected} onChange={() => toggleOrderSelection(order.orderId)} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          {isOverdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block shrink-0" />}
+                          {getDisplayOrderId(order)}
+                          <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
+                          {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                            <Badge className="bg-orange-500 text-white text-[10px] px-1 py-0 animate-pulse">URGENT</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{getModelDisplayName(order.modelId)}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {materialType !== 'Tikka' && (
+                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' : materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' : materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' : materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-blue-600 text-blue-700 bg-blue-50'}`}>
+                              {materialType}
+                            </Badge>
+                          )}
+                          {isTikka && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-600 text-purple-700 bg-purple-50">Tikka</Badge>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
+                          {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : '—'}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
+                          {format(new Date(order.dueDate), 'M/d/yy')}
+                        </span>
+                        {isOverdue && <span className="ml-1 text-[10px] text-red-500 font-semibold">OVERDUE</span>}
+                      </td>
+                      <td className="px-3 py-2 text-slate-500 text-xs">
+                        {order.customerPO ? (
+                          <Link href="/purchase-orders" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="hover:underline hover:text-blue-600">
+                            {order.customerPO}
+                          </Link>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link href={`/order-entry?draft=${order.orderId}`}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="View/Edit" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                          </Link>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" title="Sales Order" onClick={(e) => { e.stopPropagation(); handleSalesOrderView(order.orderId); }}>
+                            <FileText className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" title="Kickback" onClick={(e) => { e.stopPropagation(); handleKickbackClick(order.orderId); }}>
+                            <TrendingDown className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : (

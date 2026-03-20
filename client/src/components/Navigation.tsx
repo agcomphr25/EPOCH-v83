@@ -73,6 +73,7 @@ import {
   Mic,
   ShieldCheck,
   LayoutGrid,
+  PackageCheck,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -408,6 +409,12 @@ export default function Navigation() {
       label: 'Production Control Tower',
       icon: Factory,
       description: 'Real-time production heatmap with bottleneck detection and pipeline health overview',
+    },
+    {
+      path: '/admin/shipping-status-audit',
+      label: 'Shipping Status Audit',
+      icon: PackageCheck,
+      description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
     },
   ];
 

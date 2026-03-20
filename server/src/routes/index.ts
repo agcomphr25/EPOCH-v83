@@ -9353,6 +9353,44 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // Shipping Management / FINISHED status audit
+  app.get('/api/admin/shipping-status-audit', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+      let whereClause = `current_department = 'Shipping Management' AND status = 'FINISHED'`;
+      const params: any[] = [];
+      if (startDate) {
+        params.push(startDate);
+        whereClause += ` AND due_date >= $${params.length}::date`;
+      }
+      if (endDate) {
+        params.push(endDate);
+        whereClause += ` AND due_date <= ($${params.length}::date + interval '1 day')`;
+      }
+      const result = await pool.query(
+        `SELECT
+          order_id,
+          fb_order_number,
+          customer_id,
+          model_id,
+          status,
+          current_department,
+          due_date,
+          updated_at,
+          source
+         FROM all_orders
+         WHERE ${whereClause}
+         ORDER BY due_date ASC NULLS LAST, order_id ASC`,
+        params
+      );
+      res.json({ success: true, orders: result.rows, total: result.rows.length });
+    } catch (error: any) {
+      console.error('❌ Shipping status audit error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Return the pre-existing server if one was passed in (early-bind pattern),
   // otherwise create a new one (backward-compatible fallback).
   return existingServer || createServer(app);

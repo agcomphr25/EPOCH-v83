@@ -118,6 +118,7 @@ import OrderReports from './pages/OrderReports';
 import ProductionOrderInspector from './pages/ProductionOrderInspector';
 import DomainTruthInspector from './pages/DomainTruthInspector';
 import QueueIntegrityMonitor from './pages/admin/QueueIntegrityMonitor';
+import ShippingStatusAuditPage from './pages/admin/ShippingStatusAuditPage';
 import ProductionControlTower from './pages/admin/ProductionControlTower';
 import LinkGroupsReport from './pages/LinkGroupsReport';
 import DueDateCapacityReport from './pages/DueDateCapacityReport';
@@ -468,6 +469,7 @@ function App() {
                   <Route path="/admin/inspector/production-order" component={ProductionOrderInspector} />
                   <Route path="/admin/domain-truth" component={DomainTruthInspector} />
                   <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
+                  <Route path="/admin/shipping-status-audit" component={ShippingStatusAuditPage} />
                   <Route path="/admin/control-tower" component={ProductionControlTower} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />

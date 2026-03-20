@@ -310,6 +310,18 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ One-time migration skipped or already applied:', migError.message);
       }
 
+      // Fix: Orders in Shipping Management should always be FULFILLED, not FINALIZED
+      try {
+        const { pool: fixPool } = await import('./db');
+        const fixResult = await fixPool.query(
+          `UPDATE all_orders SET status = 'FULFILLED', updated_at = NOW()
+           WHERE current_department = 'Shipping Management' AND status = 'FINALIZED'`
+        );
+        console.log(`✅ Fixed Shipping Management status: ${(fixResult as any).rowCount ?? fixResult.length} orders updated from FINALIZED → FULFILLED`);
+      } catch (fixErr: any) {
+        console.warn('⚠️ Shipping Management status fix skipped:', fixErr.message);
+      }
+
       // Sync serialized item part numbers to match their PO items
       try {
         const { sql: sqlSync } = await import('drizzle-orm');

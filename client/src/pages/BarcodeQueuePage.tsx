@@ -987,15 +987,24 @@ export default function BarcodeQueuePage() {
               .replace(/^APR\s+/i, '')
               .replace(/Tikka\s+/i, '');
 
+            const overdueCount = orders.filter((o: any) => isAfter(new Date(), new Date(o.dueDate))).length;
+
             return (
               <AccordionItem key={categoryKey} value={categoryKey} className="border rounded-lg overflow-hidden bg-white dark:bg-slate-950">
                 <AccordionTrigger className="px-4 py-3 bg-slate-50 dark:bg-slate-900/20 hover:no-underline hover:bg-slate-100 dark:hover:bg-slate-800/30">
                   <div className="flex items-center gap-3 w-full">
                     <Target className="h-5 w-5 text-slate-600 shrink-0" />
                     <span className="text-lg font-bold">{modelName}</span>
-                    <Badge variant="secondary" className="ml-auto mr-2">
-                      {orders.length} {orders.length === 1 ? 'Order' : 'Orders'}
-                    </Badge>
+                    <div className="ml-auto mr-2 flex items-center gap-2">
+                      {overdueCount > 0 && (
+                        <Badge variant="destructive">
+                          {overdueCount} Overdue
+                        </Badge>
+                      )}
+                      <Badge variant="secondary">
+                        {orders.length} {orders.length === 1 ? 'Order' : 'Orders'}
+                      </Badge>
+                    </div>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="p-6">

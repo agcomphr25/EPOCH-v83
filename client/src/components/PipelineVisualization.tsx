@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 
@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { PIPELINE_DEPARTMENTS, DEPARTMENT_COLORS, type PipelineDepartment } from '@/constants/pipelineDepartments';
 import { calculateFlowPressure, type PressureLevel } from '@/utils/calculateFlowPressure';
-import { Filter } from 'lucide-react';
+import { Filter, X } from 'lucide-react';
 
 type ScheduleStatus =
   | 'on-schedule'
@@ -240,10 +240,159 @@ const DepartmentVisualization = ({
   );
 };
 
+// ── Department Focus Panel ────────────────────────────────────────────────────
+const DepartmentFocusPanel = ({
+  targetDept,
+  pipelineDetails,
+  getModelDisplayName,
+  onOrderClick,
+  onClose,
+}: {
+  targetDept: PipelineDepartment;
+  pipelineDetails: Record<string, OrderDetail[]>;
+  getModelDisplayName: (modelId: string) => string;
+  onOrderClick: (orderId: string) => void;
+  onClose: () => void;
+}) => {
+  const targetColor = getDeptColor(targetDept);
+
+  // Collect ALL orders across every department whose expectedDepartment === targetDept
+  const allMatchingOrders: (OrderDetail & { currentDept: string })[] = [];
+  for (const [dept, orders] of Object.entries(pipelineDetails)) {
+    for (const o of orders) {
+      if (o.expectedDepartment?.toLowerCase() === targetDept.toLowerCase()) {
+        allMatchingOrders.push({ ...o, currentDept: dept });
+      }
+    }
+  }
+
+  // Group by currentDept in pipeline order
+  const grouped = PIPELINE_DEPARTMENTS.reduce<Record<string, (OrderDetail & { currentDept: string })[]>>(
+    (acc, dept) => {
+      const matches = allMatchingOrders.filter((o) => o.currentDept === dept);
+      if (matches.length > 0) acc[dept] = matches;
+      return acc;
+    },
+    {}
+  );
+
+  // Also catch orders whose current dept is not in PIPELINE_DEPARTMENTS
+  const unknownDeptOrders = allMatchingOrders.filter(
+    (o) => !PIPELINE_DEPARTMENTS.includes(o.currentDept as PipelineDepartment)
+  );
+
+  const total = allMatchingOrders.length;
+  const inCorrectDept = allMatchingOrders.filter((o) => o.currentDept.toLowerCase() === targetDept.toLowerCase()).length;
+
+  return (
+    <div className="mt-4 rounded-xl border-2 p-4 space-y-3" style={{ borderColor: targetColor.hex }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: targetColor.hex }} />
+          <span className="font-semibold text-sm">
+            Orders expected in <span style={{ color: targetColor.hex }}>{targetDept}</span>
+          </span>
+          <Badge variant="outline" className="text-xs">{total} total</Badge>
+          {inCorrectDept > 0 && (
+            <Badge className="text-xs text-white" style={{ backgroundColor: targetColor.hex }}>
+              {inCorrectDept} already here
+            </Badge>
+          )}
+        </div>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {total === 0 ? (
+        <div className="text-sm text-muted-foreground italic text-center py-4">
+          No orders are currently forecast for this department.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {Object.entries(grouped).map(([currentDept, orders]) => {
+            const isHere = currentDept.toLowerCase() === targetDept.toLowerCase();
+            const deptIdx = PIPELINE_DEPARTMENTS.indexOf(currentDept as PipelineDepartment);
+            const targetIdx = PIPELINE_DEPARTMENTS.indexOf(targetDept);
+            const isAhead = deptIdx > targetIdx;
+            const isBehind = deptIdx < targetIdx;
+            const currentColor = getDeptColor(currentDept);
+
+            return (
+              <div key={currentDept} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentColor.hex }} />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Currently in <span className="font-semibold text-foreground">{currentDept}</span>
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] px-1.5 py-0 ${
+                      isHere
+                        ? 'border-green-500 text-green-600 dark:text-green-400'
+                        : isAhead
+                        ? 'border-blue-400 text-blue-600 dark:text-blue-400'
+                        : 'border-orange-400 text-orange-600 dark:text-orange-400'
+                    }`}
+                  >
+                    {isHere ? '✓ In place' : isAhead ? '▲ Ahead' : '▼ Behind'}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">{orders.length} order{orders.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex flex-wrap gap-1 pl-4">
+                  {orders.map((order) => (
+                    <div
+                      key={order.orderId}
+                      className={`px-2 py-0.5 rounded text-xs cursor-pointer font-medium transition-all hover:brightness-90 text-white border ${
+                        order.scheduleStatus !== 'on-schedule'
+                          ? statusBorderColors[order.scheduleStatus]
+                          : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: currentColor.hex }}
+                      onClick={() => onOrderClick(order.orderId)}
+                      title={`${getDisplayOrderId(order)} — ${getModelDisplayName(order.modelId)} — ${order.scheduleStatus} — ${order.daysInDept} days in dept`}
+                    >
+                      <span>{getDisplayOrderId(order)}</span>
+                      {order.scheduleStatus !== 'on-schedule' && (
+                        <span className={`ml-1 inline-block w-1.5 h-1.5 rounded-full ${statusDotColors[order.scheduleStatus]}`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {unknownDeptOrders.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground">
+                Currently in <span className="font-semibold text-foreground">Other</span>
+              </div>
+              <div className="flex flex-wrap gap-1 pl-4">
+                {unknownDeptOrders.map((order) => (
+                  <div
+                    key={order.orderId}
+                    className="px-2 py-0.5 rounded text-xs cursor-pointer font-medium bg-gray-400 text-white hover:brightness-90 transition-all"
+                    onClick={() => onOrderClick(order.orderId)}
+                    title={`${getDisplayOrderId(order)} — currently in ${order.currentDept}`}
+                  >
+                    {getDisplayOrderId(order)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PipelineVisualization() {
   const [, navigate] = useLocation();
   const [showOnlyCorrect, setShowOnlyCorrect] = useState(false);
+  const [focusDept, setFocusDept] = useState<PipelineDepartment | null>(null);
 
   const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
     queryKey: ['/api/orders/pipeline-counts'],
@@ -268,6 +417,20 @@ export default function PipelineVisualization() {
   };
 
   const isLoading = countsLoading || detailsLoading;
+
+  // Pre-compute expected-dept totals for the department selector buttons
+  const expectedCounts = useMemo(() => {
+    if (!pipelineDetails) return {} as Record<string, number>;
+    const counts: Record<string, number> = {};
+    for (const orders of Object.values(pipelineDetails)) {
+      for (const o of orders) {
+        if (o.expectedDepartment) {
+          counts[o.expectedDepartment] = (counts[o.expectedDepartment] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }, [pipelineDetails]);
 
   if (isLoading) {
     return (
@@ -307,8 +470,59 @@ export default function PipelineVisualization() {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {/* Department sort buttons */}
+        <div className="mb-3">
+          <div className="text-xs font-semibold text-muted-foreground mb-1.5">Sort by expected department:</div>
+          <div className="flex flex-wrap gap-1.5">
+            {PIPELINE_DEPARTMENTS.map((dept) => {
+              const color = getDeptColor(dept);
+              const count = expectedCounts[dept] ?? 0;
+              const isActive = focusDept === dept;
+              return (
+                <button
+                  key={dept}
+                  onClick={() => setFocusDept(isActive ? null : dept)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
+                    isActive
+                      ? 'text-white shadow-md scale-105'
+                      : 'bg-transparent hover:opacity-80'
+                  }`}
+                  style={
+                    isActive
+                      ? { backgroundColor: color.hex, borderColor: color.hex }
+                      : { borderColor: color.hex, color: color.hex }
+                  }
+                >
+                  {dept}
+                  {count > 0 && (
+                    <span
+                      className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
+                        isActive ? 'bg-white/25 text-white' : 'text-white'
+                      }`}
+                      style={isActive ? {} : { backgroundColor: color.hex }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Department focus panel */}
+        {focusDept && pipelineDetails && (
+          <DepartmentFocusPanel
+            targetDept={focusDept}
+            pipelineDetails={pipelineDetails}
+            getModelDisplayName={getModelDisplayName}
+            onOrderClick={handleOrderClick}
+            onClose={() => setFocusDept(null)}
+          />
+        )}
+
         {/* Pipeline row: departments interleaved with pressure arrows */}
-        <div className="overflow-x-auto pb-2">
+        <div className="overflow-x-auto pb-2 mt-4">
           <div className="flex items-start min-w-max gap-0">
             {PIPELINE_DEPARTMENTS.map((deptName, idx) => {
               const count = pipelineCounts?.[deptName] ?? 0;
@@ -323,6 +537,7 @@ export default function PipelineVisualization() {
                   ? calculateFlowPressure(upstreamCount, count)
                   : null;
               const isHighPressureTarget = upstreamPressure?.pressureLevel === 'HIGH';
+              const isFocused = focusDept === deptName;
 
               const correctCount = orders.filter(
                 (o) =>
@@ -344,10 +559,13 @@ export default function PipelineVisualization() {
 
                   <div
                     className={`flex-shrink-0 w-24 text-center space-y-2 rounded-lg p-1 transition-colors ${
-                      isHighPressureTarget
+                      isFocused
+                        ? 'ring-2 ring-offset-1'
+                        : isHighPressureTarget
                         ? 'ring-2 ring-red-500 ring-offset-1 bg-red-50 dark:bg-red-950/20'
                         : ''
                     }`}
+                    style={isFocused ? { '--tw-ring-color': deptColor.hex } as React.CSSProperties : {}}
                   >
                     <div
                       className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl text-white relative ${

@@ -804,9 +804,9 @@ router.get('/oem-shipments', async (req, res) => {
           sr.created_at,
           sr.created_by,
           sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
-          SUM(si.quantity) as item_count,
-          SUM(CASE WHEN COALESCE(poi.item_type, 'stock_model') = 'stock_model' THEN si.quantity ELSE 0 END) as stock_count,
-          SUM(CASE WHEN COALESCE(poi.item_type, 'stock_model') != 'stock_model' THEN si.quantity ELSE 0 END) as accessory_count,
+          CAST(SUM(si.quantity) AS INTEGER) as item_count,
+          CAST(SUM(CASE WHEN COALESCE(poi.item_type, 'stock_model') = 'stock_model' THEN si.quantity ELSE 0 END) AS INTEGER) as stock_count,
+          CAST(SUM(CASE WHEN COALESCE(poi.item_type, 'stock_model') != 'stock_model' THEN si.quantity ELSE 0 END) AS INTEGER) as accessory_count,
           COUNT(DISTINCT COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)) as po_count,
           json_agg(
             json_build_object(

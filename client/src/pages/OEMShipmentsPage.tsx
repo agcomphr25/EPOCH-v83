@@ -632,11 +632,11 @@ export default function OEMShipmentsPage() {
                     </Badge>
                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
                       <Layers className="h-3 w-3 mr-1" />
-                      {dateShipments.reduce((sum, s) => sum + (s.stock_count || 0), 0)} stocks
+                      {dateShipments.reduce((sum, s) => sum + Number(s.stock_count || 0), 0)} stocks
                     </Badge>
                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
                       <Wrench className="h-3 w-3 mr-1" />
-                      {dateShipments.reduce((sum, s) => sum + (s.accessory_count || 0), 0)} accessories
+                      {dateShipments.reduce((sum, s) => sum + Number(s.accessory_count || 0), 0)} accessories
                     </Badge>
                   </div>
                   {expandedDates.has(dateKey) ? (
@@ -663,16 +663,16 @@ export default function OEMShipmentsPage() {
                                   <Badge variant="secondary">
                                     {shipment.po_count} PO{shipment.po_count !== 1 ? 's' : ''}
                                   </Badge>
-                                  {(shipment.stock_count || 0) > 0 && (
+                                  {Number(shipment.stock_count || 0) > 0 && (
                                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
                                       <Layers className="h-3 w-3 mr-1" />
-                                      {shipment.stock_count} Stock{shipment.stock_count !== 1 ? 's' : ''}
+                                      {Number(shipment.stock_count)} Stock{Number(shipment.stock_count) !== 1 ? 's' : ''}
                                     </Badge>
                                   )}
-                                  {(shipment.accessory_count || 0) > 0 && (
+                                  {Number(shipment.accessory_count || 0) > 0 && (
                                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
                                       <Wrench className="h-3 w-3 mr-1" />
-                                      {shipment.accessory_count} Accessor{shipment.accessory_count !== 1 ? 'ies' : 'y'}
+                                      {Number(shipment.accessory_count)} Accessor{Number(shipment.accessory_count) !== 1 ? 'ies' : 'y'}
                                     </Badge>
                                   )}
                                 </div>
@@ -1041,16 +1041,16 @@ export default function OEMShipmentsPage() {
                         <Badge variant="secondary">
                           {shipment.po_count} PO{shipment.po_count !== 1 ? 's' : ''}
                         </Badge>
-                        {(shipment.stock_count || 0) > 0 && (
+                        {Number(shipment.stock_count || 0) > 0 && (
                           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
                             <Layers className="h-3 w-3 mr-1" />
-                            {shipment.stock_count} Stock{shipment.stock_count !== 1 ? 's' : ''}
+                            {Number(shipment.stock_count)} Stock{Number(shipment.stock_count) !== 1 ? 's' : ''}
                           </Badge>
                         )}
-                        {(shipment.accessory_count || 0) > 0 && (
+                        {Number(shipment.accessory_count || 0) > 0 && (
                           <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300">
                             <Wrench className="h-3 w-3 mr-1" />
-                            {shipment.accessory_count} Accessor{shipment.accessory_count !== 1 ? 'ies' : 'y'}
+                            {Number(shipment.accessory_count)} Accessor{Number(shipment.accessory_count) !== 1 ? 'ies' : 'y'}
                           </Badge>
                         )}
                       </div>

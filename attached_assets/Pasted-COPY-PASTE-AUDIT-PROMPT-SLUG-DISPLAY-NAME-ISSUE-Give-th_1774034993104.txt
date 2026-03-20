@@ -1,0 +1,123 @@
+COPY-PASTE AUDIT PROMPT (SLUG → DISPLAY NAME ISSUE)
+
+Give this to your Replit agent exactly as-is:
+
+Objective:
+Fix issue where technical feature keys (slugs) and option values are displayed
+on the Sales Order PDF instead of user-friendly display names.
+
+Example from PDF:
+- "handedness: right" (should be "Handedness: Right")
+- "action_inlet: def_anti" (should be "Action Inlet: Defiance Anti")
+
+We need a full trace of how feature names and values are resolved and rendered.
+
+DO NOT implement fixes yet.
+This is a diagnostic audit only.
+
+---
+
+PART 1 — Identify Feature Data Source
+
+Trace how features are stored on the order.
+
+Log and paste:
+- Raw features JSON from the order (features column)
+- Example structure for:
+  - handedness
+  - action_inlet
+
+We need to confirm:
+- keys (slugs)
+- stored values (slugs or IDs)
+
+---
+
+PART 2 — Feature Metadata Lookup
+
+Find where feature definitions are loaded.
+
+Paste:
+- Source of feature definitions (likely from features table)
+- Fields available:
+  - feature key
+  - display name
+  - options
+  - option display names
+
+Confirm:
+- Where "Action Inlet" and "Defiance Anti" exist in the system
+
+---
+
+PART 3 — Snapshot Feature Processing
+
+In createOrderSnapshot():
+
+Trace how features are transformed.
+
+Log:
+- featurePrices
+- feature display names (if any)
+- what gets stored in snapshot.features
+
+Confirm:
+- Are display names already resolved here?
+- Or are raw slugs passed through?
+
+---
+
+PART 4 — PDF Input Object
+
+Before generateSalesOrderPdf(), log:
+
+- orderData.features
+- Any mapped feature display fields
+- featurePrices / featureDisplayNames if present
+
+We need to see whether:
+- display names exist but are ignored
+- OR never exist at all
+
+---
+
+PART 5 — PDF Rendering Logic
+
+In salesOrderPdf.ts:
+
+Locate where features are rendered.
+
+Paste:
+- The loop that renders feature rows
+- The variables used for:
+  - label (left column)
+  - value (middle column)
+
+Confirm whether it uses:
+- raw key (slug)
+- raw value (slug)
+- or mapped display names
+
+---
+
+PART 6 — Fallback Behavior
+
+Identify if there is logic like:
+
+- fallback to key if displayName missing
+- fallback to raw value if option label missing
+
+Paste that logic.
+
+---
+
+Goal:
+Determine whether:
+
+A) Display names exist but are not passed to PDF  
+B) Display names exist but PDF ignores them  
+C) Snapshot never resolves display names  
+D) Feature mapping is incomplete for certain feature types  
+
+Do NOT implement fixes yet.
+Provide logs and file locations only.

@@ -23,6 +23,7 @@ interface AuditOrder {
   model_id: string | null;
   status: string;
   current_department: string;
+  shipped_date: string | null;
   due_date: string | null;
   updated_at: string | null;
   source: string | null;
@@ -54,7 +55,7 @@ export default function ShippingStatusAuditPage() {
 
   function exportCsv() {
     if (!orders.length) return;
-    const headers = ['Order ID', 'FB Order #', 'Customer', 'Model', 'Status', 'Department', 'Due Date', 'Last Updated', 'Source'];
+    const headers = ['Order ID', 'FB Order #', 'Customer', 'Model', 'Status', 'Department', 'Shipped Date', 'Due Date', 'Last Updated', 'Source'];
     const rows = orders.map((o) => [
       o.order_id,
       o.fb_order_number ?? '',
@@ -62,6 +63,7 @@ export default function ShippingStatusAuditPage() {
       o.model_id ?? '',
       o.status,
       o.current_department,
+      o.shipped_date ? format(parseISO(o.shipped_date), 'yyyy-MM-dd') : '',
       o.due_date ? format(parseISO(o.due_date), 'yyyy-MM-dd') : '',
       o.updated_at ? format(parseISO(o.updated_at), 'yyyy-MM-dd HH:mm') : '',
       o.source ?? '',
@@ -85,7 +87,7 @@ export default function ShippingStatusAuditPage() {
             Shipping Status Audit
           </h1>
           <p className="text-muted-foreground mt-1">
-            Identify orders in <strong>Shipping Management</strong> with a status of <strong>FINISHED</strong> — a mismatch that may require correction.
+            Finds orders in <strong>Shipping Management</strong> whose status is still <strong>FINALIZED</strong> — these should have been updated to <strong>FULFILLED</strong> when shipped.
           </p>
         </div>
       </div>
@@ -94,10 +96,10 @@ export default function ShippingStatusAuditPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Filter by Due Date Range
+            Filter by Ship Date Range
           </CardTitle>
           <CardDescription>
-            Leave dates blank to show all mismatches regardless of due date.
+            Filters by the date the order was shipped. Leave blank to show all mismatches across all time.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -169,9 +171,9 @@ export default function ShippingStatusAuditPage() {
                       <TableHead>Model</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Department</TableHead>
+                      <TableHead>Shipped Date</TableHead>
                       <TableHead>Due Date</TableHead>
                       <TableHead>Last Updated</TableHead>
-                      <TableHead>Source</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -188,6 +190,11 @@ export default function ShippingStatusAuditPage() {
                           <Badge variant="outline">{order.current_department}</Badge>
                         </TableCell>
                         <TableCell>
+                          {order.shipped_date
+                            ? format(parseISO(order.shipped_date), 'MMM d, yyyy')
+                            : <span className="text-muted-foreground text-sm">Not recorded</span>}
+                        </TableCell>
+                        <TableCell>
                           {order.due_date
                             ? format(parseISO(order.due_date), 'MMM d, yyyy')
                             : '—'}
@@ -196,9 +203,6 @@ export default function ShippingStatusAuditPage() {
                           {order.updated_at
                             ? format(parseISO(order.updated_at), 'MMM d, yyyy HH:mm')
                             : '—'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm capitalize">
-                          {order.source ?? '—'}
                         </TableCell>
                       </TableRow>
                     ))}

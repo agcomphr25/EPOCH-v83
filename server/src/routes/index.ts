@@ -9353,20 +9353,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Shipping Management / FINISHED status audit
+  // Shipping Management / FINALIZED status audit
+  // Finds orders in Shipping Management whose status is still FINALIZED (should be FULFILLED after shipping)
   app.get('/api/admin/shipping-status-audit', async (req, res) => {
     try {
       const { pool } = await import('../../db');
       const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
-      let whereClause = `current_department = 'Shipping Management' AND status = 'FINISHED'`;
+      let whereClause = `current_department = 'Shipping Management' AND status = 'FINALIZED'`;
       const params: any[] = [];
       if (startDate) {
         params.push(startDate);
-        whereClause += ` AND due_date >= $${params.length}::date`;
+        whereClause += ` AND COALESCE(shipped_date, updated_at::date) >= $${params.length}::date`;
       }
       if (endDate) {
         params.push(endDate);
-        whereClause += ` AND due_date <= ($${params.length}::date + interval '1 day')`;
+        whereClause += ` AND COALESCE(shipped_date, updated_at::date) <= ($${params.length}::date + interval '1 day')`;
       }
       const result = await pool.query(
         `SELECT
@@ -9376,12 +9377,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           model_id,
           status,
           current_department,
+          shipped_date,
           due_date,
           updated_at,
           source
          FROM all_orders
          WHERE ${whereClause}
-         ORDER BY due_date ASC NULLS LAST, order_id ASC`,
+         ORDER BY COALESCE(shipped_date, updated_at::date) DESC NULLS LAST, order_id ASC`,
         params
       );
       res.json({ success: true, orders: result.rows, total: result.rows.length });

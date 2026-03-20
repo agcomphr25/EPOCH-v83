@@ -2343,7 +2343,7 @@ export default function Navigation() {
             <span className="text-sm text-gray-600">
               Manufacturing ERP System
             </span>
-            {isDeploymentEnvironment() && currentUser?.username && (
+            {currentUser?.username && (
               <span
                 className="text-sm font-medium text-gray-700"
                 data-testid="text-username"
@@ -2400,16 +2400,16 @@ export default function Navigation() {
               <Cog className="h-4 w-4" />
               <span className="hidden lg:inline">Settings</span>
             </Button>
-            {isDeploymentEnvironment() && (
+            {currentUser?.username && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={currentUser?.username ? handleLogout : () => setLocation('/login')}
+                onClick={handleLogout}
                 className="gap-2"
-                data-testid={currentUser?.username ? "button-logout" : "button-login"}
+                data-testid="button-logout"
               >
                 <LogOut className="h-4 w-4" />
-                {currentUser?.username ? 'Logout' : 'Login'}
+                Logout
               </Button>
             )}
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">

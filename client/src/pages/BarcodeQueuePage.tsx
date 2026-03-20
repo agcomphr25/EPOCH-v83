@@ -55,6 +55,8 @@ import {
   Edit,
   Zap,
   ExternalLink,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -94,6 +96,8 @@ const kickbackFormSchema = z.object({
 
 type KickbackFormData = z.infer<typeof kickbackFormSchema>;
 
+type ViewMode = 'grouped' | 'flat';
+
 export default function BarcodeQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
@@ -102,9 +106,8 @@ export default function BarcodeQueuePage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
   const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
   const [kickbackOrderId, setKickbackOrderId] = useState('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
-    null
-  );
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const queryClient = useQueryClient();
 
   // Kickback form
@@ -337,6 +340,17 @@ export default function BarcodeQueuePage() {
 
     return categories;
   }, [barcodeOrders, stockModels]);
+
+  // Flat list: all barcode orders sorted — overdue first, then latest due date first
+  const flatSortedOrders = useMemo(() => {
+    return [...barcodeOrders].sort((a: any, b: any) => {
+      const aOverdue = isAfter(new Date(), new Date(a.dueDate));
+      const bOverdue = isAfter(new Date(), new Date(b.dueDate));
+      if (aOverdue && !bOverdue) return -1;
+      if (!aOverdue && bOverdue) return 1;
+      return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
+    });
+  }, [barcodeOrders]);
 
   // Handle order selection
   const toggleOrderSelection = (orderId: string) => {
@@ -724,9 +738,34 @@ export default function BarcodeQueuePage() {
     >
       {/* Header with Actions */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Scan className="h-6 w-6" />
           <h1 className="text-3xl font-bold">Barcode Department Manager</h1>
+          {/* View mode toggle */}
+          <div className="flex items-center border rounded-md overflow-hidden ml-2">
+            <button
+              onClick={() => setViewMode('grouped')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'grouped'
+                  ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              By Model
+            </button>
+            <button
+              onClick={() => setViewMode('flat')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l ${
+                viewMode === 'flat'
+                  ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              All Orders
+            </button>
+          </div>
         </div>
 
         {/* Multi-Select Actions */}
@@ -832,14 +871,113 @@ export default function BarcodeQueuePage() {
         </Card>
       </div>
 
-      {/* Categorized Order Queues */}
-      {Object.keys(categorizedOrders).length === 0 ? (
+      {/* Order Queues — grouped or flat */}
+      {barcodeOrders.length === 0 ? (
         <Card>
           <CardContent className="text-center py-8 text-gray-500 dark:text-gray-400">
             No orders currently in Barcode department
           </CardContent>
         </Card>
+      ) : viewMode === 'flat' ? (
+        /* ── Flat list view ─────────────────────────────────────────────── */
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <List className="h-4 w-4 text-slate-500" />
+            <span className="text-sm font-medium text-muted-foreground">
+              All {flatSortedOrders.length} orders · sorted by due date (latest first)
+            </span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {flatSortedOrders.map((order: any) => {
+              const isSelected = selectedOrders.has(order.orderId);
+              const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+              const orderLabels = deriveOrderLabels(order);
+              const actionLength = orderLabels.actionLengthRaw;
+              const isTikka = orderLabels.isTikka;
+              const materialType = order.materialCanonical || orderLabels.materialLabel;
+
+              return (
+                <Card
+                  key={order.orderId}
+                  id={`order-${order.orderId}`}
+                  className={`cursor-pointer transition-all duration-200 border-l-4 ${
+                    highlightedOrderId === order.orderId
+                      ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-l-yellow-500 shadow-lg'
+                      : isSelected
+                        ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-l-blue-500'
+                        : isOverdue
+                          ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
+                          : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
+                  }`}
+                  onClick={() => toggleOrderSelection(order.orderId)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox checked={isSelected} onChange={() => toggleOrderSelection(order.orderId)} className="mt-1" />
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-lg">{getDisplayOrderId(order)}</span>
+                          <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
+                          {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                            <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
+                              <Zap className="w-3 h-3" />URGENT!!!
+                            </Badge>
+                          )}
+                          {isOverdue && <Badge variant="destructive" className="text-xs">OVERDUE</Badge>}
+                        </div>
+                        {/* Model name label in flat view */}
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {getModelDisplayName(order.modelId)}
+                        </div>
+                        {order.customerPO && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <FileText className="h-3 w-3" />
+                            <Link href="/purchase-orders" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="hover:underline hover:text-blue-600 dark:hover:text-blue-400">
+                              PO {order.customerPO}
+                            </Link>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </div>
+                        )}
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-3 w-3 text-gray-500" />
+                            <span className={`font-medium ${isOverdue ? 'text-red-700' : ''}`}>
+                              Due: {format(new Date(order.dueDate), 'M/d/yy')}
+                            </span>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {materialType !== 'Tikka' && (
+                              <Badge variant="outline" className={`text-xs ${materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' : materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' : materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' : materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-blue-600 text-blue-700 bg-blue-50'}`}>
+                                {materialType}
+                              </Badge>
+                            )}
+                            {isTikka && <Badge variant="outline" className="text-xs border-purple-600 text-purple-700 bg-purple-50 font-semibold">Tikka</Badge>}
+                            <Badge variant="outline" className={`text-xs ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
+                              {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : 'Unknown'} Action
+                            </Badge>
+                          </div>
+                          <div className="flex gap-1 pt-1">
+                            <Link href={`/order-entry?draft=${order.orderId}`}>
+                              <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order"><Edit className="h-3 w-3" /></Button>
+                            </Link>
+                            <Button variant="outline" size="sm" className="h-6 w-6 p-0 ml-1" title="View Sales Order" onClick={(e) => { e.stopPropagation(); handleSalesOrderView(order.orderId); }}>
+                              <FileText className="w-3 h-3" />
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-6 w-6 p-0 ml-1" title="Report Kickback" onClick={(e) => { e.stopPropagation(); handleKickbackClick(order.orderId); }}>
+                              <TrendingDown className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
       ) : (
+        /* ── Grouped accordion view ─────────────────────────────────────── */
         <Accordion type="multiple" className="space-y-3">
           {Object.entries(categorizedOrders).sort(([a], [b]) => a.localeCompare(b)).map(([categoryKey, orders]) => {
             const modelName = categoryKey

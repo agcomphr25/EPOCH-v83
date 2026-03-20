@@ -9386,7 +9386,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          ORDER BY COALESCE(shipped_date, updated_at::date) DESC NULLS LAST, order_id ASC`,
         params
       );
-      res.json({ success: true, orders: result.rows, total: result.rows.length });
+      res.json({ success: true, orders: result, total: result.length });
     } catch (error: any) {
       console.error('❌ Shipping status audit error:', error);
       res.status(500).json({ success: false, error: error.message });

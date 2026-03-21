@@ -1437,4 +1437,215 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
   }
 });
 
+// ─── Order Override — glennj only ─────────────────────────────────────────
+
+const OVERRIDE_ONLY_USER = 'glennj';
+
+// Columns that must NEVER be touched via override (system-managed / calculated)
+const PERMANENTLY_BLOCKED_COLUMNS = new Set([
+  'id',
+  'department_history',
+  'signature_data',
+  'forecast_completion_date',
+  'forecast_confidence',
+  'forecast_days_remaining',
+  'forecast_stage',
+  'forecast_updated_at',
+  'calculated_total',
+  'source_po_id',
+]);
+
+// GET /api/admin/order-override/columns
+// Returns the full column list from all_orders with tier classification
+router.get(
+  '/order-override/columns',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || user.username !== OVERRIDE_ONLY_USER) {
+      return res.status(403).json({ error: 'Access restricted to glennj' });
+    }
+
+    try {
+      const cols = await pool.query(
+        `SELECT column_name, data_type, is_nullable, column_default
+         FROM information_schema.columns
+         WHERE table_name = 'all_orders'
+         ORDER BY ordinal_position`,
+        []
+      ) as any[];
+
+      const SAFE_COLUMNS = new Set([
+        'notes', 'internal_notes', 'customer_notes', 'special_instructions',
+        'tracking_number', 'carrier', 'customer_po',
+        'urgency', 'is_rush', 'is_replacement', 'is_paid',
+        'payment_notes', 'payment_type', 'payment_date', 'payment_amount',
+        'scrap_reason', 'kickback_reason',
+        'fb_order_number', 'dealer_name', 'dealer_po',
+        'customer_id', 'customer_name', 'customer_email', 'customer_phone',
+      ]);
+
+      const RESTRICTED_COLUMNS = new Set([
+        'status', 'status_id',
+        'current_department', 'current_department_id',
+        'due_date', 'order_date', 'shipped_date', 'week_due_date',
+        'priority_score', 'priority_flags',
+        'production_status', 'production_notes',
+      ]);
+
+      const columns = cols
+        .filter((c: any) => !PERMANENTLY_BLOCKED_COLUMNS.has(c.column_name))
+        .map((c: any) => {
+          let tier: 'safe' | 'restricted' | 'advanced';
+          if (SAFE_COLUMNS.has(c.column_name)) tier = 'safe';
+          else if (RESTRICTED_COLUMNS.has(c.column_name)) tier = 'restricted';
+          else tier = 'advanced';
+
+          return {
+            column_name: c.column_name,
+            data_type: c.data_type,
+            is_nullable: c.is_nullable === 'YES',
+            tier,
+          };
+        });
+
+      res.json({ columns });
+    } catch (err: any) {
+      console.error('[OrderOverride] Column fetch error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// GET /api/admin/order-override/order/:orderId
+// Fetch a single order row for preview
+router.get(
+  '/order-override/order/:orderId',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || user.username !== OVERRIDE_ONLY_USER) {
+      return res.status(403).json({ error: 'Access restricted to glennj' });
+    }
+
+    const orderId = req.params.orderId.trim();
+    try {
+      const rows = await pool.query(
+        `SELECT * FROM all_orders WHERE order_id = $1 OR fb_order_number = $1 LIMIT 1`,
+        [orderId]
+      ) as any[];
+
+      if (!rows.length) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      res.json({ order: rows[0] });
+    } catch (err: any) {
+      console.error('[OrderOverride] Order fetch error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// POST /api/admin/order-override
+// Apply a single field change to all_orders with full audit trail
+router.post(
+  '/order-override',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || user.username !== OVERRIDE_ONLY_USER) {
+      return res.status(403).json({ error: 'Access restricted to glennj' });
+    }
+
+    const { orderId, columnName, newValue, reason } = req.body;
+
+    if (!orderId || !columnName || reason === undefined || reason === '') {
+      return res.status(400).json({ error: 'orderId, columnName, and reason are required' });
+    }
+
+    if (PERMANENTLY_BLOCKED_COLUMNS.has(columnName)) {
+      return res.status(400).json({ error: `Column "${columnName}" cannot be modified via override` });
+    }
+
+    // Validate column actually exists on all_orders to prevent SQL injection
+    const validCols = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'all_orders' AND column_name = $1`,
+      [columnName]
+    ) as any[];
+
+    if (!validCols.length) {
+      return res.status(400).json({ error: `Column "${columnName}" does not exist on all_orders` });
+    }
+
+    try {
+      // Fetch the current value for audit
+      const currentRows = await pool.query(
+        `SELECT ${columnName}, order_id FROM all_orders WHERE order_id = $1 OR fb_order_number = $1 LIMIT 1`,
+        [orderId]
+      ) as any[];
+
+      if (!currentRows.length) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      const resolvedOrderId = currentRows[0].order_id;
+      const oldValue = currentRows[0][columnName];
+
+      // Apply the update — use parameterized column name via safe whitelist check above
+      await pool.query(
+        `UPDATE all_orders SET "${columnName}" = $1, updated_at = NOW() WHERE order_id = $2`,
+        [newValue === '' ? null : newValue, resolvedOrderId]
+      );
+
+      // Write to admin_audit_log (picked up by flight recorder as FIELD_CHANGE)
+      await pool.query(
+        `INSERT INTO admin_audit_log
+           (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, ip_address, timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ADMIN_OVERRIDE', $8, NOW())`,
+        [
+          resolvedOrderId,
+          columnName,
+          columnName.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          JSON.stringify(oldValue),
+          JSON.stringify(newValue === '' ? null : newValue),
+          user.username,
+          user.role ?? 'OWNER',
+          req.ip ?? null,
+        ]
+      );
+
+      // Write reason to audit_events for timeline
+      await pool.query(
+        `INSERT INTO audit_events
+           (entity_type, entity_id, action, actor_name, actor_role, reason, fields_changed, meta, timestamp)
+         VALUES ('order', $1, 'ADMIN_FIELD_OVERRIDE', $2, $3, $4, $5, $6, NOW())`,
+        [
+          resolvedOrderId,
+          user.username,
+          user.role ?? 'OWNER',
+          reason,
+          JSON.stringify([columnName]),
+          JSON.stringify({ column: columnName, oldValue, newValue: newValue === '' ? null : newValue }),
+        ]
+      ).catch((err: any) => {
+        // audit_events may have schema differences — don't fail the whole request
+        console.warn('[OrderOverride] audit_events insert failed (non-fatal):', err.message);
+      });
+
+      res.json({
+        success: true,
+        orderId: resolvedOrderId,
+        column: columnName,
+        oldValue,
+        newValue: newValue === '' ? null : newValue,
+      });
+    } catch (err: any) {
+      console.error('[OrderOverride] Update error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
 export default router;
+

@@ -74,6 +74,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   PackageCheck,
+  ShieldAlert,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -350,6 +351,12 @@ export default function Navigation() {
       label: 'Order Item Lookup',
       icon: Search,
       description: 'Find the item code for a production order by matching specifications',
+    },
+    {
+      path: '/admin/order-override',
+      label: 'Order Data Override',
+      icon: ShieldAlert,
+      description: 'Directly modify any column for a specific order with full audit trail (glennj only)',
     },
     {
       path: '/admin/roles-permissions',

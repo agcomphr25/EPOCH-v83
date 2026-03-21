@@ -33,6 +33,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import WeeklyShipmentsOverview from './WeeklyShipmentsOverview';
 import {
   Package,
   TrendingUp,
@@ -506,6 +508,15 @@ export default function ShippingTracker() {
           Track stocks shipped by company week (Wednesday - Tuesday)
         </p>
       </div>
+
+      <Tabs defaultValue="shipping-tracker" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="shipping-tracker">Shipping Tracker</TabsTrigger>
+          <TabsTrigger value="weekly-shipments">Weekly Shipments</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="shipping-tracker">
+        <div>
 
       {/* Current Week Summary Card */}
       <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
@@ -1200,6 +1211,13 @@ export default function ShippingTracker() {
           </div>
         </DialogContent>
       </Dialog>
+        </div>
+        </TabsContent>
+
+        <TabsContent value="weekly-shipments">
+          <WeeklyShipmentsOverview />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

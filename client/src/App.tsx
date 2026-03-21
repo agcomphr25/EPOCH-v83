@@ -144,7 +144,6 @@ import { BOMAdministration } from './pages/BOMAdministration';
 import RobustBOMAdministration from './pages/RobustBOMAdministration';
 import AGBottomMetalReport from './pages/AGBottomMetalReport';
 import ShippingTracker from './pages/ShippingTracker';
-import WeeklyShipmentsOverview from './pages/WeeklyShipmentsOverview';
 import AwaitingSignaturePage from './pages/AwaitingSignaturePage';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import EmployeeDetail from './pages/EmployeeDetail';
@@ -346,6 +345,14 @@ function RootRedirect() {
 
 function WebSocketNotifications() {
   useWebSocketNotifications();
+  return null;
+}
+
+function RedirectToShippingTracker() {
+  const [, setLocation] = useLocation();
+  React.useEffect(() => {
+    setLocation('/shipping-tracker');
+  }, [setLocation]);
   return null;
 }
 
@@ -974,7 +981,7 @@ function App() {
                     component={AGBottomMetalReport}
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
-                  <Route path="/weekly-shipments" component={WeeklyShipmentsOverview} />
+                  <Route path="/weekly-shipments" component={RedirectToShippingTracker} />
                   <Route path="/awaiting-signature" component={AwaitingSignaturePage} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />

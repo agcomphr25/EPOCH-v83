@@ -564,7 +564,28 @@ export async function createOrderSnapshot(orderId: string): Promise<OrderSnapsho
           continue;
         }
 
-        const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+        // Handle handedness specially — it's not in the features table
+        if (featureKey === 'handedness') {
+          featureDisplayNames[featureKey] = 'Handedness';
+          const handednessLabels: Record<string, string> = {
+            left: 'Left Hand',
+            right: 'Right Hand',
+            lh: 'Left Hand',
+            rh: 'Right Hand',
+          };
+          const rawVal = String(featureValue).toLowerCase();
+          featureSelectionDisplayNames[String(featureValue)] = handednessLabels[rawVal] || createFallbackDisplayName(String(featureValue));
+          featurePrices[featureKey] = 0;
+          continue;
+        }
+
+        // Some orders store action inlet as 'action_inlet' but the features table uses 'action'
+        const featureIdAlias: Record<string, string> = {
+          action_inlet: 'action',
+        };
+        const lookupId = featureIdAlias[featureKey] || featureKey;
+
+        const featureDetail = allFeatures.find((f: any) => f.id === lookupId);
         if (featureDetail) {
           featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
           const featureOptions = (featureDetail as any).options || [];

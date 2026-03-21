@@ -313,11 +313,25 @@ async function initializeBackgroundServices() {
       // Fix: Orders in Shipping Management should always be FULFILLED, not FINALIZED
       try {
         const { pool: fixPool } = await import('./db');
-        const fixResult = await fixPool.query(
-          `UPDATE all_orders SET status = 'FULFILLED', updated_at = NOW()
+        const { auditUpdateOrders } = await import('./src/services/orderAuditWrapper');
+        const eligibleRows = await fixPool.query(
+          `SELECT order_id FROM all_orders
            WHERE current_department = 'Shipping Management' AND status = 'FINALIZED'`
-        );
-        console.log(`✅ Fixed Shipping Management status: ${(fixResult as any).rowCount ?? fixResult.length} orders updated from FINALIZED → FULFILLED`);
+        ) as any[];
+        const eligibleIds = eligibleRows.map((r: any) => r.order_id);
+        if (eligibleIds.length > 0) {
+          await auditUpdateOrders({
+            db: fixPool as any,
+            orderIds: eligibleIds,
+            changes: { status: 'FULFILLED' },
+            source: 'BOOT_MIGRATION',
+            user: null,
+            reason: 'Boot migration: Shipping Management FINALIZED → FULFILLED',
+            ip: null,
+            userAgent: null,
+          });
+        }
+        console.log(`✅ Fixed Shipping Management status: ${eligibleIds.length} orders updated from FINALIZED → FULFILLED`);
       } catch (fixErr: any) {
         console.warn('⚠️ Shipping Management status fix skipped:', fixErr.message);
       }

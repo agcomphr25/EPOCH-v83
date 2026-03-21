@@ -16668,22 +16668,30 @@ export class DatabaseStorage implements IStorage {
         };
       }
 
-      // Update finalized orders to match drafts (prioritize draft verification status)
-      const updates = await db.execute(sql`
-        UPDATE all_orders 
-        SET is_verified = order_drafts.is_verified
-        FROM order_drafts 
-        WHERE all_orders.order_id = order_drafts.order_id 
-        AND all_orders.is_verified != order_drafts.is_verified
-      `);
+      // Update finalized orders to match drafts — per-order so each change is audited
+      const { auditUpdateOrders } = await import('./src/services/orderAuditWrapper');
+      let syncedCount = 0;
+      for (const row of mismatches.rows as any[]) {
+        await auditUpdateOrders({
+          db: pool,
+          orderIds: [row.order_id],
+          changes: { is_verified: row.draft_verified },
+          source: 'SYNC_VERIFICATION',
+          user: null,
+          reason: 'Auto-sync verification status from drafts',
+          ip: null,
+          userAgent: null,
+        });
+        syncedCount++;
+      }
 
       console.log(
-        `✅ Verification sync complete: ${updates.rowCount || 0} orders updated`
+        `✅ Verification sync complete: ${syncedCount} orders updated`
       );
 
       return {
-        updatedOrders: updates.rowCount || 0,
-        message: `Synced verification status for ${updates.rowCount || 0} orders`,
+        updatedOrders: syncedCount,
+        message: `Synced verification status for ${syncedCount} orders`,
       };
     } catch (error) {
       console.error('❌ Error syncing verification status:', error);

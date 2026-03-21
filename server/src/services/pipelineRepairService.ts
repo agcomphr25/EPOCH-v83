@@ -1,4 +1,5 @@
 import { pool } from '../../db';
+import { auditUpdateOrders } from './orderAuditWrapper';
 import { derivePipelineStage, validatePipelineState, PIPELINE_STAGES } from './pipelineValidationService';
 import type { PipelineError, ErrorType } from './pipelineValidationService';
 
@@ -96,14 +97,16 @@ export async function repairPipelineDrift(orderId: string, skipTypeCheck = false
     }
   }
 
-  await pool.query(
-    `UPDATE all_orders
-     SET current_department = $1, updated_at = NOW()
-     WHERE order_id = $2`,
-    [derivedStage, orderId]
-  );
-
-  await logRepairAudit(orderId, oldDepartment, derivedStage);
+  await auditUpdateOrders({
+    db: pool,
+    orderIds: [orderId],
+    changes: { current_department: derivedStage },
+    source: 'PIPELINE_AUTO_REPAIR',
+    user: { username: 'PIPELINE_AUTO_REPAIR', role: 'SYSTEM' },
+    reason: `Auto-repair: ${oldDepartment} → ${derivedStage}`,
+    ip: null,
+    userAgent: null,
+  });
 
   return {
     orderId,

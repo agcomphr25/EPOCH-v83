@@ -1,4 +1,5 @@
 import { pool } from '../../db';
+import { auditUpdateOrders } from './orderAuditWrapper';
 
 export interface ForecastAccuracyMetrics {
   totalCompleted: number;
@@ -23,17 +24,29 @@ export async function stampForecastOnOrders(): Promise<number> {
     for (const [orderId, result] of snapshot.results) {
       if (!result.projectedCompletion) continue;
       try {
-        const updateResult = await pool.query(
-          `UPDATE all_orders SET forecast_completion_date = $1
-           WHERE order_id = $2
+        // Pre-check: only stamp orders that meet all original WHERE conditions
+        const eligibleRows = await pool.query(
+          `SELECT order_id FROM all_orders
+           WHERE order_id = $1
              AND actual_completion_date IS NULL
              AND shipped_date IS NULL
-             AND (forecast_completion_date IS NULL OR forecast_completion_date != $1)
+             AND (forecast_completion_date IS NULL OR forecast_completion_date != $2)
              AND status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')`,
-          [new Date(result.projectedCompletion), orderId]
-        );
-        const rowCount = (updateResult as any)?.rowCount ?? (updateResult as any)?.length ?? 0;
-        if (rowCount > 0) stamped++;
+          [orderId, new Date(result.projectedCompletion)]
+        ) as any[];
+        if (eligibleRows.length > 0) {
+          await auditUpdateOrders({
+            db: pool,
+            orderIds: [orderId],
+            changes: { forecast_completion_date: new Date(result.projectedCompletion) },
+            source: 'FORECAST_STAMP',
+            user: null,
+            reason: 'Nightly forecast stamp',
+            ip: null,
+            userAgent: null,
+          });
+          stamped++;
+        }
       } catch {
       }
     }
@@ -51,25 +64,34 @@ export async function stampForecastOnOrders(): Promise<number> {
 export async function recordActualCompletion(orderId: string): Promise<void> {
   try {
     const now = new Date();
-    const result = await pool.query(
-      `UPDATE all_orders SET
-        actual_completion_date = $1,
-        forecast_error_days = CASE
-          WHEN forecast_completion_date IS NOT NULL
-          THEN ROUND(EXTRACT(EPOCH FROM ($1::timestamp - forecast_completion_date)) / 86400.0, 1)
-          ELSE NULL
-        END
-       WHERE order_id = $2
-         AND actual_completion_date IS NULL
-       RETURNING forecast_completion_date, forecast_error_days`,
-      [now, orderId]
-    );
-    const rows = Array.isArray(result) ? result : (result?.rows ?? []);
-    if (rows[0]?.forecast_error_days != null) {
-      console.log(
-        `[ForecastAccuracy] Order ${orderId}: error = ${rows[0].forecast_error_days} days ` +
-        `(forecast: ${rows[0].forecast_completion_date?.toISOString()?.slice(0, 10)}, actual: ${now.toISOString().slice(0, 10)})`
-      );
+    // Pre-check: skip if already completed; fetch forecast_completion_date to compute error in JS
+    const existingRows = await pool.query(
+      `SELECT forecast_completion_date FROM all_orders
+       WHERE order_id = $1 AND actual_completion_date IS NULL`,
+      [orderId]
+    ) as any[];
+    if (existingRows.length > 0) {
+      const forecastDate: Date | null = existingRows[0].forecast_completion_date ?? null;
+      // Replicate postgres: ROUND(EXTRACT(EPOCH FROM (now - forecast)) / 86400.0, 1)
+      const forecastErrorDays = forecastDate
+        ? Math.round(((now.getTime() - new Date(forecastDate).getTime()) / 86400000) * 10) / 10
+        : null;
+      const updatedRows = await auditUpdateOrders({
+        db: pool,
+        orderIds: [orderId],
+        changes: { actual_completion_date: now, forecast_error_days: forecastErrorDays },
+        source: 'FORECAST_COMPLETION',
+        user: null,
+        reason: 'Actual completion recorded',
+        ip: null,
+        userAgent: null,
+      });
+      if (updatedRows[0]?.forecast_error_days != null) {
+        console.log(
+          `[ForecastAccuracy] Order ${orderId}: error = ${updatedRows[0].forecast_error_days} days ` +
+          `(forecast: ${forecastDate?.toISOString()?.slice(0, 10)}, actual: ${now.toISOString().slice(0, 10)})`
+        );
+      }
     }
   } catch (err) {
     console.error(`[ForecastAccuracy] Failed to record actual completion for ${orderId}:`, err);

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { auditUpdateOrders } from '../services/orderAuditWrapper';
 
 import { db, pool, rawSql } from '../../db';
 import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
@@ -1008,18 +1009,28 @@ router.post('/save', async (req: Request, res: Response) => {
       if (orderIds.length > 0) {
         const uniqueOrderIds = Array.from(new Set(orderIds));
         
-        const updateResult = await client.query(
-          `
-          UPDATE all_orders
-          SET current_department = 'Layup/Plugging',
-              updated_at = NOW()
-          WHERE order_id = ANY($1::text[])
-          AND current_department IN ('P1 Production Queue', 'Production Queue')
-        `,
+        // Pre-filter to only orders in eligible source departments (preserving original WHERE guard)
+        const eligibleRows = await client.query(
+          `SELECT order_id FROM all_orders
+           WHERE order_id = ANY($1::text[])
+           AND current_department IN ('P1 Production Queue', 'Production Queue')`,
           [uniqueOrderIds]
-        );
-        
-        progressedCount = updateResult.rowCount || 0;
+        ) as any[];
+        const eligibleIds = eligibleRows.map((r: any) => r.order_id);
+
+        if (eligibleIds.length > 0) {
+          const movedRows = await auditUpdateOrders({
+            db: client as any,
+            orderIds: eligibleIds,
+            changes: { current_department: 'Layup/Plugging' },
+            source: 'LAYUP_SAVE',
+            user: (req as any).user,
+            reason: (req as any).body?.reason || 'Layup move',
+            ip: req.ip,
+            userAgent: req.headers['user-agent'] as string | null,
+          });
+          progressedCount = movedRows.length;
+        }
         console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
       }
 

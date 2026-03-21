@@ -35,6 +35,28 @@ export async function adminOverrideOrder({
     safeChanges[key] = changes[key];
   }
 
+  if (safeChanges.status) {
+    const result = await db.query(
+      `SELECT id FROM order_statuses WHERE name = $1`,
+      [safeChanges.status]
+    ) as any[];
+    if (result.length === 0) {
+      throw new Error(`Invalid status: ${safeChanges.status}`);
+    }
+    safeChanges.status_id = result[0].id;
+  }
+
+  if (safeChanges.current_department) {
+    const result = await db.query(
+      `SELECT id FROM order_departments WHERE name = $1`,
+      [safeChanges.current_department]
+    ) as any[];
+    if (result.length === 0) {
+      throw new Error(`Invalid department: ${safeChanges.current_department}`);
+    }
+    safeChanges.current_department_id = result[0].id;
+  }
+
   return await auditUpdateOrders({
     db,
     orderIds: [orderId],

@@ -1666,12 +1666,16 @@ router.post(
         return res.status(400).json({ error: 'Missing orderId or changes' });
       }
 
+      if (!reason) {
+        return res.status(400).json({ error: 'reason is required' });
+      }
+
       const result = await adminOverrideOrder({
         db: pool,
         orderId,
         changes,
         user: (req as any).user,
-        reason: reason || 'Admin override',
+        reason,
         ip: req.ip,
         userAgent: req.headers['user-agent'] as string | undefined,
       });

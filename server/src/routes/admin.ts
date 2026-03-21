@@ -471,7 +471,7 @@ router.get(
           [resolvedId]
         ),
         safeQ(
-          `SELECT field_name, field_label, old_value, new_value, changed_by, timestamp
+          `SELECT field_name, field_label, old_value, new_value, changed_by, reason, timestamp
            FROM admin_audit_log WHERE order_id = $1 ORDER BY timestamp ASC`,
           [resolvedId]
         ),
@@ -552,12 +552,13 @@ router.get(
         const label = e.field_label || e.field_name;
         const oldVal = e.old_value === null ? 'null' : JSON.stringify(e.old_value);
         const newVal = e.new_value === null ? 'null' : JSON.stringify(e.new_value);
+        const reasonSuffix = e.reason ? ` — ${e.reason}` : '';
         events.push({
           timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : null,
           type: 'FIELD_CHANGE',
-          description: `"${label}" changed: ${oldVal} → ${newVal}`,
+          description: `"${label}" changed: ${oldVal} → ${newVal}${reasonSuffix}`,
           actor: e.changed_by ?? null,
-          metadata: { fieldName: e.field_name, oldValue: e.old_value, newValue: e.new_value },
+          metadata: { fieldName: e.field_name, oldValue: e.old_value, newValue: e.new_value, reason: e.reason ?? null },
         });
       }
 
@@ -1601,8 +1602,8 @@ router.post(
       // Write to admin_audit_log (picked up by flight recorder as FIELD_CHANGE)
       await pool.query(
         `INSERT INTO admin_audit_log
-           (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, ip_address, timestamp)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ADMIN_OVERRIDE', $8, NOW())`,
+           (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ADMIN_OVERRIDE', $8, $9, $10, NOW())`,
         [
           resolvedOrderId,
           columnName,
@@ -1611,7 +1612,9 @@ router.post(
           JSON.stringify(newValue === '' ? null : newValue),
           user.username,
           user.role ?? 'OWNER',
+          reason,
           req.ip ?? null,
+          req.headers['user-agent'] ?? null,
         ]
       );
 

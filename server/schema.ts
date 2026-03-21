@@ -1107,6 +1107,7 @@ export const adminAuditLog = pgTable(
     changeType: text('change_type').notNull(), // INLINE, SIDE_PANEL, BULK
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
+    reason: text('reason'),
     timestamp: timestamp('timestamp').defaultNow().notNull(),
   },
   (table) => ({

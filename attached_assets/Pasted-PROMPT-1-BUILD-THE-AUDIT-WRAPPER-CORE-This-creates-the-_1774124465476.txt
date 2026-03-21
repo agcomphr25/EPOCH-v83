@@ -1,0 +1,131 @@
+PROMPT 1 — BUILD THE AUDIT WRAPPER (CORE)
+
+This creates the reusable foundation.
+
+You are implementing a reusable audit wrapper for all `all_orders` mutations.
+
+GOAL:
+Create a centralized helper that:
+- Captures BEFORE values
+- Executes an UPDATE
+- Logs AFTER values
+- Writes to admin_audit_log
+
+DO NOT change any existing business logic.
+
+---
+
+CREATE FILE:
+
+server/src/services/orderAuditWrapper.ts
+
+---
+
+IMPLEMENT:
+
+export async function auditUpdateOrders({
+  db, // database client (pool)
+  orderIds,
+  changes, // { field: value }
+  source,  // string identifier of route
+  user,    // req.user
+  reason,  // optional string
+  ip,
+  userAgent
+}) {
+
+  if (!orderIds || orderIds.length === 0) {
+    throw new Error("orderIds required");
+  }
+
+  const fields = Object.keys(changes);
+
+  if (fields.length === 0) {
+    throw new Error("No changes provided");
+  }
+
+  // 1. Fetch BEFORE values
+  const beforeRes = await db.query(
+    `SELECT order_id, ${fields.join(", ")}
+     FROM all_orders
+     WHERE order_id = ANY($1::text[])`,
+    [orderIds]
+  );
+
+  const beforeMap = new Map();
+  beforeRes.rows.forEach(row => {
+    beforeMap.set(row.order_id, row);
+  });
+
+  // 2. Build UPDATE query dynamically
+  const setClauses = fields.map((f, i) => `${f} = $${i + 2}`);
+  const values = [orderIds, ...fields.map(f => changes[f])];
+
+  const updateQuery = `
+    UPDATE all_orders
+    SET ${setClauses.join(", ")},
+        updated_at = NOW()
+    WHERE order_id = ANY($1::text[])
+    RETURNING order_id, ${fields.join(", ")}
+  `;
+
+  const afterRes = await db.query(updateQuery, values);
+
+  // 3. Audit logging
+  const auditInserts = [];
+
+  for (const row of afterRes.rows) {
+    const before = beforeMap.get(row.order_id);
+
+    for (const field of fields) {
+      const oldValue = before?.[field] ?? null;
+      const newValue = row[field];
+
+      // Only log actual changes
+      if (oldValue === newValue) continue;
+
+      auditInserts.push({
+        order_id: row.order_id,
+        field_name: field,
+        old_value: oldValue,
+        new_value: newValue
+      });
+    }
+  }
+
+  // 4. Insert audit rows
+  for (const entry of auditInserts) {
+    await db.query(
+      `
+      INSERT INTO admin_audit_log (
+        order_id,
+        field_name,
+        old_value,
+        new_value,
+        changed_by,
+        user_role,
+        change_type,
+        reason,
+        ip_address,
+        user_agent,
+        timestamp
+      )
+      VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,$7,$8,$9,$10,NOW())
+      `,
+      [
+        entry.order_id,
+        entry.field_name,
+        JSON.stringify(entry.old_value),
+        JSON.stringify(entry.new_value),
+        user?.username || "SYSTEM",
+        user?.role || "SYSTEM",
+        source,
+        reason || null,
+        ip || null,
+        userAgent || null
+      ]
+    );
+  }
+
+  return afterRes.rows;
+}

@@ -2292,6 +2292,14 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2 changes tables migration:', p2ChangesErr?.message);
       }
 
+      // Ensure admin_audit_log has reason column (added for audit wrapper)
+      try {
+        await pool.query(`ALTER TABLE admin_audit_log ADD COLUMN IF NOT EXISTS reason TEXT`);
+        console.log('✅ Ensured admin_audit_log has reason column');
+      } catch (auditReasonErr: any) {
+        console.warn('⚠️ admin_audit_log reason column migration:', auditReasonErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

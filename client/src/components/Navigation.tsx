@@ -300,6 +300,12 @@ export default function Navigation() {
       icon: Ticket,
       description: 'Internal ticketing for complaints and issues',
     },
+    {
+      path: '/quick-notes',
+      label: 'QuickNotes',
+      icon: FileText,
+      description: 'Create, manage, and share reusable notes with teammates',
+    },
     // {
     //   path: '/bom-administration',
     //   label: 'BOM Administration',

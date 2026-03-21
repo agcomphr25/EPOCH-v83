@@ -13582,3 +13582,39 @@ export const permUserOverrides = pgTable('perm_user_overrides', {
 }, (table) => ({
   uniq: unique().on(table.userId, table.capabilityId),
 }));
+
+// ─── QuickNotes ───────────────────────────────────────────────────────────────
+export const quickNotes = pgTable('quick_notes', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  format: text('format').notNull().default('text'), // 'text' | 'spreadsheet'
+  tags: text('tags').array(),
+  createdByUserId: integer('created_by_user_id').notNull(),
+  createdByDisplayName: text('created_by_display_name').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertQuickNoteSchema = createInsertSchema(quickNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type QuickNote = typeof quickNotes.$inferSelect;
+export type InsertQuickNote = z.infer<typeof insertQuickNoteSchema>;
+
+export const quickNoteShares = pgTable('quick_note_shares', {
+  id: serial('id').primaryKey(),
+  noteId: integer('note_id').notNull().references(() => quickNotes.id, { onDelete: 'cascade' }),
+  sharedWithUserId: integer('shared_with_user_id').notNull(),
+  sharedWithDisplayName: text('shared_with_display_name').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertQuickNoteShareSchema = createInsertSchema(quickNoteShares).omit({
+  id: true,
+  createdAt: true,
+});
+export type QuickNoteShare = typeof quickNoteShares.$inferSelect;
+export type InsertQuickNoteShare = z.infer<typeof insertQuickNoteShareSchema>;

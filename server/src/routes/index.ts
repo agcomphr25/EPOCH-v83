@@ -159,6 +159,7 @@ import permissionsRoutes from './permissions';
 import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
 import financialReviewRoutes from './financialReview';
+import quickNotesRoutes from './quickNotes';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Temporary debug route - raw order data inspector
@@ -9392,6 +9393,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+  // QuickNotes routes - collaborative note-taking with sharing
+  app.use('/api/quick-notes', authenticateToken, quickNotesRoutes);
 
   // Return the pre-existing server if one was passed in (early-bind pattern),
   // otherwise create a new one (backward-compatible fallback).

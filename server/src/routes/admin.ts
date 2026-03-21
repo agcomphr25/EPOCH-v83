@@ -4,6 +4,7 @@ import { seedOrderReferenceTables } from '../../seeds/orderReferenceTables';
 import { pool } from '../../db';
 import { DEPARTMENTS } from '../constants/departments';
 import { getQueueIntegrityStatus } from '../services/queueIntegrityService';
+import { adminOverrideOrder } from '../services/orderAdminService';
 import { validatePipelineState } from '../services/pipelineValidationService';
 import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipelineRepairService';
 import { forecastActiveOrders, forecastOrder, simulateNewOrder } from '../services/productionForecastService';
@@ -1645,6 +1646,39 @@ router.post(
       });
     } catch (err: any) {
       console.error('[OrderOverride] Update error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// POST /api/admin/orders/override
+// Multi-field admin override via adminOverrideOrder service (any ADMIN role, not glennj-only).
+// Distinct from POST /order-override which is a single-field glennj-only UI path with audit_events write.
+router.post(
+  '/orders/override',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { orderId, changes, reason } = req.body;
+
+      if (!orderId || !changes) {
+        return res.status(400).json({ error: 'Missing orderId or changes' });
+      }
+
+      const result = await adminOverrideOrder({
+        db: pool,
+        orderId,
+        changes,
+        user: (req as any).user,
+        reason: reason || 'Admin override',
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] as string | undefined,
+      });
+
+      res.json({ success: true, updated: result });
+    } catch (err: any) {
+      console.error('[AdminOverride] Error:', err);
       res.status(500).json({ error: err.message });
     }
   }

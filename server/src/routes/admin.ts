@@ -548,8 +548,21 @@ router.get(
         });
       }
 
-      // ── 4. ADMIN AUDIT LOG (field edits) ─────────────────────────────────
+      // ── 4. ADMIN AUDIT LOG (field edits + order created) ─────────────────
       for (const e of adminLogRows) {
+        // ORDER_CREATED rows are written at INSERT time — render as a distinct
+        // event rather than a malformed FIELD_CHANGE ("null → <full order JSON>")
+        if (e.field_name === 'ORDER_CREATED') {
+          events.push({
+            timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : null,
+            type: 'ORDER_CREATED',
+            description: `Order created`,
+            actor: e.changed_by ?? null,
+            metadata: { reason: e.reason ?? null },
+          });
+          continue;
+        }
+
         const label = e.field_label || e.field_name;
         const oldVal = e.old_value === null ? 'null' : JSON.stringify(e.old_value);
         const newVal = e.new_value === null ? 'null' : JSON.stringify(e.new_value);

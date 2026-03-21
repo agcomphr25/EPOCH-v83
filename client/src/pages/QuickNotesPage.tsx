@@ -87,6 +87,88 @@ function parseGrid(content: string): string[][] {
   return EMPTY_GRID;
 }
 
+function colLetterToIndex(col: string): number {
+  let result = 0;
+  for (let i = 0; i < col.length; i++) result = result * 26 + (col.toUpperCase().charCodeAt(i) - 64);
+  return result - 1;
+}
+
+function getCellNumeric(ref: string, grid: string[][], depth: number): number {
+  const m = ref.match(/^([A-Za-z]+)(\d+)$/);
+  if (!m) return 0;
+  const col = colLetterToIndex(m[1]);
+  const row = parseInt(m[2]) - 1;
+  if (row < 0 || row >= grid.length || col < 0 || col >= (grid[0]?.length ?? 0)) return 0;
+  const val = grid[row][col];
+  if (!val) return 0;
+  if (val.startsWith('=')) return parseFloat(evaluateFormula(val, grid, depth + 1)) || 0;
+  return parseFloat(val) || 0;
+}
+
+function getRangeNums(from: string, to: string, grid: string[][], depth: number): number[] {
+  const fm = from.match(/^([A-Za-z]+)(\d+)$/);
+  const tm = to.match(/^([A-Za-z]+)(\d+)$/);
+  if (!fm || !tm) return [];
+  const r1 = parseInt(fm[2]) - 1, r2 = parseInt(tm[2]) - 1;
+  const c1 = colLetterToIndex(fm[1]), c2 = colLetterToIndex(tm[1]);
+  const nums: number[] = [];
+  for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) {
+    for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
+      if (r >= 0 && r < grid.length && c >= 0 && c < (grid[0]?.length ?? 0)) {
+        const v = grid[r][c];
+        if (!v) continue;
+        const n = v.startsWith('=') ? parseFloat(evaluateFormula(v, grid, depth + 1)) || 0 : parseFloat(v);
+        if (!isNaN(n)) nums.push(n);
+      }
+    }
+  }
+  return nums;
+}
+
+function evaluateFormula(formula: string, grid: string[][], depth = 0): string {
+  if (depth > 10) return '#CIRCULAR!';
+  if (!formula.startsWith('=')) return formula;
+  try {
+    let expr = formula.slice(1).trim();
+
+    expr = expr.replace(/([A-Za-z]+)\s*\(([^)]*)\)/g, (_, fnName, argsStr) => {
+      const fn = fnName.toUpperCase();
+      const nums: number[] = [];
+      for (const arg of argsStr.split(',').map((a: string) => a.trim())) {
+        if (!arg) continue;
+        const rng = arg.match(/^([A-Za-z]+\d+)\s*:\s*([A-Za-z]+\d+)$/);
+        if (rng) { nums.push(...getRangeNums(rng[1], rng[2], grid, depth)); continue; }
+        const cel = arg.match(/^([A-Za-z]+\d+)$/);
+        if (cel) { nums.push(getCellNumeric(arg, grid, depth)); continue; }
+        const n = parseFloat(arg);
+        if (!isNaN(n)) nums.push(n);
+      }
+      switch (fn) {
+        case 'SUM':     return String(nums.reduce((a, b) => a + b, 0));
+        case 'AVERAGE': return nums.length ? String(nums.reduce((a, b) => a + b, 0) / nums.length) : '0';
+        case 'MIN':     return nums.length ? String(Math.min(...nums)) : '0';
+        case 'MAX':     return nums.length ? String(Math.max(...nums)) : '0';
+        case 'COUNT':   return String(nums.length);
+        case 'ROUND':   return nums.length >= 2 ? String(Math.round(nums[0] * 10 ** nums[1]) / 10 ** nums[1]) : String(Math.round(nums[0] ?? 0));
+        case 'ABS':     return String(Math.abs(nums[0] ?? 0));
+        case 'SQRT':    return String(Math.sqrt(nums[0] ?? 0));
+        default:        return '#NAME?';
+      }
+    });
+
+    expr = expr.replace(/\b([A-Za-z]+\d+)\b/g, (ref) => String(getCellNumeric(ref, grid, depth)));
+
+    if (!/^[0-9+\-*/().%\s]+$/.test(expr)) return '#ERROR!';
+    // eslint-disable-next-line no-new-func
+    const result = Function(`"use strict"; return (${expr})`)() as number;
+    if (!isFinite(result)) return '#DIV/0!';
+    if (isNaN(result)) return '#ERROR!';
+    return Number.isInteger(result) ? String(result) : String(parseFloat(result.toFixed(10)));
+  } catch {
+    return '#ERROR!';
+  }
+}
+
 function SpreadsheetEditor({
   content,
   onChange,
@@ -97,6 +179,7 @@ function SpreadsheetEditor({
   const grid = parseGrid(content);
   const rows = Math.max(grid.length, 10);
   const cols = Math.max(grid[0]?.length ?? 0, 5);
+  const [focusedCell, setFocusedCell] = useState<{ r: number; c: number } | null>(null);
 
   const fullGrid: string[][] = Array.from({ length: rows }, (_, r) =>
     Array.from({ length: cols }, (_, c) => grid[r]?.[c] ?? '')
@@ -120,13 +203,16 @@ function SpreadsheetEditor({
 
   return (
     <div className="overflow-auto border rounded">
-      <div className="flex gap-1 p-1 border-b bg-gray-50">
+      <div className="flex items-center gap-1 p-1 border-b bg-gray-50">
         <Button size="sm" variant="ghost" onClick={addRow} className="text-xs h-6">
           + Row
         </Button>
         <Button size="sm" variant="ghost" onClick={addCol} className="text-xs h-6">
           + Col
         </Button>
+        <span className="text-xs text-gray-400 ml-2">
+          Formulas: =SUM(A1:A5) · =A1+B2 · =AVERAGE · =MIN · =MAX · =ROUND · =ABS · =SQRT
+        </span>
       </div>
       <table className="border-collapse min-w-full">
         <tbody>
@@ -135,15 +221,27 @@ function SpreadsheetEditor({
               <td className="text-xs text-gray-400 px-1 border-r bg-gray-50 select-none w-6 text-center">
                 {r + 1}
               </td>
-              {row.map((cell, c) => (
-                <td key={c} className="p-0 border border-gray-200">
-                  <input
-                    className="w-full min-w-[80px] px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={cell}
-                    onChange={(e) => handleCell(r, c, e.target.value)}
-                  />
-                </td>
-              ))}
+              {row.map((cell, c) => {
+                const isFocused = focusedCell?.r === r && focusedCell?.c === c;
+                const isFormula = cell.startsWith('=');
+                const evaluated = isFormula && !isFocused ? evaluateFormula(cell, fullGrid) : cell;
+                const isError = isFormula && !isFocused && evaluated.startsWith('#');
+                return (
+                  <td key={c} className="p-0 border border-gray-200">
+                    <input
+                      className={cn(
+                        'w-full min-w-[80px] px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400',
+                        isFormula && !isFocused && !isError && 'text-blue-700 bg-blue-50/30',
+                        isError && 'text-red-500'
+                      )}
+                      value={evaluated}
+                      onChange={(e) => handleCell(r, c, e.target.value)}
+                      onFocus={() => setFocusedCell({ r, c })}
+                      onBlur={() => setFocusedCell(null)}
+                    />
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -154,7 +252,6 @@ function SpreadsheetEditor({
 
 function SpreadsheetViewer({ content }: { content: string }) {
   const grid = parseGrid(content);
-  const cols = grid[0]?.length ?? 0;
   if (grid.every((r) => r.every((c) => !c))) {
     return <p className="text-gray-400 italic text-sm">Empty spreadsheet</p>;
   }
@@ -167,11 +264,23 @@ function SpreadsheetViewer({ content }: { content: string }) {
               <td className="text-xs text-gray-400 px-1 border-r bg-gray-50 select-none w-6 text-center">
                 {r + 1}
               </td>
-              {row.map((cell, c) => (
-                <td key={c} className="px-2 py-1 text-sm border border-gray-200 whitespace-pre-wrap">
-                  {cell}
-                </td>
-              ))}
+              {row.map((cell, c) => {
+                const isFormula = cell.startsWith('=');
+                const display = isFormula ? evaluateFormula(cell, grid) : cell;
+                const isError = isFormula && display.startsWith('#');
+                return (
+                  <td
+                    key={c}
+                    className={cn(
+                      'px-2 py-1 text-sm border border-gray-200 whitespace-pre-wrap',
+                      isFormula && !isError && 'text-blue-700',
+                      isError && 'text-red-500'
+                    )}
+                  >
+                    {display}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

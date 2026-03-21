@@ -1,0 +1,174 @@
+COPY-PASTE AUDIT PROMPT (FOR REPLIT AGENT)
+You are performing a READ-ONLY architectural audit of the EPOCH codebase.
+
+GOAL:
+We want to implement a highly controlled "All Orders Admin Override UI" that allows authorized users to update ANY column in the `all_orders` table for a given order ID.
+
+This audit MUST identify the safest and most correct way to implement this WITHOUT breaking:
+- Business logic
+- Data integrity
+- Audit/compliance requirements (DCAA, SOC2 readiness)
+- Existing services that depend on `all_orders`
+
+---
+
+STEP 1 — LOCATE ALL TOUCHPOINTS OF `all_orders`
+
+Search entire repo for:
+- "all_orders"
+- any ORM mappings (Drizzle schema, SQL definitions)
+- API routes that read/write orders
+- services that mutate order data
+
+Return:
+- File paths
+- Line numbers
+- Purpose of each usage (read, write, transform, derived)
+
+---
+
+STEP 2 — IDENTIFY WRITE PATHS (CRITICAL)
+
+Find ALL places where `all_orders` is UPDATED:
+
+Look for:
+- UPDATE queries
+- ORM `.update()` calls
+- order mutation services
+
+For EACH:
+Return:
+- File + function name
+- What fields are allowed to change
+- Validation logic applied
+- Whether logic is centralized or scattered
+
+---
+
+STEP 3 — TRACE BUSINESS LOGIC LAYERS
+
+Determine if order updates are:
+
+A) Direct DB writes
+B) Routed through service layer (preferred)
+C) Mixed / inconsistent
+
+Map:
+UI → API route → service → DB
+
+Highlight:
+- Any required transformations
+- Derived fields
+- Side effects (inventory, pricing, status, etc.)
+
+---
+
+STEP 4 — VALIDATION + GUARDRAILS
+
+Identify:
+- Zod schemas / validators
+- Required fields
+- Enum constraints (status, type, etc.)
+- Any computed fields that should NOT be manually edited
+
+List:
+- SAFE fields (can be edited freely)
+- RESTRICTED fields (require logic)
+- DANGEROUS fields (should never be manually edited)
+
+---
+
+STEP 5 — PERMISSIONS SYSTEM
+
+Find:
+- Role-based access control (RBAC)
+- Capability checks
+- Middleware for auth
+
+Answer:
+- How can we restrict this UI to Admin/Owner only?
+- Is there an existing "super admin" concept?
+
+---
+
+STEP 6 — AUDIT LOGGING (CRITICAL FOR DCAA)
+
+Search for:
+- audit logs
+- change history tables
+- "created_at / updated_at / updated_by"
+- any existing logging middleware
+
+Determine:
+- Do updates to `all_orders` currently get logged?
+- Is there a BEFORE/AFTER snapshot anywhere?
+
+---
+
+STEP 7 — UI PATTERNS
+
+Locate:
+- Existing admin panels
+- Editable forms for orders
+- Table/grid editing components
+
+Return:
+- Reusable components we can leverage
+- Patterns for form handling and submission
+
+---
+
+STEP 8 — RISKS OF DIRECT EDITING
+
+Explicitly identify risks of allowing arbitrary updates:
+- Breaking derived fields
+- Invalid enum values
+- Desync with related tables (POs, production_orders, etc.)
+- Pricing inconsistencies
+- Status corruption
+
+---
+
+STEP 9 — RECOMMENDED ARCHITECTURE
+
+Based on findings, propose:
+
+1. Backend:
+   - New endpoint (e.g. `/admin/orders/:id/override`)
+   - Whether to bypass or reuse service layer
+   - How to enforce validation + logging
+
+2. Frontend:
+   - Type of UI (form vs JSON editor vs field grid)
+   - How to dynamically render columns
+
+3. Safety Controls:
+   - Required confirmation step
+   - Field-level warnings
+   - Change diff preview (before vs after)
+
+4. Audit:
+   - Mandatory audit log entry:
+     - user_id
+     - timestamp
+     - field changes (diff)
+     - reason for override
+
+---
+
+STEP 10 — OUTPUT FORMAT
+
+Provide a structured report:
+
+1. `all_orders` schema summary
+2. All write paths (table format)
+3. Current validation + permission model
+4. Audit logging status
+5. Identified risks
+6. Recommended implementation plan
+7. Exact insertion points in code (files + functions)
+
+IMPORTANT:
+DO NOT modify any files.
+DO NOT write implementation code yet.
+This is an audit-only task.

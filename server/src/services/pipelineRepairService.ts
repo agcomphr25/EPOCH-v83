@@ -40,22 +40,6 @@ async function loadOrderById(orderId: string) {
   return rows[0] || null;
 }
 
-async function logRepairAudit(
-  orderId: string,
-  oldDepartment: string,
-  newDepartment: string
-): Promise<void> {
-  try {
-    await pool.query(
-      `INSERT INTO admin_audit_log (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, timestamp)
-       VALUES ($1, 'current_department', 'Current Department', $2, $3, 'PIPELINE_AUTO_REPAIR', 'SYSTEM', 'PIPELINE_AUTO_REPAIR', NOW())`,
-      [orderId, oldDepartment, newDepartment]
-    );
-  } catch (err) {
-    console.error(`[PipelineRepair] Failed to log audit for order ${orderId}:`, err);
-  }
-}
-
 function classifyError(order: any, derivedStage: string): ErrorType | null {
   const currentDept = order.current_department || '';
   if (currentDept === derivedStage) return null;

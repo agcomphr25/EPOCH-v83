@@ -222,7 +222,6 @@ import AdminChecklistManagementPage from './pages/AdminChecklistManagementPage';
 import RolesPermissionsPage from './pages/admin/RolesPermissionsPage';
 import OrderLookupPage from './pages/admin/OrderLookupPage';
 import OrderOverridePage from './pages/admin/OrderOverridePage';
-import AdminOrderEdit from './pages/AdminOrderEdit';
 import WidgetCatalogPage from './pages/admin/WidgetCatalogPage';
 import ProductionForecastPage from './pages/ProductionForecastPage';
 import ForecastSettings from './pages/ForecastSettings';
@@ -469,7 +468,6 @@ function App() {
                   <Route path="/admin/roles-permissions" component={RolesPermissionsPage} />
                   <Route path="/admin/order-lookup" component={OrderLookupPage} />
                   <Route path="/admin/order-override" component={OrderOverridePage} />
-                  <Route path="/admin/order-edit" component={AdminOrderEdit} />
                   <Route path="/admin/widget-catalog" component={WidgetCatalogPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
                   <Route path="/admin/monitored-links" component={MonitoredLinksManager} />

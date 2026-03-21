@@ -324,6 +324,32 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
           ]);
           const allOrdersId = allOrderResult[0]?.id;
 
+          await pool.query(
+            `INSERT INTO admin_audit_log
+               (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+            [
+              orderId,
+              'ORDER_CREATED',
+              'Order Created',
+              JSON.stringify(null),
+              JSON.stringify({
+                order_id: orderId,
+                current_department: 'P1 Production Queue',
+                status: 'IN_PROGRESS',
+                order_source: 'PO_RELEASE',
+                source_po_id: item.po_id,
+                source_po_item_id: poItemId,
+              }),
+              (req as any).user?.username || 'SYSTEM',
+              (req as any).user?.role || 'SYSTEM',
+              'ORDER_CREATE',
+              `Order created from PO release: PO #${item.po_number}`,
+              req.ip ?? null,
+              req.headers['user-agent'] ?? null,
+            ]
+          );
+
           // Also create a production_orders record for queue visibility
           const insertProductionOrderQuery = `
             INSERT INTO production_orders (

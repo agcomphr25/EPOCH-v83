@@ -43,7 +43,30 @@ async function migrateAllOrders() {
           `INSERT INTO all_orders (${columnNames}) VALUES (${placeholders})`,
           values
         );
-        
+
+        try {
+          await devClient.query(
+            `INSERT INTO admin_audit_log
+               (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+            [
+              order.order_id ?? null,
+              'ORDER_CREATED',
+              'Order Created',
+              JSON.stringify(null),
+              JSON.stringify({ order_id: order.order_id }),
+              'SYSTEM',
+              'SYSTEM',
+              'ORDER_CREATE',
+              'Order imported via migration script',
+              null,
+              null,
+            ]
+          );
+        } catch {
+          // audit log is non-fatal for migration runs
+        }
+
         if ((i + 1) % 100 === 0) {
           console.log(`  ✓ Imported ${i + 1}/${orders.length} orders...`);
         }

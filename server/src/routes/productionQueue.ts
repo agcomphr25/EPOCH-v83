@@ -716,6 +716,24 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
         console.log(
           `✅ Created order ${orderId} for PO item ${poItem.itemName} (unit ${i}/${poItem.quantity})`
         );
+        await pool.query(
+          `INSERT INTO admin_audit_log
+             (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+          [
+            orders[0].order_id,
+            'ORDER_CREATED',
+            'Order Created',
+            JSON.stringify(null),
+            JSON.stringify(orders[0]),
+            (req as any).user?.username || 'SYSTEM',
+            (req as any).user?.role || 'SYSTEM',
+            'ORDER_CREATE',
+            `Order created from PO item: ${poItem.itemName}`,
+            req.ip ?? null,
+            req.headers['user-agent'] ?? null,
+          ]
+        );
       }
     }
 
@@ -870,6 +888,24 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
           createdOrders.push(orderWithMeta);
           console.log(
             `✅ Created order ${orderId} for PO item ${poItem.itemname} (week ${weekNumber}, unit ${i}/${unitsThisWeek})`
+          );
+          await pool.query(
+            `INSERT INTO admin_audit_log
+               (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+            [
+              orders[0].order_id,
+              'ORDER_CREATED',
+              'Order Created',
+              JSON.stringify(null),
+              JSON.stringify(orders[0]),
+              (req as any).user?.username || 'SYSTEM',
+              (req as any).user?.role || 'SYSTEM',
+              'ORDER_CREATE',
+              `Order created from PO item: ${poItem.itemname} (week ${weekNumber})`,
+              req.ip ?? null,
+              req.headers['user-agent'] ?? null,
+            ]
           );
         }
       }
@@ -1057,6 +1093,25 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
 
           console.log(
             `✅ Created order ${orderId} for PO item ${item.itemname} (${i}/${quantity})`
+          );
+
+          await pool.query(
+            `INSERT INTO admin_audit_log
+               (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+            [
+              orderId,
+              'ORDER_CREATED',
+              'Order Created',
+              JSON.stringify(null),
+              JSON.stringify(orderResult[0] || { order_id: orderId, item: item.itemname }),
+              (req as any).user?.username || 'SYSTEM',
+              (req as any).user?.role || 'SYSTEM',
+              'ORDER_CREATE',
+              `Order created from PO item: ${item.itemname}`,
+              req.ip ?? null,
+              req.headers['user-agent'] ?? null,
+            ]
           );
         } catch (orderError) {
           console.error(

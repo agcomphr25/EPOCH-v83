@@ -3,6 +3,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { pool, db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { createShipment, ShipTo } from '../utils/upsShipping';
+import { auditUpdateOrders } from '../services/orderAuditWrapper';
 
 const router = Router();
 
@@ -1243,13 +1244,19 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
     }
 
     // Also update all_orders if they exist there
-    await pool.query(`
-      UPDATE all_orders 
-      SET current_department = 'Shipping QC',
-          status = 'IN_PROGRESS',
-          updated_at = NOW()
-      WHERE order_id = ANY($1::text[])
-    `, [orderIds]);
+    await auditUpdateOrders({
+      db: pool,
+      orderIds,
+      changes: {
+        current_department: 'Shipping QC',
+        status: 'IN_PROGRESS',
+      },
+      source: 'RETURN_TO_QC',
+      user: (req as any).user,
+      reason: (req as any).body?.reason || 'Return to QC',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] as string | null,
+    });
 
     // Delete shipment_items so they don't appear in OEM Shipments anymore
     const deleteItemsResult = await pool.query(`

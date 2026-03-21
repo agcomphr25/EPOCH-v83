@@ -3,6 +3,7 @@ import { pool } from '../../db';
 import { storage } from '../../storage';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { computeEffectivePriority, getEffectivePriorityScore, compareOrderPriority } from '../../../shared/utils/computeEffectivePriority';
+import { auditUpdateOrders } from '../services/orderAuditWrapper';
 
 function logDuplicatePrevention(event: string, details: Record<string, any>) {
   console.log(JSON.stringify({
@@ -201,15 +202,18 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
 
       try {
         // Update order department and add priority metadata
-        const updateQuery = `
-          UPDATE all_orders 
-          SET 
-            current_department = 'P1 Production Queue',
-            updated_at = NOW()
-          WHERE order_id = $1
-        `;
-
-        await pool.query(updateQuery, [order.orderId]);
+        await auditUpdateOrders({
+          db: pool,
+          orderIds: [order.orderId],
+          changes: {
+            current_department: 'P1 Production Queue',
+          },
+          source: 'AUTO_POPULATE',
+          user: (req as any).user,
+          reason: 'Auto populate production queue',
+          ip: req.ip,
+          userAgent: req.headers['user-agent'] as string | null,
+        });
         updatedOrders.push({
           orderId: order.orderId,
           priorityScore: order.priorityScore,

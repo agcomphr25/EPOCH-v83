@@ -156,6 +156,8 @@ function buildCodebaseContext(prompt: string): string {
 
 export function registerCodebaseChatRoutes(app: Express): void {
   app.post("/api/codebase-chat", async (req: Request, res: Response) => {
+    return res.status(404).json({ error: "Not found" });
+    // eslint-disable-next-line no-unreachable
     try {
       const { message, history, codebaseContext } = req.body as {
         message: string;

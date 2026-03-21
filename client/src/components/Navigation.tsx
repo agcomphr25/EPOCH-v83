@@ -422,12 +422,6 @@ export default function Navigation() {
       icon: PackageCheck,
       description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
     },
-    {
-      path: '/codebase-chat',
-      label: 'Codebase Chat',
-      icon: MessageSquare,
-      description: 'Chat with ChatGPT using the actual codebase as context for debugging and feature questions',
-    },
   ];
 
   const orderManagementItems = [

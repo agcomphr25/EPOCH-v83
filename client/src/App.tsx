@@ -262,6 +262,7 @@ import UrgentOrdersReport from './pages/UrgentOrdersReport';
 import OTDReport from './pages/OTDReport';
 import OrderHeatMap from './pages/OrderHeatMap';
 import QuickNotesPage from './pages/QuickNotesPage';
+import CodebaseChatPage from './pages/CodebaseChatPage';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -1050,6 +1051,9 @@ function App() {
                     path="/fill-and-sign/:publicSignatureId"
                     component={FillAndSignPage}
                   />
+
+                  {/* Codebase Chat - AI chat grounded in actual codebase */}
+                  <Route path="/codebase-chat" component={CodebaseChatPage} />
 
                     {/* Catch-all route for 404 */}
                     <Route component={NotFound} />

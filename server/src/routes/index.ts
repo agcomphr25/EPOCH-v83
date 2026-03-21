@@ -135,6 +135,7 @@ import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
+import { registerCodebaseChatRoutes } from '../../replit_integrations/chat/codebase-chat-routes';
 import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
@@ -452,6 +453,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);
+
+  // Codebase chat routes - AI chat with codebase context
+  registerCodebaseChatRoutes(app);
 
   // Process Runner integration routes - external timer app events
   registerProcessRunnerRoutes(app);

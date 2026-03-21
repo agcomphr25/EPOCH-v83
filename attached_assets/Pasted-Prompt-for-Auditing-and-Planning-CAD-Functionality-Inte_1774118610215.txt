@@ -1,0 +1,51 @@
+Prompt for Auditing and Planning CAD Functionality Integration:**
+
+---
+> ### TASK CONTEXT
+>
+> I want to add a **CAD Drawing functionality** to my EPOCH application. I need to support the following:
+>
+> 1. **Allow uploading of CAD files** (such as `.dwg`, `.dxf`, `.step`, `.stl`, etc.) attached to a customer order, and store these files securely.
+> 2. **Read/parse CAD files** in the backend when needed. This is for:
+>     - Being able to display a list of attached drawings to an order in the UI,
+>     - Optionally, **breaking down uploaded CAD files into parts** so I can match/add them to my inventory items list.
+> 3. I want to know the **best integration points** for these features in the current code structure.
+>
+> ---
+>
+> ### AUDIT / RESEARCH PROMPT
+>
+> **Step 1: Find where the app currently handles file uploads**, especially “order attachments”, PDFs, images, or any customer-uploaded files. Please make a table of all routes/functions related to file upload, the storage logic (local/file system, S3, etc.), and which entities they're attached to (orders, customers, etc.).
+>
+> **Step 2: Identify how uploaded files are linked to an order or customer.** Is there a DB table or a files array on orders? List any models/tables/fields for this.
+>
+> **Step 3: Review the structure of the backend API for order processing.**
+> - Where are orders created, updated, and viewed?
+> - Where would extending/addition of “cadFiles” upload field make sense? (e.g., new API endpoint, extension of an existing one)
+> - Are there any existing “order attachments” you can re-use?
+>
+> **Step 4: Suggest a good place and pattern to add CAD file upload functionality.**
+> - Should this be a field on the order, its own DB table, or something else?
+> - Should it be a separate upload endpoint, or added to an existing one?
+> - How can I ensure all security and validation requirements for CAD files (extensions, size, virus scan)?
+> - How would you store the link between CAD files and inventory items (if detected)?
+>
+> **Step 5 (Stretch): For breaking CADs into parts, what would a typical backend pipeline look like?**
+> - Where should CAD parsing/inventory matching code go?
+> - How would you trigger part extraction? (on upload, on demand, via a queue/task?)
+> - What libraries/tools would you recommend for .dwg/.dxf/.step parsing in a Node.js/TypeScript backend?
+>
+>
+> Please reference actual code structure (routes, controllers, DB, etc.), and suggest how to cleanly integrate this feature in the EPOCH codebase. Include any key types/interfaces/DB-migrations that you’d expect to add.
+
+--- 
+
+**You can paste this prompt into ChatGPT (with Codebase access), GitHub Copilot Chat, or another advanced code analysis system for in-depth answers tailored to your actual project.**
+
+---
+
+If you want a human-style *short take*:  
+- **Uploads:** Look for existing file upload endpoints (e.g., `/api/orders/:id/upload`), see how PDFs are managed (like in `/uploads/followup-orders`).
+- **Storage:** See if there’s an “attachments” table or property; you’ll want to add a new “cadFiles” field (list of filenames + meta).
+- **Parsing:** Suggest a job queue that processes files via a Node.js CAD parsing library, and on successful part detection, links them to the inventory.
+- **Security:** Enforce extension/size/type checks, maybe use a virus scanning middleware.

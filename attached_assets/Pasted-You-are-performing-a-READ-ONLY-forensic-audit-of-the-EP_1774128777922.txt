@@ -1,0 +1,256 @@
+You are performing a READ-ONLY forensic audit of the EPOCH codebase.
+
+GOAL:
+I previously applied multiple prompts related to:
+1. order audit wrapper
+2. admin override service
+3. admin override API route
+4. admin order edit UI
+5. I may also have manually added or modified my own edit UI
+
+I need a COMPLETE picture of the current implementation state so we can safely clean it up, consolidate it, and move forward.
+
+IMPORTANT:
+- READ ONLY
+- DO NOT modify files
+- DO NOT propose implementation yet
+- DO NOT assume prompts were applied correctly
+- VERIFY actual code state from the repo
+
+-----------------------------------
+STEP 1 — FIND ALL RELATED FILES / TOUCHPOINTS
+-----------------------------------
+
+Search for all of the following:
+
+- orderAuditWrapper
+- auditUpdateOrders
+- orderAdminService
+- adminOverrideOrder
+- order-override
+- AdminOrderEdit
+- order edit
+- admin order
+- override
+- admin_audit_log
+- ORDER_CREATED
+- ADMIN_OVERRIDE
+- LAYUP_SAVE
+- AUTO_POPULATE
+- RETURN_TO_QC
+- SYNC_VERIFICATION
+- PIPELINE_AUTO_REPAIR
+- FORECAST_STAMP
+- FORECAST_COMPLETION
+- BOOT_MIGRATION
+
+Return:
+- file path
+- line numbers
+- what each match appears to do
+
+-----------------------------------
+STEP 2 — AUDIT WRAPPER STATUS
+-----------------------------------
+
+Inspect the actual implementation of the audit wrapper.
+
+Answer:
+1. Does orderAuditWrapper.ts exist?
+2. What is the exact exported function signature?
+3. Does it:
+   - fetch BEFORE values?
+   - perform UPDATE?
+   - compare BEFORE vs AFTER?
+   - skip no-op field changes?
+   - write to admin_audit_log?
+4. Which admin_audit_log columns does it write?
+5. Does it include:
+   - field_label
+   - reason
+   - changed_by
+   - user_role
+   - ip_address
+   - user_agent
+6. Does it work with both pool and transaction client?
+7. Any obvious bugs or mismatches with actual DB usage?
+
+Output the exact file path and a concise code summary.
+
+-----------------------------------
+STEP 3 — ALL ROUTES / SERVICES USING THE WRAPPER
+-----------------------------------
+
+Find every place where auditUpdateOrders is actually called.
+
+For each call site, return:
+- file
+- function / route
+- line numbers
+- source tag used
+- fields being changed
+- whether it passes req.user / system actor
+- whether it passes reason
+- whether it passes pool vs transaction client
+- whether any special guard / prefilter logic exists before wrapper call
+
+Output in a table.
+
+-----------------------------------
+STEP 4 — REMAINING RAW all_orders MUTATIONS
+-----------------------------------
+
+Search again for ALL remaining raw SQL touching all_orders:
+
+- UPDATE all_orders
+- INSERT INTO all_orders
+- DELETE FROM all_orders
+
+Classify each result as:
+- wrapped by audit system
+- intentionally skipped
+- still unaudited
+- non-production / script-only
+- false positive
+
+For EACH remaining raw mutation, explain:
+- why it remains
+- whether that is acceptable
+- whether it creates an audit gap
+
+-----------------------------------
+STEP 5 — ADMIN OVERRIDE BACKEND STATUS
+-----------------------------------
+
+Inspect the actual admin override backend implementation.
+
+Answer:
+1. Does orderAdminService.ts exist?
+2. Does adminOverrideOrder() exist?
+3. What fields are currently allowed?
+4. Does it use auditUpdateOrders internally?
+5. Does the API route exist?
+6. What is the exact route path?
+7. What middleware protects it?
+8. Does it validate:
+   - orderId
+   - changes
+   - reason
+9. Does it return updated rows?
+10. Are there duplicate override routes or competing implementations?
+
+-----------------------------------
+STEP 6 — ADMIN ORDER EDIT UI STATUS
+-----------------------------------
+
+Search for every frontend page / component related to admin order editing or override.
+
+Look for:
+- AdminOrderEdit
+- order override UI
+- admin edit pages
+- any custom page I may have added manually
+
+For each matching frontend file, return:
+- file path
+- component name
+- route path if wired
+- what fields it allows editing
+- whether it posts to /api/admin/order-override or another endpoint
+- whether it requires reason
+- whether it looks production-ready, partial, duplicate, or abandoned
+
+IMPORTANT:
+If there are MULTIPLE competing UIs, identify all of them clearly.
+
+-----------------------------------
+STEP 7 — ROUTING / NAVIGATION STATUS
+-----------------------------------
+
+Determine:
+1. Is the admin edit UI actually routed in the frontend?
+2. Is it linked anywhere in Navigation / admin tools?
+3. Are there duplicate routes pointing to different admin edit components?
+4. Is there dead UI code not reachable from the app?
+
+-----------------------------------
+STEP 8 — AUDIT LOG + FLIGHT RECORDER INTEGRATION
+-----------------------------------
+
+Inspect how admin_audit_log is currently consumed.
+
+Answer:
+1. Does the flight recorder read the new audit rows?
+2. Does it show:
+   - reason
+   - field changes
+   - order created events
+3. Are ORDER_CREATED and ADMIN_OVERRIDE visible in the timeline?
+4. Are there any mismatches between what the wrapper writes and what the flight recorder expects?
+
+-----------------------------------
+STEP 9 — DUPLICATION / CONFLICT / DRIFT CHECK
+-----------------------------------
+
+Identify any of the following:
+- duplicate admin edit pages
+- duplicate API routes
+- old manual audit logic still coexisting with wrapper-based logic
+- wrapper calls plus legacy manual audit inserts causing double-logging
+- fields allowed in UI but blocked by backend
+- backend allows fields that UI does not expose
+- prompts partially applied / inconsistent state
+
+-----------------------------------
+STEP 10 — OUTPUT FORMAT
+-----------------------------------
+
+Return a structured report with these sections:
+
+1. Executive Summary
+   - current state in plain English
+   - what is working
+   - what is duplicated
+   - what is incomplete
+   - biggest risks
+
+2. Audit Wrapper Status
+   - exists?
+   - where used?
+   - any gaps?
+
+3. all_orders Mutation Coverage
+   - wrapped
+   - still raw
+   - intentionally skipped
+   - scripts
+
+4. Admin Override Backend Status
+   - service
+   - route
+   - allowed fields
+   - protections
+
+5. Admin Order Edit UI Status
+   - all pages/components found
+   - which one is likely canonical
+   - duplicates / dead code
+
+6. Navigation / Route Wiring
+   - reachable vs unreachable UI
+
+7. Audit Log / Flight Recorder Integration
+   - working or mismatched
+
+8. Cleanup Targets
+   - exact files / components / routes that appear redundant, conflicting, or unfinished
+
+9. Recommended Next Build Order
+   - NOT implementation code
+   - just the safest sequence of what should be cleaned up first
+
+IMPORTANT:
+This is an audit only.
+Do not modify code.
+Do not write new implementation.
+Verify everything from actual code, not assumptions.

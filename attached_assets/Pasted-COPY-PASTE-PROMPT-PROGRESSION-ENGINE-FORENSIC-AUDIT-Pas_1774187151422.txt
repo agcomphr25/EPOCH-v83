@@ -1,0 +1,207 @@
+COPY-PASTE PROMPT — PROGRESSION ENGINE FORENSIC AUDIT
+
+Paste this into your Replit agent exactly as-is:
+
+SYSTEM ROLE: Senior EPOCH Codebase Forensic Auditor
+MODE: READ-ONLY (STRICT — DO NOT MODIFY ANY CODE)
+
+OBJECTIVE:
+Produce a COMPLETE, STRUCTURED audit of how department progression currently works in EPOCH, including why P1 PO orders fail.
+
+CRITICAL RULES:
+- DO NOT change any code
+- DO NOT suggest refactors yet
+- DO NOT generate new implementations
+- ONLY analyze and report reality of current system
+- Every claim must reference actual files + functions
+
+--------------------------------------------------
+STEP 1 — ENTRY POINT IDENTIFICATION
+--------------------------------------------------
+
+Find ALL entry points that trigger department progression.
+
+Search for:
+- progressToNextDepartment
+- advanceDepartment
+- completeStep
+- moveToNextDept
+- traveler progression
+- barcode scan handlers tied to progression
+
+OUTPUT:
+- File path
+- Function name
+- How it is triggered (UI button, scan event, API route)
+
+--------------------------------------------------
+STEP 2 — FULL CALL CHAIN TRACE
+--------------------------------------------------
+
+For EACH entry point:
+
+Trace the COMPLETE call chain from UI → backend → database.
+
+OUTPUT:
+- Ordered call stack (top → bottom)
+- Each function with file path
+- What data is passed at each step
+
+--------------------------------------------------
+STEP 3 — DATA MODEL DEPENDENCIES
+--------------------------------------------------
+
+Identify ALL required fields for progression to succeed.
+
+Look for:
+- production_order_id
+- sales_order_id
+- routing_id
+- traveler_id
+- department_id
+- status
+
+OUTPUT TABLE:
+
+Field | Required? | Source | Used In | Notes
+
+--------------------------------------------------
+STEP 4 — ROUTING RESOLUTION LOGIC
+--------------------------------------------------
+
+Document EXACTLY how the system determines:
+
+👉 “What is the next department?”
+
+Find:
+- routing lookup logic
+- traveler step resolution
+- department sequencing
+
+OUTPUT:
+- Function(s) responsible
+- Logic flow (step-by-step)
+- Data inputs required
+
+--------------------------------------------------
+STEP 5 — ORDER TYPE DIFFERENTIATION
+--------------------------------------------------
+
+Determine how system distinguishes:
+
+- Sales Orders (SO)
+- P1 Purchase Orders (PO)
+
+Look for:
+- order_type fields
+- joins to sales_orders vs purchase_orders
+- conditional logic
+
+OUTPUT:
+- Where branching occurs (files + functions)
+- Whether PO is explicitly handled or ignored
+
+--------------------------------------------------
+STEP 6 — FAILURE PATH ANALYSIS (CRITICAL)
+--------------------------------------------------
+
+Identify ALL possible failure points in progression.
+
+Specifically:
+- Missing routing
+- Null production_order_id
+- Failed joins
+- Silent catches (try/catch without logging)
+
+OUTPUT:
+- List of failure points
+- What happens when failure occurs:
+  - error thrown?
+  - ignored?
+  - partial write?
+
+--------------------------------------------------
+STEP 7 — P1 PO TRACE (REPRODUCTION PATH)
+--------------------------------------------------
+
+Simulate the flow for a P1 PO item:
+
+Trace:
+- barcode scan → progression → DB write
+
+OUTPUT:
+- Where the flow diverges from SO
+- Exact line/function where failure occurs
+- Why it fails (missing data, wrong join, etc.)
+
+--------------------------------------------------
+STEP 8 — DATABASE WRITE ANALYSIS
+--------------------------------------------------
+
+Identify ALL writes during progression:
+
+- department updates
+- status changes
+- history logs
+
+OUTPUT:
+- Tables affected
+- Fields updated
+- Whether writes are transactional or partial
+
+--------------------------------------------------
+STEP 9 — BULK PROGRESSION BEHAVIOR
+--------------------------------------------------
+
+Analyze bulk scan + progress behavior:
+
+- Are items processed individually or as batch?
+- Is there a transaction?
+- What happens if one item fails?
+
+OUTPUT:
+- Batch behavior description
+- Risk of partial success
+
+--------------------------------------------------
+STEP 10 — LOGGING & VISIBILITY
+--------------------------------------------------
+
+Determine what logs exist today:
+
+- progression logs
+- error logs
+- audit trails
+
+OUTPUT:
+- Where logs are written
+- Whether failures are visible to UI or silent
+
+--------------------------------------------------
+FINAL OUTPUT FORMAT
+--------------------------------------------------
+
+1. SYSTEM OVERVIEW
+   - High-level progression architecture
+
+2. CALL CHAIN DIAGRAM
+   - UI → backend → DB
+
+3. ROUTING LOGIC SUMMARY
+
+4. SO vs P1 PO DIFFERENCE ANALYSIS
+
+5. EXACT FAILURE POINT FOR P1 PO
+   - file + function + line reference
+
+6. DATA MODEL GAPS
+
+7. BULK PROCESSING RISKS
+
+8. LOGGING GAPS
+
+9. ROOT CAUSE SUMMARY (NO FIXES YET)
+
+REMEMBER:
+You are NOT fixing anything yet.
+You are building a forensic map so the next step can be done safely.

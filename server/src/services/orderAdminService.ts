@@ -1,4 +1,5 @@
 import { auditUpdateOrders } from './orderAuditWrapper';
+import { DEPARTMENTS } from '../constants/departments';
 
 const ALLOWED_FIELDS = [
   'due_date',
@@ -47,14 +48,11 @@ export async function adminOverrideOrder({
   }
 
   if (safeChanges.current_department) {
-    const result = await db.query(
-      `SELECT id FROM order_departments WHERE name = $1`,
-      [safeChanges.current_department]
-    ) as any[];
-    if (result.length === 0) {
+    if (!(DEPARTMENTS as readonly string[]).includes(safeChanges.current_department)) {
       throw new Error(`Invalid department: ${safeChanges.current_department}`);
     }
-    safeChanges.current_department_id = result[0].id;
+    // current_department_id references the order_departments tracking table (not a types table)
+    // so we validate the name against the canonical constant but do not attempt an FK sync
   }
 
   return await auditUpdateOrders({

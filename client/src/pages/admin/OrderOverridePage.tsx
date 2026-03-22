@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { AlertTriangle, Search, ShieldAlert, CheckCircle2, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertTriangle, Search, ShieldAlert, CheckCircle2, Pencil, X, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
@@ -40,6 +40,23 @@ function formatValue(value: any): string {
   return String(value);
 }
 
+const SECTION_MAP: Record<string, string> = {
+  current_department: 'Production',
+  status: 'Production',
+  customer_id: 'Customer / Order',
+  model_id: 'Customer / Order',
+  customer_name: 'Customer / Order',
+  customer_po: 'Customer / Order',
+  fb_order_number: 'Customer / Order',
+  due_date: 'Dates',
+  order_date: 'Dates',
+  notes: 'Notes',
+  agr_order_details: 'Notes',
+  scrap_reason: 'Notes',
+};
+
+const SECTION_ORDER = ['Production', 'Customer / Order', 'Dates', 'Notes'];
+
 export default function OrderOverridePage() {
   const { toast } = useToast();
 
@@ -54,22 +71,27 @@ export default function OrderOverridePage() {
   const [savingColumn, setSavingColumn] = useState<string | null>(null);
   const [savedColumns, setSavedColumns] = useState<Set<string>>(new Set());
 
-  // Fetch current user to enforce frontend gate (backend also enforces)
-  const { data: currentUser } = useQuery<any>({
-    queryKey: ['currentUser'],
-    staleTime: 60_000,
-  });
-
+  const { data: currentUser } = useQuery<any>({ queryKey: ['currentUser'], staleTime: 60_000 });
   const isAuthorized = currentUser?.username === 'glennj';
 
-  // Fetch column metadata
   const { data: colData } = useQuery<{ columns: ColumnMeta[] }>({
     queryKey: ['/api/admin/order-override/columns'],
     enabled: isAuthorized,
     staleTime: 5 * 60_000,
   });
 
-  // Fetch order row
+  const { data: statusData } = useQuery<{ statuses: { id: number; name: string; display_name: string }[] }>({
+    queryKey: ['/api/admin/order-statuses'],
+    enabled: isAuthorized,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: deptData } = useQuery<{ departments: string[] }>({
+    queryKey: ['/api/admin/order-departments'],
+    enabled: isAuthorized,
+    staleTime: 5 * 60_000,
+  });
+
   const { data: orderData, isFetching: orderLoading, isError: orderError } = useQuery<{ order: Record<string, any> }>({
     queryKey: ['/api/admin/order-override/order', orderId],
     queryFn: () => apiRequest(`/api/admin/order-override/order/${encodeURIComponent(orderId)}`),
@@ -80,7 +102,13 @@ export default function OrderOverridePage() {
   const order = orderData?.order ?? null;
   const resolvedOrderId = order?.order_id ?? orderId;
 
-  // Mutation
+  const { data: historyData } = useQuery<{ events: any[] }>({
+    queryKey: ['/api/admin/order-flight-recorder', resolvedOrderId],
+    queryFn: () => apiRequest(`/api/admin/order-flight-recorder/${encodeURIComponent(resolvedOrderId)}`),
+    enabled: !!resolvedOrderId && isAuthorized && !!order,
+    staleTime: 30_000,
+  });
+
   const overrideMutation = useMutation({
     mutationFn: (payload: { orderId: string; columnName: string; newValue: string; reason: string }) =>
       apiRequest('/api/admin/order-override', { method: 'POST', body: JSON.stringify(payload) }),
@@ -93,20 +121,38 @@ export default function OrderOverridePage() {
         return next;
       });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/order-override/order', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/order-flight-recorder', resolvedOrderId] });
       toast({ title: 'Saved', description: `"${vars.columnName}" updated and logged.` });
     },
-    onError: (err: any, vars) => {
+    onError: (err: any) => {
       setSavingColumn(null);
       toast({ title: 'Error', description: err.message ?? 'Update failed', variant: 'destructive' });
     },
   });
 
-  const columns = useMemo(() => {
+  const { grouped, ungrouped } = useMemo(() => {
     const cols = colData?.columns ?? [];
     const visible = showAdvanced ? cols : cols.filter(c => c.tier !== 'advanced');
-    if (!filterText.trim()) return visible;
-    const lower = filterText.toLowerCase();
-    return visible.filter(c => c.column_name.toLowerCase().includes(lower));
+
+    if (filterText.trim()) {
+      const lower = filterText.toLowerCase();
+      return { grouped: null, ungrouped: visible.filter(c => c.column_name.toLowerCase().includes(lower)) };
+    }
+
+    const sections: Record<string, ColumnMeta[]> = {};
+    const other: ColumnMeta[] = [];
+
+    for (const col of visible) {
+      const section = SECTION_MAP[col.column_name];
+      if (section) {
+        if (!sections[section]) sections[section] = [];
+        sections[section].push(col);
+      } else {
+        other.push(col);
+      }
+    }
+
+    return { grouped: { sections, other }, ungrouped: null };
   }, [colData, showAdvanced, filterText]);
 
   const handleSearch = () => {
@@ -119,9 +165,8 @@ export default function OrderOverridePage() {
   };
 
   const startEdit = (col: ColumnMeta) => {
-    const currentVal = order ? formatValue(order[col.column_name]) : '';
     setEditingColumn(col.column_name);
-    setDraftValue(pendingEdits[col.column_name]?.new_value ?? currentVal);
+    setDraftValue(pendingEdits[col.column_name]?.new_value ?? (order ? formatValue(order[col.column_name]) : ''));
     setDraftReason(pendingEdits[col.column_name]?.reason ?? '');
   };
 
@@ -133,8 +178,8 @@ export default function OrderOverridePage() {
 
   const stagePending = (colName: string) => {
     if (!order) return;
-    if (!draftReason.trim()) {
-      toast({ title: 'Reason required', description: 'Enter a reason before staging this change.', variant: 'destructive' });
+    if (draftReason.trim().length < 5) {
+      toast({ title: 'Reason required', description: 'Enter a reason (min 5 characters).', variant: 'destructive' });
       return;
     }
     setPendingEdits(prev => ({
@@ -146,12 +191,10 @@ export default function OrderOverridePage() {
         reason: draftReason,
       },
     }));
-    setEditingColumn(null);
-    setDraftValue('');
-    setDraftReason('');
+    cancelEdit();
   };
 
-  const saveOne = async (colName: string) => {
+  const saveOne = (colName: string) => {
     const edit = pendingEdits[colName];
     if (!edit) return;
     setSavingColumn(colName);
@@ -164,9 +207,7 @@ export default function OrderOverridePage() {
   };
 
   const saveAll = async () => {
-    const entries = Object.values(pendingEdits);
-    if (!entries.length) return;
-    for (const edit of entries) {
+    for (const edit of Object.values(pendingEdits)) {
       setSavingColumn(edit.column_name);
       await overrideMutation.mutateAsync({
         orderId: resolvedOrderId,
@@ -192,6 +233,143 @@ export default function OrderOverridePage() {
   }
 
   const pendingCount = Object.keys(pendingEdits).length;
+  const statuses = statusData?.statuses ?? [];
+  const departments = deptData?.departments ?? [];
+  const recentEvents = (historyData?.events ?? []).slice(-10).reverse();
+
+  const renderColumnEditor = (col: ColumnMeta) => {
+    const currentVal = order![col.column_name];
+    const pending = pendingEdits[col.column_name];
+    const isSaved = savedColumns.has(col.column_name);
+    const isEditing = editingColumn === col.column_name;
+    const isSaving = savingColumn === col.column_name;
+    const reasonShort = draftReason.trim().length > 0 && draftReason.trim().length < 5;
+
+    return (
+      <div
+        key={col.column_name}
+        className={`px-4 py-3 ${pending ? 'bg-amber-50 dark:bg-amber-950/10' : ''} ${isSaved ? 'bg-green-50 dark:bg-green-950/10' : ''}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-mono font-medium truncate">{col.column_name}</span>
+            {TIER_BADGE[col.tier]}
+            <span className="text-xs text-muted-foreground">{col.data_type}</span>
+            {isSaved && <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />}
+            {pending && !isSaved && (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Pending</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {pending && !isEditing && (
+              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => saveOne(col.column_name)} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            )}
+            {!isEditing && (
+              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => startEdit(col)}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {!isEditing && (
+          <div className="mt-1 text-xs text-muted-foreground font-mono break-all">
+            {pending ? (
+              <span>
+                <span className="line-through opacity-50">{formatValue(currentVal) || <em>empty</em>}</span>
+                {' → '}
+                <span className="text-amber-700 dark:text-amber-400 font-semibold">{pending.new_value || <em>empty</em>}</span>
+                <span className="ml-2 not-italic text-muted-foreground normal-case">({pending.reason})</span>
+              </span>
+            ) : (
+              <span className={!formatValue(currentVal) ? 'italic opacity-40' : ''}>
+                {formatValue(currentVal) || 'null'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {isEditing && (
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Current value</Label>
+                <div className="text-xs font-mono bg-muted rounded px-2 py-1.5 min-h-[32px] break-all">
+                  {formatValue(currentVal) || <span className="italic opacity-40">null</span>}
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">New value</Label>
+                {col.column_name === 'status' && statuses.length > 0 ? (
+                  <Select value={draftValue} onValueChange={setDraftValue}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statuses.map(s => (
+                        <SelectItem key={s.id} value={s.name}>{s.display_name || s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : col.column_name === 'current_department' && departments.length > 0 ? (
+                  <Select value={draftValue} onValueChange={setDraftValue}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map(d => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={draftValue}
+                    onChange={e => setDraftValue(e.target.value)}
+                    className="h-8 text-sm font-mono"
+                    placeholder="Enter new value (blank = null)"
+                    autoFocus
+                  />
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">
+                Reason for change <span className="text-red-500">*</span>
+                {reasonShort && (
+                  <span className="ml-1 text-red-400 font-normal">
+                    ({5 - draftReason.trim().length} more chars needed)
+                  </span>
+                )}
+              </Label>
+              <Textarea
+                value={draftReason}
+                onChange={e => setDraftReason(e.target.value)}
+                placeholder="Explain why this value is being changed..."
+                className="text-sm min-h-[64px]"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => stagePending(col.column_name)}
+                disabled={draftReason.trim().length < 5}
+              >
+                Stage Change
+              </Button>
+              <Button variant="ghost" size="sm" onClick={cancelEdit}>
+                <X className="w-3.5 h-3.5 mr-1" /> Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
@@ -251,6 +429,36 @@ export default function OrderOverridePage() {
         </CardContent>
       </Card>
 
+      {/* Audit history — shown once order is loaded */}
+      {order && recentEvents.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              Recent History
+              <span className="text-xs font-normal text-muted-foreground">
+                (last {recentEvents.length} events)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y max-h-56 overflow-y-auto">
+              {recentEvents.map((h, i) => (
+                <div key={i} className="px-4 py-2 text-xs flex gap-3 items-baseline">
+                  <span className="text-muted-foreground shrink-0 w-36 tabular-nums">
+                    {h.timestamp ? new Date(h.timestamp).toLocaleString() : '—'}
+                  </span>
+                  <span className="flex-1 truncate">{h.description}</span>
+                  {h.actor && (
+                    <span className="text-muted-foreground shrink-0">by {h.actor}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Pending changes summary + save all */}
       {pendingCount > 0 && (
         <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
@@ -272,7 +480,7 @@ export default function OrderOverridePage() {
         </Card>
       )}
 
-      {/* Column editor — only show when order loaded */}
+      {/* Column editor */}
       {order && (
         <Card>
           <CardHeader className="pb-3">
@@ -305,115 +513,47 @@ export default function OrderOverridePage() {
             )}
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y">
-              {columns.map(col => {
-                const currentVal = order[col.column_name];
-                const pending = pendingEdits[col.column_name];
-                const isSaved = savedColumns.has(col.column_name);
-                const isEditing = editingColumn === col.column_name;
-                const isSaving = savingColumn === col.column_name;
+            {/* Flat filtered list */}
+            {ungrouped && (
+              <div className="divide-y">
+                {ungrouped.map(col => renderColumnEditor(col))}
+                {ungrouped.length === 0 && (
+                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No columns match your filter.
+                  </div>
+                )}
+              </div>
+            )}
 
-                return (
-                  <div key={col.column_name} className={`px-4 py-3 ${pending ? 'bg-amber-50 dark:bg-amber-950/10' : ''} ${isSaved ? 'bg-green-50 dark:bg-green-950/10' : ''}`}>
-                    {/* Column header row */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm font-mono font-medium truncate">{col.column_name}</span>
-                        {TIER_BADGE[col.tier]}
-                        <span className="text-xs text-muted-foreground">{col.data_type}</span>
-                        {isSaved && <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />}
-                        {pending && !isSaved && (
-                          <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Pending</Badge>
-                        )}
+            {/* Grouped sections (no filter active) */}
+            {grouped && (
+              <div>
+                {SECTION_ORDER.map(section => {
+                  const cols = grouped.sections[section];
+                  if (!cols?.length) return null;
+                  return (
+                    <div key={section}>
+                      <div className="px-4 py-2 bg-muted/50 border-y text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        {section}
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {pending && !isEditing && (
-                          <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => saveOne(col.column_name)} disabled={isSaving}>
-                            {isSaving ? 'Saving...' : 'Save'}
-                          </Button>
-                        )}
-                        {!isEditing && (
-                          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => startEdit(col)}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
+                      <div className="divide-y">
+                        {cols.map(col => renderColumnEditor(col))}
                       </div>
                     </div>
-
-                    {/* Current / pending value display */}
-                    {!isEditing && (
-                      <div className="mt-1 text-xs text-muted-foreground font-mono break-all">
-                        {pending ? (
-                          <span>
-                            <span className="line-through opacity-50">{formatValue(currentVal) || <em>empty</em>}</span>
-                            {' → '}
-                            <span className="text-amber-700 dark:text-amber-400 font-semibold">{pending.new_value || <em>empty</em>}</span>
-                            <span className="ml-2 not-italic text-muted-foreground normal-case">({pending.reason})</span>
-                          </span>
-                        ) : (
-                          <span className={!formatValue(currentVal) ? 'italic opacity-40' : ''}>
-                            {formatValue(currentVal) || 'null'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Inline editor */}
-                    {isEditing && (
-                      <div className="mt-3 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1 block">Current value</Label>
-                            <div className="text-xs font-mono bg-muted rounded px-2 py-1.5 min-h-[32px] break-all">
-                              {formatValue(currentVal) || <span className="italic opacity-40">null</span>}
-                            </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground mb-1 block">New value</Label>
-                            <Input
-                              value={draftValue}
-                              onChange={e => setDraftValue(e.target.value)}
-                              className="h-8 text-sm font-mono"
-                              placeholder="Enter new value (blank = null)"
-                              autoFocus
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">
-                            Reason for change <span className="text-red-500">*</span>
-                          </Label>
-                          <Textarea
-                            value={draftReason}
-                            onChange={e => setDraftReason(e.target.value)}
-                            placeholder="Explain why this value is being changed..."
-                            className="text-sm min-h-[64px]"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => stagePending(col.column_name)}
-                            disabled={!draftReason.trim()}
-                          >
-                            Stage Change
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                            <X className="w-3.5 h-3.5 mr-1" /> Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                  );
+                })}
+                {grouped.other.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 bg-muted/50 border-y text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Other
+                    </div>
+                    <div className="divide-y">
+                      {grouped.other.map(col => renderColumnEditor(col))}
+                    </div>
                   </div>
-                );
-              })}
-
-              {columns.length === 0 && (
-                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No columns match your filter.
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

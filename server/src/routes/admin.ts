@@ -1470,6 +1470,35 @@ const PERMANENTLY_BLOCKED_COLUMNS = new Set([
   'source_po_id',
 ]);
 
+// GET /api/admin/order-statuses
+// Returns active statuses from order_statuses lookup table
+router.get(
+  '/order-statuses',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: Request, res: Response) => {
+    try {
+      const rows = await pool.query(
+        `SELECT id, name, display_name FROM order_statuses WHERE is_active = true ORDER BY sort_order ASC, name ASC`
+      ) as any[];
+      res.json({ statuses: rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// GET /api/admin/order-departments
+// Returns the canonical list of production department names
+router.get(
+  '/order-departments',
+  authenticateToken,
+  requireRole('ADMIN'),
+  (_req: Request, res: Response) => {
+    res.json({ departments: DEPARTMENTS });
+  }
+);
+
 // GET /api/admin/order-override/columns
 // Returns the full column list from all_orders with tier classification
 router.get(

@@ -1,0 +1,222 @@
+UI POLISH 1 — Replace Free Text with Dropdowns
+Update OrderOverridePage to use controlled dropdowns for status and department.
+
+GOAL:
+Remove free-text inputs for critical fields.
+
+---
+
+STEP 1 — FETCH OPTIONS
+
+Add API calls:
+
+GET /api/order-statuses
+GET /api/order-departments
+
+---
+
+STEP 2 — STORE IN STATE
+
+const [statuses, setStatuses] = useState([]);
+const [departments, setDepartments] = useState([]);
+
+useEffect(() => {
+  fetch('/api/order-statuses').then(r => r.json()).then(setStatuses);
+  fetch('/api/order-departments').then(r => r.json()).then(setDepartments);
+}, []);
+
+---
+
+STEP 3 — REPLACE INPUTS
+
+Replace:
+
+<input onChange={...} />
+
+WITH:
+
+<select onChange={e => handleChange('status', e.target.value)}>
+  <option value="">Select status</option>
+  {statuses.map(s => (
+    <option key={s.id} value={s.name}>{s.name}</option>
+  ))}
+</select>
+
+<select onChange={e => handleChange('current_department', e.target.value)}>
+  <option value="">Select department</option>
+  {departments.map(d => (
+    <option key={d.id} value={d.name}>{d.name}</option>
+  ))}
+</select>
+
+---
+
+VERIFY:
+- No free text for status or department
+🔹 UI POLISH 2 — Require Reason Before Submit
+Enforce reason before allowing save.
+
+---
+
+FIND submit handler
+
+ADD:
+
+if (!reason || reason.trim().length < 5) {
+  alert('Reason is required (min 5 chars)');
+  return;
+}
+
+---
+
+DISABLE BUTTON:
+
+<button disabled={!reason || reason.length < 5}>
+  Submit Override
+</button>
+🔹 UI POLISH 3 — Show Before vs After Preview
+Add preview of changes before submit.
+
+---
+
+ADD UI SECTION:
+
+<h4>Preview Changes</h4>
+
+{Object.entries(changes).map(([key, value]) => (
+  <div key={key}>
+    <strong>{key}</strong>:
+    <span style={{ color: 'red' }}>{original[key]}</span>
+    →
+    <span style={{ color: 'green' }}>{value}</span>
+  </div>
+))}
+
+---
+
+REQUIRES:
+- original order data loaded into state
+🔹 UI POLISH 4 — Load Order Before Editing
+Load order details by order ID.
+
+---
+
+ADD:
+
+const [original, setOriginal] = useState(null);
+
+const loadOrder = async () => {
+  const res = await fetch(`/api/orders/${orderId}`);
+  const data = await res.json();
+  setOriginal(data);
+};
+
+---
+
+ADD BUTTON:
+
+<button onClick={loadOrder}>Load Order</button>
+
+---
+
+VERIFY:
+- preview uses real original values
+🔹 UI POLISH 5 — Group Fields (Visual Clarity)
+Group fields into sections.
+
+---
+
+CREATE SECTIONS:
+
+<h3>Production</h3>
+- current_department
+- status
+
+<h3>Customer / Order</h3>
+- customer_id
+- model_id
+
+<h3>Dates</h3>
+- due_date
+
+<h3>Notes</h3>
+- notes
+
+---
+
+VERIFY:
+- UI no longer looks like a raw form dump
+🔹 UI POLISH 6 — Show Audit History Inline
+Add audit history panel.
+
+---
+
+ADD:
+
+const [history, setHistory] = useState([]);
+
+const loadHistory = async () => {
+  const res = await fetch(`/api/admin/order-flight-recorder/${orderId}`);
+  const data = await res.json();
+  setHistory(data);
+};
+
+---
+
+CALL after loadOrder()
+
+---
+
+RENDER:
+
+<h4>History</h4>
+{history.map((h, i) => (
+  <div key={i}>
+    [{h.timestamp}] {h.description}
+  </div>
+))}
+
+---
+
+VERIFY:
+- user sees past changes before editing
+🔹 UI POLISH 7 — Highlight Changed Fields Only
+Only show fields being edited.
+
+---
+
+REPLACE full form rendering WITH:
+
+Object.keys(changes).map(field => renderField(field))
+
+---
+
+OR:
+
+Highlight:
+
+<input style={{
+  border: changes[field] ? '2px solid orange' : '1px solid #ccc'
+}} />
+🔹 UI POLISH 8 — Success + Error Feedback
+Improve UX feedback.
+
+---
+
+ON SUCCESS:
+
+setResponse('Saved successfully');
+
+---
+
+ON ERROR:
+
+catch (e) {
+  alert(e.message);
+}
+
+---
+
+OPTIONAL:
+
+Show toast or banner instead of alert

@@ -18,7 +18,9 @@ import {
   ChevronDown,
   ChevronRight,
   X,
+  GitBranch,
 } from 'lucide-react';
+import ManufacturingTimeline from '@/components/ManufacturingTimeline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -98,6 +100,7 @@ export default function OrderTimeline() {
   const entityType = params?.entityType || 'p1_order';
   const entityId = params?.entityId || '';
 
+  const [activeTab, setActiveTab] = useState<'event-log' | 'process-flow'>('event-log');
   const [viewMode, setViewMode] = useState<'timeline' | 'table'>('timeline');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
@@ -363,6 +366,35 @@ export default function OrderTimeline() {
         </div>
       </div>
 
+      {/* ── Tab switcher ─────────────────────────────────────────────── */}
+      <div className="flex border rounded-lg overflow-hidden w-fit mb-4">
+        <Button
+          variant={activeTab === 'event-log' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('event-log')}
+          className="rounded-none border-r"
+        >
+          <List className="w-4 h-4 mr-1.5" />
+          Event Log
+        </Button>
+        <Button
+          variant={activeTab === 'process-flow' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('process-flow')}
+          className="rounded-none"
+        >
+          <GitBranch className="w-4 h-4 mr-1.5" />
+          Process Flow
+        </Button>
+      </div>
+
+      {/* ── Process Flow tab ─────────────────────────────────────────── */}
+      {activeTab === 'process-flow' && (
+        <ManufacturingTimeline orderId={entityId} />
+      )}
+
+      {/* ── Event Log tab (existing, unchanged) ─────────────────────── */}
+      {activeTab === 'event-log' && (<>
       <Card className="mb-6">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -485,6 +517,8 @@ export default function OrderTimeline() {
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Showing {timelineData.length} event{timelineData.length !== 1 ? 's' : ''} (Central Time)
       </div>
+      </>)}
+
     </div>
   );
 }

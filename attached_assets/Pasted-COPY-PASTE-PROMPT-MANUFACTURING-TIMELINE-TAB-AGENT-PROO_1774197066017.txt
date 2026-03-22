@@ -1,0 +1,161 @@
+COPY-PASTE PROMPT — MANUFACTURING TIMELINE TAB (AGENT-PROOF)
+SYSTEM ROLE: Senior EPOCH UI + Traceability Engineer
+MODE: CONTROLLED FEATURE ADD (ZERO DISRUPTION)
+
+OBJECTIVE:
+Add a new "Manufacturing Timeline" (Process Flow) tab to the existing order timeline page using order_department_transitions as the data source.
+
+DO NOT modify or remove the existing event timeline.
+
+--------------------------------------------------
+🚨 HARD RULES (DO NOT VIOLATE)
+--------------------------------------------------
+
+- DO NOT modify existing timeline logic (audit_events)
+- DO NOT refactor existing components
+- DO NOT change backend progression logic
+- DO NOT change database schema
+- DO NOT remove JSONB history usage (even if unused)
+
+ONLY:
+- ADD a new tab
+- ADD a new backend read endpoint (if needed)
+- ADD a new UI component for transitions
+
+--------------------------------------------------
+STEP 1 — IDENTIFY EXISTING PAGE
+--------------------------------------------------
+
+Locate:
+
+Order Timeline page/component
+Example:
+- /order-timeline/:type/:orderId
+- Component rendering current event timeline
+
+--------------------------------------------------
+STEP 2 — ADD TAB UI (MINIMAL CHANGE)
+--------------------------------------------------
+
+Add tab switcher ABOVE timeline:
+
+Tabs:
+
+[ Event Log ]   [ Process Flow ]
+
+DEFAULT:
+- Keep current behavior (Event Log selected)
+
+DO NOT redesign layout
+
+--------------------------------------------------
+STEP 3 — CREATE BACKEND ENDPOINT
+--------------------------------------------------
+
+Create:
+
+GET /api/orders/:orderId/transitions
+
+Query:
+
+SELECT *
+FROM order_department_transitions
+WHERE order_id = ?
+ORDER BY entered_at ASC
+
+Return raw rows
+
+--------------------------------------------------
+STEP 4 — CREATE FRONTEND COMPONENT
+--------------------------------------------------
+
+Create:
+
+ManufacturingTimeline.tsx
+
+INPUT:
+- orderId
+
+FETCH:
+- /api/orders/:orderId/transitions
+
+--------------------------------------------------
+STEP 5 — RENDER TIMELINE (SIMPLE VERSION)
+--------------------------------------------------
+
+For each transition:
+
+Display:
+
+[Department Name]
+Entered: timestamp
+Exited: timestamp OR "In Progress"
+Duration: X minutes
+
+Example layout:
+
+CNC
+Entered: Mar 18, 1:30 PM
+Exited: —
+Duration: In Progress
+
+Finish
+Entered: Mar 17, 11:00 AM
+Exited: Mar 18, 1:30 PM
+Duration: 150 min
+
+--------------------------------------------------
+STEP 6 — HANDLE EDGE CASES
+--------------------------------------------------
+
+IF no transitions:
+→ show:
+"No manufacturing history recorded yet"
+
+IF exited_at is null:
+→ label:
+"In Progress"
+
+--------------------------------------------------
+STEP 7 — ADD LIGHT FORMATTING
+--------------------------------------------------
+
+- Sort ascending by entered_at
+- Highlight current department (no exited_at)
+- Format duration in minutes
+
+DO NOT add charts or graphs yet
+
+--------------------------------------------------
+STEP 8 — WIRE TAB SWITCHING
+--------------------------------------------------
+
+IF tab === "Event Log":
+→ render existing timeline (unchanged)
+
+IF tab === "Process Flow":
+→ render ManufacturingTimeline component
+
+--------------------------------------------------
+STEP 9 — ADD MINIMAL LOGGING
+--------------------------------------------------
+
+console.log(`[TIMELINE] Loaded transitions for ${orderId}`)
+
+--------------------------------------------------
+STEP 10 — OUTPUT
+--------------------------------------------------
+
+Provide:
+
+1. New endpoint code
+2. New component code
+3. Tab integration code
+
+Confirm:
+
+"Event Log unchanged"
+"Process Flow added using order_department_transitions"
+"No existing functionality modified"
+
+STOP after patch

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,16 +16,61 @@ import {
   Database,
   Tag,
   LinkIcon,
+  Play,
+  LogOut,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ProductionOrderInspector() {
   const [searchId, setSearchId] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: order, isLoading, error } = useQuery({
     queryKey: ['/api/production-orders', activeId],
     queryFn: () => apiRequest(`/api/production-orders/${activeId}`),
     enabled: activeId !== null,
+  });
+
+  const { data: activeContext } = useQuery<{ activeJobId: number | null; activeJobLabel: string | null; punchType: string | null }>({
+    queryKey: ['/api/timekeeping/active-context'],
+    refetchInterval: 30_000,
+  });
+
+  const clockInMutation = useMutation({
+    mutationFn: (jobId: number) =>
+      apiRequest('/api/timekeeping/punch', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'clock_in', jobId: String(jobId) }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/active-context'] });
+      toast({ title: 'Clocked in — work started!' });
+    },
+    onError: (err: any) => {
+      const msg = err?.message ?? '';
+      toast({
+        title: msg.includes('Must clock out') ? 'Clock out of your current job first' : 'Failed to start work',
+        description: msg.includes('Must clock out') ? 'You are already clocked in on another job.' : undefined,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const clockOutMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/timekeeping/punch', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'clock_out' }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/active-context'] });
+      toast({ title: 'Clocked out successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to clock out', variant: 'destructive' });
+    },
   });
 
   const handleSearch = (e: React.FormEvent) => {
@@ -52,6 +97,10 @@ export default function ProductionOrderInspector() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  const isClockedIntoThisJob = activeContext?.activeJobId === activeId;
+  const isClockedInElsewhere = activeContext?.activeJobId !== null && activeContext?.activeJobId !== activeId;
+  const canStartWork = order && !['COMPLETE', 'COMPLETED', 'CANCELLED', 'SHIPPED'].includes(order.productionStatus);
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
@@ -97,6 +146,53 @@ export default function ProductionOrderInspector() {
 
       {order && !isLoading && (
         <div className="space-y-4">
+          {/* Phase 7 — Start Work / Clock Out actions */}
+          {canStartWork && (
+            <Card className={isClockedIntoThisJob ? 'border-green-300 bg-green-50' : 'border-blue-200'}>
+              <CardContent className="p-4 flex items-center justify-between gap-4">
+                <div>
+                  {isClockedIntoThisJob ? (
+                    <>
+                      <p className="font-semibold text-green-800 text-sm">Currently working on this job</p>
+                      <p className="text-xs text-green-600">Clock out to finish this session</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-sm">Ready to work on this job?</p>
+                      {isClockedInElsewhere && (
+                        <p className="text-xs text-amber-700">You're clocked in on another job — clock out first.</p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  {isClockedIntoThisJob ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={() => clockOutMutation.mutate()}
+                      disabled={clockOutMutation.isPending}
+                    >
+                      {clockOutMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4 mr-1" />}
+                      Clock Out
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => clockInMutation.mutate(order.id)}
+                      disabled={clockInMutation.isPending}
+                    >
+                      {clockInMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
+                      Start Work
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">

@@ -8,6 +8,8 @@ interface TimeClockStatus {
   lastPunch: { punchType: PunchType; punchTime: string } | null;
   clockIn: string | null;
   clockOut: string | null;
+  activeJobId: number | null;
+  activeJobLabel: string | null;
 }
 
 export interface UseTimeClockReturn {
@@ -17,6 +19,8 @@ export interface UseTimeClockReturn {
   clockInTime: string | null;
   clockOutTime: string | null;
   lastPunchTime: string | null;
+  activeJobId: number | null;
+  activeJobLabel: string | null;
   clockIn: (jobId: string) => Promise<void>;
   clockOut: () => Promise<void>;
   startBreak: () => Promise<void>;
@@ -29,6 +33,8 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
   const [lastPunchTime, setLastPunchTime] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [activeJobLabel, setActiveJobLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshStatus = useCallback(async () => {
@@ -39,6 +45,8 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
       setClockInTime(data.clockIn);
       setClockOutTime(data.clockOut);
       setLastPunchTime(data.lastPunch?.punchTime ?? null);
+      setActiveJobId(data.activeJobId ?? null);
+      setActiveJobLabel(data.activeJobLabel ?? null);
     } catch (err) {
       console.error('[useTimeClock] Failed to fetch status', err);
     } finally {
@@ -76,6 +84,8 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     const ts = new Date().toISOString();
     setStatus('clock_out');
     setClockOutTime(ts);
+    setActiveJobId(null);
+    setActiveJobLabel(null);
     try {
       await punch('clock_out');
     } catch (err) {
@@ -117,6 +127,8 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     clockInTime,
     clockOutTime,
     lastPunchTime,
+    activeJobId,
+    activeJobLabel,
     clockIn,
     clockOut,
     startBreak,

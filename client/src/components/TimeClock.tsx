@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer, Briefcase } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer, Briefcase, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
 
@@ -42,6 +42,8 @@ interface TimeClockProps {
   disableClockOut?: boolean;
 }
 
+const QUICK_START_LIMIT = 6;
+
 export default function TimeClock({
   employeeId,
   disableClockOut = false,
@@ -53,6 +55,8 @@ export default function TimeClock({
     clockInTime,
     clockOutTime,
     lastPunchTime,
+    activeJobId,
+    activeJobLabel,
     clockIn,
     clockOut,
     startBreak,
@@ -62,6 +66,7 @@ export default function TimeClock({
 
   const { toast } = useToast();
   const [selectedJobId, setSelectedJobId] = useState('');
+  const [showAllJobs, setShowAllJobs] = useState(false);
 
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: ['/api/timekeeping/jobs'],
@@ -72,20 +77,28 @@ export default function TimeClock({
     refetchInterval: 60_000,
   });
 
-  const handleClockIn = async () => {
-    if (!selectedJobId) {
+  // Phase 4 — auto-select the active job when clocked in and then clocking back in
+  useEffect(() => {
+    if (!loading && activeJobId && !clockedIn && !selectedJobId) {
+      setSelectedJobId(String(activeJobId));
+    }
+  }, [loading, activeJobId, clockedIn, selectedJobId]);
+
+  const handleClockIn = async (jobId?: string) => {
+    const id = jobId ?? selectedJobId;
+    if (!id) {
       toast({ title: 'Select a job first', variant: 'destructive' });
       return;
     }
     try {
-      await clockIn(selectedJobId);
+      await clockIn(id);
       setSelectedJobId('');
       refetchHours();
       toast({ title: 'Clocked in!' });
     } catch (err: any) {
       const msg = err?.message ?? '';
       toast({
-        title: msg.includes('Already clocked in') ? 'Already clocked in' : 'Failed to clock in',
+        title: msg.includes('Must clock out') ? 'Must clock out before starting a new job' : 'Failed to clock in',
         variant: 'destructive',
       });
     }
@@ -183,6 +196,9 @@ export default function TimeClock({
     );
   }
 
+  const quickJobs = jobs.slice(0, QUICK_START_LIMIT);
+  const extraJobs = jobs.slice(QUICK_START_LIMIT);
+
   return (
     <div className="w-full max-w-sm space-y-3">
       <Card>
@@ -204,37 +220,102 @@ export default function TimeClock({
         </CardHeader>
 
         <CardContent className="space-y-3">
-          {/* Job selector — only shown before clock-in */}
-          {!clockedIn && jobs.length > 0 && (
-            <Select value={selectedJobId} onValueChange={setSelectedJobId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select job to clock into…" />
-              </SelectTrigger>
-              <SelectContent>
-                {jobs.map(j => (
-                  <SelectItem key={j.id} value={String(j.id)}>
-                    <span className="flex items-center gap-2">
-                      <Briefcase className="h-3 w-3 opacity-60" />
-                      {j.orderNumber}
-                      {j.department && <span className="text-muted-foreground text-xs">— {j.department}</span>}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Phase 9 — active job banner */}
+          {clockedIn && !onBreak && activeJobLabel && (
+            <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <Briefcase className="h-4 w-4 text-blue-600 shrink-0" />
+              <div>
+                <p className="text-xs text-blue-600 font-medium leading-none mb-0.5">Currently working on</p>
+                <p className="font-semibold text-blue-900 leading-tight">{activeJobLabel}</p>
+              </div>
+            </div>
           )}
 
-          {!clockedIn ? (
+          {/* Job selection — only shown before clock-in */}
+          {!clockedIn && jobs.length > 0 && (
+            <div className="space-y-2">
+              {/* Phase 6 — Quick start buttons */}
+              <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                <Zap className="h-3 w-3" />
+                Quick start
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {quickJobs.map(j => (
+                  <button
+                    key={j.id}
+                    onClick={() => handleClockIn(String(j.id))}
+                    className={`text-left px-2 py-1.5 rounded border text-xs transition-colors ${
+                      selectedJobId === String(j.id)
+                        ? 'bg-green-100 border-green-400 text-green-900 font-medium'
+                        : 'bg-muted/50 border-border hover:bg-green-50 hover:border-green-300'
+                    }`}
+                  >
+                    <span className="font-mono font-medium block truncate">{j.orderNumber}</span>
+                    {j.department && (
+                      <span className="text-muted-foreground text-[10px] truncate block">{j.department}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Overflow: dropdown for extra jobs */}
+              {extraJobs.length > 0 && (
+                <div>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setShowAllJobs(v => !v)}
+                  >
+                    {showAllJobs ? 'Hide' : `+ ${extraJobs.length} more jobs`}
+                  </button>
+                  {showAllJobs && (
+                    <Select value={selectedJobId} onValueChange={setSelectedJobId}>
+                      <SelectTrigger className="w-full mt-1">
+                        <SelectValue placeholder="Select job…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {extraJobs.map(j => (
+                          <SelectItem key={j.id} value={String(j.id)}>
+                            <span className="flex items-center gap-2">
+                              <Briefcase className="h-3 w-3 opacity-60" />
+                              {j.orderNumber}
+                              {j.department && <span className="text-muted-foreground text-xs">— {j.department}</span>}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {/* Clock In button for dropdown-selected job */}
+              {selectedJobId && !quickJobs.find(j => String(j.id) === selectedJobId) && (
+                <Button
+                  onClick={() => handleClockIn()}
+                  className="w-full bg-green-500 hover:bg-green-600"
+                  size="lg"
+                >
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Clock In
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* No jobs available — plain clock-in button disabled */}
+          {!clockedIn && jobs.length === 0 && (
             <Button
-              onClick={handleClockIn}
-              disabled={!selectedJobId}
+              onClick={() => handleClockIn()}
+              disabled
               className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50"
               size="lg"
             >
               <LogIn className="h-4 w-4 mr-2" />
               Clock In
             </Button>
-          ) : onBreak ? (
+          )}
+
+          {clockedIn && onBreak ? (
             <Button
               onClick={handleEndBreak}
               className="w-full bg-amber-500 hover:bg-amber-600"
@@ -243,7 +324,7 @@ export default function TimeClock({
               <PlayCircle className="h-4 w-4 mr-2" />
               End Break
             </Button>
-          ) : (
+          ) : clockedIn ? (
             <div className="space-y-2">
               <Button
                 onClick={handleClockOut}
@@ -264,7 +345,7 @@ export default function TimeClock({
                 Start Break
               </Button>
             </div>
-          )}
+          ) : null}
 
           {clockedIn && !onBreak && clockInTime && (
             <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">

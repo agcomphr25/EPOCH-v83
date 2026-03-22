@@ -1,0 +1,151 @@
+PHASE 4 — PRODUCTION INTEGRATION (AUTOMATION LAYER)
+🔴 GOAL
+
+Move from:
+
+Employee → manually selects job
+
+To:
+
+Production flow → drives job → drives time → drives cost
+🧠 WHAT THIS DOES
+Eliminates manual job selection errors
+Speeds up shop floor
+Aligns labor with production reality
+Sets you up for kiosk + scanning
+🔵 PHASE 1 — AUTO-CREATE JOBS FROM PRODUCTION
+GOAL:
+Ensure every production_order IS a job automatically.
+
+---
+
+VERIFY:
+
+production_orders table already exists
+
+---
+
+ADD RULE (NO NEW TABLE):
+
+job_id = production_orders.id
+
+---
+
+OUTPUT:
+
+No schema change required
+🔵 PHASE 2 — ADD “ACTIVE JOB” CONTEXT
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+ADD:
+
+router.get('/active-context', authenticateToken, async (req, res) => {
+
+  const last = await db.query(`
+    SELECT job_id, punchType
+    FROM punch_events
+    WHERE epochEmployeeId = $1
+    ORDER BY punchTime DESC
+    LIMIT 1
+  `, [req.user.id]);
+
+  if (!last[0] || last[0].punchType === 'clock_out') {
+    return res.json({ activeJobId: null });
+  }
+
+  res.json({
+    activeJobId: last[0].job_id
+  });
+});
+🔵 PHASE 3 — FILTER JOBS BY DEPARTMENT (IMPORTANT)
+UPDATE:
+
+GET /api/timekeeping/jobs
+
+---
+
+ADD FILTER:
+
+WHERE status != 'COMPLETE'
+AND department = $1
+
+---
+
+PASS:
+
+req.user.department
+🔵 PHASE 4 — UI AUTO-SELECT JOB
+FILE:
+TimeClock.tsx
+
+---
+
+ON LOAD:
+
+const ctx = await apiRequest('/api/timekeeping/active-context');
+
+if (ctx.activeJobId) {
+  setSelectedJob(ctx.activeJobId);
+}
+🔵 PHASE 5 — REMOVE BUCKET THINKING FROM UI
+UI RULE:
+
+- User selects job ONLY
+- Bucket becomes invisible
+- Backend assigns bucket
+🔵 PHASE 6 — ADD “QUICK START JOB” BUTTONS
+UI UPGRADE:
+
+Instead of dropdown only:
+
+SHOW:
+
+[ Job A ]  [ Job B ]  [ Job C ]
+
+Button click:
+
+setSelectedJob(job.id)
+handlePunch()
+🔵 PHASE 7 — AUTO CLOCK-IN FROM PRODUCTION SCREEN (POWERFUL)
+WHEN USER ENTERS:
+
+- production queue
+- job detail screen
+
+ADD BUTTON:
+
+"Start Work"
+
+CALL:
+
+POST /api/timekeeping/punch
+{
+  type: 'clock_in',
+  jobId: job.id
+}
+🔵 PHASE 8 — PREVENT JOB SWITCH WITHOUT CLOCK OUT
+BACKEND CHECK:
+
+if (lastType === 'clock_in' && type === 'clock_in') {
+  return error("Must clock out before starting new job");
+}
+🔵 PHASE 9 — SHOW CURRENT JOB IN UI
+DISPLAY:
+
+"Currently working on:
+ Order #1234 - CNC"
+🔵 PHASE 10 — TEST FULL FLOW
+TEST:
+
+1. Open production job
+2. Click "Start Work"
+3. Confirm:
+   - job auto-selected
+   - punch created
+
+4. Try switching job → blocked
+5. Clock out → allowed
+6. Start new job → works

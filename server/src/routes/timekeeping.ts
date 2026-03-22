@@ -88,7 +88,7 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
       const lastType = (recent[0]?.punchType ?? null) as PunchType | null;
 
       if (punchType === 'clock_in' && lastType === 'clock_in') {
-        return res.status(400).json({ error: 'Already clocked in' });
+        return res.status(400).json({ error: 'Must clock out before starting a new job' });
       }
       if (punchType === 'clock_out' && lastType !== 'clock_in' && lastType !== 'break_end') {
         return res.status(400).json({ error: 'Must clock in first' });
@@ -151,7 +151,7 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
     const user = req.user!;
 
     if (!user.employeeId) {
-      return res.json({ status: null, lastPunch: null, clockIn: null, clockOut: null, jobId: null });
+      return res.json({ status: null, lastPunch: null, clockIn: null, clockOut: null, activeJobId: null, activeJobLabel: null });
     }
 
     const punches = await storage.getPunchEventsByEmployeeId(user.employeeId, 50);
@@ -166,6 +166,23 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
     const firstClockIn = todayPunches.find(p => p.punchType === 'clock_in');
     const lastClockOut = [...todayPunches].reverse().find(p => p.punchType === 'clock_out');
 
+    const isClockedIn = lastPunch && lastPunch.punchType !== 'clock_out';
+    const lastClockInPunch = [...todayPunches].reverse().find(p => p.punchType === 'clock_in');
+    const activeJobId = isClockedIn ? (lastClockInPunch?.jobId ?? null) : null;
+
+    let activeJobLabel: string | null = null;
+    if (activeJobId) {
+      const jobRow = await pool.query(
+        `SELECT order_id AS "orderNumber", current_department AS "department" FROM production_orders WHERE id = $1`,
+        [activeJobId]
+      );
+      if (jobRow[0]) {
+        activeJobLabel = jobRow[0].department
+          ? `${jobRow[0].orderNumber} — ${jobRow[0].department}`
+          : jobRow[0].orderNumber;
+      }
+    }
+
     res.json({
       status: lastPunch?.punchType ?? null,
       lastPunch: lastPunch
@@ -173,6 +190,8 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
         : null,
       clockIn: firstClockIn?.punchTime?.toISOString() ?? null,
       clockOut: lastClockOut?.punchTime?.toISOString() ?? null,
+      activeJobId,
+      activeJobLabel,
     });
   } catch (err: any) {
     console.error('[Timekeeping] Status error:', err);
@@ -204,15 +223,54 @@ router.get('/active-job', authenticateToken, async (req: Request, res: Response)
   }
 });
 
-// GET /api/timekeeping/jobs — active production orders
+// GET /api/timekeeping/active-context — current job context (Phase 2)
+router.get('/active-context', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const user = req.user!;
+    const empId = user.employeeId ?? user.id;
+
+    const last = await pool.query(
+      `SELECT pe.job_id AS "jobId", pe.punch_type AS "punchType",
+              po.order_id AS "orderNumber", po.current_department AS "department"
+       FROM punch_events pe
+       LEFT JOIN production_orders po ON po.id = pe.job_id
+       WHERE pe.epoch_employee_id = $1
+       ORDER BY pe.punch_time DESC LIMIT 1`,
+      [empId]
+    );
+
+    if (!last[0] || last[0].punchType === 'clock_out') {
+      return res.json({ activeJobId: null, activeJobLabel: null, punchType: last[0]?.punchType ?? null });
+    }
+
+    const row = last[0];
+    const activeJobLabel = row.jobId
+      ? (row.department ? `${row.orderNumber} — ${row.department}` : row.orderNumber)
+      : null;
+
+    res.json({
+      activeJobId: row.jobId ?? null,
+      activeJobLabel,
+      punchType: row.punchType,
+    });
+  } catch (err: any) {
+    console.error('[Timekeeping] Active context error:', err);
+    res.status(500).json({ error: 'Failed to fetch active context' });
+  }
+});
+
+// GET /api/timekeeping/jobs — active production orders (optional ?department= filter)
 router.get('/jobs', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const department = (req.query.department as string) || null;
     const jobs = await pool.query(
       `SELECT id, order_id AS "orderNumber", current_department AS "department"
        FROM production_orders
        WHERE production_status NOT IN ('COMPLETE', 'COMPLETED', 'CANCELLED')
+         AND ($1::text IS NULL OR current_department ILIKE $1)
        ORDER BY id DESC
-       LIMIT 100`
+       LIMIT 100`,
+      [department]
     );
     res.json(jobs);
   } catch (err: any) {

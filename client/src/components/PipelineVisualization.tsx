@@ -179,34 +179,47 @@ const OrderChip = ({
   );
 };
 
+type FilterMode = 'all' | 'correct' | 'incorrect';
+
 // ── Department visualization ──────────────────────────────────────────────────
 const DepartmentVisualization = ({
   department,
   orders,
   getModelDisplayName,
   onOrderClick,
-  showOnlyCorrect,
+  filterMode,
 }: {
   department: string;
   orders: OrderDetail[];
   getModelDisplayName: (modelId: string) => string;
   onOrderClick: (orderId: string) => void;
-  showOnlyCorrect: boolean;
+  filterMode: FilterMode;
 }) => {
-  const visibleOrders = showOnlyCorrect
-    ? orders.filter(
-        (o) =>
-          o.expectedDepartment &&
-          o.expectedDepartment.toLowerCase() === department.toLowerCase()
-      )
-    : orders;
+  const visibleOrders =
+    filterMode === 'correct'
+      ? orders.filter(
+          (o) =>
+            o.expectedDepartment &&
+            o.expectedDepartment.toLowerCase() === department.toLowerCase()
+        )
+      : filterMode === 'incorrect'
+      ? orders.filter(
+          (o) =>
+            !o.expectedDepartment ||
+            o.expectedDepartment.toLowerCase() !== department.toLowerCase()
+        )
+      : orders;
 
   const count = visibleOrders.length;
 
   if (count === 0) {
     return (
       <div className="text-xs text-gray-400 italic text-center py-2">
-        {showOnlyCorrect ? 'None in correct dept' : 'No orders'}
+        {filterMode === 'correct'
+          ? 'None in correct dept'
+          : filterMode === 'incorrect'
+          ? 'All in correct dept'
+          : 'No orders'}
       </div>
     );
   }
@@ -559,7 +572,7 @@ const OrderTable = ({
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PipelineVisualization() {
   const [, navigate] = useLocation();
-  const [showOnlyCorrect, setShowOnlyCorrect] = useState(false);
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [focusDept, setFocusDept] = useState<PipelineDepartment | null>(null);
   const [viewMode, setViewMode] = useState<'pipeline' | 'department'>('pipeline');
   const printRef = useRef<HTMLDivElement>(null);
@@ -759,16 +772,34 @@ export default function PipelineVisualization() {
             </div>
 
             {viewMode === 'pipeline' && (
-              <Button
-                variant={showOnlyCorrect ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setShowOnlyCorrect((v) => !v)}
-                className="text-xs h-7 gap-1"
-                title={showOnlyCorrect ? 'Showing only orders in their correct department' : 'Showing all orders'}
-              >
-                <Filter className="h-3 w-3" />
-                {showOnlyCorrect ? 'Correct Dept Only' : 'Show All'}
-              </Button>
+              <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {(
+                  [
+                    { mode: 'all',       label: 'Show All' },
+                    { mode: 'correct',   label: 'Correct Only' },
+                    { mode: 'incorrect', label: 'Incorrect Only' },
+                  ] as { mode: FilterMode; label: string }[]
+                ).map(({ mode, label }, i) => (
+                  <button
+                    key={mode}
+                    onClick={() => setFilterMode(mode)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      i > 0 ? 'border-l border-gray-200 dark:border-gray-700' : ''
+                    } ${
+                      filterMode === mode
+                        ? mode === 'incorrect'
+                          ? 'bg-orange-600 text-white'
+                          : mode === 'correct'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                        : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <Filter className="h-3 w-3" />
+                    {label}
+                  </button>
+                ))}
+              </div>
             )}
 
             {viewMode === 'department' && (
@@ -934,7 +965,7 @@ export default function PipelineVisualization() {
                             orders={orders}
                             getModelDisplayName={getModelDisplayName}
                             onOrderClick={handleOrderClick}
-                            showOnlyCorrect={showOnlyCorrect}
+                            filterMode={filterMode}
                           />
                         </div>
 

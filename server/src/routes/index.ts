@@ -7412,18 +7412,23 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
       const { storage } = await import('../../storage');
       const updatedOrders = [];
+      const failedOrders: { orderId: string; reason: string }[] = [];
 
       // Update each order individually with proper completion timestamps
       for (const orderId of orderIds) {
         try {
           // Check production orders first (P1 PO items)
-          // Production orders have format: PO-{poNumber}-{itemId}-{unit}
+          // Production orders have formats: PO-{poNumber}-{itemId}-{unit} OR P1-{soNumber}-{itemId}-{unit}
           let currentOrder: any = null;
           let isProductionOrder = false;
           let isFinalized = false;
-          
-          // Only check production_orders if orderId matches production order format
-          if (orderId.startsWith('PO-') && orderId.split('-').length >= 4) {
+
+          const isProductionOrderId =
+            (orderId.startsWith('PO-') || orderId.startsWith('P1-')) &&
+            orderId.split('-').length >= 4;
+
+          if (isProductionOrderId) {
+            console.log(`[PROGRESSION] Production order detected: ${orderId}`);
             try {
               currentOrder = await storage.getProductionOrderByOrderId(orderId);
               isProductionOrder = !!currentOrder;
@@ -7448,7 +7453,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
 
           if (!currentOrder) {
-            console.warn(`Order ${orderId} not found, skipping`);
+            console.error(`[PROGRESSION ERROR] Order not found: ${orderId}`);
+            failedOrders.push({ orderId, reason: 'ORDER_NOT_FOUND' });
             continue;
           }
           
@@ -7516,7 +7522,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 updatedAt: now,
               }
             );
-            console.log(`✅ Updated production order ${orderId} from ${currentOrder.currentDepartment} to ${department}`);
+            console.log(`[PROGRESSION SUCCESS] ${orderId} → ${department}`);
           } else if (isFinalized) {
             // Update finalized orders table
             updatedOrder = await storage.updateFinalizedOrder(
@@ -7587,10 +7593,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
 
       res.json({
-        success: true,
+        success: failedOrders.length === 0,
         message: `Updated ${updatedOrders.length} orders to ${department} department`,
         updatedOrders: updatedOrders.length,
         totalRequested: orderIds.length,
+        failedOrders,
       });
     } catch (_error) {
       console.error('❌ Update department _error:', _error);

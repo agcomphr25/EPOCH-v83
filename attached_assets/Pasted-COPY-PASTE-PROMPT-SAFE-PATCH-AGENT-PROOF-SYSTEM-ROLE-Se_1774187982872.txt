@@ -1,0 +1,159 @@
+COPY-PASTE PROMPT — SAFE PATCH (AGENT-PROOF)
+SYSTEM ROLE: Senior EPOCH Production Hotfix Engineer
+MODE: SURGICAL PATCH (STRICT)
+
+OBJECTIVE:
+Fix P1-format production orders (orderId starting with "P1-") so they correctly progress departments using the EXISTING update-department endpoint.
+
+THIS IS A HOTFIX — NOT A REFACTOR.
+
+--------------------------------------------------
+🚨 HARD RULES (DO NOT VIOLATE)
+--------------------------------------------------
+
+- DO NOT restructure architecture
+- DO NOT modify routing logic
+- DO NOT touch UI
+- DO NOT modify System B (/api/orders/:orderId/progress)
+- DO NOT rename functions
+- DO NOT introduce new abstractions
+- DO NOT change database schema
+- DO NOT “clean up” unrelated code
+
+ONLY:
+- Fix detection + lookup of P1 production orders
+- Add minimal logging for visibility
+
+--------------------------------------------------
+STEP 1 — LOCATE TARGET CODE
+--------------------------------------------------
+
+Open:
+
+server/src/routes/index.ts
+
+Find endpoint:
+
+POST /api/orders/update-department
+
+--------------------------------------------------
+STEP 2 — FIX ORDER TYPE DETECTION
+--------------------------------------------------
+
+Locate existing conditional (around line ~7426):
+
+IF YOU SEE:
+if (orderId.startsWith('PO-') && orderId.split('-').length >= 4)
+
+REPLACE WITH:
+
+const isProductionOrder =
+  (orderId.startsWith('PO-') || orderId.startsWith('P1-')) &&
+  orderId.split('-').length >= 4;
+
+IF (isProductionOrder) {
+  // existing production order logic
+}
+
+DO NOT change anything else in this block.
+
+--------------------------------------------------
+STEP 3 — ENSURE CORRECT LOOKUP IS USED
+--------------------------------------------------
+
+Inside the production order branch, VERIFY:
+
+storage.getProductionOrderByOrderId(orderId)
+
+is being called.
+
+IF NOT PRESENT:
+- ADD this lookup
+- DO NOT remove existing logic
+- DO NOT reorder unrelated logic
+
+--------------------------------------------------
+STEP 4 — ADD HARD FAILURE RESPONSE (NO MORE SILENT SKIP)
+--------------------------------------------------
+
+Find this pattern:
+
+if (!order) {
+  console.warn(`Order ${orderId} not found, skipping`);
+  continue;
+}
+
+REPLACE WITH:
+
+if (!order) {
+  console.error(`[PROGRESSION ERROR] Order not found: ${orderId}`);
+
+  failedOrders.push({
+    orderId,
+    reason: 'ORDER_NOT_FOUND'
+  });
+
+  continue;
+}
+
+--------------------------------------------------
+STEP 5 — RETURN FAILURE VISIBILITY TO UI
+--------------------------------------------------
+
+Locate response object at end of endpoint.
+
+ENSURE response includes:
+
+{
+  success: failedOrders.length === 0,
+  updatedOrders,
+  totalRequested,
+  failedOrders
+}
+
+IF failedOrders does not exist:
+- initialize it at top of handler:
+  const failedOrders = [];
+
+--------------------------------------------------
+STEP 6 — ADD TARGETED LOGGING (MINIMAL)
+--------------------------------------------------
+
+Inside production order branch, BEFORE update:
+
+console.log(`[PROGRESSION] Production order detected: ${orderId}`);
+
+AFTER successful update:
+
+console.log(`[PROGRESSION SUCCESS] ${orderId} → ${nextDepartment}`);
+
+DO NOT add excessive logs.
+
+--------------------------------------------------
+STEP 7 — DO NOT TOUCH ANYTHING ELSE
+--------------------------------------------------
+
+DO NOT:
+- modify department sequence arrays
+- modify routing logic
+- modify auditService
+- modify storage layer
+- modify other endpoints
+
+--------------------------------------------------
+STEP 8 — OUTPUT FORMAT
+--------------------------------------------------
+
+Provide:
+
+1. EXACT code diff (before → after)
+2. Confirmation:
+   - "P1 orders now route to production_orders lookup"
+   - "Silent failures removed"
+   - "UI now receives failedOrders when applicable"
+
+DO NOT include explanations.
+DO NOT suggest improvements.
+DO NOT continue beyond scope.
+
+END.

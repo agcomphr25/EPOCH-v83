@@ -120,6 +120,7 @@ import DomainTruthInspector from './pages/DomainTruthInspector';
 import QueueIntegrityMonitor from './pages/admin/QueueIntegrityMonitor';
 import ShippingStatusAuditPage from './pages/admin/ShippingStatusAuditPage';
 import ProductionControlTower from './pages/admin/ProductionControlTower';
+import LocateOrder from './pages/LocateOrder';
 import LinkGroupsReport from './pages/LinkGroupsReport';
 import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
@@ -483,6 +484,7 @@ function App() {
                   <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/admin/shipping-status-audit" component={ShippingStatusAuditPage} />
                   <Route path="/admin/control-tower" component={ProductionControlTower} />
+                  <Route path="/admin/locate-order" component={LocateOrder} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />

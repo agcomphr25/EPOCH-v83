@@ -4468,4 +4468,62 @@ router.get('/awaiting-signature', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/locate/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  console.log(`[LOCATE] Searching for ${orderId}`);
+
+  try {
+    const soOrder = await storage.getFinalizedOrderById(orderId);
+    if (soOrder) {
+      console.log(`[LOCATE RESULT] Found in SO (all_orders)`);
+      return res.json({
+        found: true,
+        orderId: soOrder.orderId,
+        sourceType: 'SO' as const,
+        currentDepartment: soOrder.currentDepartment ?? null,
+        status: soOrder.status ?? null,
+        customer: soOrder.customerId ?? null,
+        dueDate: soOrder.dueDate ?? null,
+        lastUpdated: (soOrder as any).updatedAt ?? null,
+      });
+    }
+
+    const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+    if (productionOrder) {
+      console.log(`[LOCATE RESULT] Found in PRODUCTION_ORDER (production_orders)`);
+      return res.json({
+        found: true,
+        orderId: productionOrder.orderId,
+        sourceType: 'PRODUCTION_ORDER' as const,
+        currentDepartment: productionOrder.currentDepartment ?? null,
+        status: productionOrder.productionStatus ?? null,
+        customer: productionOrder.customerName ?? null,
+        dueDate: productionOrder.dueDate ?? null,
+        lastUpdated: productionOrder.updatedAt ?? null,
+      });
+    }
+
+    const draft = await storage.getOrderDraft(orderId);
+    if (draft) {
+      console.log(`[LOCATE RESULT] Found in DRAFT (order_drafts)`);
+      return res.json({
+        found: true,
+        orderId: (draft as any).orderId ?? orderId,
+        sourceType: 'DRAFT' as const,
+        currentDepartment: (draft as any).currentDepartment ?? null,
+        status: (draft as any).status ?? null,
+        customer: (draft as any).customerId ?? null,
+        dueDate: (draft as any).dueDate ?? null,
+        lastUpdated: (draft as any).updatedAt ?? null,
+      });
+    }
+
+    console.log(`[LOCATE RESULT] Not found in any table: ${orderId}`);
+    return res.json({ found: false });
+  } catch (error) {
+    console.error('[LOCATE ERROR]', error);
+    return res.status(500).json({ found: false, error: 'Lookup failed' });
+  }
+});
+
 export default router;

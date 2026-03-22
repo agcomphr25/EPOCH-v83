@@ -475,4 +475,138 @@ router.get(
   }
 );
 
+// ─── KIOSK ENDPOINTS (no auth — tablet/kiosk use) ───────────────────────────
+
+function stableCanonicalIdKiosk(numericId: number): string {
+  const hex = numericId.toString(16).padStart(12, '0');
+  return `00000000-0000-4000-8000-${hex}`;
+}
+
+// GET /api/timekeeping/kiosk/buckets
+router.get('/kiosk/buckets', async (_req: Request, res: Response) => {
+  try {
+    const buckets = await pool.query(
+      `SELECT id, name, type FROM work_buckets WHERE active = true ORDER BY type, name`
+    );
+    res.json(buckets);
+  } catch (err: any) {
+    console.error('[Kiosk] Buckets error:', err);
+    res.status(500).json({ error: 'Failed to fetch buckets' });
+  }
+});
+
+// GET /api/timekeeping/kiosk/status/:employeeId
+router.get('/kiosk/status/:employeeId', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId) || employeeId <= 0) {
+      return res.status(400).json({ error: 'Invalid employee ID' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const rows = await pool.query(
+      `SELECT punch_type AS "punchType", punch_time AS "punchTime"
+       FROM punch_events
+       WHERE epoch_employee_id = $1 AND punch_time >= $2 AND punch_time < $3
+       ORDER BY punch_time ASC`,
+      [employeeId, today, tomorrow]
+    );
+
+    const lastPunch = rows.length > 0 ? rows[rows.length - 1] : null;
+    const firstClockIn = rows.find((r: any) => r.punchType === 'clock_in');
+    const lastClockOut = [...rows].reverse().find((r: any) => r.punchType === 'clock_out');
+
+    res.json({
+      status: lastPunch?.punchType ?? null,
+      lastPunch,
+      clockIn: firstClockIn?.punchTime ?? null,
+      clockOut: lastClockOut?.punchTime ?? null,
+    });
+  } catch (err: any) {
+    console.error('[Kiosk] Status error:', err);
+    res.status(500).json({ error: 'Failed to fetch status' });
+  }
+});
+
+// POST /api/timekeeping/kiosk/punch
+router.post('/kiosk/punch', async (req: Request, res: Response) => {
+  try {
+    const { employeeId, type, workBucketId } = req.body;
+
+    const numericId = parseInt(String(employeeId), 10);
+    if (isNaN(numericId) || numericId <= 0) {
+      return res.status(400).json({ error: 'Invalid employee ID' });
+    }
+
+    if (!type || !ALLOWED_PUNCH_TYPES.includes(type)) {
+      return res.status(400).json({ error: `type must be one of: ${ALLOWED_PUNCH_TYPES.join(', ')}` });
+    }
+
+    const punchType = type as PunchType;
+
+    if (punchType === 'clock_in' && !workBucketId) {
+      return res.status(400).json({ error: 'workBucketId is required when clocking in' });
+    }
+
+    if (workBucketId) {
+      const bucket = await pool.query(
+        `SELECT id FROM work_buckets WHERE id = $1 AND active = true`,
+        [workBucketId]
+      );
+      if (!bucket[0]) {
+        return res.status(400).json({ error: 'Invalid or inactive work bucket' });
+      }
+    }
+
+    // Sequence validation
+    const recent = await pool.query(
+      `SELECT punch_type AS "punchType"
+       FROM punch_events WHERE epoch_employee_id = $1
+       ORDER BY punch_time DESC LIMIT 1`,
+      [numericId]
+    );
+    const lastType = (recent[0]?.punchType ?? null) as PunchType | null;
+
+    if (punchType === 'clock_in' && lastType === 'clock_in') {
+      return res.status(400).json({ error: 'Already clocked in' });
+    }
+    if (punchType === 'clock_out' && lastType !== 'clock_in' && lastType !== 'break_end') {
+      return res.status(400).json({ error: 'Must clock in first' });
+    }
+    if (punchType === 'break_start' && lastType !== 'clock_in') {
+      return res.status(400).json({ error: 'Must be clocked in to start a break' });
+    }
+    if (punchType === 'break_end' && lastType !== 'break_start') {
+      return res.status(400).json({ error: 'No active break to end' });
+    }
+
+    const now = new Date();
+    await pool.query(
+      `INSERT INTO punch_events
+         (id, external_punch_id, canonical_id, epoch_employee_id,
+          punch_type, punch_time, source, work_bucket_id)
+       VALUES
+         (gen_random_uuid(), $1, $2, $3, $4, $5, 'kiosk', $6)`,
+      [
+        randomUUID(),
+        stableCanonicalIdKiosk(numericId),
+        numericId,
+        punchType,
+        now,
+        workBucketId ?? null,
+      ]
+    );
+
+    console.log(`[Kiosk] ${punchType} for employee ${numericId} bucket: ${workBucketId ?? 'none'}`);
+    res.json({ success: true, punchType });
+  } catch (err: any) {
+    console.error('[Kiosk] Punch error:', err);
+    res.status(500).json({ error: 'Failed to record punch' });
+  }
+});
+
 export default router;

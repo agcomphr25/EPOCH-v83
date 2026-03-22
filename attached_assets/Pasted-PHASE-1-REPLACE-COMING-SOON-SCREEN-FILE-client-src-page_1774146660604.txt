@@ -1,0 +1,125 @@
+PHASE 1 — REPLACE “COMING SOON” SCREEN
+FILE:
+client/src/pages/TimeClock.tsx  (or wherever that screen lives)
+
+---
+
+REMOVE:
+"Time clock functionality is coming soon"
+
+---
+
+REPLACE WITH:
+
+- status display
+- bucket selector
+- clock button
+🔵 PHASE 2 — LOAD STATUS + BUCKETS
+IMPORT:
+
+import { useEffect, useState } from 'react';
+import { apiRequest } from '@/lib/api';
+
+---
+
+STATE:
+
+const [status, setStatus] = useState('clock_out');
+const [lastPunch, setLastPunch] = useState(null);
+const [buckets, setBuckets] = useState([]);
+const [selectedBucket, setSelectedBucket] = useState('');
+LOAD DATA:
+
+useEffect(() => {
+  loadStatus();
+  loadBuckets();
+}, []);
+
+const loadStatus = async () => {
+  const res = await apiRequest('/api/timekeeping/status');
+  setStatus(res.status);
+  setLastPunch(res.lastPunch);
+};
+
+const loadBuckets = async () => {
+  const res = await apiRequest('/api/timekeeping/buckets');
+  setBuckets(res);
+  if (res.length > 0) setSelectedBucket(res[0].id);
+};
+🔵 PHASE 3 — CLOCK ACTION
+ADD:
+
+const handlePunch = async () => {
+  if (!selectedBucket) {
+    alert('Select a work bucket');
+    return;
+  }
+
+  const type = status === 'clock_in' ? 'clock_out' : 'clock_in';
+
+  await apiRequest('/api/timekeeping/punch', {
+    method: 'POST',
+    body: {
+      type,
+      workBucketId: selectedBucket
+    }
+  });
+
+  await loadStatus();
+};
+🔵 PHASE 4 — UI RENDER
+RENDER:
+
+<div className="p-6 max-w-md mx-auto">
+
+  <h2 className="text-xl font-bold mb-4">Time Clock</h2>
+
+  {/* STATUS */}
+  <div className="mb-4">
+    Status:
+    <span className="ml-2 font-semibold">
+      {status === 'clock_in' ? 'Clocked In' : 'Clocked Out'}
+    </span>
+  </div>
+
+  {/* LAST PUNCH */}
+  {lastPunch && (
+    <div className="mb-4 text-sm text-gray-500">
+      Last: {new Date(lastPunch.punchTime).toLocaleString()}
+    </div>
+  )}
+
+  {/* BUCKET SELECT */}
+  <select
+    className="w-full p-2 border rounded mb-4"
+    value={selectedBucket}
+    onChange={(e) => setSelectedBucket(e.target.value)}
+  >
+    {buckets.map(b => (
+      <option key={b.id} value={b.id}>
+        {b.name}
+      </option>
+    ))}
+  </select>
+
+  {/* BUTTON */}
+  <button
+    className="w-full bg-blue-600 text-white p-3 rounded"
+    onClick={handlePunch}
+  >
+    {status === 'clock_in' ? 'Clock Out' : 'Clock In'}
+  </button>
+
+</div>
+🔵 PHASE 5 — ADD SIMPLE GUARDRAILS
+DISABLE BUTTON if no bucket:
+
+disabled={!selectedBucket}
+🔵 PHASE 6 — TEST
+TEST:
+
+1. Page loads → status visible
+2. Buckets populate
+3. Click clock in → success
+4. Click clock out → success
+5. Refresh → state persists

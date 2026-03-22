@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { Eye, EyeOff, Scan, Settings, LogIn, Timer, Clock, CreditCard, Construction, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Scan, Settings, LogIn, Timer, Clock, CreditCard, ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import { queryClient } from '@/lib/queryClient';
+import TimeClockKiosk from '@/components/TimeClockKiosk';
 
 type LoginMode = 'regular' | 'p2-traveler' | 'timer-station' | 'badge' | 'time-clock';
 
@@ -327,14 +328,7 @@ export default function LoginPage() {
     </div>
   );
 
-  const renderTimeClock = () => (
-    <div className="text-center space-y-3 py-6">
-      <Construction className="w-10 h-10 mx-auto text-yellow-500" />
-      <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-        Time clock functionality is coming soon. This station will allow employees to clock in and out directly from the tablet.
-      </p>
-    </div>
-  );
+  const renderTimeClock = () => <TimeClockKiosk />;
 
   const renderContent = () => {
     switch (activeMode) {

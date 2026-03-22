@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 
@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { PIPELINE_DEPARTMENTS, DEPARTMENT_COLORS, type PipelineDepartment } from '@/constants/pipelineDepartments';
 import { calculateFlowPressure, type PressureLevel } from '@/utils/calculateFlowPressure';
-import { Filter, X } from 'lucide-react';
+import { Filter, X, Printer, LayoutGrid, BarChart2 } from 'lucide-react';
 
 type ScheduleStatus =
   | 'on-schedule'
@@ -256,7 +256,6 @@ const DepartmentFocusPanel = ({
 }) => {
   const targetColor = getDeptColor(targetDept);
 
-  // Collect ALL orders across every department whose expectedDepartment === targetDept
   const allMatchingOrders: (OrderDetail & { currentDept: string })[] = [];
   for (const [dept, orders] of Object.entries(pipelineDetails)) {
     for (const o of orders) {
@@ -266,7 +265,6 @@ const DepartmentFocusPanel = ({
     }
   }
 
-  // Group by currentDept in pipeline order
   const grouped = PIPELINE_DEPARTMENTS.reduce<Record<string, (OrderDetail & { currentDept: string })[]>>(
     (acc, dept) => {
       const matches = allMatchingOrders.filter((o) => o.currentDept === dept);
@@ -276,7 +274,6 @@ const DepartmentFocusPanel = ({
     {}
   );
 
-  // Also catch orders whose current dept is not in PIPELINE_DEPARTMENTS
   const unknownDeptOrders = allMatchingOrders.filter(
     (o) => !PIPELINE_DEPARTMENTS.includes(o.currentDept as PipelineDepartment)
   );
@@ -388,11 +385,184 @@ const DepartmentFocusPanel = ({
   );
 };
 
+// ── Department View (by-dept grid) ────────────────────────────────────────────
+const statusLabel: Record<ScheduleStatus, { label: string; cls: string }> = {
+  'on-schedule':     { label: 'On schedule',    cls: 'text-green-600 dark:text-green-400' },
+  'dept-overdue':    { label: 'Dept overdue',   cls: 'text-yellow-600 dark:text-yellow-400' },
+  'cannot-meet-due': { label: 'Cannot meet due',cls: 'text-orange-600 dark:text-orange-400' },
+  critical:          { label: 'Critical',        cls: 'text-red-600 dark:text-red-400' },
+};
+
+function formatDue(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const DepartmentView = ({
+  pipelineDetails,
+  getModelDisplayName,
+  onOrderClick,
+}: {
+  pipelineDetails: Record<string, OrderDetail[]>;
+  getModelDisplayName: (modelId: string) => string;
+  onOrderClick: (orderId: string) => void;
+}) => {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 dept-view-grid">
+      {PIPELINE_DEPARTMENTS.map((dept) => {
+        const orders = pipelineDetails[dept] ?? [];
+        const color = getDeptColor(dept);
+        const deptIdx = PIPELINE_DEPARTMENTS.indexOf(dept as PipelineDepartment);
+
+        const inPlace = orders.filter(
+          (o) => o.expectedDepartment?.toLowerCase() === dept.toLowerCase()
+        );
+        const shouldProgress = orders.filter(
+          (o) => {
+            const expIdx = PIPELINE_DEPARTMENTS.indexOf(o.expectedDepartment as PipelineDepartment);
+            return expIdx !== -1 && expIdx > deptIdx;
+          }
+        );
+        const aheadOfSchedule = orders.filter(
+          (o) => {
+            const expIdx = PIPELINE_DEPARTMENTS.indexOf(o.expectedDepartment as PipelineDepartment);
+            return expIdx !== -1 && expIdx < deptIdx;
+          }
+        );
+        const noExpected = orders.filter(
+          (o) => !o.expectedDepartment || !PIPELINE_DEPARTMENTS.includes(o.expectedDepartment as PipelineDepartment)
+        );
+
+        return (
+          <div
+            key={dept}
+            className="rounded-xl border overflow-hidden dept-card"
+            style={{ borderColor: color.hex }}
+          >
+            {/* Header */}
+            <div
+              className="px-4 py-3 flex items-center justify-between"
+              style={{ backgroundColor: color.hex }}
+            >
+              <span className="font-bold text-white text-sm">{dept}</span>
+              <span className="bg-white/20 text-white text-xs font-bold rounded-full px-2.5 py-0.5">
+                {orders.length} order{orders.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div className="p-3 space-y-3 bg-white dark:bg-gray-900">
+              {orders.length === 0 && (
+                <div className="text-xs text-gray-400 italic text-center py-3">Empty</div>
+              )}
+
+              {/* In correct place */}
+              {inPlace.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                    In correct place ({inPlace.length})
+                  </div>
+                  <OrderTable orders={inPlace} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-green-50 dark:bg-green-950/20" />
+                </div>
+              )}
+
+              {/* Needs to move forward (behind expected) */}
+              {shouldProgress.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block" />
+                    Should be further ahead ({shouldProgress.length})
+                  </div>
+                  <OrderTable orders={shouldProgress} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-orange-50 dark:bg-orange-950/20" showExpected />
+                </div>
+              )}
+
+              {/* Ahead of expected */}
+              {aheadOfSchedule.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                    Ahead of forecast ({aheadOfSchedule.length})
+                  </div>
+                  <OrderTable orders={aheadOfSchedule} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-blue-50 dark:bg-blue-950/20" showExpected />
+                </div>
+              )}
+
+              {/* No forecast */}
+              {noExpected.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" />
+                    No forecast ({noExpected.length})
+                  </div>
+                  <OrderTable orders={noExpected} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-gray-50 dark:bg-gray-800/40" />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const OrderTable = ({
+  orders,
+  getModelDisplayName,
+  onOrderClick,
+  rowBg,
+  showExpected = false,
+}: {
+  orders: OrderDetail[];
+  getModelDisplayName: (modelId: string) => string;
+  onOrderClick: (orderId: string) => void;
+  rowBg: string;
+  showExpected?: boolean;
+}) => (
+  <div className="rounded overflow-hidden border border-gray-200 dark:border-gray-700">
+    <table className="w-full text-xs border-collapse">
+      <thead>
+        <tr className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+          <th className="text-left px-2 py-1 font-medium">Order</th>
+          <th className="text-left px-2 py-1 font-medium">Model</th>
+          {showExpected && <th className="text-left px-2 py-1 font-medium">Forecast</th>}
+          <th className="text-left px-2 py-1 font-medium">Due</th>
+          <th className="text-left px-2 py-1 font-medium">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map((order, i) => {
+          const st = statusLabel[order.scheduleStatus] ?? { label: order.scheduleStatus, cls: '' };
+          return (
+            <tr
+              key={order.orderId}
+              className={`${i % 2 === 0 ? rowBg : 'bg-white dark:bg-gray-900'} cursor-pointer hover:brightness-95 transition-colors`}
+              onClick={() => onOrderClick(order.orderId)}
+            >
+              <td className="px-2 py-1 font-mono font-semibold">{getDisplayOrderId(order)}</td>
+              <td className="px-2 py-1 text-gray-600 dark:text-gray-300 truncate max-w-[90px]">{getModelDisplayName(order.modelId)}</td>
+              {showExpected && (
+                <td className="px-2 py-1 text-gray-500 dark:text-gray-400 truncate max-w-[80px]">{order.expectedDepartment ?? '—'}</td>
+              )}
+              <td className="px-2 py-1 whitespace-nowrap">{formatDue(order.dueDate)}</td>
+              <td className={`px-2 py-1 whitespace-nowrap font-medium ${st.cls}`}>{st.label}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+);
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PipelineVisualization() {
   const [, navigate] = useLocation();
   const [showOnlyCorrect, setShowOnlyCorrect] = useState(false);
   const [focusDept, setFocusDept] = useState<PipelineDepartment | null>(null);
+  const [viewMode, setViewMode] = useState<'pipeline' | 'department'>('pipeline');
+  const printRef = useRef<HTMLDivElement>(null);
 
   const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
     queryKey: ['/api/orders/pipeline-counts'],
@@ -416,9 +586,74 @@ export default function PipelineVisualization() {
     navigate(`/order-entry?draft=${orderId}`);
   };
 
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const totalOrders = Object.values(pipelineCounts || {}).reduce((s, c) => s + c, 0);
+    const printWindow = window.open('', '_blank', 'width=1100,height=800');
+    if (!printWindow) return;
+
+    const now = new Date().toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Production Pipeline Report — ${now}</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; color: #111; background: #fff; padding: 16px; }
+          h1 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+          .meta { font-size: 10px; color: #666; margin-bottom: 16px; }
+          .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+          .card { border-radius: 8px; border: 1px solid #ddd; overflow: hidden; break-inside: avoid; }
+          .card-header { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+          .card-header span { font-weight: 700; font-size: 11px; color: #fff; }
+          .card-header .count { background: rgba(255,255,255,0.2); border-radius: 99px; padding: 1px 8px; font-size: 10px; font-weight: 700; color: #fff; }
+          .card-body { padding: 8px; background: #fff; }
+          .section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 3px; display: flex; align-items: center; gap: 4px; }
+          .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+          .green { color: #16a34a; } .dot-green { background: #16a34a; }
+          .orange { color: #ea580c; } .dot-orange { background: #ea580c; }
+          .blue { color: #2563eb; } .dot-blue { background: #2563eb; }
+          .gray { color: #6b7280; } .dot-gray { background: #9ca3af; }
+          table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          th { text-align: left; padding: 2px 4px; background: #f3f4f6; color: #6b7280; font-weight: 600; border-bottom: 1px solid #e5e7eb; }
+          td { padding: 2px 4px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+          td.mono { font-family: monospace; font-weight: 600; }
+          .empty { color: #9ca3af; font-style: italic; text-align: center; padding: 6px; font-size: 10px; }
+          .status-on { color: #16a34a; }
+          .status-overdue { color: #ca8a04; }
+          .status-cannot { color: #ea580c; }
+          .status-critical { color: #dc2626; font-weight: 700; }
+          @media print {
+            body { padding: 8px; }
+            .grid { grid-template-columns: repeat(3, 1fr); }
+            .card { break-inside: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Production Pipeline — Department View</h1>
+        <div class="meta">Generated ${now} &nbsp;·&nbsp; ${totalOrders} active orders</div>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 400);
+  };
+
   const isLoading = countsLoading || detailsLoading;
 
-  // Pre-compute expected-dept totals for the department selector buttons
   const expectedCounts = useMemo(() => {
     if (!pipelineDetails) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
@@ -444,25 +679,110 @@ export default function PipelineVisualization() {
   }
 
   const totalOrders = Object.values(pipelineCounts || {}).reduce((sum, c) => sum + c, 0);
-
   const deptCounts = PIPELINE_DEPARTMENTS.map((name) => pipelineCounts?.[name] ?? 0);
+
+  // Build print-friendly HTML for dept view
+  const buildPrintTable = (orders: OrderDetail[], showExpected: boolean) => {
+    if (orders.length === 0) return '';
+    const rows = orders.map((o) => {
+      const model = getModelDisplayName(o.modelId);
+      const due = formatDue(o.dueDate);
+      const stCls = o.scheduleStatus === 'on-schedule' ? 'status-on'
+        : o.scheduleStatus === 'dept-overdue' ? 'status-overdue'
+        : o.scheduleStatus === 'cannot-meet-due' ? 'status-cannot'
+        : 'status-critical';
+      const stLabel = statusLabel[o.scheduleStatus]?.label ?? o.scheduleStatus;
+      const expCol = showExpected ? `<td>${o.expectedDepartment ?? '—'}</td>` : '';
+      return `<tr><td class="mono">${getDisplayOrderId(o)}</td><td>${model}</td>${expCol}<td>${due}</td><td class="${stCls}">${stLabel}</td></tr>`;
+    }).join('');
+    const expHeader = showExpected ? '<th>Forecast</th>' : '';
+    return `<table><thead><tr><th>Order</th><th>Model</th>${expHeader}<th>Due</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+  };
+
+  const buildPrintContent = () => {
+    if (!pipelineDetails) return '';
+    return PIPELINE_DEPARTMENTS.map((dept) => {
+      const orders = pipelineDetails[dept] ?? [];
+      const color = getDeptColor(dept);
+      const deptIdx = PIPELINE_DEPARTMENTS.indexOf(dept as PipelineDepartment);
+      const inPlace = orders.filter((o) => o.expectedDepartment?.toLowerCase() === dept.toLowerCase());
+      const shouldProgress = orders.filter((o) => {
+        const expIdx = PIPELINE_DEPARTMENTS.indexOf(o.expectedDepartment as PipelineDepartment);
+        return expIdx !== -1 && expIdx > deptIdx;
+      });
+      const ahead = orders.filter((o) => {
+        const expIdx = PIPELINE_DEPARTMENTS.indexOf(o.expectedDepartment as PipelineDepartment);
+        return expIdx !== -1 && expIdx < deptIdx;
+      });
+      const noForecast = orders.filter((o) => !o.expectedDepartment || !PIPELINE_DEPARTMENTS.includes(o.expectedDepartment as PipelineDepartment));
+
+      const inPlaceSection = inPlace.length ? `<div class="section-label green"><span class="dot dot-green"></span>In correct place (${inPlace.length})</div>${buildPrintTable(inPlace, false)}` : '';
+      const progressSection = shouldProgress.length ? `<div class="section-label orange"><span class="dot dot-orange"></span>Should be further ahead (${shouldProgress.length})</div>${buildPrintTable(shouldProgress, true)}` : '';
+      const aheadSection = ahead.length ? `<div class="section-label blue"><span class="dot dot-blue"></span>Ahead of forecast (${ahead.length})</div>${buildPrintTable(ahead, true)}` : '';
+      const noForecastSection = noForecast.length ? `<div class="section-label gray"><span class="dot dot-gray"></span>No forecast (${noForecast.length})</div>${buildPrintTable(noForecast, false)}` : '';
+      const emptyMsg = orders.length === 0 ? '<div class="empty">Empty</div>' : '';
+
+      return `<div class="card"><div class="card-header" style="background:${color.hex}"><span>${dept}</span><span class="count">${orders.length}</span></div><div class="card-body">${emptyMsg}${inPlaceSection}${progressSection}${aheadSection}${noForecastSection}</div></div>`;
+    }).join('');
+  };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          Production Pipeline Overview
-          <div className="flex items-center gap-2">
-            <Button
-              variant={showOnlyCorrect ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setShowOnlyCorrect((v) => !v)}
-              className="text-xs h-7 gap-1"
-              title={showOnlyCorrect ? 'Showing only orders in their correct department' : 'Showing all orders'}
-            >
-              <Filter className="h-3 w-3" />
-              {showOnlyCorrect ? 'Correct Dept Only' : 'Show All'}
-            </Button>
+        <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+          <span>Production Pipeline Overview</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* View toggle */}
+            <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <button
+                onClick={() => setViewMode('pipeline')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === 'pipeline'
+                    ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <BarChart2 className="h-3 w-3" />
+                Pipeline
+              </button>
+              <button
+                onClick={() => setViewMode('department')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-gray-700 ${
+                  viewMode === 'department'
+                    ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <LayoutGrid className="h-3 w-3" />
+                By Department
+              </button>
+            </div>
+
+            {viewMode === 'pipeline' && (
+              <Button
+                variant={showOnlyCorrect ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowOnlyCorrect((v) => !v)}
+                className="text-xs h-7 gap-1"
+                title={showOnlyCorrect ? 'Showing only orders in their correct department' : 'Showing all orders'}
+              >
+                <Filter className="h-3 w-3" />
+                {showOnlyCorrect ? 'Correct Dept Only' : 'Show All'}
+              </Button>
+            )}
+
+            {viewMode === 'department' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                className="text-xs h-7 gap-1.5"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print Report
+              </Button>
+            )}
+
             <Badge variant="outline" className="text-sm">
               {totalOrders} Active Orders
             </Badge>
@@ -470,222 +790,216 @@ export default function PipelineVisualization() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* Department sort buttons */}
-        <div className="mb-3">
-          <div className="text-xs font-semibold text-muted-foreground mb-1.5">Sort by expected department:</div>
-          <div className="flex flex-wrap gap-1.5">
-            {PIPELINE_DEPARTMENTS.map((dept) => {
-              const color = getDeptColor(dept);
-              const count = expectedCounts[dept] ?? 0;
-              const isActive = focusDept === dept;
-              return (
-                <button
-                  key={dept}
-                  onClick={() => setFocusDept(isActive ? null : dept)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
-                    isActive
-                      ? 'text-white shadow-md scale-105'
-                      : 'bg-transparent hover:opacity-80'
-                  }`}
-                  style={
-                    isActive
-                      ? { backgroundColor: color.hex, borderColor: color.hex }
-                      : { borderColor: color.hex, color: color.hex }
-                  }
-                >
-                  {dept}
-                  {count > 0 && (
-                    <span
-                      className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
-                        isActive ? 'bg-white/25 text-white' : 'text-white'
-                      }`}
-                      style={isActive ? {} : { backgroundColor: color.hex }}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Department focus panel */}
-        {focusDept && pipelineDetails && (
-          <DepartmentFocusPanel
-            targetDept={focusDept}
+        {/* ── Department View ─────────────────────────────────────── */}
+        {viewMode === 'department' && pipelineDetails && (
+          <DepartmentView
             pipelineDetails={pipelineDetails}
             getModelDisplayName={getModelDisplayName}
             onOrderClick={handleOrderClick}
-            onClose={() => setFocusDept(null)}
           />
         )}
 
-        {/* Pipeline row: departments interleaved with pressure arrows */}
-        <div className="overflow-x-auto pb-2 mt-4">
-          <div className="flex items-start min-w-max gap-0">
-            {PIPELINE_DEPARTMENTS.map((deptName, idx) => {
-              const count = pipelineCounts?.[deptName] ?? 0;
-              const orders = pipelineDetails?.[deptName] ?? [];
-              const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
-              const deptColor = getDeptColor(deptName);
+        {/* Hidden print-ready content (always rendered when dept view data exists) */}
+        {pipelineDetails && (
+          <div
+            ref={printRef}
+            style={{ display: 'none' }}
+            dangerouslySetInnerHTML={{ __html: `<div class="grid">${buildPrintContent()}</div>` }}
+          />
+        )}
 
-              const upstreamCount = idx > 0 ? deptCounts[idx - 1] : null;
-              const upstreamName  = idx > 0 ? PIPELINE_DEPARTMENTS[idx - 1] : null;
-              const upstreamPressure =
-                upstreamCount !== null
-                  ? calculateFlowPressure(upstreamCount, count)
-                  : null;
-              const isHighPressureTarget = upstreamPressure?.pressureLevel === 'HIGH';
-              const isFocused = focusDept === deptName;
-
-              const correctCount = orders.filter(
-                (o) =>
-                  o.expectedDepartment &&
-                  o.expectedDepartment.toLowerCase() === deptName.toLowerCase()
-              ).length;
-              const wrongCount = orders.length - correctCount;
-
-              return (
-                <React.Fragment key={deptName}>
-                  {idx > 0 && upstreamCount !== null && upstreamName && (
-                    <FlowPressureIndicator
-                      upstreamName={upstreamName}
-                      downstreamName={deptName}
-                      upstreamCount={upstreamCount}
-                      downstreamCount={count}
-                    />
-                  )}
-
-                  <div
-                    className={`flex-shrink-0 w-24 text-center space-y-2 rounded-lg p-1 transition-colors ${
-                      isFocused
-                        ? 'ring-2 ring-offset-1'
-                        : isHighPressureTarget
-                        ? 'ring-2 ring-red-500 ring-offset-1 bg-red-50 dark:bg-red-950/20'
-                        : ''
-                    }`}
-                    style={isFocused ? { '--tw-ring-color': deptColor.hex } as React.CSSProperties : {}}
-                  >
-                    <div
-                      className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl text-white relative ${
-                        count > 45 ? 'ring-2 ring-yellow-400 ring-offset-1' : ''
+        {/* ── Pipeline View ───────────────────────────────────────── */}
+        {viewMode === 'pipeline' && (
+          <>
+            {/* Department sort buttons */}
+            <div className="mb-3">
+              <div className="text-xs font-semibold text-muted-foreground mb-1.5">Sort by expected department:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {PIPELINE_DEPARTMENTS.map((dept) => {
+                  const color = getDeptColor(dept);
+                  const count = expectedCounts[dept] ?? 0;
+                  const isActive = focusDept === dept;
+                  return (
+                    <button
+                      key={dept}
+                      onClick={() => setFocusDept(isActive ? null : dept)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
+                        isActive
+                          ? 'text-white shadow-md scale-105'
+                          : 'bg-transparent hover:opacity-80'
                       }`}
-                      style={{ backgroundColor: deptColor.hex }}
+                      style={
+                        isActive
+                          ? { backgroundColor: color.hex, borderColor: color.hex }
+                          : { borderColor: color.hex, color: color.hex }
+                      }
                     >
-                      {count}
-                      {count > 45 && (
-                        <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">!</span>
-                      )}
-                    </div>
-
-                    <div className="text-xs font-medium leading-tight">{deptName}</div>
-
-                    {wrongCount > 0 && (
-                      <div className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold">
-                        {wrongCount} wrong dept
-                      </div>
-                    )}
-
-                    <div className="min-h-[60px] p-2 bg-gray-50 dark:bg-gray-800/50 rounded border overflow-hidden">
-                      <DepartmentVisualization
-                        department={deptName}
-                        orders={orders}
-                        getModelDisplayName={getModelDisplayName}
-                        onOrderClick={handleOrderClick}
-                        showOnlyCorrect={showOnlyCorrect}
-                      />
-                    </div>
-
-                    <Progress value={percentage} className="h-2" />
-                    <div className="text-xs text-gray-500">{percentage.toFixed(1)}%</div>
-
-                    {upstreamPressure && (
-                      <div
-                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-tight ${
-                          pressureColors[upstreamPressure.pressureLevel].badge
-                        }`}
-                      >
-                        {upstreamPressure.pressureLevel} pressure
-                        <span className="block font-normal opacity-75">
-                          ↑ {upstreamCount} upstream
+                      {dept}
+                      {count > 0 && (
+                        <span
+                          className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
+                            isActive ? 'bg-white/25 text-white' : 'text-white'
+                          }`}
+                          style={isActive ? {} : { backgroundColor: color.hex }}
+                        >
+                          {count}
                         </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Department focus panel */}
+            {focusDept && pipelineDetails && (
+              <DepartmentFocusPanel
+                targetDept={focusDept}
+                pipelineDetails={pipelineDetails}
+                getModelDisplayName={getModelDisplayName}
+                onOrderClick={handleOrderClick}
+                onClose={() => setFocusDept(null)}
+              />
+            )}
+
+            {/* Pipeline row */}
+            <div className="overflow-x-auto pb-2 mt-4">
+              <div className="flex items-start min-w-max gap-0">
+                {PIPELINE_DEPARTMENTS.map((deptName, idx) => {
+                  const count = pipelineCounts?.[deptName] ?? 0;
+                  const orders = pipelineDetails?.[deptName] ?? [];
+                  const percentage = totalOrders > 0 ? (count / totalOrders) * 100 : 0;
+                  const deptColor = getDeptColor(deptName);
+
+                  const upstreamCount = idx > 0 ? deptCounts[idx - 1] : null;
+                  const upstreamName  = idx > 0 ? PIPELINE_DEPARTMENTS[idx - 1] : null;
+                  const upstreamPressure =
+                    upstreamCount !== null
+                      ? calculateFlowPressure(upstreamCount, count)
+                      : null;
+                  const isHighPressureTarget = upstreamPressure?.pressureLevel === 'HIGH';
+                  const isFocused = focusDept === deptName;
+
+                  const correctCount = orders.filter(
+                    (o) =>
+                      o.expectedDepartment &&
+                      o.expectedDepartment.toLowerCase() === deptName.toLowerCase()
+                  ).length;
+                  const wrongCount = orders.length - correctCount;
+
+                  return (
+                    <React.Fragment key={deptName}>
+                      {idx > 0 && upstreamCount !== null && upstreamName && (
+                        <FlowPressureIndicator
+                          upstreamName={upstreamName}
+                          downstreamName={deptName}
+                          upstreamCount={upstreamCount}
+                          downstreamCount={count}
+                        />
+                      )}
+
+                      <div
+                        className={`flex-shrink-0 w-24 text-center space-y-2 rounded-lg p-1 transition-colors ${
+                          isFocused
+                            ? 'ring-2 ring-offset-1'
+                            : isHighPressureTarget
+                            ? 'ring-2 ring-red-500 ring-offset-1 bg-red-50 dark:bg-red-950/20'
+                            : ''
+                        }`}
+                        style={isFocused ? { '--tw-ring-color': deptColor.hex } as React.CSSProperties : {}}
+                      >
+                        <div
+                          className={`w-full h-16 rounded-lg flex items-center justify-center font-bold text-xl text-white relative ${
+                            count > 45 ? 'ring-2 ring-yellow-400 ring-offset-1' : ''
+                          }`}
+                          style={{ backgroundColor: deptColor.hex }}
+                        >
+                          {count}
+                          {count > 45 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-yellow-400 text-black text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">!</span>
+                          )}
+                        </div>
+
+                        <div className="text-xs font-medium leading-tight">{deptName}</div>
+
+                        {wrongCount > 0 && (
+                          <div className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold">
+                            {wrongCount} wrong dept
+                          </div>
+                        )}
+
+                        <div className="min-h-[60px] p-2 bg-gray-50 dark:bg-gray-800/50 rounded border overflow-hidden">
+                          <DepartmentVisualization
+                            department={deptName}
+                            orders={orders}
+                            getModelDisplayName={getModelDisplayName}
+                            onOrderClick={handleOrderClick}
+                            showOnlyCorrect={showOnlyCorrect}
+                          />
+                        </div>
+
+                        <Progress value={percentage} className="h-2" />
+                        <div className="text-xs text-gray-500">{percentage.toFixed(1)}%</div>
+
+                        {upstreamPressure && (
+                          <div
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-tight ${
+                              pressureColors[upstreamPressure.pressureLevel].badge
+                            }`}
+                          >
+                            {upstreamPressure.pressureLevel} pressure
+                            <span className="block font-normal opacity-75">
+                              ↑ {upstreamCount} upstream
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">
+                  Card color = forecast expected dept. Grey = order is in its correct dept. Colored = order is in wrong dept.
+                </div>
+                <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded bg-gray-200 border border-gray-400" />
+                    <span>Correct dept (grey)</span>
                   </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
+                  {PIPELINE_DEPARTMENTS.map((dept) => {
+                    const color = getDeptColor(dept);
+                    return (
+                      <div key={dept} className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded" style={{ backgroundColor: color.hex }} />
+                        <span>{dept}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-        {/* Legend */}
-        <div className="mt-4 space-y-3">
-          {/* Department color legend */}
-          <div>
-            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">
-              Card color = forecast expected dept. Grey = order is in its correct dept. Colored = order is in wrong dept.
-            </div>
-            <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-gray-200 border border-gray-400" />
-                <span>Correct dept (grey)</span>
-              </div>
-              {PIPELINE_DEPARTMENTS.map((dept) => {
-                const color = getDeptColor(dept);
-                return (
-                  <div key={dept} className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded" style={{ backgroundColor: color.hex }} />
-                    <span>{dept}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Schedule status legend */}
-          <div>
-            <div className="text-xs font-semibold text-gray-500 mb-1.5 text-center">Schedule Status (border / dot indicator — only on wrong-dept cards)</div>
-            <div className="flex items-center justify-center gap-4 text-xs flex-wrap">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded bg-gray-300" />
-                <span>On Schedule (no border)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded border-2 border-yellow-400 bg-gray-200" />
-                <span>Dept Overdue</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded border-2 border-orange-500 bg-gray-200" />
-                <span>Can't Meet Due</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded border-2 border-red-600 bg-gray-200" />
-                <span>Critical</span>
+              <div className="flex items-center justify-center gap-4 text-xs flex-wrap pt-1 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded border-2 border-yellow-400" />
+                  <span>Dept overdue</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded border-2 border-orange-500" />
+                  <span>Cannot meet due date</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded border-2 border-red-600" />
+                  <span>Critical</span>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Pressure + overloaded legend */}
-          <div className="flex items-center justify-center gap-4 text-xs text-gray-600 flex-wrap">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded border-2 border-yellow-400 bg-gray-300" />
-              <span>Header ring: &gt;45 Orders</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-              <span>Low pressure</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-              <span>Medium pressure</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-              <span>High pressure — bottleneck risk</span>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

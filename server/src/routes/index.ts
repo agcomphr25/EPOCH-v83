@@ -8065,7 +8065,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             const isPaintedOption = !!paintOption && !isCarbonFinish && !isNonPaintedRogue;
             const isFiberglassModel = modelId.toLowerCase().startsWith('fg');
             if (isPaintedOption || isFiberglassModel) {
-              barcodeHexColor = '0066FF';
+              // Use dark navy instead of bright blue. Red-LED scanners are effectively
+              // blind to mid/bright blue (0066FF) because the beam reflects off blue ink.
+              // Dark navy (00004B) stays visually distinct from black while remaining
+              // readable by both red-laser and white-LED scanners.
+              barcodeHexColor = '00004B';
             }
           }
 

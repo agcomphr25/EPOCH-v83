@@ -1,0 +1,166 @@
+PROMPT 1 — AUDIT VIEW DEEP ANALYSIS (WHAT ARE WE CAPTURING?)
+
+This is about:
+
+“Is our audit trail actually complete and useful?”
+
+SYSTEM ROLE: Senior EPOCH Audit & Compliance Engineer
+MODE: READ-ONLY FORENSIC AUDIT (STRICT)
+
+OBJECTIVE:
+Analyze the current audit/event system (audit_events, timeline views, logs) to determine:
+1) What information is captured
+2) What is missing
+3) What is misleading or incomplete
+
+DO NOT propose fixes yet.
+
+--------------------------------------------------
+🚨 RULES
+--------------------------------------------------
+
+- DO NOT modify code
+- DO NOT suggest implementation yet
+- ONLY analyze current behavior
+- Every claim must reference actual files/functions
+
+--------------------------------------------------
+STEP 1 — IDENTIFY ALL AUDIT DATA SOURCES
+--------------------------------------------------
+
+Search for:
+
+- audit_events table
+- logEvent
+- auditService.logFieldChanges
+- auditService.recordDepartmentEntry
+- any other logging systems
+
+OUTPUT:
+
+System | Table | Trigger | Data Captured
+
+--------------------------------------------------
+STEP 2 — TRACE AUDIT WRITE PATHS
+--------------------------------------------------
+
+For BOTH:
+- all_orders
+- production_orders
+
+Trace:
+
+- progression endpoints
+- update endpoints
+- badge scan flows (if any)
+
+OUTPUT:
+
+Endpoint | Order Type | Audit Written? | What fields captured
+
+--------------------------------------------------
+STEP 3 — FIELD-LEVEL AUDIT ANALYSIS
+--------------------------------------------------
+
+For audit_events:
+
+List ALL fields captured per event:
+
+- field name
+- before value
+- after value
+- actor
+- timestamp
+
+Then identify what is NOT captured but should be:
+
+Examples:
+- department duration
+- actor type (badge vs manual)
+- source of action
+- batch vs single operation
+
+OUTPUT:
+
+Field | Captured? | Source | Missing?
+
+--------------------------------------------------
+STEP 4 — ACTOR / SOURCE TRACEABILITY
+--------------------------------------------------
+
+Determine:
+
+- how "who performed action" is tracked
+- whether system distinguishes:
+  - employee badge scan
+  - admin UI click
+  - automated process
+
+OUTPUT:
+
+Action Type | Actor Captured? | Source Captured? | Reliability
+
+--------------------------------------------------
+STEP 5 — TIMELINE UI ANALYSIS
+--------------------------------------------------
+
+Inspect current timeline UI:
+
+(example: /order-timeline/... page)
+
+Determine:
+
+- what data source it uses (audit_events vs others)
+- what is shown
+- what is hidden
+
+OUTPUT:
+
+UI Element | Data Source | Missing Info
+
+--------------------------------------------------
+STEP 6 — AUDIT QUALITY SCORING
+--------------------------------------------------
+
+Evaluate audit system across:
+
+- completeness
+- accuracy
+- usability
+- compliance readiness
+
+OUTPUT:
+
+Category | Score (1–5) | Reason
+
+--------------------------------------------------
+STEP 7 — CRITICAL GAPS
+--------------------------------------------------
+
+List the MOST IMPORTANT missing audit capabilities:
+
+Examples:
+- cannot reconstruct full lifecycle
+- cannot identify who progressed item in some cases
+- cannot distinguish scan vs click
+- timestamps missing
+
+OUTPUT:
+
+Gap | Impact | Where it originates
+
+--------------------------------------------------
+FINAL OUTPUT FORMAT
+--------------------------------------------------
+
+1. AUDIT SYSTEM OVERVIEW
+2. WHAT IS CAPTURED (COMPLETE LIST)
+3. WHAT IS MISSING (CRITICAL)
+4. ACTOR / SOURCE TRACEABILITY
+5. TIMELINE UI LIMITATIONS
+6. AUDIT QUALITY SCORE
+7. TOP 5 CRITICAL GAPS
+
+REMEMBER:
+Do NOT propose fixes yet.
+We are defining what a “complete audit system” requires.

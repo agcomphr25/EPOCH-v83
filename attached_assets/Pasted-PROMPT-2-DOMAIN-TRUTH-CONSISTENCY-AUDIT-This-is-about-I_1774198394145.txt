@@ -1,0 +1,164 @@
+PROMPT 2 — DOMAIN TRUTH & CONSISTENCY AUDIT
+
+This is about:
+
+“Is the system telling the truth everywhere?”
+
+SYSTEM ROLE: Senior EPOCH Data Integrity & Consistency Auditor
+MODE: READ-ONLY FORENSIC AUDIT (STRICT)
+
+OBJECTIVE:
+Determine whether EPOCH presents consistent and accurate "truth" across:
+- Domain Truth Inspector
+- Order Timeline
+- Department Queues
+- Locate Order
+- Database state
+
+Identify ALL inconsistencies and conflicting sources of truth.
+
+DO NOT propose fixes yet.
+
+--------------------------------------------------
+🚨 RULES
+--------------------------------------------------
+
+- DO NOT modify code
+- DO NOT suggest solutions yet
+- ONLY identify inconsistencies
+- Every claim must reference actual files/functions
+
+--------------------------------------------------
+STEP 1 — DEFINE SOURCES OF TRUTH
+--------------------------------------------------
+
+Identify all data sources used for:
+
+- current department
+- order status
+- history/timeline
+
+Examples:
+- all_orders
+- production_orders
+- order_department_transitions
+- audit_events
+
+OUTPUT:
+
+Concept | Source | Used By
+
+--------------------------------------------------
+STEP 2 — TRACE DOMAIN TRUTH INSPECTOR
+--------------------------------------------------
+
+Analyze DTI:
+
+- what tables it queries
+- how it resolves orderId
+- fallback logic
+
+OUTPUT:
+
+DTI Section | Data Source | Coverage | Gaps
+
+--------------------------------------------------
+STEP 3 — CROSS-VIEW COMPARISON
+--------------------------------------------------
+
+For a SINGLE order:
+
+Compare:
+
+- DTI
+- Order Timeline
+- Department Queue
+- Locate Order
+
+Check:
+
+- currentDepartment consistency
+- status consistency
+- history consistency
+
+OUTPUT:
+
+View | Data Source | Matches DB? | Issues
+
+--------------------------------------------------
+STEP 4 — IDENTIFY CONFLICT SCENARIOS
+--------------------------------------------------
+
+List cases where system shows conflicting information:
+
+Examples:
+- queue shows CNC but timeline shows Barcode
+- DTI says not found but Locate finds it
+- history missing in one view but present in another
+
+OUTPUT:
+
+Scenario | Root Cause | Affected Views
+
+--------------------------------------------------
+STEP 5 — PARTIAL DATA PROBLEMS
+--------------------------------------------------
+
+Identify cases where:
+
+- data exists but is not displayed
+- data displayed is incomplete
+
+Examples:
+- transitions exist but timeline uses audit_events
+- production_orders excluded from certain queries
+
+OUTPUT:
+
+Case | Data Exists? | Displayed? | Why mismatch
+
+--------------------------------------------------
+STEP 6 — RELIABILITY SCORING
+--------------------------------------------------
+
+Score each system:
+
+- DTI
+- Timeline
+- Queues
+- Locate Order
+
+OUTPUT:
+
+System | Accuracy (1–5) | Consistency (1–5) | Notes
+
+--------------------------------------------------
+STEP 7 — ROOT CAUSE SUMMARY
+--------------------------------------------------
+
+Identify the CORE reasons for inconsistency:
+
+Examples:
+- multiple data sources for same concept
+- incomplete query coverage
+- fallback logic gaps
+
+OUTPUT:
+
+Root Cause | Impact
+
+--------------------------------------------------
+FINAL OUTPUT FORMAT
+--------------------------------------------------
+
+1. SOURCES OF TRUTH MAP
+2. DTI ANALYSIS
+3. CROSS-VIEW CONSISTENCY CHECK
+4. CONFLICT SCENARIOS
+5. PARTIAL DATA ISSUES
+6. SYSTEM RELIABILITY SCORES
+7. ROOT CAUSE SUMMARY
+
+REMEMBER:
+Do NOT fix anything yet.
+We are defining what “truth” means in EPOCH.

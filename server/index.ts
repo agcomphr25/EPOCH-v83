@@ -2375,22 +2375,6 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ employees labor_rate migration:', lrErr?.message);
       }
 
-      // Ensure job_allocations table exists for distributing job labor cost across projects
-      try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS job_allocations (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            job_id INTEGER NOT NULL REFERENCES production_orders(id),
-            project_id UUID NOT NULL REFERENCES projects(id),
-            allocation_percent NUMERIC,
-            allocation_units NUMERIC,
-            created_at TIMESTAMP DEFAULT now()
-          )
-        `);
-        console.log('✅ Ensured job_allocations table exists');
-      } catch (jaErr: any) {
-        console.warn('⚠️ job_allocations migration:', jaErr?.message);
-      }
 
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');

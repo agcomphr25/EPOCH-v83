@@ -1,0 +1,229 @@
+PROMPT 1 — MOVE TABLE CREATION TO MIGRATION
+You are performing a SAFE MIGRATION EXTRACTION.
+
+GOAL:
+Move job_allocations table creation OUT of runtime (server startup)
+and into a proper database migration.
+
+IMPORTANT:
+- DO NOT break existing data
+- DO NOT duplicate table creation
+- Preserve exact schema
+- Remove any "create on boot" logic
+
+---
+
+STEP 1 — FIND RUNTIME CREATION
+
+Search for:
+- CREATE TABLE job_allocations
+- ensureJobAllocationsTable
+- any db.query that creates job_allocations
+
+---
+
+STEP 2 — COPY EXACT SCHEMA
+
+Extract the FULL CREATE TABLE statement currently used.
+
+---
+
+STEP 3 — CREATE MIGRATION FILE
+
+Create new file:
+
+/migrations/0004_job_allocations.sql
+
+Paste:
+
+CREATE TABLE IF NOT EXISTS job_allocations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id integer NOT NULL,
+  project_id uuid NOT NULL,
+  allocation_percent numeric,
+  allocation_units numeric,
+  created_at timestamp DEFAULT now()
+);
+
+---
+
+STEP 4 — ADD FKs (if not already present)
+
+ALTER TABLE job_allocations
+ADD CONSTRAINT fk_job
+FOREIGN KEY (job_id) REFERENCES production_orders(id);
+
+ALTER TABLE job_allocations
+ADD CONSTRAINT fk_project
+FOREIGN KEY (project_id) REFERENCES projects(id);
+
+---
+
+STEP 5 — REMOVE RUNTIME CREATION
+
+Delete or disable:
+- any "create table on startup" logic
+- any boot-time schema enforcement for this table
+
+---
+
+STEP 6 — VERIFY
+
+- App boots clean
+- Table still exists
+- No duplicate creation logs
+- Existing allocations still work
+
+---
+
+OUTPUT:
+
+- Migration file contents
+- File(s) removed/edited
+- Confirmation no runtime creation remains
+🔵 PROMPT 2 — ADD ALLOCATION VALIDATION
+You are adding VALIDATION to job allocation logic.
+
+GOAL:
+Ensure invalid allocations cannot be saved.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+ROUTE:
+POST /admin/job-allocate
+
+---
+
+STEP 1 — FIND HANDLER
+
+Locate the route that processes:
+
+jobId + allocations array
+
+---
+
+STEP 2 — ADD VALIDATION BLOCK
+
+BEFORE any INSERTS, add:
+
+const totalUnits = allocations.reduce((sum, a) => sum + (a.units || 0), 0);
+
+if (!allocations || allocations.length === 0) {
+  return res.status(400).json({ error: 'At least one allocation required' });
+}
+
+if (totalUnits <= 0) {
+  return res.status(400).json({ error: 'Total units must be greater than 0' });
+}
+
+for (const a of allocations) {
+  if (!a.projectId) {
+    return res.status(400).json({ error: 'projectId required' });
+  }
+
+  if (!a.units || a.units <= 0) {
+    return res.status(400).json({ error: 'units must be > 0' });
+  }
+}
+
+---
+
+STEP 3 — OPTIONAL (STRONG RECOMMENDATION)
+
+Prevent duplicate projects:
+
+const projectIds = allocations.map(a => a.projectId);
+const unique = new Set(projectIds);
+
+if (unique.size !== projectIds.length) {
+  return res.status(400).json({ error: 'Duplicate projects not allowed' });
+}
+
+---
+
+STEP 4 — VERIFY
+
+- Empty allocations → blocked
+- Zero units → blocked
+- Negative units → blocked
+- Duplicate project → blocked
+- Valid case → passes
+
+---
+
+OUTPUT:
+
+- Updated route code
+- List of validation rules enforced
+🔵 PROMPT 3 — ADD ALLOCATION AUDIT LOGGING
+You are adding AUDIT LOGGING for job allocations.
+
+GOAL:
+Track every allocation change in admin_audit_log.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+ROUTE:
+POST /admin/job-allocate
+
+---
+
+STEP 1 — AFTER SUCCESSFUL SAVE
+
+After allocations are inserted (or replaced), ADD:
+
+await db.query(`
+  INSERT INTO admin_audit_log (
+    field_name,
+    field_label,
+    old_value,
+    new_value,
+    changed_by,
+    user_role,
+    change_type,
+    reason,
+    timestamp
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+`, [
+  'JOB_ALLOCATION',
+  'Job Allocation',
+  null,
+  JSON.stringify({
+    jobId,
+    allocations
+  }),
+  req.user.username,
+  req.user.role,
+  'JOB_ALLOCATION',
+  'Manual allocation update'
+]);
+
+---
+
+STEP 2 — OPTIONAL (BETTER)
+
+If you already fetched previous allocations before deleting:
+
+Use:
+
+old_value = previous allocations
+new_value = new allocations
+
+---
+
+STEP 3 — VERIFY
+
+- Allocation save → audit row created
+- Contains jobId + allocations JSON
+- Shows correct user + role
+- Appears in admin_audit_log
+
+---
+
+OUTPUT:
+
+- Updated route snippet
+- Example audit row JSON

@@ -863,15 +863,35 @@ router.post('/admin/job-allocate', authenticateToken, requireRole('ADMIN', 'OWNE
     const { jobId, allocations } = req.body;
     const numericJobId = parseInt(String(jobId), 10);
     if (isNaN(numericJobId)) return res.status(400).json({ error: 'Invalid jobId' });
+
+    // ── Validation (Prompt 2) ────────────────────────────────────────────────
     if (!Array.isArray(allocations) || allocations.length === 0) {
-      return res.status(400).json({ error: 'allocations must be a non-empty array' });
+      return res.status(400).json({ error: 'At least one allocation required' });
     }
-    // Validate allocations
+    const totalUnits = allocations.reduce((sum: number, a: any) => sum + (Number(a.units) || 0), 0);
+    if (totalUnits <= 0) {
+      return res.status(400).json({ error: 'Total units must be greater than 0' });
+    }
     for (const a of allocations) {
-      if (!a.projectId || typeof a.units !== 'number' || a.units <= 0) {
-        return res.status(400).json({ error: 'Each allocation requires projectId and a positive units value' });
+      if (!a.projectId) {
+        return res.status(400).json({ error: 'projectId required for every allocation' });
+      }
+      if (!a.units || Number(a.units) <= 0) {
+        return res.status(400).json({ error: 'units must be > 0 for every allocation' });
       }
     }
+    const projectIds = allocations.map((a: any) => a.projectId);
+    if (new Set(projectIds).size !== projectIds.length) {
+      return res.status(400).json({ error: 'Duplicate projects not allowed' });
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Capture previous allocations for audit old_value (Prompt 3)
+    const previousRows = await pool.query(
+      `SELECT project_id AS "projectId", allocation_units AS "allocationUnits"
+       FROM job_allocations WHERE job_id = $1`,
+      [numericJobId]
+    );
 
     // Replace: delete existing, then insert new
     await pool.query(`DELETE FROM job_allocations WHERE job_id = $1`, [numericJobId]);
@@ -879,9 +899,28 @@ router.post('/admin/job-allocate', authenticateToken, requireRole('ADMIN', 'OWNE
       await pool.query(
         `INSERT INTO job_allocations (job_id, project_id, allocation_units)
          VALUES ($1, $2, $3)`,
-        [numericJobId, a.projectId, a.units]
+        [numericJobId, a.projectId, Number(a.units)]
       );
     }
+
+    // ── Audit logging (Prompt 3) ─────────────────────────────────────────────
+    try {
+      const user = (req as any).user;
+      await storage.createAdminAuditLog({
+        orderId: String(numericJobId),
+        fieldName: 'JOB_ALLOCATION',
+        fieldLabel: 'Job Cost Allocation',
+        oldValue: previousRows.length > 0 ? previousRows : null,
+        newValue: { jobId: numericJobId, allocations },
+        changedBy: user?.username ?? 'unknown',
+        userRole: user?.role ?? 'ADMIN',
+        changeType: 'JOB_ALLOCATION',
+        reason: 'Manual allocation update',
+      });
+    } catch (auditErr) {
+      console.warn('[job-allocate] Audit log failed (non-fatal):', auditErr);
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     res.json({ success: true, jobId: numericJobId, count: allocations.length });
   } catch (err: any) {

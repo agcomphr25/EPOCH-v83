@@ -29,6 +29,13 @@
       "when": 1773600000000,
       "tag": "0003_comprehensive_integer_to_uuid_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774150000000,
+      "tag": "0004_job_allocations",
+      "breakpoints": true
     }
   ]
 }

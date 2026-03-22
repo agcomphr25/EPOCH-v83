@@ -4,11 +4,14 @@ import { authenticateToken, requireRole } from '../../middleware/auth';
 import { storage } from '../../storage';
 import { pool } from '../../db';
 import { pairPunches, sumHours } from '../services/timekeepingPairing';
+import { getPayPeriod } from '../services/payPeriod';
 
 const router = Router();
 
 const ALLOWED_PUNCH_TYPES = ['clock_in', 'clock_out', 'break_start', 'break_end'] as const;
 type PunchType = typeof ALLOWED_PUNCH_TYPES[number];
+
+const MAX_SHIFT_HOURS = 16;
 
 function stableCanonicalId(numericId: number): string {
   const hex = numericId.toString(16).padStart(12, '0');
@@ -102,10 +105,7 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
       .filter(p => new Date(p.punchTime) >= today)
       .sort((a, b) => new Date(a.punchTime).getTime() - new Date(b.punchTime).getTime());
 
-    const lastPunch = todayPunches.length > 0
-      ? todayPunches[todayPunches.length - 1]
-      : null;
-
+    const lastPunch = todayPunches.length > 0 ? todayPunches[todayPunches.length - 1] : null;
     const firstClockIn = todayPunches.find(p => p.punchType === 'clock_in');
     const lastClockOut = [...todayPunches].reverse().find(p => p.punchType === 'clock_out');
 
@@ -124,22 +124,18 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
 });
 
 // GET /api/timekeeping/hours?startDate=&endDate=
+// Defaults to current pay period when no dates supplied
 router.get('/hours', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = req.user!;
 
     if (!user.employeeId) {
-      return res.json({ intervals: [], totalHours: 0 });
+      return res.json({ intervals: [], totalHours: 0, payPeriod: getPayPeriod() });
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startDate = req.query.startDate
-      ? new Date(req.query.startDate as string)
-      : today;
-    const endDate = req.query.endDate
-      ? new Date(req.query.endDate as string)
-      : new Date();
+    const payPeriod = getPayPeriod();
+    const startDate = req.query.startDate ? new Date(req.query.startDate as string) : payPeriod.start;
+    const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
 
     const rows = await pool.query(
       `SELECT punch_type AS "punchType", punch_time AS "punchTime"
@@ -153,14 +149,14 @@ router.get('/hours', authenticateToken, async (req: Request, res: Response) => {
     const intervals = pairPunches(rows);
     const totalHours = sumHours(intervals);
 
-    res.json({ intervals, totalHours });
+    res.json({ intervals, totalHours, payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label } });
   } catch (err: any) {
     console.error('[Timekeeping] Hours error:', err);
     res.status(500).json({ error: 'Failed to fetch hours' });
   }
 });
 
-// GET /api/timekeeping/admin/employee/:id  — admin view all punches for an employee
+// GET /api/timekeeping/admin/employee/:id
 router.get(
   '/admin/employee/:id',
   authenticateToken,
@@ -168,24 +164,32 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const employeeId = parseInt(req.params.id, 10);
-      if (isNaN(employeeId)) {
-        return res.status(400).json({ error: 'Invalid employee ID' });
-      }
+      if (isNaN(employeeId)) return res.status(400).json({ error: 'Invalid employee ID' });
+
+      const payPeriod = getPayPeriod();
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : payPeriod.start;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
 
       const rows = await pool.query(
         `SELECT id, punch_type AS "punchType", punch_time AS "punchTime",
-                source, department_code AS "departmentCode",
+                source, approved,
                 created_at AS "createdAt"
          FROM punch_events
          WHERE epoch_employee_id = $1
-         ORDER BY punch_time DESC`,
-        [employeeId]
+           AND punch_time BETWEEN $2 AND $3
+         ORDER BY punch_time ASC`,
+        [employeeId, startDate, endDate]
       );
 
-      const intervals = pairPunches([...rows].reverse());
+      const intervals = pairPunches(rows);
       const totalHours = sumHours(intervals);
 
-      res.json({ punches: rows, intervals, totalHours });
+      res.json({
+        punches: rows,
+        intervals,
+        totalHours,
+        payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label },
+      });
     } catch (err: any) {
       console.error('[Timekeeping] Admin view error:', err);
       res.status(500).json({ error: 'Failed to fetch punch records' });
@@ -193,7 +197,54 @@ router.get(
   }
 );
 
-// PUT /api/timekeeping/admin/punch/:id  — admin correct a punch time
+// POST /api/timekeeping/admin/approve/:employeeId
+router.post(
+  '/admin/approve/:employeeId',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const employeeId = parseInt(req.params.employeeId, 10);
+      if (isNaN(employeeId)) return res.status(400).json({ error: 'Invalid employee ID' });
+
+      const payPeriod = getPayPeriod();
+
+      const result = await pool.query(
+        `UPDATE punch_events
+         SET approved = true
+         WHERE epoch_employee_id = $1
+           AND punch_time BETWEEN $2 AND $3
+           AND approved = false`,
+        [employeeId, payPeriod.start, payPeriod.end]
+      );
+
+      try {
+        await storage.createAdminAuditLog({
+          orderId: 'TIMEKEEPING',
+          fieldName: 'PAY_PERIOD_APPROVAL',
+          fieldLabel: 'Pay Period Approved',
+          oldValue: null,
+          newValue: { employeeId, payPeriod: payPeriod.label },
+          changedBy: user.username,
+          userRole: user.role,
+          changeType: 'TIME_ADMIN',
+          reason: `Pay period approved: ${payPeriod.label}`,
+        });
+      } catch (auditErr) {
+        console.warn('[Timekeeping] Approval audit failed (non-fatal):', auditErr);
+      }
+
+      console.log(`[Timekeeping] Admin ${user.username} approved pay period ${payPeriod.label} for employee ${employeeId}`);
+      res.json({ success: true, approvedCount: (result as any).rowCount ?? 0, payPeriod: payPeriod.label });
+    } catch (err: any) {
+      console.error('[Timekeeping] Approve error:', err);
+      res.status(500).json({ error: 'Failed to approve pay period' });
+    }
+  }
+);
+
+// PUT /api/timekeeping/admin/punch/:id
 router.put(
   '/admin/punch/:id',
   authenticateToken,
@@ -204,25 +255,32 @@ router.put(
       const punchId = req.params.id;
       const { punchTime } = req.body;
 
-      if (!punchTime) {
-        return res.status(400).json({ error: 'punchTime is required' });
+      if (!punchTime) return res.status(400).json({ error: 'punchTime is required' });
+
+      // Phase 31 guardrail: no future punch times
+      const newTime = new Date(punchTime);
+      if (newTime > new Date()) {
+        return res.status(400).json({ error: 'Punch time cannot be in the future' });
       }
 
       const existing = await pool.query(
-        `SELECT punch_time AS "punchTime", punch_type AS "punchType"
+        `SELECT punch_time AS "punchTime", punch_type AS "punchType", approved
          FROM punch_events WHERE id = $1`,
         [punchId]
       );
 
-      if (!existing[0]) {
-        return res.status(404).json({ error: 'Punch not found' });
+      if (!existing[0]) return res.status(404).json({ error: 'Punch not found' });
+
+      // Phase 28: block edits on approved punches
+      if (existing[0].approved) {
+        return res.status(400).json({ error: 'Punch is approved and locked' });
       }
 
       const oldTime = existing[0].punchTime;
 
       await pool.query(
         `UPDATE punch_events SET punch_time = $1 WHERE id = $2`,
-        [new Date(punchTime), punchId]
+        [newTime, punchId]
       );
 
       try {
@@ -250,7 +308,7 @@ router.put(
   }
 );
 
-// DELETE /api/timekeeping/admin/punch/:id  — admin remove a punch
+// DELETE /api/timekeeping/admin/punch/:id
 router.delete(
   '/admin/punch/:id',
   authenticateToken,
@@ -261,13 +319,17 @@ router.delete(
       const punchId = req.params.id;
 
       const existing = await pool.query(
-        `SELECT punch_time AS "punchTime", punch_type AS "punchType", epoch_employee_id AS "epochEmployeeId"
+        `SELECT punch_time AS "punchTime", punch_type AS "punchType",
+                epoch_employee_id AS "epochEmployeeId", approved
          FROM punch_events WHERE id = $1`,
         [punchId]
       );
 
-      if (!existing[0]) {
-        return res.status(404).json({ error: 'Punch not found' });
+      if (!existing[0]) return res.status(404).json({ error: 'Punch not found' });
+
+      // Phase 28: block deletes on approved punches
+      if (existing[0].approved) {
+        return res.status(400).json({ error: 'Punch is approved and locked' });
       }
 
       await pool.query(`DELETE FROM punch_events WHERE id = $1`, [punchId]);
@@ -293,6 +355,55 @@ router.delete(
     } catch (err: any) {
       console.error('[Timekeeping] Admin delete error:', err);
       res.status(500).json({ error: 'Failed to delete punch' });
+    }
+  }
+);
+
+// GET /api/timekeeping/admin/payroll — approved punches for export
+router.get(
+  '/admin/payroll',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const payPeriod = getPayPeriod();
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : payPeriod.start;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
+
+      const rows = await pool.query(
+        `SELECT
+           epoch_employee_id AS "epochEmployeeId",
+           punch_type AS "punchType",
+           punch_time AS "punchTime",
+           approved
+         FROM punch_events
+         WHERE approved = true
+           AND punch_time BETWEEN $1 AND $2
+         ORDER BY epoch_employee_id, punch_time`,
+        [startDate, endDate]
+      );
+
+      const byEmployee: Record<number, any> = {};
+      for (const row of rows) {
+        const eid = row.epochEmployeeId;
+        if (!byEmployee[eid]) byEmployee[eid] = { epochEmployeeId: eid, punches: [], totalHours: 0, intervals: [] };
+        byEmployee[eid].punches.push(row);
+      }
+
+      for (const eid of Object.keys(byEmployee)) {
+        const emp = byEmployee[eid as any];
+        emp.intervals = pairPunches(emp.punches);
+        emp.totalHours = sumHours(emp.intervals);
+      }
+
+      res.json({
+        payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label },
+        employees: Object.values(byEmployee),
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error('[Timekeeping] Payroll export error:', err);
+      res.status(500).json({ error: 'Failed to export payroll' });
     }
   }
 );

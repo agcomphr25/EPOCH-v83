@@ -2314,6 +2314,14 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ admin_audit_log reason column migration:', auditReasonErr?.message);
       }
 
+      // Ensure punch_events has approved column (pay period approval system)
+      try {
+        await pool.query(`ALTER TABLE punch_events ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false`);
+        console.log('✅ Ensured punch_events has approved column');
+      } catch (punchApprovedErr: any) {
+        console.warn('⚠️ punch_events approved column migration:', punchApprovedErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

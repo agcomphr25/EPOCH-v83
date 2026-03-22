@@ -1,0 +1,127 @@
+PHASE 25 — PAY PERIOD STANDARDIZATION
+Create centralized pay period utility.
+
+FILE:
+server/src/services/payPeriod.ts
+
+---
+
+IMPLEMENT:
+
+export function getPayPeriod(date = new Date()) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+
+  const firstHalfStart = new Date(year, month, 1);
+  const firstHalfEnd = new Date(year, month, 15, 23, 59, 59);
+
+  const secondHalfStart = new Date(year, month, 16);
+  const secondHalfEnd = new Date(year, month + 1, 0, 23, 59, 59);
+
+  if (d.getDate() <= 15) {
+    return { start: firstHalfStart, end: firstHalfEnd };
+  }
+
+  return { start: secondHalfStart, end: secondHalfEnd };
+}
+🔵 PHASE 26 — ENFORCE PAY PERIOD IN HOURS
+Update /api/timekeeping/hours to use pay period.
+
+---
+
+IMPORT:
+getPayPeriod
+
+---
+
+REPLACE manual date filtering with:
+
+const { start, end } = getPayPeriod();
+
+---
+
+USE in query:
+AND punchTime BETWEEN $2 AND $3
+🔵 PHASE 27 — APPROVAL SYSTEM (BASIC)
+Add approval flag.
+
+DB CHANGE:
+
+ALTER TABLE punch_events
+ADD COLUMN approved BOOLEAN DEFAULT false;
+Add approve endpoint.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+router.post('/admin/approve/:employeeId', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+  await db.query(`
+    UPDATE punch_events
+    SET approved = true
+    WHERE epochEmployeeId = $1
+  `, [req.params.employeeId]);
+
+  res.json({ success: true });
+});
+🔵 PHASE 28 — LOCK APPROVED PUNCHES
+Prevent edits after approval.
+
+---
+
+IN EDIT + DELETE endpoints:
+
+CHECK:
+
+const approved = await db.query(`
+  SELECT approved FROM punch_events WHERE id = $1
+`, [req.params.id]);
+
+if (approved[0]?.approved) {
+  return res.status(400).json({ error: 'Punch is approved and locked' });
+}
+🔵 PHASE 29 — PAYROLL EXPORT
+Add payroll export.
+
+---
+
+router.get('/admin/payroll', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+
+  const rows = await db.query(`
+    SELECT epochEmployeeId, punchType, punchTime
+    FROM punch_events
+    WHERE approved = true
+    ORDER BY epochEmployeeId, punchTime
+  `);
+
+  res.json(rows);
+});
+🔵 PHASE 30 — FRONTEND APPROVAL BUTTON
+Add approve UI.
+
+---
+
+Button:
+
+<button onClick={() => approve(employeeId)}>
+  Approve Pay Period
+</button>
+🔵 PHASE 31 — FINAL GUARDRAILS
+Add validations:
+
+- No future punchTime
+- No negative intervals
+- Max shift length (e.g. 16 hours)
+
+---
+
+Reject invalid data at API level
+🔵 PHASE 32 — FINAL TEST
+Test:
+
+1. Clock in/out → hours correct
+2. Approve employee → locked
+3. Attempt edit → blocked
+4. Export payroll → only approved punches

@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { PIPELINE_DEPARTMENTS, DEPARTMENT_COLORS, type PipelineDepartment } from '@/constants/pipelineDepartments';
 import { calculateFlowPressure, type PressureLevel } from '@/utils/calculateFlowPressure';
-import { Filter, X, Printer, LayoutGrid, BarChart2 } from 'lucide-react';
+import { Filter, X, Printer, LayoutGrid, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
 
 type ScheduleStatus =
   | 'on-schedule'
@@ -422,12 +422,24 @@ const DepartmentView = ({
   getModelDisplayName: (modelId: string) => string;
   onOrderClick: (orderId: string) => void;
 }) => {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const toggleDept = (dept: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept);
+      else next.add(dept);
+      return next;
+    });
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 dept-view-grid">
       {PIPELINE_DEPARTMENTS.map((dept) => {
         const orders = pipelineDetails[dept] ?? [];
         const color = getDeptColor(dept);
         const deptIdx = PIPELINE_DEPARTMENTS.indexOf(dept as PipelineDepartment);
+        const isCollapsed = collapsed.has(dept);
 
         const inPlace = orders.filter(
           (o) => o.expectedDepartment?.toLowerCase() === dept.toLowerCase()
@@ -454,17 +466,25 @@ const DepartmentView = ({
             className="rounded-xl border overflow-hidden dept-card"
             style={{ borderColor: color.hex }}
           >
-            {/* Header */}
+            {/* Header — click to collapse/expand */}
             <div
-              className="px-4 py-3 flex items-center justify-between"
+              className="px-4 py-3 flex items-center justify-between cursor-pointer select-none"
               style={{ backgroundColor: color.hex }}
+              onClick={() => toggleDept(dept)}
             >
-              <span className="font-bold text-white text-sm">{dept}</span>
+              <div className="flex items-center gap-2">
+                {isCollapsed
+                  ? <ChevronRight className="w-4 h-4 text-white/80" />
+                  : <ChevronDown className="w-4 h-4 text-white/80" />
+                }
+                <span className="font-bold text-white text-sm">{dept}</span>
+              </div>
               <span className="bg-white/20 text-white text-xs font-bold rounded-full px-2.5 py-0.5">
                 {orders.length} order{orders.length !== 1 ? 's' : ''}
               </span>
             </div>
 
+            {!isCollapsed && (
             <div className="p-3 space-y-3 bg-white dark:bg-gray-900">
               {orders.length === 0 && (
                 <div className="text-xs text-gray-400 italic text-center py-3">Empty</div>
@@ -514,6 +534,7 @@ const DepartmentView = ({
                 </div>
               )}
             </div>
+            )}
           </div>
         );
       })}

@@ -4469,8 +4469,9 @@ router.get('/awaiting-signature', async (req: Request, res: Response) => {
 });
 
 router.get('/locate/:orderId', async (req, res) => {
-  const { orderId } = req.params;
-  console.log(`[LOCATE] Searching for ${orderId}`);
+  const rawId = req.params.orderId;
+  const orderId = rawId.trim().toUpperCase();
+  console.log(`[LOCATE] Searching for ${orderId} (raw: ${rawId})`);
 
   try {
     const soOrder = await storage.getFinalizedOrderById(orderId);

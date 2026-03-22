@@ -1,0 +1,133 @@
+COPY-PASTE PROMPT — LAYER 2 FORENSIC AUDIT
+
+This will map exactly why items become unfindable
+
+SYSTEM ROLE: Senior EPOCH Visibility & Recovery Auditor
+MODE: READ-ONLY (STRICT — NO CODE CHANGES)
+
+OBJECTIVE:
+Determine how EPOCH tracks, detects, and surfaces items that fail progression or fall out of expected department flow.
+
+CRITICAL RULES:
+- DO NOT modify code
+- DO NOT propose fixes yet
+- ONLY analyze current system behavior
+- Every claim must reference actual files/functions
+
+--------------------------------------------------
+STEP 1 — CURRENT STATE TRACKING
+--------------------------------------------------
+
+Identify ALL fields used to track item state:
+
+Look for:
+- currentDepartment
+- status / productionStatus
+- departmentHistory
+- timestamps (updated_at, last_moved_at)
+
+OUTPUT:
+Field | Table | Purpose | Reliability
+
+--------------------------------------------------
+STEP 2 — FAILED PROGRESSION HANDLING
+--------------------------------------------------
+
+Trace what happens when:
+
+- progression fails
+- order not found
+- routing missing
+
+OUTPUT:
+- Is state updated?
+- Is any flag set?
+- Is item marked in any way?
+
+--------------------------------------------------
+STEP 3 — "STUCK ITEM" DETECTION
+--------------------------------------------------
+
+Search for ANY logic that detects:
+
+- items not moved in X time
+- items with invalid department
+- items missing routing
+
+OUTPUT:
+- Functions / queries
+- Where used (if anywhere)
+
+--------------------------------------------------
+STEP 4 — DASHBOARD DATA SOURCES
+--------------------------------------------------
+
+For each dashboard:
+
+- OrdersList
+- Production queues
+- Department views
+
+Identify:
+- Which tables they query
+- What filters they apply
+
+OUTPUT:
+Dashboard | Query Source | Filters | Excludes what?
+
+--------------------------------------------------
+STEP 5 — SEARCH SYSTEM ANALYSIS
+--------------------------------------------------
+
+Audit global search:
+
+- What fields are indexed?
+- Which tables are included?
+- Are production_orders included?
+
+OUTPUT:
+- Search coverage map
+
+--------------------------------------------------
+STEP 6 — "INVISIBLE ITEM" SCENARIOS
+--------------------------------------------------
+
+List ALL scenarios where an item can exist in DB but NOT appear in UI.
+
+Examples:
+- wrong table
+- null department
+- filtered out by query
+- failed progression
+
+OUTPUT:
+- Concrete scenarios with file references
+
+--------------------------------------------------
+STEP 7 — AUDIT & LOGGING VISIBILITY
+--------------------------------------------------
+
+Determine:
+
+- where progression failures are logged
+- whether UI can access those logs
+
+OUTPUT:
+- logging pipeline
+- UI exposure (yes/no)
+
+--------------------------------------------------
+FINAL OUTPUT FORMAT
+--------------------------------------------------
+
+1. STATE TRACKING SYSTEM
+2. FAILURE HANDLING BEHAVIOR
+3. DASHBOARD COVERAGE MAP
+4. SEARCH COVERAGE MAP
+5. INVISIBLE ITEM SCENARIOS (CRITICAL)
+6. LOGGING VISIBILITY GAPS
+7. ROOT CAUSE OF "LOST ITEMS"
+
+REMEMBER:
+Do NOT fix anything yet.
+We are mapping how items disappear so we can eliminate it permanently.

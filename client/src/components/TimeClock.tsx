@@ -1,4 +1,4 @@
-import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -8,9 +8,20 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Clock, LogIn, LogOut, Coffee, PlayCircle } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
+
+interface WorkInterval {
+  clockIn: string;
+  clockOut: string;
+  durationHours: number;
+}
+
+interface HoursData {
+  intervals: WorkInterval[];
+  totalHours: number;
+}
 
 interface TimeClockProps {
   employeeId: string;
@@ -37,9 +48,15 @@ export default function TimeClock({
 
   const { toast } = useToast();
 
+  const { data: hoursData, refetch: refetchHours } = useQuery<HoursData>({
+    queryKey: ['/api/timekeeping/hours'],
+    refetchInterval: 60_000,
+  });
+
   const handleClockIn = async () => {
     try {
       await clockIn();
+      refetchHours();
       toast({ title: 'Clocked in successfully!' });
     } catch (err: any) {
       const msg = err?.message ?? '';
@@ -87,6 +104,7 @@ export default function TimeClock({
         return;
       }
       await clockOut();
+      refetchHours();
       toast({ title: 'Clocked out successfully!' });
     } catch (err: any) {
       const msg = err?.message ?? '';
@@ -109,6 +127,7 @@ export default function TimeClock({
   const handleEndBreak = async () => {
     try {
       await endBreak();
+      refetchHours();
       toast({ title: 'Break ended — back to work!' });
     } catch {
       toast({ title: 'Failed to end break', variant: 'destructive' });
@@ -118,6 +137,14 @@ export default function TimeClock({
   const formatTime = (iso: string | null) => {
     if (!iso) return null;
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDuration = (hours: number) => {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
   };
 
   if (loading) {
@@ -139,93 +166,130 @@ export default function TimeClock({
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-5 w-5" />
-          Time Clock
-          {onBreak && (
-            <Badge variant="outline" className="border-amber-400 text-amber-700 text-xs ml-1">
-              On Break
-            </Badge>
-          )}
-          {clockedIn && !onBreak && (
-            <Badge variant="outline" className="border-green-500 text-green-700 text-xs ml-1">
-              Clocked In
-            </Badge>
-          )}
-          {!clockedIn && status !== null && (
-            <Badge variant="outline" className="border-muted-foreground text-muted-foreground text-xs ml-1">
-              Clocked Out
-            </Badge>
-          )}
-        </CardTitle>
-        <CardDescription>Employee ID: {employeeId}</CardDescription>
-      </CardHeader>
+    <div className="w-full max-w-sm space-y-3">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Time Clock
+            {onBreak && (
+              <Badge variant="outline" className="border-amber-400 text-amber-700 text-xs ml-1">
+                On Break
+              </Badge>
+            )}
+            {clockedIn && !onBreak && (
+              <Badge variant="outline" className="border-green-500 text-green-700 text-xs ml-1">
+                Clocked In
+              </Badge>
+            )}
+            {!clockedIn && status !== null && (
+              <Badge variant="outline" className="border-muted-foreground text-muted-foreground text-xs ml-1">
+                Clocked Out
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>Employee ID: {employeeId}</CardDescription>
+        </CardHeader>
 
-      <CardContent className="space-y-3">
-        {!clockedIn ? (
-          <Button
-            onClick={handleClockIn}
-            className="w-full bg-green-500 hover:bg-green-600"
-            size="lg"
-          >
-            <LogIn className="h-4 w-4 mr-2" />
-            Clock In
-          </Button>
-        ) : onBreak ? (
-          <Button
-            onClick={handleEndBreak}
-            className="w-full bg-amber-500 hover:bg-amber-600"
-            size="lg"
-          >
-            <PlayCircle className="h-4 w-4 mr-2" />
-            End Break
-          </Button>
-        ) : (
-          <div className="space-y-2">
+        <CardContent className="space-y-3">
+          {!clockedIn ? (
             <Button
-              onClick={handleClockOut}
-              disabled={disableClockOut}
-              className="w-full bg-red-500 hover:bg-red-600"
+              onClick={handleClockIn}
+              className="w-full bg-green-500 hover:bg-green-600"
               size="lg"
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Clock Out
+              <LogIn className="h-4 w-4 mr-2" />
+              Clock In
             </Button>
+          ) : onBreak ? (
             <Button
-              onClick={handleStartBreak}
-              variant="outline"
-              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
-              size="sm"
+              onClick={handleEndBreak}
+              className="w-full bg-amber-500 hover:bg-amber-600"
+              size="lg"
             >
-              <Coffee className="h-4 w-4 mr-2" />
-              Start Break
+              <PlayCircle className="h-4 w-4 mr-2" />
+              End Break
             </Button>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <Button
+                onClick={handleClockOut}
+                disabled={disableClockOut}
+                className="w-full bg-red-500 hover:bg-red-600"
+                size="lg"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Clock Out
+              </Button>
+              <Button
+                onClick={handleStartBreak}
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+                size="sm"
+              >
+                <Coffee className="h-4 w-4 mr-2" />
+                Start Break
+              </Button>
+            </div>
+          )}
 
-        {clockedIn && !onBreak && clockInTime && (
-          <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-sm font-medium text-green-800">Clocked in since</p>
-            <p className="text-lg font-bold text-green-900">{formatTime(clockInTime)}</p>
-          </div>
-        )}
+          {clockedIn && !onBreak && clockInTime && (
+            <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-sm font-medium text-green-800">Clocked in since</p>
+              <p className="text-lg font-bold text-green-900">{formatTime(clockInTime)}</p>
+            </div>
+          )}
 
-        {onBreak && (
-          <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <p className="text-sm font-medium text-amber-800">On break since</p>
-            <p className="text-lg font-bold text-amber-900">{formatTime(lastPunchTime)}</p>
-          </div>
-        )}
+          {onBreak && (
+            <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <p className="text-sm font-medium text-amber-800">On break since</p>
+              <p className="text-lg font-bold text-amber-900">{formatTime(lastPunchTime)}</p>
+            </div>
+          )}
 
-        {!clockedIn && clockOutTime && (
-          <div className="text-center p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <p className="text-sm font-medium text-slate-600">Clocked out at</p>
-            <p className="text-lg font-bold text-slate-800">{formatTime(clockOutTime)}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {!clockedIn && clockOutTime && (
+            <div className="text-center p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <p className="text-sm font-medium text-slate-600">Clocked out at</p>
+              <p className="text-lg font-bold text-slate-800">{formatTime(clockOutTime)}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {hoursData && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Timer className="h-4 w-4" />
+              Today's Hours
+              <span className="ml-auto font-bold text-base">
+                {formatDuration(hoursData.totalHours)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          {hoursData.intervals.length > 0 && (
+            <CardContent className="pt-0">
+              <ul className="space-y-1">
+                {hoursData.intervals.map((interval, i) => (
+                  <li key={i} className="flex justify-between text-xs text-muted-foreground">
+                    <span>
+                      {formatTime(interval.clockIn)} → {formatTime(interval.clockOut)}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {formatDuration(interval.durationHours)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          )}
+          {hoursData.intervals.length === 0 && (
+            <CardContent className="pt-0">
+              <p className="text-xs text-muted-foreground text-center py-1">No completed intervals yet today</p>
+            </CardContent>
+          )}
+        </Card>
+      )}
+    </div>
   );
 }

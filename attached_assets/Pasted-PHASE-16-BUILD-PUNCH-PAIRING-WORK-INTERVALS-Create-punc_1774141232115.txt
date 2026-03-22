@@ -1,0 +1,179 @@
+PHASE 16 — BUILD PUNCH PAIRING (WORK INTERVALS)
+Create punch pairing utility.
+
+FILE:
+server/src/services/timekeepingPairing.ts
+
+---
+
+IMPLEMENT:
+
+export function pairPunches(punches) {
+  const intervals = [];
+  let currentIn = null;
+
+  for (const p of punches) {
+    if (p.punchType === 'clock_in') {
+      currentIn = p;
+    }
+
+    if (p.punchType === 'clock_out' && currentIn) {
+      intervals.push({
+        clockIn: currentIn.punchTime,
+        clockOut: p.punchTime,
+        durationHours: (new Date(p.punchTime) - new Date(currentIn.punchTime)) / 3600000
+      });
+      currentIn = null;
+    }
+  }
+
+  return intervals;
+}
+🔵 PHASE 17 — EMPLOYEE HOURS ENDPOINT
+Add employee hours endpoint.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+IMPORT:
+
+import { pairPunches } from '../services/timekeepingPairing';
+
+---
+
+ADD:
+
+router.get('/hours', authenticateToken, async (req, res) => {
+  const punches = await db.query(`
+    SELECT punchType, punchTime
+    FROM punch_events
+    WHERE epochEmployeeId = $1
+    ORDER BY punchTime ASC
+  `, [req.user.id]);
+
+  const intervals = pairPunches(punches);
+
+  const totalHours = intervals.reduce((sum, i) => sum + i.durationHours, 0);
+
+  res.json({
+    intervals,
+    totalHours
+  });
+});
+🔵 PHASE 18 — PAY PERIOD FILTER
+Add pay period filtering.
+
+---
+
+UPDATE QUERY:
+
+WHERE epochEmployeeId = $1
+AND punchTime BETWEEN $2 AND $3
+
+---
+
+PASS:
+startDate, endDate from query params
+🔵 PHASE 19 — ADMIN TIME VIEW
+Create admin time view.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+ADD:
+
+router.get('/admin/employee/:id', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+  const punches = await db.query(`
+    SELECT *
+    FROM punch_events
+    WHERE epochEmployeeId = $1
+    ORDER BY punchTime DESC
+  `, [req.params.id]);
+
+  res.json(punches);
+});
+🔵 PHASE 20 — ADMIN EDIT PUNCH
+Add admin edit punch endpoint.
+
+---
+
+router.put('/admin/punch/:id', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+  const { punchTime } = req.body;
+
+  await db.query(`
+    UPDATE punch_events
+    SET punchTime = $1
+    WHERE id = $2
+  `, [punchTime, req.params.id]);
+
+  res.json({ success: true });
+});
+🔵 PHASE 21 — ADMIN DELETE PUNCH
+Add delete endpoint.
+
+---
+
+router.delete('/admin/punch/:id', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+  await db.query(`
+    DELETE FROM punch_events
+    WHERE id = $1
+  `, [req.params.id]);
+
+  res.json({ success: true });
+});
+🔵 PHASE 22 — ADD AUDIT TO ADMIN EDIT
+Add audit for admin punch edit.
+
+---
+
+AFTER UPDATE:
+
+await db.query(`
+  INSERT INTO admin_audit_log (
+    field_name,
+    field_label,
+    old_value,
+    new_value,
+    changed_by,
+    user_role,
+    change_type,
+    reason,
+    timestamp
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+`, [
+  'TIME_EDIT',
+  'Time Edit',
+  null,
+  JSON.stringify({ punchId: req.params.id, newTime: punchTime }),
+  req.user.username,
+  req.user.role,
+  'TIME_ADMIN',
+  'Manual time correction'
+]);
+🔵 PHASE 23 — FRONTEND HOURS VIEW
+Add hours display to TimeClock UI.
+
+---
+
+CALL:
+GET /api/timekeeping/hours
+
+---
+
+DISPLAY:
+
+- totalHours
+- list of intervals
+🔵 PHASE 24 — FINAL TEST
+Test full system:
+
+1. Clock in/out
+2. Verify intervals generated
+3. Verify hours correct
+4. Admin edit punch → reflected in hours
+5. Admin delete punch → recalculates correctly

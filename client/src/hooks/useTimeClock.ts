@@ -17,7 +17,7 @@ export interface UseTimeClockReturn {
   clockInTime: string | null;
   clockOutTime: string | null;
   lastPunchTime: string | null;
-  clockIn: (workBucketId: string) => Promise<void>;
+  clockIn: (jobId: string) => Promise<void>;
   clockOut: () => Promise<void>;
   startBreak: () => Promise<void>;
   endBreak: () => Promise<void>;
@@ -50,21 +50,21 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     refreshStatus();
   }, [refreshStatus]);
 
-  const punch = async (type: PunchType, workBucketId?: string) => {
+  const punch = async (type: PunchType, jobId?: string) => {
     await apiRequest('/api/timekeeping/punch', {
       method: 'POST',
-      body: JSON.stringify({ type, ...(workBucketId ? { workBucketId } : {}) }),
+      body: JSON.stringify({ type, ...(jobId ? { jobId } : {}) }),
     });
     await refreshStatus();
   };
 
-  const clockIn = async (workBucketId: string) => {
+  const clockIn = async (jobId: string) => {
     const ts = new Date().toISOString();
     setStatus('clock_in');
     setClockInTime(ts);
     setClockOutTime(null);
     try {
-      await punch('clock_in', workBucketId);
+      await punch('clock_in', jobId);
     } catch (err) {
       console.error('[useTimeClock] Clock-in failed', err);
       await refreshStatus();

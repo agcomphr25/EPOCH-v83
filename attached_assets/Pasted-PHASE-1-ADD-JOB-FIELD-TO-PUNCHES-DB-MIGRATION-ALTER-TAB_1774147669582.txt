@@ -1,0 +1,151 @@
+PHASE 1 — ADD JOB FIELD TO PUNCHES
+DB MIGRATION:
+
+ALTER TABLE punch_events
+ADD COLUMN job_id uuid;
+🔵 PHASE 2 — DEFINE WHAT A “JOB” IS (MINIMAL)
+
+👉 For now, reuse what you already have
+
+Use:
+
+production_orders.id
+
+NOT a new table yet.
+
+🔵 PHASE 3 — UPDATE PUNCH ROUTE
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+ADD:
+
+const { jobId } = req.body;
+
+IF job-based clocking:
+
+if (!jobId && type === 'clock_in') {
+  return res.status(400).json({ error: 'jobId required for clock in' });
+}
+🔵 PHASE 4 — AUTO ASSIGN BUCKET FROM JOB
+BEFORE INSERT:
+
+let bucketId = workBucketId;
+
+if (jobId) {
+  const job = await db.query(`
+    SELECT department
+    FROM production_orders
+    WHERE id = $1
+  `, [jobId]);
+
+  if (job.length > 0) {
+    const dept = job[0].department;
+
+    const bucket = await db.query(`
+      SELECT id
+      FROM work_buckets
+      WHERE name ILIKE $1
+      LIMIT 1
+    `, [`%${dept}%`]);
+
+    if (bucket.length > 0) {
+      bucketId = bucket[0].id;
+    }
+  }
+}
+🔵 PHASE 5 — SAVE job_id ON INSERT
+INSERT INTO punch_events (
+  id,
+  epochEmployeeId,
+  punchType,
+  punchTime,
+  source,
+  work_bucket_id,
+  job_id
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7);
+🔵 PHASE 6 — ADD ACTIVE JOB ENDPOINT
+router.get('/active-job', authenticateToken, async (req, res) => {
+
+  const last = await db.query(`
+    SELECT job_id, punchType
+    FROM punch_events
+    WHERE epochEmployeeId = $1
+    ORDER BY punchTime DESC
+    LIMIT 1
+  `, [req.user.id]);
+
+  if (!last[0] || last[0].punchType === 'clock_out') {
+    return res.json({ jobId: null });
+  }
+
+  res.json({ jobId: last[0].job_id });
+});
+🔵 PHASE 7 — ADD JOB LIST ENDPOINT
+router.get('/jobs', authenticateToken, async (req, res) => {
+
+  const jobs = await db.query(`
+    SELECT id, order_number, department
+    FROM production_orders
+    WHERE status != 'COMPLETE'
+    ORDER BY created_at DESC
+    LIMIT 50
+  `);
+
+  res.json(jobs);
+});
+🔵 PHASE 8 — UPDATE UI (CRITICAL SHIFT)
+REMOVE:
+Bucket dropdown (optional — or keep as fallback)
+
+ADD:
+Job selector
+LOAD JOBS:
+
+const [jobs, setJobs] = useState([]);
+const [selectedJob, setSelectedJob] = useState('');
+
+useEffect(() => {
+  loadJobs();
+}, []);
+
+const loadJobs = async () => {
+  const res = await apiRequest('/api/timekeeping/jobs');
+  setJobs(res);
+};
+JOB SELECT:
+
+<select
+  value={selectedJob}
+  onChange={(e) => setSelectedJob(e.target.value)}
+>
+  <option value="">Select Job</option>
+  {jobs.map(j => (
+    <option key={j.id} value={j.id}>
+      {j.order_number} - {j.department}
+    </option>
+  ))}
+</select>
+🔵 PHASE 9 — UPDATE PUNCH ACTION
+BODY:
+
+{
+  type: 'clock_in',
+  jobId: selectedJob
+}
+🔵 PHASE 10 — UX LOGIC
+RULES:
+
+- Cannot clock in without selecting a job
+- Clock out does NOT require jobId
+- If already clocked in → disable job selector
+🔵 PHASE 11 — TEST
+TEST:
+
+1. Select job → clock in
+2. Confirm job_id stored
+3. Confirm bucket auto-filled
+4. Clock out → closes job
+5. Try clock in without job → blocked

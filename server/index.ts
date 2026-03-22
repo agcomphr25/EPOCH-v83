@@ -2359,6 +2359,14 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ punch_events work_bucket_id migration:', workBucketIdErr?.message);
       }
 
+      // Ensure punch_events has job_id column (FK to production_orders)
+      try {
+        await pool.query(`ALTER TABLE punch_events ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES production_orders(id)`);
+        console.log('✅ Ensured punch_events has job_id column');
+      } catch (jobIdErr: any) {
+        console.warn('⚠️ punch_events job_id migration:', jobIdErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

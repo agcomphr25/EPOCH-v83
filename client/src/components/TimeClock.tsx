@@ -12,20 +12,18 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
 
-interface WorkBucket {
-  id: string;
-  name: string;
-  type: string;
+interface Job {
+  id: number;
+  orderNumber: string;
+  department: string | null;
 }
 
 interface WorkInterval {
@@ -43,12 +41,6 @@ interface TimeClockProps {
   employeeId: string;
   disableClockOut?: boolean;
 }
-
-const GROUP_LABELS: Record<string, string> = {
-  DIRECT: 'Direct Labor',
-  INDIRECT: 'Indirect',
-  NON_WORK: 'Non-Work',
-};
 
 export default function TimeClock({
   employeeId,
@@ -69,10 +61,10 @@ export default function TimeClock({
   } = useTimeClock(employeeId);
 
   const { toast } = useToast();
-  const [selectedBucketId, setSelectedBucketId] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState('');
 
-  const { data: buckets = [] } = useQuery<WorkBucket[]>({
-    queryKey: ['/api/timekeeping/buckets'],
+  const { data: jobs = [] } = useQuery<Job[]>({
+    queryKey: ['/api/timekeeping/jobs'],
   });
 
   const { data: hoursData, refetch: refetchHours } = useQuery<HoursData>({
@@ -80,20 +72,14 @@ export default function TimeClock({
     refetchInterval: 60_000,
   });
 
-  const bucketGroups = buckets.reduce<Record<string, WorkBucket[]>>((acc, b) => {
-    if (!acc[b.type]) acc[b.type] = [];
-    acc[b.type].push(b);
-    return acc;
-  }, {});
-
   const handleClockIn = async () => {
-    if (!selectedBucketId) {
-      toast({ title: 'Select a work bucket first', variant: 'destructive' });
+    if (!selectedJobId) {
+      toast({ title: 'Select a job first', variant: 'destructive' });
       return;
     }
     try {
-      await clockIn(selectedBucketId);
-      setSelectedBucketId('');
+      await clockIn(selectedJobId);
+      setSelectedJobId('');
       refetchHours();
       toast({ title: 'Clocked in!' });
     } catch (err: any) {
@@ -218,20 +204,21 @@ export default function TimeClock({
         </CardHeader>
 
         <CardContent className="space-y-3">
-          {/* Bucket selector — only shown before clock-in */}
-          {!clockedIn && buckets.length > 0 && (
-            <Select value={selectedBucketId} onValueChange={setSelectedBucketId}>
+          {/* Job selector — only shown before clock-in */}
+          {!clockedIn && jobs.length > 0 && (
+            <Select value={selectedJobId} onValueChange={setSelectedJobId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select work bucket…" />
+                <SelectValue placeholder="Select job to clock into…" />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(bucketGroups).map(([type, items]) => (
-                  <SelectGroup key={type}>
-                    <SelectLabel>{GROUP_LABELS[type] ?? type}</SelectLabel>
-                    {items.map(b => (
-                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                    ))}
-                  </SelectGroup>
+                {jobs.map(j => (
+                  <SelectItem key={j.id} value={String(j.id)}>
+                    <span className="flex items-center gap-2">
+                      <Briefcase className="h-3 w-3 opacity-60" />
+                      {j.orderNumber}
+                      {j.department && <span className="text-muted-foreground text-xs">— {j.department}</span>}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -240,7 +227,7 @@ export default function TimeClock({
           {!clockedIn ? (
             <Button
               onClick={handleClockIn}
-              disabled={!selectedBucketId}
+              disabled={!selectedJobId}
               className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50"
               size="lg"
             >

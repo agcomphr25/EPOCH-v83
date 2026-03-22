@@ -5,19 +5,17 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, LogIn, LogOut, UserCheck, Coffee, PlayCircle, ArrowLeft } from 'lucide-react';
+import { CheckCircle, LogIn, LogOut, UserCheck, Coffee, PlayCircle, ArrowLeft, Briefcase } from 'lucide-react';
 
-interface WorkBucket {
-  id: string;
-  name: string;
-  type: string;
+interface Job {
+  id: number;
+  orderNumber: string;
+  department: string | null;
 }
 
 type PunchStatus = 'clock_in' | 'clock_out' | 'break_start' | 'break_end' | null;
@@ -27,13 +25,8 @@ interface KioskStatus {
   lastPunch: { punchType: string; punchTime: string } | null;
   clockIn: string | null;
   clockOut: string | null;
+  activeJobId: number | null;
 }
-
-const GROUP_LABELS: Record<string, string> = {
-  DIRECT: 'Direct Labor',
-  INDIRECT: 'Indirect',
-  NON_WORK: 'Non-Work',
-};
 
 async function kioskFetch(path: string, options?: RequestInit) {
   const res = await fetch(`/api/timekeeping${path}`, {
@@ -53,21 +46,15 @@ export default function TimeClockKiosk() {
   const [employeeId, setEmployeeId] = useState<number | null>(null);
 
   const [kioskStatus, setKioskStatus] = useState<KioskStatus | null>(null);
-  const [buckets, setBuckets] = useState<WorkBucket[]>([]);
-  const [selectedBucket, setSelectedBucket] = useState('');
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const bucketGroups = buckets.reduce<Record<string, WorkBucket[]>>((acc, b) => {
-    if (!acc[b.type]) acc[b.type] = [];
-    acc[b.type].push(b);
-    return acc;
-  }, {});
-
-  // Load buckets once
+  // Load active jobs once
   useEffect(() => {
-    kioskFetch('/kiosk/buckets').then(setBuckets).catch(console.error);
+    kioskFetch('/kiosk/jobs').then(setJobs).catch(console.error);
   }, []);
 
   const loadStatus = useCallback(async (empId: number) => {
@@ -95,8 +82,8 @@ export default function TimeClockKiosk() {
   };
 
   const handlePunch = async (type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end') => {
-    if (type === 'clock_in' && !selectedBucket) {
-      setError('Select a work bucket first');
+    if (type === 'clock_in' && !selectedJobId) {
+      setError('Select a job first');
       return;
     }
     setLoading(true);
@@ -107,7 +94,7 @@ export default function TimeClockKiosk() {
         body: JSON.stringify({
           employeeId,
           type,
-          workBucketId: type === 'clock_in' ? selectedBucket : undefined,
+          jobId: type === 'clock_in' ? parseInt(selectedJobId, 10) : undefined,
         }),
       });
 
@@ -121,13 +108,12 @@ export default function TimeClockKiosk() {
       setSuccessMsg(labels[type] ?? 'Done!');
       setStep('done');
 
-      // Reset to entry screen after 4 seconds
       setTimeout(() => {
         setStep('entry');
         setIdInput('');
         setEmployeeId(null);
         setKioskStatus(null);
-        setSelectedBucket('');
+        setSelectedJobId('');
         setSuccessMsg('');
         setError('');
       }, 4000);
@@ -143,7 +129,7 @@ export default function TimeClockKiosk() {
     setIdInput('');
     setEmployeeId(null);
     setKioskStatus(null);
-    setSelectedBucket('');
+    setSelectedJobId('');
     setError('');
   };
 
@@ -172,6 +158,10 @@ export default function TimeClockKiosk() {
 
   // ── STEP 2: CLOCK UI ────────────────────────────────────────────────────────
   if (step === 'clock') {
+    const activeJob = kioskStatus?.activeJobId
+      ? jobs.find(j => j.id === kioskStatus.activeJobId)
+      : null;
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -188,6 +178,12 @@ export default function TimeClockKiosk() {
           <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
             <p className="text-sm font-medium text-green-800">Clocked in since</p>
             <p className="text-xl font-bold text-green-900">{fmt(kioskStatus.clockIn)}</p>
+            {activeJob && (
+              <p className="text-xs text-green-700 mt-1 flex items-center justify-center gap-1">
+                <Briefcase className="h-3 w-3" />
+                {activeJob.orderNumber}{activeJob.department ? ` — ${activeJob.department}` : ''}
+              </p>
+            )}
           </div>
         )}
 
@@ -205,19 +201,20 @@ export default function TimeClockKiosk() {
                 Last clocked out at {fmt(kioskStatus.clockOut)}
               </div>
             )}
-            {buckets.length > 0 && (
-              <Select value={selectedBucket} onValueChange={setSelectedBucket}>
+            {jobs.length > 0 && (
+              <Select value={selectedJobId} onValueChange={setSelectedJobId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select work bucket…" />
+                  <SelectValue placeholder="Select job to clock into…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(bucketGroups).map(([type, items]) => (
-                    <SelectGroup key={type}>
-                      <SelectLabel>{GROUP_LABELS[type] ?? type}</SelectLabel>
-                      {items.map(b => (
-                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                      ))}
-                    </SelectGroup>
+                  {jobs.map(j => (
+                    <SelectItem key={j.id} value={String(j.id)}>
+                      <span className="flex items-center gap-2">
+                        <Briefcase className="h-3 w-3 opacity-60" />
+                        {j.orderNumber}
+                        {j.department && <span className="text-muted-foreground text-xs">— {j.department}</span>}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -230,7 +227,7 @@ export default function TimeClockKiosk() {
         {!clockedIn && (
           <Button
             className="w-full h-14 text-base bg-green-500 hover:bg-green-600 disabled:opacity-50"
-            disabled={loading || !selectedBucket}
+            disabled={loading || !selectedJobId}
             onClick={() => handlePunch('clock_in')}
           >
             <LogIn className="w-5 h-5 mr-2" />

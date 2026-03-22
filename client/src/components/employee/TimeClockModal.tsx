@@ -10,20 +10,18 @@ import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, X } from 'lucide-react';
+import { Clock, LogIn, LogOut, X, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
 
-interface WorkBucket {
-  id: string;
-  name: string;
-  type: string;
+interface Job {
+  id: number;
+  orderNumber: string;
+  department: string | null;
 }
 
 interface TimeClockModalProps {
@@ -41,32 +39,20 @@ export default function TimeClockModal({
     useTimeClock(employeeId);
 
   const { toast } = useToast();
-  const [selectedBucketId, setSelectedBucketId] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState('');
 
-  const { data: buckets = [] } = useQuery<WorkBucket[]>({
-    queryKey: ['/api/timekeeping/buckets'],
+  const { data: jobs = [] } = useQuery<Job[]>({
+    queryKey: ['/api/timekeeping/jobs'],
   });
 
-  const bucketGroups = buckets.reduce<Record<string, WorkBucket[]>>((acc, b) => {
-    if (!acc[b.type]) acc[b.type] = [];
-    acc[b.type].push(b);
-    return acc;
-  }, {});
-
-  const GROUP_LABELS: Record<string, string> = {
-    DIRECT: 'Direct Labor',
-    INDIRECT: 'Indirect',
-    NON_WORK: 'Non-Work',
-  };
-
   const handleClockIn = async () => {
-    if (!selectedBucketId) {
-      toast({ title: 'Select a work bucket first', variant: 'destructive' });
+    if (!selectedJobId) {
+      toast({ title: 'Select a job first', variant: 'destructive' });
       return;
     }
     try {
-      await clockIn(selectedBucketId);
-      setSelectedBucketId('');
+      await clockIn(selectedJobId);
+      setSelectedJobId('');
       toast({ title: 'Clocked in successfully!' });
     } catch (err: any) {
       const msg = err?.message ?? '';
@@ -82,9 +68,7 @@ export default function TimeClockModal({
       const enforcementRes = await fetch(`/api/checklist-management/enforcement-status?employeeId=${employeeId}`);
       if (enforcementRes.ok) {
         const enforcement = await enforcementRes.json();
-        if (!enforcement.canClockOut) {
-          return { complete: false, checklists: enforcement.incompleteChecklists };
-        }
+        if (!enforcement.canClockOut) return { complete: false, checklists: enforcement.incompleteChecklists };
         return { complete: true, checklists: [] };
       }
       const today = new Date().toISOString().split('T')[0];
@@ -184,19 +168,20 @@ export default function TimeClockModal({
                   <p className="text-sm text-gray-500">Last out at {formatTime(clockOutTime)}</p>
                 )}
               </div>
-              {buckets.length > 0 && (
-                <Select value={selectedBucketId} onValueChange={setSelectedBucketId}>
+              {jobs.length > 0 && (
+                <Select value={selectedJobId} onValueChange={setSelectedJobId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select work bucket…" />
+                    <SelectValue placeholder="Select job to clock into…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(bucketGroups).map(([type, items]) => (
-                      <SelectGroup key={type}>
-                        <SelectLabel>{GROUP_LABELS[type] ?? type}</SelectLabel>
-                        {items.map(b => (
-                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                        ))}
-                      </SelectGroup>
+                    {jobs.map(j => (
+                      <SelectItem key={j.id} value={String(j.id)}>
+                        <span className="flex items-center gap-2">
+                          <Briefcase className="h-3 w-3 opacity-60" />
+                          {j.orderNumber}
+                          {j.department && <span className="text-muted-foreground text-xs">— {j.department}</span>}
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -208,7 +193,7 @@ export default function TimeClockModal({
             {!clockedIn ? (
               <Button
                 onClick={handleClockIn}
-                disabled={!selectedBucketId}
+                disabled={!selectedJobId}
                 className="w-full bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
                 size="lg"
               >
@@ -228,7 +213,7 @@ export default function TimeClockModal({
             <p className="text-xs text-center text-gray-500">
               {clockedIn
                 ? 'Complete your daily checklist before clocking out'
-                : 'Select a work bucket, then clock in'}
+                : 'Select a job, then clock in'}
             </p>
           </div>
         </div>

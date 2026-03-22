@@ -16,11 +16,24 @@ function stableCanonicalId(numericId: number): string {
   return `00000000-0000-4000-8000-${hex}`;
 }
 
+/**
+ * Given a production_orders row, try to match its current_department to a work bucket.
+ * Returns the bucket id (UUID string) or null.
+ */
+async function bucketFromDepartment(dept: string | null): Promise<string | null> {
+  if (!dept) return null;
+  const result = await pool.query(
+    `SELECT id FROM work_buckets WHERE name ILIKE $1 AND active = true LIMIT 1`,
+    [`%${dept}%`]
+  );
+  return result[0]?.id ?? null;
+}
+
 // POST /api/timekeeping/punch
 router.post('/punch', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = req.user!;
-    const { type, workBucketId } = req.body;
+    const { type, jobId, workBucketId: explicitBucketId } = req.body;
 
     if (!type || !ALLOWED_PUNCH_TYPES.includes(type)) {
       return res.status(400).json({ error: `type must be one of: ${ALLOWED_PUNCH_TYPES.join(', ')}` });
@@ -28,16 +41,38 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
 
     const punchType = type as PunchType;
 
-    // Bucket required on clock_in only
-    if (punchType === 'clock_in' && !workBucketId) {
-      return res.status(400).json({ error: 'workBucketId is required when clocking in' });
+    // jobId required for clock_in
+    if (punchType === 'clock_in' && !jobId) {
+      return res.status(400).json({ error: 'jobId is required when clocking in' });
     }
 
-    // Validate bucket exists if provided
-    if (workBucketId) {
+    // Validate job + auto-derive bucket
+    let resolvedBucketId: string | null = explicitBucketId ?? null;
+    let resolvedJobId: number | null = null;
+
+    if (jobId) {
+      const numericJobId = parseInt(String(jobId), 10);
+      if (isNaN(numericJobId)) {
+        return res.status(400).json({ error: 'Invalid jobId' });
+      }
+      const job = await pool.query(
+        `SELECT id, current_department FROM production_orders WHERE id = $1`,
+        [numericJobId]
+      );
+      if (!job[0]) {
+        return res.status(400).json({ error: 'Job not found' });
+      }
+      resolvedJobId = numericJobId;
+      if (!resolvedBucketId) {
+        resolvedBucketId = await bucketFromDepartment(job[0].current_department);
+      }
+    }
+
+    // Validate explicit bucket if still needed
+    if (resolvedBucketId && !resolvedJobId) {
       const bucket = await pool.query(
         `SELECT id FROM work_buckets WHERE id = $1 AND active = true`,
-        [workBucketId]
+        [resolvedBucketId]
       );
       if (!bucket[0]) {
         return res.status(400).json({ error: 'Invalid or inactive work bucket' });
@@ -71,16 +106,17 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
     await pool.query(
       `INSERT INTO punch_events
          (id, external_punch_id, canonical_id, epoch_employee_id,
-          punch_type, punch_time, source, work_bucket_id)
+          punch_type, punch_time, source, work_bucket_id, job_id)
        VALUES
-         (gen_random_uuid(), $1, $2, $3, $4, $5, 'epoch_native', $6)`,
+         (gen_random_uuid(), $1, $2, $3, $4, $5, 'epoch_native', $6, $7)`,
       [
         externalPunchId,
         canonicalId,
         user.employeeId ?? null,
         punchType,
         now,
-        workBucketId ?? null,
+        resolvedBucketId,
+        resolvedJobId,
       ]
     );
 
@@ -90,7 +126,7 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
         fieldName: 'TIME_PUNCH',
         fieldLabel: 'Time Punch',
         oldValue: null,
-        newValue: { type: punchType, workBucketId: workBucketId ?? null },
+        newValue: { type: punchType, jobId: resolvedJobId, workBucketId: resolvedBucketId },
         changedBy: user.username,
         userRole: user.role,
         changeType: 'TIMEKEEPING',
@@ -100,7 +136,7 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
       console.warn('[Timekeeping] Audit log failed (non-fatal):', auditErr);
     }
 
-    console.log(`[Timekeeping] ${punchType} recorded for user ${user.username} (employee ${user.employeeId}) bucket: ${workBucketId ?? 'none'}`);
+    console.log(`[Timekeeping] ${punchType} for user ${user.username} job: ${resolvedJobId ?? 'none'} bucket: ${resolvedBucketId ?? 'none'}`);
     res.json({ success: true, punchType });
   } catch (err: any) {
     console.error('[Timekeeping] Punch error:', err);
@@ -114,7 +150,7 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
     const user = req.user!;
 
     if (!user.employeeId) {
-      return res.json({ status: null, lastPunch: null, clockIn: null, clockOut: null });
+      return res.json({ status: null, lastPunch: null, clockIn: null, clockOut: null, jobId: null });
     }
 
     const punches = await storage.getPunchEventsByEmployeeId(user.employeeId, 50);
@@ -143,7 +179,48 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
   }
 });
 
-// GET /api/timekeeping/buckets — list active work buckets
+// GET /api/timekeeping/active-job
+router.get('/active-job', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const user = req.user!;
+    const empId = user.employeeId ?? user.id;
+
+    const last = await pool.query(
+      `SELECT job_id AS "jobId", punch_type AS "punchType"
+       FROM punch_events
+       WHERE epoch_employee_id = $1
+       ORDER BY punch_time DESC LIMIT 1`,
+      [empId]
+    );
+
+    if (!last[0] || last[0].punchType === 'clock_out') {
+      return res.json({ jobId: null });
+    }
+    res.json({ jobId: last[0].jobId ?? null });
+  } catch (err: any) {
+    console.error('[Timekeeping] Active job error:', err);
+    res.status(500).json({ error: 'Failed to fetch active job' });
+  }
+});
+
+// GET /api/timekeeping/jobs — active production orders
+router.get('/jobs', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const jobs = await pool.query(
+      `SELECT id, order_id AS "orderNumber", current_department AS "department"
+       FROM production_orders
+       WHERE production_status NOT IN ('COMPLETE', 'COMPLETED', 'CANCELLED')
+       ORDER BY id DESC
+       LIMIT 100`
+    );
+    res.json(jobs);
+  } catch (err: any) {
+    console.error('[Timekeeping] Jobs error:', err);
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
+
+// GET /api/timekeeping/buckets — list active work buckets (fallback)
 router.get('/buckets', authenticateToken, async (req: Request, res: Response) => {
   try {
     const buckets = await pool.query(
@@ -174,10 +251,13 @@ router.get('/hours', authenticateToken, async (req: Request, res: Response) => {
          pe.punch_type AS "punchType",
          pe.punch_time AS "punchTime",
          pe.work_bucket_id AS "workBucketId",
+         pe.job_id AS "jobId",
          wb.name AS "bucketName",
-         wb.type AS "bucketType"
+         wb.type AS "bucketType",
+         po.order_id AS "jobOrderNumber"
        FROM punch_events pe
        LEFT JOIN work_buckets wb ON wb.id = pe.work_bucket_id
+       LEFT JOIN production_orders po ON po.id = pe.job_id
        WHERE pe.epoch_employee_id = $1
          AND pe.punch_time BETWEEN $2 AND $3
        ORDER BY pe.punch_time ASC`,
@@ -220,10 +300,13 @@ router.get(
            pe.source,
            pe.approved,
            pe.work_bucket_id AS "workBucketId",
+           pe.job_id AS "jobId",
            wb.name AS "bucketName",
+           po.order_id AS "jobOrderNumber",
            pe.created_at AS "createdAt"
          FROM punch_events pe
          LEFT JOIN work_buckets wb ON wb.id = pe.work_bucket_id
+         LEFT JOIN production_orders po ON po.id = pe.job_id
          WHERE pe.epoch_employee_id = $1
            AND pe.punch_time BETWEEN $2 AND $3
          ORDER BY pe.punch_time ASC`,
@@ -495,6 +578,23 @@ router.get('/kiosk/buckets', async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/timekeeping/kiosk/jobs — active jobs for kiosk selector
+router.get('/kiosk/jobs', async (_req: Request, res: Response) => {
+  try {
+    const jobs = await pool.query(
+      `SELECT id, order_id AS "orderNumber", current_department AS "department"
+       FROM production_orders
+       WHERE production_status NOT IN ('COMPLETE', 'COMPLETED', 'CANCELLED')
+       ORDER BY id DESC
+       LIMIT 100`
+    );
+    res.json(jobs);
+  } catch (err: any) {
+    console.error('[Kiosk] Jobs error:', err);
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
+
 // GET /api/timekeeping/kiosk/status/:employeeId
 router.get('/kiosk/status/:employeeId', async (req: Request, res: Response) => {
   try {
@@ -509,10 +609,15 @@ router.get('/kiosk/status/:employeeId', async (req: Request, res: Response) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const rows = await pool.query(
-      `SELECT punch_type AS "punchType", punch_time AS "punchTime"
-       FROM punch_events
-       WHERE epoch_employee_id = $1 AND punch_time >= $2 AND punch_time < $3
-       ORDER BY punch_time ASC`,
+      `SELECT
+         pe.punch_type AS "punchType",
+         pe.punch_time AS "punchTime",
+         pe.job_id AS "jobId",
+         po.order_id AS "jobOrderNumber"
+       FROM punch_events pe
+       LEFT JOIN production_orders po ON po.id = pe.job_id
+       WHERE pe.epoch_employee_id = $1 AND pe.punch_time >= $2 AND pe.punch_time < $3
+       ORDER BY pe.punch_time ASC`,
       [employeeId, today, tomorrow]
     );
 
@@ -520,11 +625,15 @@ router.get('/kiosk/status/:employeeId', async (req: Request, res: Response) => {
     const firstClockIn = rows.find((r: any) => r.punchType === 'clock_in');
     const lastClockOut = [...rows].reverse().find((r: any) => r.punchType === 'clock_out');
 
+    // Current active job (from last clock_in that hasn't been clocked out)
+    const activeJobId = (lastPunch?.punchType !== 'clock_out') ? (lastPunch?.jobId ?? null) : null;
+
     res.json({
       status: lastPunch?.punchType ?? null,
       lastPunch,
       clockIn: firstClockIn?.punchTime ?? null,
       clockOut: lastClockOut?.punchTime ?? null,
+      activeJobId,
     });
   } catch (err: any) {
     console.error('[Kiosk] Status error:', err);
@@ -535,7 +644,7 @@ router.get('/kiosk/status/:employeeId', async (req: Request, res: Response) => {
 // POST /api/timekeeping/kiosk/punch
 router.post('/kiosk/punch', async (req: Request, res: Response) => {
   try {
-    const { employeeId, type, workBucketId } = req.body;
+    const { employeeId, type, jobId, workBucketId: explicitBucketId } = req.body;
 
     const numericId = parseInt(String(employeeId), 10);
     if (isNaN(numericId) || numericId <= 0) {
@@ -548,17 +657,27 @@ router.post('/kiosk/punch', async (req: Request, res: Response) => {
 
     const punchType = type as PunchType;
 
-    if (punchType === 'clock_in' && !workBucketId) {
-      return res.status(400).json({ error: 'workBucketId is required when clocking in' });
+    if (punchType === 'clock_in' && !jobId) {
+      return res.status(400).json({ error: 'jobId is required when clocking in' });
     }
 
-    if (workBucketId) {
-      const bucket = await pool.query(
-        `SELECT id FROM work_buckets WHERE id = $1 AND active = true`,
-        [workBucketId]
+    // Validate job + auto-derive bucket
+    let resolvedBucketId: string | null = explicitBucketId ?? null;
+    let resolvedJobId: number | null = null;
+
+    if (jobId) {
+      const numericJobId = parseInt(String(jobId), 10);
+      if (isNaN(numericJobId)) return res.status(400).json({ error: 'Invalid jobId' });
+
+      const job = await pool.query(
+        `SELECT id, current_department FROM production_orders WHERE id = $1`,
+        [numericJobId]
       );
-      if (!bucket[0]) {
-        return res.status(400).json({ error: 'Invalid or inactive work bucket' });
+      if (!job[0]) return res.status(400).json({ error: 'Job not found' });
+
+      resolvedJobId = numericJobId;
+      if (!resolvedBucketId) {
+        resolvedBucketId = await bucketFromDepartment(job[0].current_department);
       }
     }
 
@@ -588,20 +707,21 @@ router.post('/kiosk/punch', async (req: Request, res: Response) => {
     await pool.query(
       `INSERT INTO punch_events
          (id, external_punch_id, canonical_id, epoch_employee_id,
-          punch_type, punch_time, source, work_bucket_id)
+          punch_type, punch_time, source, work_bucket_id, job_id)
        VALUES
-         (gen_random_uuid(), $1, $2, $3, $4, $5, 'kiosk', $6)`,
+         (gen_random_uuid(), $1, $2, $3, $4, $5, 'kiosk', $6, $7)`,
       [
         randomUUID(),
         stableCanonicalIdKiosk(numericId),
         numericId,
         punchType,
         now,
-        workBucketId ?? null,
+        resolvedBucketId,
+        resolvedJobId,
       ]
     );
 
-    console.log(`[Kiosk] ${punchType} for employee ${numericId} bucket: ${workBucketId ?? 'none'}`);
+    console.log(`[Kiosk] ${punchType} for employee ${numericId} job: ${resolvedJobId ?? 'none'} bucket: ${resolvedBucketId ?? 'none'}`);
     res.json({ success: true, punchType });
   } catch (err: any) {
     console.error('[Kiosk] Punch error:', err);

@@ -812,12 +812,108 @@ router.get('/admin/job-labor-breakdown/:jobId', authenticateToken, requireRole('
     const totalHours = breakdown.reduce((sum, r) => sum + r.hours, 0);
     const totalCost = breakdown.reduce((sum, r) => sum + r.cost, 0);
 
-    res.json({ jobId, totalHours, totalCost, breakdown });
+    // Phase 5 — apply allocations to distribute cost/hours across projects
+    const allocRows = await pool.query(
+      `SELECT ja.project_id AS "projectId", ja.allocation_units AS "allocationUnits",
+              p.project_code AS "projectCode", p.project_name AS "projectName"
+       FROM job_allocations ja
+       LEFT JOIN projects p ON p.id = ja.project_id
+       WHERE ja.job_id = $1`,
+      [jobId]
+    );
+    const totalUnits = allocRows.reduce((sum: number, a: any) => sum + Number(a.allocationUnits ?? 0), 0);
+    const projectAllocation = allocRows.map((a: any) => {
+      const ratio = totalUnits > 0 ? Number(a.allocationUnits) / totalUnits : 0;
+      return {
+        projectId: a.projectId,
+        projectCode: a.projectCode,
+        projectName: a.projectName,
+        allocationUnits: Number(a.allocationUnits),
+        hours: totalHours * ratio,
+        cost: totalCost * ratio,
+      };
+    });
+
+    res.json({ jobId, totalHours, totalCost, breakdown, projectAllocation });
   } catch (err: any) {
     console.error('[job-labor-breakdown]', err);
     res.status(500).json({ error: 'Failed to calculate job labor breakdown' });
   }
 });
 
+// GET /api/timekeeping/admin/projects — list active projects for allocation UI
+router.get('/admin/projects', authenticateToken, requireRole('ADMIN', 'OWNER'), async (_req: Request, res: Response) => {
+  try {
+    const projects = await pool.query(
+      `SELECT id, project_code AS "projectCode", project_name AS "projectName"
+       FROM projects
+       WHERE status = 'active'
+       ORDER BY project_code ASC`
+    );
+    res.json(projects);
+  } catch (err: any) {
+    console.error('[admin/projects]', err);
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+// POST /api/timekeeping/admin/job-allocate — replace allocations for a job
+router.post('/admin/job-allocate', authenticateToken, requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { jobId, allocations } = req.body;
+    const numericJobId = parseInt(String(jobId), 10);
+    if (isNaN(numericJobId)) return res.status(400).json({ error: 'Invalid jobId' });
+    if (!Array.isArray(allocations) || allocations.length === 0) {
+      return res.status(400).json({ error: 'allocations must be a non-empty array' });
+    }
+    // Validate allocations
+    for (const a of allocations) {
+      if (!a.projectId || typeof a.units !== 'number' || a.units <= 0) {
+        return res.status(400).json({ error: 'Each allocation requires projectId and a positive units value' });
+      }
+    }
+
+    // Replace: delete existing, then insert new
+    await pool.query(`DELETE FROM job_allocations WHERE job_id = $1`, [numericJobId]);
+    for (const a of allocations) {
+      await pool.query(
+        `INSERT INTO job_allocations (job_id, project_id, allocation_units)
+         VALUES ($1, $2, $3)`,
+        [numericJobId, a.projectId, a.units]
+      );
+    }
+
+    res.json({ success: true, jobId: numericJobId, count: allocations.length });
+  } catch (err: any) {
+    console.error('[job-allocate]', err);
+    res.status(500).json({ error: 'Failed to save job allocations' });
+  }
+});
+
+// GET /api/timekeeping/admin/job-allocations/:jobId — current allocations for a job
+router.get('/admin/job-allocations/:jobId', authenticateToken, requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+  try {
+    const jobId = parseInt(req.params.jobId, 10);
+    if (isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+    const rows = await pool.query(
+      `SELECT ja.id, ja.job_id AS "jobId", ja.project_id AS "projectId",
+              ja.allocation_units AS "allocationUnits", ja.allocation_percent AS "allocationPercent",
+              ja.created_at AS "createdAt",
+              p.project_code AS "projectCode", p.project_name AS "projectName"
+       FROM job_allocations ja
+       LEFT JOIN projects p ON p.id = ja.project_id
+       WHERE ja.job_id = $1
+       ORDER BY ja.created_at ASC`,
+      [jobId]
+    );
+    res.json(rows);
+  } catch (err: any) {
+    console.error('[job-allocations]', err);
+    res.status(500).json({ error: 'Failed to fetch job allocations' });
+  }
+});
+
 export default router;
+
 

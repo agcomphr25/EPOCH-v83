@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Clock, CheckCircle, Trash2, Pencil, Download, Search, Briefcase } from 'lucide-react';
+import { Clock, CheckCircle, Trash2, Pencil, Download, Search, Briefcase, PieChart, Plus, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PunchRow {
   id: string;
@@ -43,11 +44,32 @@ interface JobLaborEmployee {
   cost: number;
 }
 
+interface ProjectAllocationRow {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  allocationUnits: number;
+  hours: number;
+  cost: number;
+}
+
 interface JobLaborBreakdown {
   jobId: number;
   totalHours: number;
   totalCost: number;
   breakdown: JobLaborEmployee[];
+  projectAllocation: ProjectAllocationRow[];
+}
+
+interface Project {
+  id: string;
+  projectCode: string;
+  projectName: string;
+}
+
+interface AllocationInputRow {
+  projectId: string;
+  units: number;
 }
 
 const PUNCH_LABELS: Record<string, string> = {
@@ -109,6 +131,26 @@ export default function TimeClockAdminPage() {
     enabled: activeJobId !== null,
   });
 
+  const [allocRows, setAllocRows] = useState<AllocationInputRow[]>([{ projectId: '', units: 0 }]);
+
+  const { data: projects } = useQuery<Project[]>({
+    queryKey: ['/api/timekeeping/admin/projects'],
+  });
+
+  const allocateMutation = useMutation({
+    mutationFn: (payload: { jobId: number; allocations: { projectId: string; units: number }[] }) =>
+      apiRequest('/api/timekeeping/admin/job-allocate', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      toast({ title: 'Allocations saved' });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/admin/job-labor-breakdown', activeJobId] });
+    },
+    onError: (err: any) =>
+      toast({ title: err?.message ?? 'Failed to save allocations', variant: 'destructive' }),
+  });
+
   const handleJobSearch = () => {
     const id = parseInt(jobIdInput.trim(), 10);
     if (isNaN(id)) {
@@ -116,6 +158,17 @@ export default function TimeClockAdminPage() {
       return;
     }
     setActiveJobId(id);
+    setAllocRows([{ projectId: '', units: 0 }]);
+  };
+
+  const handleAllocate = () => {
+    if (!activeJobId) return;
+    const valid = allocRows.filter(r => r.projectId && r.units > 0);
+    if (valid.length === 0) {
+      toast({ title: 'Add at least one project with a positive units value', variant: 'destructive' });
+      return;
+    }
+    allocateMutation.mutate({ jobId: activeJobId, allocations: valid });
   };
 
   const approveMutation = useMutation({
@@ -424,6 +477,127 @@ export default function TimeClockAdminPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Job Cost Allocation */}
+      {activeJobId !== null && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <PieChart className="w-4 h-4 text-primary" />
+              Job Cost Allocation — Job #{activeJobId}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Distribute this job's labor cost across projects using relative units (e.g. 6 + 4 = 60% / 40%).
+            </p>
+
+            {/* Input rows */}
+            <div className="space-y-2">
+              {allocRows.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Select
+                    value={row.projectId}
+                    onValueChange={val =>
+                      setAllocRows(prev => prev.map((r, idx) => idx === i ? { ...r, projectId: val } : r))
+                    }
+                  >
+                    <SelectTrigger className="flex-1 max-w-xs h-8 text-sm">
+                      <SelectValue placeholder="Select project…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(projects ?? []).map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.projectCode} — {p.projectName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="Units"
+                    value={row.units || ''}
+                    onChange={e =>
+                      setAllocRows(prev =>
+                        prev.map((r, idx) => idx === i ? { ...r, units: parseFloat(e.target.value) || 0 } : r)
+                      )
+                    }
+                    className="w-24 h-8 text-sm"
+                  />
+                  {allocRows.length > 1 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-muted-foreground"
+                      onClick={() => setAllocRows(prev => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAllocRows(prev => [...prev, { projectId: '', units: 0 }])}
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Add Project
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAllocate}
+                disabled={allocateMutation.isPending}
+                className="bg-primary"
+              >
+                {allocateMutation.isPending ? 'Saving…' : 'Save Allocations'}
+              </Button>
+            </div>
+
+            {/* Current allocation distribution */}
+            {jobLaborData?.projectAllocation && jobLaborData.projectAllocation.length > 0 && (
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Current Allocation Distribution</p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Project</TableHead>
+                      <TableHead className="text-right">Units</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {jobLaborData.projectAllocation.map(alloc => (
+                      <TableRow key={alloc.projectId}>
+                        <TableCell className="text-sm font-medium">
+                          {alloc.projectCode} — {alloc.projectName}
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {alloc.allocationUnits}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {formatHours(alloc.hours)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {alloc.cost > 0
+                            ? `$${alloc.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payroll export */}
       <Card>

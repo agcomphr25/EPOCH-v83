@@ -1,0 +1,122 @@
+PHASE 1 — CREATE ALLOCATION TABLE
+CREATE TABLE job_allocations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  job_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+
+  allocation_percent numeric,   -- optional
+  allocation_units numeric,     -- optional
+
+  created_at timestamp DEFAULT now()
+);
+🔵 PHASE 2 — ADD BASIC RULE
+
+👉 Only ONE of these should be used:
+
+allocation_percent
+allocation_units
+
+We’ll support both, but you’ll typically use:
+
+👉 units (recommended for you)
+
+🔵 PHASE 3 — ALLOCATION ENDPOINT
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+router.post('/admin/job-allocate', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+
+  const { jobId, allocations } = req.body;
+
+  // allocations = [{ projectId, units }]
+
+  for (const a of allocations) {
+    await db.query(`
+      INSERT INTO job_allocations (job_id, project_id, allocation_units)
+      VALUES ($1,$2,$3)
+    `, [jobId, a.projectId, a.units]);
+  }
+
+  res.json({ success: true });
+});
+🔵 PHASE 4 — GET JOB ALLOCATIONS
+router.get('/admin/job-allocations/:jobId', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+
+  const rows = await db.query(`
+    SELECT *
+    FROM job_allocations
+    WHERE job_id = $1
+  `, [req.params.jobId]);
+
+  res.json(rows);
+});
+🔵 PHASE 5 — APPLY ALLOCATION TO COST
+UPDATE:
+
+/admin/job-labor-breakdown/:jobId
+ADD:
+const allocations = await db.query(`
+  SELECT project_id, allocation_units
+  FROM job_allocations
+  WHERE job_id = $1
+`, [req.params.jobId]);
+CALCULATE TOTAL UNITS
+const totalUnits = allocations.reduce((sum, a) => sum + a.allocation_units, 0);
+DISTRIBUTE COST
+const projectCosts = [];
+
+for (const a of allocations) {
+  const ratio = a.allocation_units / totalUnits;
+
+  projectCosts.push({
+    projectId: a.project_id,
+    hours: totalHours * ratio,
+    cost: totalCost * ratio
+  });
+}
+RETURN
+res.json({
+  jobId,
+  totalHours,
+  totalCost,
+  breakdown: result,
+  projectAllocation: projectCosts
+});
+🔵 PHASE 6 — SIMPLE UI (ADMIN)
+Add to admin:
+
+- Select Job
+- Enter:
+
+Project A → units
+Project B → units
+
+Button: "Allocate"
+🔵 PHASE 7 — TEST (CRITICAL)
+TEST:
+
+Job labor = 10 hours
+
+Allocations:
+- Project A = 6 units
+- Project B = 4 units
+
+EXPECT:
+
+Project A → 6 hours
+Project B → 4 hours
+🔴 IMPORTANT RULES
+1. Allocation happens AFTER work
+
+✔ correct
+
+2. Allocation does NOT change punches
+
+✔ critical
+
+3. Allocation is auditable
+
+(we can add audit later)

@@ -1,0 +1,138 @@
+COPY-PASTE PROMPT — LAYER 3 PATCH (AGENT-PROOF)
+
+This will fix traceability WITHOUT schema changes
+
+SYSTEM ROLE: Senior EPOCH Traceability Engineer
+MODE: CONTROLLED PATCH (NO SCHEMA CHANGES)
+
+OBJECTIVE:
+Standardize department history and timeline display across ALL order types (SO + production_orders) using order_department_transitions as the single source of truth.
+
+DO NOT attempt to restore JSONB department_history or *_completed_at columns.
+
+--------------------------------------------------
+🚨 HARD RULES
+--------------------------------------------------
+
+- DO NOT modify database schema
+- DO NOT add new columns
+- DO NOT modify updateProductionOrder validColumns
+- DO NOT remove existing logic
+- DO NOT refactor progression endpoints
+
+ONLY:
+- Update READ paths (UI + API) to use order_department_transitions
+
+--------------------------------------------------
+STEP 1 — IDENTIFY ALL HISTORY READ LOCATIONS
+--------------------------------------------------
+
+Search for:
+
+- department_history usage
+- Flight Recorder
+- DomainTruthInspector history sections
+- Order detail history panels
+
+--------------------------------------------------
+STEP 2 — REPLACE JSONB HISTORY WITH TRANSITIONS QUERY
+--------------------------------------------------
+
+Wherever you see:
+
+order.department_history
+
+REPLACE (read only) with:
+
+const transitions = await getDepartmentTransitions(orderId)
+
+--------------------------------------------------
+STEP 3 — CREATE HELPER (IF NOT EXISTS)
+--------------------------------------------------
+
+Create:
+
+getDepartmentTransitions(orderId)
+
+Query:
+
+SELECT *
+FROM order_department_transitions
+WHERE order_id = ?
+ORDER BY entered_at ASC
+
+--------------------------------------------------
+STEP 4 — NORMALIZE OUTPUT
+--------------------------------------------------
+
+Map transitions into:
+
+[
+  {
+    from: previous_department,
+    to: current_department,
+    enteredAt,
+    exitedAt,
+    durationMinutes
+  }
+]
+
+--------------------------------------------------
+STEP 5 — UPDATE DTI "FLIGHT RECORDER"
+--------------------------------------------------
+
+Current:
+- Phase 1: JSONB history
+- Phase 2: transitions
+
+MODIFY:
+
+- REMOVE dependency on JSONB
+- ALWAYS use transitions as primary source
+
+Label:
+
+"Department Timeline (from transitions)"
+
+--------------------------------------------------
+STEP 6 — UPDATE ORDER DETAIL VIEW
+--------------------------------------------------
+
+If order detail UI shows history:
+
+- replace JSONB usage
+- show transitions timeline
+
+--------------------------------------------------
+STEP 7 — ADD FALLBACK LABEL
+--------------------------------------------------
+
+If no transitions found:
+
+Display:
+
+"No department history recorded yet"
+
+--------------------------------------------------
+STEP 8 — ADD MINIMAL LOGGING
+--------------------------------------------------
+
+console.log(`[TRACE] Loaded ${transitions.length} transitions for ${orderId}`)
+
+--------------------------------------------------
+STEP 9 — OUTPUT
+--------------------------------------------------
+
+Provide:
+
+1. list of updated UI components
+2. helper function code
+3. before → after examples
+
+Confirm:
+
+"order_department_transitions is now the primary history source"
+"production_orders now show full timeline"
+"no schema changes made"
+
+STOP after patch

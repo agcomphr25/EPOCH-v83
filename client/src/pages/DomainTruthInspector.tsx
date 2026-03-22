@@ -671,52 +671,29 @@ export default function DomainTruthInspector() {
               )}
             </SectionCard>
 
-            {/* ─── 4. Department History ─── */}
-            <SectionCard title="4 — Department History (embedded JSONB)" icon={Clock}>
-              {(() => {
-                const history = order?.department_history;
-                const arr = Array.isArray(history)
-                  ? history
-                  : typeof history === 'string'
-                  ? (() => { try { return JSON.parse(history); } catch { return []; } })()
-                  : [];
-                if (arr.length === 0) return <p className="text-sm text-gray-400 italic">No department history recorded.</p>;
-                return (
-                  <div className="space-y-1">
-                    {[...arr].reverse().map((h: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <span className="text-gray-400 w-6 text-right flex-shrink-0">{arr.length - i}</span>
-                        <span className="font-mono text-gray-600 dark:text-gray-400 w-36 flex-shrink-0">
-                          {h.fromDepartment ?? '—'}
-                        </span>
-                        <span className="text-gray-400">→</span>
-                        <span className="font-mono text-indigo-600 dark:text-indigo-400 w-36 flex-shrink-0">
-                          {h.toDepartment ?? '—'}
-                        </span>
-                        <span className="text-gray-400 flex-1">
-                          {h.timestamp ? new Date(h.timestamp).toLocaleString() : ''}
-                        </span>
-                        {h.movedBy && <span className="text-gray-500">{h.movedBy}</span>}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {departmentTransitions.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-semibold text-gray-500 mb-2">From order_department_transitions table</p>
-                  <div className="space-y-1">
-                    {departmentTransitions.map((t: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <span className="font-mono text-indigo-600 dark:text-indigo-400 w-36 flex-shrink-0">{t.department}</span>
-                        <span className="text-gray-400">entered: {new Date(t.entered_at).toLocaleString()}</span>
-                        {t.exited_at && <span className="text-gray-400">→ exited: {new Date(t.exited_at).toLocaleString()}</span>}
-                        {t.duration_minutes != null && <span className="text-gray-500">{t.duration_minutes}m</span>}
-                        {t.exit_reason && <Badge variant="outline" className="text-xs">{t.exit_reason}</Badge>}
-                      </div>
-                    ))}
-                  </div>
+            {/* ─── 4. Department Timeline ─── */}
+            <SectionCard title="4 — Department Timeline (from transitions)" icon={Clock} defaultOpen={departmentTransitions.length > 0}>
+              {departmentTransitions.length === 0 ? (
+                <p className="text-sm text-gray-400 italic">No department history recorded yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {departmentTransitions.map((t: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-xs py-1 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <span className="text-gray-400 w-5 text-right flex-shrink-0">{i + 1}</span>
+                      <span className="font-mono text-indigo-600 dark:text-indigo-400 w-40 flex-shrink-0">{t.department}</span>
+                      <span className="text-gray-400 flex-1">
+                        {t.entered_at ? new Date(t.entered_at).toLocaleString() : '—'}
+                        {t.exited_at && <> → {new Date(t.exited_at).toLocaleString()}</>}
+                      </span>
+                      {t.duration_minutes != null && (
+                        <span className="text-gray-500 font-mono w-14 text-right flex-shrink-0">{t.duration_minutes}m</span>
+                      )}
+                      {t.exit_reason && <Badge variant="outline" className="text-xs flex-shrink-0">{t.exit_reason}</Badge>}
+                      {t.cycle_number != null && t.cycle_number > 1 && (
+                        <Badge variant="outline" className="text-xs text-orange-600 flex-shrink-0">cycle {t.cycle_number}</Badge>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </SectionCard>

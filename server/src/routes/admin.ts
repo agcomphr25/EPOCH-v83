@@ -583,29 +583,33 @@ router.get(
         });
       }
 
-      // ── 2. DEPARTMENT HISTORY (embedded JSONB) ───────────────────────────
-      let deptHistory: any[] = [];
-      try {
-        const raw = orderRow?.department_history;
-        deptHistory = Array.isArray(raw)
-          ? raw
-          : typeof raw === 'string'
-          ? JSON.parse(raw)
-          : [];
-      } catch (_) {}
+      // ── 2. DEPARTMENT TIMELINE (from order_department_transitions — primary source) ──
+      // JSONB department_history is NOT used here: it is absent for production_orders.
+      // order_department_transitions is written for ALL order types by auditService.
+      console.log(`[TRACE] Loaded ${transitionRows.length} transitions for ${resolvedId}`);
 
-      for (const entry of deptHistory) {
-        const ts = entry.timestamp ?? entry.movedAt ?? null;
-        const from = entry.fromDepartment ?? entry.from ?? '?';
-        const to = entry.toDepartment ?? entry.to ?? '?';
-        const by = entry.movedBy ?? entry.progressedBy ?? entry.assignedTechnician ?? null;
+      let prevDept: string | null = null;
+      for (const t of transitionRows) {
+        const from = prevDept ?? '(start)';
+        const to = t.department ?? '?';
+        const durationStr = t.duration_minutes != null ? ` (${t.duration_minutes}m)` : '';
         events.push({
-          timestamp: ts ? new Date(ts).toISOString() : null,
+          timestamp: t.entered_at ? new Date(t.entered_at).toISOString() : null,
           type: 'DEPARTMENT_CHANGE',
-          description: `Department: ${from} → ${to}`,
-          actor: by,
-          metadata: { fromDepartment: from, toDepartment: to },
+          description: `Department: ${from} → ${to}${durationStr}`,
+          actor: null,
+          metadata: {
+            fromDepartment: from,
+            toDepartment: to,
+            enteredAt: t.entered_at,
+            exitedAt: t.exited_at ?? null,
+            durationMinutes: t.duration_minutes ?? null,
+            exitReason: t.exit_reason ?? null,
+            cycleNumber: t.cycle_number ?? null,
+            source: 'order_department_transitions',
+          },
         });
+        prevDept = to;
       }
 
       // ── 3. AUDIT EVENTS ──────────────────────────────────────────────────

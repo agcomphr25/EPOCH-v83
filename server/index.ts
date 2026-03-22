@@ -2367,6 +2367,14 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ punch_events job_id migration:', jobIdErr?.message);
       }
 
+      // Ensure employees has labor_rate column for job cost calculation
+      try {
+        await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS labor_rate NUMERIC`);
+        console.log('✅ Ensured employees has labor_rate column');
+      } catch (lrErr: any) {
+        console.warn('⚠️ employees labor_rate migration:', lrErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

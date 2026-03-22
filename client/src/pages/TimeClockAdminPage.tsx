@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Clock, CheckCircle, Trash2, Pencil, Download, Search } from 'lucide-react';
+import { Clock, CheckCircle, Trash2, Pencil, Download, Search, Briefcase } from 'lucide-react';
 
 interface PunchRow {
   id: string;
@@ -33,6 +33,21 @@ interface PayrollData {
   payPeriod: { label: string };
   employees: Array<{ epochEmployeeId: number; totalHours: number; intervals: any[] }>;
   generatedAt: string;
+}
+
+interface JobLaborEmployee {
+  employeeId: number;
+  employeeName: string | null;
+  hours: number;
+  laborRate: number;
+  cost: number;
+}
+
+interface JobLaborBreakdown {
+  jobId: number;
+  totalHours: number;
+  totalCost: number;
+  breakdown: JobLaborEmployee[];
 }
 
 const PUNCH_LABELS: Record<string, string> = {
@@ -70,6 +85,9 @@ export default function TimeClockAdminPage() {
   const [activeEmployeeId, setActiveEmployeeId] = useState<number | null>(null);
   const [editingPunch, setEditingPunch] = useState<{ id: string; punchTime: string } | null>(null);
 
+  const [jobIdInput, setJobIdInput] = useState('');
+  const [activeJobId, setActiveJobId] = useState<number | null>(null);
+
   const { data, isLoading, refetch } = useQuery<AdminEmployeeData>({
     queryKey: ['/api/timekeeping/admin/employee', activeEmployeeId],
     enabled: activeEmployeeId !== null,
@@ -80,6 +98,25 @@ export default function TimeClockAdminPage() {
       queryKey: ['/api/timekeeping/admin/payroll'],
       enabled: false,
     });
+
+  const {
+    data: jobLaborData,
+    isLoading: jobLaborLoading,
+    refetch: refetchJobLabor,
+    isFetching: jobLaborFetching,
+  } = useQuery<JobLaborBreakdown>({
+    queryKey: ['/api/timekeeping/admin/job-labor-breakdown', activeJobId],
+    enabled: activeJobId !== null,
+  });
+
+  const handleJobSearch = () => {
+    const id = parseInt(jobIdInput.trim(), 10);
+    if (isNaN(id)) {
+      toast({ title: 'Enter a valid numeric job ID', variant: 'destructive' });
+      return;
+    }
+    setActiveJobId(id);
+  };
 
   const approveMutation = useMutation({
     mutationFn: (empId: number) =>
@@ -287,6 +324,106 @@ export default function TimeClockAdminPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Job Labor Analysis */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-primary" />
+            Job Labor Analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2 mb-4">
+            <Input
+              placeholder="Job ID (numeric)"
+              value={jobIdInput}
+              onChange={e => setJobIdInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleJobSearch()}
+              className="max-w-xs"
+            />
+            <Button onClick={handleJobSearch} disabled={jobLaborLoading || jobLaborFetching}>
+              <Search className="w-4 h-4 mr-2" />
+              {jobLaborLoading || jobLaborFetching ? 'Loading…' : 'Load Job Labor'}
+            </Button>
+            {activeJobId !== null && (
+              <Button variant="ghost" size="sm" onClick={() => refetchJobLabor()}>
+                Refresh
+              </Button>
+            )}
+          </div>
+
+          {activeJobId !== null && (jobLaborLoading || jobLaborFetching) && (
+            <div className="flex justify-center py-6">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+            </div>
+          )}
+
+          {jobLaborData && (
+            <div className="space-y-3">
+              <div className="flex gap-6 text-sm font-medium pb-2 border-b">
+                <span>Job #{jobLaborData.jobId}</span>
+                <span>Total hours: <strong>{formatHours(jobLaborData.totalHours)}</strong></span>
+                <span>
+                  Estimated cost:{' '}
+                  <strong>
+                    ${jobLaborData.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </strong>
+                </span>
+              </div>
+
+              {jobLaborData.breakdown.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No completed punch intervals found for this job.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead className="text-right">Rate ($/hr)</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {jobLaborData.breakdown.map(row => (
+                      <TableRow key={row.employeeId}>
+                        <TableCell className="text-sm">
+                          {row.employeeName || `Employee #${row.employeeId}`}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {formatHours(row.hours)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {row.laborRate > 0
+                            ? `$${row.laborRate.toFixed(2)}`
+                            : <span className="italic">not set</span>}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-sm">
+                          {row.cost > 0
+                            ? `$${row.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="border-t-2 font-bold">
+                      <TableCell>Total</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {formatHours(jobLaborData.totalHours)}
+                      </TableCell>
+                      <TableCell />
+                      <TableCell className="text-right">
+                        ${jobLaborData.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Payroll export */}
       <Card>

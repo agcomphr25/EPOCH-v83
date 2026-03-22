@@ -5,6 +5,7 @@ import { storage } from '../../storage';
 import { pool } from '../../db';
 import { pairPunches, sumHours } from '../services/timekeepingPairing';
 import { getPayPeriod } from '../services/payPeriod';
+import { buildJobIntervals } from '../services/jobLabor';
 
 const router = Router();
 
@@ -729,4 +730,94 @@ router.post('/kiosk/punch', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/timekeeping/admin/job-labor/:jobId — total hours for a job
+router.get('/admin/job-labor/:jobId', authenticateToken, requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+  try {
+    const jobId = parseInt(req.params.jobId, 10);
+    if (isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+    // Fetch all punches for employees who clocked into this job — clock_outs don't carry job_id
+    const punches = await pool.query(
+      `SELECT punch_type AS "punchType", punch_time AS "punchTime",
+              job_id AS "jobId", epoch_employee_id AS "epochEmployeeId"
+       FROM punch_events
+       WHERE epoch_employee_id IN (
+         SELECT DISTINCT epoch_employee_id FROM punch_events
+         WHERE job_id = $1 AND punch_type = 'clock_in'
+       )
+       ORDER BY punch_time ASC`,
+      [jobId]
+    );
+
+    const allIntervals = buildJobIntervals(punches);
+    // Keep only intervals that started on this job
+    const intervals = allIntervals.filter(i => i.jobId === jobId);
+    const totalHours = intervals.reduce((sum, i) => sum + i.hours, 0);
+
+    res.json({ jobId, totalHours, intervals });
+  } catch (err: any) {
+    console.error('[job-labor]', err);
+    res.status(500).json({ error: 'Failed to calculate job labor' });
+  }
+});
+
+// GET /api/timekeeping/admin/job-labor-breakdown/:jobId — per-employee hours + cost for a job
+router.get('/admin/job-labor-breakdown/:jobId', authenticateToken, requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+  try {
+    const jobId = parseInt(req.params.jobId, 10);
+    if (isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+    // Fetch all punches for employees who clocked into this job (clock_outs have null job_id)
+    const rows = await pool.query(
+      `SELECT pe.punch_type AS "punchType",
+              pe.punch_time AS "punchTime",
+              pe.job_id AS "jobId",
+              pe.epoch_employee_id AS "epochEmployeeId",
+              COALESCE(e.labor_rate, 0) AS "laborRate",
+              COALESCE(e.name, '') AS "employeeName"
+       FROM punch_events pe
+       LEFT JOIN employees e ON e.id = pe.epoch_employee_id
+       WHERE pe.epoch_employee_id IN (
+         SELECT DISTINCT epoch_employee_id FROM punch_events
+         WHERE job_id = $1 AND punch_type = 'clock_in'
+       )
+       ORDER BY pe.epoch_employee_id, pe.punch_time ASC`,
+      [jobId]
+    );
+
+    // Group by employee
+    const byEmployee: Record<number, typeof rows> = {};
+    for (const row of rows) {
+      const empId = row.epochEmployeeId;
+      if (!byEmployee[empId]) byEmployee[empId] = [];
+      byEmployee[empId].push(row);
+    }
+
+    const breakdown = Object.entries(byEmployee).map(([empId, empPunches]) => {
+      const allIntervals = buildJobIntervals(empPunches);
+      // Only count intervals where the clock_in was for this job
+      const intervals = allIntervals.filter(i => i.jobId === jobId);
+      const hours = intervals.reduce((sum, i) => sum + i.hours, 0);
+      const laborRate = Number(empPunches[0]?.laborRate ?? 0);
+      const cost = hours * laborRate;
+      return {
+        employeeId: Number(empId),
+        employeeName: empPunches[0]?.employeeName || null,
+        hours,
+        laborRate,
+        cost,
+      };
+    });
+
+    const totalHours = breakdown.reduce((sum, r) => sum + r.hours, 0);
+    const totalCost = breakdown.reduce((sum, r) => sum + r.cost, 0);
+
+    res.json({ jobId, totalHours, totalCost, breakdown });
+  } catch (err: any) {
+    console.error('[job-labor-breakdown]', err);
+    res.status(500).json({ error: 'Failed to calculate job labor breakdown' });
+  }
+});
+
 export default router;
+

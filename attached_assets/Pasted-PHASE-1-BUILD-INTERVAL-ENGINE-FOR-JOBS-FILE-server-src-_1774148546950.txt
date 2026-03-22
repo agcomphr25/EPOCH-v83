@@ -1,0 +1,149 @@
+PHASE 1 — BUILD INTERVAL ENGINE FOR JOBS
+FILE:
+server/src/services/jobLabor.ts
+
+---
+
+IMPLEMENT:
+
+export function buildJobIntervals(punches) {
+  const intervals = [];
+  let current = null;
+
+  for (const p of punches) {
+    if (p.punchType === 'clock_in') {
+      current = p;
+    }
+
+    if (p.punchType === 'clock_out' && current) {
+      intervals.push({
+        jobId: current.job_id,
+        start: current.punchTime,
+        end: p.punchTime,
+        hours: (new Date(p.punchTime) - new Date(current.punchTime)) / 3600000
+      });
+      current = null;
+    }
+  }
+
+  return intervals;
+}
+🔵 PHASE 2 — JOB LABOR ENDPOINT
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+IMPORT:
+import { buildJobIntervals } from '../services/jobLabor';
+
+---
+
+ADD:
+
+router.get('/admin/job-labor/:jobId', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+
+  const punches = await db.query(`
+    SELECT *
+    FROM punch_events
+    WHERE job_id = $1
+    ORDER BY punchTime ASC
+  `, [req.params.jobId]);
+
+  const intervals = buildJobIntervals(punches);
+
+  const totalHours = intervals.reduce((sum, i) => sum + i.hours, 0);
+
+  res.json({
+    jobId: req.params.jobId,
+    totalHours,
+    intervals
+  });
+});
+🔵 PHASE 3 — LABOR BY EMPLOYEE (PER JOB)
+ADD:
+
+router.get('/admin/job-labor-breakdown/:jobId', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+
+  const punches = await db.query(`
+    SELECT epochEmployeeId, punchType, punchTime, job_id
+    FROM punch_events
+    WHERE job_id = $1
+    ORDER BY punchTime ASC
+  `, [req.params.jobId]);
+
+  const byEmployee = {};
+
+  for (const p of punches) {
+    if (!byEmployee[p.epochEmployeeId]) {
+      byEmployee[p.epochEmployeeId] = [];
+    }
+    byEmployee[p.epochEmployeeId].push(p);
+  }
+
+  const result = [];
+
+  for (const empId in byEmployee) {
+    const intervals = buildJobIntervals(byEmployee[empId]);
+
+    const hours = intervals.reduce((sum, i) => sum + i.hours, 0);
+
+    result.push({
+      employeeId: empId,
+      hours
+    });
+  }
+
+  res.json(result);
+});
+🔵 PHASE 4 — ADD LABOR RATE (MINIMAL)
+DB:
+
+ALTER TABLE employees
+ADD COLUMN labor_rate numeric;
+🔵 PHASE 5 — COST CALCULATION
+UPDATE breakdown:
+
+SELECT e.id, e.labor_rate
+
+---
+
+MODIFY RESULT:
+
+result.push({
+  employeeId: empId,
+  hours,
+  cost: hours * (employee.labor_rate || 0)
+});
+🔵 PHASE 6 — TOTAL JOB COST
+ADD TO RESPONSE:
+
+const totalCost = result.reduce((sum, r) => sum + r.cost, 0);
+
+res.json({
+  jobId: req.params.jobId,
+  totalHours,
+  totalCost,
+  breakdown: result
+});
+🔵 PHASE 7 — SIMPLE ADMIN UI ADD
+IN TimeClockAdmin:
+
+ADD:
+
+- input job ID
+- "Load Job Labor"
+
+CALL:
+
+GET /api/timekeeping/admin/job-labor-breakdown/:jobId
+🔵 PHASE 8 — TEST
+TEST:
+
+1. Clock into job
+2. Clock out
+3. Hit job-labor endpoint
+4. Confirm:
+   - hours correct
+   - employee breakdown correct
+   - cost correct

@@ -1,34 +1,44 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
+export type PunchType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
 interface TimeClockStatus {
-  status: 'IN' | 'OUT';
+  status: PunchType | null;
+  lastPunch: { punchType: PunchType; punchTime: string } | null;
   clockIn: string | null;
   clockOut: string | null;
 }
 
-interface UseTimeClockReturn {
+export interface UseTimeClockReturn {
   clockedIn: boolean;
+  onBreak: boolean;
+  status: PunchType | null;
   clockInTime: string | null;
   clockOutTime: string | null;
+  lastPunchTime: string | null;
   clockIn: () => Promise<void>;
   clockOut: () => Promise<void>;
+  startBreak: () => Promise<void>;
+  endBreak: () => Promise<void>;
   loading: boolean;
 }
 
 export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
-  const [clockedIn, setClockedIn] = useState(false);
+  const [status, setStatus] = useState<PunchType | null>(null);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
+  const [lastPunchTime, setLastPunchTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshStatus = useCallback(async () => {
     setLoading(true);
     try {
       const data = await apiRequest('/api/timekeeping/status') as TimeClockStatus;
-      setClockedIn(data.status === 'IN');
+      setStatus(data.status);
       setClockInTime(data.clockIn);
       setClockOutTime(data.clockOut);
+      setLastPunchTime(data.lastPunch?.punchTime ?? null);
     } catch (err) {
       console.error('[useTimeClock] Failed to fetch status', err);
     } finally {
@@ -40,17 +50,21 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     refreshStatus();
   }, [refreshStatus]);
 
+  const punch = async (type: PunchType) => {
+    await apiRequest('/api/timekeeping/punch', {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    });
+    await refreshStatus();
+  };
+
   const clockIn = async () => {
-    const timestamp = new Date().toISOString();
-    setClockedIn(true);
-    setClockInTime(timestamp);
+    const ts = new Date().toISOString();
+    setStatus('clock_in');
+    setClockInTime(ts);
     setClockOutTime(null);
     try {
-      await apiRequest('/api/timekeeping/punch', {
-        method: 'POST',
-        body: JSON.stringify({ type: 'clock_in' }),
-      });
-      await refreshStatus();
+      await punch('clock_in');
     } catch (err) {
       console.error('[useTimeClock] Clock-in failed', err);
       await refreshStatus();
@@ -59,15 +73,11 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
   };
 
   const clockOut = async () => {
-    const timestamp = new Date().toISOString();
-    setClockedIn(false);
-    setClockOutTime(timestamp);
+    const ts = new Date().toISOString();
+    setStatus('clock_out');
+    setClockOutTime(ts);
     try {
-      await apiRequest('/api/timekeeping/punch', {
-        method: 'POST',
-        body: JSON.stringify({ type: 'clock_out' }),
-      });
-      await refreshStatus();
+      await punch('clock_out');
     } catch (err) {
       console.error('[useTimeClock] Clock-out failed', err);
       await refreshStatus();
@@ -75,12 +85,42 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     }
   };
 
+  const startBreak = async () => {
+    setStatus('break_start');
+    try {
+      await punch('break_start');
+    } catch (err) {
+      console.error('[useTimeClock] Break start failed', err);
+      await refreshStatus();
+      throw err;
+    }
+  };
+
+  const endBreak = async () => {
+    setStatus('break_end');
+    try {
+      await punch('break_end');
+    } catch (err) {
+      console.error('[useTimeClock] Break end failed', err);
+      await refreshStatus();
+      throw err;
+    }
+  };
+
+  const clockedIn = status === 'clock_in' || status === 'break_start' || status === 'break_end';
+  const onBreak = status === 'break_start';
+
   return {
     clockedIn,
+    onBreak,
+    status,
     clockInTime,
     clockOutTime,
+    lastPunchTime,
     clockIn,
     clockOut,
+    startBreak,
+    endBreak,
     loading,
   };
 }

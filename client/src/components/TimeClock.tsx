@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -7,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Clock, LogIn, LogOut } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, PlayCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
 
@@ -20,8 +21,19 @@ export default function TimeClock({
   employeeId,
   disableClockOut = false,
 }: TimeClockProps) {
-  const { clockedIn, clockInTime, clockOutTime, clockIn, clockOut, loading } =
-    useTimeClock(employeeId);
+  const {
+    clockedIn,
+    onBreak,
+    status,
+    clockInTime,
+    clockOutTime,
+    lastPunchTime,
+    clockIn,
+    clockOut,
+    startBreak,
+    endBreak,
+    loading,
+  } = useTimeClock(employeeId);
 
   const { toast } = useToast();
 
@@ -29,8 +41,12 @@ export default function TimeClock({
     try {
       await clockIn();
       toast({ title: 'Clocked in successfully!' });
-    } catch (error) {
-      toast({ title: 'Failed to clock in', variant: 'destructive' });
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      toast({
+        title: msg.includes('Already clocked in') ? 'Already clocked in' : 'Failed to clock in',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -44,7 +60,6 @@ export default function TimeClock({
         }
         return { complete: true, checklists: [] };
       }
-
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`/api/checklist?employeeId=${employeeId}&date=${today}`);
       if (!response.ok) throw new Error('Failed to fetch checklist');
@@ -53,8 +68,7 @@ export default function TimeClock({
         item.required ? Boolean(item.value) : true
       );
       return { complete: allRequiredComplete, checklists: [] };
-    } catch (error) {
-      console.error('Error checking checklist:', error);
+    } catch {
       return { complete: true, checklists: [] };
     }
   };
@@ -62,7 +76,6 @@ export default function TimeClock({
   const handleClockOut = async () => {
     try {
       const result = await checkChecklistCompletion();
-
       if (!result.complete) {
         const names = result.checklists?.map((c: any) => c.name).join(', ');
         toast({
@@ -73,12 +86,38 @@ export default function TimeClock({
         });
         return;
       }
-
       await clockOut();
       toast({ title: 'Clocked out successfully!' });
-    } catch (error) {
-      toast({ title: 'Failed to clock out', variant: 'destructive' });
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      toast({
+        title: msg.includes('Must clock in') ? 'Must clock in first' : 'Failed to clock out',
+        variant: 'destructive',
+      });
     }
+  };
+
+  const handleStartBreak = async () => {
+    try {
+      await startBreak();
+      toast({ title: 'Break started' });
+    } catch {
+      toast({ title: 'Failed to start break', variant: 'destructive' });
+    }
+  };
+
+  const handleEndBreak = async () => {
+    try {
+      await endBreak();
+      toast({ title: 'Break ended — back to work!' });
+    } catch {
+      toast({ title: 'Failed to end break', variant: 'destructive' });
+    }
+  };
+
+  const formatTime = (iso: string | null) => {
+    if (!iso) return null;
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   if (loading) {
@@ -92,7 +131,7 @@ export default function TimeClock({
         </CardHeader>
         <CardContent>
           <div className="flex justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
           </div>
         </CardContent>
       </Card>
@@ -101,14 +140,30 @@ export default function TimeClock({
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader>
+      <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
           Time Clock
+          {onBreak && (
+            <Badge variant="outline" className="border-amber-400 text-amber-700 text-xs ml-1">
+              On Break
+            </Badge>
+          )}
+          {clockedIn && !onBreak && (
+            <Badge variant="outline" className="border-green-500 text-green-700 text-xs ml-1">
+              Clocked In
+            </Badge>
+          )}
+          {!clockedIn && status !== null && (
+            <Badge variant="outline" className="border-muted-foreground text-muted-foreground text-xs ml-1">
+              Clocked Out
+            </Badge>
+          )}
         </CardTitle>
         <CardDescription>Employee ID: {employeeId}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+
+      <CardContent className="space-y-3">
         {!clockedIn ? (
           <Button
             onClick={handleClockIn}
@@ -118,40 +173,56 @@ export default function TimeClock({
             <LogIn className="h-4 w-4 mr-2" />
             Clock In
           </Button>
-        ) : (
+        ) : onBreak ? (
           <Button
-            onClick={handleClockOut}
-            className="w-full bg-red-500 hover:bg-red-600"
+            onClick={handleEndBreak}
+            className="w-full bg-amber-500 hover:bg-amber-600"
             size="lg"
           >
-            <LogOut className="h-4 w-4 mr-2" />
-            Clock Out
+            <PlayCircle className="h-4 w-4 mr-2" />
+            End Break
           </Button>
+        ) : (
+          <div className="space-y-2">
+            <Button
+              onClick={handleClockOut}
+              disabled={disableClockOut}
+              className="w-full bg-red-500 hover:bg-red-600"
+              size="lg"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Clock Out
+            </Button>
+            <Button
+              onClick={handleStartBreak}
+              variant="outline"
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+              size="sm"
+            >
+              <Coffee className="h-4 w-4 mr-2" />
+              Start Break
+            </Button>
+          </div>
         )}
 
-        {clockedIn && clockInTime && (
+        {clockedIn && !onBreak && clockInTime && (
           <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-sm font-medium text-green-800">
-              Clocked in since
-            </p>
-            <p className="text-lg font-bold text-green-900">
-              {new Date(clockInTime).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </p>
+            <p className="text-sm font-medium text-green-800">Clocked in since</p>
+            <p className="text-lg font-bold text-green-900">{formatTime(clockInTime)}</p>
+          </div>
+        )}
+
+        {onBreak && (
+          <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <p className="text-sm font-medium text-amber-800">On break since</p>
+            <p className="text-lg font-bold text-amber-900">{formatTime(lastPunchTime)}</p>
           </div>
         )}
 
         {!clockedIn && clockOutTime && (
-          <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
-            <p className="text-sm font-medium text-red-800">Clocked out at</p>
-            <p className="text-lg font-bold text-red-900">
-              {new Date(clockOutTime).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </p>
+          <div className="text-center p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <p className="text-sm font-medium text-slate-600">Clocked out at</p>
+            <p className="text-lg font-bold text-slate-800">{formatTime(clockOutTime)}</p>
           </div>
         )}
       </CardContent>

@@ -1,0 +1,143 @@
+PHASE 9 — PREVENT DOUBLE CLOCK-IN / CLOCK-OUT
+Update punch route to enforce valid sequences.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+BEFORE INSERT, ADD:
+
+const last = await db.query(`
+  SELECT punchType
+  FROM punch_events
+  WHERE epochEmployeeId = $1
+  ORDER BY punchTime DESC
+  LIMIT 1
+`, [req.user.id]);
+
+const lastType = last[0]?.punchType;
+
+if (type === 'clock_in' && lastType === 'clock_in') {
+  return res.status(400).json({ error: 'Already clocked in' });
+}
+
+if (type === 'clock_out' && lastType !== 'clock_in') {
+  return res.status(400).json({ error: 'Must clock in first' });
+}
+🔵 PHASE 10 — ADD BREAK SUPPORT (OPTIONAL BUT CLEAN)
+Extend punch types.
+
+---
+
+ALLOW:
+
+clock_in
+clock_out
+break_start
+break_end
+
+---
+
+UPDATE VALIDATION:
+
+const allowed = ['clock_in','clock_out','break_start','break_end'];
+if (!allowed.includes(type)) {
+  return res.status(400).json({ error: 'Invalid type' });
+}
+🔵 PHASE 11 — ADD PUNCH AUDIT (LIGHTWEIGHT)
+Add audit log for punches.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+AFTER INSERT, ADD:
+
+await db.query(`
+  INSERT INTO admin_audit_log (
+    order_id,
+    field_name,
+    field_label,
+    old_value,
+    new_value,
+    changed_by,
+    user_role,
+    change_type,
+    reason,
+    timestamp
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+`, [
+  null,
+  'TIME_PUNCH',
+  'Time Punch',
+  null,
+  JSON.stringify({ type: punchType }),
+  req.user.username,
+  req.user.role,
+  'TIMEKEEPING',
+  'Employee punch'
+]);
+🔵 PHASE 12 — ADD “CURRENT STATUS” ENDPOINT
+Create endpoint to get employee punch state.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+ADD:
+
+router.get('/status', authenticateToken, async (req, res) => {
+  const last = await db.query(`
+    SELECT punchType, punchTime
+    FROM punch_events
+    WHERE epochEmployeeId = $1
+    ORDER BY punchTime DESC
+    LIMIT 1
+  `, [req.user.id]);
+
+  res.json({
+    status: last[0]?.punchType || 'clock_out',
+    lastPunch: last[0] || null
+  });
+});
+🔵 PHASE 13 — UPDATE FRONTEND STATUS
+Update useTimeClock hook.
+
+---
+
+CALL:
+GET /api/timekeeping/status
+
+---
+
+SET:
+
+isClockedIn = status === 'clock_in'
+🔵 PHASE 14 — FIX TIME CLOCK UI STATE
+Update TimeClock.tsx
+
+---
+
+DISABLE BUTTON:
+
+- If clocked in → show "Clock Out"
+- If clocked out → show "Clock In"
+
+---
+
+OPTIONAL:
+
+Show last punch time
+🔵 PHASE 15 — TEST AGAIN
+Test sequence:
+
+1. Clock in → success
+2. Clock in again → blocked
+3. Clock out → success
+4. Clock out again → blocked
+5. Refresh → state persists
+6. Check /api/timekeeping/status

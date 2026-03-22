@@ -1,0 +1,126 @@
+PHASE 1 — ADD WORK BUCKETS TABLE
+Create work buckets table.
+
+DB MIGRATION:
+
+CREATE TABLE work_buckets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  type text NOT NULL, -- DIRECT, INDIRECT, NON_WORK
+  active boolean DEFAULT true,
+  created_at timestamp DEFAULT now()
+);
+🔵 PHASE 2 — SEED PLACEHOLDER BUCKETS
+Insert initial buckets.
+
+INSERT INTO work_buckets (name, type) VALUES
+('Production - Stocks', 'DIRECT'),
+('Production - Aerospace', 'DIRECT'),
+('CNC Work', 'DIRECT'),
+('Layup Work', 'DIRECT'),
+('Finishing', 'DIRECT'),
+('Admin', 'INDIRECT'),
+('Training / Idle', 'NON_WORK');
+🔵 PHASE 3 — ATTACH BUCKET TO PUNCHES
+Add bucket reference.
+
+ALTER TABLE punch_events
+ADD COLUMN work_bucket_id uuid;
+
+ALTER TABLE punch_events
+ADD CONSTRAINT fk_work_bucket
+FOREIGN KEY (work_bucket_id)
+REFERENCES work_buckets(id);
+🔵 PHASE 4 — REQUIRE BUCKET ON PUNCH
+Update punch route.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+ADD validation:
+
+const { workBucketId } = req.body;
+
+if (!workBucketId) {
+  return res.status(400).json({ error: 'workBucketId required' });
+}
+🔵 PHASE 5 — SAVE BUCKET ON INSERT
+Modify INSERT.
+
+INSERT INTO punch_events (
+  id,
+  epochEmployeeId,
+  punchType,
+  punchTime,
+  source,
+  work_bucket_id
+)
+VALUES ($1,$2,$3,$4,$5,$6);
+🔵 PHASE 6 — ADD BUCKET LIST ENDPOINT
+Expose buckets to UI.
+
+router.get('/buckets', authenticateToken, async (req, res) => {
+  const buckets = await db.query(`
+    SELECT id, name, type
+    FROM work_buckets
+    WHERE active = true
+    ORDER BY name
+  `);
+  res.json(buckets);
+});
+🔵 PHASE 7 — UPDATE FRONTEND (CRITICAL)
+TimeClock.tsx
+
+---
+
+LOAD buckets:
+
+GET /api/timekeeping/buckets
+
+---
+
+ADD dropdown:
+
+<select onChange={(e) => setBucket(e.target.value)}>
+  {buckets.map(b => (
+    <option value={b.id}>{b.name}</option>
+  ))}
+</select>
+🔵 PHASE 8 — PASS BUCKET ON CLOCK ACTION
+When clocking in/out:
+
+POST /api/timekeeping/punch
+
+BODY:
+
+{
+  type: 'clock_in',
+  workBucketId: selectedBucket
+}
+🔵 PHASE 9 — DISPLAY BUCKET IN HOURS
+Update /hours endpoint query:
+
+SELECT punchType, punchTime, work_bucket_id
+🔵 PHASE 10 — BASIC JOB COST VIEW (FOUNDATION)
+Add aggregation endpoint.
+
+router.get('/admin/labor-by-bucket', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+
+  const rows = await db.query(`
+    SELECT
+      work_bucket_id,
+      SUM(
+        CASE
+          WHEN punchType = 'clock_out'
+          THEN 1
+          ELSE 0
+        END
+      ) as punches
+    FROM punch_events
+    GROUP BY work_bucket_id
+  `);
+
+  res.json(rows);
+});

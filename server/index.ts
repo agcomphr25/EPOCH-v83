@@ -2322,6 +2322,43 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ punch_events approved column migration:', punchApprovedErr?.message);
       }
 
+      // Ensure work_buckets table exists and is seeded (work bucket tracking)
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS work_buckets (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        const existing = await pool.query(`SELECT COUNT(*) AS cnt FROM work_buckets`);
+        if (parseInt(existing[0]?.cnt ?? '0', 10) === 0) {
+          await pool.query(`
+            INSERT INTO work_buckets (name, type) VALUES
+              ('Production - Stocks', 'DIRECT'),
+              ('Production - Aerospace', 'DIRECT'),
+              ('CNC Work', 'DIRECT'),
+              ('Layup Work', 'DIRECT'),
+              ('Finishing', 'DIRECT'),
+              ('Admin', 'INDIRECT'),
+              ('Training / Idle', 'NON_WORK')
+          `);
+        }
+        console.log('✅ Ensured work_buckets table exists with seed data');
+      } catch (workBucketsErr: any) {
+        console.warn('⚠️ work_buckets migration:', workBucketsErr?.message);
+      }
+
+      // Ensure punch_events has work_bucket_id column
+      try {
+        await pool.query(`ALTER TABLE punch_events ADD COLUMN IF NOT EXISTS work_bucket_id UUID REFERENCES work_buckets(id)`);
+        console.log('✅ Ensured punch_events has work_bucket_id column');
+      } catch (workBucketIdErr: any) {
+        console.warn('⚠️ punch_events work_bucket_id migration:', workBucketIdErr?.message);
+      }
+
       // Seed default health check types and config if not present
       const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();

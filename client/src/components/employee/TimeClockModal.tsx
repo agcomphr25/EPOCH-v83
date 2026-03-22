@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -7,15 +8,23 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Clock, LogIn, LogOut, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
+
+interface WorkBucket {
+  id: string;
+  name: string;
+  type: string;
+}
 
 interface TimeClockModalProps {
   employeeId: string;
@@ -32,13 +41,39 @@ export default function TimeClockModal({
     useTimeClock(employeeId);
 
   const { toast } = useToast();
+  const [selectedBucketId, setSelectedBucketId] = useState('');
+
+  const { data: buckets = [] } = useQuery<WorkBucket[]>({
+    queryKey: ['/api/timekeeping/buckets'],
+  });
+
+  const bucketGroups = buckets.reduce<Record<string, WorkBucket[]>>((acc, b) => {
+    if (!acc[b.type]) acc[b.type] = [];
+    acc[b.type].push(b);
+    return acc;
+  }, {});
+
+  const GROUP_LABELS: Record<string, string> = {
+    DIRECT: 'Direct Labor',
+    INDIRECT: 'Indirect',
+    NON_WORK: 'Non-Work',
+  };
 
   const handleClockIn = async () => {
+    if (!selectedBucketId) {
+      toast({ title: 'Select a work bucket first', variant: 'destructive' });
+      return;
+    }
     try {
-      await clockIn();
+      await clockIn(selectedBucketId);
+      setSelectedBucketId('');
       toast({ title: 'Clocked in successfully!' });
-    } catch (error) {
-      toast({ title: 'Failed to clock in', variant: 'destructive' });
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      toast({
+        title: msg.includes('Already clocked in') ? 'Already clocked in' : 'Failed to clock in',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -52,7 +87,6 @@ export default function TimeClockModal({
         }
         return { complete: true, checklists: [] };
       }
-
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`/api/checklist?employeeId=${employeeId}&date=${today}`);
       if (!response.ok) throw new Error('Failed to fetch checklist');
@@ -61,8 +95,7 @@ export default function TimeClockModal({
         item.required ? Boolean(item.value) : true
       );
       return { complete: allRequiredComplete, checklists: [] };
-    } catch (error) {
-      console.error('Error checking checklist:', error);
+    } catch {
       return { complete: true, checklists: [] };
     }
   };
@@ -70,7 +103,6 @@ export default function TimeClockModal({
   const handleClockOut = async () => {
     try {
       const result = await checkChecklistCompletion();
-
       if (!result.complete) {
         const names = result.checklists?.map((c: any) => c.name).join(', ');
         toast({
@@ -81,29 +113,20 @@ export default function TimeClockModal({
         });
         return;
       }
-
       await clockOut();
       toast({ title: 'Clocked out successfully!' });
-    } catch (error) {
+    } catch {
       toast({ title: 'Failed to clock out', variant: 'destructive' });
     }
   };
 
-  const formatTime = (dateString: string) => {
+  const formatTime = (dateString: string | null) => {
     if (!dateString) return '';
-    return new Date(dateString).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const getCurrentTime = () => {
-    return new Date().toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
+  const getCurrentTime = () =>
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   if (loading) {
     return (
@@ -116,7 +139,7 @@ export default function TimeClockModal({
             </DialogTitle>
           </DialogHeader>
           <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
         </DialogContent>
       </Dialog>
@@ -139,49 +162,54 @@ export default function TimeClockModal({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Current Time Display */}
           <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-lg">
             <p className="text-sm text-gray-600 mb-2">Current Time</p>
-            <p className="text-2xl font-bold text-blue-600">
-              {getCurrentTime()}
-            </p>
-            <p className="text-sm text-gray-500">
-              {new Date().toLocaleDateString()}
-            </p>
+            <p className="text-2xl font-bold text-blue-600">{getCurrentTime()}</p>
+            <p className="text-sm text-gray-500">{new Date().toLocaleDateString()}</p>
           </div>
 
-          {/* Clock In/Out Status */}
           {clockedIn ? (
             <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
               <div className="flex items-center justify-center space-x-2 mb-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                <p className="text-sm font-medium text-green-800">
-                  Currently Clocked In
-                </p>
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <p className="text-sm font-medium text-green-800">Currently Clocked In</p>
               </div>
-              <p className="text-lg font-bold text-green-900">
-                Since {formatTime(clockInTime!)}
-              </p>
+              <p className="text-lg font-bold text-green-900">Since {formatTime(clockInTime)}</p>
             </div>
           ) : (
-            <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-sm font-medium text-gray-600">
-                Not Clocked In
-              </p>
-              {clockOutTime && (
-                <p className="text-sm text-gray-500">
-                  Last clocked out at {formatTime(clockOutTime)}
-                </p>
+            <div className="space-y-3">
+              <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm font-medium text-gray-600">Not Clocked In</p>
+                {clockOutTime && (
+                  <p className="text-sm text-gray-500">Last out at {formatTime(clockOutTime)}</p>
+                )}
+              </div>
+              {buckets.length > 0 && (
+                <Select value={selectedBucketId} onValueChange={setSelectedBucketId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select work bucket…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(bucketGroups).map(([type, items]) => (
+                      <SelectGroup key={type}>
+                        <SelectLabel>{GROUP_LABELS[type] ?? type}</SelectLabel>
+                        {items.map(b => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="space-y-3">
             {!clockedIn ? (
               <Button
                 onClick={handleClockIn}
-                className="w-full bg-green-500 hover:bg-green-600 text-white"
+                disabled={!selectedBucketId}
+                className="w-full bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
                 size="lg"
               >
                 <LogIn className="w-4 h-4 mr-2" />
@@ -197,11 +225,10 @@ export default function TimeClockModal({
                 Clock Out
               </Button>
             )}
-
             <p className="text-xs text-center text-gray-500">
               {clockedIn
                 ? 'Complete your daily checklist before clocking out'
-                : 'Click to start your work day'}
+                : 'Select a work bucket, then clock in'}
             </p>
           </div>
         </div>

@@ -11,8 +11,6 @@ const router = Router();
 const ALLOWED_PUNCH_TYPES = ['clock_in', 'clock_out', 'break_start', 'break_end'] as const;
 type PunchType = typeof ALLOWED_PUNCH_TYPES[number];
 
-const MAX_SHIFT_HOURS = 16;
-
 function stableCanonicalId(numericId: number): string {
   const hex = numericId.toString(16).padStart(12, '0');
   return `00000000-0000-4000-8000-${hex}`;
@@ -22,13 +20,30 @@ function stableCanonicalId(numericId: number): string {
 router.post('/punch', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = req.user!;
-    const { type } = req.body;
+    const { type, workBucketId } = req.body;
 
     if (!type || !ALLOWED_PUNCH_TYPES.includes(type)) {
       return res.status(400).json({ error: `type must be one of: ${ALLOWED_PUNCH_TYPES.join(', ')}` });
     }
 
     const punchType = type as PunchType;
+
+    // Bucket required on clock_in only
+    if (punchType === 'clock_in' && !workBucketId) {
+      return res.status(400).json({ error: 'workBucketId is required when clocking in' });
+    }
+
+    // Validate bucket exists if provided
+    if (workBucketId) {
+      const bucket = await pool.query(
+        `SELECT id FROM work_buckets WHERE id = $1 AND active = true`,
+        [workBucketId]
+      );
+      if (!bucket[0]) {
+        return res.status(400).json({ error: 'Invalid or inactive work bucket' });
+      }
+    }
+
     const resolvedId = user.employeeId ?? user.id;
     const canonicalId = stableCanonicalId(resolvedId);
 
@@ -50,19 +65,24 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
       }
     }
 
-    await storage.createPunchEvent({
-      externalPunchId: randomUUID(),
-      canonicalId,
-      epochEmployeeId: user.employeeId ?? null,
-      punchType,
-      punchTime: new Date(),
-      source: 'epoch_native',
-      departmentCode: null,
-      jobCode: null,
-      locationCode: null,
-      metadata: null,
-      signature: null,
-    });
+    const externalPunchId = randomUUID();
+    const now = new Date();
+
+    await pool.query(
+      `INSERT INTO punch_events
+         (id, external_punch_id, canonical_id, epoch_employee_id,
+          punch_type, punch_time, source, work_bucket_id)
+       VALUES
+         (gen_random_uuid(), $1, $2, $3, $4, $5, 'epoch_native', $6)`,
+      [
+        externalPunchId,
+        canonicalId,
+        user.employeeId ?? null,
+        punchType,
+        now,
+        workBucketId ?? null,
+      ]
+    );
 
     try {
       await storage.createAdminAuditLog({
@@ -70,7 +90,7 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
         fieldName: 'TIME_PUNCH',
         fieldLabel: 'Time Punch',
         oldValue: null,
-        newValue: { type: punchType },
+        newValue: { type: punchType, workBucketId: workBucketId ?? null },
         changedBy: user.username,
         userRole: user.role,
         changeType: 'TIMEKEEPING',
@@ -80,7 +100,7 @@ router.post('/punch', authenticateToken, async (req: Request, res: Response) => 
       console.warn('[Timekeeping] Audit log failed (non-fatal):', auditErr);
     }
 
-    console.log(`[Timekeeping] ${punchType} recorded for user ${user.username} (employee ${user.employeeId})`);
+    console.log(`[Timekeeping] ${punchType} recorded for user ${user.username} (employee ${user.employeeId}) bucket: ${workBucketId ?? 'none'}`);
     res.json({ success: true, punchType });
   } catch (err: any) {
     console.error('[Timekeeping] Punch error:', err);
@@ -123,8 +143,20 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
   }
 });
 
+// GET /api/timekeeping/buckets — list active work buckets
+router.get('/buckets', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const buckets = await pool.query(
+      `SELECT id, name, type FROM work_buckets WHERE active = true ORDER BY type, name`
+    );
+    res.json(buckets);
+  } catch (err: any) {
+    console.error('[Timekeeping] Buckets error:', err);
+    res.status(500).json({ error: 'Failed to fetch work buckets' });
+  }
+});
+
 // GET /api/timekeeping/hours?startDate=&endDate=
-// Defaults to current pay period when no dates supplied
 router.get('/hours', authenticateToken, async (req: Request, res: Response) => {
   try {
     const user = req.user!;
@@ -138,18 +170,28 @@ router.get('/hours', authenticateToken, async (req: Request, res: Response) => {
     const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
 
     const rows = await pool.query(
-      `SELECT punch_type AS "punchType", punch_time AS "punchTime"
-       FROM punch_events
-       WHERE epoch_employee_id = $1
-         AND punch_time BETWEEN $2 AND $3
-       ORDER BY punch_time ASC`,
+      `SELECT
+         pe.punch_type AS "punchType",
+         pe.punch_time AS "punchTime",
+         pe.work_bucket_id AS "workBucketId",
+         wb.name AS "bucketName",
+         wb.type AS "bucketType"
+       FROM punch_events pe
+       LEFT JOIN work_buckets wb ON wb.id = pe.work_bucket_id
+       WHERE pe.epoch_employee_id = $1
+         AND pe.punch_time BETWEEN $2 AND $3
+       ORDER BY pe.punch_time ASC`,
       [user.employeeId, startDate, endDate]
     );
 
     const intervals = pairPunches(rows);
     const totalHours = sumHours(intervals);
 
-    res.json({ intervals, totalHours, payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label } });
+    res.json({
+      intervals,
+      totalHours,
+      payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label },
+    });
   } catch (err: any) {
     console.error('[Timekeeping] Hours error:', err);
     res.status(500).json({ error: 'Failed to fetch hours' });
@@ -171,13 +213,20 @@ router.get(
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
 
       const rows = await pool.query(
-        `SELECT id, punch_type AS "punchType", punch_time AS "punchTime",
-                source, approved,
-                created_at AS "createdAt"
-         FROM punch_events
-         WHERE epoch_employee_id = $1
-           AND punch_time BETWEEN $2 AND $3
-         ORDER BY punch_time ASC`,
+        `SELECT
+           pe.id,
+           pe.punch_type AS "punchType",
+           pe.punch_time AS "punchTime",
+           pe.source,
+           pe.approved,
+           pe.work_bucket_id AS "workBucketId",
+           wb.name AS "bucketName",
+           pe.created_at AS "createdAt"
+         FROM punch_events pe
+         LEFT JOIN work_buckets wb ON wb.id = pe.work_bucket_id
+         WHERE pe.epoch_employee_id = $1
+           AND pe.punch_time BETWEEN $2 AND $3
+         ORDER BY pe.punch_time ASC`,
         [employeeId, startDate, endDate]
       );
 
@@ -235,7 +284,6 @@ router.post(
         console.warn('[Timekeeping] Approval audit failed (non-fatal):', auditErr);
       }
 
-      console.log(`[Timekeeping] Admin ${user.username} approved pay period ${payPeriod.label} for employee ${employeeId}`);
       res.json({ success: true, approvedCount: (result as any).rowCount ?? 0, payPeriod: payPeriod.label });
     } catch (err: any) {
       console.error('[Timekeeping] Approve error:', err);
@@ -257,7 +305,6 @@ router.put(
 
       if (!punchTime) return res.status(400).json({ error: 'punchTime is required' });
 
-      // Phase 31 guardrail: no future punch times
       const newTime = new Date(punchTime);
       if (newTime > new Date()) {
         return res.status(400).json({ error: 'Punch time cannot be in the future' });
@@ -270,18 +317,10 @@ router.put(
       );
 
       if (!existing[0]) return res.status(404).json({ error: 'Punch not found' });
-
-      // Phase 28: block edits on approved punches
-      if (existing[0].approved) {
-        return res.status(400).json({ error: 'Punch is approved and locked' });
-      }
+      if (existing[0].approved) return res.status(400).json({ error: 'Punch is approved and locked' });
 
       const oldTime = existing[0].punchTime;
-
-      await pool.query(
-        `UPDATE punch_events SET punch_time = $1 WHERE id = $2`,
-        [newTime, punchId]
-      );
+      await pool.query(`UPDATE punch_events SET punch_time = $1 WHERE id = $2`, [newTime, punchId]);
 
       try {
         await storage.createAdminAuditLog({
@@ -299,7 +338,6 @@ router.put(
         console.warn('[Timekeeping] Admin edit audit failed (non-fatal):', auditErr);
       }
 
-      console.log(`[Timekeeping] Admin ${user.username} corrected punch ${punchId}: ${oldTime} → ${punchTime}`);
       res.json({ success: true });
     } catch (err: any) {
       console.error('[Timekeeping] Admin edit error:', err);
@@ -326,11 +364,7 @@ router.delete(
       );
 
       if (!existing[0]) return res.status(404).json({ error: 'Punch not found' });
-
-      // Phase 28: block deletes on approved punches
-      if (existing[0].approved) {
-        return res.status(400).json({ error: 'Punch is approved and locked' });
-      }
+      if (existing[0].approved) return res.status(400).json({ error: 'Punch is approved and locked' });
 
       await pool.query(`DELETE FROM punch_events WHERE id = $1`, [punchId]);
 
@@ -350,7 +384,6 @@ router.delete(
         console.warn('[Timekeeping] Admin delete audit failed (non-fatal):', auditErr);
       }
 
-      console.log(`[Timekeeping] Admin ${user.username} deleted punch ${punchId}`);
       res.json({ success: true });
     } catch (err: any) {
       console.error('[Timekeeping] Admin delete error:', err);
@@ -359,7 +392,7 @@ router.delete(
   }
 );
 
-// GET /api/timekeeping/admin/payroll — approved punches for export
+// GET /api/timekeeping/admin/payroll
 router.get(
   '/admin/payroll',
   authenticateToken,
@@ -377,8 +410,7 @@ router.get(
            punch_time AS "punchTime",
            approved
          FROM punch_events
-         WHERE approved = true
-           AND punch_time BETWEEN $1 AND $2
+         WHERE approved = true AND punch_time BETWEEN $1 AND $2
          ORDER BY epoch_employee_id, punch_time`,
         [startDate, endDate]
       );
@@ -389,9 +421,7 @@ router.get(
         if (!byEmployee[eid]) byEmployee[eid] = { epochEmployeeId: eid, punches: [], totalHours: 0, intervals: [] };
         byEmployee[eid].punches.push(row);
       }
-
-      for (const eid of Object.keys(byEmployee)) {
-        const emp = byEmployee[eid as any];
+      for (const emp of Object.values(byEmployee)) {
         emp.intervals = pairPunches(emp.punches);
         emp.totalHours = sumHours(emp.intervals);
       }
@@ -404,6 +434,43 @@ router.get(
     } catch (err: any) {
       console.error('[Timekeeping] Payroll export error:', err);
       res.status(500).json({ error: 'Failed to export payroll' });
+    }
+  }
+);
+
+// GET /api/timekeeping/admin/labor-by-bucket
+router.get(
+  '/admin/labor-by-bucket',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const payPeriod = getPayPeriod();
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : payPeriod.start;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
+
+      const rows = await pool.query(
+        `SELECT
+           pe.work_bucket_id AS "workBucketId",
+           wb.name AS "bucketName",
+           wb.type AS "bucketType",
+           COUNT(*) FILTER (WHERE pe.punch_type = 'clock_in') AS "sessions",
+           COUNT(DISTINCT pe.epoch_employee_id) AS "uniqueEmployees"
+         FROM punch_events pe
+         LEFT JOIN work_buckets wb ON wb.id = pe.work_bucket_id
+         WHERE pe.punch_time BETWEEN $1 AND $2
+         GROUP BY pe.work_bucket_id, wb.name, wb.type
+         ORDER BY wb.name NULLS LAST`,
+        [startDate, endDate]
+      );
+
+      res.json({
+        payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label },
+        buckets: rows,
+      });
+    } catch (err: any) {
+      console.error('[Timekeeping] Labor by bucket error:', err);
+      res.status(500).json({ error: 'Failed to fetch labor by bucket' });
     }
   }
 );

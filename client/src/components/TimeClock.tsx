@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,9 +9,24 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
+
+interface WorkBucket {
+  id: string;
+  name: string;
+  type: string;
+}
 
 interface WorkInterval {
   clockIn: string;
@@ -27,6 +43,12 @@ interface TimeClockProps {
   employeeId: string;
   disableClockOut?: boolean;
 }
+
+const GROUP_LABELS: Record<string, string> = {
+  DIRECT: 'Direct Labor',
+  INDIRECT: 'Indirect',
+  NON_WORK: 'Non-Work',
+};
 
 export default function TimeClock({
   employeeId,
@@ -47,17 +69,33 @@ export default function TimeClock({
   } = useTimeClock(employeeId);
 
   const { toast } = useToast();
+  const [selectedBucketId, setSelectedBucketId] = useState('');
+
+  const { data: buckets = [] } = useQuery<WorkBucket[]>({
+    queryKey: ['/api/timekeeping/buckets'],
+  });
 
   const { data: hoursData, refetch: refetchHours } = useQuery<HoursData>({
     queryKey: ['/api/timekeeping/hours'],
     refetchInterval: 60_000,
   });
 
+  const bucketGroups = buckets.reduce<Record<string, WorkBucket[]>>((acc, b) => {
+    if (!acc[b.type]) acc[b.type] = [];
+    acc[b.type].push(b);
+    return acc;
+  }, {});
+
   const handleClockIn = async () => {
+    if (!selectedBucketId) {
+      toast({ title: 'Select a work bucket first', variant: 'destructive' });
+      return;
+    }
     try {
-      await clockIn();
+      await clockIn(selectedBucketId);
+      setSelectedBucketId('');
       refetchHours();
-      toast({ title: 'Clocked in successfully!' });
+      toast({ title: 'Clocked in!' });
     } catch (err: any) {
       const msg = err?.message ?? '';
       toast({
@@ -72,9 +110,7 @@ export default function TimeClock({
       const enforcementRes = await fetch(`/api/checklist-management/enforcement-status?employeeId=${employeeId}`);
       if (enforcementRes.ok) {
         const enforcement = await enforcementRes.json();
-        if (!enforcement.canClockOut) {
-          return { complete: false, checklists: enforcement.incompleteChecklists };
-        }
+        if (!enforcement.canClockOut) return { complete: false, checklists: enforcement.incompleteChecklists };
         return { complete: true, checklists: [] };
       }
       const today = new Date().toISOString().split('T')[0];
@@ -105,13 +141,9 @@ export default function TimeClock({
       }
       await clockOut();
       refetchHours();
-      toast({ title: 'Clocked out successfully!' });
-    } catch (err: any) {
-      const msg = err?.message ?? '';
-      toast({
-        title: msg.includes('Must clock in') ? 'Must clock in first' : 'Failed to clock out',
-        variant: 'destructive',
-      });
+      toast({ title: 'Clocked out!' });
+    } catch {
+      toast({ title: 'Failed to clock out', variant: 'destructive' });
     }
   };
 
@@ -169,33 +201,47 @@ export default function TimeClock({
     <div className="w-full max-w-sm space-y-3">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <Clock className="h-5 w-5" />
             Time Clock
             {onBreak && (
-              <Badge variant="outline" className="border-amber-400 text-amber-700 text-xs ml-1">
-                On Break
-              </Badge>
+              <Badge variant="outline" className="border-amber-400 text-amber-700 text-xs">On Break</Badge>
             )}
             {clockedIn && !onBreak && (
-              <Badge variant="outline" className="border-green-500 text-green-700 text-xs ml-1">
-                Clocked In
-              </Badge>
+              <Badge variant="outline" className="border-green-500 text-green-700 text-xs">Clocked In</Badge>
             )}
             {!clockedIn && status !== null && (
-              <Badge variant="outline" className="border-muted-foreground text-muted-foreground text-xs ml-1">
-                Clocked Out
-              </Badge>
+              <Badge variant="outline" className="border-muted-foreground text-muted-foreground text-xs">Clocked Out</Badge>
             )}
           </CardTitle>
           <CardDescription>Employee ID: {employeeId}</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-3">
+          {/* Bucket selector — only shown before clock-in */}
+          {!clockedIn && buckets.length > 0 && (
+            <Select value={selectedBucketId} onValueChange={setSelectedBucketId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select work bucket…" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(bucketGroups).map(([type, items]) => (
+                  <SelectGroup key={type}>
+                    <SelectLabel>{GROUP_LABELS[type] ?? type}</SelectLabel>
+                    {items.map(b => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {!clockedIn ? (
             <Button
               onClick={handleClockIn}
-              className="w-full bg-green-500 hover:bg-green-600"
+              disabled={!selectedBucketId}
+              className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50"
               size="lg"
             >
               <LogIn className="h-4 w-4 mr-2" />
@@ -261,14 +307,14 @@ export default function TimeClock({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Timer className="h-4 w-4" />
-              Today's Hours
+              This Pay Period
               <span className="ml-auto font-bold text-base">
                 {formatDuration(hoursData.totalHours)}
               </span>
             </CardTitle>
           </CardHeader>
-          {hoursData.intervals.length > 0 && (
-            <CardContent className="pt-0">
+          <CardContent className="pt-0">
+            {hoursData.intervals.length > 0 ? (
               <ul className="space-y-1">
                 {hoursData.intervals.map((interval, i) => (
                   <li key={i} className="flex justify-between text-xs text-muted-foreground">
@@ -281,13 +327,12 @@ export default function TimeClock({
                   </li>
                 ))}
               </ul>
-            </CardContent>
-          )}
-          {hoursData.intervals.length === 0 && (
-            <CardContent className="pt-0">
-              <p className="text-xs text-muted-foreground text-center py-1">No completed intervals yet today</p>
-            </CardContent>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-1">
+                No completed intervals yet this period
+              </p>
+            )}
+          </CardContent>
         </Card>
       )}
     </div>

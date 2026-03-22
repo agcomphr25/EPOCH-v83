@@ -1,0 +1,191 @@
+COPY-PASTE PROMPT — LAYER 3 FORENSIC AUDIT
+
+This is the same style: READ-ONLY, no fixes yet
+
+SYSTEM ROLE: Senior EPOCH Audit & Traceability Engineer
+MODE: READ-ONLY FORENSIC AUDIT (STRICT)
+
+OBJECTIVE:
+Determine how EPOCH records, stores, and exposes historical movement of items through departments — and identify why production_orders have no usable audit trail.
+
+CRITICAL RULES:
+- DO NOT modify code
+- DO NOT propose fixes yet
+- ONLY analyze current behavior
+- Every claim must reference actual files/functions
+
+--------------------------------------------------
+STEP 1 — IDENTIFY ALL HISTORY MECHANISMS
+--------------------------------------------------
+
+Search for:
+
+- department_history
+- auditService
+- recordDepartmentEntry
+- *_completed_at fields
+- status change logging
+- event tables (audit_events, etc.)
+
+OUTPUT:
+System | Table | Purpose | Used By
+
+--------------------------------------------------
+STEP 2 — TRACE HISTORY WRITE PATH (ALL_ORDERS)
+--------------------------------------------------
+
+Follow progression for all_orders:
+
+- update-department
+- /:orderId/progress
+
+Identify:
+
+- where department_history is written
+- where auditService is called
+- where timestamps are written
+
+OUTPUT:
+- call chain
+- exact write points
+- fields updated
+
+--------------------------------------------------
+STEP 3 — TRACE HISTORY WRITE PATH (PRODUCTION_ORDERS)
+--------------------------------------------------
+
+Follow progression for production_orders:
+
+- update-department (System A)
+- any other endpoints
+
+Identify:
+
+- whether department_history is passed
+- whether it is written
+- whether auditService is called
+
+OUTPUT:
+- call chain
+- write attempts vs actual DB writes
+
+--------------------------------------------------
+STEP 4 — VALIDCOLUMNS WHITELIST ANALYSIS (CRITICAL)
+--------------------------------------------------
+
+Locate:
+
+updateProductionOrder()
+
+Find:
+
+validColumns set
+
+OUTPUT:
+
+- full list of allowed fields
+- list of EXCLUDED fields
+
+Specifically check:
+
+- departmentHistory
+- *_completed_at fields
+- isFulfilled
+
+--------------------------------------------------
+STEP 5 — TIMESTAMP SYSTEM ANALYSIS
+--------------------------------------------------
+
+Determine:
+
+- how *_completed_at fields are intended to work
+- where they should be written
+- whether any code writes them
+
+OUTPUT:
+Field | Exists in DB | Written? | Where
+
+--------------------------------------------------
+STEP 6 — AUDIT SERVICE COVERAGE
+--------------------------------------------------
+
+Analyze:
+
+auditService.logFieldChanges  
+auditService.recordDepartmentEntry  
+
+Determine:
+
+- which endpoints call these
+- whether production_orders ever trigger them
+
+OUTPUT:
+Endpoint | Calls auditService? | Table affected
+
+--------------------------------------------------
+STEP 7 — EVENT / HISTORY TABLES
+--------------------------------------------------
+
+Identify all event tables:
+
+- audit_events
+- p2SerializedItemEvents
+- any others
+
+Determine:
+
+- what data is stored
+- whether production_orders generate events
+
+OUTPUT:
+Table | Event Type | Coverage
+
+--------------------------------------------------
+STEP 8 — UI HISTORY VISIBILITY
+--------------------------------------------------
+
+Find where history is shown in UI:
+
+- Order detail view
+- Traveler
+- Audit panels
+
+Determine:
+
+- which tables they query
+- whether production_orders are included
+
+OUTPUT:
+UI Component | Data Source | Coverage
+
+--------------------------------------------------
+STEP 9 — FAILURE MODES (CRITICAL)
+--------------------------------------------------
+
+List ALL scenarios where history SHOULD be recorded but is not:
+
+Examples:
+- progression without history
+- timestamp fields ignored
+- audit events missing
+
+OUTPUT:
+Scenario | Expected Behavior | Actual Behavior | File reference
+
+--------------------------------------------------
+FINAL OUTPUT FORMAT
+--------------------------------------------------
+
+1. HISTORY SYSTEM OVERVIEW
+2. ALL_ORDERS TRACEABILITY (WORKING PATH)
+3. PRODUCTION_ORDERS TRACEABILITY (BROKEN PATH)
+4. VALIDCOLUMNS ROOT CAUSE
+5. TIMESTAMP SYSTEM STATUS
+6. AUDIT SERVICE COVERAGE GAP
+7. EVENT SYSTEM GAP
+8. UI VISIBILITY GAP
+9. COMPLETE ROOT CAUSE SUMMARY
+
+REMEMBER:
+Do NOT fix anything yet.
+We are identifying why history is broken so we can restore it safely.

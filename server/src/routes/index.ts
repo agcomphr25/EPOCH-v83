@@ -8071,10 +8071,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
           try {
             const bwipjs = await import('bwip-js');
+            // PO/P1 order IDs are ~3-4x longer strings than regular SO IDs.
+            // Code128 bar count is proportional to text length, so at scale: 4
+            // the generated PNG is ~4x wider for PO items. When both are drawn
+            // at width: 170 in the PDF the PO bars compress to unscannably thin.
+            // Use scale: 2 for PO/P1 items so bar density matches regular orders.
+            const barcodeScale = isPOItem ? 2 : 4;
             const barcodeBuffer = await bwipjs.default.toBuffer({
               bcid: 'code128',
               text: barcodeText,
-              scale: 4,
+              scale: barcodeScale,
               height: 18,
               includetext: false,
               paddingwidth: 10,

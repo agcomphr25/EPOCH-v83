@@ -1,0 +1,205 @@
+You are performing a READ-ONLY forensic audit of all timekeeping-related functionality in the EPOCH codebase.
+
+GOAL:
+There is existing timekeeping code that was previously connected externally. We are now shifting to a fully native EPOCH timekeeping system. I need a COMPLETE understanding of what currently exists so we can decide what to keep, refactor, or delete.
+
+IMPORTANT:
+- READ ONLY
+- DO NOT modify code
+- DO NOT propose implementation yet
+- VERIFY actual code, do not assume correctness
+
+--------------------------------------------------
+STEP 1 — FIND ALL TIMEKEEPING TOUCHPOINTS
+--------------------------------------------------
+
+Search for:
+
+- time
+- timekeeping
+- time_clock
+- clock_in
+- clock_out
+- punches
+- time_punch
+- time_entries
+- time_sheets
+- payroll
+- hours
+- shift
+- work_time
+- labor
+- attendance
+
+Return:
+- file path
+- line numbers
+- what each match appears to do
+
+--------------------------------------------------
+STEP 2 — IDENTIFY DATA MODELS / TABLES
+--------------------------------------------------
+
+Find all database-related definitions:
+
+- Drizzle schema files
+- SQL migrations
+- raw SQL queries
+
+Look for tables like:
+- time_punches
+- time_sheets
+- time_entries
+- employee_time
+- anything time-related
+
+For each table:
+- table name
+- columns
+- types
+- relationships (FKs if any)
+- whether table actually exists vs just referenced
+
+--------------------------------------------------
+STEP 3 — FIND ALL WRITE OPERATIONS
+--------------------------------------------------
+
+Search for:
+
+- INSERT INTO (time tables)
+- UPDATE (time tables)
+- DELETE (time tables)
+
+For each:
+- file
+- function / route
+- what triggers it (UI, API, background job)
+- whether it uses EPOCH DB or external service
+- whether any validation exists
+- whether audit/logging exists
+
+--------------------------------------------------
+STEP 4 — FIND ALL READ / DISPLAY LOGIC
+--------------------------------------------------
+
+Search for:
+
+- SELECT queries on time tables
+- API routes returning time data
+- frontend pages showing time or hours
+
+For each:
+- file
+- route/component
+- what data is shown
+- whether data is complete or partial
+
+--------------------------------------------------
+STEP 5 — EXTERNAL DEPENDENCIES CHECK
+--------------------------------------------------
+
+Determine if timekeeping is:
+
+- fully inside EPOCH
+- partially inside EPOCH
+- still relying on external system/API
+
+Look for:
+- fetch/axios calls to external URLs
+- service wrappers
+- environment variables referencing external systems
+
+Return:
+- exact external dependencies
+- what they are used for
+
+--------------------------------------------------
+STEP 6 — AUTH / USER LINKING
+--------------------------------------------------
+
+Determine how time is tied to users:
+
+- Does it use EPOCH users table?
+- Is employee_id mapped correctly?
+- Any mismatches between auth system and time records?
+
+--------------------------------------------------
+STEP 7 — PERMISSIONS / ACCESS
+--------------------------------------------------
+
+Identify:
+
+- who can clock in/out
+- who can edit punches
+- who can view time data
+- any role-based restrictions
+
+--------------------------------------------------
+STEP 8 — INCONSISTENCIES / RISKS
+--------------------------------------------------
+
+Identify:
+
+- duplicate tables or models
+- unused or dead code
+- partially implemented features
+- mismatched schemas vs usage
+- external + internal hybrid conflicts
+- missing audit trail
+- missing constraints
+
+--------------------------------------------------
+STEP 9 — UI / UX SURFACE
+--------------------------------------------------
+
+List all frontend surfaces:
+
+- pages
+- components
+- dashboards
+- admin tools
+
+For each:
+- what functionality exists
+- whether it is usable or broken
+- whether it connects to real data
+
+--------------------------------------------------
+STEP 10 — OUTPUT FORMAT
+--------------------------------------------------
+
+Return a structured report:
+
+1. Executive Summary
+   - current state (simple explanation)
+   - internal vs external split
+   - major risks
+
+2. Data Model
+   - all time-related tables
+   - what is actually used
+
+3. Write Paths
+   - where time data is created/updated
+
+4. Read Paths
+   - where time data is displayed
+
+5. External Dependencies
+   - what is still external
+
+6. User + Permissions Model
+   - how users interact with time
+
+7. UI Status
+   - what exists vs usable
+
+8. Risks / Gaps
+   - what is broken, duplicated, or dangerous
+
+9. Cleanup Targets
+   - specific files/components/services to remove or refactor
+
+10. Readiness for Native EPOCH Timekeeping
+   - what can be reused
+   - what must be replaced

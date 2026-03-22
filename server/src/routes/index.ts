@@ -139,6 +139,7 @@ import { registerCodebaseChatRoutes } from '../../replit_integrations/chat/codeb
 import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
+import timekeepingRoutes from './timekeeping';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import accountingPrepRoutes from './accountingPrep';
@@ -286,6 +287,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Labor summary routes (IC-F1) - Derived insights from punch events
   app.use('/api/labor', laborRoutes);
+
+  // Native EPOCH timekeeping — punch_events as source of truth
+  app.use('/api/timekeeping', timekeepingRoutes);
 
   // Historical Data routes - for tracking legacy system data
   app.use('/api/historical-data', historicalDataRoutes);

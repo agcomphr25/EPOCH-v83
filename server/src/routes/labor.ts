@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { authenticateToken } from '../../middleware/auth';
 import {
   calculateLaborSummary,
   calculateJobLaborSummary,
@@ -12,7 +13,7 @@ import { evaluatePunchAwareness, AwarenessConfig } from '../services/missedPunch
 
 const router = Router();
 
-router.get('/summary/employee/:canonicalId', async (req: Request, res: Response) => {
+router.get('/summary/employee/:canonicalId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { canonicalId } = req.params;
     const { period } = req.query;
@@ -57,7 +58,7 @@ router.get('/summary/employee/:canonicalId', async (req: Request, res: Response)
   }
 });
 
-router.get('/summary/job/:jobCode', async (req: Request, res: Response) => {
+router.get('/summary/job/:jobCode', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { jobCode } = req.params;
     const { startDate, endDate } = req.query;
@@ -88,7 +89,7 @@ router.get('/summary/job/:jobCode', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/summary/site/:siteId', async (req: Request, res: Response) => {
+router.get('/summary/site/:siteId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { siteId } = req.params;
     const { startDate, endDate } = req.query;
@@ -119,7 +120,7 @@ router.get('/summary/site/:siteId', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/open-punches', async (req: Request, res: Response) => {
+router.get('/open-punches', authenticateToken, async (req: Request, res: Response) => {
   try {
     const today = getTodayDateRange();
     const allPunches = await storage.getPunchEventsByDateRange(today.start, today.end);
@@ -166,7 +167,7 @@ router.get('/open-punches', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/hours-today/:canonicalId', async (req: Request, res: Response) => {
+router.get('/hours-today/:canonicalId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { canonicalId } = req.params;
     const today = getTodayDateRange();
@@ -193,7 +194,7 @@ router.get('/hours-today/:canonicalId', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/pay-period-info', async (_req: Request, res: Response) => {
+router.get('/pay-period-info', authenticateToken, async (_req: Request, res: Response) => {
   try {
     const dates = getPayPeriodDates();
     const now = new Date();
@@ -211,7 +212,7 @@ router.get('/pay-period-info', async (_req: Request, res: Response) => {
   }
 });
 
-router.get('/awareness/:canonicalId', async (req: Request, res: Response) => {
+router.get('/awareness/:canonicalId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { canonicalId } = req.params;
     const thresholdHours = req.query.thresholdHours 
@@ -242,7 +243,7 @@ router.get('/awareness/:canonicalId', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/awareness-by-employee/:employeeId', async (req: Request, res: Response) => {
+router.get('/awareness-by-employee/:employeeId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.employeeId);
     if (isNaN(employeeId)) {

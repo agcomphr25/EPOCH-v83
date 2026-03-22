@@ -3,6 +3,7 @@ import { db } from '../../db';
 import { apiIntegrationKeys, epochExternalEvents, epochLaborFacts } from '../../schema';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 import { 
   getConnectorHealth, 
   listConnectorHealthByTenant, 
@@ -252,7 +253,7 @@ export function registerTimeClockRoutes(app: Express) {
     }
   });
 
-  app.post('/api/integrations/time-clock/keys', async (req: Request, res: Response) => {
+  app.post('/api/integrations/time-clock/keys', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
     try {
       const { tenantId, label } = req.body;
 
@@ -292,7 +293,7 @@ export function registerTimeClockRoutes(app: Express) {
     }
   });
 
-  app.get('/api/integrations/time-clock/keys', async (req: Request, res: Response) => {
+  app.get('/api/integrations/time-clock/keys', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
     try {
       const keys = await db
         .select({
@@ -317,7 +318,7 @@ export function registerTimeClockRoutes(app: Express) {
     }
   });
 
-  app.delete('/api/integrations/time-clock/keys/:id', async (req: Request, res: Response) => {
+  app.delete('/api/integrations/time-clock/keys/:id', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
 

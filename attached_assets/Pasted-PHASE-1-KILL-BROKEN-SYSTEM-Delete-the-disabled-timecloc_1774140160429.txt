@@ -1,0 +1,189 @@
+PHASE 1 — KILL BROKEN SYSTEM
+Delete the disabled timeclock system.
+
+GOAL:
+Remove dead routes and prevent confusion.
+
+---
+
+DELETE FILE:
+server/routes.ts.disabled
+
+---
+
+VERIFY:
+- No references to /api/timeclock remain
+- Server compiles clean
+🔴 PHASE 2 — LOCK DOWN SECURITY (CRITICAL)
+Add authentication to labor + connector routes.
+
+---
+
+FILE:
+server/src/routes/labor.ts
+
+ADD to all routes:
+authenticateToken
+
+---
+
+FILE:
+server/src/routes/timeClock.ts
+
+ADD:
+authenticateToken + requireRole('ADMIN')
+
+TO:
+- /api/integrations/time-clock/keys
+- any key management routes
+
+---
+
+VERIFY:
+- Unauthorized requests return 401
+🔴 PHASE 3 — DEFINE NEW SOURCE OF TRUTH
+We are standardizing on punch_events as the ONLY timekeeping source.
+
+GOAL:
+All native timekeeping will write into punch_events.
+
+---
+
+DO NOT CREATE new tables
+
+DO NOT USE time_clock_entries anymore
+
+---
+
+VERIFY:
+- No future writes use time_clock_entries
+🔴 PHASE 4 — CREATE NATIVE CLOCK ROUTE
+Create new native punch route.
+
+FILE:
+server/src/routes/timekeeping.ts
+
+---
+
+IMPLEMENT:
+
+import { Router } from 'express';
+import { randomUUID } from 'crypto';
+
+const router = Router();
+
+router.post('/punch', authenticateToken, async (req, res) => {
+  try {
+    const { type } = req.body; // 'clock_in' | 'clock_out'
+
+    if (!type) {
+      return res.status(400).json({ error: 'type required' });
+    }
+
+    const punchType = type === 'clock_in' ? 'clock_in' : 'clock_out';
+
+    await db.query(`
+      INSERT INTO punch_events (
+        id,
+        externalPunchId,
+        canonicalId,
+        epochEmployeeId,
+        punchType,
+        punchTime,
+        source
+      )
+      VALUES ($1,$2,$3,$4,$5,NOW(),'epoch_native')
+    `, [
+      randomUUID(),
+      randomUUID(),
+      req.user.canonicalId,
+      req.user.id,
+      punchType
+    ]);
+
+    res.json({ success: true });
+
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'failed to punch' });
+  }
+});
+
+export default router;
+🔴 PHASE 5 — REGISTER ROUTE
+Register new timekeeping route.
+
+FILE:
+server/index.ts
+
+ADD:
+
+import timekeepingRoutes from './src/routes/timekeeping';
+
+app.use('/api/timekeeping', timekeepingRoutes);
+🔴 PHASE 6 — FIX FRONTEND HOOK
+Update useTimeClock hook.
+
+FILE:
+client/src/hooks/useTimeClock.ts
+
+---
+
+REPLACE ALL API CALLS WITH:
+
+POST /api/timekeeping/punch
+
+BODY:
+{ type: 'clock_in' }
+
+AND
+
+{ type: 'clock_out' }
+
+---
+
+REMOVE:
+- /api/timeclock usage
+- axios usage
+
+USE:
+apiRequest
+🔴 PHASE 7 — DISABLE OFFLINE REPLAY (TEMP)
+Disable broken offline replay for timeclock.
+
+FILE:
+server/src/routes/offlineReplay.ts
+
+---
+
+FIND:
+CLOCK_IN
+CLOCK_OUT
+
+---
+
+REPLACE WITH:
+
+return res.status(410).json({ error: 'timekeeping reset in progress' });
+
+---
+
+VERIFY:
+- No silent failures
+🔴 PHASE 8 — TEST
+Test full flow:
+
+1. Login as employee
+2. Click clock in
+3. Confirm:
+   - 200 response
+   - row inserted in punch_events
+
+4. Click clock out
+5. Confirm second row inserted
+
+6. Call:
+GET /api/labor/awareness
+
+Verify:
+- employee shows correct state

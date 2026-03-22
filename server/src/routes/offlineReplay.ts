@@ -42,17 +42,9 @@ function resolveInternalRoute(eventType: string, payload: any): { method: string
         body: { orderIds: payload.orderIds },
       };
     case 'CLOCK_IN':
-      return {
-        method: 'POST',
-        path: '/api/timeclock',
-        body: { employeeId: payload.employeeId, action: 'IN', timestamp: payload.timestamp },
-      };
     case 'CLOCK_OUT':
-      return {
-        method: 'POST',
-        path: '/api/timeclock',
-        body: { employeeId: payload.employeeId, action: 'OUT', timestamp: payload.timestamp },
-      };
+      // Timekeeping reset in progress — offline replay for clock events is disabled
+      return null;
     default:
       return null;
   }

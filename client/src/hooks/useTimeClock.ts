@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { performMutation } from '@/offline/performMutation';
+import { apiRequest } from '@/lib/queryClient';
 
 interface TimeClockStatus {
   status: 'IN' | 'OUT';
@@ -17,7 +16,7 @@ interface UseTimeClockReturn {
   loading: boolean;
 }
 
-export default function useTimeClock(employeeId: string): UseTimeClockReturn {
+export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
   const [clockedIn, setClockedIn] = useState(false);
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [clockOutTime, setClockOutTime] = useState<string | null>(null);
@@ -26,19 +25,16 @@ export default function useTimeClock(employeeId: string): UseTimeClockReturn {
   const refreshStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get<TimeClockStatus>(
-        `/api/timeclock?employeeId=${employeeId}`
-      );
-      const { status, clockIn, clockOut } = res.data;
-      setClockedIn(status === 'IN');
-      setClockInTime(clockIn || null);
-      setClockOutTime(clockOut || null);
+      const data = await apiRequest('/api/timekeeping/status') as TimeClockStatus;
+      setClockedIn(data.status === 'IN');
+      setClockInTime(data.clockIn);
+      setClockOutTime(data.clockOut);
     } catch (err) {
-      console.error('Failed to fetch timeclock status', err);
+      console.error('[useTimeClock] Failed to fetch status', err);
     } finally {
       setLoading(false);
     }
-  }, [employeeId]);
+  }, []);
 
   useEffect(() => {
     refreshStatus();
@@ -46,28 +42,36 @@ export default function useTimeClock(employeeId: string): UseTimeClockReturn {
 
   const clockIn = async () => {
     const timestamp = new Date().toISOString();
-    const result = await performMutation('CLOCK_IN', { employeeId, timestamp }, {
-      onOfflineOptimistic: () => {
-        setClockedIn(true);
-        setClockInTime(timestamp);
-        setClockOutTime(null);
-      },
-    });
-    if (!result?.queued) {
+    setClockedIn(true);
+    setClockInTime(timestamp);
+    setClockOutTime(null);
+    try {
+      await apiRequest('/api/timekeeping/punch', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'clock_in' }),
+      });
       await refreshStatus();
+    } catch (err) {
+      console.error('[useTimeClock] Clock-in failed', err);
+      await refreshStatus();
+      throw err;
     }
   };
 
   const clockOut = async () => {
     const timestamp = new Date().toISOString();
-    const result = await performMutation('CLOCK_OUT', { employeeId, timestamp }, {
-      onOfflineOptimistic: () => {
-        setClockedIn(false);
-        setClockOutTime(timestamp);
-      },
-    });
-    if (!result?.queued) {
+    setClockedIn(false);
+    setClockOutTime(timestamp);
+    try {
+      await apiRequest('/api/timekeeping/punch', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'clock_out' }),
+      });
       await refreshStatus();
+    } catch (err) {
+      console.error('[useTimeClock] Clock-out failed', err);
+      await refreshStatus();
+      throw err;
     }
   };
 

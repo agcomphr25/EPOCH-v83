@@ -43,15 +43,15 @@ function resolveApiConfig(eventType: OfflineEventType, payload: Record<string, u
       };
     case 'CLOCK_IN':
       return {
-        url: '/api/timeclock',
+        url: '/api/timekeeping/punch',
         method: 'POST',
-        body: { employeeId: payload.employeeId, action: 'IN', timestamp: payload.timestamp },
+        body: { type: 'clock_in' },
       };
     case 'CLOCK_OUT':
       return {
-        url: '/api/timeclock',
+        url: '/api/timekeeping/punch',
         method: 'POST',
-        body: { employeeId: payload.employeeId, action: 'OUT', timestamp: payload.timestamp },
+        body: { type: 'clock_out' },
       };
     default:
       throw new Error(`[EPOCH] Unknown offline event type: ${eventType}`);

@@ -1,0 +1,155 @@
+COPY-PASTE PROMPT — DOMAIN TRUTH INSPECTOR PATCH (AGENT-PROOF)
+SYSTEM ROLE: Senior EPOCH Diagnostics Engineer
+MODE: SURGICAL PATCH (STRICT)
+
+OBJECTIVE:
+Extend Domain Truth Inspector so it can detect and display orders from production_orders in addition to all_orders.
+
+THIS IS A PATCH — NOT A REFACTOR.
+
+--------------------------------------------------
+🚨 HARD RULES (DO NOT VIOLATE)
+--------------------------------------------------
+
+- DO NOT refactor Domain Truth Inspector structure
+- DO NOT modify existing all_orders logic
+- DO NOT change UI layout significantly
+- DO NOT introduce new architecture
+- DO NOT modify unrelated services
+- DO NOT change database schema
+
+ONLY:
+- Add production_orders lookup as a fallback
+- Normalize minimal fields for display
+- Add sourceType indicator
+
+--------------------------------------------------
+STEP 1 — LOCATE DOMAIN TRUTH INSPECTOR LOGIC
+--------------------------------------------------
+
+Search for:
+
+- DomainTruthInspector
+- domain truth
+- inspector routes / components
+
+Identify:
+- backend endpoint (likely /api/domain-truth/... or similar)
+- frontend component rendering results
+
+--------------------------------------------------
+STEP 2 — PATCH BACKEND LOOKUP LOGIC
+--------------------------------------------------
+
+Find existing lookup pattern:
+
+// current behavior (example)
+const order = await getFinalizedOrderById(orderId)
+
+IF NOT FOUND:
+→ currently returns "not found"
+
+--------------------------------------------------
+MODIFY TO:
+
+let order = await getFinalizedOrderById(orderId)
+let sourceType = 'SO'
+
+IF (!order) {
+  const productionOrder = await getProductionOrderByOrderId(orderId)
+
+  IF (productionOrder) {
+    order = productionOrder
+    sourceType = 'PRODUCTION_ORDER'
+  }
+}
+
+IF (!order) {
+  const draft = await getOrderDraft(orderId)
+
+  IF (draft) {
+    order = draft
+    sourceType = 'DRAFT'
+  }
+}
+
+--------------------------------------------------
+STEP 3 — NORMALIZE FIELDS (MINIMAL)
+--------------------------------------------------
+
+DO NOT change existing all_orders logic.
+
+ONLY add mapping when sourceType === 'PRODUCTION_ORDER':
+
+Map:
+
+order.currentDepartment =
+  order.current_department || 'UNKNOWN'
+
+order.status =
+  order.production_status || 'UNKNOWN'
+
+order.displayId =
+  order.order_id || order.id
+
+--------------------------------------------------
+STEP 4 — ADD SOURCE INDICATOR
+--------------------------------------------------
+
+Ensure response includes:
+
+sourceType
+
+DO NOT remove existing fields
+
+--------------------------------------------------
+STEP 5 — UPDATE FRONTEND DISPLAY (MINIMAL)
+--------------------------------------------------
+
+In DomainTruthInspector UI:
+
+Add a small label:
+
+IF sourceType === 'PRODUCTION_ORDER'
+→ show badge: "Production Order"
+
+IF sourceType === 'SO'
+→ show badge: "Sales Order"
+
+IF sourceType === 'DRAFT'
+→ show badge: "Draft"
+
+DO NOT redesign UI
+
+--------------------------------------------------
+STEP 6 — ADD DEBUG LOGGING (LIGHT)
+--------------------------------------------------
+
+console.log(`[DTI] Lookup ${orderId}`)
+console.log(`[DTI RESULT] ${sourceType}`)
+
+--------------------------------------------------
+STEP 7 — DO NOT TOUCH ANYTHING ELSE
+--------------------------------------------------
+
+DO NOT:
+- modify audit services
+- modify progression
+- modify search
+- modify queue logic
+
+--------------------------------------------------
+STEP 8 — OUTPUT
+--------------------------------------------------
+
+Provide:
+
+1. Backend patch (before → after)
+2. Frontend patch (before → after)
+3. Confirmation:
+
+"Domain Truth Inspector now resolves production_orders"
+"All existing behavior preserved"
+
+NO additional suggestions
+STOP after patch

@@ -529,8 +529,18 @@ export default function DomainTruthInspector() {
                     <FieldRow label="features" value={order.features} />
                   </div>
                 )}
-                {/* Legacy / production order presence */}
-                <div className="mt-4 flex flex-wrap gap-2">
+                {/* Source type + legacy / production order presence */}
+                <div className="mt-4 flex flex-wrap gap-2 items-center">
+                  {/* Source badge */}
+                  {data.sourceType === 'PRODUCTION_ORDER' && (
+                    <Badge className="text-xs bg-purple-600 text-white">Production Order</Badge>
+                  )}
+                  {data.sourceType === 'SO' && (
+                    <Badge className="text-xs bg-blue-600 text-white">Sales Order</Badge>
+                  )}
+                  {data.sourceType === 'DRAFT' && (
+                    <Badge className="text-xs bg-gray-500 text-white">Draft</Badge>
+                  )}
                   <Badge variant={data.legacyOrder ? 'default' : 'outline'} className="text-xs">
                     {data.legacyOrder ? '✓ in orders (legacy)' : '✗ not in orders (legacy)'}
                   </Badge>

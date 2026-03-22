@@ -118,7 +118,7 @@ router.get(
         [orderId]
       );
 
-      const order = orderRows[0] || null;
+      let order: any = orderRows[0] || null;
       // Use the real order_id from the DB row if found via fb_order_number alias
       const resolvedId = order?.order_id ?? orderId;
 
@@ -170,6 +170,84 @@ router.get(
 
       const legacyOrder = legacyRows[0] || null;
       const productionOrder = productionRows[0] || null;
+
+      // ── DTI PATCH: Fallback resolution ────────────────────────────────────
+      // If all_orders returned nothing, attempt production_orders then order_drafts.
+      console.log(`[DTI] Lookup ${orderId}`);
+      let sourceType = 'SO';
+
+      if (!order && productionOrder) {
+        // Normalize production_orders fields for display
+        order = {
+          order_id: productionOrder.order_id,
+          fb_order_number: null,
+          status: productionOrder.production_status || 'UNKNOWN',
+          current_department: productionOrder.current_department || 'UNKNOWN',
+          current_department_id: null,
+          scrap_date: null,
+          is_cancelled: false,
+          is_flattop: false,
+          features: null,
+          model_id: null,
+          order_source: 'production_orders',
+          created_at: productionOrder.created_at,
+          due_date: null,
+          customer_id: null,
+          department_history: productionOrder.department_history,
+          shipped_date: null,
+          is_paid: null,
+          is_replacement: false,
+          urgency: null,
+          priority_score: null,
+          scrap_reason: null,
+          updated_at: null,
+          customer_name: null,
+          customer_email: null,
+          displayId: productionOrder.order_id || String(productionOrder.id),
+        };
+        sourceType = 'PRODUCTION_ORDER';
+      }
+
+      if (!order) {
+        // Fallback 2: order_drafts
+        const draftRows = await safeQuery(
+          `SELECT order_id, status, created_at FROM order_drafts WHERE order_id = $1 LIMIT 1`,
+          [orderId]
+        );
+        if (draftRows[0]) {
+          const draft = draftRows[0];
+          order = {
+            order_id: draft.order_id,
+            fb_order_number: null,
+            status: draft.status || 'DRAFT',
+            current_department: null,
+            current_department_id: null,
+            scrap_date: null,
+            is_cancelled: false,
+            is_flattop: false,
+            features: null,
+            model_id: null,
+            order_source: 'order_drafts',
+            created_at: draft.created_at,
+            due_date: null,
+            customer_id: null,
+            department_history: null,
+            shipped_date: null,
+            is_paid: null,
+            is_replacement: false,
+            urgency: null,
+            priority_score: null,
+            scrap_reason: null,
+            updated_at: null,
+            customer_name: null,
+            customer_email: null,
+            displayId: draft.order_id,
+          };
+          sourceType = 'DRAFT';
+        }
+      }
+
+      console.log(`[DTI RESULT] ${sourceType}`);
 
       // ── 5. Queue eligibility evaluation ──────────────────────────────────
       let queueEvaluation: any = null;
@@ -390,6 +468,7 @@ router.get(
       res.json({
         orderId,
         resolvedId,
+        sourceType,
         order,
         legacyOrder,
         productionOrder,

@@ -1,0 +1,144 @@
+COPY-PASTE AUDIT PROMPT — FINISHER ACCEPTANCE LAYER
+You are performing a FULL WORKFLOW + DOMAIN TRUTH AUDIT on the FINISH / FINAL PRODUCTION STAGE inside the EPOCH system.
+
+OBJECTIVE:
+Map the EXACT current workflow of how stocks move into and through the Finish department, then identify how to introduce a REQUIRED "Finisher Acceptance" step that enforces accountability before work begins.
+
+-----------------------------------
+STEP 1 — TRACE CURRENT FLOW (END-TO-END)
+-----------------------------------
+
+Trace a stock/order from:
+- Previous department (e.g., CNC / Paint / QC)
+→ INTO Finish
+→ THROUGH Finish
+→ OUT to next stage (QC / Shipping / Complete)
+
+For each step, identify:
+
+1. Trigger:
+   - What action moves the item INTO Finish?
+   - (Button click? scan? auto progression?)
+
+2. Assignment:
+   - How is a finisher assigned?
+   - Is it manual, automatic, or role-based?
+
+3. State:
+   - What fields represent:
+     - currentDepartment
+     - status
+     - assignedUser / technician
+     - queue position (if any)
+
+4. UI:
+   - Where does the finisher SEE their assigned work?
+   - (Dashboard, queue, table, etc.)
+
+5. Action:
+   - What does the finisher actually DO today?
+   - (Start work? nothing? immediate work without acknowledgment?)
+
+6. Audit Trail:
+   - What events are logged when:
+     - item enters Finish
+     - item is assigned
+     - work begins
+     - item leaves Finish
+
+-----------------------------------
+STEP 2 — IDENTIFY GAPS
+-----------------------------------
+
+Specifically determine:
+
+1. Is there ANY explicit "acceptance" step today?
+2. Can a finisher begin work without acknowledging ownership?
+3. Is there any timestamp for:
+   - "work started"
+   - "user acknowledged responsibility"
+4. Can items sit assigned but untouched with no visibility?
+
+-----------------------------------
+STEP 3 — DEFINE DOMAIN TRUTH (CRITICAL)
+-----------------------------------
+
+Based on findings, define:
+
+A. What SHOULD represent:
+   - "Assigned"
+   - "Accepted"
+   - "In Progress"
+
+B. Recommend whether acceptance should be:
+   - A new status
+   - A new event type
+   - A new field (e.g., accepted_at, accepted_by)
+
+C. Identify the SINGLE SOURCE OF TRUTH for:
+   - acceptance state
+
+-----------------------------------
+STEP 4 — DESIGN ACCEPTANCE LAYER
+-----------------------------------
+
+Propose a clean implementation for:
+
+🔥 "FINISHER ACCEPT QUEUE"
+
+Requirements:
+- Finisher must explicitly ACCEPT before starting work
+- Acceptance is tied to USER + TIMESTAMP
+- Item remains in "Assigned Queue" until accepted
+- Accepted items move to "Active Work"
+
+Design:
+
+1. Backend:
+   - New fields (if needed)
+   - New audit event: FINISH_ACCEPTED
+   - Update rules for status progression
+
+2. Frontend:
+   - Split UI into:
+     - Assigned (Not Accepted)
+     - Accepted / In Progress
+   - Add "Accept Work" button
+
+3. Rules:
+   - Prevent "Progress to Next Department" unless accepted
+   - Optional: prevent time tracking until accepted
+
+-----------------------------------
+STEP 5 — IMPACT ANALYSIS
+-----------------------------------
+
+Identify what this change affects:
+
+- ProductionOrderInspector.tsx
+- Any queue or dashboard components
+- Time tracking system (if tied)
+- Audit log system
+- Status/progression logic
+
+-----------------------------------
+STEP 6 — OUTPUT
+-----------------------------------
+
+Return:
+
+1. Current workflow map (step-by-step)
+2. Identified gaps
+3. Recommended domain model for acceptance
+4. Exact implementation plan:
+   - DB changes
+   - API/service updates
+   - UI changes
+5. Risks or edge cases
+
+IMPORTANT:
+Do NOT guess.
+Trace actual code paths, components, and database usage.
+If something is unclear, flag it explicitly.
+
+Goal = Create a SYSTEM-LEVEL understanding before implementing.

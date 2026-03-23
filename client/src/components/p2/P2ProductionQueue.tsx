@@ -370,6 +370,7 @@ export default function P2ProductionQueue() {
             .avery-label {
               width: 2.625in;
               height: 1in;
+              box-sizing: border-box;
               border: 1px solid #ccc;
               overflow: hidden;
               background: white;

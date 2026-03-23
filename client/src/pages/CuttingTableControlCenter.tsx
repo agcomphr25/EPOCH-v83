@@ -1224,13 +1224,22 @@ export default function CuttingTableControlCenter() {
             <head>
               <title>Packet Labels - Avery 8160</title>
               <style>
-                @page { size: letter; margin: 0.5in 0.1875in 0.5in 0.1875in; }
                 body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-                .labels-container { width: 8.125in; margin: 0 auto; overflow: hidden; }
+                .labels-container {
+                  width: 8.5in;
+                  padding: 0.5in 0.1875in;
+                  display: grid;
+                  grid-template-columns: repeat(3, 2.625in);
+                  grid-template-rows: repeat(10, 1in);
+                  column-gap: 0.125in;
+                  row-gap: 0;
+                }
                 .label {
-                  width: 2.625in; height: 1in; padding: 0.04in 0.06in;
-                  box-sizing: border-box; page-break-inside: avoid;
-                  float: left; overflow: hidden;
+                  width: 2.625in;
+                  height: 1in;
+                  padding: 0.04in 0.06in;
+                  box-sizing: border-box;
+                  overflow: hidden;
                   border: 1px solid #ddd;
                 }
                 .label-header { font-size: 7pt; font-weight: bold; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1239,7 +1248,11 @@ export default function CuttingTableControlCenter() {
                 .barcode-container img { max-width: 100%; height: 0.28in; }
                 .barcode-text { font-family: monospace; font-size: 7pt; }
                 .item-number { font-size: 5pt; text-align: right; }
-                @media print { .label { border: none; } }
+                @media print {
+                  html, body { width: 8.5in; height: 11in; margin: 0; padding: 0; }
+                  .label { border: none; }
+                  @page { size: letter; margin: 0; }
+                }
               </style>
             </head>
             <body><div class="labels-container">${labelsHtml}</div></body>

@@ -160,18 +160,33 @@ export default function PastDueReport() {
 
   return (
     <div className="p-4 max-w-screen-xl mx-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Past Due Report</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Active orders with a due date more than 14 days before the selected date. Excludes FULFILLED, CANCELLED, and HOLDING.
-          </p>
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm pb-4 pt-4 -mx-4 px-4 mb-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Past Due Report</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Active orders with a due date more than 14 days before the selected date. Excludes FULFILLED, CANCELLED, and HOLDING.
+            </p>
+            {!isLoading && sorted.length > 0 && (
+              <div className="flex gap-4 text-xs text-gray-500 mt-2">
+                <span>
+                  <span className="font-bold text-red-600">{sorted.filter((o) => o.daysOverdue >= 60).length}</span> ≥ 60d overdue
+                </span>
+                <span>
+                  <span className="font-bold text-orange-500">{sorted.filter((o) => o.daysOverdue >= 30 && o.daysOverdue < 60).length}</span> 30–59d overdue
+                </span>
+                <span>
+                  <span className="font-bold text-yellow-600">{sorted.filter((o) => o.daysOverdue >= 14 && o.daysOverdue < 30).length}</span> 14–29d overdue
+                </span>
+              </div>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={exportCSV} disabled={sorted.length === 0} className="shrink-0">
+            <Download className="w-4 h-4 mr-1.5" />
+            Export CSV
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} disabled={sorted.length === 0} className="shrink-0">
-          <Download className="w-4 h-4 mr-1.5" />
-          Export CSV
-        </Button>
       </div>
 
       {/* Controls */}
@@ -292,20 +307,6 @@ export default function PastDueReport() {
         )}
       </div>
 
-      {/* Summary bar */}
-      {!isLoading && sorted.length > 0 && (
-        <div className="mt-3 flex gap-4 text-xs text-gray-500">
-          <span>
-            <span className="font-bold text-red-600">{sorted.filter((o) => o.daysOverdue >= 60).length}</span> ≥ 60d overdue
-          </span>
-          <span>
-            <span className="font-bold text-orange-500">{sorted.filter((o) => o.daysOverdue >= 30 && o.daysOverdue < 60).length}</span> 30–59d overdue
-          </span>
-          <span>
-            <span className="font-bold text-yellow-600">{sorted.filter((o) => o.daysOverdue >= 14 && o.daysOverdue < 30).length}</span> 14–29d overdue
-          </span>
-        </div>
-      )}
     </div>
   );
 }

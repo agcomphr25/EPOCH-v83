@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link, useLocation, useSearch } from 'wouter';
 import { Badge } from '@/components/ui/badge';
+import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -151,6 +152,35 @@ interface Order {
   isManualUrgency?: boolean;
   createdAt: string;
   updatedAt: string;
+  layupCompletedAt?: string;
+  pluggingCompletedAt?: string;
+  cncCompletedAt?: string;
+  finishCompletedAt?: string;
+  gunsmithCompletedAt?: string;
+  paintCompletedAt?: string;
+  qcCompletedAt?: string;
+  shippingCompletedAt?: string;
+}
+
+function getDeptEntryDate(order: { currentDepartment?: string; createdAt: string; layupCompletedAt?: string; pluggingCompletedAt?: string; cncCompletedAt?: string; finishCompletedAt?: string; gunsmithCompletedAt?: string; paintCompletedAt?: string; qcCompletedAt?: string }): Date | null {
+  const raw = (() => {
+    switch (order.currentDepartment) {
+      case 'Layup':
+      case 'Layup/Plugging': return order.createdAt;
+      case 'Plugging':       return order.layupCompletedAt    || order.createdAt;
+      case 'CNC':            return order.pluggingCompletedAt || order.createdAt;
+      case 'Finish':         return order.cncCompletedAt      || order.createdAt;
+      case 'Finish QC':      return order.finishCompletedAt   || order.createdAt;
+      case 'Gunsmith':       return order.finishCompletedAt   || order.createdAt;
+      case 'Paint':          return order.gunsmithCompletedAt || order.createdAt;
+      case 'QC':             return order.paintCompletedAt    || order.createdAt;
+      case 'Shipping':       return order.qcCompletedAt       || order.createdAt;
+      default:               return order.createdAt;
+    }
+  })();
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 interface Customer {
@@ -1531,11 +1561,33 @@ export default function OrdersList() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">
-                          {localOrderUpdates[order.orderId] ||
-                            order.currentDepartment ||
-                            'Not Set'}
-                        </Badge>
+                        <RadixTooltip.Provider delayDuration={200}>
+                          <RadixTooltip.Root>
+                            <RadixTooltip.Trigger asChild>
+                              <Badge variant="secondary" className="cursor-default">
+                                {localOrderUpdates[order.orderId] ||
+                                  order.currentDepartment ||
+                                  'Not Set'}
+                              </Badge>
+                            </RadixTooltip.Trigger>
+                            <RadixTooltip.Portal>
+                              <RadixTooltip.Content
+                                side="top"
+                                sideOffset={5}
+                                className="z-[9999] rounded bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md select-none"
+                              >
+                                {(() => {
+                                  const dept = localOrderUpdates[order.orderId] || order.currentDepartment;
+                                  const entryDate = getDeptEntryDate(order);
+                                  if (!entryDate) return `In ${dept || 'Not Set'}`;
+                                  const days = (Date.now() - entryDate.getTime()) / (1000 * 60 * 60 * 24);
+                                  return `${days.toFixed(1)} days in ${dept || 'Not Set'}`;
+                                })()}
+                                <RadixTooltip.Arrow className="fill-gray-900" />
+                              </RadixTooltip.Content>
+                            </RadixTooltip.Portal>
+                          </RadixTooltip.Root>
+                        </RadixTooltip.Provider>
                       </TableCell>
                       <TableCell>
                         <div className="relative group">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchProductionOrders,
@@ -52,6 +52,8 @@ import {
   BarChart3,
   ListChecks,
   TrendingUp,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -64,7 +66,20 @@ export default function ProductionTracker() {
     null
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+
+  const togglePOExpand = (key: string) => {
+    setExpandedPOs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   // Form state for editing
   const [formData, setFormData] = useState({
@@ -220,6 +235,7 @@ export default function ProductionTracker() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8"></TableHead>
                     <TableHead>PO Number</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Total Orders</TableHead>
@@ -231,46 +247,103 @@ export default function ProductionTracker() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {poSummary.map((summary, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">
-                        {summary.poNumber}
-                      </TableCell>
-                      <TableCell>{summary.customerName}</TableCell>
-                      <TableCell>{summary.total}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{summary.pending}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default">{summary.laidUp}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{summary.shipped}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            summary.remainingToLayup > 0
-                              ? 'destructive'
-                              : 'secondary'
-                          }
+                  {poSummary.map((summary) => {
+                    const key = summary.poKey;
+                    const isExpanded = expandedPOs.has(key);
+                    return (
+                      <Fragment key={key}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => togglePOExpand(key)}
                         >
-                          {summary.remainingToLayup}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            summary.remainingToShip > 0
-                              ? 'destructive'
-                              : 'secondary'
-                          }
-                        >
-                          {summary.remainingToShip}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          <TableCell className="pr-0">
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {summary.poNumber}
+                          </TableCell>
+                          <TableCell>{summary.customerName}</TableCell>
+                          <TableCell>{summary.total}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{summary.pending}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="default">{summary.laidUp}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{summary.shipped}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                summary.remainingToLayup > 0
+                                  ? 'destructive'
+                                  : 'secondary'
+                              }
+                            >
+                              {summary.remainingToLayup}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                summary.remainingToShip > 0
+                                  ? 'destructive'
+                                  : 'secondary'
+                              }
+                            >
+                              {summary.remainingToShip}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow>
+                            <TableCell colSpan={9} className="p-0 bg-muted/30">
+                              <div className="px-8 py-2">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-muted-foreground border-b">
+                                      <th className="text-left py-1 pr-4 font-medium">
+                                        Production Code
+                                      </th>
+                                      <th className="text-left py-1 pr-4 font-medium">
+                                        Product Name
+                                      </th>
+                                      <th className="text-left py-1 font-medium">
+                                        Current Department
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {summary.orders.map((order) => (
+                                      <tr
+                                        key={order.id}
+                                        className="border-b border-border/40 last:border-0"
+                                      >
+                                        <td className="py-1.5 pr-4 font-mono text-xs">
+                                          {order.orderId}
+                                        </td>
+                                        <td className="py-1.5 pr-4">
+                                          {order.itemName}
+                                        </td>
+                                        <td className="py-1.5 text-muted-foreground">
+                                          {order.currentDepartment || '—'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

@@ -16,6 +16,7 @@ export interface ProductionOrder {
   orderDate: string;
   dueDate: string;
   productionStatus: 'PENDING' | 'LAID_UP' | 'SHIPPED';
+  currentDepartment?: string | null;
   laidUpAt?: string;
   shippedAt?: string;
   notes?: string;
@@ -92,6 +93,7 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
   const summaryByPO: Record<
     string,
     {
+      poKey: string;
       poNumber: string;
       customerName: string;
       total: number;
@@ -100,6 +102,7 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
       shipped: number;
       remainingToLayup: number;
       remainingToShip: number;
+      orders: ProductionOrder[];
     }
   > = {};
 
@@ -108,6 +111,7 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
 
     if (!summaryByPO[key]) {
       summaryByPO[key] = {
+        poKey: key,
         poNumber: order.poNumber,
         customerName: order.customerName,
         total: 0,
@@ -116,11 +120,13 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
         shipped: 0,
         remainingToLayup: 0,
         remainingToShip: 0,
+        orders: [],
       };
     }
 
     const summary = summaryByPO[key];
     summary.total++;
+    summary.orders.push(order);
 
     switch (order.productionStatus) {
       case 'PENDING':

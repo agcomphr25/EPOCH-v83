@@ -111,8 +111,9 @@ export default function PastDueReport() {
   }
 
   function exportCSV() {
-    const header = ['Order ID', 'Customer', 'Model', 'Due Date', 'Days Overdue', 'Status', 'Department'];
-    const rows = sorted.map((o) => [
+    const header = ['#', 'Order ID', 'Customer', 'Model', 'Due Date', 'Days Overdue', 'Status', 'Department'];
+    const rows = sorted.map((o, i) => [
+      String(i + 1),
       o.orderId,
       o.customerName ?? '',
       o.modelId,
@@ -196,6 +197,7 @@ export default function PastDueReport() {
             <table className="w-full text-sm border-collapse">
               <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <tr>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap w-10">#</th>
                   <Th col="orderId" label="Order ID" />
                   <Th col="customerName" label="Customer" />
                   <Th col="modelId" label="Model" />
@@ -206,7 +208,7 @@ export default function PastDueReport() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {sorted.map((order) => {
+                {sorted.map((order, idx) => {
                   const overdueSeverity =
                     order.daysOverdue >= 60
                       ? 'text-red-700 font-bold dark:text-red-400'
@@ -219,6 +221,8 @@ export default function PastDueReport() {
                       key={order.id}
                       className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
                     >
+                      {/* Row number */}
+                      <td className="px-3 py-2.5 text-gray-400 text-xs tabular-nums select-none">{idx + 1}</td>
                       {/* Order ID */}
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">

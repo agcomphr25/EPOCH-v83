@@ -72,7 +72,7 @@ export default function MasterDocumentRegister() {
     queryKey: ['/api/auth/session'],
   });
 
-  const canCreateEdit = session?.role === 'ADMIN' || session?.role === 'OWNER';
+  const canCreateEdit = session?.role === 'ADMIN' || session?.role === 'OWNER' || session?.username === 'lauriet';
   const canApprove = session?.username === 'lauriet';
 
   // Filter documents

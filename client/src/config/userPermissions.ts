@@ -290,6 +290,9 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/p2-quotes-list',
       '/rfq-risk-assessment',
       '/app/production/stations',
+      '/purchase-review-checklist',
+      '/purchase-review-submissions',
+      '/preproduction-checklists',
     ],
   },
 

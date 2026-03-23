@@ -1,0 +1,163 @@
+COPY-PASTE AUDIT PROMPT — RELOCATE ACCEPTANCE TO FINISH QC
+You are performing a CORRECTIVE DOMAIN AUDIT on the Finish Acceptance feature.
+
+CURRENT PROBLEM:
+Acceptance was implemented in the Finish queue, but this is INCORRECT.
+
+✅ Correct workflow:
+- Finish queue = routing only (Production Manager assigns technician + progresses)
+- Finish QC = execution ownership (technician must ACCEPT work)
+
+OBJECTIVE:
+1. Identify exactly what was implemented incorrectly
+2. Remove acceptance from Finish
+3. Re-implement acceptance in Finish QC with STRICT ownership rules
+
+-----------------------------------
+STEP 1 — TRACE CURRENT IMPLEMENTATION
+-----------------------------------
+
+Identify ALL places where "finish acceptance" currently exists:
+
+1. Database:
+   - finishAcceptedAt
+   - finishAcceptedBy / finishAcceptedByUserId
+   - Which tables?
+
+2. API:
+   - /finish-accept endpoint
+   - Any validation logic
+
+3. Frontend:
+   - FinishQueuePage.tsx
+   - Where Accept button is rendered
+   - Any conditional UI (accepted vs not)
+
+4. Guards:
+   - Any restriction tied to leaving Finish
+
+-----------------------------------
+STEP 2 — IDENTIFY VIOLATIONS OF CORRECT MODEL
+-----------------------------------
+
+List all ways current implementation violates intended workflow:
+
+❌ Acceptance happening in Finish (should not exist here)
+❌ Acceptance allowed before technician assignment
+❌ Acceptance not tied to assigned technician
+❌ Production manager vs technician roles not enforced
+
+-----------------------------------
+STEP 3 — REMOVE ACCEPTANCE FROM FINISH (CLEANLY)
+-----------------------------------
+
+You MUST:
+
+1. Remove Accept button from FinishQueuePage.tsx
+2. Remove any Finish-specific acceptance logic
+3. Remove any guards blocking movement out of Finish
+4. DO NOT delete database fields (they will be reused)
+
+Finish queue should return to:
+
+- Select orders
+- Select technician
+- Move to Finish QC
+
+-----------------------------------
+STEP 4 — TRACE FINISH QC WORKFLOW
+-----------------------------------
+
+Identify:
+
+1. File(s) rendering Finish QC queue/page
+2. API endpoint providing Finish QC orders
+3. How assignedTechnician is stored and passed
+4. Logged-in user context (how user identity is accessed)
+
+-----------------------------------
+STEP 5 — DEFINE CORRECT ACCEPTANCE RULES
+-----------------------------------
+
+Acceptance MUST follow:
+
+1. Only allowed if:
+   currentDepartment === 'Finish QC'
+
+2. Only allowed if:
+   loggedInUser.id === assignedTechnicianUserId
+
+3. Exception:
+   Production Manager (e.g. @agrace) CAN override
+
+4. Prevent:
+   - Accepting someone else's work
+   - Accepting unassigned work
+
+-----------------------------------
+STEP 6 — REIMPLEMENT ACCEPTANCE IN FINISH QC
+-----------------------------------
+
+Backend:
+
+Update /finish-accept endpoint:
+
+- Validate department = 'Finish QC'
+- Validate user:
+    IF user != assignedTechnicianUserId
+    AND user not in override role
+    → reject
+
+- Set:
+    finishAcceptedAt
+    finishAcceptedByUserId
+
+- Update transitions metadata:
+    { acceptedAt, acceptedByUserId }
+
+Frontend (Finish QC page):
+
+1. Show Accept button ONLY when:
+   - finishAcceptedAt is NULL
+
+2. Disable Accept button if:
+   - user is not assigned technician
+   - and not override role
+
+3. Show:
+   - Accepted badge
+   - Accepted timestamp
+   - Technician name
+
+-----------------------------------
+STEP 7 — OPTIONAL GUARD (RECOMMENDED)
+-----------------------------------
+
+Prevent movement OUT OF Finish QC unless accepted:
+
+IF:
+  fromDepartment === 'Finish QC'
+  AND finishAcceptedAt IS NULL
+THEN:
+  reject
+
+-----------------------------------
+STEP 8 — OUTPUT
+-----------------------------------
+
+Return:
+
+1. What was incorrectly implemented
+2. What was removed from Finish
+3. What was added to Finish QC
+4. Updated validation rules
+5. Files changed
+6. Confirmation:
+
+"Acceptance is now correctly enforced at Finish QC with technician-level ownership"
+
+IMPORTANT:
+Do NOT guess.
+Trace actual code and modify precisely.
+
+This is a DOMAIN CORRECTION, not a patch.

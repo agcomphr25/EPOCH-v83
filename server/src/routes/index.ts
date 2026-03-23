@@ -7388,10 +7388,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     });
   });
 
-  // ── Finish Acceptance endpoint ──
+  // ── Finish QC Acceptance endpoint ──
   // POST /api/orders/:orderId/finish-accept
-  // Finisher explicitly accepts ownership of a Finish-department order.
-  // Sets finishAcceptedAt + finishAcceptedBy, stamps acceptance into the open
+  // A Finish QC technician explicitly accepts ownership of their assigned work.
+  // Only the assigned technician (or an admin override) may accept.
+  // Sets finishAcceptedAt + finishAcceptedBy on the order, stamps the open
   // department-transition row metadata, and records an audit field-change.
   app.post('/api/orders/:orderId/finish-accept', async (req, res) => {
     try {
@@ -7431,10 +7432,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'Order not found' });
       }
 
-      // Guard: must be in Finish
-      if (currentOrder.currentDepartment !== 'Finish') {
+      // Guard: order must be in Finish QC (not Finish)
+      if (currentOrder.currentDepartment !== 'Finish QC') {
         return res.status(400).json({
-          error: `Order is in ${currentOrder.currentDepartment || 'unknown'}, not Finish`,
+          error: `Order is in ${currentOrder.currentDepartment || 'unknown'}, not Finish QC`,
         });
       }
 
@@ -7445,6 +7446,43 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           acceptedAt: currentOrder.finishAcceptedAt,
           acceptedBy: currentOrder.finishAcceptedBy,
         });
+      }
+
+      // ── Ownership check ──────────────────────────────────────────────────
+      // Admin users and agrace (production manager) can accept any order.
+      // All other users may only accept orders assigned to them.
+      const userRole = (req.user?.role || '').toUpperCase();
+      const isAdminOverride =
+        userRole === 'ADMIN' || req.user?.username === 'agrace';
+
+      if (!isAdminOverride) {
+        const assignedTo = currentOrder.assignedTechnician || null;
+        if (!assignedTo) {
+          return res.status(403).json({
+            error: 'Order has no assigned technician — a production manager must assign it first',
+          });
+        }
+
+        // Look up logged-in user's employee name to compare with stored technician name
+        const { pool: poolInst } = await import('../../db');
+        const empResult = await poolInst.query(
+          'SELECT name FROM employees WHERE id = $1 LIMIT 1',
+          [req.user?.employeeId]
+        );
+        const loggedInEmployeeName: string | null = empResult[0]?.name ?? null;
+
+        if (!loggedInEmployeeName) {
+          return res.status(403).json({
+            error: 'Your account is not linked to an employee record',
+          });
+        }
+
+        if (loggedInEmployeeName.toLowerCase() !== assignedTo.toLowerCase()) {
+          return res.status(403).json({
+            error: `This order is assigned to ${assignedTo} — you cannot accept someone else's work`,
+            assignedTo,
+          });
+        }
       }
 
       const now = new Date();
@@ -7595,17 +7633,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // Skip no-op moves (prevents empty audit events, zero-duration transitions, timeline noise)
           if (currentOrder.currentDepartment === department) {
             console.log(`⏭️ Skipping ${orderId}: already in ${department}`);
-            continue;
-          }
-
-          // ── FINISH ACCEPTANCE GUARD ──
-          // An order cannot leave Finish unless a finisher has explicitly accepted it.
-          if (
-            currentOrder.currentDepartment === 'Finish' &&
-            !currentOrder.finishAcceptedAt
-          ) {
-            console.warn(`🚫 [finish-guard] ${orderId}: cannot leave Finish without acceptance`);
-            failedOrders.push({ orderId, reason: 'FINISH_NOT_ACCEPTED' });
             continue;
           }
 

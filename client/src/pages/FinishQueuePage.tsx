@@ -23,8 +23,6 @@ import {
   FileText,
   Zap,
   TrendingDown,
-  ClipboardCheck,
-  Clock,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -103,7 +101,6 @@ const BUCKET_ORDER = [
   'noDueDate',
 ] as const;
 type BucketKey = (typeof BUCKET_ORDER)[number];
-
 type CategorizedOrders = Record<BucketKey, any[]>;
 
 function categorizeOrders(orders: any[]): CategorizedOrders {
@@ -196,18 +193,7 @@ export default function FinishQueuePage() {
 
   // ── Derived collections ────────────────────────────────────────────────────
   const finishOrders = useMemo(() => allOrders as any[], [allOrders]);
-
-  const awaitingOrders = useMemo(
-    () => finishOrders.filter((o: any) => !o.finishAcceptedAt),
-    [finishOrders]
-  );
-  const acceptedOrders = useMemo(
-    () => finishOrders.filter((o: any) => !!o.finishAcceptedAt),
-    [finishOrders]
-  );
-
-  const awaitingCategorized = useMemo(() => categorizeOrders(awaitingOrders), [awaitingOrders]);
-  const acceptedCategorized = useMemo(() => categorizeOrders(acceptedOrders), [acceptedOrders]);
+  const categorizedOrders = useMemo(() => categorizeOrders(finishOrders), [finishOrders]);
 
   const cncCount = useMemo(
     () => (allOrders as any[]).filter((o: any) => o.currentDepartment === 'CNC').length,
@@ -245,7 +231,7 @@ export default function FinishQueuePage() {
     );
   };
 
-  // ── Multi-select (only for accepted orders → progress to Finish QC) ────────
+  // ── Multi-select ───────────────────────────────────────────────────────────
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders((prev) => {
       const next = new Set(prev);
@@ -255,39 +241,17 @@ export default function FinishQueuePage() {
     });
   };
 
-  const handleSelectAllAccepted = () => {
-    if (selectedOrders.size === acceptedOrders.length) {
+  const handleSelectAll = () => {
+    if (selectedOrders.size === finishOrders.length) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(new Set(acceptedOrders.map((o: any) => o.orderId)));
+      setSelectedOrders(new Set(finishOrders.map((o: any) => o.orderId)));
     }
   };
 
   const handleClearSelection = () => setSelectedOrders(new Set());
 
   // ── Mutations ──────────────────────────────────────────────────────────────
-  const acceptMutation = useMutation({
-    mutationFn: async ({
-      orderId,
-      technicianName,
-    }: {
-      orderId: string;
-      technicianName: string;
-    }) =>
-      apiRequest(`/api/orders/${orderId}/finish-accept`, {
-        method: 'POST',
-        body: JSON.stringify({ technicianName }),
-      }),
-    onSuccess: (_data, { orderId }) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/department/Finish'] });
-      toast.success(`Order accepted`);
-    },
-    onError: (err: any, { orderId }) => {
-      const msg = err?.message || 'Failed to accept order';
-      toast.error(msg);
-    },
-  });
-
   const progressMutation = useMutation({
     mutationFn: async ({
       orderIds,
@@ -311,13 +275,10 @@ export default function FinishQueuePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
 
       const failed = data?.failedOrders ?? [];
-      const notAccepted = failed.filter((f: any) => f.reason === 'FINISH_NOT_ACCEPTED');
-      if (notAccepted.length > 0) {
-        toast.error(
-          `${notAccepted.length} order(s) blocked — must be accepted before progressing`
-        );
+      if (failed.length > 0) {
+        toast.error(`${failed.length} order(s) could not be progressed`);
       } else {
-        toast.success(`${selectedOrders.size} orders progressed to Finish QC`);
+        toast.success(`${selectedOrders.size} orders moved to Finish QC`);
       }
       setSelectedOrders(new Set());
       setSelectedTechnician('');
@@ -367,8 +328,8 @@ export default function FinishQueuePage() {
     }
   };
 
-  // ── Card renderer (shared between both sections) ───────────────────────────
-  const renderOrderCard = (order: any, bucketStyle: (typeof BUCKET_STYLES)[string], mode: 'awaiting' | 'accepted') => {
+  // ── Card renderer ──────────────────────────────────────────────────────────
+  const renderOrderCard = (order: any, bucketStyle: (typeof BUCKET_STYLES)[string]) => {
     const isSelected = selectedOrders.has(order.orderId);
     const isHighlighted = highlightedOrderId === order.orderId;
     const kickbackStatus = getKickbackStatus(order.orderId);
@@ -381,20 +342,15 @@ export default function FinishQueuePage() {
 
     return (
       <div key={order.orderId} className="relative">
-        {mode === 'accepted' && (
-          <div className="absolute top-2 left-2 z-10">
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => handleSelectOrder(order.orderId)}
-              className="bg-white dark:bg-gray-800 border-2"
-            />
-          </div>
-        )}
+        <div className="absolute top-2 left-2 z-10">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => handleSelectOrder(order.orderId)}
+            className="bg-white dark:bg-gray-800 border-2"
+          />
+        </div>
 
-        <Card
-          id={`order-${order.orderId}`}
-          className={`${cardClass} ${mode === 'accepted' ? 'pl-8' : ''}`}
-        >
+        <Card id={`order-${order.orderId}`} className={`${cardClass} pl-8`}>
           <CardContent className="p-3">
             {/* Header row */}
             <div className="flex items-center justify-between mb-2">
@@ -419,7 +375,7 @@ export default function FinishQueuePage() {
               </div>
               {order.dueDate ? (
                 <Badge
-                  variant={mode === 'awaiting' && new Date(order.dueDate) < new Date() ? 'destructive' : 'outline'}
+                  variant={new Date(order.dueDate) < new Date() ? 'destructive' : 'outline'}
                   className="text-xs"
                 >
                   Due: {format(new Date(order.dueDate), 'M/d')}
@@ -436,17 +392,6 @@ export default function FinishQueuePage() {
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
               {getModelDisplayName(order.modelId)}
             </div>
-
-            {/* Accepted-at banner (accepted section only) */}
-            {mode === 'accepted' && order.finishAcceptedAt && (
-              <div className="flex items-center gap-1.5 mb-2 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded px-2 py-1 border border-green-200 dark:border-green-800">
-                <CheckCircle className="w-3 h-3 shrink-0" />
-                <span className="font-medium">{order.finishAcceptedBy}</span>
-                <span className="text-gray-500 dark:text-gray-400">
-                  · {format(new Date(order.finishAcceptedAt), 'M/d h:mm a')}
-                </span>
-              </div>
-            )}
 
             {/* Action row */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -465,7 +410,6 @@ export default function FinishQueuePage() {
                 Sales Order
               </Badge>
 
-              {/* Kickback button */}
               <Button
                 variant="outline"
                 size="sm"
@@ -498,28 +442,6 @@ export default function FinishQueuePage() {
                   Kickback
                 </Badge>
               )}
-
-              {/* ACCEPT WORK button — awaiting section only */}
-              {mode === 'awaiting' && (
-                <Button
-                  size="sm"
-                  className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white ml-auto"
-                  disabled={!selectedTechnician || acceptMutation.isPending}
-                  onClick={() => {
-                    if (!selectedTechnician) {
-                      toast.error('Select a technician first');
-                      return;
-                    }
-                    acceptMutation.mutate({
-                      orderId: order.orderId,
-                      technicianName: selectedTechnician,
-                    });
-                  }}
-                >
-                  <ClipboardCheck className="h-3 w-3 mr-1" />
-                  Accept Work
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -527,11 +449,8 @@ export default function FinishQueuePage() {
     );
   };
 
-  // ── Section renderer (shared header + due-date buckets) ───────────────────
-  const renderSection = (
-    categorized: CategorizedOrders,
-    mode: 'awaiting' | 'accepted'
-  ) => {
+  // ── Section renderer (due-date buckets) ───────────────────────────────────
+  const renderSection = (categorized: CategorizedOrders) => {
     const hasAny = BUCKET_ORDER.some((k) => categorized[k].length > 0);
     if (!hasAny) return null;
 
@@ -549,7 +468,7 @@ export default function FinishQueuePage() {
                 </h3>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {orders.map((order: any) => renderOrderCard(order, style, mode))}
+                {orders.map((order: any) => renderOrderCard(order, style))}
               </div>
             </div>
           );
@@ -615,7 +534,7 @@ export default function FinishQueuePage() {
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
-              Paint
+              Finish QC
               <ArrowRight className="h-5 w-5" />
             </CardTitle>
           </CardHeader>
@@ -630,13 +549,13 @@ export default function FinishQueuePage() {
         </Card>
       </div>
 
-      {/* ── Technician selector (global, used by both Accept + Progress) ─────── */}
+      {/* Technician selector */}
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Users className="h-4 w-4 text-gray-600 shrink-0" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 shrink-0">
-              Active Technician:
+              Assign Technician for Finish QC:
             </span>
             <Select value={selectedTechnician} onValueChange={setSelectedTechnician}>
               <SelectTrigger className="w-48">
@@ -652,13 +571,14 @@ export default function FinishQueuePage() {
             </Select>
             {!selectedTechnician && (
               <span className="text-xs text-amber-600 dark:text-amber-400">
-                Select a technician to enable Accept Work
+                Select a technician to enable Move to Finish QC
               </span>
             )}
           </div>
         </CardContent>
       </Card>
 
+      {/* Queue */}
       {finishOrders.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -666,108 +586,48 @@ export default function FinishQueuePage() {
           </CardContent>
         </Card>
       ) : (
-        <>
-          {/* ── SECTION A: AWAITING ACCEPTANCE ──────────────────────────────── */}
-          <Card>
-            <CardHeader className="bg-amber-50 dark:bg-amber-900/20">
-              <CardTitle className="flex items-center justify-between">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span>Finish Queue</span>
+                <Badge variant="outline">{finishOrders.length} Orders</Badge>
+              </div>
+              {finishOrders.length > 0 && (
                 <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-amber-600" />
-                  <span>Awaiting Acceptance</span>
-                  <Badge
+                  <Button
                     variant="outline"
-                    className="ml-2 border-amber-300 text-amber-700 dark:text-amber-300"
+                    size="sm"
+                    onClick={handleSelectAll}
+                    className="flex items-center gap-2"
                   >
-                    {awaitingOrders.length} Orders
-                  </Badge>
-                </div>
-              </CardTitle>
-              <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
-                Select a technician above then click <strong>Accept Work</strong> on each order to
-                claim ownership before starting
-              </p>
-            </CardHeader>
-            <CardContent className="p-4">
-              {awaitingOrders.length === 0 ? (
-                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                  All orders have been accepted — great work!
-                </div>
-              ) : (
-                renderSection(awaitingCategorized, 'awaiting')
-              )}
-            </CardContent>
-          </Card>
-
-          {/* ── SECTION B: ACCEPTED / IN PROGRESS ───────────────────────────── */}
-          <Card>
-            <CardHeader className="bg-green-50 dark:bg-green-900/20">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span>Accepted / In Progress</span>
-                  <Badge
-                    variant="outline"
-                    className="ml-2 border-green-300 text-green-700 dark:text-green-300"
-                  >
-                    {acceptedOrders.length} Orders
-                  </Badge>
-                </div>
-
-                {/* Bulk controls for accepted orders */}
-                {acceptedOrders.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSelectAllAccepted}
-                      className="flex items-center gap-2"
-                    >
-                      {selectedOrders.size === acceptedOrders.length ? (
-                        <CheckSquare className="h-4 w-4" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
-                      {selectedOrders.size === acceptedOrders.length
-                        ? 'Deselect All'
-                        : 'Select All'}
+                    {selectedOrders.size === finishOrders.length ? (
+                      <CheckSquare className="h-4 w-4" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                    {selectedOrders.size === finishOrders.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  {selectedOrders.size > 0 && (
+                    <Button variant="outline" size="sm" onClick={handleClearSelection}>
+                      Clear ({selectedOrders.size})
                     </Button>
-                    {selectedOrders.size > 0 && (
-                      <Button variant="outline" size="sm" onClick={handleClearSelection}>
-                        Clear ({selectedOrders.size})
-                      </Button>
-                    )}
-                    {selectedOrders.size > 0 && selectedTechnician && (
-                      <Button
-                        onClick={handleProgressOrders}
-                        disabled={progressMutation.isPending}
-                        className="bg-blue-600 hover:bg-blue-700"
-                        size="sm"
-                      >
-                        <ArrowRight className="h-4 w-4 mr-1" />
-                        Move to Finish QC ({selectedOrders.size})
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardTitle>
-              <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                Select orders and click <strong>Move to Finish QC</strong> when complete
-              </p>
-            </CardHeader>
-            <CardContent className="p-4">
-              {acceptedOrders.length === 0 ? (
-                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-                  No accepted orders yet — accept orders above to begin work
+                  )}
                 </div>
-              ) : (
-                renderSection(acceptedCategorized, 'accepted')
               )}
-            </CardContent>
-          </Card>
-        </>
+            </CardTitle>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Select orders and assign a technician, then click{' '}
+              <strong>Move to Finish QC</strong> to progress them
+            </p>
+          </CardHeader>
+          <CardContent className="p-4">
+            {renderSection(categorizedOrders)}
+          </CardContent>
+        </Card>
       )}
 
-      {/* Floating progression bar (accepted orders only) */}
+      {/* Floating progression bar */}
       {selectedOrders.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="container mx-auto p-4">
@@ -775,8 +635,7 @@ export default function FinishQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <span className="font-medium text-green-800 dark:text-green-200">
-                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for
-                  progression
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -799,7 +658,7 @@ export default function FinishQueuePage() {
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressMutation.isPending
                     ? 'Progressing…'
-                    : `Progress to Finish QC (${selectedOrders.size})`}
+                    : `Move to Finish QC (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

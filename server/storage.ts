@@ -16594,21 +16594,41 @@ export class DatabaseStorage implements IStorage {
   ): Promise<AllOrder> {
     try {
       console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(data));
-      
-      await db
-        .update(allOrders)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(allOrders.orderId, orderId));
 
-      const [order] = await db
-        .select()
-        .from(allOrders)
-        .where(eq(allOrders.orderId, orderId))
-        .limit(1);
+      // Check upfront whether a production_orders record exists so we can sync it atomically.
+      const productionRecord =
+        data.currentDepartment !== undefined
+          ? await this.getProductionOrderByOrderId(orderId)
+          : undefined;
 
-      if (!order) {
-        throw new Error(`Finalized order with ID ${orderId} not found`);
-      }
+      const order = await db.transaction(async (tx) => {
+        await tx
+          .update(allOrders)
+          .set({ ...data, updatedAt: new Date() })
+          .where(eq(allOrders.orderId, orderId));
+
+        const [updated] = await tx
+          .select()
+          .from(allOrders)
+          .where(eq(allOrders.orderId, orderId))
+          .limit(1);
+
+        if (!updated) {
+          throw new Error(`Finalized order with ID ${orderId} not found`);
+        }
+
+        // If currentDepartment is being updated and a production_orders record exists,
+        // sync it within the same transaction so getAllOrders deduplication
+        // (which prefers production_orders) always returns the correct department.
+        if (data.currentDepartment !== undefined && productionRecord) {
+          await tx.execute(
+            sql`UPDATE production_orders SET current_department = ${data.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
+          );
+          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${data.currentDepartment}`);
+        }
+
+        return updated;
+      });
 
       return order;
     } catch (err: any) {

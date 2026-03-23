@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 
@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { PIPELINE_DEPARTMENTS, DEPARTMENT_COLORS, type PipelineDepartment } from '@/constants/pipelineDepartments';
 import { calculateFlowPressure, type PressureLevel } from '@/utils/calculateFlowPressure';
-import { Filter, X, Printer, LayoutGrid, BarChart2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Filter, X, Printer, LayoutGrid, BarChart2, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 
 type ScheduleStatus =
   | 'on-schedule'
@@ -417,10 +417,12 @@ const DepartmentView = ({
   pipelineDetails,
   getModelDisplayName,
   onOrderClick,
+  showOffTrackOnly,
 }: {
   pipelineDetails: Record<string, OrderDetail[]>;
   getModelDisplayName: (modelId: string) => string;
   onOrderClick: (orderId: string) => void;
+  showOffTrackOnly: boolean;
 }) => {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -486,12 +488,17 @@ const DepartmentView = ({
 
             {!isCollapsed && (
             <div className="p-3 space-y-3 bg-white dark:bg-gray-900">
-              {orders.length === 0 && (
-                <div className="text-xs text-gray-400 italic text-center py-3">Empty</div>
+              {(showOffTrackOnly
+                ? shouldProgress.length === 0 && aheadOfSchedule.length === 0
+                : orders.length === 0
+              ) && (
+                <div className="text-xs text-gray-400 italic text-center py-3">
+                  {showOffTrackOnly ? 'All on track' : 'Empty'}
+                </div>
               )}
 
-              {/* In correct place */}
-              {inPlace.length > 0 && (
+              {/* In correct place — hidden when off-track filter is active */}
+              {!showOffTrackOnly && inPlace.length > 0 && (
                 <div>
                   <div className="text-[10px] font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
@@ -500,7 +507,6 @@ const DepartmentView = ({
                   <OrderTable orders={inPlace} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-green-50 dark:bg-green-950/20" />
                 </div>
               )}
-
               {/* Needs to move forward (behind expected) */}
               {shouldProgress.length > 0 && (
                 <div>
@@ -596,7 +602,8 @@ export default function PipelineVisualization() {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [focusDept, setFocusDept] = useState<PipelineDepartment | null>(null);
   const [viewMode, setViewMode] = useState<'pipeline' | 'department'>('pipeline');
-  const printRef = useRef<HTMLDivElement>(null);
+  const [showOffTrackOnly, setShowOffTrackOnly] = useState(false);
+  const [printDept, setPrintDept] = useState<string>('all');
 
   const { data: pipelineCounts, isLoading: countsLoading } = useQuery<Record<string, number>>({
     queryKey: ['/api/orders/pipeline-counts'],
@@ -621,10 +628,11 @@ export default function PipelineVisualization() {
   };
 
   const handlePrint = () => {
-    const printContent = printRef.current;
-    if (!printContent) return;
+    if (!pipelineDetails) return;
 
-    const totalOrders = Object.values(pipelineCounts || {}).reduce((s, c) => s + c, 0);
+    const totalOrders = printDept === 'all'
+      ? Object.values(pipelineCounts || {}).reduce((s, c) => s + c, 0)
+      : (pipelineCounts?.[printDept] ?? 0);
     const printWindow = window.open('', '_blank', 'width=1100,height=800');
     if (!printWindow) return;
 
@@ -632,12 +640,15 @@ export default function PipelineVisualization() {
       month: 'short', day: 'numeric', year: 'numeric',
       hour: 'numeric', minute: '2-digit',
     });
+    const reportTitle = printDept === 'all'
+      ? 'Production Pipeline — Department View'
+      : `Production Pipeline — ${printDept}`;
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Production Pipeline Report — ${now}</title>
+        <title>${reportTitle} — ${now}</title>
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; color: #111; background: #fff; padding: 16px; }
@@ -672,9 +683,9 @@ export default function PipelineVisualization() {
         </style>
       </head>
       <body>
-        <h1>Production Pipeline — Department View</h1>
+        <h1>${reportTitle}</h1>
         <div class="meta">Generated ${now} &nbsp;·&nbsp; ${totalOrders} active orders</div>
-        ${printContent.innerHTML}
+        <div class="grid">${buildPrintContent(printDept)}</div>
       </body>
       </html>
     `);
@@ -733,9 +744,10 @@ export default function PipelineVisualization() {
     return `<table><thead><tr><th>Order</th><th>Model</th>${expHeader}<th>Due</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
   };
 
-  const buildPrintContent = () => {
+  const buildPrintContent = (deptFilter: string = 'all') => {
     if (!pipelineDetails) return '';
-    return PIPELINE_DEPARTMENTS.map((dept) => {
+    const depts = deptFilter === 'all' ? PIPELINE_DEPARTMENTS : PIPELINE_DEPARTMENTS.filter(d => d === deptFilter);
+    return depts.map((dept) => {
       const orders = pipelineDetails[dept] ?? [];
       const color = getDeptColor(dept);
       const deptIdx = PIPELINE_DEPARTMENTS.indexOf(dept as PipelineDepartment);
@@ -824,15 +836,43 @@ export default function PipelineVisualization() {
             )}
 
             {viewMode === 'department' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePrint}
-                className="text-xs h-7 gap-1.5"
-              >
-                <Printer className="h-3.5 w-3.5" />
-                Print Report
-              </Button>
+              <>
+                {/* Off-track only toggle */}
+                <button
+                  onClick={() => setShowOffTrackOnly((v) => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    showOffTrackOnly
+                      ? 'bg-orange-600 text-white border-orange-600'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Off Track Only
+                </button>
+
+                {/* Department selector + print */}
+                <div className="flex items-center gap-1">
+                  <select
+                    value={printDept}
+                    onChange={(e) => setPrintDept(e.target.value)}
+                    className="text-xs h-7 rounded-l-md border border-r-0 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 px-2 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  >
+                    <option value="all">All Departments</option>
+                    {PIPELINE_DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrint}
+                    className="text-xs h-7 gap-1.5 rounded-l-none border-l-0"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Print
+                  </Button>
+                </div>
+              </>
             )}
 
             <Badge variant="outline" className="text-sm">
@@ -848,15 +888,7 @@ export default function PipelineVisualization() {
             pipelineDetails={pipelineDetails}
             getModelDisplayName={getModelDisplayName}
             onOrderClick={handleOrderClick}
-          />
-        )}
-
-        {/* Hidden print-ready content (always rendered when dept view data exists) */}
-        {pipelineDetails && (
-          <div
-            ref={printRef}
-            style={{ display: 'none' }}
-            dangerouslySetInnerHTML={{ __html: `<div class="grid">${buildPrintContent()}</div>` }}
+            showOffTrackOnly={showOffTrackOnly}
           />
         )}
 

@@ -78,6 +78,20 @@ const requireAdminOrOwner = async (req: Request, res: Response, next: any) => {
   next();
 };
 
+// Authorization middleware for document create/edit - admin, owner, or designated document managers
+const requireDocumentEditor = async (req: Request, res: Response, next: any) => {
+  const user = await getUserFromSession(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  const documentManagers = ['lauriet'];
+  if (user.role !== 'ADMIN' && user.role !== 'OWNER' && !documentManagers.includes(user.username)) {
+    return res.status(403).json({ error: 'You do not have permission to create or edit documents' });
+  }
+  (req as any).user = user;
+  next();
+};
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -169,9 +183,9 @@ router.get('/:id/versions', requireAuth, async (req: Request, res: Response) => 
   }
 });
 
-// Create new document with file upload (admin/owner only)
+// Create new document with file upload (admin/owner/document managers only)
 // Auth middleware runs BEFORE upload to prevent anonymous file uploads
-router.post('/', requireAdminOrOwner, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/', requireDocumentEditor, upload.single('file'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user!; // Guaranteed by middleware
     const {
@@ -229,9 +243,9 @@ router.post('/', requireAdminOrOwner, upload.single('file'), async (req: Request
   }
 });
 
-// Update document / Create new version (admin/owner only)
+// Update document / Create new version (admin/owner/document managers only)
 // Auth middleware runs BEFORE upload to prevent anonymous file uploads
-router.put('/:id', requireAdminOrOwner, upload.single('file'), async (req: Request, res: Response) => {
+router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user!; // Guaranteed by middleware
     const {
@@ -484,8 +498,8 @@ router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) =
   }
 });
 
-// CSV Import (admin/owner only)
-router.post('/import/csv', requireAdminOrOwner, csvUpload.single('file'), async (req: Request, res: Response) => {
+// CSV Import (admin/owner/document managers only)
+router.post('/import/csv', requireDocumentEditor, csvUpload.single('file'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user!;
     

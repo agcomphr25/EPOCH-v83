@@ -42,6 +42,12 @@ import {
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -683,6 +689,7 @@ export default function POManager() {
   const [reassignCustomerSearch, setReassignCustomerSearch] = useState('');
   const [reassignCustomerOpen, setReassignCustomerOpen] = useState(false);
   const [reassignTargetCustomer, setReassignTargetCustomer] = useState<Customer | null>(null);
+  const [expandedCustomers, setExpandedCustomers] = useState<string[]>([]);
   const [newCustomerData, setNewCustomerData] = useState({
     name: '',
     email: '',
@@ -1087,6 +1094,28 @@ export default function POManager() {
     return Object.values(groups).sort((a, b) => a.customerName.localeCompare(b.customerName));
   })();
 
+  const allCustomerIds = groupedPOs.map((g) => g.customerId);
+
+  // Default all customer groups to expanded; add any newly appeared customers
+  useEffect(() => {
+    setExpandedCustomers((prev) => {
+      const prevSet = new Set(prev);
+      const newIds = allCustomerIds.filter((id) => !prevSet.has(id));
+      if (newIds.length === 0) return prev;
+      return [...prev, ...newIds];
+    });
+  }, [allCustomerIds.join(',')]);
+
+  const allExpanded = allCustomerIds.length > 0 && allCustomerIds.every((id) => expandedCustomers.includes(id));
+
+  const toggleAllAccordions = () => {
+    if (allExpanded) {
+      setExpandedCustomers([]);
+    } else {
+      setExpandedCustomers(allCustomerIds);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'OPEN':
@@ -1431,10 +1460,19 @@ export default function POManager() {
                 <SelectItem value="CANCELED">Canceled</SelectItem>
               </SelectContent>
             </Select>
+            {groupedPOs.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleAllAccordions}
+              >
+                {allExpanded ? 'Collapse All' : 'Expand All'}
+              </Button>
+            )}
           </div>
 
           {/* Purchase Orders List - Grouped by Customer */}
-          <div className="space-y-6">
+          <div className="space-y-2">
             {isLoading ? (
               <div className="text-center py-8">Loading purchase orders...</div>
             ) : filteredPOs.length === 0 ? (
@@ -1444,33 +1482,48 @@ export default function POManager() {
                   : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
               </div>
             ) : (
-              groupedPOs.map((group) => (
-                <div key={group.customerId} className="space-y-3">
-                  <div className="flex items-center gap-2 border-b pb-2">
-                    <h3 className="text-lg font-semibold text-gray-800">{group.customerName}</h3>
-                    <Badge variant="secondary" className="text-xs">{group.pos.length} PO{group.pos.length !== 1 ? 's' : ''}</Badge>
-                  </div>
-                  <div className="grid gap-4 pl-2">
-                    {group.pos.map((po) => (
-                      <POCard
-                        key={po.id}
-                        po={po}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        onViewItems={handleViewItems}
-                        onCalculateSchedule={handleCalculateSchedule}
-                        onGenerateProductionOrders={handleGenerateProductionOrders}
-                        onReassignCustomer={(po) => {
-                          setReassignPO(po);
-                          setReassignTargetCustomer(null);
-                          setReassignCustomerSearch('');
-                        }}
-                        isGeneratingOrders={isGeneratingOrders}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))
+              <Accordion
+                type="multiple"
+                value={expandedCustomers}
+                onValueChange={setExpandedCustomers}
+                className="space-y-4"
+              >
+                {groupedPOs.map((group) => (
+                  <AccordionItem
+                    key={group.customerId}
+                    value={group.customerId}
+                    className="border rounded-lg px-4"
+                  >
+                    <AccordionTrigger className="hover:no-underline py-3">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-800">{group.customerName}</h3>
+                        <Badge variant="secondary" className="text-xs">{group.pos.length} PO{group.pos.length !== 1 ? 's' : ''}</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid gap-4 pt-2 pb-2">
+                        {group.pos.map((po) => (
+                          <POCard
+                            key={po.id}
+                            po={po}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onViewItems={handleViewItems}
+                            onCalculateSchedule={handleCalculateSchedule}
+                            onGenerateProductionOrders={handleGenerateProductionOrders}
+                            onReassignCustomer={(po) => {
+                              setReassignPO(po);
+                              setReassignTargetCustomer(null);
+                              setReassignCustomerSearch('');
+                            }}
+                            isGeneratingOrders={isGeneratingOrders}
+                          />
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
             )}
           </div>
         </div>

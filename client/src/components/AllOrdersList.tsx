@@ -59,7 +59,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -782,23 +782,32 @@ export default function AllOrdersList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <HoverCard openDelay={200} closeDelay={100}>
-                        <HoverCardTrigger asChild>
-                          <Badge
-                            className={`${getDepartmentBadgeColor(displayDepartment)} text-white cursor-default`}
-                          >
-                            {displayDepartment || 'Completed'}
-                          </Badge>
-                        </HoverCardTrigger>
-                        <HoverCardContent className="w-auto min-w-0 px-3 py-1.5 text-xs font-medium" side="top">
-                          {(() => {
-                            const entryDate = getDeptEntryDate(order);
-                            if (!entryDate) return `In ${displayDepartment || 'Completed'}`;
-                            const days = (Date.now() - entryDate.getTime()) / (1000 * 60 * 60 * 24);
-                            return `${days.toFixed(1)} days in ${displayDepartment || 'Completed'}`;
-                          })()}
-                        </HoverCardContent>
-                      </HoverCard>
+                      <RadixTooltip.Provider delayDuration={200}>
+                        <RadixTooltip.Root>
+                          <RadixTooltip.Trigger asChild>
+                            <Badge
+                              className={`${getDepartmentBadgeColor(displayDepartment)} text-white cursor-default`}
+                            >
+                              {displayDepartment || 'Completed'}
+                            </Badge>
+                          </RadixTooltip.Trigger>
+                          <RadixTooltip.Portal>
+                            <RadixTooltip.Content
+                              side="top"
+                              sideOffset={5}
+                              className="z-[9999] rounded bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md select-none"
+                            >
+                              {(() => {
+                                const entryDate = getDeptEntryDate(order);
+                                if (!entryDate) return `In ${displayDepartment || 'Completed'}`;
+                                const days = (Date.now() - entryDate.getTime()) / (1000 * 60 * 60 * 24);
+                                return `${days.toFixed(1)} days in ${displayDepartment || 'Completed'}`;
+                              })()}
+                              <RadixTooltip.Arrow className="fill-gray-900" />
+                            </RadixTooltip.Content>
+                          </RadixTooltip.Portal>
+                        </RadixTooltip.Root>
+                      </RadixTooltip.Provider>
                     </TableCell>
                     <TableCell>
                       {order.dueDate

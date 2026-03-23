@@ -258,8 +258,20 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
 function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string>('');
   const queryClient = useQueryClient();
   const fileInputRef = { current: null as HTMLInputElement | null };
+
+  const handlePreview = async (attachmentId: string, fileName: string) => {
+    try {
+      const response = await apiRequest(`/api/pos/${poId}/attachments/${attachmentId}/download`);
+      setPreviewFileName(fileName);
+      setPreviewUrl(response.downloadURL);
+    } catch (error) {
+      toast.error('Failed to load preview');
+    }
+  };
 
   const { data: attachments = [], isLoading, refetch } = useQuery({
     queryKey: [`/api/pos/${poId}/attachments`],
@@ -350,6 +362,7 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="flex items-center gap-1">
@@ -432,6 +445,13 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handlePreview(attachment.id, attachment.originalFileName)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDownload(attachment.id, attachment.originalFileName)}
                     >
                       <Download className="w-4 h-4" />
@@ -455,6 +475,26 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) { setPreviewUrl(null); setPreviewFileName(''); } }}>
+      <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="truncate pr-4">{previewFileName}</DialogTitle>
+          </div>
+        </DialogHeader>
+        <div className="flex-1 min-h-0">
+          {previewUrl && (
+            <iframe
+              src={previewUrl}
+              className="w-full h-full border-0"
+              title={previewFileName}
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

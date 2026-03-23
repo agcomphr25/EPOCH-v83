@@ -19,6 +19,7 @@ import OrderEntry from './pages/OrderEntry';
 import OrderEntryTest from './components/OrderEntryTest';
 import OrdersList from './pages/OrdersList';
 import PastDueReport from './pages/PastDueReport';
+import WhatIfForecast from './pages/WhatIfForecast';
 import OrdersListSimple from './pages/OrdersListSimple';
 import FeatureManager from './pages/FeatureManager';
 import StockModels from './pages/StockModels';
@@ -991,6 +992,7 @@ function App() {
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
                   <Route path="/past-due-report" component={PastDueReport} />
+                  <Route path="/what-if-forecast" component={WhatIfForecast} />
 
                   {/* Department Queue Management Routes */}
                   <Route

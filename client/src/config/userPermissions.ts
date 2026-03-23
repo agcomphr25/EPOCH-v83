@@ -147,6 +147,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/material-inventory',
   '/filtered-orders-report',
   '/urgent-orders-report',
+  '/what-if-forecast',
   '/otd-report',
   '/order-heat-map',
   '/fabric-inventory',
@@ -209,6 +210,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/voice-notes',
       '/order-heat-map',
       '/urgent-orders-report',
+      '/what-if-forecast',
       '/production-forecast',
     ],
   },
@@ -314,6 +316,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/refund-request',
       '/refund-queue',
       '/urgent-orders-report',
+      '/what-if-forecast',
     ],
   },
 

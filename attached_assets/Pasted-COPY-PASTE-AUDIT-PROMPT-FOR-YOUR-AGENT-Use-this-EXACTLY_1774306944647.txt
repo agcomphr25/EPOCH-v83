@@ -1,0 +1,152 @@
+COPY-PASTE AUDIT PROMPT (FOR YOUR AGENT)
+
+Use this EXACTLY as-is:
+
+FULL SYSTEM AUDIT — BACKLOG + PAST-DUE FORECAST ENGINE (PHASE 1)
+
+OBJECTIVE:
+We are building a time-based simulation tool that forecasts how many orders will be more than 14 days past due over time.
+
+This is NOT a report.
+This is NOT a static query.
+This is a forward simulation engine.
+
+--------------------------------
+STEP 1 — AUDIT EXISTING DATA SOURCES
+--------------------------------
+
+1. Locate the implementation of:
+   /past-due-report
+
+2. Identify:
+   - data source (tables used)
+   - how due_date is stored
+   - how "past due" is calculated
+   - how status = FULFILLED is handled
+
+3. Confirm we can retrieve:
+   - all OPEN orders (status != FULFILLED)
+   - due_date for each order
+
+RETURN:
+- exact query or repository function used
+- list of fields available
+
+--------------------------------
+STEP 2 — DEFINE SIMULATION INPUT CONTRACT
+--------------------------------
+
+We need a new simulation input object:
+
+{
+  referenceDate: Date,
+  ordersPerWeek: number,
+  shipmentsPerWeek: number,
+  simulationWeeks: number,
+  assumedLeadTimeDays: number
+}
+
+CONFIRM:
+- where this will live (frontend vs backend)
+- how it will be passed into the engine
+
+--------------------------------
+STEP 3 — DESIGN SIMULATION ENGINE (CORE LOGIC)
+--------------------------------
+
+We are simulating WEEK BY WEEK.
+
+INITIAL STATE:
+- Load all open orders from DB
+- Each order must include:
+  - due_date
+  - (optional) created_at
+
+SIMULATION LOOP (for each week):
+
+1. ADD NEW ORDERS
+   - Create N = ordersPerWeek new simulated orders
+   - Assign:
+     due_date = current_week_date + assumedLeadTimeDays
+
+2. FULFILL ORDERS (FIFO)
+   - Sort all orders by due_date ASC
+   - Remove N = shipmentsPerWeek oldest orders
+
+3. AGE REMAINING ORDERS
+   - Advance current date by 7 days
+
+4. CALCULATE METRICS
+   - past_due_count = count of orders where:
+     (current_date - due_date) > 14 days
+
+   - total_backlog = total remaining orders
+
+STORE weekly results
+
+--------------------------------
+STEP 4 — OUTPUT STRUCTURE
+--------------------------------
+
+Return:
+
+[
+  {
+    weekIndex: number,
+    date: Date,
+    backlog: number,
+    pastDue: number
+  }
+]
+
+--------------------------------
+STEP 5 — ARCHITECTURE DECISION
+--------------------------------
+
+Decide and justify:
+
+Should this simulation run:
+A) Frontend (pure JS)
+B) Backend service (recommended)
+
+Explain tradeoffs.
+
+--------------------------------
+STEP 6 — DO NOT OVER-ENGINEER
+--------------------------------
+
+STRICT RULES:
+- Do NOT include department logic
+- Do NOT include routing
+- Do NOT include cycle times
+- Do NOT include bottlenecks
+- Do NOT segment by product type
+
+This is a FIRST PASS CAPACITY MODEL ONLY.
+
+--------------------------------
+STEP 7 — DELIVERABLES
+--------------------------------
+
+Provide:
+
+1. Simulation function (clean, testable)
+2. Data loader (from existing orders)
+3. Example run with:
+   - ordersPerWeek = 50
+   - shipmentsPerWeek = 40
+   - simulationWeeks = 12
+   - assumedLeadTimeDays = 30
+
+4. Sample output
+
+--------------------------------
+SUCCESS CRITERIA
+--------------------------------
+
+We must be able to answer:
+
+"If we increase shipments by 10 per week,
+how long until past-due orders decrease?"
+
+--------------------------------

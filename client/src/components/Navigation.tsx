@@ -612,6 +612,12 @@ export default function Navigation() {
       description: 'View all orders flagged as Urgent or Critical priority',
     },
     {
+      path: '/what-if-forecast',
+      label: 'What-If Forecast',
+      icon: TestTube,
+      description: 'Simulate how intake/output changes affect past-due backlog over time',
+    },
+    {
       path: '/otd-report',
       label: 'OTD Report',
       icon: TrendingUp,

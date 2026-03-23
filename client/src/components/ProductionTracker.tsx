@@ -311,7 +311,7 @@ export default function ProductionTracker() {
                                         Production Code
                                       </th>
                                       <th className="text-left py-1 pr-4 font-medium">
-                                        Product Name
+                                        Item Code
                                       </th>
                                       <th className="text-left py-1 font-medium">
                                         Current Department
@@ -327,8 +327,8 @@ export default function ProductionTracker() {
                                         <td className="py-1.5 pr-4 font-mono text-xs">
                                           {order.orderId}
                                         </td>
-                                        <td className="py-1.5 pr-4">
-                                          {order.itemName}
+                                        <td className="py-1.5 pr-4 font-mono text-xs">
+                                          {order.itemId}
                                         </td>
                                         <td className="py-1.5 text-muted-foreground">
                                           {order.currentDepartment || '—'}

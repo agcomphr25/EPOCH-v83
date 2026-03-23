@@ -8,6 +8,11 @@ import { Button } from '@/components/ui/button';
 const EXCLUDED_STATUSES = ['FULFILLED', 'CANCELLED', 'HOLDING'];
 const DEFAULT_DAYS_THRESHOLD = 14;
 
+interface StockModel {
+  id: string;
+  displayName: string;
+}
+
 interface Order {
   id: number;
   orderId: string;
@@ -58,6 +63,16 @@ export default function PastDueReport() {
     queryKey: ['/api/orders/with-payment-status'],
   });
 
+  const { data: stockModels = [] } = useQuery<StockModel[]>({
+    queryKey: ['/api/stock-models'],
+  });
+
+  const modelDisplayName = useMemo(() => {
+    const map: Record<string, string> = {};
+    stockModels.forEach((m) => { map[m.id] = m.displayName; });
+    return (id: string) => map[id] ?? id;
+  }, [stockModels]);
+
   const cutoff = useMemo(() => {
     const base = new Date(selectedDate + 'T00:00:00');
     return subDays(base, DEFAULT_DAYS_THRESHOLD);
@@ -85,11 +100,12 @@ export default function PastDueReport() {
           o.orderId.toLowerCase().includes(q) ||
           (o.customerName ?? '').toLowerCase().includes(q) ||
           o.modelId.toLowerCase().includes(q) ||
+          modelDisplayName(o.modelId).toLowerCase().includes(q) ||
           (o.currentDepartment ?? '').toLowerCase().includes(q) ||
           o.status.toLowerCase().includes(q)
         );
       });
-  }, [allOrders, cutoff, search, selectedDate]);
+  }, [allOrders, cutoff, search, selectedDate, modelDisplayName]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -116,7 +132,7 @@ export default function PastDueReport() {
       String(i + 1),
       o.orderId,
       o.customerName ?? '',
-      o.modelId,
+      modelDisplayName(o.modelId),
       format(new Date(o.dueDate), 'yyyy-MM-dd'),
       String(o.daysOverdue),
       o.status,
@@ -242,8 +258,8 @@ export default function PastDueReport() {
                         {order.customerName ?? order.customerId}
                       </td>
                       {/* Model */}
-                      <td className="px-3 py-2.5 font-mono text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                        {order.modelId}
+                      <td className="px-3 py-2.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {modelDisplayName(order.modelId)}
                       </td>
                       {/* Due Date */}
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-700 dark:text-gray-300">

@@ -1,17 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { Package, TrendingUp, Calendar } from 'lucide-react';
 import {
-  getCurrentCompanyWeek,
-  formatWeekRange,
-  isDateInCompanyWeek,
+  getCurrentOperationalWeek,
+  formatOperationalWeekRange,
+  isDateInOperationalWeek,
 } from '@shared/weekUtils';
 import { Link } from 'wouter';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function WeeklyShippingWidget() {
-  const currentYear = new Date().getFullYear();
-  const currentWeek = getCurrentCompanyWeek();
+  const { week: currentWeek, year: currentYear } = getCurrentOperationalWeek();
 
   // Fetch all orders
   const { data: orders, isLoading } = useQuery<any[]>({
@@ -23,21 +22,19 @@ export default function WeeklyShippingWidget() {
     },
   });
 
-  // Calculate current week stocks shipped - only count orders fulfilled in the current company week
+  // Calculate current week stocks shipped - only count orders fulfilled in the current operational week
   const currentWeekShipped =
     orders?.filter((order) => {
-      if (
-        order.status !== 'FULFILLED' &&
-        order.currentDepartment !== 'Fulfilled'
-      ) {
+      if (order.status !== 'FULFILLED') {
         return false;
       }
-      // Use updatedAt as the fulfillment date - with safety check
-      if (!order.updatedAt) return false;
+      // Use shippingCompletedAt or shippedDate as the fulfillment date
+      const rawDate = order.shippingCompletedAt || order.shippedDate;
+      if (!rawDate) return false;
       try {
-        const fulfillmentDate = new Date(order.updatedAt);
+        const fulfillmentDate = new Date(rawDate);
         if (isNaN(fulfillmentDate.getTime())) return false;
-        return isDateInCompanyWeek(fulfillmentDate, currentWeek, currentYear);
+        return isDateInOperationalWeek(fulfillmentDate, currentWeek, currentYear);
       } catch {
         return false;
       }
@@ -95,7 +92,7 @@ export default function WeeklyShippingWidget() {
               data-testid="text-week-range"
             >
               <Calendar className="h-3 w-3" />
-              <span>{formatWeekRange(currentWeek, currentYear)}</span>
+              <span>{formatOperationalWeekRange(currentWeek, currentYear)}</span>
             </div>
             <Link href="/shipping-tracker">
               <div className="mt-3 text-center">

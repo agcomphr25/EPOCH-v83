@@ -47,6 +47,14 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
+const TIKKA_BARREL_OPTIONS = [
+  'tikka_proof_sendero',
+  'tikka_proof_sendero_lite',
+  'tikka_factory_sporter_lite',
+  'tikka_hca_summit',
+  'tikka_hca_heavy',
+] as const;
+
 interface StockModel {
   id: string;
   name: string;
@@ -260,10 +268,14 @@ export default function POProductsPage() {
     field: keyof POProductFormData,
     value: string | boolean | string[]
   ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'stockModel') {
+        next.actionInlet = '';
+        next.barrelInlet = '';
+      }
+      return next;
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -734,46 +746,63 @@ export default function POProductsPage() {
                     </div>
 
                     {/* Action Inlet */}
-                    <div className="space-y-2">
-                      <Label htmlFor="actionInlet">Action Inlet</Label>
-                      <Select
-                        value={formData.actionInlet}
-                        onValueChange={(value) =>
-                          handleInputChange('actionInlet', value)
-                        }
-                        disabled={featuresLoading}
-                      >
-                        <SelectTrigger data-testid="select-action-inlet">
-                          <SelectValue
-                            placeholder={
-                              featuresLoading
-                                ? 'Loading...'
-                                : 'Select action inlet'
+                    {(() => {
+                      const isTikkaModel = formData.stockModel.toLowerCase().includes('tikka');
+                      return (
+                        <div className="space-y-2">
+                          <Label htmlFor="actionInlet" className="flex items-center gap-2">
+                            Action Inlet
+                            {isTikkaModel && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                Tikka only
+                              </span>
+                            )}
+                          </Label>
+                          <Select
+                            value={formData.actionInlet}
+                            onValueChange={(value) =>
+                              handleInputChange('actionInlet', value)
                             }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {features
-                            .find(
-                              (f: any) =>
-                                f.name === 'action_inlet' ||
-                                f.id === 'action_inlet'
-                            )
-                            ?.options?.filter(
-                              (option: any) =>
-                                option.value && option.value.trim() !== ''
-                            )
-                            .map((option: any) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            disabled={featuresLoading}
+                          >
+                            <SelectTrigger data-testid="select-action-inlet">
+                              <SelectValue
+                                placeholder={
+                                  featuresLoading
+                                    ? 'Loading...'
+                                    : 'Select action inlet'
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {features
+                                .find(
+                                  (f: any) =>
+                                    f.name === 'action_inlet' ||
+                                    f.id === 'action_inlet'
+                                )
+                                ?.options?.filter((option: any) => {
+                                  if (!option.value || option.value.trim() === '') return false;
+                                  if (formData.actionInlet === option.value) return true;
+                                  const isTikkaOption =
+                                    option.value.toLowerCase().includes('tikka') ||
+                                    option.label.toLowerCase().includes('tikka');
+                                  if (isTikkaModel) return isTikkaOption;
+                                  return !isTikkaOption;
+                                })
+                                .map((option: any) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })()}
 
                     {/* Bottom Metal */}
                     <div className="space-y-2">
@@ -818,46 +847,61 @@ export default function POProductsPage() {
                     </div>
 
                     {/* Barrel Inlet */}
-                    <div className="space-y-2">
-                      <Label htmlFor="barrelInlet">Barrel Inlet</Label>
-                      <Select
-                        value={formData.barrelInlet}
-                        onValueChange={(value) =>
-                          handleInputChange('barrelInlet', value)
-                        }
-                        disabled={featuresLoading}
-                      >
-                        <SelectTrigger data-testid="select-barrel-inlet">
-                          <SelectValue
-                            placeholder={
-                              featuresLoading
-                                ? 'Loading...'
-                                : 'Select barrel inlet'
+                    {(() => {
+                      const isTikkaModel = formData.stockModel.toLowerCase().includes('tikka');
+                      return (
+                        <div className="space-y-2">
+                          <Label htmlFor="barrelInlet" className="flex items-center gap-2">
+                            Barrel Inlet
+                            {isTikkaModel && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                Tikka only
+                              </span>
+                            )}
+                          </Label>
+                          <Select
+                            value={formData.barrelInlet}
+                            onValueChange={(value) =>
+                              handleInputChange('barrelInlet', value)
                             }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {features
-                            .find(
-                              (f: any) =>
-                                f.name === 'barrel_inlet' ||
-                                f.id === 'barrel_inlet'
-                            )
-                            ?.options?.filter(
-                              (option: any) =>
-                                option.value && option.value.trim() !== ''
-                            )
-                            .map((option: any) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            disabled={featuresLoading}
+                          >
+                            <SelectTrigger data-testid="select-barrel-inlet">
+                              <SelectValue
+                                placeholder={
+                                  featuresLoading
+                                    ? 'Loading...'
+                                    : 'Select barrel inlet'
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {features
+                                .find(
+                                  (f: any) =>
+                                    f.name === 'barrel_inlet' ||
+                                    f.id === 'barrel_inlet'
+                                )
+                                ?.options?.filter((option: any) => {
+                                  if (!option.value || option.value.trim() === '') return false;
+                                  if (formData.barrelInlet === option.value) return true;
+                                  const isTikkaBarrel = (TIKKA_BARREL_OPTIONS as readonly string[]).includes(option.value);
+                                  if (isTikkaModel) return isTikkaBarrel;
+                                  return !isTikkaBarrel;
+                                })
+                                .map((option: any) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })()}
 
                     {/* QDs */}
                     <div className="space-y-2">

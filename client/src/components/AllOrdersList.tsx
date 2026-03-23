@@ -17,6 +17,36 @@ interface Order {
   isFullyPaid?: boolean;
   isVerified?: boolean;
   updatedAt?: string;
+  createdAt?: string;
+  layupCompletedAt?: string;
+  pluggingCompletedAt?: string;
+  cncCompletedAt?: string;
+  finishCompletedAt?: string;
+  gunsmithCompletedAt?: string;
+  paintCompletedAt?: string;
+  qcCompletedAt?: string;
+  shippingCompletedAt?: string;
+}
+
+function getDeptEntryDate(order: Order): Date | null {
+  const raw = (() => {
+    switch (order.currentDepartment) {
+      case 'Layup':
+      case 'Layup/Plugging': return order.createdAt;
+      case 'Plugging':       return order.layupCompletedAt    || order.createdAt;
+      case 'CNC':            return order.pluggingCompletedAt || order.createdAt;
+      case 'Finish':         return order.cncCompletedAt      || order.createdAt;
+      case 'Finish QC':      return order.finishCompletedAt   || order.createdAt;
+      case 'Gunsmith':       return order.finishCompletedAt   || order.createdAt;
+      case 'Paint':          return order.gunsmithCompletedAt || order.createdAt;
+      case 'QC':             return order.paintCompletedAt    || order.createdAt;
+      case 'Shipping':       return order.qcCompletedAt       || order.createdAt;
+      default:               return order.createdAt;
+    }
+  })();
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 interface Kickback {
@@ -29,7 +59,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -752,20 +782,23 @@ export default function AllOrdersList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Tooltip className="inline-block w-auto">
-                        <TooltipTrigger asChild>
+                      <HoverCard openDelay={200} closeDelay={100}>
+                        <HoverCardTrigger asChild>
                           <Badge
                             className={`${getDepartmentBadgeColor(displayDepartment)} text-white cursor-default`}
                           >
                             {displayDepartment || 'Completed'}
                           </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent className="w-auto min-w-0 p-2">
-                          {order.updatedAt
-                            ? `${((Date.now() - new Date(order.updatedAt).getTime()) / (1000 * 60 * 60 * 24)).toFixed(1)} days in ${displayDepartment || 'Completed'}`
-                            : `In ${displayDepartment || 'Completed'}`}
-                        </TooltipContent>
-                      </Tooltip>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-auto min-w-0 px-3 py-1.5 text-xs font-medium" side="top">
+                          {(() => {
+                            const entryDate = getDeptEntryDate(order);
+                            if (!entryDate) return `In ${displayDepartment || 'Completed'}`;
+                            const days = (Date.now() - entryDate.getTime()) / (1000 * 60 * 60 * 24);
+                            return `${days.toFixed(1)} days in ${displayDepartment || 'Completed'}`;
+                          })()}
+                        </HoverCardContent>
+                      </HoverCard>
                     </TableCell>
                     <TableCell>
                       {order.dueDate

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Table,
   TableBody,
@@ -483,11 +484,20 @@ export default function OrdersManagementPage() {
                         </TableCell>
                         <TableCell>{getProductName(order)}</TableCell>
                         <TableCell>
-                          <Badge
-                            className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white`}
-                          >
-                            {order.currentDepartment}
-                          </Badge>
+                          <Tooltip className="inline-block w-auto">
+                            <TooltipTrigger asChild>
+                              <Badge
+                                className={`${getDepartmentBadgeColor(order.currentDepartment)} text-white cursor-default`}
+                              >
+                                {order.currentDepartment}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent className="w-auto min-w-0 p-2">
+                              {order.updatedAt
+                                ? `${((Date.now() - new Date(order.updatedAt).getTime()) / (1000 * 60 * 60 * 24)).toFixed(1)} days in ${order.currentDepartment}`
+                                : `In ${order.currentDepartment}`}
+                            </TooltipContent>
+                          </Tooltip>
                         </TableCell>
                         <TableCell>
                           <Badge

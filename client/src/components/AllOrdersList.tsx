@@ -16,6 +16,7 @@ interface Order {
   paymentTotal?: number;
   isFullyPaid?: boolean;
   isVerified?: boolean;
+  updatedAt?: string;
 }
 
 interface Kickback {
@@ -28,6 +29,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -750,11 +752,20 @@ export default function AllOrdersList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={`${getDepartmentBadgeColor(displayDepartment)} text-white`}
-                      >
-                        {displayDepartment || 'Completed'}
-                      </Badge>
+                      <Tooltip className="inline-block w-auto">
+                        <TooltipTrigger asChild>
+                          <Badge
+                            className={`${getDepartmentBadgeColor(displayDepartment)} text-white cursor-default`}
+                          >
+                            {displayDepartment || 'Completed'}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent className="w-auto min-w-0 p-2">
+                          {order.updatedAt
+                            ? `${((Date.now() - new Date(order.updatedAt).getTime()) / (1000 * 60 * 60 * 24)).toFixed(1)} days in ${displayDepartment || 'Completed'}`
+                            : `In ${displayDepartment || 'Completed'}`}
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       {order.dueDate

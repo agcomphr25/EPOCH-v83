@@ -13,9 +13,10 @@ const TooltipProvider = ({ children }: TooltipProviderProps) => {
 
 interface TooltipProps {
   children: React.ReactNode;
+  className?: string;
 }
 
-const Tooltip = ({ children }: TooltipProps) => {
+const Tooltip = ({ children, className }: TooltipProps) => {
   const [isVisible, setIsVisible] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -42,7 +43,7 @@ const Tooltip = ({ children }: TooltipProps) => {
 
   return (
     <div
-      className="relative w-full"
+      className={cn('relative w-full', className)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >

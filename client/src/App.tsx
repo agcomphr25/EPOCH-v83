@@ -18,6 +18,7 @@ import DiscountManagement from './pages/DiscountManagement';
 import OrderEntry from './pages/OrderEntry';
 import OrderEntryTest from './components/OrderEntryTest';
 import OrdersList from './pages/OrdersList';
+import PastDueReport from './pages/PastDueReport';
 import OrdersListSimple from './pages/OrdersListSimple';
 import FeatureManager from './pages/FeatureManager';
 import StockModels from './pages/StockModels';
@@ -989,6 +990,7 @@ function App() {
                   <Route path="/awaiting-signature" component={AwaitingSignaturePage} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
+                  <Route path="/past-due-report" component={PastDueReport} />
 
                   {/* Department Queue Management Routes */}
                   <Route

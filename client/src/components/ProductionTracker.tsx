@@ -328,7 +328,7 @@ export default function ProductionTracker() {
                                           {order.orderId}
                                         </td>
                                         <td className="py-1.5 pr-4 font-mono text-xs">
-                                          {order.itemId}
+                                          {order.itemName || order.itemId}
                                         </td>
                                         <td className="py-1.5 text-muted-foreground">
                                           {order.currentDepartment || '—'}

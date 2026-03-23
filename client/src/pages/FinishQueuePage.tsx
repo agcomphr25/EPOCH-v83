@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Users,
-  ArrowUp,
   CheckSquare,
   Square,
   CheckCircle,
@@ -24,6 +23,8 @@ import {
   FileText,
   Zap,
   TrendingDown,
+  ClipboardCheck,
+  Clock,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -34,268 +35,259 @@ import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
-import { isOrderInDepartment } from '@/lib/departmentUtils';
 import KickbackReportModal from '@/components/KickbackReportModal';
 
+// ── Due-date bucket colours ───────────────────────────────────────────────────
+const BUCKET_STYLES: Record<
+  string,
+  { label: string; heading: string; base: string; selected: string }
+> = {
+  overdue: {
+    label: '🚨 Overdue',
+    heading: 'text-red-600 dark:text-red-400',
+    base: 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700',
+    selected:
+      'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700',
+  },
+  dueToday: {
+    label: '🔥 Due Today',
+    heading: 'text-orange-600 dark:text-orange-400',
+    base: 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700',
+    selected:
+      'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700',
+  },
+  dueTomorrow: {
+    label: '⚡ Due Tomorrow',
+    heading: 'text-yellow-600 dark:text-yellow-400',
+    base: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700',
+    selected:
+      'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700',
+  },
+  dueThisWeek: {
+    label: '📅 Due This Week',
+    heading: 'text-blue-600 dark:text-blue-400',
+    base: 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700',
+    selected:
+      'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700',
+  },
+  dueNextWeek: {
+    label: '📋 Due Next Week',
+    heading: 'text-green-600 dark:text-green-400',
+    base: 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700',
+    selected:
+      'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700',
+  },
+  futureDue: {
+    label: '📆 Future Orders',
+    heading: 'text-gray-600 dark:text-gray-400',
+    base: 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700',
+    selected:
+      'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700',
+  },
+  noDueDate: {
+    label: '❓ No Due Date',
+    heading: 'text-gray-500 dark:text-gray-400',
+    base: 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700',
+    selected:
+      'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700',
+  },
+};
+
+const BUCKET_ORDER = [
+  'overdue',
+  'dueToday',
+  'dueTomorrow',
+  'dueThisWeek',
+  'dueNextWeek',
+  'futureDue',
+  'noDueDate',
+] as const;
+type BucketKey = (typeof BUCKET_ORDER)[number];
+
+type CategorizedOrders = Record<BucketKey, any[]>;
+
+function categorizeOrders(orders: any[]): CategorizedOrders {
+  const today = new Date();
+  const todayNorm = new Date(today);
+  todayNorm.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(todayNorm.getTime() + 86400000);
+  const nextWeek = new Date(todayNorm.getTime() + 7 * 86400000);
+  const twoWeeks = new Date(todayNorm.getTime() + 14 * 86400000);
+
+  const result: CategorizedOrders = {
+    overdue: [],
+    dueToday: [],
+    dueTomorrow: [],
+    dueThisWeek: [],
+    dueNextWeek: [],
+    futureDue: [],
+    noDueDate: [],
+  };
+
+  for (const order of orders) {
+    if (!order.dueDate) {
+      result.noDueDate.push(order);
+      continue;
+    }
+    const d = new Date(order.dueDate);
+    d.setHours(0, 0, 0, 0);
+    if (d < todayNorm) result.overdue.push(order);
+    else if (d.getTime() === todayNorm.getTime()) result.dueToday.push(order);
+    else if (d.getTime() === tomorrow.getTime()) result.dueTomorrow.push(order);
+    else if (d <= nextWeek) result.dueThisWeek.push(order);
+    else if (d <= twoWeeks) result.dueNextWeek.push(order);
+    else result.futureDue.push(order);
+  }
+
+  const sortFn = (a: any, b: any) => {
+    if (a.dueDate && b.dueDate) {
+      const cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      if (cmp !== 0) return cmp;
+    }
+    return a.orderId.localeCompare(b.orderId);
+  };
+
+  for (const key of BUCKET_ORDER) {
+    if (key === 'noDueDate') {
+      result[key].sort((a, b) => a.orderId.localeCompare(b.orderId));
+    } else {
+      result[key].sort(sortFn);
+    }
+  }
+  return result;
+}
+
 export default function FinishQueuePage() {
-  // Multi-select state
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
-  const [selectAll, setSelectAll] = useState(false);
   const [selectedTechnician, setSelectedTechnician] = useState<string>('');
   const [salesOrderModalOpen, setSalesOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
-    null
-  );
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
-  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{
+    orderId: string;
+    department: string;
+  } | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  // Fetch Finish technicians from database
+  // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: finishTechniciansData = [] } = useQuery({
     queryKey: ['/api/employees/finish-technicians'],
     staleTime: 0,
     refetchOnMount: true,
   });
-
   const finishTechnicians = Array.isArray(finishTechniciansData)
     ? finishTechniciansData.map((tech: any) => tech.name)
     : [];
 
-  // Get orders in Finish department directly from server (includes both regular orders and P1 PO items)
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/department/Finish'],
   });
 
-  // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  // Helper function to check if an order has kickbacks
-  const hasKickbacks = (orderId: string) => {
-    return (allKickbacks as any[]).some(
-      (kickback: any) => kickback.orderId === orderId
-    );
-  };
-
-  // Helper function to get the most severe kickback status for an order
-  const getKickbackStatus = (orderId: string) => {
-    const orderKickbacks = (allKickbacks as any[]).filter(
-      (kickback: any) => kickback.orderId === orderId
-    );
-    if (orderKickbacks.length === 0) return null;
-
-    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
-    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-    const highestPriority = orderKickbacks.reduce(
-      (highest: string, kickback: any) => {
-        const currentIndex = priorities.indexOf(kickback.priority);
-        const highestIndex = priorities.indexOf(highest);
-        return currentIndex < highestIndex ? kickback.priority : highest;
-      },
-      'LOW'
-    );
-
-    return highestPriority;
-  };
-
-  // Function to handle kickback badge click
-  const handleKickbackClick = (orderId: string) => {
-    setLocation('/kickback-tracking');
-  };
-
-  // Function to handle sales order modal
-  const handleSalesOrderView = (orderId: string) => {
-    setSelectedOrderId(orderId);
-    setSalesOrderModalOpen(true);
-  };
-
-  // Server already filters to Finish department (includes regular orders + P1 PO items)
-  const finishOrders = useMemo(() => {
-    console.log(
-      '🔍 FINISH QUEUE DEBUG: Orders in Finish department from API:',
-      (allOrders as any[]).length || 0
-    );
-
-    // No client-side filtering needed - server returns only Finish department orders
-    console.log(
-      '✅ FINISH QUEUE: Displaying',
-      (allOrders as any[]).length,
-      'orders from Finish department (includes regular orders + P1 PO items)'
-    );
-
-    return allOrders as any[];
-  }, [allOrders]);
-
-  const orderIdsForTickets = useMemo(() => finishOrders.map((o: any) => o.orderId), [finishOrders]);
-  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
-
-  // Categorize orders by due date
-  const categorizedOrders = useMemo(() => {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const nextWeek = new Date(today);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-
-    const overdue = [];
-    const dueToday = [];
-    const dueTomorrow = [];
-    const dueThisWeek = [];
-    const dueNextWeek = [];
-    const futureDue = [];
-    const noDueDate = [];
-
-    for (const order of finishOrders) {
-      if (!order.dueDate) {
-        noDueDate.push(order);
-        continue;
-      }
-
-      const dueDate = new Date(order.dueDate);
-      dueDate.setHours(0, 0, 0, 0); // Normalize to start of day
-      const todayNorm = new Date(today);
-      todayNorm.setHours(0, 0, 0, 0);
-
-      if (dueDate < todayNorm) {
-        overdue.push(order);
-      } else if (dueDate.getTime() === todayNorm.getTime()) {
-        dueToday.push(order);
-      } else if (dueDate.getTime() === tomorrow.getTime()) {
-        dueTomorrow.push(order);
-      } else if (
-        dueDate <= new Date(todayNorm.getTime() + 7 * 24 * 60 * 60 * 1000)
-      ) {
-        dueThisWeek.push(order);
-      } else if (
-        dueDate <= new Date(todayNorm.getTime() + 14 * 24 * 60 * 60 * 1000)
-      ) {
-        dueNextWeek.push(order);
-      } else {
-        futureDue.push(order);
-      }
-    }
-
-    // Sort each category by due date and order ID
-    const sortFn = (a: any, b: any) => {
-      if (a.dueDate && b.dueDate) {
-        const dateCompare =
-          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        if (dateCompare !== 0) return dateCompare;
-      }
-      return a.orderId.localeCompare(b.orderId);
-    };
-
-    return {
-      overdue: overdue.sort(sortFn),
-      dueToday: dueToday.sort(sortFn),
-      dueTomorrow: dueTomorrow.sort(sortFn),
-      dueThisWeek: dueThisWeek.sort(sortFn),
-      dueNextWeek: dueNextWeek.sort(sortFn),
-      futureDue: futureDue.sort(sortFn),
-      noDueDate: noDueDate.sort((a, b) => a.orderId.localeCompare(b.orderId)),
-    };
-  }, [finishOrders]);
-
-  // Count orders in previous department (CNC)
-  const cncCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) => order.currentDepartment === 'CNC'
-    ).length;
-  }, [allOrders]);
-
-  // Count orders in next department (Paint)
-  const paintCount = useMemo(() => {
-    return (allOrders as any[]).filter(
-      (order: any) => order.currentDepartment === 'Paint'
-    ).length;
-  }, [allOrders]);
-
-  // Get stock models for display names
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
   });
 
+  // ── Derived collections ────────────────────────────────────────────────────
+  const finishOrders = useMemo(() => allOrders as any[], [allOrders]);
+
+  const awaitingOrders = useMemo(
+    () => finishOrders.filter((o: any) => !o.finishAcceptedAt),
+    [finishOrders]
+  );
+  const acceptedOrders = useMemo(
+    () => finishOrders.filter((o: any) => !!o.finishAcceptedAt),
+    [finishOrders]
+  );
+
+  const awaitingCategorized = useMemo(() => categorizeOrders(awaitingOrders), [awaitingOrders]);
+  const acceptedCategorized = useMemo(() => categorizeOrders(acceptedOrders), [acceptedOrders]);
+
+  const cncCount = useMemo(
+    () => (allOrders as any[]).filter((o: any) => o.currentDepartment === 'CNC').length,
+    [allOrders]
+  );
+  const paintCount = useMemo(
+    () => (allOrders as any[]).filter((o: any) => o.currentDepartment === 'Paint').length,
+    [allOrders]
+  );
+
+  const orderIdsForTickets = useMemo(
+    () => finishOrders.map((o: any) => o.orderId),
+    [finishOrders]
+  );
+  const { data: ticketMap } = useOrderTicketCounts(orderIdsForTickets);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const getModelDisplayName = (modelId: string) => {
     if (!modelId) return 'Unknown Model';
     const model = (stockModels as any[]).find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
   };
 
-  // Multi-select functions
+  const hasKickbacks = (orderId: string) =>
+    (allKickbacks as any[]).some((k: any) => k.orderId === orderId);
+
+  const getKickbackStatus = (orderId: string) => {
+    const ks = (allKickbacks as any[]).filter((k: any) => k.orderId === orderId);
+    if (ks.length === 0) return null;
+    const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+    return ks.reduce(
+      (h: string, k: any) =>
+        priorities.indexOf(k.priority) < priorities.indexOf(h) ? k.priority : h,
+      'LOW'
+    );
+  };
+
+  // ── Multi-select (only for accepted orders → progress to Finish QC) ────────
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(orderId)) {
-        newSet.delete(orderId);
-      } else {
-        newSet.add(orderId);
-      }
-      return newSet;
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
     });
   };
 
-  const handleSelectAll = () => {
-    if (selectedOrders.size === finishOrders.length) {
+  const handleSelectAllAccepted = () => {
+    if (selectedOrders.size === acceptedOrders.length) {
       setSelectedOrders(new Set());
-      setSelectAll(false);
     } else {
-      setSelectedOrders(
-        new Set(finishOrders.map((order: any) => order.orderId))
-      );
-      setSelectAll(true);
+      setSelectedOrders(new Set(acceptedOrders.map((o: any) => o.orderId)));
     }
   };
 
-  const handleClearSelection = () => {
-    setSelectedOrders(new Set());
-    setSelectAll(false);
-  };
+  const handleClearSelection = () => setSelectedOrders(new Set());
 
-  // Move orders to Finish QC with technician assignment
-  const moveToFinishQCMutation = useMutation({
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const acceptMutation = useMutation({
     mutationFn: async ({
-      orderIds,
-      technician,
+      orderId,
+      technicianName,
     }: {
-      orderIds: string[];
-      technician: string;
-    }) => {
-      const response = await apiRequest('/api/orders/update-department', {
+      orderId: string;
+      technicianName: string;
+    }) =>
+      apiRequest(`/api/orders/${orderId}/finish-accept`, {
         method: 'POST',
-        body: JSON.stringify({
-          orderIds: orderIds,
-          department: 'Finish QC',
-          status: 'IN_PROGRESS',
-          assignedTechnician: technician,
-        }),
-      });
-      return response;
+        body: JSON.stringify({ technicianName }),
+      }),
+    onSuccess: (_data, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department/Finish'] });
+      toast.success(`Order accepted`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department/Finish'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Finish QC'],
-      });
-      toast.success(
-        `${selectedOrders.size} orders moved to Finish QC (${selectedTechnician})`
-      );
-      setSelectedOrders(new Set());
-      setSelectAll(false);
-      setSelectedTechnician('');
-    },
-    onError: () => {
-      toast.error('Failed to move orders to Finish QC');
+    onError: (err: any, { orderId }) => {
+      const msg = err?.message || 'Failed to accept order';
+      toast.error(msg);
     },
   });
 
-  // Progress mutation for moving orders to next department (Finish QC)
   const progressMutation = useMutation({
     mutationFn: async ({
       orderIds,
@@ -303,110 +295,282 @@ export default function FinishQueuePage() {
     }: {
       orderIds: string[];
       technician: string;
-    }) => {
-      const response = await apiRequest('/api/orders/update-department', {
+    }) =>
+      apiRequest('/api/orders/update-department', {
         method: 'POST',
         body: JSON.stringify({
-          orderIds: orderIds,
+          orderIds,
           department: 'Finish QC',
           status: 'IN_PROGRESS',
           assignedTechnician: technician,
         }),
-      });
-      return response;
-    },
-    onSuccess: () => {
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department/Finish'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/department', 'Finish QC'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department/Finish'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/department', 'Finish QC'],
-      });
-      toast.success(`${selectedOrders.size} orders progressed to Finish QC`);
+
+      const failed = data?.failedOrders ?? [];
+      const notAccepted = failed.filter((f: any) => f.reason === 'FINISH_NOT_ACCEPTED');
+      if (notAccepted.length > 0) {
+        toast.error(
+          `${notAccepted.length} order(s) blocked — must be accepted before progressing`
+        );
+      } else {
+        toast.success(`${selectedOrders.size} orders progressed to Finish QC`);
+      }
       setSelectedOrders(new Set());
-      setSelectAll(false);
       setSelectedTechnician('');
     },
-    onError: () => {
-      toast.error('Failed to progress orders');
-    },
+    onError: () => toast.error('Failed to progress orders'),
   });
 
-  const handleMoveToFinishQC = () => {
+  const handleProgressOrders = () => {
     if (selectedOrders.size === 0) {
-      toast.error('Please select orders to move');
+      toast.error('Please select orders to progress');
       return;
     }
     if (!selectedTechnician) {
       toast.error('Please select a technician');
       return;
     }
-    moveToFinishQCMutation.mutate({
+    progressMutation.mutate({
       orderIds: Array.from(selectedOrders),
       technician: selectedTechnician,
     });
   };
 
-
-  // Handle progress orders function
-  const handleProgressOrders = () => {
-    if (selectedOrders.size === 0) {
-      toast.error('Please select orders to progress');
-      return;
-    }
-
-    progressMutation.mutate({
-      orderIds: Array.from(selectedOrders),
-      technician: selectedTechnician || '',
-    });
-  };
-
-  // Auto-select order when scanned
+  // ── Scanner / search ───────────────────────────────────────────────────────
   const handleOrderScanned = (orderId: string) => {
-    // Check if the order exists in the current queue
-    const orderExists = finishOrders.some(
-      (order: any) => order.orderId === orderId
-    );
-    if (orderExists) {
+    const exists = finishOrders.some((o: any) => o.orderId === orderId);
+    if (exists) {
       setSelectedOrders((prev) => new Set([...Array.from(prev), orderId]));
-      toast.success(`Order ${orderId} selected automatically`);
+      toast.success(`Order ${orderId} selected`);
     } else {
-      toast.error(`Order ${orderId} is not in the Finish department`);
+      toast.error(`Order ${orderId} is not in Finish`);
     }
   };
 
-  // Handle order search selection
   const handleOrderSearchSelect = (order: any) => {
-    const orderExists = finishOrders.some(
-      (o: any) => o.orderId === order.orderId
-    );
-    if (orderExists) {
+    const exists = finishOrders.some((o: any) => o.orderId === order.orderId);
+    if (exists) {
       setHighlightedOrderId(order.orderId);
-      // Auto-scroll to the highlighted order
       setTimeout(() => {
-        const element = document.getElementById(`order-${order.orderId}`);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        document.getElementById(`order-${order.orderId}`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
       }, 100);
-      toast.success(`Order ${order.orderId} highlighted in the list`);
+      toast.success(`Order ${order.orderId} highlighted`);
     } else {
-      toast.error(`Order ${order.orderId} is not in the Finish department`);
+      toast.error(`Order ${order.orderId} is not in Finish`);
     }
   };
 
+  // ── Card renderer (shared between both sections) ───────────────────────────
+  const renderOrderCard = (order: any, bucketStyle: (typeof BUCKET_STYLES)[string], mode: 'awaiting' | 'accepted') => {
+    const isSelected = selectedOrders.has(order.orderId);
+    const isHighlighted = highlightedOrderId === order.orderId;
+    const kickbackStatus = getKickbackStatus(order.orderId);
+
+    const cardClass = isHighlighted
+      ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
+      : isSelected
+      ? bucketStyle.selected
+      : bucketStyle.base;
+
+    return (
+      <div key={order.orderId} className="relative">
+        {mode === 'accepted' && (
+          <div className="absolute top-2 left-2 z-10">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => handleSelectOrder(order.orderId)}
+              className="bg-white dark:bg-gray-800 border-2"
+            />
+          </div>
+        )}
+
+        <Card
+          id={`order-${order.orderId}`}
+          className={`${cardClass} ${mode === 'accepted' ? 'pl-8' : ''}`}
+        >
+          <CardContent className="p-3">
+            {/* Header row */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold">{getDisplayOrderId(order)}</span>
+                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
+                {(order.urgency === 'high' || order.urgency === 'critical') &&
+                  order.isManualUrgency && (
+                    <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                      <Zap className="w-3 h-3" />
+                      URGENT!!!
+                    </Badge>
+                  )}
+                {order.fbOrderNumber && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
+                  >
+                    FB: {order.fbOrderNumber}
+                  </Badge>
+                )}
+              </div>
+              {order.dueDate ? (
+                <Badge
+                  variant={mode === 'awaiting' && new Date(order.dueDate) < new Date() ? 'destructive' : 'outline'}
+                  className="text-xs"
+                >
+                  Due: {format(new Date(order.dueDate), 'M/d')}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">No Due Date</Badge>
+              )}
+            </div>
+
+            {/* Customer / model */}
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+              {order.customerName}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              {getModelDisplayName(order.modelId)}
+            </div>
+
+            {/* Accepted-at banner (accepted section only) */}
+            {mode === 'accepted' && order.finishAcceptedAt && (
+              <div className="flex items-center gap-1.5 mb-2 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded px-2 py-1 border border-green-200 dark:border-green-800">
+                <CheckCircle className="w-3 h-3 shrink-0" />
+                <span className="font-medium">{order.finishAcceptedBy}</span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  · {format(new Date(order.finishAcceptedAt), 'M/d h:mm a')}
+                </span>
+              </div>
+            )}
+
+            {/* Action row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {order.isPaid && (
+                <Badge variant="secondary" className="text-xs">PAID</Badge>
+              )}
+              <Badge
+                variant="outline"
+                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
+                onClick={() => {
+                  setSelectedOrderId(order.orderId);
+                  setSalesOrderModalOpen(true);
+                }}
+              >
+                <FileText className="w-3 h-3 mr-1" />
+                Sales Order
+              </Badge>
+
+              {/* Kickback button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOrderForKickback({ orderId: order.orderId, department: 'Finish' });
+                  setKickbackModalOpen(true);
+                }}
+                className="h-6 px-2 text-xs"
+              >
+                <TrendingDown className="h-3 w-3 mr-1" />
+                Report Kickback
+              </Button>
+
+              {hasKickbacks(order.orderId) && (
+                <Badge
+                  variant="destructive"
+                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
+                    kickbackStatus === 'CRITICAL'
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : kickbackStatus === 'HIGH'
+                      ? 'bg-orange-600 hover:bg-orange-700'
+                      : kickbackStatus === 'MEDIUM'
+                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                      : 'bg-gray-600 hover:bg-gray-700'
+                  }`}
+                  onClick={() => setLocation('/kickback-tracking')}
+                >
+                  <AlertTriangle className="w-3 h-3 mr-1" />
+                  Kickback
+                </Badge>
+              )}
+
+              {/* ACCEPT WORK button — awaiting section only */}
+              {mode === 'awaiting' && (
+                <Button
+                  size="sm"
+                  className="h-7 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white ml-auto"
+                  disabled={!selectedTechnician || acceptMutation.isPending}
+                  onClick={() => {
+                    if (!selectedTechnician) {
+                      toast.error('Select a technician first');
+                      return;
+                    }
+                    acceptMutation.mutate({
+                      orderId: order.orderId,
+                      technicianName: selectedTechnician,
+                    });
+                  }}
+                >
+                  <ClipboardCheck className="h-3 w-3 mr-1" />
+                  Accept Work
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // ── Section renderer (shared header + due-date buckets) ───────────────────
+  const renderSection = (
+    categorized: CategorizedOrders,
+    mode: 'awaiting' | 'accepted'
+  ) => {
+    const hasAny = BUCKET_ORDER.some((k) => categorized[k].length > 0);
+    if (!hasAny) return null;
+
+    return (
+      <div className="space-y-6">
+        {BUCKET_ORDER.map((bucket) => {
+          const orders = categorized[bucket];
+          if (orders.length === 0) return null;
+          const style = BUCKET_STYLES[bucket];
+          return (
+            <div key={bucket}>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className={`text-lg font-semibold ${style.heading}`}>
+                  {style.label} ({orders.length})
+                </h3>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {orders.map((order: any) => renderOrderCard(order, style, mode))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Page header */}
       <div className="flex items-center gap-2 mb-6">
         <Paintbrush className="h-6 w-6" />
         <h1 className="text-3xl font-bold">Finish Department Manager</h1>
       </div>
 
-      {/* Barcode Scanner at top */}
+      {/* Barcode Scanner */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
-      {/* Order Search Box */}
+      {/* Order Search */}
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
@@ -430,8 +594,7 @@ export default function FinishQueuePage() {
       </Card>
 
       {/* Department Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Previous Department Count */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-orange-700 dark:text-orange-300 flex items-center gap-2">
@@ -449,7 +612,6 @@ export default function FinishQueuePage() {
           </CardContent>
         </Card>
 
-        {/* Next Department Count */}
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
@@ -468,927 +630,144 @@ export default function FinishQueuePage() {
         </Card>
       </div>
 
-      {/* Current Finish Orders */}
+      {/* ── Technician selector (global, used by both Accept + Progress) ─────── */}
       <Card>
-        <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Paintbrush className="h-5 w-5 text-blue-600" />
-              <span>Finish Orders</span>
-              <Badge variant="outline" className="ml-2 border-blue-300">
-                {finishOrders.length} Orders
-              </Badge>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* Technician Selection */}
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-gray-600" />
-                <Select
-                  value={selectedTechnician}
-                  onValueChange={setSelectedTechnician}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Select Technician" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {finishTechnicians.map((tech) => (
-                      <SelectItem key={tech} value={tech}>
-                        {tech}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Multi-select Controls */}
-              {finishOrders.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSelectAll}
-                    className="flex items-center gap-2"
-                  >
-                    {selectedOrders.size === finishOrders.length ? (
-                      <CheckSquare className="h-4 w-4" />
-                    ) : (
-                      <Square className="h-4 w-4" />
-                    )}
-                    {selectedOrders.size === finishOrders.length
-                      ? 'Deselect All'
-                      : 'Select All'}
-                  </Button>
-
-                  {selectedOrders.size > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearSelection}
-                    >
-                      Clear ({selectedOrders.size})
-                    </Button>
-                  )}
-
-                  {selectedOrders.size > 0 && (
-                    <div className="flex items-center gap-2">
-                      {selectedTechnician && (
-                        <Button
-                          onClick={handleProgressOrders}
-                          disabled={progressMutation.isPending}
-                          className="bg-blue-600 hover:bg-blue-700"
-                          size="sm"
-                        >
-                          <ArrowRight className="h-4 w-4 mr-1" />
-                          Move to Finish QC ({selectedOrders.size})
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardTitle>
-          <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
-            Assigned to {selectedTechnician || 'No technician selected'} •
-            Select orders and route to next department
-          </p>
-        </CardHeader>
         <CardContent className="p-4">
-          {finishOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              No orders currently in Finish department
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Overdue Orders - Critical Priority */}
-              {categorizedOrders.overdue.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
-                      🚨 Overdue ({categorizedOrders.overdue.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.overdue.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-red-100 dark:bg-red-800/40 border-red-400 dark:border-red-600 ring-2 ring-red-300 dark:ring-red-700'
-                                : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              {order.dueDate && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  Due: {format(new Date(order.dueDate), 'M/d')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Finish'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 px-2 text-xs"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3 mr-1" />
-                                Report Kickback
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Due Today - High Priority */}
-              {categorizedOrders.dueToday.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-orange-600 dark:text-orange-400">
-                      🔥 Due Today ({categorizedOrders.dueToday.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.dueToday.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-orange-100 dark:bg-orange-800/40 border-orange-400 dark:border-orange-600 ring-2 ring-orange-300 dark:ring-orange-700'
-                                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              {order.dueDate && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  Due: {format(new Date(order.dueDate), 'M/d')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Finish'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 px-2 text-xs"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3 mr-1" />
-                                Report Kickback
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Due Tomorrow - Medium Priority */}
-              {categorizedOrders.dueTomorrow.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">
-                      ⚡ Due Tomorrow ({categorizedOrders.dueTomorrow.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.dueTomorrow.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-yellow-100 dark:bg-yellow-800/40 border-yellow-400 dark:border-yellow-600 ring-2 ring-yellow-300 dark:ring-yellow-700'
-                                : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              {order.dueDate && (
-                                <Badge variant="outline" className="text-xs">
-                                  Due: {format(new Date(order.dueDate), 'M/d')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Due This Week - Normal Priority */}
-              {categorizedOrders.dueThisWeek.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                      📅 Due This Week ({categorizedOrders.dueThisWeek.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.dueThisWeek.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-blue-100 dark:bg-blue-800/40 border-blue-400 dark:border-blue-600 ring-2 ring-blue-300 dark:ring-blue-700'
-                                : 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              {order.dueDate && (
-                                <Badge variant="outline" className="text-xs">
-                                  Due: {format(new Date(order.dueDate), 'M/d')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Due Next Week - Lower Priority */}
-              {categorizedOrders.dueNextWeek.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">
-                      📋 Due Next Week ({categorizedOrders.dueNextWeek.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.dueNextWeek.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-green-100 dark:bg-green-800/40 border-green-400 dark:border-green-600 ring-2 ring-green-300 dark:ring-green-700'
-                                : 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              {order.dueDate && (
-                                <Badge variant="outline" className="text-xs">
-                                  Due: {format(new Date(order.dueDate), 'M/d')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Future Due - Lowest Priority */}
-              {categorizedOrders.futureDue.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400">
-                      📆 Future Orders ({categorizedOrders.futureDue.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.futureDue.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
-                                : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              {order.dueDate && (
-                                <Badge variant="outline" className="text-xs">
-                                  Due: {format(new Date(order.dueDate), 'M/d')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* No Due Date */}
-              {categorizedOrders.noDueDate.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-gray-500 dark:text-gray-400">
-                      ❓ No Due Date ({categorizedOrders.noDueDate.length})
-                    </h3>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {categorizedOrders.noDueDate.map((order: any) => (
-                      <div key={order.id} className="relative">
-                        <div className="absolute top-2 left-2 z-10">
-                          <Checkbox
-                            checked={selectedOrders.has(order.orderId)}
-                            onCheckedChange={() =>
-                              handleSelectOrder(order.orderId)
-                            }
-                            className="bg-white dark:bg-gray-800 border-2"
-                          />
-                        </div>
-                        <Card
-                          id={`order-${order.orderId}`}
-                          className={`${
-                            highlightedOrderId === order.orderId
-                              ? 'border-yellow-400 bg-yellow-50 dark:border-yellow-600 dark:bg-yellow-900/20 ring-2 ring-yellow-300 shadow-lg'
-                              : selectedOrders.has(order.orderId)
-                                ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-400 dark:border-gray-600 ring-2 ring-gray-300 dark:ring-gray-700'
-                                : 'bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700'
-                          } pl-8`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-semibold">
-                                  {getDisplayOrderId(order)}
-                                </span>
-                                <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
-                                    <Zap className="w-3 h-3" />
-                                    URGENT!!!
-                                  </Badge>
-                                )}
-                                {order.fbOrderNumber && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs px-1 py-0 bg-blue-50 dark:bg-blue-900/20 border-blue-300"
-                                  >
-                                    FB: {order.fbOrderNumber}
-                                  </Badge>
-                                )}
-                              </div>
-                              <Badge variant="secondary" className="text-xs">
-                                No Due Date
-                              </Badge>
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                              {order.customerName}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                              {getModelDisplayName(order.modelId)}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {order.isPaid && (
-                                <Badge variant="secondary" className="text-xs">
-                                  PAID
-                                </Badge>
-                              )}
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={() =>
-                                  handleSalesOrderView(order.orderId)
-                                }
-                              >
-                                <FileText className="w-3 h-3 mr-1" />
-                                Sales Order
-                              </Badge>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Users className="h-4 w-4 text-gray-600 shrink-0" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 shrink-0">
+              Active Technician:
+            </span>
+            <Select value={selectedTechnician} onValueChange={setSelectedTechnician}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select Technician" />
+              </SelectTrigger>
+              <SelectContent>
+                {finishTechnicians.map((tech) => (
+                  <SelectItem key={tech} value={tech}>
+                    {tech}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!selectedTechnician && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Select a technician to enable Accept Work
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Floating Progression Button */}
+      {finishOrders.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12 text-gray-500 dark:text-gray-400">
+            No orders currently in Finish department
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* ── SECTION A: AWAITING ACCEPTANCE ──────────────────────────────── */}
+          <Card>
+            <CardHeader className="bg-amber-50 dark:bg-amber-900/20">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                  <span>Awaiting Acceptance</span>
+                  <Badge
+                    variant="outline"
+                    className="ml-2 border-amber-300 text-amber-700 dark:text-amber-300"
+                  >
+                    {awaitingOrders.length} Orders
+                  </Badge>
+                </div>
+              </CardTitle>
+              <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                Select a technician above then click <strong>Accept Work</strong> on each order to
+                claim ownership before starting
+              </p>
+            </CardHeader>
+            <CardContent className="p-4">
+              {awaitingOrders.length === 0 ? (
+                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                  All orders have been accepted — great work!
+                </div>
+              ) : (
+                renderSection(awaitingCategorized, 'awaiting')
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION B: ACCEPTED / IN PROGRESS ───────────────────────────── */}
+          <Card>
+            <CardHeader className="bg-green-50 dark:bg-green-900/20">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span>Accepted / In Progress</span>
+                  <Badge
+                    variant="outline"
+                    className="ml-2 border-green-300 text-green-700 dark:text-green-300"
+                  >
+                    {acceptedOrders.length} Orders
+                  </Badge>
+                </div>
+
+                {/* Bulk controls for accepted orders */}
+                {acceptedOrders.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllAccepted}
+                      className="flex items-center gap-2"
+                    >
+                      {selectedOrders.size === acceptedOrders.length ? (
+                        <CheckSquare className="h-4 w-4" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                      {selectedOrders.size === acceptedOrders.length
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </Button>
+                    {selectedOrders.size > 0 && (
+                      <Button variant="outline" size="sm" onClick={handleClearSelection}>
+                        Clear ({selectedOrders.size})
+                      </Button>
+                    )}
+                    {selectedOrders.size > 0 && selectedTechnician && (
+                      <Button
+                        onClick={handleProgressOrders}
+                        disabled={progressMutation.isPending}
+                        className="bg-blue-600 hover:bg-blue-700"
+                        size="sm"
+                      >
+                        <ArrowRight className="h-4 w-4 mr-1" />
+                        Move to Finish QC ({selectedOrders.size})
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardTitle>
+              <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                Select orders and click <strong>Move to Finish QC</strong> when complete
+              </p>
+            </CardHeader>
+            <CardContent className="p-4">
+              {acceptedOrders.length === 0 ? (
+                <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                  No accepted orders yet — accept orders above to begin work
+                </div>
+              ) : (
+                renderSection(acceptedCategorized, 'accepted')
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Floating progression bar (accepted orders only) */}
       {selectedOrders.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="container mx-auto p-4">
@@ -1396,8 +775,8 @@ export default function FinishQueuePage() {
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <span className="font-medium text-green-800 dark:text-green-200">
-                  {selectedOrders.size} order
-                  {selectedOrders.size > 1 ? 's' : ''} selected for progression
+                  {selectedOrders.size} order{selectedOrders.size > 1 ? 's' : ''} selected for
+                  progression
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1411,13 +790,15 @@ export default function FinishQueuePage() {
                 <Button
                   onClick={handleProgressOrders}
                   disabled={
-                    selectedOrders.size === 0 || progressMutation.isPending || !selectedTechnician
+                    selectedOrders.size === 0 ||
+                    progressMutation.isPending ||
+                    !selectedTechnician
                   }
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
                   {progressMutation.isPending
-                    ? 'Progressing...'
+                    ? 'Progressing…'
                     : `Progress to Finish QC (${selectedOrders.size})`}
                 </Button>
               </div>
@@ -1426,14 +807,12 @@ export default function FinishQueuePage() {
         </div>
       )}
 
-      {/* Sales Order Modal */}
+      {/* Modals */}
       <SalesOrderModal
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
       />
-
-      {/* Kickback Report Modal */}
       <KickbackReportModal
         open={kickbackModalOpen}
         onOpenChange={(open) => {

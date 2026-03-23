@@ -10375,7 +10375,9 @@ export class DatabaseStorage implements IStorage {
       'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
       'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
-      'materialCanonical', 'sourceSnapshot'
+      'materialCanonical', 'sourceSnapshot',
+      'finishAcceptedAt', 'finishAcceptedBy',
+      'status', 'assignedTechnician', 'finishCompletedAt',
     ]);
     const safeData: Record<string, any> = {};
     for (const [key, value] of Object.entries(data as any)) {

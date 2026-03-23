@@ -1,0 +1,211 @@
+COPY-PASTE IMPLEMENTATION PROMPT — FINISH ACCEPTANCE (PROMPT 2)
+You are implementing a NEW DOMAIN FEATURE inside EPOCH:
+
+🔥 FINISHER ACCEPTANCE LAYER
+
+This must be implemented CLEANLY, ADDITIVELY, and WITHOUT breaking existing workflows.
+
+-----------------------------------
+CORE RULE (NON-NEGOTIABLE)
+-----------------------------------
+
+An order in Finish CANNOT be progressed to Finish QC unless:
+
+finishAcceptedAt IS NOT NULL
+
+This is the enforcement of accountability.
+
+-----------------------------------
+STEP 1 — DATABASE (STRICT)
+-----------------------------------
+
+Update BOTH tables:
+
+- allOrders
+- productionOrders
+
+Add columns:
+
+finishAcceptedAt → timestamp, nullable
+finishAcceptedBy → text, nullable
+
+DO NOT:
+- Add defaults
+- Backfill automatically (handle separately if needed)
+
+-----------------------------------
+STEP 2 — STORAGE LAYER FIX (CRITICAL BUG)
+-----------------------------------
+
+In:
+
+server/storage.ts → updateProductionOrder()
+
+Add:
+
+finishAcceptedAt
+finishAcceptedBy
+
+to the validColumns whitelist
+
+⚠️ This is REQUIRED or updates will silently fail.
+
+-----------------------------------
+STEP 3 — NEW ENDPOINT (AUTHORITATIVE ACTION)
+-----------------------------------
+
+Create:
+
+POST /api/orders/:orderId/finish-accept
+
+Behavior:
+
+1. Fetch order
+2. Validate:
+   - currentDepartment === 'Finish'
+   - finishAcceptedAt IS NULL (prevent double accept)
+
+3. Update:
+   - finishAcceptedAt = NOW()
+   - finishAcceptedBy = technicianName OR logged-in user
+
+4. Update open transition row:
+   WHERE:
+     entityId = orderId
+     exitedAt IS NULL
+
+   Set metadata:
+
+   {
+     acceptedAt: timestamp,
+     acceptedByUserId: userId
+   }
+
+5. Write audit log (field change)
+
+6. Return updated order
+
+-----------------------------------
+STEP 4 — DEPARTURE GUARD (CRITICAL)
+-----------------------------------
+
+In:
+
+POST /api/orders/update-department
+
+Add logic BEFORE allowing transition:
+
+IF:
+  fromDepartment === 'Finish'
+  AND finishAcceptedAt IS NULL
+
+THEN:
+  return 400 error:
+
+  "Order must be accepted before progressing from Finish"
+
+DO NOT:
+- Bypass this under any condition
+- Apply to other departments (Finish ONLY)
+
+-----------------------------------
+STEP 5 — FRONTEND (FinishQueuePage.tsx)
+-----------------------------------
+
+Refactor UI into TWO STATES:
+
+-----------------------------------
+A) AWAITING ACCEPTANCE
+-----------------------------------
+
+Filter:
+  finishAcceptedAt === null
+
+Display:
+  - Order card
+  - Due date grouping (keep existing buckets)
+  - Accept Work button
+
+Behavior:
+  - Requires technician selected OR uses logged-in user
+  - Calls POST /finish-accept
+  - On success → immediately moves to Accepted section
+
+-----------------------------------
+B) ACCEPTED / IN PROGRESS
+-----------------------------------
+
+Filter:
+  finishAcceptedAt !== null
+
+Display:
+  - Accepted timestamp
+  - Technician badge
+  - Normal controls
+
+RULE:
+  "Move to Finish QC" button ONLY enabled here
+
+-----------------------------------
+STEP 6 — DO NOT CHANGE (IMPORTANT)
+-----------------------------------
+
+DO NOT MODIFY:
+
+- currentDepartment logic
+- status logic (leave IN_PROGRESS untouched)
+- department sequencing
+- existing transition entry/exit behavior
+
+This feature is ADDITIVE ONLY.
+
+-----------------------------------
+STEP 7 — DOMAIN TRUTH ALIGNMENT
+-----------------------------------
+
+Clarify internally:
+
+- currentDepartment = location
+- finishAcceptedAt = ownership
+- transitions table = timeline truth
+
+These are DIFFERENT truths. Do not merge them.
+
+-----------------------------------
+STEP 8 — EDGE CASE HANDLING
+-----------------------------------
+
+Handle:
+
+1. Double-click Accept
+   → ignore or return safe error
+
+2. Orders already accepted
+   → no-op
+
+3. Orders already in Finish before deploy
+   → remain unaccepted (do NOT auto-fill)
+
+-----------------------------------
+STEP 9 — OUTPUT
+-----------------------------------
+
+Return:
+
+1. Exact files modified
+2. Code diffs
+3. Any assumptions made
+4. Confirmation:
+   "Finish acceptance is now enforced at the system level"
+
+-----------------------------------
+SUCCESS CRITERIA
+-----------------------------------
+
+✔ Orders cannot leave Finish without acceptance  
+✔ Acceptance is tied to user + timestamp  
+✔ UI clearly separates unclaimed vs claimed work  
+✔ Audit trail captures acceptance event  
+✔ No regression in other departments  
+
+This is a SYSTEM-LEVEL accountability feature — implement carefully.

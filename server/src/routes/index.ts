@@ -7388,6 +7388,138 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     });
   });
 
+  // ── Finish Acceptance endpoint ──
+  // POST /api/orders/:orderId/finish-accept
+  // Finisher explicitly accepts ownership of a Finish-department order.
+  // Sets finishAcceptedAt + finishAcceptedBy, stamps acceptance into the open
+  // department-transition row metadata, and records an audit field-change.
+  app.post('/api/orders/:orderId/finish-accept', async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { technicianName } = req.body;
+
+      if (!technicianName || typeof technicianName !== 'string' || !technicianName.trim()) {
+        return res.status(400).json({ error: 'technicianName is required' });
+      }
+
+      const { storage } = await import('../../storage');
+
+      // Locate the order across all three order types
+      let currentOrder: any = null;
+      let isProductionOrder = false;
+      let isFinalized = false;
+
+      const isProductionOrderId =
+        (orderId.startsWith('PO-') || orderId.startsWith('P1-')) &&
+        orderId.split('-').length >= 4;
+
+      if (isProductionOrderId) {
+        try {
+          currentOrder = await storage.getProductionOrderByOrderId(orderId);
+          isProductionOrder = !!currentOrder;
+        } catch (_) {}
+      }
+      if (!currentOrder) {
+        currentOrder = await storage.getFinalizedOrderById(orderId);
+        isFinalized = !!currentOrder;
+      }
+      if (!currentOrder) {
+        currentOrder = await storage.getOrderDraft(orderId);
+      }
+
+      if (!currentOrder) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Guard: must be in Finish
+      if (currentOrder.currentDepartment !== 'Finish') {
+        return res.status(400).json({
+          error: `Order is in ${currentOrder.currentDepartment || 'unknown'}, not Finish`,
+        });
+      }
+
+      // Guard: prevent double-accept
+      if (currentOrder.finishAcceptedAt) {
+        return res.status(409).json({
+          error: 'Order has already been accepted',
+          acceptedAt: currentOrder.finishAcceptedAt,
+          acceptedBy: currentOrder.finishAcceptedBy,
+        });
+      }
+
+      const now = new Date();
+      const acceptedBy = technicianName.trim();
+      const updateData = { finishAcceptedAt: now, finishAcceptedBy: acceptedBy };
+
+      // Persist to correct table
+      let updatedOrder: any;
+      if (isProductionOrder) {
+        updatedOrder = await storage.updateProductionOrder((currentOrder as any).id, {
+          ...updateData,
+          updatedAt: now,
+        } as any);
+      } else if (isFinalized) {
+        updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
+      } else {
+        updatedOrder = await storage.updateOrderDraft(orderId, { ...updateData, updatedAt: now });
+      }
+
+      // Stamp acceptance into the open department-transition row metadata
+      try {
+        const { db: dbInstance } = await import('../../db');
+        const { sql: sqlTag, eq: eqOp, and: andOp, isNull: isNullOp } = await import('drizzle-orm');
+        const { orderDepartmentTransitions: odt } = await import('../../schema');
+        await dbInstance
+          .update(odt)
+          .set({
+            metadata: sqlTag`COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
+              acceptedAt: now.toISOString(),
+              acceptedByUserId: req.user?.id ?? null,
+              acceptedByName: acceptedBy,
+            })}::jsonb`,
+          })
+          .where(
+            andOp(
+              eqOp(odt.entityId, orderId),
+              isNullOp(odt.exitedAt)
+            )
+          );
+      } catch (transitionErr) {
+        console.warn('[finish-accept] transition metadata update failed:', transitionErr);
+      }
+
+      // Audit field-change log
+      try {
+        const actor = {
+          id: req.user?.id,
+          username: req.user?.username || acceptedBy,
+          role: req.user?.role || 'technician',
+        };
+        await auditService.logFieldChanges(
+          'p1_order',
+          orderId,
+          currentOrder,
+          updatedOrder || { ...currentOrder, ...updateData },
+          actor,
+          { source: 'finish-accept' }
+        );
+      } catch (auditErr) {
+        console.warn('[finish-accept] audit log failed:', auditErr);
+      }
+
+      console.log(`✅ [finish-accept] ${orderId} accepted by ${acceptedBy}`);
+      return res.json({
+        success: true,
+        orderId,
+        finishAcceptedAt: now,
+        finishAcceptedBy: acceptedBy,
+      });
+    } catch (err) {
+      console.error('[finish-accept] error:', err);
+      return res.status(500).json({ error: 'Failed to accept order' });
+    }
+  });
+
   // Update order department endpoint with progress logic
   app.post('/api/orders/update-department', async (req, res) => {
     try {
@@ -7463,6 +7595,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // Skip no-op moves (prevents empty audit events, zero-duration transitions, timeline noise)
           if (currentOrder.currentDepartment === department) {
             console.log(`⏭️ Skipping ${orderId}: already in ${department}`);
+            continue;
+          }
+
+          // ── FINISH ACCEPTANCE GUARD ──
+          // An order cannot leave Finish unless a finisher has explicitly accepted it.
+          if (
+            currentOrder.currentDepartment === 'Finish' &&
+            !currentOrder.finishAcceptedAt
+          ) {
+            console.warn(`🚫 [finish-guard] ${orderId}: cannot leave Finish without acceptance`);
+            failedOrders.push({ orderId, reason: 'FINISH_NOT_ACCEPTED' });
             continue;
           }
 

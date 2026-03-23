@@ -994,9 +994,11 @@ export default function AllOrdersPage() {
                     <RadixTooltip.Provider delayDuration={200}>
                       <RadixTooltip.Root>
                         <RadixTooltip.Trigger asChild>
-                          <Badge variant="secondary" className="cursor-default">
-                            {order.currentDepartment || 'Completed'}
-                          </Badge>
+                          <span className="inline-flex">
+                            <Badge variant="secondary" className="cursor-default">
+                              {order.currentDepartment || 'Completed'}
+                            </Badge>
+                          </span>
                         </RadixTooltip.Trigger>
                         <RadixTooltip.Portal>
                           <RadixTooltip.Content

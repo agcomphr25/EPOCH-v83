@@ -1564,11 +1564,13 @@ export default function OrdersList() {
                         <RadixTooltip.Provider delayDuration={200}>
                           <RadixTooltip.Root>
                             <RadixTooltip.Trigger asChild>
-                              <Badge variant="secondary" className="cursor-default">
-                                {localOrderUpdates[order.orderId] ||
-                                  order.currentDepartment ||
-                                  'Not Set'}
-                              </Badge>
+                              <span className="inline-flex">
+                                <Badge variant="secondary" className="cursor-default">
+                                  {localOrderUpdates[order.orderId] ||
+                                    order.currentDepartment ||
+                                    'Not Set'}
+                                </Badge>
+                              </span>
                             </RadixTooltip.Trigger>
                             <RadixTooltip.Portal>
                               <RadixTooltip.Content

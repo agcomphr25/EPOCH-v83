@@ -785,11 +785,13 @@ export default function AllOrdersList() {
                       <RadixTooltip.Provider delayDuration={200}>
                         <RadixTooltip.Root>
                           <RadixTooltip.Trigger asChild>
-                            <Badge
-                              className={`${getDepartmentBadgeColor(displayDepartment)} text-white cursor-default`}
-                            >
-                              {displayDepartment || 'Completed'}
-                            </Badge>
+                            <span className="inline-flex">
+                              <Badge
+                                className={`${getDepartmentBadgeColor(displayDepartment)} text-white cursor-default`}
+                              >
+                                {displayDepartment || 'Completed'}
+                              </Badge>
+                            </span>
                           </RadixTooltip.Trigger>
                           <RadixTooltip.Portal>
                             <RadixTooltip.Content

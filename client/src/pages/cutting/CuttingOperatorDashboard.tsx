@@ -57,6 +57,8 @@ import {
   ChevronRight,
   Pencil,
   History,
+  X,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeInputField } from "@/components/BarcodeInputField";
@@ -178,8 +180,17 @@ const getFabricStatus = (
   return 'available';
 };
 
+type SessionUser = { id: number; username: string; role: string };
+
+function useIsAdmin() {
+  const { data: session } = useQuery<SessionUser>({ queryKey: ['/api/auth/session'] });
+  const role = session?.role;
+  return role === 'ADMIN' || role === 'OWNER';
+}
+
 export default function CuttingOperatorDashboard() {
   const { toast } = useToast();
+  const isAdmin = useIsAdmin();
   
   const [selectedStatus, setSelectedStatus] = useState<string>("ACTIVE");
   const [selectedMfgItem, setSelectedMfgItem] = useState<ManufacturingQueueItem | null>(null);
@@ -238,6 +249,7 @@ export default function CuttingOperatorDashboard() {
   const [editFabricSourceOpen, setEditFabricSourceOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<BuiltPacketFabricSource | null>(null);
   const [editingPacketId, setEditingPacketId] = useState<number | null>(null);
+  const [confirmDeleteSourceId, setConfirmDeleteSourceId] = useState<number | null>(null);
   const [fabricSourceForm, setFabricSourceForm] = useState({
     fabricType: '',
     lotNumber: '',
@@ -276,6 +288,22 @@ export default function CuttingOperatorDashboard() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update fabric source.', variant: 'destructive' });
+    },
+  });
+
+  const deleteFabricSourceMutation = useMutation({
+    mutationFn: async ({ packetId, sourceId }: { packetId: number; sourceId: number }) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/built-packets/${packetId}/fabric-sources/${sourceId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
+      setConfirmDeleteSourceId(null);
+      toast({ title: 'Fabric source deleted', description: 'The fabric source record has been removed.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete fabric source.', variant: 'destructive' });
     },
   });
 
@@ -2313,28 +2341,62 @@ export default function CuttingOperatorDashboard() {
                                   <span>Qty used: {source.quantityUsed}</span>
                                 </div>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="shrink-0"
-                                onClick={() => {
-                                  setEditingSource(source);
-                                  setEditingPacketId(packet.id);
-                                  setFabricSourceForm({
-                                    fabricType: source.fabricType || '',
-                                    lotNumber: source.lotNumber || '',
-                                    batchNumber: source.batchNumber || '',
-                                    rollNumber: source.rollNumber || '',
-                                    supplierPartNumber: source.supplierPartNumber || '',
-                                    internalControlNumber: source.internalControlNumber || '',
-                                    expirationDate: source.expirationDate || '',
-                                  });
-                                  setEditFabricSourceOpen(true);
-                                }}
-                              >
-                                <Pencil className="h-3 w-3 mr-1" />
-                                Edit
-                              </Button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingSource(source);
+                                    setEditingPacketId(packet.id);
+                                    setFabricSourceForm({
+                                      fabricType: source.fabricType || '',
+                                      lotNumber: source.lotNumber || '',
+                                      batchNumber: source.batchNumber || '',
+                                      rollNumber: source.rollNumber || '',
+                                      supplierPartNumber: source.supplierPartNumber || '',
+                                      internalControlNumber: source.internalControlNumber || '',
+                                      expirationDate: source.expirationDate || '',
+                                    });
+                                    setEditFabricSourceOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  Edit
+                                </Button>
+                                {isAdmin && (
+                                  confirmDeleteSourceId === source.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={deleteFabricSourceMutation.isPending}
+                                        onClick={() => {
+                                          deleteFabricSourceMutation.mutate({ packetId: packet.id, sourceId: source.id });
+                                        }}
+                                      >
+                                        Confirm
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setConfirmDeleteSourceId(null)}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-destructive border-destructive/30 hover:bg-destructive hover:text-destructive-foreground"
+                                      onClick={() => setConfirmDeleteSourceId(source.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />
+                                      Delete
+                                    </Button>
+                                  )
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2987,6 +3049,21 @@ export default function CuttingOperatorDashboard() {
                             Roll Depleted
                           </span>
                         </label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            setScannedFabrics(prev => prev.filter(f => f.id !== fabric.id));
+                            setProductionForm(prev => ({
+                              ...prev,
+                              depletedRolls: prev.depletedRolls.filter(id => id !== fabric.id),
+                            }));
+                          }}
+                          title="Remove scanned roll"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   ))}

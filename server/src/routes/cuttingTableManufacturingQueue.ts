@@ -1507,4 +1507,36 @@ router.patch('/built-packets/:packetId/fabric-sources/:sourceId', async (req: Re
   }
 });
 
+// Delete a fabric source for a built packet (admin only)
+router.delete('/built-packets/:packetId/fabric-sources/:sourceId', async (req: Request, res: Response) => {
+  try {
+    const userRole = ((req as any).user?.role || '').toUpperCase();
+    if (userRole !== 'ADMIN' && userRole !== 'OWNER') {
+      return res.status(403).json({ error: 'Admin access required to delete fabric sources' });
+    }
+
+    const { packetId, sourceId } = req.params;
+
+    const existing = await db.query.cuttingBuiltPacketFabricSources.findFirst({
+      where: and(
+        eq(cuttingBuiltPacketFabricSources.id, parseInt(sourceId)),
+        eq(cuttingBuiltPacketFabricSources.builtPacketId, parseInt(packetId))
+      ),
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric source not found' });
+    }
+
+    await db
+      .delete(cuttingBuiltPacketFabricSources)
+      .where(eq(cuttingBuiltPacketFabricSources.id, parseInt(sourceId)));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting fabric source:', error);
+    res.status(500).json({ error: 'Failed to delete fabric source' });
+  }
+});
+
 export default router;

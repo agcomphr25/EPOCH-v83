@@ -644,47 +644,148 @@ export default function PipelineVisualization() {
       ? 'Production Pipeline — Department View'
       : `Production Pipeline — ${printDept}`;
 
+    const isSingleDept = printDept !== 'all';
+    const gridCols = isSingleDept ? '1fr' : 'repeat(3, 1fr)';
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>${reportTitle} — ${now}</title>
         <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; color: #111; background: #fff; padding: 16px; }
-          h1 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
-          .meta { font-size: 10px; color: #666; margin-bottom: 16px; }
-          .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-          .card { border-radius: 8px; border: 1px solid #ddd; overflow: hidden; break-inside: avoid; }
-          .card-header { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
-          .card-header span { font-weight: 700; font-size: 11px; color: #fff; }
-          .card-header .count { background: rgba(255,255,255,0.2); border-radius: 99px; padding: 1px 8px; font-size: 10px; font-weight: 700; color: #fff; }
-          .card-body { padding: 8px; background: #fff; }
-          .section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 3px; display: flex; align-items: center; gap: 4px; }
+          /* ── Force colour printing ── */
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; margin: 0; padding: 0; }
+
+          @page {
+            size: ${isSingleDept ? 'letter portrait' : 'letter landscape'};
+            margin: 0.55in 0.5in 0.6in 0.5in;
+          }
+
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            font-size: 10.5px;
+            color: #111;
+            background: #fff;
+          }
+
+          /* ── Header ── */
+          .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #111;
+            padding-bottom: 6px;
+            margin-bottom: 14px;
+          }
+          .report-header h1 { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+          .report-header .meta { font-size: 9px; color: #555; text-align: right; line-height: 1.5; }
+          .report-header .meta strong { color: #111; }
+
+          /* ── Dept grid ── */
+          .grid {
+            display: grid;
+            grid-template-columns: ${gridCols};
+            gap: 10px;
+          }
+
+          /* ── Card ── */
+          .card {
+            border-radius: 6px;
+            border: 1.5px solid #ccc;
+            overflow: hidden;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .card-header {
+            padding: 6px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .card-header .dept-name {
+            font-weight: 800;
+            font-size: 11px;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+          }
+          .card-header .count {
+            background: rgba(255,255,255,0.25);
+            border-radius: 99px;
+            padding: 1px 7px;
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #fff;
+          }
+          .card-body { padding: 7px 8px; background: #fff; }
+
+          /* ── Section labels ── */
+          .section-label {
+            font-size: 8.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin: 7px 0 3px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
+          .section-label:first-child { margin-top: 2px; }
           .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-          .green { color: #16a34a; } .dot-green { background: #16a34a; }
-          .orange { color: #ea580c; } .dot-orange { background: #ea580c; }
-          .blue { color: #2563eb; } .dot-blue { background: #2563eb; }
-          .gray { color: #6b7280; } .dot-gray { background: #9ca3af; }
-          table { width: 100%; border-collapse: collapse; font-size: 10px; }
-          th { text-align: left; padding: 2px 4px; background: #f3f4f6; color: #6b7280; font-weight: 600; border-bottom: 1px solid #e5e7eb; }
-          td { padding: 2px 4px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
-          td.mono { font-family: monospace; font-weight: 600; }
-          .empty { color: #9ca3af; font-style: italic; text-align: center; padding: 6px; font-size: 10px; }
-          .status-on { color: #16a34a; }
-          .status-overdue { color: #ca8a04; }
-          .status-cannot { color: #ea580c; }
-          .status-critical { color: #dc2626; font-weight: 700; }
+          .green  { color: #15803d; } .dot-green  { background: #16a34a; }
+          .orange { color: #c2410c; } .dot-orange { background: #ea580c; }
+          .blue   { color: #1d4ed8; } .dot-blue   { background: #2563eb; }
+          .gray   { color: #6b7280; } .dot-gray   { background: #9ca3af; }
+
+          /* ── Tables ── */
+          table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+          thead tr { background: #f1f5f9 !important; }
+          th {
+            text-align: left;
+            padding: 2px 5px;
+            color: #475569;
+            font-weight: 700;
+            border-bottom: 1px solid #cbd5e1;
+            font-size: 8.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+          }
+          td { padding: 2.5px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+          td.mono { font-family: 'Courier New', monospace; font-weight: 700; }
+          tr:last-child td { border-bottom: none; }
+          tr:nth-child(even) { background: #f8fafc !important; }
+
+          /* Status colours */
+          .status-on       { color: #15803d; font-weight: 600; }
+          .status-overdue  { color: #b45309; font-weight: 600; }
+          .status-cannot   { color: #c2410c; font-weight: 700; }
+          .status-critical { color: #b91c1c; font-weight: 800; }
+
+          .empty { color: #94a3b8; font-style: italic; text-align: center; padding: 8px; font-size: 9.5px; }
+
+          /* ── Footer ── */
           @media print {
-            body { padding: 8px; }
-            .grid { grid-template-columns: repeat(3, 1fr); }
-            .card { break-inside: avoid; }
+            body::after {
+              content: 'AG Composites — EPOCH Manufacturing System';
+              display: block;
+              margin-top: 20px;
+              text-align: center;
+              font-size: 8px;
+              color: #aaa;
+              border-top: 1px solid #e5e7eb;
+              padding-top: 6px;
+            }
           }
         </style>
       </head>
       <body>
-        <h1>${reportTitle}</h1>
-        <div class="meta">Generated ${now} &nbsp;·&nbsp; ${totalOrders} active orders</div>
+        <div class="report-header">
+          <h1>${reportTitle}</h1>
+          <div class="meta">
+            <strong>${totalOrders} active orders</strong><br/>
+            Generated ${now}
+          </div>
+        </div>
         <div class="grid">${buildPrintContent(printDept)}</div>
       </body>
       </html>
@@ -768,7 +869,7 @@ export default function PipelineVisualization() {
       const noForecastSection = noForecast.length ? `<div class="section-label gray"><span class="dot dot-gray"></span>No forecast (${noForecast.length})</div>${buildPrintTable(noForecast, false)}` : '';
       const emptyMsg = orders.length === 0 ? '<div class="empty">Empty</div>' : '';
 
-      return `<div class="card"><div class="card-header" style="background:${color.hex}"><span>${dept}</span><span class="count">${orders.length}</span></div><div class="card-body">${emptyMsg}${inPlaceSection}${progressSection}${aheadSection}${noForecastSection}</div></div>`;
+      return `<div class="card"><div class="card-header" style="background:${color.hex}"><span class="dept-name">${dept}</span><span class="count">${orders.length} order${orders.length !== 1 ? 's' : ''}</span></div><div class="card-body">${emptyMsg}${inPlaceSection}${progressSection}${aheadSection}${noForecastSection}</div></div>`;
     }).join('');
   };
 

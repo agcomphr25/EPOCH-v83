@@ -4,6 +4,7 @@ import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -109,6 +110,35 @@ interface Order {
   isVerified?: boolean;
   createdAt?: string;
   barcode?: string;
+  layupCompletedAt?: string;
+  pluggingCompletedAt?: string;
+  cncCompletedAt?: string;
+  finishCompletedAt?: string;
+  gunsmithCompletedAt?: string;
+  paintCompletedAt?: string;
+  qcCompletedAt?: string;
+  shippingCompletedAt?: string;
+}
+
+function getDeptEntryDate(order: { currentDepartment: string; createdAt?: string; layupCompletedAt?: string; pluggingCompletedAt?: string; cncCompletedAt?: string; finishCompletedAt?: string; gunsmithCompletedAt?: string; paintCompletedAt?: string; qcCompletedAt?: string }): Date | null {
+  const raw = (() => {
+    switch (order.currentDepartment) {
+      case 'Layup':
+      case 'Layup/Plugging': return order.createdAt;
+      case 'Plugging':       return order.layupCompletedAt    || order.createdAt;
+      case 'CNC':            return order.pluggingCompletedAt || order.createdAt;
+      case 'Finish':         return order.cncCompletedAt      || order.createdAt;
+      case 'Finish QC':      return order.finishCompletedAt   || order.createdAt;
+      case 'Gunsmith':       return order.finishCompletedAt   || order.createdAt;
+      case 'Paint':          return order.gunsmithCompletedAt || order.createdAt;
+      case 'QC':             return order.paintCompletedAt    || order.createdAt;
+      case 'Shipping':       return order.qcCompletedAt       || order.createdAt;
+      default:               return order.createdAt;
+    }
+  })();
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 interface Customer {
@@ -961,9 +991,30 @@ export default function AllOrdersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {order.currentDepartment || 'Completed'}
-                    </Badge>
+                    <RadixTooltip.Provider delayDuration={200}>
+                      <RadixTooltip.Root>
+                        <RadixTooltip.Trigger asChild>
+                          <Badge variant="secondary" className="cursor-default">
+                            {order.currentDepartment || 'Completed'}
+                          </Badge>
+                        </RadixTooltip.Trigger>
+                        <RadixTooltip.Portal>
+                          <RadixTooltip.Content
+                            side="top"
+                            sideOffset={5}
+                            className="z-[9999] rounded bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md select-none"
+                          >
+                            {(() => {
+                              const entryDate = getDeptEntryDate(order);
+                              if (!entryDate) return `In ${order.currentDepartment || 'Completed'}`;
+                              const days = (Date.now() - entryDate.getTime()) / (1000 * 60 * 60 * 24);
+                              return `${days.toFixed(1)} days in ${order.currentDepartment || 'Completed'}`;
+                            })()}
+                            <RadixTooltip.Arrow className="fill-gray-900" />
+                          </RadixTooltip.Content>
+                        </RadixTooltip.Portal>
+                      </RadixTooltip.Root>
+                    </RadixTooltip.Provider>
                   </TableCell>
                   <TableCell>
                     <div className="relative group">

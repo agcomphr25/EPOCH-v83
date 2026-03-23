@@ -67,7 +67,7 @@ export default function PastDueReport() {
     return allOrders
       .filter((o) => {
         if (EXCLUDED_STATUSES.includes(o.status)) return false;
-        if (o.currentDepartment === 'Fulfilled') return false;
+        if (['Fulfilled', 'Shipping Manager', 'Completed'].includes(o.currentDepartment ?? '')) return false;
         const due = new Date(o.dueDate);
         if (isNaN(due.getTime())) return false;
         return due < cutoff;

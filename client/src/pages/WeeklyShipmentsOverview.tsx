@@ -71,6 +71,7 @@ interface OEMShipmentItem {
   description: string;
   poNumber: string;
   hasPackingSlip: boolean;
+  itemType?: string;
 }
 
 interface OEMShipment {
@@ -312,19 +313,21 @@ export default function WeeklyShipmentsOverview() {
     if (oemData?.shipments) {
       oemData.shipments.forEach((shipment) => {
         const shipDate = new Date(shipment.created_at);
-        shipment.items.forEach((item) => {
-          items.push({
-            id: `oem-${shipment.id}-${item.id}`,
-            type: 'OEM',
-            orderId: item.orderId,
-            modelOrDescription: item.description || `PO# ${item.poNumber}`,
-            customerName: shipment.customer_name,
-            trackingNumber: shipment.master_tracking_number || '',
-            carrier: SERVICE_NAMES[shipment.service_code] || shipment.service_code || 'UPS',
-            shippedDate: shipDate,
-            itemCount: item.quantity,
+        shipment.items
+          .filter((item) => !item.itemType || item.itemType === 'stock_model')
+          .forEach((item) => {
+            items.push({
+              id: `oem-${shipment.id}-${item.id}`,
+              type: 'OEM',
+              orderId: item.orderId,
+              modelOrDescription: item.description || `PO# ${item.poNumber}`,
+              customerName: shipment.customer_name,
+              trackingNumber: shipment.master_tracking_number || '',
+              carrier: SERVICE_NAMES[shipment.service_code] || shipment.service_code || 'UPS',
+              shippedDate: shipDate,
+              itemCount: item.quantity,
+            });
           });
-        });
       });
     }
 

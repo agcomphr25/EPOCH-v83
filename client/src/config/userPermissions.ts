@@ -386,6 +386,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/receiving',
       '/master-document-register',
       '/inventory/parts-request',
+      '/qc',
+      '/maintenance',
+      '/maintenance-events',
+      '/projects',
     ],
   },
 

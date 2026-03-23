@@ -14,6 +14,10 @@ import {
   Plus,
   MessageSquare,
   ClipboardList,
+  ShieldCheck,
+  Wrench,
+  CalendarClock,
+  FolderKanban,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
@@ -112,6 +116,62 @@ export default function LAURIETTestDashboard() {
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Document control & revision tracking
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/qc">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+              <CardContent className="p-4 text-center">
+                <ShieldCheck className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Quality Control
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  QC inspections & records
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/maintenance">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200">
+              <CardContent className="p-4 text-center">
+                <Wrench className="w-8 h-8 text-orange-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Preventative Maintenance
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Scheduled maintenance plans
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/maintenance-events">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-red-200">
+              <CardContent className="p-4 text-center">
+                <CalendarClock className="w-8 h-8 text-red-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Maintenance Events
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Log & track maintenance activity
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/projects">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
+              <CardContent className="p-4 text-center">
+                <FolderKanban className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  P2 Projects
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Project pipeline & tracking
                 </p>
               </CardContent>
             </Card>

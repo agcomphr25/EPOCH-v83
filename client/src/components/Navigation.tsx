@@ -75,6 +75,7 @@ import {
   LayoutGrid,
   PackageCheck,
   ShieldAlert,
+  Tv,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -289,6 +290,12 @@ export default function Navigation() {
   );
 
   const navItems = [
+    {
+      path: '/tv-display',
+      label: 'TV Display',
+      icon: Tv,
+      description: 'Multi-panel shop floor display for monitors and meeting room screens',
+    },
     {
       path: '/customers',
       label: 'Customer Management',

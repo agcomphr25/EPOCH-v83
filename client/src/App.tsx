@@ -48,6 +48,7 @@ import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
 import ProductionStationDashboard from './pages/ProductionStationDashboard';
 import TVDisplayPage from './pages/TVDisplayPage';
+import TVTimerBoard from './pages/TVTimerBoard';
 import ProductionTimerHistory from './pages/ProductionTimerHistory';
 import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
@@ -270,17 +271,37 @@ import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
 import { getDashboardRoute } from './config/dashboardMapping';
 
+function useIsEmbedMode() {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1';
+}
+
+function ConditionalOfflineIndicator() {
+  const isEmbed = useIsEmbedMode();
+  return isEmbed ? null : <OfflineIndicator />;
+}
+
+function ConditionalMainWrapper({ children }: { children: React.ReactNode }) {
+  const isEmbed = useIsEmbedMode();
+  if (isEmbed) {
+    return <div className="w-full h-screen overflow-auto">{children}</div>;
+  }
+  return <main className="container mx-auto px-4 py-8">{children}</main>;
+}
+
 // Component to conditionally render Navigation
 function ConditionalNavigation() {
   const [location] = useLocation();
+  const isEmbed = useIsEmbedMode();
   const hideNavigation =
+    isEmbed ||
     location === '/darleneb-dashboard' ||
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
     location === '/login' ||
     location.startsWith('/sign-order') || // Hide navigation on customer sign order page
     location.startsWith('/fill-and-sign') || // Hide navigation on customer fill-and-sign page
-    location.startsWith('/tv-display'); // Hide navigation on TV display page
+    location.startsWith('/tv-display') || // Hide navigation on TV display page
+    location.startsWith('/tv-timer-board'); // Hide navigation on timer board page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -423,8 +444,8 @@ function App() {
           <Router>
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
-              <OfflineIndicator />
-              <main className="container mx-auto px-4 py-8">
+              <ConditionalOfflineIndicator />
+              <ConditionalMainWrapper>
                 <RouteGuard>
                   <Switch>
                     <Route path="/" component={RootRedirect} />
@@ -499,6 +520,7 @@ function App() {
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
                   <Route path="/tv-display" component={TVDisplayPage} />
+                  <Route path="/tv-timer-board" component={TVTimerBoard} />
                   <Route path="/app/production/timer-history" component={ProductionTimerHistory} />
                   <Route path="/app/production/timer-programs" component={TimerProgramsPage} />
                   
@@ -1070,7 +1092,7 @@ function App() {
                     <Route component={NotFound} />
                   </Switch>
                 </RouteGuard>
-              </main>
+              </ConditionalMainWrapper>
             </div>
             <Toaster />
             <HotToaster />

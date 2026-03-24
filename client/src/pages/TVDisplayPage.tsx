@@ -1,410 +1,516 @@
-import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, Timer, Tv, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Monitor, Play, X, ChevronLeft, ChevronRight, Upload, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import * as pdfjsLib from 'pdfjs-dist';
 
-interface ProductionProgramRun {
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+type LayoutType = '2-panel' | '4-panel';
+
+type PanelContent =
+  | 'blank'
+  | 'presentation'
+  | 'timer-station'
+  | 'shipping-tracker'
+  | 'production-pipeline'
+  | 'manufacturing-queue'
+  | 'production-floor-timers';
+
+interface PanelConfig {
+  content: PanelContent;
+}
+
+interface TVConfig {
+  layout: LayoutType;
+  panels: PanelConfig[];
+  slideInterval: number;
+}
+
+interface SlideData {
   id: string;
-  programId: string;
-  instanceName: string | null;
-  sku: string | null;
-  serialNumber: string | null;
-  mandrelNumber: number | null;
-  ovenNumber: number | null;
-  ovenSlot: string | null;
-  status: 'running' | 'paused' | 'awaiting_next' | 'completed' | 'stopped';
-  currentStepIndex: number;
-  startedAt: string;
-  completedAt: string | null;
-  totalElapsedSeconds: number;
-  cumulativePauseSeconds?: number;
-  lastPausedAt?: string | null;
-  program?: {
-    id: string;
-    name: string;
-    description: string | null;
-  };
-  steps?: {
-    id: string;
-    stepIndex: number;
-    stepName: string;
-    durationSeconds: number;
-  }[];
+  dataUrl: string;
+  name: string;
 }
 
-function formatTime(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+const CONTENT_OPTIONS: { value: PanelContent; label: string }[] = [
+  { value: 'blank', label: 'Blank' },
+  { value: 'presentation', label: 'Presentation' },
+  { value: 'production-floor-timers', label: 'Production Floor Timers' },
+  { value: 'timer-station', label: 'Timer Station' },
+  { value: 'shipping-tracker', label: 'Shipping Tracker' },
+  { value: 'production-pipeline', label: 'Production Pipeline' },
+  { value: 'manufacturing-queue', label: 'Manufacturing Queue' },
+];
+
+const CONTENT_URLS: Record<Exclude<PanelContent, 'blank' | 'presentation'>, string> = {
+  'production-floor-timers': '/tv-timer-board?embed=1',
+  'timer-station': '/app/production/stations?embed=1',
+  'shipping-tracker': '/shipping-tracker?embed=1',
+  'production-pipeline': '/projects/pipeline?embed=1',
+  'manufacturing-queue': '/manufacturing-queue?embed=1',
+};
+
+const DEFAULT_CONFIG: TVConfig = {
+  layout: '2-panel',
+  panels: [
+    { content: 'blank' },
+    { content: 'blank' },
+    { content: 'blank' },
+    { content: 'blank' },
+  ],
+  slideInterval: 15,
+};
+
+const STORAGE_KEY = 'tv_display_config_v2';
+const SLIDES_STORAGE_KEY = 'tv_display_slides_v2';
+
+function loadConfig(): TVConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_CONFIG,
+        ...parsed,
+        panels: parsed.panels?.length ? parsed.panels : DEFAULT_CONFIG.panels,
+      };
+    }
+  } catch {}
+  return { ...DEFAULT_CONFIG };
+}
+
+function saveConfig(config: TVConfig) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
+function loadSlides(): SlideData[] {
+  try {
+    const raw = localStorage.getItem(SLIDES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function saveSlides(slides: SlideData[]) {
+  try {
+    localStorage.setItem(SLIDES_STORAGE_KEY, JSON.stringify(slides));
+  } catch (e) {
+    console.warn('Could not persist slides (quota exceeded?)', e);
   }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function getStatusStyle(status: string) {
-  switch (status) {
-    case 'running':
-      return { bg: 'bg-emerald-500', text: 'text-white', label: 'RUNNING', pulse: true };
-    case 'paused':
-      return { bg: 'bg-amber-500', text: 'text-white', label: 'PAUSED', pulse: false };
-    case 'awaiting_next':
-      return { bg: 'bg-sky-500', text: 'text-white', label: 'AWAITING', pulse: true };
-    default:
-      return { bg: 'bg-gray-500', text: 'text-white', label: status.toUpperCase(), pulse: false };
-  }
-}
-
-function TVTimerCard({ run }: { run: ProductionProgramRun }) {
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
-
-  const currentStep = run.steps?.find(s => s.stepIndex === run.currentStepIndex);
-  const totalSteps = run.steps?.length || 0;
-  const totalProgramDuration = run.steps?.reduce((sum, s) => sum + s.durationSeconds, 0) || 0;
-
-  const priorStepsDuration = run.steps
-    ?.filter(s => s.stepIndex < run.currentStepIndex)
-    .reduce((sum, s) => sum + s.durationSeconds, 0) || 0;
+function PresentationPanel({ interval }: { interval: number }) {
+  const [slides, setSlides] = useState<SlideData[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const startTime = new Date(run.startedAt).getTime();
-    const pauseSeconds = run.cumulativePauseSeconds || 0;
+    setSlides(loadSlides());
+  }, []);
 
-    if (run.status === 'completed' || run.status === 'stopped') {
-      setElapsedTime(run.totalElapsedSeconds);
-      setCurrentPauseSeconds(pauseSeconds);
-      return;
-    }
+  const startTimer = useCallback(
+    (count: number) => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (count > 1) {
+        timerRef.current = setInterval(() => {
+          setCurrentIndex((i) => (i + 1) % count);
+        }, interval * 1000);
+      }
+    },
+    [interval]
+  );
 
-    if (run.status === 'paused' || run.status === 'awaiting_next') {
-      const pausedAtTime = run.lastPausedAt ? new Date(run.lastPausedAt).getTime() : Date.now();
-      const frozenElapsed = Math.floor((pausedAtTime - startTime) / 1000) - pauseSeconds;
-      setElapsedTime(frozenElapsed);
-
-      const updateDelay = () => {
-        const currentNow = Date.now();
-        const totalDelay = Math.floor((currentNow - startTime) / 1000) - frozenElapsed;
-        setCurrentPauseSeconds(totalDelay);
-      };
-      updateDelay();
-      const interval = setInterval(updateDelay, 1000);
-      return () => clearInterval(interval);
-    }
-
-    setCurrentPauseSeconds(pauseSeconds);
-    const updateElapsed = () => {
-      const now = Date.now();
-      const elapsed = Math.floor((now - startTime) / 1000) - pauseSeconds;
-      setElapsedTime(elapsed);
+  useEffect(() => {
+    startTimer(slides.length);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, [slides.length, startTimer]);
 
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [run.startedAt, run.status, run.totalElapsedSeconds, run.cumulativePauseSeconds, run.lastPausedAt]);
+  const goNext = () => {
+    setCurrentIndex((i) => (i + 1) % slides.length);
+    startTimer(slides.length);
+  };
 
-  const elapsedInCurrentStep = Math.max(0, elapsedTime - priorStepsDuration);
-  const stepTimeRemaining = currentStep
-    ? Math.max(0, currentStep.durationSeconds - elapsedInCurrentStep)
-    : 0;
+  const goPrev = () => {
+    setCurrentIndex((i) => (i - 1 + slides.length) % slides.length);
+    startTimer(slides.length);
+  };
 
-  const stepProgress = currentStep && currentStep.durationSeconds > 0
-    ? Math.min(100, (elapsedInCurrentStep / currentStep.durationSeconds) * 100)
-    : 0;
-
-  const estimatedCompletion = totalProgramDuration > 0
-    ? new Date(new Date(run.startedAt).getTime() + (totalProgramDuration + currentPauseSeconds) * 1000)
-    : null;
-
-  const status = getStatusStyle(run.status);
-  const isOvertime = currentStep && elapsedInCurrentStep > currentStep.durationSeconds;
+  if (slides.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-black text-gray-500 text-sm">
+        No slides loaded — configure in the TV Display settings
+      </div>
+    );
+  }
 
   return (
-    <div className={`rounded-xl border-2 p-4 xl:p-5 transition-all ${
-      isOvertime ? 'border-red-500 bg-red-950/30' :
-      run.status === 'paused' ? 'border-amber-500/50 bg-amber-950/20' :
-      run.status === 'awaiting_next' ? 'border-sky-500/50 bg-sky-950/20 animate-pulse' :
-      'border-slate-700 bg-slate-900/50'
-    }`}>
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-lg xl:text-xl font-bold text-white truncate">
-            {run.program?.name || 'Unknown'}
-          </h3>
-          {run.instanceName && (
-            <p className="text-sm text-slate-400 truncate">{run.instanceName}</p>
-          )}
-        </div>
-        <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${status.bg} ${status.text} ${status.pulse ? 'animate-pulse' : ''}`}>
-          {status.label}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-sm text-slate-400 mb-3">
-        {run.serialNumber && (
-          <div><span className="text-slate-500">SN:</span> <span className="font-mono text-slate-300">{run.serialNumber}</span></div>
-        )}
-        {run.mandrelNumber && (
-          <div><span className="text-slate-500">Mandrel:</span> <span className="text-slate-300">{run.mandrelNumber}</span></div>
-        )}
-        {run.ovenNumber && (
-          <div>
-            <span className="text-slate-500">Oven:</span> <span className="text-slate-300">{run.ovenNumber}</span>
-            {run.ovenSlot && <span className="text-slate-400 ml-1">({run.ovenSlot === 'A' ? 'R' : run.ovenSlot === 'B' ? 'L' : run.ovenSlot})</span>}
+    <div className="relative w-full h-full bg-black overflow-hidden group">
+      <img
+        src={slides[currentIndex]?.dataUrl}
+        alt={`Slide ${currentIndex + 1}`}
+        className="w-full h-full object-contain"
+      />
+      {slides.length > 1 && (
+        <>
+          <button
+            onClick={goPrev}
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button
+            onClick={goNext}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+            {currentIndex + 1} / {slides.length}
           </div>
-        )}
-        {run.sku && (
-          <div><span className="text-slate-500">SKU:</span> <span className="font-mono text-slate-300">{run.sku}</span></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function IframePanel({ url }: { url: string }) {
+  return (
+    <iframe
+      src={url}
+      className="w-full h-full border-0"
+      style={{ display: 'block', overflow: 'hidden' }}
+      scrolling="no"
+      title="Panel content"
+    />
+  );
+}
+
+function BlankPanel() {
+  return <div className="w-full h-full bg-black" />;
+}
+
+function LivePanel({ config, interval }: { config: PanelConfig; interval: number }) {
+  if (config.content === 'blank') return <BlankPanel />;
+  if (config.content === 'presentation') return <PresentationPanel interval={interval} />;
+  return <IframePanel url={CONTENT_URLS[config.content as keyof typeof CONTENT_URLS]} />;
+}
+
+function SlideManager({
+  slides,
+  onSlidesChange,
+}: {
+  slides: SlideData[];
+  onSlidesChange: (s: SlideData[]) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setLoading(true);
+    const newSlides: SlideData[] = [...slides];
+
+    for (const file of files) {
+      if (file.type === 'application/pdf') {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d')!;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            newSlides.push({
+              id: `${Date.now()}-${pageNum}-${Math.random()}`,
+              dataUrl: canvas.toDataURL('image/jpeg', 0.85),
+              name: `${file.name} — Page ${pageNum}`,
+            });
+          }
+        } catch (err) {
+          console.error('Failed to render PDF', err);
+        }
+      } else if (file.type.startsWith('image/')) {
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        newSlides.push({
+          id: `${Date.now()}-${Math.random()}`,
+          dataUrl,
+          name: file.name,
+        });
+      }
+    }
+
+    onSlidesChange(newSlides);
+    setLoading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeSlide = (id: string) => {
+    onSlidesChange(slides.filter((s) => s.id !== id));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading}
+        >
+          <Upload className="h-4 w-4 mr-1" />
+          {loading ? 'Processing...' : 'Upload Images / PDF'}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.pdf"
+          multiple
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+        {slides.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-red-500 hover:text-red-600"
+            onClick={() => onSlidesChange([])}
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Clear All
+          </Button>
         )}
       </div>
-
-      <div className="bg-slate-800/60 rounded-lg p-3 mb-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-slate-500 uppercase tracking-wider">
-            Step {run.currentStepIndex + 1}/{totalSteps}
-          </span>
-          <span className="text-sm font-semibold text-slate-200">
-            {currentStep?.stepName || `Step ${run.currentStepIndex + 1}`}
-          </span>
+      {slides.length > 0 ? (
+        <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 border rounded bg-gray-50">
+          {slides.map((slide, idx) => (
+            <div
+              key={slide.id}
+              className="relative group rounded overflow-hidden border bg-white"
+            >
+              <img
+                src={slide.dataUrl}
+                alt={slide.name}
+                className="w-full aspect-video object-contain"
+              />
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                <span className="text-white text-xs font-bold">{idx + 1}</span>
+                <button
+                  onClick={() => removeSlide(slide.id)}
+                  className="text-red-300 hover:text-red-100"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-
-        <div className="w-full bg-slate-700 rounded-full h-2 mb-2">
-          <div
-            className={`h-2 rounded-full transition-all duration-1000 ${
-              isOvertime ? 'bg-red-500' :
-              stepProgress > 80 ? 'bg-amber-500' :
-              'bg-emerald-500'
-            }`}
-            style={{ width: `${Math.min(stepProgress, 100)}%` }}
-          />
-        </div>
-
-        <div className="text-center">
-          <span className={`text-3xl xl:text-4xl font-mono font-bold ${
-            isOvertime ? 'text-red-400' :
-            run.status === 'paused' ? 'text-amber-400' :
-            stepTimeRemaining < 60 ? 'text-amber-400' :
-            'text-emerald-400'
-          }`}>
-            {isOvertime ? '-' : ''}{formatTime(isOvertime ? elapsedInCurrentStep - currentStep!.durationSeconds : stepTimeRemaining)}
-          </span>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {isOvertime ? 'OVERTIME' : 'remaining'}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-slate-500">
-        <div>
-          <span>Started </span>
-          <span className="text-slate-400">
-            {new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-          </span>
-        </div>
-        <div>
-          <span>Elapsed </span>
-          <span className="font-mono text-slate-400">{formatTime(Math.min(elapsedTime, totalProgramDuration))}</span>
-        </div>
-        {estimatedCompletion && (
-          <div>
-            <span>Done </span>
-            <span className="text-slate-400">
-              ~{estimatedCompletion.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-            </span>
-          </div>
-        )}
-      </div>
+      ) : (
+        <p className="text-sm text-gray-400 italic">No slides yet. Upload images or a PDF.</p>
+      )}
     </div>
   );
 }
 
 export default function TVDisplayPage() {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [slidesUrl, setSlidesUrl] = useState('');
-  const [isConfiguring, setIsConfiguring] = useState(false);
-  const [inputUrl, setInputUrl] = useState('');
+  const [config, setConfig] = useState<TVConfig>(loadConfig);
+  const [isLive, setIsLive] = useState(false);
+  const [showExitHint, setShowExitHint] = useState(false);
+  const [slides, setSlides] = useState<SlideData[]>(loadSlides);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const panelCount = config.layout === '2-panel' ? 2 : 4;
 
   useEffect(() => {
-    const saved = localStorage.getItem('tv-display-slides-url');
-    if (saved) setSlidesUrl(saved);
-  }, []);
+    saveConfig(config);
+  }, [config]);
 
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+    saveSlides(slides);
+  }, [slides]);
 
-  const { data: runs, isLoading } = useQuery<ProductionProgramRun[]>({
-    queryKey: ['/api/production/timers/runs'],
-    queryFn: async () => {
-      const response = await fetch('/api/production/timers/runs');
-      if (!response.ok) throw new Error('Failed to load timer data');
-      return response.json();
-    },
-    refetchInterval: 2000,
-  });
-
-  const [detailedRuns, setDetailedRuns] = useState<ProductionProgramRun[]>([]);
-
-  const activeRuns = runs?.filter(r =>
-    r.status === 'running' || r.status === 'paused' || r.status === 'awaiting_next'
-  ) || [];
-
-  useEffect(() => {
-    const fetchDetails = async () => {
-      if (!activeRuns.length) {
-        setDetailedRuns([]);
-        return;
-      }
-      const detailed = await Promise.all(
-        activeRuns.map(async (run) => {
-          try {
-            const response = await fetch(`/api/production/timers/runs/${run.id}`);
-            if (response.ok) return await response.json();
-            return { ...run, program: null, steps: [] };
-          } catch {
-            return { ...run, program: null, steps: [] };
-          }
-        })
-      );
-      setDetailedRuns(detailed);
-    };
-    fetchDetails();
-  }, [runs]);
-
-  const convertSlidesUrl = (url: string): string => {
-    if (!url) return '';
-    if (url.includes('/embed')) return url;
-    const match = url.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/);
-    if (match) {
-      return `https://docs.google.com/presentation/d/${match[1]}/embed?start=true&loop=true&delayms=10000`;
-    }
-    return url;
+  const updateLayout = (layout: LayoutType) => {
+    setConfig((c) => ({ ...c, layout }));
   };
 
-  const handleSaveSlides = () => {
-    const embedUrl = convertSlidesUrl(inputUrl);
-    setSlidesUrl(embedUrl);
-    localStorage.setItem('tv-display-slides-url', embedUrl);
-    setIsConfiguring(false);
+  const updatePanel = (index: number, content: PanelContent) => {
+    setConfig((c) => {
+      const panels = [...c.panels];
+      panels[index] = { content };
+      return { ...c, panels };
+    });
   };
 
-  const handleClearSlides = () => {
-    setSlidesUrl('');
-    localStorage.removeItem('tv-display-slides-url');
-    setIsConfiguring(false);
+  const updateInterval = (val: string) => {
+    const n = parseInt(val, 10);
+    if (!isNaN(n) && n >= 1) setConfig((c) => ({ ...c, slideInterval: n }));
   };
 
-  const hasSlides = slidesUrl.length > 0;
+  const handleMouseMove = () => {
+    setShowExitHint(true);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setShowExitHint(false), 3000);
+  };
+
+  const hasPresentationPanel = config.panels
+    .slice(0, panelCount)
+    .some((p) => p.content === 'presentation');
+
+  if (isLive) {
+    const activePanels = config.panels.slice(0, panelCount);
+    return (
+      <div
+        className={cn(
+          'fixed inset-0 z-50 bg-black',
+          panelCount === 2 ? 'grid grid-cols-2' : 'grid grid-cols-2 grid-rows-2'
+        )}
+        style={{ width: '100vw', height: '100vh' }}
+        onMouseMove={handleMouseMove}
+      >
+        {activePanels.map((panel, i) => (
+          <div key={i} className="relative overflow-hidden">
+            <LivePanel config={panel} interval={config.slideInterval} />
+          </div>
+        ))}
+
+        <button
+          className={cn(
+            'fixed top-4 right-4 z-[9999] bg-black/80 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm transition-opacity duration-500 hover:bg-black',
+            showExitHint ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          )}
+          onClick={() => setIsLive(false)}
+        >
+          <X className="h-4 w-4" />
+          Exit Live Mode
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 bg-slate-950 text-white overflow-hidden flex flex-col">
-      <div className="flex items-center justify-between px-4 xl:px-6 py-2 bg-slate-900/80 border-b border-slate-800 shrink-0">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <Tv className="w-5 h-5 text-emerald-400" />
-          <h1 className="text-lg font-bold text-white">Production Floor</h1>
-          <Badge variant="outline" className="text-emerald-400 border-emerald-500/50 text-xs">
-            {activeRuns.length} active
-          </Badge>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => { setInputUrl(slidesUrl); setIsConfiguring(!isConfiguring); }}
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
-          >
-            <ExternalLink className="w-3 h-3" />
-            {hasSlides ? 'Edit Slides' : 'Add Slides'}
-          </button>
-          <div className="text-right">
-            <p className="text-2xl font-mono font-bold text-white tracking-wider">
-              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-            </p>
-            <p className="text-xs text-slate-500">
-              {currentTime.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+          <Monitor className="h-7 w-7 text-primary" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">TV Display</h1>
+            <p className="text-sm text-gray-500">
+              Configure and launch a multi-panel shop floor display.
             </p>
           </div>
         </div>
-      </div>
 
-      {isConfiguring && (
-        <div className="px-4 xl:px-6 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3 max-w-2xl">
-            <input
-              type="text"
-              value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
-              placeholder="Paste Google Slides URL or embed link..."
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
-            />
-            <button
-              onClick={handleSaveSlides}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              Save
-            </button>
-            {hasSlides && (
+        <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6">
+          <div className="space-y-2">
+            <Label className="text-base font-semibold">Layout</Label>
+            <div className="flex gap-3">
               <button
-                onClick={handleClearSlides}
-                className="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 rounded-lg text-sm font-medium transition-colors"
+                onClick={() => updateLayout('2-panel')}
+                className={cn(
+                  'flex-1 border-2 rounded-lg p-4 flex flex-col items-center gap-2 transition-colors cursor-pointer',
+                  config.layout === '2-panel'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-200 hover:border-gray-300'
+                )}
               >
-                Remove
+                <div className="flex gap-1 w-20">
+                  <div className="flex-1 h-12 bg-gray-300 rounded" />
+                  <div className="flex-1 h-12 bg-gray-300 rounded" />
+                </div>
+                <span className="text-sm font-medium">Split (2-panel)</span>
               </button>
-            )}
-            <button
-              onClick={() => setIsConfiguring(false)}
-              className="px-3 py-2 text-slate-400 hover:text-white text-sm transition-colors"
-            >
-              Cancel
-            </button>
+              <button
+                onClick={() => updateLayout('4-panel')}
+                className={cn(
+                  'flex-1 border-2 rounded-lg p-4 flex flex-col items-center gap-2 transition-colors cursor-pointer',
+                  config.layout === '4-panel'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-200 hover:border-gray-300'
+                )}
+              >
+                <div className="grid grid-cols-2 gap-1 w-20">
+                  <div className="h-6 bg-gray-300 rounded" />
+                  <div className="h-6 bg-gray-300 rounded" />
+                  <div className="h-6 bg-gray-300 rounded" />
+                  <div className="h-6 bg-gray-300 rounded" />
+                </div>
+                <span className="text-sm font-medium">Four-Screen (4-panel)</span>
+              </button>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">
-            Paste any Google Slides URL - it will be auto-converted to an embedded view with auto-advance.
-          </p>
-        </div>
-      )}
 
-      <div className={`flex-1 flex min-h-0 ${hasSlides ? '' : ''}`}>
-        <div className={`${hasSlides ? 'w-1/2 border-r border-slate-800' : 'w-full'} overflow-y-auto p-4 xl:p-6`}>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-10 h-10 animate-spin text-emerald-400" />
-            </div>
-          ) : detailedRuns.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Timer className="w-16 h-16 mx-auto text-slate-700 mb-4" />
-                <p className="text-2xl font-semibold text-slate-600">No Active Timers</p>
-                <p className="text-slate-500 mt-1">Timers will appear here when started</p>
-              </div>
-            </div>
-          ) : (
-            <div className={`grid gap-4 ${
-              !hasSlides
-                ? detailedRuns.length <= 4
-                  ? 'grid-cols-1 md:grid-cols-2 max-w-5xl mx-auto'
-                  : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
-                : detailedRuns.length <= 2
-                  ? 'grid-cols-1'
-                  : 'grid-cols-1 xl:grid-cols-2'
-            }`}>
-              {detailedRuns.map((run) => (
-                <TVTimerCard key={run.id} run={run} />
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">Panel Content</Label>
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: panelCount }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <Label className="text-xs text-gray-500">
+                    Panel {i + 1}
+                    {config.layout === '4-panel' &&
+                      ` (${i === 0 ? 'Top-Left' : i === 1 ? 'Top-Right' : i === 2 ? 'Bottom-Left' : 'Bottom-Right'})`}
+                    {config.layout === '2-panel' &&
+                      ` (${i === 0 ? 'Left' : 'Right'})`}
+                  </Label>
+                  <Select
+                    value={config.panels[i]?.content ?? 'blank'}
+                    onValueChange={(val) => updatePanel(i, val as PanelContent)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONTENT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               ))}
+            </div>
+          </div>
+
+          {hasPresentationPanel && (
+            <div className="space-y-4 border-t pt-4">
+              <Label className="text-base font-semibold">Presentation Slides</Label>
+              <div className="flex items-center gap-3">
+                <Label className="text-sm text-gray-600 whitespace-nowrap">
+                  Auto-advance every
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  className="w-20"
+                  value={config.slideInterval}
+                  onChange={(e) => updateInterval(e.target.value)}
+                />
+                <span className="text-sm text-gray-500">seconds</span>
+              </div>
+              <SlideManager slides={slides} onSlidesChange={setSlides} />
             </div>
           )}
         </div>
 
-        {hasSlides && (
-          <div className="w-1/2 bg-black">
-            <iframe
-              src={slidesUrl}
-              className="w-full h-full border-0"
-              allowFullScreen
-              title="Google Slides Presentation"
-            />
-          </div>
-        )}
+        <div className="flex justify-end">
+          <Button size="lg" className="gap-2" onClick={() => setIsLive(true)}>
+            <Play className="h-5 w-5" />
+            Go Live
+          </Button>
+        </div>
       </div>
     </div>
   );

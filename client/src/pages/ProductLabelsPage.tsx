@@ -168,7 +168,7 @@ export default function ProductLabelsPage() {
     setLabelItems(
       labelItems.map((item) =>
         item.productId === productId
-          ? { ...item, fillPage: !item.fillPage, copies: !item.fillPage ? 30 : 1 }
+          ? { ...item, fillPage: !item.fillPage, copies: !item.fillPage ? 14 : 1 }
           : item
       )
     );
@@ -233,7 +233,7 @@ export default function ProductLabelsPage() {
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
 
-      const totalCount = labelItems.reduce((sum, i) => i.fillPage ? sum + 30 : sum + i.copies, 0);
+      const totalCount = labelItems.reduce((sum, i) => i.fillPage ? sum + 14 : sum + i.copies, 0);
       toast({ title: 'Labels Generated', description: `${totalCount} labels ready to print.` });
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -242,7 +242,7 @@ export default function ProductLabelsPage() {
     }
   };
 
-  const totalLabels = labelItems.reduce((sum, item) => item.fillPage ? sum + 30 : sum + item.copies, 0);
+  const totalLabels = labelItems.reduce((sum, item) => item.fillPage ? sum + 14 : sum + item.copies, 0);
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
@@ -250,7 +250,7 @@ export default function ProductLabelsPage() {
         <Tag className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-2xl font-bold">Product Label Generator</h1>
-          <p className="text-muted-foreground">Generate Avery 8160 product labels with barcodes</p>
+          <p className="text-muted-foreground">Generate Avery 8162 product labels with barcodes</p>
         </div>
       </div>
 
@@ -372,7 +372,7 @@ export default function ProductLabelsPage() {
                           <Minus className="h-3 w-3" />
                         </Button>
                         <Input
-                          value={item.fillPage ? '30' : item.copies}
+                          value={item.fillPage ? '14' : item.copies}
                           onChange={(e) => setCopies(item.productId, e.target.value)}
                           className="w-14 text-center text-sm"
                           disabled={item.fillPage}

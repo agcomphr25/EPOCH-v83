@@ -11,17 +11,17 @@ const POINTS_PER_INCH = 72;
 const PAGE_WIDTH = 8.5 * POINTS_PER_INCH;    // 612pt
 const PAGE_HEIGHT = 11 * POINTS_PER_INCH;    // 792pt
 
-// Avery 8160: 2.625" x 1", 3 columns x 10 rows = 30 per sheet
-const LABEL_WIDTH = 2.625 * POINTS_PER_INCH;  // 189pt
-const LABEL_HEIGHT = 1.0 * POINTS_PER_INCH;   // 72pt
+// Avery 8162: 4" x 1.333", 2 columns x 7 rows = 14 per sheet
+const LABEL_WIDTH = 4.0 * POINTS_PER_INCH;        // 288pt
+const LABEL_HEIGHT = 1.333 * POINTS_PER_INCH;     // ~96pt
 
-const COLUMNS = 3;
-const ROWS = 10;
-const LABELS_PER_PAGE = COLUMNS * ROWS;        // 30
+const COLUMNS = 2;
+const ROWS = 7;
+const LABELS_PER_PAGE = COLUMNS * ROWS;            // 14
 
-const LEFT_MARGIN = 0.1875 * POINTS_PER_INCH;  // 13.5pt
-const TOP_MARGIN = 0.5 * POINTS_PER_INCH;      // 36pt
-const H_GAP = 0.125 * POINTS_PER_INCH;         // 9pt
+const LEFT_MARGIN = 0.156 * POINTS_PER_INCH;      // ~11.2pt
+const TOP_MARGIN = 0.83 * POINTS_PER_INCH;        // ~59.8pt
+const H_GAP = 0.1875 * POINTS_PER_INCH;           // 13.5pt
 const V_GAP = 0;
 
 function getLabelPosition(index: number): { x: number; y: number } {
@@ -160,19 +160,19 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
         const { x, y } = getLabelPosition(labelIndex);
         const item = labelItems[i];
 
-        // Avery 8160: 189pt wide x 72pt tall
+        // Avery 8162: 288pt wide x ~96pt tall
         // Layout (from top): code text → barcode image → description
-        const padding = 6;
-        const labelInnerWidth = LABEL_WIDTH - padding * 2;  // ~177pt usable width
+        const padding = 8;
+        const labelInnerWidth = LABEL_WIDTH - padding * 2;  // ~272pt usable width
         const centerX = x + LABEL_WIDTH / 2;
 
-        // Code value text at top (size 9 bold)
+        // Code value text at top (size 12 bold)
         const codeText = item.barcodeValue;
-        const codeFontSize = 9;
+        const codeFontSize = 12;
         const codeWidth = boldFont.widthOfTextAtSize(codeText, codeFontSize);
         page.drawText(codeText, {
           x: centerX - codeWidth / 2,
-          y: y + 59,   // ~4pt from top of 72pt label
+          y: y + LABEL_HEIGHT - 16,   // ~6pt from top
           size: codeFontSize,
           font: boldFont,
           color: rgb(0, 0, 0),
@@ -184,10 +184,10 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
             const pngBuffer = await generateBarcodePng(item.barcodeValue);
             const barcodeImage = await pdfDoc.embedPng(pngBuffer);
 
-            const barcodeDisplayWidth = Math.min(labelInnerWidth - 8, 170);
-            const barcodeDisplayHeight = 22;
+            const barcodeDisplayWidth = Math.min(labelInnerWidth - 16, 250);
+            const barcodeDisplayHeight = 32;
             const barcodeX = centerX - barcodeDisplayWidth / 2;
-            const barcodeY = y + 28;   // barcode spans y+28 to y+50
+            const barcodeY = y + LABEL_HEIGHT - 58;   // centered vertically
 
             page.drawImage(barcodeImage, {
               x: barcodeX,
@@ -200,24 +200,24 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
             page.drawText('[BARCODE ERROR]', {
               x: centerX - 40,
               y: y + LABEL_HEIGHT / 2,
-              size: 7,
+              size: 9,
               font: font,
               color: rgb(1, 0, 0),
             });
           }
         }
 
-        // Description text at bottom (size 7, up to 2 lines)
-        const descFontSize = 7;
+        // Description text at bottom (size 9, up to 2 lines)
+        const descFontSize = 9;
         const maxDescLines = 2;
         const descLines = wrapText(item.description, font, descFontSize, labelInnerWidth - 8).slice(0, maxDescLines);
-        const descStartY = y + 20;   // bottom text area
+        const descStartY = y + LABEL_HEIGHT - 70;   // bottom text area
 
         descLines.forEach((line, lineIndex) => {
           const lineWidth = font.widthOfTextAtSize(line, descFontSize);
           page.drawText(line, {
             x: centerX - lineWidth / 2,
-            y: descStartY - lineIndex * 9,
+            y: descStartY - lineIndex * 12,
             size: descFontSize,
             font: font,
             color: rgb(0, 0, 0),

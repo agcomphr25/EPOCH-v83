@@ -131,7 +131,9 @@ export default function ProductionTracker() {
   });
 
   // Get summary by PO
-  const poSummary = getProductionSummaryByPO(filteredOrders);
+  const poSummary = getProductionSummaryByPO(filteredOrders).sort((a, b) =>
+    (a.customerName || '').localeCompare(b.customerName || '')
+  );
 
   const handleEdit = (order: ProductionOrder) => {
     setEditingOrder(order);
@@ -328,7 +330,7 @@ export default function ProductionTracker() {
                                           {order.orderId}
                                         </td>
                                         <td className="py-1.5 pr-4 font-mono text-xs">
-                                          {order.itemName || order.itemId}
+                                          {order.itemId?.toLowerCase()}
                                         </td>
                                         <td className="py-1.5 text-muted-foreground">
                                           {order.currentDepartment || '—'}

@@ -353,6 +353,53 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Serialized item sync skipped:', syncErr.message);
       }
 
+      // Data correction: PO 037517 item 225 (Grace Engineering) — fix cf_privateer → cf_beartooth
+      // The specifications snapshot was frozen with the wrong stock model at creation time.
+      // This correction updates stockModelId, stockModelName, and specifications.stockModel atomically.
+      // Also corrects any production_orders spawned from item 225 that have the same bad snapshot.
+      try {
+        const { pgPool: corrPgPool } = await import('./db');
+        const checkResult = await corrPgPool.query(
+          `SELECT id FROM purchase_order_items WHERE id = 225 AND stock_model_id = 'cf_privateer'`
+        );
+        if (checkResult.rows.length > 0) {
+          await corrPgPool.query(`
+            UPDATE purchase_order_items
+            SET stock_model_id   = 'cf_beartooth',
+                stock_model_name = 'Carbon Fiber Beartooth',
+                specifications   = jsonb_set(
+                  specifications::jsonb,
+                  '{stockModel}',
+                  '"cf_beartooth"'
+                ),
+                updated_at = NOW()
+            WHERE id = 225 AND stock_model_id = 'cf_privateer'
+          `);
+          console.log('✅ Data correction: PO item 225 stock model corrected cf_privateer → cf_beartooth');
+        } else {
+          console.log('✅ Data correction: PO item 225 already correct or not found, skipping');
+        }
+        // Also fix production_orders that were spawned from PO item 225 with the bad snapshot
+        const prodCheckResult = await corrPgPool.query(
+          `SELECT id FROM production_orders WHERE po_item_id = 225 AND specifications->>'stockModel' = 'cf_privateer'`
+        );
+        if (prodCheckResult.rows.length > 0) {
+          await corrPgPool.query(`
+            UPDATE production_orders
+            SET specifications = jsonb_set(
+                  specifications::jsonb,
+                  '{stockModel}',
+                  '"cf_beartooth"'
+                ),
+                updated_at = NOW()
+            WHERE po_item_id = 225 AND specifications->>'stockModel' = 'cf_privateer'
+          `);
+          console.log(`✅ Data correction: ${prodCheckResult.rows.length} production_orders for PO item 225 corrected cf_privateer → cf_beartooth`);
+        }
+      } catch (corrErr: any) {
+        console.warn('⚠️ PO item 225 data correction skipped:', corrErr.message);
+      }
+
       // Sync serialized items stuck at "Pending Layup" with their actual work task progress
       try {
         const { sql: sqlDeptSync } = await import('drizzle-orm');

@@ -13,10 +13,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { AveryLabelPrint } from '@/components/AveryLabelPrint';
+
+interface StockModel {
+  id: string;
+  name: string;
+  displayName: string;
+  price: number;
+  isActive: boolean;
+}
 
 interface POItem {
   id: number;
@@ -101,7 +116,7 @@ export default function POItemsManager({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<POItem | null>(null);
-  const [editForm, setEditForm] = useState({ itemName: '', quantity: 1, unitPrice: 0, notes: '' });
+  const [editForm, setEditForm] = useState({ itemName: '', quantity: 1, unitPrice: 0, notes: '', stockModelId: '' });
   const [barcodeItemId, setBarcodeItemId] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -128,6 +143,16 @@ export default function POItemsManager({
     enabled: poItems.some((item) => item.itemType === 'custom_model'),
   });
 
+  // Fetch stock models for the stock model dropdown in edit dialog
+  const { data: stockModels = [] } = useQuery<StockModel[]>({
+    queryKey: ['/api/stock-models'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/stock-models');
+      return result;
+    },
+    enabled: isEditDialogOpen,
+  });
+
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (itemId: number) => {
@@ -152,12 +177,20 @@ export default function POItemsManager({
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ itemId, data }: { itemId: number; data: any }) => {
-      return await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
+    mutationFn: async ({ itemId, data, stockModelId }: { itemId: number; data: POItemUpdatePayload; stockModelId?: string }) => {
+      const result = await apiRequest(`/api/pos/${poId}/items/${itemId}`, {
         method: 'PUT',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
       });
+      if (stockModelId) {
+        await apiRequest(`/api/pos/${poId}/items/${itemId}/stock-model`, {
+          method: 'PATCH',
+          body: JSON.stringify({ stockModelId }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/pos/${poId}/items`] });
@@ -184,27 +217,46 @@ export default function POItemsManager({
 
   const handleEditItem = (item: POItem) => {
     setEditItem(item);
+    const currentStockModelId = item.specifications?.stockModel || item.specifications?.stockModelId || '';
     setEditForm({
       itemName: item.itemName,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       notes: item.notes || '',
+      stockModelId: currentStockModelId,
     });
     setIsEditDialogOpen(true);
   };
 
+  interface POItemUpdatePayload {
+    itemName: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    notes: string | null;
+  }
+
   const handleSaveEdit = () => {
     if (!editItem) return;
     const totalPrice = editForm.quantity * editForm.unitPrice;
+
+    const updateData: POItemUpdatePayload = {
+      itemName: editForm.itemName,
+      quantity: editForm.quantity,
+      unitPrice: editForm.unitPrice,
+      totalPrice,
+      notes: editForm.notes || null,
+    };
+
+    const stockModelId =
+      editForm.stockModelId && editForm.stockModelId !== (editItem.specifications as Record<string, unknown>)?.stockModel
+        ? editForm.stockModelId
+        : undefined;
+
     updateMutation.mutate({
       itemId: editItem.id,
-      data: {
-        itemName: editForm.itemName,
-        quantity: editForm.quantity,
-        unitPrice: editForm.unitPrice,
-        totalPrice,
-        notes: editForm.notes || null,
-      },
+      data: updateData,
+      stockModelId,
     });
   };
 
@@ -530,6 +582,27 @@ export default function POItemsManager({
                   onChange={(e) => setEditForm({ ...editForm, itemName: e.target.value })}
                   className="mt-1"
                 />
+              </div>
+              <div>
+                <Label htmlFor="edit-stock-model">Stock Model</Label>
+                <Select
+                  value={editForm.stockModelId}
+                  onValueChange={(value) => setEditForm({ ...editForm, stockModelId: value })}
+                >
+                  <SelectTrigger className="mt-1" id="edit-stock-model">
+                    <SelectValue placeholder="Select stock model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stockModels.filter((sm) => sm.isActive).map((sm) => (
+                      <SelectItem key={sm.id} value={sm.id}>
+                        {sm.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Updates the stock model ID, name, and specifications snapshot together.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

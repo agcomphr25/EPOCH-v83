@@ -6299,6 +6299,50 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // PATCH /api/pos/:poId/items/:itemId/stock-model — atomically update stockModelId, stockModelName, and specifications.stockModel
+  app.patch('/api/pos/:poId/items/:itemId/stock-model', async (req, res) => {
+    try {
+      const { poId, itemId } = req.params;
+      const { stockModelId } = req.body;
+
+      if (!stockModelId || typeof stockModelId !== 'string') {
+        return res.status(400).json({ error: 'stockModelId (string) is required' });
+      }
+
+      const { storage } = await import('../../storage');
+      const { db } = await import('../../db');
+      const { stockModels } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+
+      const [stockModel] = await db.select().from(stockModels).where(eq(stockModels.id, stockModelId)).limit(1);
+      if (!stockModel) {
+        return res.status(404).json({ error: `Stock model '${stockModelId}' not found` });
+      }
+
+      const currentItem = await storage.getPurchaseOrderItem(parseInt(itemId));
+      if (!currentItem) {
+        return res.status(404).json({ error: `PO item ${itemId} not found` });
+      }
+
+      const updatedSpecs = {
+        ...(currentItem.specifications as Record<string, any> || {}),
+        stockModel: stockModel.id,
+      };
+
+      const updatedItem = await storage.updatePurchaseOrderItem(parseInt(itemId), {
+        stockModelId: stockModel.id,
+        stockModelName: stockModel.displayName || stockModel.name,
+        specifications: updatedSpecs,
+      });
+
+      console.log(`🔧 PATCH stock-model: PO item ${itemId} → ${stockModel.id} (${stockModel.displayName})`);
+      res.json(updatedItem);
+    } catch (_error) {
+      console.error('🔧 PATCH stock-model error:', _error);
+      res.status(500).json({ error: 'Failed to update stock model on PO item' });
+    }
+  });
+
   app.delete('/api/pos/:poId/items/:itemId', async (req, res) => {
     try {
       console.log('🔧 Delete Purchase Order Item endpoint called');

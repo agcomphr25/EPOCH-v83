@@ -298,7 +298,7 @@ export default function BarcodeQueuePage() {
     barcodeOrders.forEach((order: any) => {
       const modelId = order.modelId;
       const stockModel = (stockModels as any[]).find(
-        (m: any) => m.id === modelId
+        (m: any) => m.id === modelId || m.slug === modelId
       );
 
       const baseName =
@@ -306,16 +306,23 @@ export default function BarcodeQueuePage() {
         stockModel?.name ||
         modelId;
 
-      let cleanedName = baseName
+      let cleanedName = (baseName || 'Unknown')
         .replace(/^CF\s+/i, '')
         .replace(/^FG\s+/i, '')
         .replace(/^M1A\s+/i, '')
-        .replace(/^APR\s+/i, '');
-      cleanedName = cleanedName.replace(/-Tikka$/i, '');
+        .replace(/^APR\s+/i, '')
+        .replace(/^cf_/i, '')
+        .replace(/^fg_/i, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+      cleanedName = cleanedName.replace(/-Tikka$/i, '').replace(/\s+Tikka$/i, '');
 
       const labels = deriveOrderLabels(order);
       const materialLabel = order.materialCanonical || labels.materialLabel;
-      const categoryKey = `${cleanedName} - ${labels.actionLabel}`;
+      const actionLabelPart = labels.actionLengthRaw !== 'unknown' ? labels.actionLabel : '';
+      const categoryKey = actionLabelPart
+        ? `${cleanedName} - ${actionLabelPart}`
+        : cleanedName;
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];

@@ -521,8 +521,7 @@ import {
 import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
 
 // Helper: Explicit column selection for production_orders table
-// Note: departmentHistory is defined in schema but does NOT exist in actual database table
-// Using SELECT * would fail because Drizzle tries to select the non-existent column
+// Explicitly list all columns needed by getAllOrders() normalization logic.
 const productionOrdersColumns = {
   id: productionOrders.id,
   orderId: productionOrders.orderId,
@@ -549,6 +548,17 @@ const productionOrdersColumns = {
   currentDepartment: productionOrders.currentDepartment,
   materialCanonical: productionOrders.materialCanonical,
   sourceSnapshot: productionOrders.sourceSnapshot,
+  departmentHistory: productionOrders.departmentHistory,
+  barcodeCompletedAt: productionOrders.barcodeCompletedAt,
+  layupCompletedAt: productionOrders.layupCompletedAt,
+  cncCompletedAt: productionOrders.cncCompletedAt,
+  finishCompletedAt: productionOrders.finishCompletedAt,
+  finishAcceptedAt: productionOrders.finishAcceptedAt,
+  finishAcceptedBy: productionOrders.finishAcceptedBy,
+  gunsmithCompletedAt: productionOrders.gunsmithCompletedAt,
+  paintCompletedAt: productionOrders.paintCompletedAt,
+  qcCompletedAt: productionOrders.qcCompletedAt,
+  shippingCompletedAt: productionOrders.shippingCompletedAt,
 };
 
 // modify the interface with any CRUD methods
@@ -3314,10 +3324,13 @@ export class DatabaseStorage implements IStorage {
         departmentHistory: po.departmentHistory || [],
         scrappedQuantity: null,
         totalProduced: null,
+        barcodeCompletedAt: po.barcodeCompletedAt,
         layupCompletedAt: po.layupCompletedAt,
         pluggingCompletedAt: null,
         cncCompletedAt: po.cncCompletedAt,
         finishCompletedAt: po.finishCompletedAt,
+        finishAcceptedAt: po.finishAcceptedAt,
+        finishAcceptedBy: po.finishAcceptedBy,
         gunsmithCompletedAt: po.gunsmithCompletedAt,
         paintCompletedAt: po.paintCompletedAt,
         qcCompletedAt: po.qcCompletedAt,

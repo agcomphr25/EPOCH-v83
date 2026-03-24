@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
 
 import { db, pool, rawSql } from '../../db';
-import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels, insertMoldSchema } from '../../schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 import { deriveCanonicalMaterial } from '../utils/deriveCanonicalMaterial';
@@ -40,6 +40,26 @@ router.get('/molds', async (req: Request, res: Response) => {
     res.json({ success: true, molds: allMolds });
   } catch (error: any) {
     console.error('Error fetching molds:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create a new mold
+router.post('/molds', async (req: Request, res: Response) => {
+  try {
+    const result = insertMoldSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid mold data',
+        details: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')
+      });
+    }
+    const [newMold] = await db.insert(molds).values(result.data).returning();
+    console.log('✅ Created new mold:', newMold);
+    res.status(201).json({ success: true, mold: newMold });
+  } catch (error: any) {
+    console.error('Error creating mold:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

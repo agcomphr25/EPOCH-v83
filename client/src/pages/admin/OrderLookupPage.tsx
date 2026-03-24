@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, CheckCircle2, XCircle, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, CheckCircle, AlertTriangle, Tag } from 'lucide-react';
 
 const FIELD_LABELS: Record<string, string> = {
   stock_model:   'Stock Model',
@@ -42,6 +42,17 @@ export default function OrderLookupPage() {
   const totalScored: number = data?.totalScored ?? 0;
   const isPerfect = topScore > 0 && topScore === maxPossible;
   const isDefinitive = matches.length === 1;
+
+  // Resolve the best direct item code from the order row
+  const directItemCode: string | null = (() => {
+    if (!data?.order) return null;
+    const o = data.order;
+    // Prefer the PO item's item_id (most authoritative), then the order's own item_id
+    const candidate = o.poi_item_id || o.item_id || null;
+    // Reject numeric-only or blank values (legacy bad data)
+    if (!candidate || /^\d+$/.test(candidate.trim())) return null;
+    return candidate.trim();
+  })();
 
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
@@ -103,6 +114,30 @@ export default function OrderLookupPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Direct item code from PO link */}
+          {directItemCode ? (
+            <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
+              <CardContent className="py-4 flex items-center gap-4">
+                <Tag className="h-5 w-5 text-blue-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-0.5">
+                    Associated Item Code (via PO link)
+                  </p>
+                  <p className="font-mono font-bold text-lg text-blue-900 dark:text-blue-100">
+                    {directItemCode}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-dashed border-muted">
+              <CardContent className="py-4 flex items-center gap-3 text-muted-foreground">
+                <Tag className="h-4 w-4 shrink-0 opacity-50" />
+                <p className="text-sm">No direct item code linked to this order — see spec-match results below.</p>
+              </CardContent>
+            </Card>
+          )}
 
           {matches.length === 0 ? (
             <Card>

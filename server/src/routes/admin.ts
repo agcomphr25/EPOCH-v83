@@ -1475,10 +1475,15 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
     const { orderId } = req.query as { orderId?: string };
     if (!orderId) return res.status(400).json({ error: 'orderId is required' });
 
-    // Get the production order and its specs
+    // Get the production order and its specs, plus directly linked item code
     const orderRows = await pool.query(
-      `SELECT id, order_id, po_number, current_department, production_status, specifications
-       FROM production_orders WHERE order_id = $1 LIMIT 1`,
+      `SELECT po.id, po.order_id, po.po_number, po.current_department, po.production_status,
+              po.specifications, po.item_id, po.item_name, po.po_item_id,
+              poi.item_id  AS poi_item_id,
+              poi.item_name AS poi_item_name
+       FROM production_orders po
+       LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
+       WHERE po.order_id = $1 LIMIT 1`,
       [orderId]
     );
     if (orderRows.length === 0) return res.json({ order: null, matches: [] });

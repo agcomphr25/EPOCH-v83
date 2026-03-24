@@ -1793,12 +1793,21 @@ export default function CuttingOperatorDashboard() {
                           <span className="text-muted-foreground text-sm ml-2">Roll {roll.rollNumber}</span>
                         </div>
                       </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <div>Lot: {roll.lotNumber || 'N/A'} | Batch: {roll.batchNumber || 'N/A'}</div>
-                        <div>
-                          {parseFloat(roll.squareMeters || '0').toFixed(1)} m²
-                          {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                      <div className="flex items-center gap-2">
+                        <div className="text-right text-xs text-muted-foreground">
+                          <div>Lot: {roll.lotNumber || 'N/A'} | Batch: {roll.batchNumber || 'N/A'}</div>
+                          <div>
+                            {parseFloat(roll.squareMeters || '0').toFixed(1)} m²
+                            {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
+                          </div>
                         </div>
+                        <button
+                          onClick={() => setValidatedRolls(prev => prev.filter(r => r.id !== roll.id))}
+                          className="ml-1 p-1 text-muted-foreground hover:text-red-600 transition-colors"
+                          aria-label="Remove roll"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   ))}

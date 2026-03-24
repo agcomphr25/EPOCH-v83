@@ -15,11 +15,8 @@ import {
   CheckSquare,
   Square,
   CheckCircle,
-  Clock,
-  ClipboardCheck,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -35,27 +32,6 @@ export default function FinishQCQueuePage() {
   // Get repair order information
   const { isRepairOrder, repairNotesMap } = useRepairOrders();
 
-  // Get logged-in session user for ownership checks
-  const { data: sessionUser } = useQuery<any>({
-    queryKey: ['/api/auth/session'],
-  });
-
-  // Derive the logged-in employee's full name (used to check order ownership)
-  const loggedInEmployeeName = useMemo(() => {
-    if (!sessionUser) return null;
-    const first = sessionUser.firstName || '';
-    const last = sessionUser.lastName || '';
-    const full = `${first} ${last}`.trim();
-    return full || null;
-  }, [sessionUser]);
-
-  // Admin / production-manager override: can accept any order
-  const isAdminUser = useMemo(() => {
-    if (!sessionUser) return false;
-    const role = (sessionUser.role || '').toUpperCase();
-    return role === 'ADMIN' || sessionUser.username === 'agrace';
-  }, [sessionUser]);
-
   // Get orders in Finish QC department
   const { data: finishQCOrders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders/department/Finish QC'],
@@ -66,39 +42,17 @@ export default function FinishQCQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
-  // Split orders: unaccepted vs accepted
-  const awaitingOrders = useMemo(
-    () => finishQCOrders.filter((o: any) => !o.finishAcceptedAt),
-    [finishQCOrders]
-  );
-  const acceptedOrders = useMemo(
-    () => finishQCOrders.filter((o: any) => !!o.finishAcceptedAt),
-    [finishQCOrders]
-  );
-
-  // Filter accepted orders by search (checkboxes only apply to accepted)
+  // All orders feed directly into the selectable list (acceptance step disabled)
   const filteredAccepted = useMemo(() => {
-    if (!searchQuery.trim()) return acceptedOrders;
+    if (!searchQuery.trim()) return finishQCOrders;
     const query = searchQuery.toLowerCase().trim();
-    return acceptedOrders.filter((order: any) => {
+    return finishQCOrders.filter((order: any) => {
       const orderId = order.orderId?.toLowerCase() || '';
       const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
       const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
       return orderId.includes(query) || fbNumber.includes(query) || displayOrderId.includes(query);
     });
-  }, [acceptedOrders, searchQuery]);
-
-  // Filter awaiting orders by search
-  const filteredAwaiting = useMemo(() => {
-    if (!searchQuery.trim()) return awaitingOrders;
-    const query = searchQuery.toLowerCase().trim();
-    return awaitingOrders.filter((order: any) => {
-      const orderId = order.orderId?.toLowerCase() || '';
-      const fbNumber = order.fbOrderNumber?.toLowerCase() || '';
-      const displayOrderId = getDisplayOrderId(order.orderId)?.toLowerCase() || '';
-      return orderId.includes(query) || fbNumber.includes(query) || displayOrderId.includes(query);
-    });
-  }, [awaitingOrders, searchQuery]);
+  }, [finishQCOrders, searchQuery]);
 
   // Count orders in adjacent departments
   const prevDeptCount = useMemo(
@@ -201,24 +155,6 @@ export default function FinishQCQueuePage() {
     );
   }, [selectedOrders.size, filteredAccepted.length]);
 
-  // ── Accept mutation ────────────────────────────────────────────────────────
-  const acceptMutation = useMutation({
-    mutationFn: async ({ orderId, technicianName }: { orderId: string; technicianName: string }) =>
-      apiRequest(`/api/orders/${orderId}/finish-accept`, {
-        method: 'POST',
-        body: { technicianName },
-      }),
-    onSuccess: (_data, { orderId }) => {
-      toast.success(`Order accepted`);
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/department/Finish QC'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-    },
-    onError: (err: any) => {
-      const msg = err?.message || 'Failed to accept order';
-      toast.error(msg);
-    },
-  });
-
   // ── Progress to Paint mutation ─────────────────────────────────────────────
   const progressToPaint = useMutation({
     mutationFn: async (orderIds: string[]) => {
@@ -255,15 +191,6 @@ export default function FinishQCQueuePage() {
       return;
     }
     progressToPaint.mutate(Array.from(selectedOrders));
-  };
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  // Determine if the logged-in user can accept a given order
-  const canAcceptOrder = (order: any): boolean => {
-    if (isAdminUser) return true;
-    if (!loggedInEmployeeName) return false;
-    const assignedTo = order.assignedTechnician || '';
-    return assignedTo.toLowerCase() === loggedInEmployeeName.toLowerCase();
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -355,109 +282,20 @@ export default function FinishQCQueuePage() {
         </Card>
       </div>
 
-      {/* ── SECTION A: AWAITING QC ACCEPTANCE ─────────────────────────────── */}
-      <Card>
-        <CardHeader className="bg-amber-50 dark:bg-amber-900/20">
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-amber-600" />
-            <span>Awaiting QC Acceptance</span>
-            <Badge
-              variant="outline"
-              className="ml-2 border-amber-300 text-amber-700 dark:text-amber-300"
-            >
-              {awaitingOrders.length} Orders
-            </Badge>
-            {searchQuery && filteredAwaiting.length !== awaitingOrders.length && (
-              <Badge variant="secondary" className="ml-1">
-                {filteredAwaiting.length} shown
-              </Badge>
-            )}
-          </CardTitle>
-          <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
-            QC technicians must accept their assigned orders before beginning inspection
-          </p>
-        </CardHeader>
-        <CardContent className="p-4">
-          {filteredAwaiting.length === 0 ? (
-            <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-              {awaitingOrders.length === 0
-                ? 'All orders have been accepted — great work!'
-                : `No orders matching "${searchQuery}"`}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredAwaiting.map((order: any) => {
-                const isHighlighted = highlightedOrderId === order.orderId;
-                const canAccept = canAcceptOrder(order);
-                return (
-                  <div
-                    key={order.orderId}
-                    id={`order-${order.orderId}`}
-                    className={`relative transition-all duration-200 ${
-                      isHighlighted
-                        ? 'ring-4 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg'
-                        : ''
-                    }`}
-                  >
-                    <OrderTooltip
-                      order={order}
-                      stockModels={stockModels as any[]}
-                      showPaintAndTexture={true}
-                      showHoverText={false}
-                      disableHoverPopup={true}
-                      showTechnician={true}
-                      isRepair={isRepairOrder(order.orderId)}
-                      repairNotes={repairNotesMap.get(order.orderId)}
-                      className="border-l-amber-500"
-                    />
-                    {/* Accept button overlay */}
-                    <div className="mt-1 px-1">
-                      {canAccept ? (
-                        <Button
-                          size="sm"
-                          className="w-full h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white"
-                          disabled={acceptMutation.isPending}
-                          onClick={() =>
-                            acceptMutation.mutate({
-                              orderId: order.orderId,
-                              technicianName: order.assignedTechnician || loggedInEmployeeName || '',
-                            })
-                          }
-                        >
-                          <ClipboardCheck className="h-3 w-3 mr-1" />
-                          Accept for QC
-                        </Button>
-                      ) : (
-                        <div className="text-xs text-center text-gray-400 dark:text-gray-500 py-1">
-                          Assigned to{' '}
-                          <span className="font-medium text-gray-600 dark:text-gray-400">
-                            {order.assignedTechnician || 'unassigned'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── SECTION B: ACCEPTED / IN QC ───────────────────────────────────── */}
+      {/* ── FINISH QC ORDERS ──────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="bg-green-50 dark:bg-green-900/20">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-600" />
-              <span>Accepted / In QC</span>
+              <span>Finish QC Orders</span>
               <Badge
                 variant="outline"
                 className="ml-2 border-green-300 text-green-700 dark:text-green-300"
               >
-                {acceptedOrders.length} Orders
+                {finishQCOrders.length} Orders
               </Badge>
-              {searchQuery && filteredAccepted.length !== acceptedOrders.length && (
+              {searchQuery && filteredAccepted.length !== finishQCOrders.length && (
                 <Badge variant="secondary" className="ml-1">
                   {filteredAccepted.length} shown
                 </Badge>
@@ -496,15 +334,15 @@ export default function FinishQCQueuePage() {
             )}
           </CardTitle>
           <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-            Select accepted orders and click <strong>Progress to Paint</strong> when QC is complete
+            Select orders and click <strong>Progress to Paint</strong> when QC is complete
           </p>
         </CardHeader>
         <CardContent className="p-4">
           {filteredAccepted.length === 0 ? (
             <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-              {acceptedOrders.length === 0
-                ? 'No accepted orders yet — technicians must accept orders above to begin QC'
-                : `No accepted orders matching "${searchQuery}"`}
+              {finishQCOrders.length === 0
+                ? 'No orders in Finish QC'
+                : `No orders matching "${searchQuery}"`}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -534,16 +372,6 @@ export default function FinishQCQueuePage() {
                       repairNotes={repairNotesMap.get(order.orderId)}
                       className={`border-l-green-500 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                     />
-                    {/* Accepted-by badge */}
-                    {order.finishAcceptedAt && (
-                      <div className="flex items-center gap-1 mt-1 px-2 py-1 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800 mx-1">
-                        <CheckCircle className="w-3 h-3 shrink-0" />
-                        <span className="font-medium truncate">{order.finishAcceptedBy}</span>
-                        <span className="text-gray-400 shrink-0">
-                          · {format(new Date(order.finishAcceptedAt), 'M/d h:mm a')}
-                        </span>
-                      </div>
-                    )}
                     {/* Checkbox for progress selection */}
                     <div className="absolute top-2 right-2">
                       <Checkbox

@@ -6197,6 +6197,7 @@ export interface P1POQueueItem {
   poNumber: string;
   productName: string;
   stockModel: string | null;
+  specifications: Record<string, any> | null;
   actionLength: string | null;
   material: string | null;
   handedness: string | null;

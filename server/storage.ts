@@ -9774,6 +9774,7 @@ export class DatabaseStorage implements IStorage {
             poNumber: po.poNumber,
             productName: item.itemName || '',
             stockModel: stockModel,
+            specifications: specs && Object.keys(specs).length > 0 ? specs : null,
             itemType: item.itemType || null,
             actionLength: specs.actionLength || specs.action_length || null,
             material: specs.material || null,

@@ -194,6 +194,17 @@ export default function ProductionQueueManager() {
     queryFn: () => apiRequest('/api/p1-po-queue/purchase-orders/open'),
   });
 
+  // Fetch stock models for display name resolution in PO queue
+  const { data: stockModels = [] } = useQuery<{ id: string; displayName: string }[]>({
+    queryKey: ['/api/stock-models'],
+  });
+
+  const getStockModelDisplayName = (modelId: string | null): string => {
+    if (!modelId) return '-';
+    const model = stockModels.find((m) => m.id === modelId);
+    return model ? model.displayName : modelId;
+  };
+
   // P1 Purchase Order items query removed - now managed via OEM Priority Settings
 
   // Fetch orders that need attention (missing critical information for layup scheduling)
@@ -1393,7 +1404,7 @@ export default function ProductionQueueManager() {
                                       </TableCell>
                                       <TableCell>
                                         <Badge variant="outline">
-                                          {item.stockModel || '-'}
+                                          {getStockModelDisplayName(item.specifications?.stockModel || item.stockModel)}
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-sm">

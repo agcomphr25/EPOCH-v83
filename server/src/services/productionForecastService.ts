@@ -95,7 +95,7 @@ export interface ForecastSummary {
 }
 
 let cycleTimeCache: { data: Record<string, number>; cachedAt: number } | null = null;
-const CYCLE_CACHE_TTL = 300_000;
+const CYCLE_CACHE_TTL = 900_000;
 
 async function loadCycleTimes(): Promise<Record<string, number>> {
   if (cycleTimeCache && Date.now() - cycleTimeCache.cachedAt < CYCLE_CACHE_TTL) {
@@ -167,7 +167,7 @@ async function loadCycleTimes(): Promise<Record<string, number>> {
 }
 
 let modelCycleTimeCache: { data: Record<string, Record<string, number>>; cachedAt: number } | null = null;
-const MODEL_CYCLE_CACHE_TTL = 300_000;
+const MODEL_CYCLE_CACHE_TTL = 900_000;
 
 async function loadModelCycleTimes(): Promise<Record<string, Record<string, number>>> {
   if (modelCycleTimeCache && Date.now() - modelCycleTimeCache.cachedAt < MODEL_CYCLE_CACHE_TTL) {
@@ -216,7 +216,7 @@ async function getCycleTimesForModel(modelId: string | null): Promise<{ times: R
 }
 
 let queueWeightCache: { data: Record<string, number>; cachedAt: number } | null = null;
-const QUEUE_WEIGHT_CACHE_TTL = 300_000;
+const QUEUE_WEIGHT_CACHE_TTL = 900_000;
 
 async function loadQueueWeights(): Promise<Record<string, number>> {
   if (queueWeightCache && Date.now() - queueWeightCache.cachedAt < QUEUE_WEIGHT_CACHE_TTL) {
@@ -329,7 +329,7 @@ export async function forecastOrder(
 }
 
 let backlogCache: { data: Record<string, number>; cachedAt: number } | null = null;
-const BACKLOG_CACHE_TTL = 300_000;
+const BACKLOG_CACHE_TTL = 900_000;
 
 async function loadBacklogs(): Promise<Record<string, number>> {
   if (backlogCache && Date.now() - backlogCache.cachedAt < BACKLOG_CACHE_TTL) {

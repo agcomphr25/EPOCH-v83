@@ -2516,6 +2516,18 @@ async function initializeBackgroundServices() {
     } catch (svcError) {
       console.warn('⚠️ Queue integrity service failed to start:', svcError);
     }
+
+    // Pre-warm the production simulation cache so the first page load is instant
+    try {
+      const { runSimulation } = await import('./src/services/productionSimulator');
+      runSimulation().then(() => {
+        console.log('✅ Production simulation cache pre-warmed');
+      }).catch((err) => {
+        console.warn('⚠️ Production simulation cache pre-warm failed:', err);
+      });
+    } catch (warmErr) {
+      console.warn('⚠️ Could not import productionSimulator for pre-warm:', warmErr);
+    }
   } catch (error) {
     console.error('Error initializing background services:', error);
   }

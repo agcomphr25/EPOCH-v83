@@ -88,6 +88,7 @@ export interface SimulationSnapshot {
 
 let simulationCache: { snapshot: SimulationSnapshot; cachedAt: number } | null = null;
 const SIMULATION_CACHE_TTL = 300_000;
+let isRefreshing = false;
 
 function getSkipRules(order: { isFlattop?: boolean; features?: any; modelId?: string | null }): Set<string> {
   const skips = new Set<string>();
@@ -263,11 +264,7 @@ async function loadActiveOrders(): Promise<SimOrder[]> {
   });
 }
 
-export async function runSimulation(): Promise<SimulationSnapshot> {
-  if (simulationCache && Date.now() - simulationCache.cachedAt < SIMULATION_CACHE_TTL) {
-    return simulationCache.snapshot;
-  }
-
+async function runSimulationCore(): Promise<SimulationSnapshot> {
   const startTime = Date.now();
   const [activeOrders, capacity, cycleTimes, modelCycleTimes] = await Promise.all([
     loadActiveOrders(),
@@ -469,7 +466,31 @@ export async function runSimulation(): Promise<SimulationSnapshot> {
   };
 
   simulationCache = { snapshot, cachedAt: Date.now() };
+  isRefreshing = false;
   return snapshot;
+}
+
+export async function runSimulation(): Promise<SimulationSnapshot> {
+  const now = Date.now();
+  if (simulationCache && now - simulationCache.cachedAt < SIMULATION_CACHE_TTL) {
+    return simulationCache.snapshot;
+  }
+
+  if (simulationCache && !isRefreshing) {
+    isRefreshing = true;
+    runSimulationCore().catch((err) => {
+      console.error('[DES] Background refresh failed:', err);
+      isRefreshing = false;
+    });
+    return simulationCache.snapshot;
+  }
+
+  if (!simulationCache) {
+    const snapshot = await runSimulationCore();
+    return snapshot;
+  }
+
+  return simulationCache.snapshot;
 }
 
 export async function simulateFactoryCompletion(orderId: string): Promise<SimulationOrderResult | null> {

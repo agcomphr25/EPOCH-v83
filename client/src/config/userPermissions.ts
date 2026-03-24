@@ -237,6 +237,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/metal-accessories',
       '/training',
       '/oem-shipments',
+      '/product-labels',
     ],
   },
 

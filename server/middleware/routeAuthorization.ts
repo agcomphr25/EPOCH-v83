@@ -37,6 +37,7 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-management',
       '/customers',
       '/inventory/parts-request',
+      '/admin/order-lookup',
     ],
   },
 

@@ -16,6 +16,7 @@ import {
   GraduationCap,
   ScanBarcode,
   Tag,
+  Search,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -209,6 +210,20 @@ export default function FALEESHAHTestDashboard() {
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Print product labels
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/order-lookup">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-violet-200">
+            <CardContent className="p-4 text-center">
+              <Search className="w-8 h-8 text-violet-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Order Lookup
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Search and lookup orders
               </p>
             </CardContent>
           </Card>

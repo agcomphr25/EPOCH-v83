@@ -472,7 +472,8 @@ export default function POProductsPage() {
               ? poProducts.filter((p) =>
                   (p.customerName || '').toLowerCase().includes(q) ||
                   (p.productName || '').toLowerCase().includes(q) ||
-                  (p.productType || '').toLowerCase().includes(q)
+                  (p.productType || '').toLowerCase().includes(q) ||
+                  (p.customerProductNumber || '').toLowerCase().includes(q)
                 )
               : poProducts;
             return (

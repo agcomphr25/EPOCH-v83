@@ -54,6 +54,8 @@ import {
   p2TravelerChanges,
   p2SerializedItems,
   p2SerializedItemEvents,
+  p2NonconformingDispositions,
+  p2Rmas,
   partRoutings,
   travelers,
   travelerSteps,
@@ -280,6 +282,10 @@ import {
   type InsertP2SerializedItem,
   type P2SerializedItemEvent,
   type InsertP2SerializedItemEvent,
+  type P2NonconformingDisposition,
+  type InsertP2NonconformingDisposition,
+  type P2Rma,
+  type InsertP2Rma,
   type Traveler,
   type InsertTraveler,
   type TravelerStep,
@@ -2189,6 +2195,17 @@ export interface IStorage {
   // Sign Order Page Settings
   getSignOrderPageSettings(): Promise<any | undefined>;
   updateSignOrderPageSettings(data: any): Promise<any>;
+
+  // P2 Nonconforming Dispositions
+  getP2NonconformingDispositionsByItem(serializedItemId: string): Promise<P2NonconformingDisposition[]>;
+  createP2NonconformingDisposition(data: InsertP2NonconformingDisposition): Promise<P2NonconformingDisposition>;
+  resolveP2NonconformingDisposition(id: number): Promise<P2NonconformingDisposition | undefined>;
+
+  // P2 RMAs
+  getAllP2Rmas(): Promise<P2Rma[]>;
+  getP2RmasByStatus(status: 'open' | 'shipped' | 'complete'): Promise<P2Rma[]>;
+  createP2Rma(data: InsertP2Rma): Promise<P2Rma>;
+  updateP2Rma(id: number, data: Partial<InsertP2Rma & { shippedAt: Date | null; completedAt: Date | null }>): Promise<P2Rma | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -19179,6 +19196,60 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newSettings;
     }
+  }
+
+  // P2 Nonconforming Dispositions
+  async getP2NonconformingDispositionsByItem(serializedItemId: string): Promise<P2NonconformingDisposition[]> {
+    return db
+      .select()
+      .from(p2NonconformingDispositions)
+      .where(eq(p2NonconformingDispositions.serializedItemId, serializedItemId));
+  }
+
+  async createP2NonconformingDisposition(data: InsertP2NonconformingDisposition): Promise<P2NonconformingDisposition> {
+    const [disposition] = await db
+      .insert(p2NonconformingDispositions)
+      .values({ ...data, createdAt: new Date(), updatedAt: new Date() })
+      .returning();
+    return disposition;
+  }
+
+  async resolveP2NonconformingDisposition(id: number): Promise<P2NonconformingDisposition | undefined> {
+    const [updated] = await db
+      .update(p2NonconformingDispositions)
+      .set({ resolved: true, resolvedAt: new Date(), updatedAt: new Date() })
+      .where(eq(p2NonconformingDispositions.id, id))
+      .returning();
+    return updated;
+  }
+
+  // P2 RMAs
+  async getAllP2Rmas(): Promise<P2Rma[]> {
+    return db.select().from(p2Rmas);
+  }
+
+  async getP2RmasByStatus(status: 'open' | 'shipped' | 'complete'): Promise<P2Rma[]> {
+    return db
+      .select()
+      .from(p2Rmas)
+      .where(eq(p2Rmas.status, status));
+  }
+
+  async createP2Rma(data: InsertP2Rma): Promise<P2Rma> {
+    const [rma] = await db
+      .insert(p2Rmas)
+      .values({ ...data, createdAt: new Date(), updatedAt: new Date() })
+      .returning();
+    return rma;
+  }
+
+  async updateP2Rma(id: number, data: Partial<InsertP2Rma & { shippedAt: Date | null; completedAt: Date | null }>): Promise<P2Rma | undefined> {
+    const [updated] = await db
+      .update(p2Rmas)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p2Rmas.id, id))
+      .returning();
+    return updated;
   }
 }
 

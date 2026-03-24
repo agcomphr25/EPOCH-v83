@@ -51,7 +51,7 @@ import { P2POManager } from '@/components/P2POManager';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
-import P2ScrappedItemsTab from '@/components/p2/P2ScrappedItemsTab';
+import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -448,7 +448,7 @@ export default function P2ControlCenter() {
           </TabsTrigger>
           <TabsTrigger value="scrapped" className="flex items-center gap-2" data-testid="tab-scrapped">
             <XCircle className="h-4 w-4" />
-            Scrapped
+            Nonconforming
           </TabsTrigger>
         </TabsList>
 
@@ -570,7 +570,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="scrapped">
-          <P2ScrappedItemsTab />
+          <P2NonconformingTab />
         </TabsContent>
       </Tabs>
     </div>

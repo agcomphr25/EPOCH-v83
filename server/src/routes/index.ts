@@ -329,19 +329,301 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
   
-  // P2 Serialized Items - scrapped list (inline to avoid router mount ordering issues)
+  // P2 Serialized Items - scrapped/nonconforming list (inline to avoid router mount ordering issues)
   app.get('/api/p2/serialized-items/scrapped', async (req, res) => {
     try {
       const { db } = await import('../../db');
-      const { p2SerializedItems } = await import('../../schema');
-      const { eq, desc } = await import('drizzle-orm');
+      const { p2SerializedItems, p2NonconformingDispositions } = await import('../../schema');
+      const { eq, desc, inArray } = await import('drizzle-orm');
       const units = await db.query.p2SerializedItems.findMany({
         where: eq(p2SerializedItems.status, 'SCRAPPED'),
         orderBy: (t: any, { desc: d }: any) => [d(t.scrapAt)],
       });
-      res.json(units);
+
+      // Enrich with disposition info
+      const itemIds = units.map((u: any) => u.id);
+      let dispositions: any[] = [];
+      if (itemIds.length > 0) {
+        dispositions = await db
+          .select()
+          .from(p2NonconformingDispositions)
+          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds));
+      }
+      const dispositionMap = new Map(dispositions.map((d: any) => [d.serializedItemId, d]));
+      const enriched = units.map((u: any) => ({
+        ...u,
+        disposition: dispositionMap.get(u.id) || null,
+      }));
+      res.json(enriched);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Failed to fetch scrapped items' });
+    }
+  });
+
+  // P2 Nonconforming Dispositions - GET all dispositions for an item
+  app.get('/api/p2/nonconforming-dispositions/:serializedItemId', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2NonconformingDispositions } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      const rows = await db
+        .select()
+        .from(p2NonconformingDispositions)
+        .where(eq(p2NonconformingDispositions.serializedItemId, req.params.serializedItemId));
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch dispositions' });
+    }
+  });
+
+  // P2 Nonconforming Dispositions - POST create a new disposition
+  app.post('/api/p2/nonconforming-dispositions', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { pool } = await import('../../db');
+      const {
+        p2NonconformingDispositions,
+        p2Rmas,
+        p2SerializedItems,
+        p2PurchaseOrders,
+        inventoryItems,
+        inventoryBalances,
+        insertP2NonconformingDispositionSchema,
+      } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+
+      const parsed = insertP2NonconformingDispositionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+      }
+
+      const data = parsed.data;
+
+      // Resolve instantly for dispositions that don't require further action
+      // Use as Is → inventory added, then resolved; Repair → stays open until RMA complete
+      const autoResolvedTypes = ['Scrap', 'Use as Is', 'Use for Reference', 'Return to Vendor'];
+      const isAutoResolved = autoResolvedTypes.includes(data.dispositionType);
+
+      const [disposition] = await db
+        .insert(p2NonconformingDispositions)
+        .values({
+          ...data,
+          resolved: isAutoResolved ? true : false,
+          resolvedAt: isAutoResolved ? new Date() : null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      // Side effects based on disposition type
+      if (data.dispositionType === 'Scrap') {
+        // Increment scrap count and recalculate scrap rate percentage on the PO
+        if (data.poId) {
+          try {
+            // Count total serialized items on this PO (used as denominator for rate)
+            const totalResult = await pool.query<{ total: string }>(
+              `SELECT COUNT(*) AS total FROM p2_serialized_items WHERE po_id = $1`,
+              [data.poId]
+            );
+            const total = parseInt(totalResult.rows[0]?.total || '0', 10) || 1;
+
+            await pool.query(
+              `UPDATE p2_purchase_orders
+               SET scrapped_item_count = COALESCE(scrapped_item_count, 0) + 1,
+                   scrap_rate_percent = ROUND(((COALESCE(scrapped_item_count, 0) + 1)::real / $1::real * 100)::numeric, 2),
+                   notes = CONCAT(COALESCE(notes, ''), E'\n[SCRAP] Disposition #', $2::text, ' filed for S/N ', $3::text, ' on ', $4::text),
+                   updated_at = NOW()
+               WHERE id = $5`,
+              [total, disposition.id, data.serialNumber, new Date().toISOString().slice(0, 10), data.poId]
+            );
+          } catch (e) {
+            console.error('Failed to update PO scrap rate:', e);
+          }
+        }
+      } else if (data.dispositionType === 'Use as Is') {
+        // Add item to inventory bank
+        try {
+          const [item] = await db
+            .select()
+            .from(p2SerializedItems)
+            .where(eq(p2SerializedItems.id, data.serializedItemId))
+            .limit(1);
+          if (item) {
+            // Check if inventory item exists for this part number
+            const [invItem] = await db
+              .select()
+              .from(inventoryItems)
+              .where(eq(inventoryItems.agPartNumber, item.partNumber))
+              .limit(1);
+            // Ensure an inventory_items record exists for this part
+            const effectiveInvItem = invItem || await db
+              .insert(inventoryItems)
+              .values({
+                agPartNumber: item.partNumber,
+                name: item.partName || item.partNumber,
+                source: 'P2 Nonconforming (Use as Is)',
+                notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .returning()
+              .then(([r]) => r);
+
+            if (effectiveInvItem) {
+              // Upsert inventory balance in WAREHOUSE-MAIN location
+              const [existingBalance] = await db
+                .select()
+                .from(inventoryBalances)
+                .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                .limit(1);
+              if (existingBalance) {
+                await db
+                  .update(inventoryBalances)
+                  .set({
+                    quantityOnHand: existingBalance.quantityOnHand + 1,
+                    quantityAvailable: existingBalance.quantityAvailable + 1,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(inventoryBalances.id, existingBalance.id));
+              } else {
+                await db
+                  .insert(inventoryBalances)
+                  .values({
+                    agPartNumber: item.partNumber,
+                    locationId: 'WAREHOUSE-MAIN',
+                    quantityOnHand: 1,
+                    quantityAllocated: 0,
+                    quantityAvailable: 1,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  });
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to add item to inventory bank:', e);
+        }
+      } else if (data.dispositionType === 'Repair') {
+        // Create an open RMA record
+        try {
+          const now = new Date();
+          const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+          // Count existing P2 RMAs today for sequence number
+          const existingRmas = await pool.query(
+            `SELECT rma_number FROM p2_rmas WHERE rma_number LIKE $1`,
+            [`RMA-P2-${dateStr}-%`]
+          );
+          let maxSeq = 0;
+          for (const row of existingRmas.rows) {
+            const match = (row.rma_number as string).match(/-(\d+)$/);
+            if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
+          }
+          const rmaNumber = `RMA-P2-${dateStr}-${maxSeq + 1}`;
+
+          await db
+            .insert(p2Rmas)
+            .values({
+              dispositionId: disposition.id,
+              serializedItemId: data.serializedItemId,
+              rmaNumber,
+              status: 'open',
+              traceableMaterials: [],
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+        } catch (e) {
+          console.error('Failed to create RMA for disposition:', e);
+        }
+      }
+
+      res.status(201).json(disposition);
+    } catch (err: any) {
+      console.error('Error creating disposition:', err);
+      res.status(500).json({ error: err?.message || 'Failed to create disposition' });
+    }
+  });
+
+  // P2 Nonconforming Dispositions - PATCH mark as resolved
+  app.patch('/api/p2/nonconforming-dispositions/:id/resolve', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2NonconformingDispositions } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      const [updated] = await db
+        .update(p2NonconformingDispositions)
+        .set({ resolved: true, resolvedAt: new Date(), updatedAt: new Date() })
+        .where(eq(p2NonconformingDispositions.id, parseInt(req.params.id)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Disposition not found' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to resolve disposition' });
+    }
+  });
+
+  // P2 RMAs - GET all open RMAs
+  app.get('/api/p2/rmas', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2Rmas, p2NonconformingDispositions, p2SerializedItems } = await import('../../schema');
+      const { eq, desc, ne } = await import('drizzle-orm');
+      const rmas = await db
+        .select({
+          rma: p2Rmas,
+          disposition: p2NonconformingDispositions,
+          item: p2SerializedItems,
+        })
+        .from(p2Rmas)
+        .leftJoin(p2NonconformingDispositions, eq(p2Rmas.dispositionId, p2NonconformingDispositions.id))
+        .leftJoin(p2SerializedItems, eq(p2Rmas.serializedItemId, p2SerializedItems.id))
+        .orderBy(desc(p2Rmas.createdAt));
+      res.json(rmas);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch RMAs' });
+    }
+  });
+
+  // P2 RMAs - PATCH add materials and/or mark shipped/complete
+  app.patch('/api/p2/rmas/:id', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2Rmas } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      const { traceableMaterials, status, notes } = req.body;
+
+      const updateData: any = { updatedAt: new Date() };
+      if (traceableMaterials !== undefined) updateData.traceableMaterials = traceableMaterials;
+      if (notes !== undefined) updateData.notes = notes;
+      if (status === 'shipped') {
+        updateData.status = 'shipped';
+        updateData.shippedAt = new Date();
+      } else if (status === 'complete') {
+        updateData.status = 'complete';
+        updateData.completedAt = new Date();
+      } else if (status) {
+        updateData.status = status;
+      }
+
+      const [updated] = await db
+        .update(p2Rmas)
+        .set(updateData)
+        .where(eq(p2Rmas.id, parseInt(req.params.id)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'RMA not found' });
+
+      // When RMA is marked complete, resolve the linked disposition
+      if (status === 'complete' && updated.dispositionId) {
+        const { p2NonconformingDispositions } = await import('../../schema');
+        await db
+          .update(p2NonconformingDispositions)
+          .set({ resolved: true, resolvedAt: new Date(), updatedAt: new Date() })
+          .where(eq(p2NonconformingDispositions.id, updated.dispositionId));
+      }
+
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to update RMA' });
     }
   });
 

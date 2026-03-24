@@ -1,11 +1,32 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trash2, Search, AlertTriangle, Loader2, AlertCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertTriangle,
+  Search,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+  ClipboardList,
+  Wrench,
+  Plus,
+  Trash2,
+  Package,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { format } from 'date-fns';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface ScrappedItem {
   id: string;
@@ -13,6 +34,7 @@ interface ScrappedItem {
   barcode: string;
   partNumber: string;
   partName: string;
+  poId: number | null;
   poNumber: string;
   customerName: string;
   currentDepartment: string;
@@ -21,13 +43,466 @@ interface ScrappedItem {
   scrapBy: string | null;
   scrapAt: string | null;
   createdAt: string;
+  disposition: Disposition | null;
 }
 
-export default function P2ScrappedItemsTab() {
-  const [searchTerm, setSearchTerm] = useState('');
+interface Disposition {
+  id: number;
+  serializedItemId: string;
+  dispositionType: string;
+  poId: number | null;
+  poNumber: string | null;
+  authorization: string;
+  partNumber: string;
+  serialNumber: string;
+  dispositionDate: string;
+  reasonType: string;
+  reasonOther: string | null;
+  notes: string | null;
+  resolved: boolean;
+  resolvedAt: string | null;
+  createdAt: string;
+}
 
-  const { data: scrappedItems = [], isLoading, isError, error } = useQuery<ScrappedItem[]>({
+interface Rma {
+  rma: {
+    id: number;
+    dispositionId: number;
+    serializedItemId: string;
+    rmaNumber: string;
+    status: string;
+    traceableMaterials: { name: string; lot: string; qty: string }[];
+    shippedAt: string | null;
+    completedAt: string | null;
+    notes: string | null;
+    createdAt: string;
+  };
+  disposition: Disposition | null;
+  item: ScrappedItem | null;
+}
+
+interface TraceableMaterial {
+  name: string;
+  lot: string;
+  qty: string;
+}
+
+const DISPOSITION_TYPES = ['Scrap', 'Repair', 'Use as Is', 'Use for Reference', 'Return to Vendor'] as const;
+const REASON_QUALITY = 'quality';
+const REASON_OTHER = 'other';
+const QUALITY_LABEL = 'Quality does not meet customer tolerances/requirements';
+
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return '—';
+  try {
+    return format(new Date(dateStr), 'MMM d, yyyy');
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatDateTime(dateStr: string | null) {
+  if (!dateStr) return '—';
+  try {
+    return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
+  } catch {
+    return dateStr;
+  }
+}
+
+function DispositionDialog({
+  item,
+  onClose,
+  onSuccess,
+}: {
+  item: ScrappedItem;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  const [dispositionType, setDispositionType] = useState<string>('');
+  const [authorization, setAuthorization] = useState('');
+  const [dispositionDate, setDispositionDate] = useState(today);
+  const [reasonType, setReasonType] = useState<string>(REASON_QUALITY);
+  const [reasonOther, setReasonOther] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const createMutation = useMutation({
+    mutationFn: (data: object) =>
+      apiRequest('/api/p2/nonconforming-dispositions', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      toast({ title: 'Disposition filed', description: 'The disposition report has been submitted.' });
+      onSuccess();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err?.message || 'Failed to file disposition', variant: 'destructive' });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dispositionType) {
+      toast({ title: 'Missing field', description: 'Please select a disposition type.', variant: 'destructive' });
+      return;
+    }
+    if (!authorization.trim()) {
+      toast({ title: 'Missing field', description: 'Authorization is required.', variant: 'destructive' });
+      return;
+    }
+    if (reasonType === REASON_OTHER && !reasonOther.trim()) {
+      toast({ title: 'Missing field', description: 'Please describe the reason.', variant: 'destructive' });
+      return;
+    }
+    createMutation.mutate({
+      serializedItemId: item.id,
+      dispositionType,
+      poId: item.poId || null,
+      poNumber: item.poNumber || null,
+      authorization: authorization.trim(),
+      partNumber: item.partNumber,
+      serialNumber: item.serialNumber,
+      dispositionDate,
+      reasonType,
+      reasonOther: reasonType === REASON_OTHER ? reasonOther.trim() : null,
+      notes: notes.trim() || null,
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-orange-500" />
+            Disposition Report
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Part Number</Label>
+              <Input value={item.partNumber} readOnly className="bg-muted" />
+            </div>
+            <div>
+              <Label>Serial Number</Label>
+              <Input value={item.serialNumber} readOnly className="bg-muted" />
+            </div>
+          </div>
+
+          <div>
+            <Label>Project / PO</Label>
+            <Input value={item.poNumber || '—'} readOnly className="bg-muted" />
+          </div>
+
+          <div>
+            <Label htmlFor="dispositionType">Disposition *</Label>
+            <Select value={dispositionType} onValueChange={setDispositionType}>
+              <SelectTrigger id="dispositionType">
+                <SelectValue placeholder="Select disposition..." />
+              </SelectTrigger>
+              <SelectContent>
+                {DISPOSITION_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="authorization">Authorization *</Label>
+            <Input
+              id="authorization"
+              value={authorization}
+              onChange={(e) => setAuthorization(e.target.value)}
+              placeholder="Name or role..."
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="dispositionDate">Date *</Label>
+            <Input
+              id="dispositionDate"
+              type="date"
+              value={dispositionDate}
+              onChange={(e) => setDispositionDate(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label>Reason *</Label>
+            <div className="space-y-2 mt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="reasonType"
+                  value={REASON_QUALITY}
+                  checked={reasonType === REASON_QUALITY}
+                  onChange={() => setReasonType(REASON_QUALITY)}
+                />
+                <span className="text-sm">{QUALITY_LABEL}</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="reasonType"
+                  value={REASON_OTHER}
+                  checked={reasonType === REASON_OTHER}
+                  onChange={() => setReasonType(REASON_OTHER)}
+                />
+                <span className="text-sm">Other</span>
+              </label>
+              {reasonType === REASON_OTHER && (
+                <Textarea
+                  placeholder="Describe reason..."
+                  value={reasonOther}
+                  onChange={(e) => setReasonOther(e.target.value)}
+                  rows={2}
+                />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              placeholder="Additional notes..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              File Disposition
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const [expanded, setExpanded] = useState(false);
+  const [materials, setMaterials] = useState<TraceableMaterial[]>(
+    rma.rma.traceableMaterials || []
+  );
+  const [newMaterial, setNewMaterial] = useState<TraceableMaterial>({ name: '', lot: '', qty: '' });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: object) =>
+      apiRequest(`/api/p2/rmas/${rma.rma.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
+      onUpdated();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Error', description: err?.message || 'Failed to update RMA', variant: 'destructive' });
+    },
+  });
+
+  const addMaterial = () => {
+    if (!newMaterial.name.trim()) return;
+    const updated = [...materials, { ...newMaterial }];
+    setMaterials(updated);
+    setNewMaterial({ name: '', lot: '', qty: '' });
+    updateMutation.mutate({ traceableMaterials: updated });
+  };
+
+  const removeMaterial = (idx: number) => {
+    const updated = materials.filter((_, i) => i !== idx);
+    setMaterials(updated);
+    updateMutation.mutate({ traceableMaterials: updated });
+  };
+
+  const markShipped = () => {
+    updateMutation.mutate({ status: 'shipped', traceableMaterials: materials });
+    toast({ title: 'RMA marked as shipped' });
+  };
+
+  const markComplete = () => {
+    updateMutation.mutate({ status: 'complete', traceableMaterials: materials });
+    toast({ title: 'RMA marked as complete' });
+  };
+
+  const statusColor = rma.rma.status === 'open'
+    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+    : rma.rma.status === 'shipped'
+    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+    : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+
+  return (
+    <div className="border rounded-md mb-2">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between p-3 text-left hover:bg-accent/50 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <span className="font-mono font-medium text-sm">{rma.rma.rmaNumber}</span>
+          <span className="text-sm text-muted-foreground">
+            {rma.item?.partNumber} — SN {rma.item?.serialNumber || rma.disposition?.serialNumber}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
+            {rma.rma.status.charAt(0).toUpperCase() + rma.rma.status.slice(1)}
+          </span>
+          <span className="text-xs text-muted-foreground">{formatDate(rma.rma.createdAt)}</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t pt-3">
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Customer</span>
+              <p className="font-medium">{rma.item?.customerName || '—'}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">PO</span>
+              <p className="font-medium">{rma.item?.poNumber || '—'}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Authorized by</span>
+              <p className="font-medium">{rma.disposition?.authorization || '—'}</p>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
+              <Package className="h-4 w-4" />
+              Traceable Materials
+            </h4>
+            {materials.length > 0 && (
+              <Table className="mb-2">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Lot #</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {materials.map((m, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="text-sm">{m.name}</TableCell>
+                      <TableCell className="font-mono text-sm">{m.lot}</TableCell>
+                      <TableCell className="text-sm">{m.qty}</TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive"
+                          onClick={() => removeMaterial(idx)}
+                          disabled={rma.rma.status !== 'open' || updateMutation.isPending}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {rma.rma.status === 'open' && (
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Label className="text-xs">Material Name</Label>
+                  <Input
+                    placeholder="Material..."
+                    value={newMaterial.name}
+                    onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="w-28">
+                  <Label className="text-xs">Lot #</Label>
+                  <Input
+                    placeholder="Lot..."
+                    value={newMaterial.lot}
+                    onChange={(e) => setNewMaterial({ ...newMaterial, lot: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="w-20">
+                  <Label className="text-xs">Qty</Label>
+                  <Input
+                    placeholder="Qty"
+                    value={newMaterial.qty}
+                    onChange={(e) => setNewMaterial({ ...newMaterial, qty: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <Button size="sm" variant="outline" onClick={addMaterial} disabled={updateMutation.isPending}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {rma.rma.status === 'open' && (
+            <div className="flex gap-2 pt-2">
+              <Button
+                size="sm"
+                onClick={markShipped}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Wrench className="h-3 w-3 mr-1" />}
+                Mark Shipped
+              </Button>
+            </div>
+          )}
+          {rma.rma.status === 'shipped' && (
+            <div className="flex gap-2 pt-2">
+              <Button
+                size="sm"
+                onClick={markComplete}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
+                Mark Complete
+              </Button>
+              <span className="text-xs text-muted-foreground self-center">
+                Shipped {formatDateTime(rma.rma.shippedAt)}
+              </span>
+            </div>
+          )}
+          {rma.rma.status === 'complete' && (
+            <div className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1 pt-2">
+              <CheckCircle className="h-4 w-4" />
+              Completed {formatDateTime(rma.rma.completedAt)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function P2NonconformingTab() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedItem, setSelectedItem] = useState<ScrappedItem | null>(null);
+
+  const { data: scrappedItems = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
     queryKey: ['/api/p2/serialized-items/scrapped'],
+    refetchInterval: 60000,
+  });
+
+  const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
+    queryKey: ['/api/p2/rmas'],
     refetchInterval: 60000,
   });
 
@@ -45,14 +520,9 @@ export default function P2ScrappedItemsTab() {
     );
   });
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—';
-    try {
-      return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
-    } catch {
-      return dateStr;
-    }
-  };
+  const pendingCount = scrappedItems.filter((i) => !i.disposition).length;
+  const openRmaCount = rmasRaw.filter((r) => r.rma.status === 'open').length;
+  const activeRmas = rmasRaw.filter((r) => r.rma.status === 'open' || r.rma.status === 'shipped');
 
   if (isLoading) {
     return (
@@ -69,7 +539,7 @@ export default function P2ScrappedItemsTab() {
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12 text-destructive">
           <AlertCircle className="h-12 w-12 mb-3" />
-          <p className="font-medium">Failed to load scrapped items</p>
+          <p className="font-medium">Failed to load nonconforming items</p>
           <p className="text-sm text-muted-foreground mt-1">
             {error instanceof Error ? error.message : 'An unexpected error occurred'}
           </p>
@@ -79,86 +549,210 @@ export default function P2ScrappedItemsTab() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Trash2 className="h-5 w-5 text-red-500" />
-            Scrapped P2 Items
-            <Badge variant="destructive" className="ml-2">
-              {scrappedItems.length}
-            </Badge>
-          </CardTitle>
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by serial, part, PO, customer..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {filtered.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            {scrappedItems.length === 0 ? (
-              <>
-                <p className="font-medium">No scrapped items</p>
-                <p className="text-sm">Items scrapped from production will appear here</p>
-              </>
-            ) : (
-              <>
-                <p className="font-medium">No results</p>
-                <p className="text-sm">No scrapped items match your search</p>
-              </>
+    <>
+      {selectedItem && (
+        <DispositionDialog
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onSuccess={() => setSelectedItem(null)}
+        />
+      )}
+
+      <Tabs defaultValue="items" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="items" className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Nonconforming Items
+            {pendingCount > 0 && (
+              <Badge variant="destructive" className="ml-1 text-xs px-1.5">{pendingCount}</Badge>
             )}
-          </div>
-        ) : (
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Serial Number</TableHead>
-                  <TableHead>Part Number</TableHead>
-                  <TableHead>Part Name</TableHead>
-                  <TableHead>PO Number</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Scrap Reason</TableHead>
-                  <TableHead>Scrapped By</TableHead>
-                  <TableHead>Scrapped At</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono font-medium">{item.serialNumber}</TableCell>
-                    <TableCell className="font-mono text-sm">{item.partNumber}</TableCell>
-                    <TableCell className="max-w-[200px] truncate" title={item.partName}>
-                      {item.partName}
-                    </TableCell>
-                    <TableCell className="font-medium">{item.poNumber}</TableCell>
-                    <TableCell>{item.customerName}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{item.currentDepartment}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[250px]">
-                      <span className="text-red-600 dark:text-red-400 text-sm" title={item.scrapReason}>
-                        {item.scrapReason}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">{item.scrapBy || '—'}</TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">{formatDate(item.scrapAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </TabsTrigger>
+          <TabsTrigger value="rmas" className="flex items-center gap-2">
+            <Wrench className="h-4 w-4" />
+            RMAs
+            {activeRmas.length > 0 && (
+              <Badge variant="outline" className="ml-1 text-xs px-1.5 bg-orange-100 text-orange-700 border-orange-300">
+                {activeRmas.length} active
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="items">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+                  Nonconforming P2 Items
+                  <Badge variant="secondary" className="ml-2">{scrappedItems.length}</Badge>
+                  {pendingCount > 0 && (
+                    <Badge variant="destructive" className="ml-1">
+                      {pendingCount} need attention
+                    </Badge>
+                  )}
+                </CardTitle>
+                <div className="relative w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by serial, part, PO, customer..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filtered.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  {scrappedItems.length === 0 ? (
+                    <>
+                      <p className="font-medium">No nonconforming items</p>
+                      <p className="text-sm">Items flagged as nonconforming will appear here</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium">No results</p>
+                      <p className="text-sm">No items match your search</p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Serial Number</TableHead>
+                        <TableHead>Part Number</TableHead>
+                        <TableHead>Part Name</TableHead>
+                        <TableHead>PO Number</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Disposition</TableHead>
+                        <TableHead>Flagged At</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((item) => {
+                        const hasDispo = !!item.disposition;
+                        const isResolved = item.disposition?.resolved;
+                        return (
+                          <TableRow
+                            key={item.id}
+                            className="cursor-pointer hover:bg-accent/30"
+                            onClick={() => !hasDispo && setSelectedItem(item)}
+                          >
+                            <TableCell>
+                              {!hasDispo ? (
+                                <Badge variant="destructive" className="text-xs whitespace-nowrap">
+                                  Needs Attention
+                                </Badge>
+                              ) : isResolved ? (
+                                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs border-0">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Resolved
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs border-0">
+                                  In Progress
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono font-medium">{item.serialNumber}</TableCell>
+                            <TableCell className="font-mono text-sm">{item.partNumber}</TableCell>
+                            <TableCell className="max-w-[180px] truncate" title={item.partName}>
+                              {item.partName}
+                            </TableCell>
+                            <TableCell className="font-medium">{item.poNumber}</TableCell>
+                            <TableCell>{item.customerName}</TableCell>
+                            <TableCell>
+                              {hasDispo ? (
+                                <span className="text-sm font-medium">{item.disposition!.dispositionType}</span>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {formatDateTime(item.scrapAt)}
+                            </TableCell>
+                            <TableCell>
+                              {!hasDispo && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedItem(item);
+                                  }}
+                                >
+                                  <ClipboardList className="h-3 w-3 mr-1" />
+                                  File Disposition
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rmas">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-blue-500" />
+                  Active RMAs
+                  <Badge variant="secondary" className="ml-2">{activeRmas.length}</Badge>
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {openRmaCount > 0 && (
+                    <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">
+                      {openRmaCount} open
+                    </Badge>
+                  )}
+                  {rmasRaw.length > activeRmas.length && (
+                    <span className="text-xs text-muted-foreground">
+                      {rmasRaw.length - activeRmas.length} completed
+                    </span>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {activeRmas.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Wrench className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">No active RMAs</p>
+                  <p className="text-sm">RMAs are created when a disposition type of "Repair" is filed</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {activeRmas.map((rma) => (
+                    <RmaRow
+                      key={rma.rma.id}
+                      rma={rma}
+                      onUpdated={() => {
+                        refetchItems();
+                        refetchRmas();
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </>
   );
 }

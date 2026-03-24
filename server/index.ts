@@ -2387,6 +2387,57 @@ async function initializeBackgroundServices() {
       await seedDefaultHealthCheckConfig();
       await ensureSmsHealthCheckExists();
       await ensureTrackingPipelineHealthCheckExists();
+
+      // Ensure P2 Nonconforming Dispositions and RMAs tables exist
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS p2_nonconforming_dispositions (
+            id SERIAL PRIMARY KEY,
+            serialized_item_id UUID NOT NULL REFERENCES p2_serialized_items(id) ON DELETE CASCADE,
+            disposition_type TEXT NOT NULL,
+            po_id INTEGER REFERENCES p2_purchase_orders(id),
+            po_number TEXT,
+            auth_person TEXT NOT NULL,
+            part_number TEXT NOT NULL,
+            serial_number TEXT NOT NULL,
+            disposition_date DATE NOT NULL,
+            reason_type TEXT NOT NULL,
+            reason_other TEXT,
+            notes TEXT,
+            resolved BOOLEAN NOT NULL DEFAULT FALSE,
+            resolved_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS p2_rmas (
+            id SERIAL PRIMARY KEY,
+            disposition_id INTEGER NOT NULL REFERENCES p2_nonconforming_dispositions(id) ON DELETE CASCADE,
+            serialized_item_id UUID NOT NULL REFERENCES p2_serialized_items(id) ON DELETE CASCADE,
+            rma_number TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'open',
+            traceable_materials JSONB NOT NULL DEFAULT '[]',
+            shipped_at TIMESTAMP,
+            completed_at TIMESTAMP,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        // Add scrap-rate tracking columns to p2_purchase_orders if not yet present
+        await pool.query(`
+          ALTER TABLE p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS scrapped_item_count INTEGER NOT NULL DEFAULT 0
+        `);
+        await pool.query(`
+          ALTER TABLE p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS scrap_rate_percent REAL NOT NULL DEFAULT 0
+        `);
+        console.log('✅ Ensured p2_nonconforming_dispositions and p2_rmas tables exist');
+      } catch (ncErr: any) {
+        console.warn('⚠️ p2_nonconforming_dispositions/p2_rmas migration:', ncErr?.message);
+      }
     }
 
     // Set up quarterly vendor evaluation reset (runs on Jan 1, Apr 1, Jul 1, Oct 1)

@@ -4327,6 +4327,10 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   productionLeadId: integer('production_lead_id').references(() => employees.id), // Production lead for this PO
   productionLeadName: text('production_lead_name'), // Denormalized for display
   
+  // Scrap rate tracking — incremented by nonconforming disposition workflow
+  scrappedItemCount: integer('scrapped_item_count').default(0),
+  scrapRatePercent: real('scrap_rate_percent').default(0),
+
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -13587,6 +13591,100 @@ export const permUserOverrides = pgTable('perm_user_overrides', {
 }, (table) => ({
   uniq: unique().on(table.userId, table.capabilityId),
 }));
+
+// ─── P2 Nonconforming Dispositions ────────────────────────────────────────────
+// Disposition reports filed for P2 serialized items that have been flagged as
+// nonconforming (status = SCRAPPED on p2_serialized_items). A disposition must
+// be filed before the item can be considered resolved.
+
+export const p2NonconformingDispositions = pgTable('p2_nonconforming_dispositions', {
+  id: serial('id').primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .notNull()
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' }),
+  // Disposition type drives downstream outcome
+  dispositionType: text('disposition_type').notNull(), // Scrap | Repair | Use as Is | Use for Reference | Return to Vendor
+  // Project / PO linkage
+  poId: integer('po_id').references(() => p2PurchaseOrders.id),
+  poNumber: text('po_number'), // Denormalized for display
+  // Authorization
+  authorization: text('auth_person').notNull(),
+  // Part identifiers (pre-filled from serialized item, stored as snapshot)
+  partNumber: text('part_number').notNull(),
+  serialNumber: text('serial_number').notNull(),
+  // Date
+  dispositionDate: date('disposition_date').notNull(),
+  // Reason
+  reasonType: text('reason_type').notNull(), // quality | other
+  reasonOther: text('reason_other'), // free text when reasonType = 'other'
+  // Notes
+  notes: text('notes'),
+  // Resolution status
+  resolved: boolean('resolved').notNull().default(false),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertP2NonconformingDispositionSchema = createInsertSchema(p2NonconformingDispositions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  dispositionType: z.enum(['Scrap', 'Repair', 'Use as Is', 'Use for Reference', 'Return to Vendor']),
+  reasonType: z.enum(['quality', 'other']),
+  reasonOther: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  poId: z.number().optional().nullable(),
+  poNumber: z.string().optional().nullable(),
+  resolved: z.boolean().default(false),
+  resolvedAt: z.string().optional().nullable(),
+});
+
+export type P2NonconformingDisposition = typeof p2NonconformingDispositions.$inferSelect;
+export type InsertP2NonconformingDisposition = z.infer<typeof insertP2NonconformingDispositionSchema>;
+
+// ─── P2 RMAs ──────────────────────────────────────────────────────────────────
+// RMA records created when a disposition type is "Repair". Linked to the
+// disposition record. Tracks traceable materials and shipment.
+
+export const p2Rmas = pgTable('p2_rmas', {
+  id: serial('id').primaryKey(),
+  dispositionId: integer('disposition_id')
+    .notNull()
+    .references(() => p2NonconformingDispositions.id, { onDelete: 'cascade' }),
+  serializedItemId: uuid('serialized_item_id')
+    .notNull()
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' }),
+  rmaNumber: text('rma_number').notNull().unique(), // Auto-generated e.g. RMA-P2-20260324-1
+  status: text('status').notNull().default('open'), // open | shipped | complete
+  // Traceable materials used in repair (JSONB array: [{name, lot, qty}])
+  traceableMaterials: jsonb('traceable_materials').$type<{ name: string; lot: string; qty: string }[]>().default(sql`'[]'::jsonb`),
+  shippedAt: timestamp('shipped_at'),
+  completedAt: timestamp('completed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertP2RmaSchema = createInsertSchema(p2Rmas).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  status: z.enum(['open', 'shipped', 'complete']).default('open'),
+  traceableMaterials: z.array(z.object({
+    name: z.string(),
+    lot: z.string(),
+    qty: z.string(),
+  })).optional().default([]),
+  notes: z.string().optional().nullable(),
+  shippedAt: z.string().optional().nullable(),
+  completedAt: z.string().optional().nullable(),
+});
+
+export type P2Rma = typeof p2Rmas.$inferSelect;
+export type InsertP2Rma = z.infer<typeof insertP2RmaSchema>;
 
 // ─── QuickNotes ───────────────────────────────────────────────────────────────
 export const quickNotes = pgTable('quick_notes', {

@@ -963,6 +963,7 @@ async function initializeBackgroundServices() {
         const { sql: sqlPO } = await import('drizzle-orm');
         await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS material_canonical TEXT NOT NULL DEFAULT ''`);
         await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS source_snapshot JSONB`);
+        await db.execute(sqlPO`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS p2_po_item_id INTEGER`);
         console.log('✅ Ensured production_orders has material_canonical and source_snapshot columns');
       } catch (poError: any) {
         // Columns may already exist

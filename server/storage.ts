@@ -565,6 +565,7 @@ const productionOrdersColumns = {
   paintCompletedAt: productionOrders.paintCompletedAt,
   qcCompletedAt: productionOrders.qcCompletedAt,
   shippingCompletedAt: productionOrders.shippingCompletedAt,
+  p2PoItemId: productionOrders.p2PoItemId,
 };
 
 // modify the interface with any CRUD methods
@@ -3182,6 +3183,15 @@ export class DatabaseStorage implements IStorage {
       poItems.map((poi) => [poi.id.toString(), stockModelMap.get(poi.stockModelId || '') || poi.itemName || poi.id.toString()])
     );
 
+    // Get P2 purchase order items for P2 PO item name lookup
+    const p2PoItems = await db.select({
+      id: p2PurchaseOrderItems.id,
+      partName: p2PurchaseOrderItems.partName,
+    }).from(p2PurchaseOrderItems);
+    const p2PoItemMap = new Map(
+      p2PoItems.map((item) => [item.id.toString(), item.partName])
+    );
+
     // Enrich orders with customer names and add required frontend fields
     const enrichedOrders = orders.map((order) => ({
       ...order,
@@ -3266,8 +3276,8 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      // Look up the proper item name from purchase_order_items table
-      const resolvedItemName = poItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
+      // Look up the proper item name from purchase_order_items (P1) or p2_purchase_order_items (P2) tables
+      const resolvedItemName = p2PoItemMap.get(po.p2PoItemId?.toString() || '') || poItemMap.get(po.itemId?.toString() || '') || p2PoItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
       
       // Derive modelId with fallback chain for robust stock model resolution
       let derivedModelId = parsedSpecs?.stockModel
@@ -10324,7 +10334,7 @@ export class DatabaseStorage implements IStorage {
 
   // Production Orders CRUD
   async getAllProductionOrders(): Promise<ProductionOrder[]> {
-    return await db
+    const orders = await db
       .select(productionOrdersColumns)
       .from(productionOrders)
       .orderBy(
@@ -10337,6 +10347,33 @@ export class DatabaseStorage implements IStorage {
         END`), // Priority score (lower = higher priority)
         desc(productionOrders.createdAt) // Newest first as tie-breaker
       );
+
+    // Build P1 purchase order item lookup: id → itemName
+    const p1Items = await db.select({
+      id: purchaseOrderItems.id,
+      itemName: purchaseOrderItems.itemName,
+    }).from(purchaseOrderItems);
+    const p1ItemMap = new Map(p1Items.map((i) => [i.id.toString(), i.itemName]));
+
+    // Build P2 purchase order item lookup: id → partName
+    const p2Items = await db.select({
+      id: p2PurchaseOrderItems.id,
+      partName: p2PurchaseOrderItems.partName,
+    }).from(p2PurchaseOrderItems);
+    const p2ItemMap = new Map(p2Items.map((i) => [i.id.toString(), i.partName]));
+
+    // Resolve itemName: if the stored value is empty or a raw numeric ID, look it up
+    return orders.map((order) => {
+      const needsResolution = !order.itemName || /^\d+$/.test(order.itemName);
+      if (!needsResolution) return order;
+      const resolved =
+        p2ItemMap.get(order.p2PoItemId?.toString() || '') ||
+        p1ItemMap.get(order.poItemId?.toString() || '') ||
+        p2ItemMap.get(order.itemId?.toString() || '') ||
+        p1ItemMap.get(order.itemId?.toString() || '') ||
+        order.itemName;
+      return { ...order, itemName: resolved };
+    });
   }
 
   async getProductionOrder(id: number): Promise<ProductionOrder | undefined> {

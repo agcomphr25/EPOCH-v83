@@ -5280,6 +5280,8 @@ export const productionOrders = pgTable('production_orders', {
   hasP1Priority: boolean('has_p1_priority').default(false),
   materialCanonical: text('material_canonical').notNull().default(''),
   sourceSnapshot: jsonb('source_snapshot'),
+  // P2 PO reference for orders that originated from P2 purchase orders
+  p2PoItemId: integer('p2_po_item_id'), // Reference to p2_purchase_order_items.id
 });
 
 // Enhanced Form Insert Schemas

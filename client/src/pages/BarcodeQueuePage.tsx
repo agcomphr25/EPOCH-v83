@@ -1008,7 +1008,7 @@ export default function BarcodeQueuePage() {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm font-medium text-muted-foreground">
-              All {flatSortedOrders.length} orders · sorted by due date (latest first)
+              All {flatSortedOrders.length} orders · grouped by model (overdue first, then latest due date)
             </span>
           </div>
           <div className="border rounded-lg overflow-hidden">
@@ -1026,96 +1026,112 @@ export default function BarcodeQueuePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {flatSortedOrders.map((order: any, idx: number) => {
-                  const isSelected = selectedOrders.has(order.orderId);
-                  const isOverdue = isAfter(new Date(), new Date(order.dueDate));
-                  const orderLabels = deriveOrderLabels(order);
-                  const actionLength = orderLabels.actionLengthRaw;
-                  const isTikka = orderLabels.isTikka;
-                  const materialType = order.materialCanonical || orderLabels.materialLabel;
-                  const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
-                  const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
-                  const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
+                {Object.entries(categorizedOrders).sort(([a], [b]) => a.localeCompare(b)).flatMap(([categoryKey, groupOrders]) => {
+                  const groupRows = (groupOrders as any[]).map((order: any, idx: number) => {
+                    const isSelected = selectedOrders.has(order.orderId);
+                    const isOverdue = isAfter(new Date(), new Date(order.dueDate));
+                    const orderLabels = deriveOrderLabels(order);
+                    const actionLength = orderLabels.actionLengthRaw;
+                    const isTikka = orderLabels.isTikka;
+                    const materialType = order.materialCanonical || orderLabels.materialLabel;
+                    const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
+                    const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
+                    const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
 
-                  return (
-                    <tr
-                      key={order.orderId}
-                      id={`order-${order.orderId}`}
-                      onClick={() => toggleOrderSelection(order.orderId)}
-                      className={`cursor-pointer transition-colors ${
-                        highlightedOrderId === order.orderId
-                          ? 'bg-yellow-50 dark:bg-yellow-900/20'
-                          : isSelected
-                            ? 'bg-blue-50 dark:bg-blue-900/20'
-                            : isOverdue
-                              ? 'bg-red-50 dark:bg-red-900/10'
-                              : idx % 2 === 0
-                                ? 'bg-white dark:bg-slate-950'
-                                : 'bg-slate-50/60 dark:bg-slate-900/20'
-                      } hover:bg-slate-100 dark:hover:bg-slate-800/40`}
-                    >
-                      <td className="px-3 py-2">
-                        <Checkbox checked={isSelected} onChange={() => toggleOrderSelection(order.orderId)} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1.5 font-semibold">
-                          {isOverdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block shrink-0" />}
-                          {getDisplayOrderId(order)}
-                          <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
-                          {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-                            <Badge className="bg-orange-500 text-white text-[10px] px-1 py-0 animate-pulse">URGENT</Badge>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{getModelDisplayName(order.modelId)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {materialType !== 'Tikka' && (
-                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' : materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' : materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' : materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-blue-600 text-blue-700 bg-blue-50'}`}>
-                              {materialType}
-                            </Badge>
-                          )}
-                          {isTikka && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-600 text-purple-700 bg-purple-50">Tikka</Badge>}
-                          {lopVal && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
-                          {hasHeavyFill && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
-                          {hasADL && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
-                          {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : '—'}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
-                          {format(new Date(order.dueDate), 'M/d/yy')}
-                        </span>
-                        {isOverdue && <span className="ml-1 text-[10px] text-red-500 font-semibold">OVERDUE</span>}
-                      </td>
-                      <td className="px-3 py-2 text-slate-500 text-xs">
-                        {order.customerPO ? (
-                          <Link href="/purchase-orders" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="hover:underline hover:text-blue-600">
-                            {order.customerPO}
-                          </Link>
-                        ) : '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link href={`/order-entry?draft=${order.orderId}`}>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="View/Edit" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                              <Edit className="h-3 w-3" />
+                    return (
+                      <tr
+                        key={order.orderId}
+                        id={`order-${order.orderId}`}
+                        onClick={() => toggleOrderSelection(order.orderId)}
+                        className={`cursor-pointer transition-colors ${
+                          highlightedOrderId === order.orderId
+                            ? 'bg-yellow-50 dark:bg-yellow-900/20'
+                            : isSelected
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : isOverdue
+                                ? 'bg-red-50 dark:bg-red-900/10'
+                                : idx % 2 === 0
+                                  ? 'bg-white dark:bg-slate-950'
+                                  : 'bg-slate-50/60 dark:bg-slate-900/20'
+                        } hover:bg-slate-100 dark:hover:bg-slate-800/40`}
+                      >
+                        <td className="px-3 py-2">
+                          <Checkbox checked={isSelected} onChange={() => toggleOrderSelection(order.orderId)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            {isOverdue && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block shrink-0" />}
+                            {getDisplayOrderId(order)}
+                            <TicketBadge orderId={order.orderId} ticketMap={ticketMap} />
+                            {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                              <Badge className="bg-orange-500 text-white text-[10px] px-1 py-0 animate-pulse">URGENT</Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{getModelDisplayName(order.modelId)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {materialType !== 'Tikka' && (
+                              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${materialType === 'Carbon Fiber' ? 'border-gray-800 text-gray-800 bg-gray-100' : materialType === 'Fiberglass' ? 'border-amber-600 text-amber-700 bg-amber-50' : materialType === 'M1A' ? 'border-green-600 text-green-700 bg-green-50' : materialType === 'APR' ? 'border-indigo-600 text-indigo-700 bg-indigo-50' : 'border-blue-600 text-blue-700 bg-blue-50'}`}>
+                                {materialType}
+                              </Badge>
+                            )}
+                            {isTikka && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-600 text-purple-700 bg-purple-50">Tikka</Badge>}
+                            {lopVal && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-teal-600 text-teal-700 bg-teal-50 font-semibold">LOP {lopVal}</Badge>}
+                            {hasHeavyFill && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
+                            {hasADL && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${actionLength === 'short' ? 'border-red-500 text-red-700 bg-red-50' : actionLength === 'medium' ? 'border-orange-500 text-orange-700 bg-orange-50' : actionLength === 'long' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-500 text-gray-700 bg-gray-50'}`}>
+                            {actionLength === 'short' ? 'Short' : actionLength === 'medium' ? 'Medium' : actionLength === 'long' ? 'Long' : '—'}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
+                            {format(new Date(order.dueDate), 'M/d/yy')}
+                          </span>
+                          {isOverdue && <span className="ml-1 text-[10px] text-red-500 font-semibold">OVERDUE</span>}
+                        </td>
+                        <td className="px-3 py-2 text-slate-500 text-xs">
+                          {order.customerPO ? (
+                            <Link href="/purchase-orders" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="hover:underline hover:text-blue-600">
+                              {order.customerPO}
+                            </Link>
+                          ) : '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <Link href={`/order-entry?draft=${order.orderId}`}>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" title="View/Edit" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Sales Order" onClick={(e) => { e.stopPropagation(); handleSalesOrderView(order.orderId); }}>
+                              <FileText className="h-3 w-3" />
                             </Button>
-                          </Link>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" title="Sales Order" onClick={(e) => { e.stopPropagation(); handleSalesOrderView(order.orderId); }}>
-                            <FileText className="h-3 w-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" title="Kickback" onClick={(e) => { e.stopPropagation(); handleKickbackClick(order.orderId); }}>
-                            <TrendingDown className="h-3 w-3" />
-                          </Button>
-                        </div>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Kickback" onClick={(e) => { e.stopPropagation(); handleKickbackClick(order.orderId); }}>
+                              <TrendingDown className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+
+                  return [
+                    <tr key={`group-header-${categoryKey}`} className="bg-slate-100 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700">
+                      <td colSpan={8} className="px-3 py-1.5">
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                          {categoryKey}
+                        </span>
+                        <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+                          {(groupOrders as any[]).length} {(groupOrders as any[]).length === 1 ? 'order' : 'orders'}
+                        </span>
                       </td>
-                    </tr>
-                  );
+                    </tr>,
+                    ...groupRows,
+                  ];
                 })}
               </tbody>
             </table>

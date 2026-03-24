@@ -67,6 +67,7 @@ interface TravelerData {
   signatures: any[];
   lotNumbers: any[];
   routingDocuments: any[];
+  allocatedPackets: any[];
 }
 
 export default function P2TravelerViewer() {
@@ -504,6 +505,151 @@ export default function P2TravelerViewer() {
 
             <TabsContent value="traceability" className="mt-4">
               <div className="space-y-6">
+                {/* Cutting Packets Section */}
+                {travelerData.allocatedPackets && travelerData.allocatedPackets.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Layers className="h-5 w-5" />
+                        Cutting Packets
+                      </CardTitle>
+                      <CardDescription>Raw material traceability from cutting packets allocated to this item</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        {travelerData.allocatedPackets.map((packet: any, pi: number) => (
+                          <div key={packet.id} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="font-mono text-sm">{packet.barcode}</Badge>
+                                {packet.isMixedFabric && (
+                                  <Badge className="bg-purple-100 text-purple-800">Mixed Fabric</Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-muted-foreground">
+                                  Built: {safeFormat(packet.buildDate, 'MMM d, yyyy')}
+                                </span>
+                                <Badge variant={packet.status === 'CONSUMED' ? 'secondary' : packet.status === 'AVAILABLE' ? 'default' : 'outline'}>
+                                  {packet.status}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            {packet.fabricSources && packet.fabricSources.length > 0 ? (
+                              <div className="space-y-3">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fabric Sources ({packet.fabricSources.length})</p>
+                                {packet.fabricSources.map((src: any, si: number) => {
+                                  const fab = src.inventoryDetail;
+                                  const expirationDate = src.expirationDate || fab?.expirationDate;
+                                  const isExpired = expirationDate && isValid(new Date(expirationDate)) && new Date(expirationDate) < new Date();
+                                  return (
+                                    <div key={src.id} className="bg-muted/40 rounded-md p-3">
+                                      {packet.fabricSources.length > 1 && (
+                                        <p className="text-xs font-medium text-muted-foreground mb-2">Source {si + 1}{src.isPrimary ? ' (Primary)' : ''}</p>
+                                      )}
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                        {(src.fabricType || fab?.fabric) && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Fabric Type</span>
+                                            <p className="font-medium">{src.fabricType || fab.fabric}</p>
+                                          </div>
+                                        )}
+                                        {(src.internalControlNumber || fab?.internalControlNumber) && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">ICN</span>
+                                            <p className="font-mono font-semibold">{src.internalControlNumber || fab.internalControlNumber}</p>
+                                          </div>
+                                        )}
+                                        {(src.lotNumber || fab?.lotNumber) && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Lot #</span>
+                                            <p className="font-mono">{src.lotNumber || fab.lotNumber}</p>
+                                          </div>
+                                        )}
+                                        {(src.rollNumber || fab?.rollNumber) && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Roll #</span>
+                                            <p className="font-mono">{src.rollNumber || fab.rollNumber}</p>
+                                          </div>
+                                        )}
+                                        {(src.batchNumber || fab?.batchNumber) && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Batch #</span>
+                                            <p className="font-mono">{src.batchNumber || fab.batchNumber}</p>
+                                          </div>
+                                        )}
+                                        {expirationDate && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Expiration Date</span>
+                                            <p className={isExpired ? 'text-red-600 font-semibold' : ''}>
+                                              {safeFormat(expirationDate, 'MMM d, yyyy')}
+                                              {isExpired && <span className="ml-1 text-xs">(Expired)</span>}
+                                            </p>
+                                          </div>
+                                        )}
+                                        {(src.supplierPartNumber || fab?.supplierPartNumber) && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Supplier Part #</span>
+                                            <p className="font-mono">{src.supplierPartNumber || fab.supplierPartNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab?.source && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Source / Manufacturer</span>
+                                            <p>{fab.source}</p>
+                                          </div>
+                                        )}
+                                        {fab?.fabricPartNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Fabric Part #</span>
+                                            <p className="font-mono">{fab.fabricPartNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab?.nickname && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Nickname</span>
+                                            <p>{fab.nickname}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {(fab?.conformanceDocumentLink) && (
+                                        <div className="mt-2 pt-2 border-t border-dashed">
+                                          <span className="text-muted-foreground text-xs">Conformance Document</span>
+                                          <p className="mt-0.5">
+                                            <a
+                                              href={fab.conformanceDocumentLink}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:underline flex items-center gap-1 text-sm"
+                                            >
+                                              <ExternalLink className="h-3 w-3" />
+                                              View Document
+                                            </a>
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">No fabric source records found for this packet</p>
+                            )}
+
+                            {packet.notes && (
+                              <div className="mt-3 pt-3 border-t border-dashed">
+                                <span className="text-muted-foreground text-xs">Notes</span>
+                                <p className="text-sm mt-1">{packet.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Materials Used Section */}
                 <Card>
                   <CardHeader>

@@ -22,6 +22,8 @@ import {
   routingDocuments,
   inventoryItems,
   cuttingFabricInventory,
+  cuttingBuiltPackets,
+  cuttingBuiltPacketFabricSources,
   travelerSteps,
   travelerTasks,
   travelerTaskFields,
@@ -690,6 +692,75 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       }
     }
 
+    // Query cutting packets allocated to this serialized item
+    let allocatedPackets: any[] = [];
+    try {
+      const rawPackets = await db.query.cuttingBuiltPackets.findMany({
+        where: or(
+          eq(cuttingBuiltPackets.allocatedToOrder, serializedItem.id),
+          eq(cuttingBuiltPackets.allocatedToOrder, serializedItem.barcode),
+          eq(cuttingBuiltPackets.allocatedToOrder, serializedItem.serialNumber),
+        ),
+      });
+
+      allocatedPackets = await Promise.all(rawPackets.map(async (packet) => {
+        const fabricSources = await db.query.cuttingBuiltPacketFabricSources.findMany({
+          where: eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id),
+        });
+
+        const sourcesWithInventory = await Promise.all(fabricSources.map(async (source) => {
+          let inventoryDetail: any = null;
+          if (source.fabricInventoryId) {
+            const fabRecord = await db.query.cuttingFabricInventory.findFirst({
+              where: eq(cuttingFabricInventory.id, source.fabricInventoryId),
+            });
+            if (fabRecord) {
+              inventoryDetail = {
+                fabricId: fabRecord.id,
+                fabric: fabRecord.fabric,
+                fabricPartNumber: fabRecord.fabricPartNumber,
+                nickname: fabRecord.nickname,
+                source: fabRecord.source,
+                supplierPartNumber: fabRecord.supplierPartNumber,
+                supplierPoNumber: fabRecord.supplierPoNumber,
+                manufacturerPoNumber: fabRecord.manufacturerPoNumber,
+                lotNumber: fabRecord.lotNumber,
+                rollNumber: fabRecord.rollNumber,
+                batchNumber: fabRecord.batchNumber,
+                internalControlNumber: fabRecord.internalControlNumber,
+                barcode: fabRecord.barcode,
+                manufactureDate: fabRecord.manufactureDate,
+                receivedDate: fabRecord.receivedDate,
+                expirationDate: fabRecord.expirationDate,
+                location: fabRecord.location,
+                freezerNumber: fabRecord.freezerNumber,
+                conformanceDocumentLink: fabRecord.conformanceDocumentLink,
+                quantityInStock: fabRecord.quantityInStock,
+                squareMeters: fabRecord.squareMeters,
+                notes: fabRecord.notes,
+                status: fabRecord.status,
+              };
+            }
+          }
+          return { ...source, inventoryDetail };
+        }));
+
+        return {
+          id: packet.id,
+          barcode: packet.barcode,
+          packetNumber: packet.packetNumber,
+          buildDate: packet.buildDate,
+          status: packet.status,
+          isMixedFabric: packet.isMixedFabric,
+          fabricSourceCount: packet.fabricSourceCount,
+          notes: packet.notes,
+          fabricSources: sourcesWithInventory,
+        };
+      }));
+    } catch (e) {
+      console.log('Cutting packets query not available:', (e as Error).message);
+    }
+
     let routingDocs: any[] = [];
     try {
       const conditions = [];
@@ -738,6 +809,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       signatures,
       lotNumbers,
       routingDocuments: routingDocs,
+      allocatedPackets,
     });
   } catch (error: any) {
     console.error('Error getting traveler data:', error);

@@ -1475,6 +1475,36 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
     const { orderId } = req.query as { orderId?: string };
     if (!orderId) return res.status(400).json({ error: 'orderId is required' });
 
+    // First, find all production orders whose order_id contains the input (case-insensitive)
+    const candidateRows = await pool.query(
+      `SELECT po.id, po.order_id, po.po_number, po.current_department, po.production_status
+       FROM production_orders po
+       WHERE po.order_id ILIKE $1
+       ORDER BY po.order_id
+       LIMIT 50`,
+      [`%${orderId}%`]
+    );
+
+    // No matches at all
+    if (candidateRows.length === 0) return res.json({ order: null, matches: [], candidates: [] });
+
+    // Multiple matches — return candidates list for selection
+    if (candidateRows.length > 1) {
+      return res.json({
+        order: null,
+        matches: [],
+        candidates: candidateRows.map((r: any) => ({
+          order_id: r.order_id,
+          po_number: r.po_number,
+          current_department: r.current_department,
+          production_status: r.production_status,
+        })),
+      });
+    }
+
+    // Exactly one match — proceed with full detail lookup using the resolved order_id
+    const resolvedOrderId = candidateRows[0].order_id;
+
     // Get the production order and its specs, plus directly linked item code
     const orderRows = await pool.query(
       `SELECT po.id, po.order_id, po.po_number, po.current_department, po.production_status,
@@ -1484,9 +1514,9 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
        FROM production_orders po
        LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
        WHERE po.order_id = $1 LIMIT 1`,
-      [orderId]
+      [resolvedOrderId]
     );
-    if (orderRows.length === 0) return res.json({ order: null, matches: [] });
+    if (orderRows.length === 0) return res.json({ order: null, matches: [], candidates: [] });
     const order = orderRows[0];
     const specs = order.specifications || {};
 

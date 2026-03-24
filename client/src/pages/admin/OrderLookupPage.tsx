@@ -36,12 +36,18 @@ export default function OrderLookupPage() {
 
   const handleSearch = () => setOrderId(input.trim());
 
+  const candidates: any[] = data?.candidates ?? [];
   const matches: any[] = data?.matches ?? [];
   const topScore: number = data?.topScore ?? 0;
   const maxPossible: number = data?.maxPossible ?? 0;
   const totalScored: number = data?.totalScored ?? 0;
   const isPerfect = topScore > 0 && topScore === maxPossible;
   const isDefinitive = matches.length === 1;
+
+  const selectCandidate = (candidateOrderId: string) => {
+    setInput(candidateOrderId);
+    setOrderId(candidateOrderId);
+  };
 
   // Resolve the best direct item code from the order row
   const directItemCode: string | null = (() => {
@@ -81,8 +87,44 @@ export default function OrderLookupPage() {
         <p className="text-sm text-red-500">Something went wrong. Check the order ID and try again.</p>
       )}
 
-      {data && !data.order && (
+      {data && !data.order && candidates.length === 0 && (
         <p className="text-sm text-muted-foreground">No production order found for <strong>{orderId}</strong>.</p>
+      )}
+
+      {candidates.length > 1 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              {candidates.length} matching orders — select one to view details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>PO Number</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {candidates.map((c: any) => (
+                  <TableRow
+                    key={c.order_id}
+                    className="cursor-pointer hover:bg-muted/60"
+                    onClick={() => selectCandidate(c.order_id)}
+                  >
+                    <TableCell className="font-mono font-medium">{c.order_id}</TableCell>
+                    <TableCell>{c.po_number || '—'}</TableCell>
+                    <TableCell>{c.current_department || '—'}</TableCell>
+                    <TableCell><Badge variant="outline">{c.production_status}</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {data?.order && (

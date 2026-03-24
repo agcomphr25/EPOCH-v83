@@ -1,0 +1,119 @@
+COPY-PASTE IMPLEMENTATION PROMPT (SAFE REMOVAL)
+
+This is what you paste into your agent next:
+
+You are performing a SAFE, COMPLETE removal of the "shipping" stage from the P2 pipeline.
+
+Follow ALL steps in order.
+Do NOT skip validation.
+
+---
+
+## STEP 0 — VERIFY DATA (MANDATORY)
+
+Run:
+
+SELECT COUNT(*) FROM projects WHERE current_stage = 'shipping';
+
+IF count > 0:
+    STOP and report the records
+    DO NOT proceed
+
+IF count = 0:
+    Continue
+
+---
+
+## STEP 1 — REMOVE FROM BACKEND VALIDATION
+
+File:
+server/src/routes/projects.ts
+
+Tasks:
+- Remove 'shipping' from VALID_PIPELINE_STAGES array
+- Remove 'shipping' from the Zod enum for current_stage validation
+
+Then:
+- Search entire file for "shipping"
+- Ensure no references remain tied to pipeline stage
+
+---
+
+## STEP 2 — REMOVE FROM FRONTEND STAGE DEFINITIONS
+
+File 1:
+client/src/pages/P2PipelineBoardPage.tsx
+
+File 2:
+client/src/components/widgets/PipelineBoardWidget.tsx
+
+Tasks:
+- Remove the { key: 'shipping', label: 'Shipping' } object from PIPELINE_STAGES
+- Remove any color mapping tied to 'shipping'
+- Remove any icon mapping if present
+
+---
+
+## STEP 3 — HARD GUARD AGAINST STALE VALUES
+
+Add a defensive guard in backend update logic:
+
+File:
+server/src/routes/projects.ts (or wherever stage updates occur)
+
+Add:
+
+IF incoming current_stage === 'shipping':
+    return 400 with message:
+    "Invalid stage: 'shipping' has been deprecated"
+
+This prevents stale clients from silently corrupting state
+
+---
+
+## STEP 4 — VERIFY NO UI BREAKAGE
+
+Check:
+- Pipeline renders correctly
+- Stage count updates correctly
+- No empty column spacing issues
+- No console errors
+
+---
+
+## STEP 5 — VERIFY DRAG & DROP
+
+Test:
+- Move project between stages
+- Ensure no reference to 'shipping' exists
+- Ensure PATCH payloads contain only valid stages
+
+---
+
+## STEP 6 — GLOBAL SEARCH (FINAL SAFETY PASS)
+
+Search entire repo for:
+
+"key: 'shipping'"
+"current_stage = 'shipping'"
+"'shipping'"
+
+Ignore:
+- P1 departments (Shipping / Shipping QC)
+- Shipping costs / carriers / addresses
+
+Only remove anything tied to P2 pipeline stages
+
+---
+
+## STEP 7 — FINAL REPORT
+
+Return:
+- Files modified
+- Confirmation that 'shipping' no longer exists in pipeline logic
+- Confirmation that drag/drop + API updates work
+- Confirmation that no projects use 'shipping'
+
+DO NOT introduce new abstractions
+DO NOT refactor unrelated code
+MAKE MINIMAL, SAFE CHANGES ONLY

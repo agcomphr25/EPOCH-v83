@@ -1,0 +1,182 @@
+COPY-PASTE AUDIT PROMPT — REMOVE “SHIPPING” PANEL (P2 PIPELINE)
+You are performing a FULL TRACE + SAFE REMOVAL audit for the "Shipping" stage in the P2 Pipeline Board.
+
+DO NOT modify code yet.
+Your job is to identify:
+1) Where "Shipping" is defined
+2) How it is used across frontend + backend
+3) What will break if it is removed
+4) The safest way to remove it WITHOUT corrupting data or workflows
+
+---
+
+## STEP 1 — FIND STAGE SOURCE OF TRUTH
+
+Search for:
+- "Shipping"
+- "shipping"
+- "SHIPPING"
+
+Identify:
+- Is this coming from:
+  a) Hardcoded array in frontend (React)
+  b) Shared constants file
+  c) Database enum (project_stage / status)
+  d) API response from backend
+
+Return:
+- File paths
+- Exact code snippets
+- Whether this is SINGLE SOURCE OF TRUTH or duplicated
+
+---
+
+## STEP 2 — PIPELINE BOARD RENDER LOGIC
+
+Locate:
+- P2 Pipeline Board component (likely something like PipelineBoard.tsx or ProjectsPipeline.tsx)
+
+Identify:
+- Where columns are defined
+- How stages map to columns
+- Whether stages are:
+  a) Iterated dynamically
+  b) Manually defined per column
+
+Return:
+- Column definition structure
+- Whether removing one stage affects layout logic
+
+---
+
+## STEP 3 — DATA MODEL + DATABASE IMPACT
+
+Search backend for:
+- project_stage
+- status
+- stage enums
+
+Identify:
+- Does "Shipping" exist as:
+  a) Enum value in DB
+  b) Stored string in records
+  c) Derived/computed state
+
+Check:
+- Are there ANY existing projects with stage = "Shipping"
+
+Return:
+- Table name
+- Column name
+- Enum definition (if exists)
+- Count of records using "Shipping"
+
+---
+
+## STEP 4 — TRANSITIONS / BUSINESS LOGIC
+
+Search for:
+- Stage transitions
+- Functions like:
+  - moveToNextStage
+  - updateProjectStage
+  - pipeline transitions
+
+Determine:
+- Can projects currently move INTO "Shipping"
+- Is it part of a required progression chain
+
+Return:
+- Transition rules
+- Whether removing breaks progression
+
+---
+
+## STEP 5 — DOWNSTREAM DEPENDENCIES
+
+Search for "Shipping" usage in:
+
+- Reports
+- Dashboards
+- Filters
+- Metrics
+- Notifications
+- Permissions logic
+
+Return:
+- Any logic that depends on "Shipping"
+- Especially:
+  - counts
+  - grouping
+  - SLA tracking
+
+---
+
+## STEP 6 — UI SIDE EFFECTS
+
+Check:
+- Empty state logic
+- Column count assumptions
+- Grid/flex layout
+
+Determine:
+- Will removing 1 column break:
+  - layout width
+  - scrolling
+  - responsive behavior
+
+---
+
+## STEP 7 — SAFE REMOVAL PLAN (DO NOT IMPLEMENT)
+
+Based on findings, propose:
+
+### OPTION A — UI-ONLY REMOVAL
+(If stage still needed in backend)
+
+### OPTION B — FULL REMOVAL
+(Remove from constants + backend)
+
+### OPTION C — HIDE / DEPRECATE
+(Keep data, remove from UI + prevent future use)
+
+---
+
+## STEP 8 — MIGRATION PLAN (CRITICAL)
+
+If "Shipping" exists in DB:
+
+Provide:
+- SQL or migration strategy to:
+  - Reassign existing "Shipping" projects to correct stage
+  - OR archive them safely
+
+---
+
+## STEP 9 — FINAL RECOMMENDATION
+
+Give a clear recommendation:
+
+- What approach to take
+- Why
+- Risk level (LOW / MED / HIGH)
+
+---
+
+## OUTPUT FORMAT
+
+Respond with:
+
+1) SOURCE OF TRUTH
+2) UI STRUCTURE
+3) DATABASE IMPACT
+4) TRANSITIONS
+5) DEPENDENCIES
+6) RISKS
+7) SAFE REMOVAL PLAN
+8) MIGRATION PLAN
+9) FINAL RECOMMENDATION
+
+DO NOT MODIFY CODE
+DO NOT GUESS
+TRACE EVERYTHING

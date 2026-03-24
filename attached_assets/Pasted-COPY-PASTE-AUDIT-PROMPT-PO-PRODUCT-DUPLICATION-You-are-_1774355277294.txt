@@ -1,0 +1,195 @@
+COPY-PASTE AUDIT PROMPT (PO PRODUCT DUPLICATION)
+You are performing a FULL SYSTEM AUDIT and IMPLEMENTATION PLAN for a new feature in EPOCH:
+
+FEATURE: "Duplicate PO Product Item"
+
+GOAL:
+Allow users to duplicate an existing PO Product Item to rapidly create similar items, while ensuring:
+- No data integrity issues
+- No accidental duplication of unique identifiers
+- User can safely edit the duplicated item before saving
+
+---
+
+STEP 1 — LOCATE CURRENT SYSTEM
+
+Find and map ALL relevant files involved in PO Product Items:
+
+1) UI Layer
+- Create New PO Product modal (shown in screenshot)
+- Form component(s)
+- Validation logic
+- Submission handler
+
+2) Data Layer
+- Database table for PO Product Items
+- All columns and types
+- Identify:
+  - Primary key
+  - Unique fields
+  - Required fields
+  - JSON/feature fields
+
+3) API Layer
+- Endpoint used to CREATE PO Product
+- Any transformation logic before insert
+
+4) State Management
+- How form state is initialized
+- Default values vs loaded values
+
+OUTPUT:
+- File paths
+- Key functions
+- Data flow from UI → API → DB
+
+---
+
+STEP 2 — IDENTIFY DUPLICATION RISKS
+
+For PO Product Items, explicitly identify which fields:
+
+MUST NOT BE COPIED:
+- IDs (uuid, id)
+- Barcode values (if unique)
+- System-generated fields (created_at, updated_at)
+- Any audit/history fields
+
+MAY NEED RESET OR USER CONFIRMATION:
+- Customer Product Number (barcode label)
+- Product Name
+- Any external references
+
+SAFE TO COPY:
+- Product Type
+- Features (JSON/config)
+- Default specs
+- Customer association (confirm if always same or optional)
+
+OUTPUT:
+Clear classification table:
+[Field Name] | Copy / Reset / Block | Reason
+
+---
+
+STEP 3 — DESIGN DUPLICATION FLOW
+
+Design UX + system flow:
+
+ENTRY POINT:
+- "Duplicate" button on:
+  - Existing PO Product row OR
+  - Inside edit/view modal
+
+FLOW:
+1. User clicks "Duplicate"
+2. System loads existing product data
+3. System creates a NEW FORM STATE (not linked to original)
+4. Strip/reset unsafe fields
+5. Open "Create New PO Product" modal PRE-FILLED
+
+CRITICAL:
+- This must behave EXACTLY like "Create New"
+- Not an update
+- No reference to original ID
+
+---
+
+STEP 4 — IMPLEMENTATION PLAN
+
+Provide exact implementation steps:
+
+A) FRONTEND
+
+1. Add Duplicate Button
+- Location: (specify exact component)
+- Pass product ID
+
+2. Create duplication handler:
+- Fetch product by ID (or reuse existing data if present)
+- Transform payload:
+  - Remove restricted fields
+  - Reset required editable fields
+
+3. Initialize form with duplicated data
+
+4. Add visual indicator:
+- "Duplicated from [Product Name]" (optional but recommended)
+
+---
+
+B) BACKEND (if needed)
+
+Confirm:
+- Can existing CREATE endpoint be reused? (preferred: YES)
+
+If NO:
+- Create safe duplication endpoint
+
+---
+
+C) DATA TRANSFORMATION FUNCTION (REQUIRED)
+
+Create a dedicated function:
+
+duplicatePOProductTransform(original)
+
+This function MUST:
+- Deep clone object
+- Remove:
+  - id
+  - timestamps
+  - unique fields
+- Reset:
+  - product name
+  - barcode/customer product number
+
+Return clean payload for create form
+
+---
+
+STEP 5 — EDGE CASES
+
+Handle:
+
+1. Feature JSON integrity
+- Ensure deep clone (no reference mutation)
+
+2. Validation errors
+- Prevent duplicate barcode conflicts
+
+3. Customer switching
+- If user changes customer, ensure compatibility
+
+4. Partial duplication
+- Allow user to clear fields before save
+
+---
+
+STEP 6 — AUDIT TRAIL (IMPORTANT FOR EPOCH)
+
+Add optional audit log:
+
+Event:
+"PO_PRODUCT_DUPLICATED"
+
+Include:
+- original_product_id
+- new_product_id (after save)
+- user_id
+- timestamp
+
+---
+
+STEP 7 — OUTPUT FORMAT
+
+Return:
+
+1. File-by-file change plan
+2. Exact functions to create/modify
+3. Any DB constraints to watch
+4. Copy-paste ready code blocks (if possible)
+5. Risks / assumptions
+
+DO NOT BE VAGUE.
+TRACE EVERYTHING END-TO-END.

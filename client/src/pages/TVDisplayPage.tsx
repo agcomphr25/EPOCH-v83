@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import * as pdfjsLib from 'pdfjs-dist';
+import { getAllWidgets, getWidget, WidgetTypeId } from '@/lib/widgetRegistry';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
@@ -18,10 +19,13 @@ type PanelContent =
   | 'shipping-tracker'
   | 'production-pipeline'
   | 'manufacturing-queue'
-  | 'production-floor-timers';
+  | 'production-floor-timers'
+  | 'widget';
 
 interface PanelConfig {
   content: PanelContent;
+  widgetType?: WidgetTypeId;
+  widgetProps?: Record<string, string>;
 }
 
 interface TVConfig {
@@ -36,7 +40,7 @@ interface SlideData {
   name: string;
 }
 
-const CONTENT_OPTIONS: { value: PanelContent; label: string }[] = [
+const LIVE_MODULE_OPTIONS: { value: PanelContent; label: string }[] = [
   { value: 'blank', label: 'Blank' },
   { value: 'presentation', label: 'Presentation' },
   { value: 'production-floor-timers', label: 'Production Floor Timers' },
@@ -46,7 +50,7 @@ const CONTENT_OPTIONS: { value: PanelContent; label: string }[] = [
   { value: 'manufacturing-queue', label: 'Manufacturing Queue' },
 ];
 
-const CONTENT_URLS: Record<Exclude<PanelContent, 'blank' | 'presentation'>, string> = {
+const CONTENT_URLS: Record<Exclude<PanelContent, 'blank' | 'presentation' | 'widget'>, string> = {
   'production-floor-timers': '/tv-timer-board?embed=1',
   'timer-station': '/app/production/stations?embed=1',
   'shipping-tracker': '/shipping-tracker?embed=1',
@@ -195,9 +199,58 @@ function BlankPanel() {
   return <div className="w-full h-full bg-black" />;
 }
 
+function coerceWidgetProps(
+  rawProps: Record<string, string>,
+  propTypes?: Record<string, 'string' | 'string[]' | 'number'>,
+): Record<string, unknown> {
+  if (!propTypes) return rawProps;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawProps)) {
+    const type = propTypes[key];
+    if (type === 'string[]') {
+      result[key] = value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else if (type === 'number') {
+      result[key] = parseFloat(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function WidgetPanel({ config }: { config: PanelConfig }) {
+  if (!config.widgetType) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-900 text-gray-500 text-sm">
+        No widget selected
+      </div>
+    );
+  }
+  const entry = getWidget(config.widgetType);
+  if (!entry) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-900 text-gray-500 text-sm">
+        Unknown widget
+      </div>
+    );
+  }
+  const WidgetComponent = entry.component;
+  const coerced = coerceWidgetProps(config.widgetProps ?? {}, entry.propTypes);
+  const props = { ...(entry.defaultProps ?? {}), ...coerced };
+  return (
+    <div className="w-full h-full overflow-auto bg-white p-2">
+      <WidgetComponent {...props} />
+    </div>
+  );
+}
+
 function LivePanel({ config, interval }: { config: PanelConfig; interval: number }) {
   if (config.content === 'blank') return <BlankPanel />;
   if (config.content === 'presentation') return <PresentationPanel interval={interval} />;
+  if (config.content === 'widget') return <WidgetPanel config={config} />;
   return <IframePanel url={CONTENT_URLS[config.content as keyof typeof CONTENT_URLS]} />;
 }
 
@@ -333,6 +386,7 @@ export default function TVDisplayPage() {
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const panelCount = config.layout === '2-panel' ? 2 : 4;
+  const allWidgets = getAllWidgets();
 
   useEffect(() => {
     saveConfig(config);
@@ -346,10 +400,26 @@ export default function TVDisplayPage() {
     setConfig((c) => ({ ...c, layout }));
   };
 
-  const updatePanel = (index: number, content: PanelContent) => {
+  const updatePanelContent = (index: number, selectValue: string) => {
     setConfig((c) => {
       const panels = [...c.panels];
-      panels[index] = { content };
+      if (selectValue.startsWith('widget:')) {
+        const widgetType = selectValue.slice('widget:'.length) as WidgetTypeId;
+        panels[index] = { content: 'widget', widgetType, widgetProps: {} };
+      } else {
+        panels[index] = { content: selectValue as PanelContent };
+      }
+      return { ...c, panels };
+    });
+  };
+
+  const updatePanelWidgetProp = (panelIndex: number, propKey: string, propValue: string) => {
+    setConfig((c) => {
+      const panels = [...c.panels];
+      panels[panelIndex] = {
+        ...panels[panelIndex],
+        widgetProps: { ...(panels[panelIndex].widgetProps ?? {}), [propKey]: propValue },
+      };
       return { ...c, panels };
     });
   };
@@ -368,6 +438,13 @@ export default function TVDisplayPage() {
   const hasPresentationPanel = config.panels
     .slice(0, panelCount)
     .some((p) => p.content === 'presentation');
+
+  const getPanelSelectValue = (panel: PanelConfig): string => {
+    if (panel.content === 'widget' && panel.widgetType) {
+      return `widget:${panel.widgetType}`;
+    }
+    return panel.content;
+  };
 
   if (isLive) {
     const activePanels = config.panels.slice(0, panelCount);
@@ -454,33 +531,67 @@ export default function TVDisplayPage() {
 
           <div className="space-y-3">
             <Label className="text-base font-semibold">Panel Content</Label>
-            <div className="grid grid-cols-2 gap-3">
-              {Array.from({ length: panelCount }).map((_, i) => (
-                <div key={i} className="space-y-1">
-                  <Label className="text-xs text-gray-500">
-                    Panel {i + 1}
-                    {config.layout === '4-panel' &&
-                      ` (${i === 0 ? 'Top-Left' : i === 1 ? 'Top-Right' : i === 2 ? 'Bottom-Left' : 'Bottom-Right'})`}
-                    {config.layout === '2-panel' &&
-                      ` (${i === 0 ? 'Left' : 'Right'})`}
-                  </Label>
-                  <Select
-                    value={config.panels[i]?.content ?? 'blank'}
-                    onValueChange={(val) => updatePanel(i, val as PanelContent)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CONTENT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+            <div className="grid grid-cols-2 gap-4">
+              {Array.from({ length: panelCount }).map((_, i) => {
+                const panel = config.panels[i] ?? { content: 'blank' };
+                const selectValue = getPanelSelectValue(panel);
+                const widgetEntry =
+                  panel.content === 'widget' && panel.widgetType
+                    ? getWidget(panel.widgetType)
+                    : undefined;
+                return (
+                  <div key={i} className="space-y-2">
+                    <Label className="text-xs text-gray-500">
+                      Panel {i + 1}
+                      {config.layout === '4-panel' &&
+                        ` (${i === 0 ? 'Top-Left' : i === 1 ? 'Top-Right' : i === 2 ? 'Bottom-Left' : 'Bottom-Right'})`}
+                      {config.layout === '2-panel' && ` (${i === 0 ? 'Left' : 'Right'})`}
+                    </Label>
+                    <Select
+                      value={selectValue}
+                      onValueChange={(val) => updatePanelContent(i, val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__live_modules_header__" disabled>
+                          — Live Modules —
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+                        {LIVE_MODULE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__widgets_header__" disabled>
+                          — Catalog Widgets —
+                        </SelectItem>
+                        {allWidgets.map((w) => (
+                          <SelectItem key={w.id} value={`widget:${w.id}`}>
+                            {w.displayName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {widgetEntry && widgetEntry.requiredProps.length > 0 && (
+                      <div className="space-y-1.5 pl-1 border-l-2 border-primary/30">
+                        {widgetEntry.requiredProps.map((propKey) => (
+                          <div key={propKey} className="space-y-0.5">
+                            <Label className="text-xs text-gray-500">{propKey}</Label>
+                            <Input
+                              className="h-7 text-xs"
+                              placeholder={`Enter ${propKey}…`}
+                              value={(panel.widgetProps ?? {})[propKey] ?? ''}
+                              onChange={(e) => updatePanelWidgetProp(i, propKey, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

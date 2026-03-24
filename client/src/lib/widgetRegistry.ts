@@ -42,6 +42,8 @@ export interface WidgetRegistryEntry {
   requiredProps: string[];
   /** Default props merged before required props */
   defaultProps?: Record<string, unknown>;
+  /** Declared types for required props — used to coerce stored strings to correct runtime types */
+  propTypes?: Record<string, 'string' | 'string[]' | 'number'>;
 }
 
 // ─── Registry Map ──────────────────────────────────────────────────────────────
@@ -104,6 +106,7 @@ registerWidget({
   component: MetricStatGroup as ComponentType<Record<string, unknown>>,
   requiredProps: ['slugs'],
   defaultProps: { label: '' },
+  propTypes: { slugs: 'string[]' },
 });
 
 registerWidget({

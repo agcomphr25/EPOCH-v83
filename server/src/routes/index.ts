@@ -7638,25 +7638,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Update each order individually with proper completion timestamps
       for (const orderId of orderIds) {
         try {
-          // Check production orders first (P1 PO items)
-          // Production orders have formats: PO-{poNumber}-{itemId}-{unit} OR P1-{soNumber}-{itemId}-{unit}
+          // Check production orders first for all order ID formats
+          // Production orders can have various ID formats (PO-*, P1-*, EL*, etc.)
           let currentOrder: any = null;
           let isProductionOrder = false;
           let isFinalized = false;
 
-          const isProductionOrderId =
-            (orderId.startsWith('PO-') || orderId.startsWith('P1-')) &&
-            orderId.split('-').length >= 4;
-
-          if (isProductionOrderId) {
-            console.log(`[PROGRESSION] Production order detected: ${orderId}`);
-            try {
-              currentOrder = await storage.getProductionOrderByOrderId(orderId);
-              isProductionOrder = !!currentOrder;
-            } catch (prodError) {
-              // Gracefully handle production order lookup errors
-              console.warn(`⚠️ Production order lookup failed for ${orderId}:`, prodError instanceof Error ? prodError.message : prodError);
+          try {
+            currentOrder = await storage.getProductionOrderByOrderId(orderId);
+            isProductionOrder = !!currentOrder;
+            if (isProductionOrder) {
+              console.log(`[PROGRESSION] Production order found: ${orderId}`);
             }
+          } catch (prodError) {
+            // Gracefully handle production order lookup errors
+            console.warn(`⚠️ Production order lookup failed for ${orderId}:`, prodError instanceof Error ? prodError.message : prodError);
           }
 
           // If not a production order, check finalized orders

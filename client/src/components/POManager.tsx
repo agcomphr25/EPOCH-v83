@@ -503,7 +503,8 @@ function POCard({
   onCalculateSchedule,
   onGenerateProductionOrders,
   onReassignCustomer,
-  isGeneratingOrders,
+  isLoadingPreview,
+  isGeneratingOrdersForThisPO,
 }: {
   po: PurchaseOrder;
   onEdit: (po: PurchaseOrder) => void;
@@ -512,7 +513,8 @@ function POCard({
   onCalculateSchedule: (id: number) => void;
   onGenerateProductionOrders: (id: number) => void;
   onReassignCustomer: (po: PurchaseOrder) => void;
-  isGeneratingOrders: boolean;
+  isLoadingPreview: boolean;
+  isGeneratingOrdersForThisPO: boolean;
 }) {
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${po.id}`],
@@ -591,18 +593,20 @@ function POCard({
                   variant="outline"
                   size="sm"
                   onClick={() => onGenerateProductionOrders(po.id)}
-                  disabled={isGeneratingOrders || hasOrders}
+                  disabled={isGeneratingOrdersForThisPO || isLoadingPreview || hasOrders}
                   title={
                     hasOrders
                       ? `Production orders already exist (${orderCount} orders)`
                       : 'Generate production orders from this PO'
                   }
                 >
-                  {isGeneratingOrders
+                  {isGeneratingOrdersForThisPO
                     ? 'Generating...'
-                    : hasOrders
-                      ? `Orders Generated (${orderCount})`
-                      : 'Generate Production Orders'}
+                    : isLoadingPreview
+                      ? 'Loading Preview...'
+                      : hasOrders
+                        ? `Orders Generated (${orderCount})`
+                        : 'Generate Production Orders'}
                 </Button>
               </div>
               <Button
@@ -674,6 +678,14 @@ export default function POManager() {
   const [isGeneratingOrders, setIsGeneratingOrders] = useState(false);
   const [scheduleData, setScheduleData] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    willGenerate: { name: string; quantity: number; orderCount: number }[];
+    willSkip: { name: string; quantity: number; reason: string }[];
+    totalOrderCount: number;
+  } | null>(null);
+  const [previewPoId, setPreviewPoId] = useState<number | null>(null);
+  const [loadingPreviewPoId, setLoadingPreviewPoId] = useState<number | null>(null);
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [reassignPO, setReassignPO] = useState<PurchaseOrder | null>(null);
   const [reassignCustomerSearch, setReassignCustomerSearch] = useState('');
@@ -853,22 +865,38 @@ export default function POManager() {
   };
 
   const handleGenerateProductionOrders = async (poId: number) => {
+    setLoadingPreviewPoId(poId);
+    try {
+      const preview = await apiRequest(
+        `/api/pos/${poId}/preview-production-orders`,
+        { method: 'POST' }
+      );
+      setPreviewData(preview);
+      setPreviewPoId(poId);
+      setPreviewDialogOpen(true);
+    } catch (error) {
+      console.error('Preview production orders error:', error);
+      toast.error('Failed to load production order preview');
+    } finally {
+      setLoadingPreviewPoId(null);
+    }
+  };
+
+  const handleConfirmGenerateProductionOrders = async () => {
+    if (previewPoId === null) return;
+    setPreviewDialogOpen(false);
     setIsGeneratingOrders(true);
     try {
       const result = await apiRequest(
-        `/api/pos/${poId}/generate-production-orders`,
-        {
-          method: 'POST',
-        }
+        `/api/pos/${previewPoId}/generate-production-orders`,
+        { method: 'POST' }
       );
 
       console.log('Generated production orders:', result);
       toast.success(`Generated ${result.createdOrders} production orders`);
 
-      // Refresh PO list
       refetch();
 
-      // 🟢 AUTO-SCHEDULE: Automatically schedule the new OEM production orders
       try {
         console.log('🟢 Auto-scheduling new OEM production orders...');
         const scheduleResult = await apiRequest('/api/algorithmic-schedule', {
@@ -889,6 +917,8 @@ export default function POManager() {
       toast.error('Failed to generate production orders');
     } finally {
       setIsGeneratingOrders(false);
+      setPreviewPoId(null);
+      setPreviewData(null);
     }
   };
 
@@ -1506,7 +1536,8 @@ export default function POManager() {
                               setReassignTargetCustomer(null);
                               setReassignCustomerSearch('');
                             }}
-                            isGeneratingOrders={isGeneratingOrders}
+                            isLoadingPreview={loadingPreviewPoId === po.id}
+                            isGeneratingOrdersForThisPO={isGeneratingOrders && previewPoId === po.id}
                           />
                         ))}
                       </div>
@@ -1973,6 +2004,87 @@ export default function POManager() {
                 >
                   Reassign
                 </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Production Order Preview Dialog */}
+      <Dialog open={previewDialogOpen} onOpenChange={(open) => { if (!open) { setPreviewDialogOpen(false); setPreviewData(null); setPreviewPoId(null); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Production Order Preview</DialogTitle>
+          </DialogHeader>
+          {previewData && (
+            <div className="space-y-4">
+              {previewData.willGenerate.length > 0 ? (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 text-green-700">Items that will generate orders</h4>
+                  <div className="rounded-md border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left p-2 font-medium">Item</th>
+                          <th className="text-right p-2 font-medium">Qty</th>
+                          <th className="text-right p-2 font-medium">Orders</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.willGenerate.map((item, i) => (
+                          <tr key={i} className="border-b last:border-0">
+                            <td className="p-2">{item.name}</td>
+                            <td className="p-2 text-right">{item.quantity}</td>
+                            <td className="p-2 text-right font-medium text-green-700">{item.orderCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No items will generate production orders.</p>
+              )}
+
+              {previewData.willSkip.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 text-gray-500">Items that will be skipped</h4>
+                  <div className="rounded-md border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left p-2 font-medium">Item</th>
+                          <th className="text-right p-2 font-medium">Qty</th>
+                          <th className="text-left p-2 font-medium">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.willSkip.map((item, i) => (
+                          <tr key={i} className="border-b last:border-0 text-muted-foreground">
+                            <td className="p-2">{item.name}</td>
+                            <td className="p-2 text-right">{item.quantity}</td>
+                            <td className="p-2">{item.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2 border-t">
+                <span className="text-sm font-semibold">Total orders to create: <span className="text-green-700">{previewData.totalOrderCount}</span></span>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => { setPreviewDialogOpen(false); setPreviewData(null); setPreviewPoId(null); }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleConfirmGenerateProductionOrders}
+                    disabled={previewData.totalOrderCount === 0}
+                  >
+                    Confirm &amp; Generate
+                  </Button>
+                </div>
               </div>
             </div>
           )}

@@ -6298,6 +6298,80 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // Shared filtering helpers for production order generation
+  const PO_NON_STOCK_PATTERNS = [
+    /bottom.?metal/i,
+    /^bm[-_]/i,          // BM-xxx patterns for bottom metals
+    /rail/i,
+    /swivel/i,
+    /stud/i,
+    /qd.?accessory/i,
+    /^qd[-_]/i,          // QD-xxx patterns
+    /hardware/i,
+    /screw/i,
+    /bolt/i,
+    /nut/i,
+    /washer/i,
+    /pin/i,
+    /spring/i,
+    /accessory/i,
+    /part.?only/i,
+  ];
+
+  const isPOItemNonStock = (item: any): boolean => {
+    const allIdentifiers = `${item.itemName || item.stockModelName || ''} ${item.stockModelId || ''} ${item.itemId || ''}`;
+    return PO_NON_STOCK_PATTERNS.some(pattern => pattern.test(allIdentifiers));
+  };
+
+  const isPOItemEligibleForProduction = (item: any): boolean => {
+    const stockModelId = item.stockModelId || '';
+    const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
+    return hasValidStockModel && !isPOItemNonStock(item);
+  };
+
+  // Preview Production Orders (dry-run) from Purchase Order Items
+  app.post('/api/pos/:id/preview-production-orders', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const poId = parseInt(req.params.id);
+
+      const purchaseOrder = await storage.getPurchaseOrder(poId);
+      if (!purchaseOrder) {
+        return res.status(404).json({ _error: 'Purchase order not found' });
+      }
+
+      const poItems = await storage.getPurchaseOrderItems(poId);
+
+      const willGenerate: { name: string; quantity: number; orderCount: number }[] = [];
+      const willSkip: { name: string; quantity: number; reason: string }[] = [];
+
+      for (const item of poItems) {
+        const stockModelId = item.stockModelId || '';
+        const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
+        const name = item.stockModelName || item.itemName || stockModelId || 'Unknown';
+
+        if (!hasValidStockModel) {
+          willSkip.push({ name, quantity: item.quantity, reason: 'No stock model' });
+          continue;
+        }
+
+        if (isPOItemNonStock(item)) {
+          willSkip.push({ name, quantity: item.quantity, reason: 'Non-stock / hardware part' });
+          continue;
+        }
+
+        willGenerate.push({ name, quantity: item.quantity, orderCount: item.quantity });
+      }
+
+      const totalOrderCount = willGenerate.reduce((sum, i) => sum + i.orderCount, 0);
+
+      res.json({ willGenerate, willSkip, totalOrderCount });
+    } catch (error) {
+      console.error('Preview production orders error:', error);
+      res.status(500).json({ _error: 'Failed to preview production orders' });
+    }
+  });
+
   // Generate Production Orders from Purchase Order Items
   app.post('/api/pos/:id/generate-production-orders', async (req, res) => {
     try {
@@ -6326,55 +6400,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Get all items for this purchase order
       const poItems = await storage.getPurchaseOrderItems(poId);
       
-      // Define patterns that indicate NON-STOCK items (parts only, no manufacturing needed)
-      // These should NOT get production orders - they're just parts fulfillment
-      const nonStockPatterns = [
-        /bottom.?metal/i,
-        /^bm[-_]/i,          // BM-xxx patterns for bottom metals
-        /rail/i,
-        /swivel/i,
-        /stud/i,
-        /qd.?accessory/i,
-        /^qd[-_]/i,          // QD-xxx patterns
-        /hardware/i,
-        /screw/i,
-        /bolt/i,
-        /nut/i,
-        /washer/i,
-        /pin/i,
-        /spring/i,
-        /accessory/i,
-        /part.?only/i,
-      ];
-      
-      // Function to check if an item is a non-stock part
-      const isNonStockItem = (item: any): boolean => {
-        const itemName = (item.itemName || item.stockModelName || '').toLowerCase();
-        const stockModelId = (item.stockModelId || '').toLowerCase();
-        const itemId = (item.itemId || '').toLowerCase();
-        
-        // Check if any of the identifiers match non-stock patterns
-        const allIdentifiers = `${itemName} ${stockModelId} ${itemId}`;
-        return nonStockPatterns.some(pattern => pattern.test(allIdentifiers));
-      };
-      
       // Include items that have a valid stock model ID (not 'no_stock' or empty)
       // AND are not non-stock parts (bottom metals, rails, etc.)
+      // Uses shared isPOItemEligibleForProduction helper (same logic as preview endpoint)
       const stockModelItems = poItems.filter((item) => {
-        const stockModelId = item.stockModelId || '';
-        const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
-        
-        if (!hasValidStockModel) {
-          console.log(`🚫 Skipping item ${item.id}: no valid stock model (${stockModelId})`);
+        if (!isPOItemEligibleForProduction(item)) {
+          const stockModelId = item.stockModelId || '';
+          const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
+          if (!hasValidStockModel) {
+            console.log(`🚫 Skipping item ${item.id}: no valid stock model (${stockModelId})`);
+          } else {
+            console.log(`🚫 Skipping non-stock item ${item.id}: ${item.itemName || item.stockModelName} (parts only, no manufacturing)`);
+          }
           return false;
         }
-        
-        // Check if this is a non-stock item (parts only)
-        if (isNonStockItem(item)) {
-          console.log(`🚫 Skipping non-stock item ${item.id}: ${item.itemName || item.stockModelName} (parts only, no manufacturing)`);
-          return false;
-        }
-        
         return true;
       });
 

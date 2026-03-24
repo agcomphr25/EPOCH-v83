@@ -1,0 +1,58 @@
+index-NF5cyHoS.js:5208 React initialized: Object
+index-NF5cyHoS.js:5208 React hooks: Object
+index-NF5cyHoS.js:5208 [EPOCH SYNC] Sync engine starting
+index-NF5cyHoS.js:5208 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-NF5cyHoS.js:5205 App component is rendering...
+index-NF5cyHoS.js:5205 Environment: production
+index-NF5cyHoS.js:5205 Base URL: /
+index-NF5cyHoS.js:1565 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-NF5cyHoS.js:1565 [EPOCH] Install prompt captured and ready
+/production-tracking:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-NF5cyHoS.js:235 🌐 API Request to /api/production-orders (timeout: 15000ms, deployment: true)
+index-NF5cyHoS.js:235 ✅ API Response from /api/production-orders: 200
+index-NF5cyHoS.js:235 🌐 API Request to /api/production-orders (timeout: 15000ms, deployment: true)
+index-NF5cyHoS.js:235 ✅ API Response from /api/production-orders: 200
+index-NF5cyHoS.js:235 🌐 API Request to /api/robust-boms/p2-po-boms?search= (timeout: 15000ms, deployment: true)
+index-NF5cyHoS.js:235 ✅ API Response from /api/robust-boms/p2-po-boms?search=: 200
+index-NF5cyHoS.js:4711 🛒 P1 Purchase Orders received: Object
+index-NF5cyHoS.js:4711 🔍 Fetching production queue...
+index-NF5cyHoS.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-NF5cyHoS.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-NF5cyHoS.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-NF5cyHoS.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-NF5cyHoS.js:4711 🛒 P1 Purchase Orders received: Object
+index-NF5cyHoS.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-NF5cyHoS.js:4711 🛒 P1 Purchase Orders received: Object
+index-NF5cyHoS.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-NF5cyHoS.js:4711 🔍 Production queue result: 136 orders
+index-NF5cyHoS.js:4711 🛒 P1 Purchase Orders received: Object
+index-NF5cyHoS.js:4711 🛒 P1 Purchase Orders received: Object
+index-NF5cyHoS.js:235 🌐 API Request to /api/layup-schedule/molds (timeout: 15000ms, deployment: true)
+/api/layup-schedule/molds:1  Failed to load resource: the server responded with a status of 404 ()
+index-NF5cyHoS.js:235 ✅ API Response from /api/layup-schedule/molds: 404
+index-NF5cyHoS.js:5208 API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/layup-schedule/molds</pre>
+</body>
+</html>
+
+console.error @ index-NF5cyHoS.js:5208
+index-NF5cyHoS.js:5208 💥 API Request failed for /api/layup-schedule/molds: Error: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/layup-schedule/molds</pre>
+</body>
+</html>
+
+    at Fe (index-NF5cyHoS.js:235:6362)
+console.error @ index-NF5cyHoS.js:5208
+index-NF5cyHoS.js:4711 🛒 P1 Purchase Orders received: Object

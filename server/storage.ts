@@ -3162,7 +3162,7 @@ export class DatabaseStorage implements IStorage {
       stockModelId: purchaseOrderItems.stockModelId,
     }).from(purchaseOrderItems);
     const poItemMap = new Map(
-      poItems.map((poi) => [poi.id.toString(), poi.itemName || stockModelMap.get(poi.stockModelId || '') || poi.id.toString()])
+      poItems.map((poi) => [poi.id.toString(), stockModelMap.get(poi.stockModelId || '') || poi.itemName || poi.id.toString()])
     );
 
     // Enrich orders with customer names and add required frontend fields

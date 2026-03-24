@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertTriangle, CheckCircle, BarChart3, Settings, ArrowUpDown, ArrowUp, ArrowDown, X, CalendarDays, TrendingDown } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 
@@ -58,6 +58,13 @@ export default function ProductionForecastPage() {
   const [driftSearch, setDriftSearch] = useState('');
   const [driftSortField, setDriftSortField] = useState<DriftSortField | null>('gap');
   const [driftSortDirection, setDriftSortDirection] = useState<SortDirection>('desc');
+
+  const [forecastPage, setForecastPage] = useState(1);
+  const [driftPage, setDriftPage] = useState(1);
+  const PAGE_SIZE = 25;
+
+  useEffect(() => { setForecastPage(1); }, [searchTerm, statusFilter, departmentFilter, expectedDeptFilter, modelFilter, sortField, sortDirection, dateFrom, dateTo]);
+  useEffect(() => { setDriftPage(1); }, [driftSearch, driftSortField, driftSortDirection]);
 
   const { data: forecastData, isLoading, error } = useQuery<ForecastItem[]>({
     queryKey: ['/api/forecast/dashboard'],
@@ -249,6 +256,16 @@ export default function ProductionForecastPage() {
 
     return result;
   }, [driftData, driftSearch, driftSortField, driftSortDirection]);
+
+  const forecastTotalPages = Math.max(1, Math.ceil(filteredAndSortedData.length / PAGE_SIZE));
+  const forecastStart = (forecastPage - 1) * PAGE_SIZE;
+  const forecastEnd = forecastStart + PAGE_SIZE;
+  const pagedForecastData = filteredAndSortedData.slice(forecastStart, forecastEnd);
+
+  const driftTotalPages = Math.max(1, Math.ceil(filteredDriftOrders.length / PAGE_SIZE));
+  const driftStart = (driftPage - 1) * PAGE_SIZE;
+  const driftEnd = driftStart + PAGE_SIZE;
+  const pagedDriftOrders = filteredDriftOrders.slice(driftStart, driftEnd);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -446,11 +463,11 @@ export default function ProductionForecastPage() {
                     />
                   </div>
                 </div>
-                {activeFilterCount > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Showing {filteredAndSortedData.length} of {forecastData?.length ?? 0} orders
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  {filteredAndSortedData.length === 0
+                    ? 'No orders to show'
+                    : `Showing ${forecastStart + 1}–${Math.min(forecastEnd, filteredAndSortedData.length)} of ${filteredAndSortedData.length} orders${activeFilterCount > 0 ? ` (filtered from ${forecastData?.length ?? 0})` : ''}`}
+                </p>
               </div>
             </CardHeader>
             <CardContent>
@@ -495,9 +512,9 @@ export default function ProductionForecastPage() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredAndSortedData.map((item, index) => (
+                        pagedForecastData.map((item, index) => (
                           <TableRow key={item.orderId}>
-                            <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
+                            <TableCell className="text-muted-foreground text-xs">{forecastStart + index + 1}</TableCell>
                             <TableCell className="font-medium">{item.orderId}</TableCell>
                             <TableCell>{item.model || '—'}</TableCell>
                             <TableCell>{item.actualDepartment || '—'}</TableCell>
@@ -509,6 +526,29 @@ export default function ProductionForecastPage() {
                       )}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {!isLoading && forecastTotalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForecastPage((p) => Math.max(1, p - 1))}
+                    disabled={forecastPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {forecastPage} of {forecastTotalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForecastPage((p) => Math.min(forecastTotalPages, p + 1))}
+                    disabled={forecastPage === forecastTotalPages}
+                  >
+                    Next
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -609,9 +649,9 @@ export default function ProductionForecastPage() {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredDriftOrders.map((item, index) => (
+                          pagedDriftOrders.map((item, index) => (
                             <TableRow key={item.orderId} className={item.gap >= 3 ? 'bg-red-50' : ''}>
-                              <TableCell className="text-muted-foreground text-xs">{index + 1}</TableCell>
+                              <TableCell className="text-muted-foreground text-xs">{driftStart + index + 1}</TableCell>
                               <TableCell className="font-medium">{item.orderId}</TableCell>
                               <TableCell>{item.model || '—'}</TableCell>
                               <TableCell>{item.actualDepartment || '—'}</TableCell>
@@ -624,6 +664,29 @@ export default function ProductionForecastPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  {driftTotalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDriftPage((p) => Math.max(1, p - 1))}
+                        disabled={driftPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {driftPage} of {driftTotalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDriftPage((p) => Math.min(driftTotalPages, p + 1))}
+                        disabled={driftPage === driftTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>

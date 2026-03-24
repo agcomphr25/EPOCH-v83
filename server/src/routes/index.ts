@@ -6272,17 +6272,29 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
       const objectStorageService = new ObjectStorageService();
-      
-      const downloadURL = await objectStorageService.getObjectEntityDownloadURL(attachment.filePath);
-      
-      res.json({ 
-        downloadURL, 
-        fileName: attachment.originalFileName,
-        mimeType: attachment.mimeType 
-      });
+
+      const forceDownload = req.query.download === 'true';
+
+      const normalizedPath = attachment.filePath?.startsWith('objects/')
+        ? `/${attachment.filePath}`
+        : attachment.filePath;
+
+      if (!normalizedPath || !normalizedPath.startsWith('/objects/')) {
+        return res.status(404).json({ error: 'File not found in cloud storage' });
+      }
+
+      const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
+
+      if (forceDownload) {
+        res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalFileName}"`);
+      } else {
+        res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
+      }
+
+      await objectStorageService.downloadObject(objectFile, res);
     } catch (error: any) {
-      console.error('Error getting PO attachment download URL:', error);
-      res.status(500).json({ error: 'Failed to get download URL' });
+      console.error('Error downloading PO attachment:', error);
+      res.status(500).json({ error: 'Failed to download attachment' });
     }
   });
 

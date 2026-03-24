@@ -269,14 +269,9 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
   const queryClient = useQueryClient();
   const fileInputRef = { current: null as HTMLInputElement | null };
 
-  const handlePreview = async (attachmentId: string, fileName: string) => {
-    try {
-      const response = await apiRequest(`/api/pos/${poId}/attachments/${attachmentId}/download`);
-      setPreviewFileName(fileName);
-      setPreviewUrl(response.downloadURL);
-    } catch (error) {
-      toast.error('Failed to load preview');
-    }
+  const handlePreview = (attachmentId: string, fileName: string) => {
+    setPreviewFileName(fileName);
+    setPreviewUrl(`/api/pos/${poId}/attachments/${attachmentId}/download`);
   };
 
   const { data: attachments = [], isLoading, refetch } = useQuery({
@@ -352,13 +347,8 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
     }
   };
 
-  const handleDownload = async (attachmentId: string, fileName: string) => {
-    try {
-      const response = await apiRequest(`/api/pos/${poId}/attachments/${attachmentId}/download`);
-      window.open(response.downloadURL, '_blank');
-    } catch (error) {
-      toast.error('Failed to download file');
-    }
+  const handleDownload = (attachmentId: string, fileName: string) => {
+    window.open(`/api/pos/${poId}/attachments/${attachmentId}/download?download=true`, '_blank');
   };
 
   const formatFileSize = (bytes: number) => {

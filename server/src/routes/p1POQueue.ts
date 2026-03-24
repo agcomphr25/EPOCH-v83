@@ -647,9 +647,12 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
         let specs: any = null;
         let poId: number | null = null;
 
+        let itemId = '';
+        let itemName = stockModelName;
+
         if (poItemId && !isNaN(poItemId)) {
           const poItemResult = await pool.query(
-            `SELECT poi.item_type, poi.specifications, poi.po_id
+            `SELECT poi.item_type, poi.item_id, poi.item_name, poi.specifications, poi.po_id
              FROM purchase_order_items poi
              WHERE poi.id = $1`,
             [poItemId]
@@ -657,6 +660,8 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
           if (poItemResult.length > 0) {
             const poItem = poItemResult[0];
             itemType = poItem.item_type || 'stock';
+            itemId = poItem.item_id || '';
+            itemName = poItem.item_name || stockModelName;
             specs = poItem.specifications || null;
             poId = poItem.po_id || null;
             if (!specs) {
@@ -678,6 +683,7 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
             customer_name,
             po_number,
             item_type,
+            item_id,
             item_name,
             specifications,
             current_department,
@@ -687,7 +693,7 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
             is_fulfilled,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'Layup/Plugging', 'PENDING', $10, $10, false, NOW(), NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, 'Layup/Plugging', 'PENDING', $11, $11, false, NOW(), NOW())
         `, [
           row.order_id,
           poId,
@@ -696,7 +702,8 @@ router.post('/backfill-production-orders', async (req: Request, res: Response) =
           customerName,
           poNumber,
           itemType,
-          stockModelName,
+          itemId,
+          itemName,
           specs ? JSON.stringify(specs) : '{}',
           row.scheduled_date,
         ]);

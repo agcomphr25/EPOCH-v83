@@ -2968,7 +2968,7 @@ router.patch(
               if (isNaN(parsedDate.getTime())) {
                 return res.status(400).json({ error: `Invalid date for ${fieldName}` });
               }
-              validatedValue = parsedDate.toISOString();
+              validatedValue = parsedDate;
             }
             break;
         }

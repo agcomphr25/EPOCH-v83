@@ -74,19 +74,19 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof NewMoldForm, string>>>({});
 
   const { data: moldsData, isLoading, refetch } = useQuery<{ success: boolean; molds: Mold[] }>({
-    queryKey: ['/api/layup-schedule/molds'],
+    queryKey: ['/api/molds'],
     enabled: open,
   });
 
   const updateMoldMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Mold> }) => {
-      return apiRequest(`/api/layup-schedule/molds/${id}`, {
+      return apiRequest(`/api/molds/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/molds'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/molds'] });
       toast({ title: 'Mold updated', description: 'Mold settings have been saved.' });
       setEditingMold(null);
     },
@@ -97,13 +97,13 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
 
   const bulkUpdateMutation = useMutation({
     mutationFn: async ({ modelName, data }: { modelName: string; data: Partial<Mold> }) => {
-      return apiRequest('/api/layup-schedule/molds/bulk/by-model', {
+      return apiRequest('/api/molds/bulk/by-model', {
         method: 'PATCH',
         body: JSON.stringify({ modelName, ...data }),
       });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/molds'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/molds'] });
       toast({ title: 'Molds updated', description: `All ${variables.modelName} molds have been updated.` });
     },
     onError: (error: any) => {
@@ -113,13 +113,13 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
 
   const createMoldMutation = useMutation({
     mutationFn: async (data: object) => {
-      return apiRequest('/api/layup-schedule/molds', {
+      return apiRequest('/api/molds', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/layup-schedule/molds'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/molds'] });
       toast({ title: 'Mold created', description: 'New mold has been added successfully.' });
       setAddMoldOpen(false);
       setNewMoldForm(emptyNewMold());

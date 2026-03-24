@@ -61,6 +61,7 @@ import {
   ChevronRight,
   CalendarCheck,
   Settings,
+  RotateCcw,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
 import { LayupSchedulePreview } from './LayupSchedulePreview';
@@ -131,6 +132,9 @@ export default function ProductionQueueManager() {
   // State for P1 Purchase Orders filter
   const [selectedPOFilter, setSelectedPOFilter] = useState<string>('all');
 
+  // State for retry stuck selections
+  const [retryingPO, setRetryingPO] = useState<string | null>(null);
+
   // State for P1 Purchase Order item selection (Map of PO number to Map of item ID to selected quantity)
   const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Map<number, number>>>(
     new Map()
@@ -197,6 +201,13 @@ export default function ProductionQueueManager() {
   // Fetch stock models for display name resolution in PO queue
   const { data: stockModels = [] } = useQuery<{ id: string; displayName: string }[]>({
     queryKey: ['/api/stock-models'],
+  });
+
+  // Fetch stuck counts per PO to conditionally show "Retry Failed Items" button
+  const { data: stuckCounts = {}, refetch: refetchStuckCounts } = useQuery<Record<string, number>>({
+    queryKey: ['/api/p1-po-queue/stuck-counts'],
+    queryFn: () => apiRequest('/api/p1-po-queue/stuck-counts'),
+    refetchOnWindowFocus: false,
   });
 
   const getStockModelDisplayName = (modelId: string | null): string => {
@@ -686,6 +697,47 @@ export default function ProductionQueueManager() {
       
       return newMap;
     });
+  };
+
+  const handleRetryStuck = async (poNumber: string) => {
+    setRetryingPO(poNumber);
+    try {
+      const result = await apiRequest(`/api/p1-po-queue/retry-stuck/${encodeURIComponent(poNumber)}`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (result.recovered > 0) {
+        toast({
+          title: 'Retry Successful',
+          description: `Recovered ${result.recovered} order(s) for PO #${poNumber}${result.failed > 0 ? `. ${result.failed} item(s) still failing.` : '.'}`,
+        });
+        refetchPOs();
+        refetchStuckCounts();
+        queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      } else if (result.stuckSelectionsFound === 0) {
+        toast({
+          title: 'No Stuck Items',
+          description: `PO #${poNumber} has no stuck selections — all selections already have production orders.`,
+        });
+        refetchStuckCounts();
+      } else {
+        toast({
+          title: 'Retry Failed',
+          description: `Found ${result.stuckSelectionsFound} stuck selection(s) but could not recover them. Check server logs.`,
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Retry Error',
+        description: error.message || `Failed to retry stuck items for PO #${poNumber}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setRetryingPO(null);
+    }
   };
 
   const handleSelectAllPOItems = (poNumber: string, items: any[]) => {
@@ -1297,12 +1349,33 @@ export default function ProductionQueueManager() {
                                   </span>
                                 )}
                               </div>
-                              <Badge 
-                                variant="outline"
-                                data-testid={`badge-items-total-${po.poNumber}`}
-                              >
-                                {po.totalItems} {po.totalItems === 1 ? 'item' : 'items'}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge 
+                                  variant="outline"
+                                  data-testid={`badge-items-total-${po.poNumber}`}
+                                >
+                                  {po.totalItems} {po.totalItems === 1 ? 'item' : 'items'}
+                                </Badge>
+                                {(stuckCounts[po.poNumber] > 0 || retryingPO === po.poNumber) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-amber-700 border-amber-300 hover:bg-amber-50 flex items-center gap-1"
+                                    disabled={retryingPO === po.poNumber}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRetryStuck(po.poNumber);
+                                    }}
+                                    data-testid={`button-retry-stuck-${po.poNumber}`}
+                                    title={`Retry ${stuckCounts[po.poNumber]} failed selection(s) that did not generate production orders`}
+                                  >
+                                    <RotateCcw className={`w-3 h-3 ${retryingPO === po.poNumber ? 'animate-spin' : ''}`} />
+                                    {retryingPO === po.poNumber
+                                      ? 'Retrying…'
+                                      : `Retry Failed Items (${stuckCounts[po.poNumber]})`}
+                                  </Button>
+                                )}
+                              </div>
                             </CollapsibleTrigger>
                             
                             <CollapsibleContent className="p-4 pt-0">

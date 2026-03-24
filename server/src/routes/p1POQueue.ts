@@ -597,6 +597,315 @@ router.post('/progress', async (req: Request, res: Response) => {
   }
 });
 
+// Get stuck selection counts for all POs at once.
+// Returns a map of { [poNumber]: stuckCount } for all POs that have any stuck selections.
+// Used by the UI to conditionally show "Retry Failed Items" buttons.
+router.get('/stuck-counts', async (req: Request, res: Response) => {
+  try {
+    const stuckQuery = `
+      SELECT po.po_number, COUNT(*) as stuck_count
+      FROM po_product_selections pps
+      JOIN purchase_order_items poi ON poi.id = pps.po_product_id
+      JOIN purchase_orders po ON po.id = poi.po_id
+      WHERE (
+        SELECT COUNT(*) FROM production_orders prod
+        WHERE prod.po_item_id = poi.id
+      ) < pps.quantity_selected
+      GROUP BY po.po_number
+    `;
+    const result = await pool.query(stuckQuery);
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.po_number] = parseInt(row.stuck_count, 10);
+    }
+    res.json(counts);
+  } catch (error) {
+    console.error('Error getting stuck counts:', error);
+    res.status(500).json({
+      error: 'Failed to get stuck counts',
+      details: (error as any).message,
+    });
+  }
+});
+
+// Get count of stuck selections for a given PO (by PO number).
+// A "stuck" selection is one in po_product_selections where no corresponding
+// production_orders record exists for the selected po_item_id.
+// Used by the UI to decide whether to show the "Retry Failed Items" button.
+router.get('/stuck-count/:poNumber', async (req: Request, res: Response) => {
+  try {
+    const poNum = decodeURIComponent(req.params.poNumber);
+
+    // Find po_product_selections whose poProductId (treated as purchase_order_items.id)
+    // belongs to this PO AND has no matching production_orders record
+    const stuckQuery = `
+      SELECT COUNT(*) as stuck_count
+      FROM po_product_selections pps
+      JOIN purchase_order_items poi ON poi.id = pps.po_product_id
+      JOIN purchase_orders po ON po.id = poi.po_id
+      WHERE po.po_number = $1
+        AND (
+          SELECT COUNT(*) FROM production_orders prod
+          WHERE prod.po_item_id = poi.id
+        ) < pps.quantity_selected
+    `;
+    const result = await pool.query(stuckQuery, [poNum]);
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
+    const stuckCount = parseInt(rows[0]?.stuck_count || '0', 10);
+
+    res.json({ poNumber: poNum, stuckCount });
+  } catch (error) {
+    console.error('Error getting stuck count:', error);
+    res.status(500).json({
+      error: 'Failed to get stuck count',
+      details: (error as any).message,
+    });
+  }
+});
+
+// Retry stuck selections for a given PO (by PO number).
+//
+// A "stuck" selection is one in po_product_selections where fewer production_orders
+// records exist than quantity_selected (accounting for partial failure).
+//
+// The retry re-runs the exact same scheduling logic as /schedule for each
+// individual order_id that is missing from production_orders. Per-table
+// idempotency is used (each table is checked independently), so a partial
+// failure in the original batch (e.g., all_orders inserted but production_orders
+// failed) is correctly repaired without re-inserting rows that already exist.
+//
+// Order IDs are generated identically to /schedule: PO-{po_number}-{poItemId}-{i+1}
+// where i is the 0-based unit index within the selection's quantity.
+router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
+  try {
+    const poNum = decodeURIComponent(req.params.poNumber);
+    const { targetWeek } = req.body;
+
+    console.log(`🔄 P1 PO Retry: Starting retry for PO #${poNum}`);
+
+    // Find selections from po_product_selections for this PO where the number of
+    // existing production_orders < quantity_selected (partial or complete failure).
+    // This correctly handles both fully-missing and partially-missing cases.
+    const stuckSelectionsQuery = `
+      SELECT
+        pps.id as selection_id,
+        pps.po_product_id as po_item_id,
+        pps.quantity_selected as quantity,
+        pps.selection_batch_id,
+        poi.id as poi_id,
+        poi.item_id,
+        poi.item_name,
+        poi.specifications,
+        poi.due_date,
+        poi.order_count,
+        po.id as purchase_order_id,
+        po.po_number,
+        po.customer_id,
+        po.customer_name,
+        (
+          SELECT COUNT(*) FROM production_orders prod
+          WHERE prod.po_item_id = poi.id
+        ) as existing_prod_order_count
+      FROM po_product_selections pps
+      JOIN purchase_order_items poi ON poi.id = pps.po_product_id
+      JOIN purchase_orders po ON po.id = poi.po_id
+      WHERE po.po_number = $1
+        AND (
+          SELECT COUNT(*) FROM production_orders prod
+          WHERE prod.po_item_id = poi.id
+        ) < pps.quantity_selected
+    `;
+    const stuckResult = await pool.query(stuckSelectionsQuery, [poNum]);
+    const stuckSelections = Array.isArray(stuckResult) ? stuckResult : (stuckResult as any).rows || [];
+
+    console.log(`🔄 P1 PO Retry: Found ${stuckSelections.length} stuck selections for PO #${poNum}`);
+
+    if (stuckSelections.length === 0) {
+      return res.json({
+        success: true,
+        message: `No stuck selections found for PO #${poNum}. All selected items already have production orders.`,
+        stuckSelectionsFound: 0,
+        recovered: 0,
+        failed: 0,
+      });
+    }
+
+    const scheduledOrders: string[] = [];
+    const errors: Array<{ selectionId: number; poItemId: number; error: string }> = [];
+
+    for (const sel of stuckSelections) {
+      try {
+        const poItemId = sel.po_item_id;
+        // Use the quantity from the selection record (identical to /schedule)
+        const quantity = sel.quantity || 1;
+
+        const specs = sel.specifications || {};
+        const dueDate = sel.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const scheduledDate = targetWeek ? new Date(targetWeek) : new Date(dueDate);
+
+        // Generate the same order IDs as /schedule (i+1, not currentOrderCount+i+1)
+        for (let i = 0; i < quantity; i++) {
+          const orderId = `PO-${sel.po_number}-${poItemId}-${i + 1}`;
+          const notes = `PO Item: ${sel.item_name || ''} - PO #${sel.po_number} (Unit ${i + 1} of ${quantity}) [RETRIED]`;
+          const features = JSON.stringify({
+            po_item_id: poItemId,
+            po_number: sel.po_number,
+            po_id: sel.purchase_order_id,
+            specifications: specs,
+            action_length: specs.action_length || '',
+          });
+
+          // Check each table independently for per-table idempotency.
+          // A partial failure (e.g., all_orders OK, production_orders failed) is
+          // repaired by inserting only the missing rows.
+
+          // all_orders — insert only if missing
+          const allOrdersExists = await pool.query(
+            `SELECT id FROM all_orders WHERE order_id = $1 LIMIT 1`,
+            [orderId]
+          );
+          const allOrdersExistsRows = Array.isArray(allOrdersExists) ? allOrdersExists : (allOrdersExists as any).rows || [];
+          if (allOrdersExistsRows.length === 0) {
+            await pool.query(`
+              INSERT INTO all_orders (
+                order_id, order_date, due_date, customer_id, model_id,
+                current_department, status, notes, features, order_source,
+                source_po_id, source_po_item_id, department_history, created_at, updated_at
+              ) VALUES (
+                $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb,
+                'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
+              )
+            `, [
+              orderId,
+              dueDate,
+              sel.customer_id || sel.customer_name,
+              sel.item_id || '',
+              notes,
+              features,
+              sel.purchase_order_id,
+              poItemId,
+            ]);
+
+            await pool.query(
+              `INSERT INTO admin_audit_log
+                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+              [
+                orderId,
+                'ORDER_CREATED',
+                'Order Created',
+                JSON.stringify(null),
+                JSON.stringify({
+                  order_id: orderId,
+                  current_department: 'P1 Production Queue',
+                  status: 'IN_PROGRESS',
+                  order_source: 'PO_RELEASE',
+                  source_po_id: sel.purchase_order_id,
+                  source_po_item_id: poItemId,
+                  retry: true,
+                  selection_id: sel.selection_id,
+                }),
+                (req as any).user?.username || 'SYSTEM',
+                (req as any).user?.role || 'SYSTEM',
+                'ORDER_CREATE',
+                `Order created via retry for stuck batch selection (PO #${sel.po_number})`,
+                req.ip ?? null,
+                req.headers['user-agent'] ?? null,
+              ]
+            );
+          } else {
+            console.log(`🔄 Retry: all_orders already has ${orderId}, skipping insert`);
+          }
+
+          // production_orders — insert only if missing (DO NOTHING avoids resetting
+          // progress for orders that have already advanced through departments)
+          const prodInsertResult = await pool.query(`
+            INSERT INTO production_orders (
+              order_id, po_id, po_item_id, customer_id, customer_name,
+              po_number, item_type, item_id, item_name, specifications,
+              order_date, due_date, production_status, current_department,
+              department_history, created_at, updated_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
+              'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
+            )
+            ON CONFLICT (order_id) DO NOTHING
+            RETURNING order_id
+          `, [
+            orderId,
+            sel.purchase_order_id,
+            poItemId,
+            sel.customer_id || '',
+            sel.customer_name || '',
+            sel.po_number || '',
+            specs.item_type || 'Stock',
+            sel.item_id || '',
+            sel.item_name || '',
+            JSON.stringify(specs),
+            dueDate,
+          ]);
+          const prodInsertRows = Array.isArray(prodInsertResult) ? prodInsertResult : (prodInsertResult as any).rows || [];
+          const prodOrderCreated = prodInsertRows.length > 0;
+
+          // layup_schedule — insert only if missing (DO NOTHING to preserve any
+          // existing schedule date for orders already in flight)
+          await pool.query(`
+            INSERT INTO layup_schedule (
+              order_id, scheduled_date, priority_score, is_locked, created_at, updated_at
+            ) VALUES ($1, $2, 1500, false, NOW(), NOW())
+            ON CONFLICT (order_id) DO NOTHING
+          `, [orderId, scheduledDate.toISOString()]);
+
+          // Count as recovered only if the production_orders row was newly created
+          if (prodOrderCreated) {
+            scheduledOrders.push(orderId);
+          } else {
+            console.log(`🔄 Retry: production_orders already has ${orderId}, skipping (order already progressed)`);
+          }
+        }
+
+        // Update order_count if we created new production orders.
+        // Set to max(existing_count, quantity) to avoid double-counting.
+        const targetOrderCount = Math.max(sel.order_count || 0, quantity);
+        if (targetOrderCount !== (sel.order_count || 0)) {
+          await pool.query(
+            `UPDATE purchase_order_items SET order_count = $1, updated_at = NOW() WHERE id = $2`,
+            [targetOrderCount, poItemId]
+          );
+        }
+
+      } catch (err) {
+        console.error(`🔄 Retry error for selection ${sel.selection_id} (po_item ${sel.po_item_id}):`, err);
+        errors.push({
+          selectionId: sel.selection_id,
+          poItemId: sel.po_item_id,
+          error: (err as Error).message,
+        });
+      }
+    }
+
+    console.log(`🔄 P1 PO Retry complete: ${scheduledOrders.length} orders processed, ${errors.length} selection(s) failed`);
+
+    res.json({
+      success: true,
+      poNumber: poNum,
+      stuckSelectionsFound: stuckSelections.length,
+      recovered: scheduledOrders.length,
+      failed: errors.length,
+      orderIds: scheduledOrders,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Retry complete: processed ${scheduledOrders.length} order(s) for PO #${poNum}${errors.length > 0 ? `, ${errors.length} selection(s) still failing` : ''}`,
+    });
+  } catch (error) {
+    console.error('Error retrying stuck selections:', error);
+    res.status(500).json({
+      error: 'Failed to retry stuck selections',
+      details: (error as any).message,
+    });
+  }
+});
+
 // Backfill missing layup_schedule orders to production_orders
 router.post('/backfill-production-orders', async (req: Request, res: Response) => {
   try {

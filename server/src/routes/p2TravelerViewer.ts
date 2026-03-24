@@ -1733,4 +1733,87 @@ router.get('/signatures/verify/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/p2-traveler-viewer/material-traceability
+// Upsert traceability records for a specific material in a department
+router.post('/material-traceability', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId, department, inventoryPartId, inventoryPartNumber, capturedValues, recordedBy } = req.body;
+
+    if (!serializedItemId || !department || !Array.isArray(capturedValues) || capturedValues.length === 0) {
+      return res.status(400).json({ error: 'serializedItemId, department, and capturedValues (non-empty array) are required' });
+    }
+
+    if (!recordedBy || typeof recordedBy !== 'string') {
+      return res.status(400).json({ error: 'recordedBy is required' });
+    }
+
+    // Require at least one part identifier to avoid broad deletion across entire department
+    if (!inventoryPartId && !inventoryPartNumber) {
+      return res.status(400).json({ error: 'Either inventoryPartId or inventoryPartNumber is required to scope the traceability record' });
+    }
+
+    // Verify serialized item exists
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, serializedItemId),
+    });
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    // Delete existing traceability records for this specific part + department combination
+    const deleteConditions = [
+      eq(p2SerializedItemTraceability.serializedItemId, serializedItemId),
+      eq(p2SerializedItemTraceability.department, department),
+    ];
+    if (inventoryPartId) {
+      deleteConditions.push(eq(p2SerializedItemTraceability.inventoryPartId, String(inventoryPartId)));
+    } else {
+      deleteConditions.push(eq(p2SerializedItemTraceability.inventoryPartNumber, inventoryPartNumber));
+    }
+
+    await db.delete(p2SerializedItemTraceability).where(and(...deleteConditions));
+
+    // Insert new records for each captured value
+    const newRecords = capturedValues.map((cv: { field: string; value: string }) => ({
+      serializedItemId,
+      department,
+      inventoryPartId: inventoryPartId ? String(inventoryPartId) : null,
+      inventoryPartNumber: inventoryPartNumber || null,
+      traceabilityType: 'custom',
+      traceabilityLabel: cv.field,
+      traceabilityValue: cv.value,
+      recordedBy,
+    }));
+
+    // Filter out records with empty values
+    const validRecords = newRecords.filter(r => r.traceabilityValue && r.traceabilityValue.trim() !== '');
+
+    let inserted: any[] = [];
+    if (validRecords.length > 0) {
+      inserted = await db.insert(p2SerializedItemTraceability).values(validRecords).returning();
+    }
+
+    // Build the updated material usage record to return
+    const capturedValuesResult = inserted.map(r => ({
+      field: r.traceabilityLabel,
+      value: r.traceabilityValue,
+      recordedBy: r.recordedBy,
+      recordedAt: r.createdAt,
+    }));
+
+    const updatedMaterialUsage = {
+      department,
+      partId: inventoryPartId || null,
+      partNumber: inventoryPartNumber || null,
+      capturedValues: capturedValuesResult,
+      isTraced: capturedValuesResult.length > 0,
+    };
+
+    return res.json({ success: true, records: inserted, updatedMaterialUsage });
+  } catch (error: any) {
+    console.error('Error saving material traceability:', error);
+    return res.status(500).json({ error: error.message || 'Failed to save material traceability' });
+  }
+});
+
 export default router;

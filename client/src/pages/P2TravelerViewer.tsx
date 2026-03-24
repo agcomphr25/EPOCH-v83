@@ -30,6 +30,7 @@ import {
   ArrowRight,
   AlertCircle,
   ChevronRight,
+  ChevronDown,
   BarChart3,
   Layers,
   Download,
@@ -38,6 +39,9 @@ import {
   Eye,
   ExternalLink,
   FileIcon,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
@@ -93,6 +97,10 @@ export default function P2TravelerViewer() {
     partName: '',
     createdBy: 'system',
   });
+
+  const [expandedMaterials, setExpandedMaterials] = useState<Record<string, boolean>>({});
+  const [editingMaterials, setEditingMaterials] = useState<Record<string, boolean>>({});
+  const [materialFormValues, setMaterialFormValues] = useState<Record<string, Record<string, string>>>({});
 
   useEffect(() => {
     if (urlBarcode && urlBarcode !== searchedBarcode) {
@@ -164,6 +172,99 @@ export default function P2TravelerViewer() {
       });
     },
   });
+
+  const saveTraceabilityMutation = useMutation({
+    mutationFn: async (data: {
+      serializedItemId: string;
+      department: string;
+      inventoryPartId?: string | number;
+      inventoryPartNumber?: string;
+      capturedValues: { field: string; value: string }[];
+      recordedBy: string;
+    }) => {
+      return await apiRequest('/api/p2-traveler-viewer/material-traceability', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (_result: any, variables: any) => {
+      toast({
+        title: 'Traceability Saved',
+        description: 'Material traceability data has been recorded successfully.',
+      });
+      const matKey = `${variables.department}-${variables.inventoryPartId || variables.inventoryPartNumber || ''}`;
+      setEditingMaterials(prev => ({ ...prev, [matKey]: false }));
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save traceability data',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const getMaterialKey = (mat: any, index: number) =>
+    `${mat.department}-${mat.partId || mat.partNumber || index}`;
+
+  const getDefaultFields = (mat: any): string[] => {
+    if (mat.requiredFields && mat.requiredFields.length > 0) return mat.requiredFields;
+    if (mat.inventoryItem?.traceabilityFields && mat.inventoryItem.traceabilityFields.length > 0)
+      return mat.inventoryItem.traceabilityFields;
+    return ['Lot Number', 'Batch Number', 'Roll Number', 'Notes'];
+  };
+
+  const handleToggleMaterial = (matKey: string) => {
+    setExpandedMaterials(prev => ({ ...prev, [matKey]: !prev[matKey] }));
+  };
+
+  const handleStartEdit = (mat: any, matKey: string) => {
+    const fields = getDefaultFields(mat);
+    const existingValues: Record<string, string> = {};
+    fields.forEach(f => {
+      const found = mat.capturedValues.find((cv: any) => cv.field === f);
+      existingValues[f] = found ? found.value : '';
+    });
+    if (mat.capturedValues.length > 0) {
+      mat.capturedValues.forEach((cv: any) => {
+        if (!existingValues[cv.field]) existingValues[cv.field] = cv.value;
+      });
+    }
+    setMaterialFormValues(prev => ({ ...prev, [matKey]: existingValues }));
+    setEditingMaterials(prev => ({ ...prev, [matKey]: true }));
+  };
+
+  const handleCancelEdit = (matKey: string) => {
+    setEditingMaterials(prev => ({ ...prev, [matKey]: false }));
+  };
+
+  const handleSaveTraceability = (mat: any, matKey: string) => {
+    if (!travelerData?.serializedItem?.id) return;
+    const formValues = materialFormValues[matKey] || {};
+    const capturedValues = Object.entries(formValues)
+      .filter(([, v]) => v && v.trim() !== '')
+      .map(([field, value]) => ({ field, value }));
+
+    if (capturedValues.length === 0) {
+      toast({ title: 'No data to save', description: 'Please enter at least one traceability value.', variant: 'destructive' });
+      return;
+    }
+
+    if (!mat.partId && !mat.partNumber) {
+      toast({ title: 'Cannot save', description: 'This material has no part identifier configured.', variant: 'destructive' });
+      return;
+    }
+
+    saveTraceabilityMutation.mutate({
+      serializedItemId: travelerData.serializedItem.id,
+      department: mat.department,
+      inventoryPartId: mat.partId || undefined,
+      inventoryPartNumber: mat.partNumber || undefined,
+      capturedValues,
+      recordedBy: 'viewer',
+    });
+  };
 
   const handleCreateLot = () => {
     if (!travelerData?.serializedItem) return;
@@ -654,234 +755,321 @@ export default function P2TravelerViewer() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Materials Used</CardTitle>
-                    <CardDescription>Actual materials consumed in production with full inventory traceability</CardDescription>
+                    <CardDescription>Actual materials consumed in production with full inventory traceability — click any card to expand and enter traceability data</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {travelerData.materialUsage && travelerData.materialUsage.length > 0 ? (
-                      <div className="space-y-4">
-                        {travelerData.materialUsage.map((mat: any, index: number) => (
-                          <div key={`mat-${index}`} className="border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary">{mat.department}</Badge>
-                                <span className="font-semibold text-sm">{mat.partName}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {mat.partNumber && (
-                                  <Badge variant="outline" className="font-mono">Part #{mat.partNumber}</Badge>
-                                )}
-                                {mat.capturedValues.length > 0 ? (
-                                  <Badge className="bg-emerald-100 text-emerald-800">Traced</Badge>
-                                ) : (
-                                  <Badge variant="destructive">Not Yet Traced</Badge>
-                                )}
-                              </div>
-                            </div>
+                      <div className="space-y-3">
+                        {travelerData.materialUsage.map((mat: any, index: number) => {
+                          const matKey = getMaterialKey(mat, index);
+                          const isExpanded = !!expandedMaterials[matKey];
+                          const isEditing = !!editingMaterials[matKey];
+                          const isTraced = mat.capturedValues.length > 0;
+                          const isLayupPacket = mat.department === 'Layup';
+                          const fields = getDefaultFields(mat);
+                          const formVals = materialFormValues[matKey] || {};
+                          const isSaving = saveTraceabilityMutation.isPending;
 
-                            {mat.inventoryItem && (
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
-                                {mat.inventoryItem.agPartNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">AG Part #</span>
-                                    <p className="font-mono font-medium">{mat.inventoryItem.agPartNumber}</p>
-                                  </div>
-                                )}
-                                {mat.inventoryItem.source && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Source</span>
-                                    <p>{mat.inventoryItem.source}</p>
-                                  </div>
-                                )}
-                                {mat.inventoryItem.supplierPartNumber && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Supplier Part #</span>
-                                    <p className="font-mono">{mat.inventoryItem.supplierPartNumber}</p>
-                                  </div>
-                                )}
-                                {mat.inventoryItem.category && (
-                                  <div>
-                                    <span className="text-muted-foreground text-xs">Category</span>
-                                    <p>{mat.inventoryItem.category}</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                          return (
+                            <div key={matKey} className="border rounded-lg overflow-hidden">
+                              {/* Header row — always visible, click to toggle */}
+                              <button
+                                type="button"
+                                className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                                onClick={() => handleToggleMaterial(matKey)}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  )}
+                                  <Badge variant="secondary" className="flex-shrink-0">{mat.department}</Badge>
+                                  <span className="font-semibold text-sm truncate">{mat.partName}</span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                  {mat.partNumber && (
+                                    <Badge variant="outline" className="font-mono text-xs hidden sm:inline-flex">Part #{mat.partNumber}</Badge>
+                                  )}
+                                  {isTraced ? (
+                                    <Badge className="bg-emerald-100 text-emerald-800">Traced</Badge>
+                                  ) : (
+                                    <Badge variant="destructive">Not Yet Traced</Badge>
+                                  )}
+                                </div>
+                              </button>
 
-                            {mat.capturedValues.length > 0 && (
-                              <div className="bg-muted/50 rounded-md p-3 mb-3">
-                                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Captured Traceability</p>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                                  {mat.capturedValues.map((cv: any, ci: number) => (
-                                    <div key={ci}>
-                                      <span className="text-muted-foreground text-xs">{cv.field}</span>
-                                      <p className="font-mono font-medium">{cv.value}</p>
-                                      {cv.recordedBy && (
-                                        <span className="text-xs text-muted-foreground">by {cv.recordedBy}</span>
+                              {/* Expanded content */}
+                              {isExpanded && (
+                                <div className="px-4 py-4 border-t space-y-4">
+                                  {/* Inventory item metadata */}
+                                  {mat.inventoryItem && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                      {mat.inventoryItem.agPartNumber && (
+                                        <div>
+                                          <span className="text-muted-foreground text-xs">AG Part #</span>
+                                          <p className="font-mono font-medium">{mat.inventoryItem.agPartNumber}</p>
+                                        </div>
+                                      )}
+                                      {mat.inventoryItem.source && (
+                                        <div>
+                                          <span className="text-muted-foreground text-xs">Source</span>
+                                          <p>{mat.inventoryItem.source}</p>
+                                        </div>
+                                      )}
+                                      {mat.inventoryItem.supplierPartNumber && (
+                                        <div>
+                                          <span className="text-muted-foreground text-xs">Supplier Part #</span>
+                                          <p className="font-mono">{mat.inventoryItem.supplierPartNumber}</p>
+                                        </div>
+                                      )}
+                                      {mat.inventoryItem.category && (
+                                        <div>
+                                          <span className="text-muted-foreground text-xs">Category</span>
+                                          <p>{mat.inventoryItem.category}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Layup packet: show cutting packet details rather than entry form */}
+                                  {isLayupPacket ? (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                      <p className="text-xs font-semibold text-blue-700 mb-2 uppercase tracking-wide">Layup Packet — Fabric Source</p>
+                                      {travelerData.allocatedPackets && travelerData.allocatedPackets.length > 0 ? (
+                                        <div className="space-y-2">
+                                          {travelerData.allocatedPackets.map((pkt: any) => (
+                                            <div key={pkt.id} className="text-sm">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <Badge variant="outline" className="font-mono text-xs">{pkt.barcode}</Badge>
+                                                <Badge variant={pkt.status === 'CONSUMED' ? 'secondary' : 'default'} className="text-xs">{pkt.status}</Badge>
+                                              </div>
+                                              {pkt.fabricSources && pkt.fabricSources.length > 0 && (
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+                                                  {pkt.fabricSources.map((src: any, si: number) => {
+                                                    const fab = src.inventoryDetail;
+                                                    return (
+                                                      <div key={si} className="text-xs">
+                                                        {(src.fabricType || fab?.fabric) && <p className="font-medium">{src.fabricType || fab.fabric}</p>}
+                                                        {(src.internalControlNumber || fab?.internalControlNumber) && (
+                                                          <p className="font-mono text-muted-foreground">ICN: {src.internalControlNumber || fab.internalControlNumber}</p>
+                                                        )}
+                                                        {(src.lotNumber || fab?.lotNumber) && (
+                                                          <p className="font-mono text-muted-foreground">Lot: {src.lotNumber || fab.lotNumber}</p>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground italic">No cutting packets allocated to this item yet</p>
+                                      )}
+                                    </div>
+                                  ) : isEditing ? (
+                                    /* Inline edit form */
+                                    <div className="bg-muted/30 rounded-md p-4 space-y-3">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Enter Traceability Data</p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {fields.map((field: string) => (
+                                          <div key={field} className="space-y-1">
+                                            <Label htmlFor={`${matKey}-${field}`} className="text-xs">{field}</Label>
+                                            <Input
+                                              id={`${matKey}-${field}`}
+                                              placeholder={`Enter ${field}...`}
+                                              value={formVals[field] || ''}
+                                              onChange={(e) => {
+                                                setMaterialFormValues(prev => ({
+                                                  ...prev,
+                                                  [matKey]: { ...(prev[matKey] || {}), [field]: e.target.value },
+                                                }));
+                                              }}
+                                              className="h-8 text-sm"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="flex items-center gap-2 pt-1">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleSaveTraceability(mat, matKey)}
+                                          disabled={isSaving}
+                                          className="h-8"
+                                        >
+                                          <Save className="h-3 w-3 mr-1" />
+                                          {isSaving ? 'Saving...' : 'Save'}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => handleCancelEdit(matKey)}
+                                          disabled={isSaving}
+                                          className="h-8"
+                                        >
+                                          <X className="h-3 w-3 mr-1" />
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : isTraced ? (
+                                    /* Read-only captured values with edit button */
+                                    <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Captured Traceability</p>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-xs"
+                                          onClick={() => handleStartEdit(mat, matKey)}
+                                        >
+                                          <Pencil className="h-3 w-3 mr-1" />
+                                          Edit
+                                        </Button>
+                                      </div>
+                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                                        {mat.capturedValues.map((cv: any, ci: number) => (
+                                          <div key={ci}>
+                                            <span className="text-muted-foreground text-xs">{cv.field}</span>
+                                            <p className="font-mono font-medium">{cv.value}</p>
+                                            {cv.recordedBy && (
+                                              <span className="text-xs text-muted-foreground">by {cv.recordedBy}</span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* Not yet traced — show entry form immediately */
+                                    <div className="bg-muted/30 rounded-md p-4 space-y-3">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Enter Traceability Data</p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {fields.map((field: string) => (
+                                          <div key={field} className="space-y-1">
+                                            <Label htmlFor={`${matKey}-new-${field}`} className="text-xs">{field}</Label>
+                                            <Input
+                                              id={`${matKey}-new-${field}`}
+                                              placeholder={`Enter ${field}...`}
+                                              value={formVals[field] || ''}
+                                              onChange={(e) => {
+                                                setMaterialFormValues(prev => ({
+                                                  ...prev,
+                                                  [matKey]: { ...(prev[matKey] || {}), [field]: e.target.value },
+                                                }));
+                                              }}
+                                              className="h-8 text-sm"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="flex items-center gap-2 pt-1">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => handleSaveTraceability(mat, matKey)}
+                                          disabled={isSaving}
+                                          className="h-8"
+                                        >
+                                          <Save className="h-3 w-3 mr-1" />
+                                          {isSaving ? 'Saving...' : 'Save'}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Fabric inventory details (for traced materials) */}
+                                  {mat.fabricDetails && mat.fabricDetails.length > 0 && mat.fabricDetails.map((fab: any, fi: number) => (
+                                    <div key={fi} className="mt-2 pt-3 border-t">
+                                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Inventory Material Details</p>
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                        {fab.fabric && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Fabric Type</span>
+                                            <p className="font-medium">{fab.fabric}</p>
+                                          </div>
+                                        )}
+                                        {fab.nickname && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Nickname</span>
+                                            <p>{fab.nickname}</p>
+                                          </div>
+                                        )}
+                                        {fab.fabricPartNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Fabric Part #</span>
+                                            <p className="font-mono">{fab.fabricPartNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab.source && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Source / Manufacturer</span>
+                                            <p>{fab.source}</p>
+                                          </div>
+                                        )}
+                                        {fab.internalControlNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">ICN</span>
+                                            <p className="font-mono font-semibold">{fab.internalControlNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab.lotNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Lot #</span>
+                                            <p className="font-mono">{fab.lotNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab.rollNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Roll #</span>
+                                            <p className="font-mono">{fab.rollNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab.batchNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Batch #</span>
+                                            <p className="font-mono">{fab.batchNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab.supplierPartNumber && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Supplier Part #</span>
+                                            <p className="font-mono">{fab.supplierPartNumber}</p>
+                                          </div>
+                                        )}
+                                        {fab.expirationDate && (
+                                          <div>
+                                            <span className="text-muted-foreground text-xs">Expiration Date</span>
+                                            <p className={isValid(new Date(fab.expirationDate)) && new Date(fab.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
+                                              {safeFormat(fab.expirationDate, 'MMM d, yyyy')}
+                                            </p>
+                                          </div>
+                                        )}
+                                        {fab.conformanceDocumentLink && (
+                                          <div className="col-span-2">
+                                            <span className="text-muted-foreground text-xs">Conformance Document</span>
+                                            <p>
+                                              <a href={fab.conformanceDocumentLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 text-sm">
+                                                <ExternalLink className="h-3 w-3" />
+                                                View Document
+                                              </a>
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {fab.notes && (
+                                        <div className="mt-2 pt-2 border-t border-dashed">
+                                          <span className="text-muted-foreground text-xs">Notes</span>
+                                          <p className="text-sm mt-1">{fab.notes}</p>
+                                        </div>
                                       )}
                                     </div>
                                   ))}
                                 </div>
-                              </div>
-                            )}
-
-                            {mat.fabricDetails && mat.fabricDetails.length > 0 && mat.fabricDetails.map((fab: any, fi: number) => (
-                              <div key={fi} className="mt-3 pt-3 border-t">
-                                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Inventory Material Details</p>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                  {fab.fabric && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Fabric Type</span>
-                                      <p className="font-medium">{fab.fabric}</p>
-                                    </div>
-                                  )}
-                                  {fab.nickname && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Nickname</span>
-                                      <p>{fab.nickname}</p>
-                                    </div>
-                                  )}
-                                  {fab.fabricPartNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Fabric Part #</span>
-                                      <p className="font-mono">{fab.fabricPartNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.source && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Source / Manufacturer</span>
-                                      <p>{fab.source}</p>
-                                    </div>
-                                  )}
-                                  {fab.internalControlNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">ICN</span>
-                                      <p className="font-mono font-semibold">{fab.internalControlNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.lotNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Lot #</span>
-                                      <p className="font-mono">{fab.lotNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.rollNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Roll #</span>
-                                      <p className="font-mono">{fab.rollNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.batchNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Batch #</span>
-                                      <p className="font-mono">{fab.batchNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.supplierPartNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Supplier Part #</span>
-                                      <p className="font-mono">{fab.supplierPartNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.supplierPoNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Supplier PO #</span>
-                                      <p className="font-mono">{fab.supplierPoNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.manufacturerPoNumber && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Manufacturer PO #</span>
-                                      <p className="font-mono">{fab.manufacturerPoNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.barcode && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Barcode</span>
-                                      <p className="font-mono">{fab.barcode}</p>
-                                    </div>
-                                  )}
-                                  {fab.manufactureDate && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Manufacture Date</span>
-                                      <p>{safeFormat(fab.manufactureDate, 'MMM d, yyyy')}</p>
-                                    </div>
-                                  )}
-                                  {fab.receivedDate && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Received Date</span>
-                                      <p>{safeFormat(fab.receivedDate, 'MMM d, yyyy')}</p>
-                                    </div>
-                                  )}
-                                  {fab.expirationDate && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Expiration Date</span>
-                                      <p className={isValid(new Date(fab.expirationDate)) && new Date(fab.expirationDate) < new Date() ? 'text-red-600 font-semibold' : ''}>
-                                        {safeFormat(fab.expirationDate, 'MMM d, yyyy')}
-                                      </p>
-                                    </div>
-                                  )}
-                                  {fab.location && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Location</span>
-                                      <p>{fab.location}</p>
-                                    </div>
-                                  )}
-                                  {fab.freezerNumber != null && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Freezer #</span>
-                                      <p>{fab.freezerNumber}</p>
-                                    </div>
-                                  )}
-                                  {fab.squareMeters != null && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Square Meters</span>
-                                      <p>{fab.squareMeters}</p>
-                                    </div>
-                                  )}
-                                  {fab.conformanceDocumentLink && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Conformance Document</span>
-                                      <p>
-                                        <a href={fab.conformanceDocumentLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                          View Document
-                                        </a>
-                                      </p>
-                                    </div>
-                                  )}
-                                  {fab.status && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Status</span>
-                                      <Badge variant={fab.status === 'active' ? 'default' : 'destructive'}>
-                                        {fab.status}
-                                      </Badge>
-                                    </div>
-                                  )}
-                                  {(fab.depletedAt || fab.depletedBy) && (
-                                    <div>
-                                      <span className="text-muted-foreground text-xs">Depleted</span>
-                                      <p className="text-red-600">
-                                        {fab.depletedAt ? safeFormat(fab.depletedAt, 'MMM d, yyyy h:mm a') : 'Yes'}
-                                        {fab.depletedBy ? ` by ${fab.depletedBy}` : ''}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                                {fab.notes && (
-                                  <div className="mt-2 pt-2 border-t border-dashed">
-                                    <span className="text-muted-foreground text-xs">Notes</span>
-                                    <p className="text-sm mt-1">{fab.notes}</p>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-
-                            {mat.capturedValues.length > 0 && (!mat.fabricDetails || mat.fabricDetails.length === 0) && (
-                              <p className="text-xs text-muted-foreground mt-2 italic">
-                                No matching material found in fabric inventory for captured values
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-center text-gray-500 py-8">No materials configured for this routing</p>

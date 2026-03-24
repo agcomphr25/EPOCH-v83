@@ -52,7 +52,7 @@ const createProjectRequestSchema = z.object({
 
 const VALID_PIPELINE_STAGES = [
   'rfq_received', 'quote_preparing', 'quote_submitted', 'purchase_review',
-  'po_received', 'production', 'shipping', 'completed',
+  'po_received', 'production', 'completed',
 ] as const;
 
 const updateProjectRequestSchema = z.object({
@@ -451,6 +451,10 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.body.currentStage === 'shipping') {
+      return res.status(400).json({ message: "Invalid stage: 'shipping' has been deprecated" });
+    }
     
     const validationResult = updateProjectRequestSchema.safeParse(req.body);
     if (!validationResult.success) {

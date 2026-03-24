@@ -47,7 +47,6 @@ const PIPELINE_STAGES = [
   { key: 'purchase_review', label: 'Purchase Review' },
   { key: 'po_received', label: 'PO Received' },
   { key: 'production', label: 'Production' },
-  { key: 'shipping', label: 'Shipping' },
   { key: 'completed', label: 'Completed' },
 ];
 
@@ -58,7 +57,6 @@ const STAGE_COLORS: Record<string, string> = {
   purchase_review: 'bg-orange-50 border-orange-200',
   po_received: 'bg-blue-50 border-blue-200',
   production: 'bg-indigo-50 border-indigo-200',
-  shipping: 'bg-purple-50 border-purple-200',
   completed: 'bg-green-50 border-green-200',
 };
 
@@ -69,7 +67,6 @@ const HEADER_COLORS: Record<string, string> = {
   purchase_review: 'bg-orange-200 text-orange-800',
   po_received: 'bg-blue-200 text-blue-800',
   production: 'bg-indigo-200 text-indigo-800',
-  shipping: 'bg-purple-200 text-purple-800',
   completed: 'bg-green-200 text-green-800',
 };
 

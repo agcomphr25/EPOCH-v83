@@ -22,7 +22,6 @@ const PIPELINE_STAGES = [
   { key: 'purchase_review', label: 'Purchase Review' },
   { key: 'po_received', label: 'PO Received' },
   { key: 'production', label: 'Production' },
-  { key: 'shipping', label: 'Shipping' },
   { key: 'completed', label: 'Completed' },
 ];
 
@@ -33,7 +32,6 @@ const STAGE_BG: Record<string, string> = {
   purchase_review: 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700',
   po_received: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700',
   production: 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700',
-  shipping: 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700',
   completed: 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700',
 };
 
@@ -44,7 +42,6 @@ const HEADER_BG: Record<string, string> = {
   purchase_review: 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-100',
   po_received: 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-100',
   production: 'bg-indigo-200 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-100',
-  shipping: 'bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-100',
   completed: 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100',
 };
 

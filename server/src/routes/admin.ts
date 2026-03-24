@@ -1570,6 +1570,35 @@ router.get('/order-lookup', async (req: Request, res: Response) => {
   }
 });
 
+// ─── Item Code → Orders reverse lookup ────────────────────────────────────
+
+router.get('/item-code-lookup', async (req: Request, res: Response) => {
+  try {
+    const { itemCode } = req.query as { itemCode?: string };
+    if (!itemCode || !itemCode.trim()) return res.status(400).json({ error: 'itemCode is required' });
+
+    const rows = await pool.query(
+      `SELECT DISTINCT po.order_id,
+              po.po_number,
+              po.current_department,
+              po.production_status,
+              COALESCE(NULLIF(poi.item_id, ''), NULLIF(po.item_id, '')) AS resolved_item_code
+       FROM production_orders po
+       LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
+       WHERE po.item_id ILIKE $1
+          OR poi.item_id ILIKE $1
+       ORDER BY po.order_id
+       LIMIT 200`,
+      [`%${itemCode.trim()}%`]
+    );
+
+    res.json({ orders: rows });
+  } catch (error: any) {
+    console.error('Item code lookup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── Order Override — glennj only ─────────────────────────────────────────
 
 const OVERRIDE_ONLY_USER = 'glennj';

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, CheckCircle2, XCircle, CheckCircle, AlertTriangle, Tag } from 'lucide-react';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -20,7 +21,9 @@ const FIELD_LABELS: Record<string, string> = {
   qds:           'QDS',
 };
 
-export default function OrderLookupPage() {
+// ─── Tab 1: Order → Item Code ──────────────────────────────────────────────
+
+function OrderToItemCodeTab() {
   const [input, setInput] = useState('');
   const [orderId, setOrderId] = useState('');
 
@@ -49,25 +52,19 @@ export default function OrderLookupPage() {
     setOrderId(candidateOrderId);
   };
 
-  // Resolve the best direct item code from the order row
   const directItemCode: string | null = (() => {
     if (!data?.order) return null;
     const o = data.order;
-    // Prefer the PO item's item_id (most authoritative), then the order's own item_id
     const candidate = o.poi_item_id || o.item_id || null;
-    // Reject numeric-only or blank values (legacy bad data)
     if (!candidate || /^\d+$/.test(candidate.trim())) return null;
     return candidate.trim();
   })();
 
   return (
-    <div className="container mx-auto p-6 max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Order → Item Code Lookup</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Enter a production order ID to find its matching item code from the product catalog.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-muted-foreground text-sm">
+        Enter a production order ID to find its matching item code from the product catalog.
+      </p>
 
       <div className="flex gap-2 max-w-lg">
         <Input
@@ -157,7 +154,6 @@ export default function OrderLookupPage() {
             </CardContent>
           </Card>
 
-          {/* Direct item code from PO link */}
           {directItemCode ? (
             <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
               <CardContent className="py-4 flex items-center gap-4">
@@ -268,6 +264,125 @@ export default function OrderLookupPage() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Tab 2: Item Code → Orders ─────────────────────────────────────────────
+
+function ItemCodeToOrdersTab() {
+  const [input, setInput] = useState('');
+  const [itemCode, setItemCode] = useState('');
+
+  const { data, isFetching, isError } = useQuery<any>({
+    queryKey: ['/api/admin/item-code-lookup', itemCode],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/item-code-lookup?itemCode=${encodeURIComponent(itemCode)}`);
+      if (!res.ok) throw new Error('Lookup failed');
+      return res.json();
+    },
+    enabled: !!itemCode,
+  });
+
+  const handleSearch = () => setItemCode(input.trim());
+
+  const orders: any[] = data?.orders ?? [];
+
+  return (
+    <div className="space-y-6">
+      <p className="text-muted-foreground text-sm">
+        Enter a full or partial item code to find all production orders linked to it.
+      </p>
+
+      <div className="flex gap-2 max-w-lg">
+        <Input
+          placeholder="e.g. AG-CRB-AHV105-SR"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+        />
+        <Button onClick={handleSearch} disabled={!input.trim() || isFetching}>
+          <Search className="h-4 w-4 mr-2" />
+          {isFetching ? 'Searching...' : 'Search'}
+        </Button>
+      </div>
+
+      {isError && (
+        <p className="text-sm text-red-500">Something went wrong. Check the item code and try again.</p>
+      )}
+
+      {data && orders.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground">
+            <XCircle className="h-10 w-10 mx-auto mb-3 opacity-40" />
+            <p className="font-medium">No production orders found matching <strong className="font-mono">{itemCode}</strong>.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {orders.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              {orders.length} order{orders.length !== 1 ? 's' : ''} matching <span className="font-mono">{itemCode}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>PO Number</TableHead>
+                  <TableHead>Current Dept</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Item Code</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((o: any) => (
+                  <TableRow key={o.order_id}>
+                    <TableCell className="font-mono font-medium">{o.order_id}</TableCell>
+                    <TableCell>{o.po_number || '—'}</TableCell>
+                    <TableCell>{o.current_department || '—'}</TableCell>
+                    <TableCell><Badge variant="outline">{o.production_status}</Badge></TableCell>
+                    <TableCell className="font-mono text-sm">{o.resolved_item_code || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────
+
+export default function OrderLookupPage() {
+  return (
+    <div className="container mx-auto p-6 max-w-5xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Order Lookup</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Look up production orders by order ID or item code.
+        </p>
+      </div>
+
+      <Tabs defaultValue="order-to-item">
+        <TabsList>
+          <TabsTrigger value="order-to-item">Order → Item Code</TabsTrigger>
+          <TabsTrigger value="item-to-orders">Item Code → Orders</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="order-to-item" className="mt-6">
+          <OrderToItemCodeTab />
+        </TabsContent>
+
+        <TabsContent value="item-to-orders" className="mt-6">
+          <ItemCodeToOrdersTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

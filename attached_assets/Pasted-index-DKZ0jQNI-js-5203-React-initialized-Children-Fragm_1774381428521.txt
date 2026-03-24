@@ -1,0 +1,307 @@
+index-DKZ0jQNI.js:5203 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-DKZ0jQNI.js:5203 React hooks: {useState: ƒ, useEffect: ƒ}
+index-DKZ0jQNI.js:5203 [EPOCH SYNC] Sync engine starting
+index-DKZ0jQNI.js:5203 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DKZ0jQNI.js:5200 App component is rendering...
+index-DKZ0jQNI.js:5200 Environment: production
+index-DKZ0jQNI.js:5200 Base URL: /
+index-DKZ0jQNI.js:1565 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-DKZ0jQNI.js:1565 [EPOCH] Install prompt captured and ready
+product-labels:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-DKZ0jQNI.js:235 🌐 API Request to /api/production-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/production-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/po-products (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/stock-models (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/features (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/customers (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/stock-models: 200
+index-DKZ0jQNI.js:235 ✅ API Response from /api/features: 200
+index-DKZ0jQNI.js:235 ✅ API Response from /api/po-products: 200
+index-DKZ0jQNI.js:235 ✅ API Response from /api/customers: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/production-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/production-orders: 200
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 0, isLoading: true, data: Array(0)}
+index-DKZ0jQNI.js:4706 🔍 Fetching production queue...
+index-DKZ0jQNI.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 0, isLoading: true, data: Array(0)}
+index-DKZ0jQNI.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-DKZ0jQNI.js:4706 🔍 Production queue result: 136 orders
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 0, isLoading: true, data: Array(0)}
+index-DKZ0jQNI.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+index-DKZ0jQNI.js:40 [Violation] 'setTimeout' handler took 125ms
+[Violation] Forced reflow while executing JavaScript took 60ms
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+[Violation] Forced reflow while executing JavaScript took 61ms
+index-DKZ0jQNI.js:235 🌐 API Request to /api/layup-schedule/molds (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235  POST https://agcompepoch.xyz/api/layup-schedule/molds 404 (Not Found)
+Me @ index-DKZ0jQNI.js:235
+mutationFn @ index-DKZ0jQNI.js:4706
+fn @ index-DKZ0jQNI.js:51
+p @ index-DKZ0jQNI.js:51
+start @ index-DKZ0jQNI.js:51
+execute @ index-DKZ0jQNI.js:51
+await in execute
+mutate @ index-DKZ0jQNI.js:51
+(anonymous) @ index-DKZ0jQNI.js:51
+ne @ index-DKZ0jQNI.js:4706
+S7t @ index-DKZ0jQNI.js:37
+k7t @ index-DKZ0jQNI.js:37
+_7t @ index-DKZ0jQNI.js:37
+F6e @ index-DKZ0jQNI.js:37
+slt @ index-DKZ0jQNI.js:37
+(anonymous) @ index-DKZ0jQNI.js:37
+CEe @ index-DKZ0jQNI.js:40
+Eot @ index-DKZ0jQNI.js:37
+t0e @ index-DKZ0jQNI.js:37
+Z5e @ index-DKZ0jQNI.js:37
+H7t @ index-DKZ0jQNI.js:37
+index-DKZ0jQNI.js:235 ✅ API Response from /api/layup-schedule/molds: 404
+index-DKZ0jQNI.js:5203 API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/layup-schedule/molds</pre>
+</body>
+</html>
+
+console.error @ index-DKZ0jQNI.js:5203
+Me @ index-DKZ0jQNI.js:235
+await in Me
+mutationFn @ index-DKZ0jQNI.js:4706
+fn @ index-DKZ0jQNI.js:51
+p @ index-DKZ0jQNI.js:51
+start @ index-DKZ0jQNI.js:51
+execute @ index-DKZ0jQNI.js:51
+await in execute
+mutate @ index-DKZ0jQNI.js:51
+(anonymous) @ index-DKZ0jQNI.js:51
+ne @ index-DKZ0jQNI.js:4706
+S7t @ index-DKZ0jQNI.js:37
+k7t @ index-DKZ0jQNI.js:37
+_7t @ index-DKZ0jQNI.js:37
+F6e @ index-DKZ0jQNI.js:37
+slt @ index-DKZ0jQNI.js:37
+(anonymous) @ index-DKZ0jQNI.js:37
+CEe @ index-DKZ0jQNI.js:40
+Eot @ index-DKZ0jQNI.js:37
+t0e @ index-DKZ0jQNI.js:37
+Z5e @ index-DKZ0jQNI.js:37
+H7t @ index-DKZ0jQNI.js:37
+index-DKZ0jQNI.js:5203 💥 API Request failed for /api/layup-schedule/molds: Error: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/layup-schedule/molds</pre>
+</body>
+</html>
+
+    at Me (index-DKZ0jQNI.js:235:6362)
+console.error @ index-DKZ0jQNI.js:5203
+Me @ index-DKZ0jQNI.js:235
+await in Me
+mutationFn @ index-DKZ0jQNI.js:4706
+fn @ index-DKZ0jQNI.js:51
+p @ index-DKZ0jQNI.js:51
+start @ index-DKZ0jQNI.js:51
+execute @ index-DKZ0jQNI.js:51
+await in execute
+mutate @ index-DKZ0jQNI.js:51
+(anonymous) @ index-DKZ0jQNI.js:51
+ne @ index-DKZ0jQNI.js:4706
+S7t @ index-DKZ0jQNI.js:37
+k7t @ index-DKZ0jQNI.js:37
+_7t @ index-DKZ0jQNI.js:37
+F6e @ index-DKZ0jQNI.js:37
+slt @ index-DKZ0jQNI.js:37
+(anonymous) @ index-DKZ0jQNI.js:37
+CEe @ index-DKZ0jQNI.js:40
+Eot @ index-DKZ0jQNI.js:37
+t0e @ index-DKZ0jQNI.js:37
+Z5e @ index-DKZ0jQNI.js:37
+H7t @ index-DKZ0jQNI.js:37
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Total orders: 0
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Filtered orders: 0
+index-DKZ0jQNI.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Total orders: 0
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Filtered orders: 0
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Total orders: 2611
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Filtered orders: 130
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:40 [Violation] 'setTimeout' handler took 53ms
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/orders/progress-department (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/orders/progress-department: 200
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Total orders: 2611
+index-DKZ0jQNI.js:4079 🔍 CNC Queue - Filtered orders: 129
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/orders/update-department (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/orders/update-department: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DKZ0jQNI.js:235 🌐 API Request to /api/orders/progress-department (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/orders/progress-department: 200
+index-DKZ0jQNI.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/orders/update-department (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/orders/update-department: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 0, isLoading: true, data: Array(0)}
+index-DKZ0jQNI.js:4706 🔍 Fetching production queue...
+index-DKZ0jQNI.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 0, isLoading: true, data: Array(0)}
+index-DKZ0jQNI.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-DKZ0jQNI.js:4706 🔍 Production queue result: 136 orders
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 0, isLoading: true, data: Array(0)}
+index-DKZ0jQNI.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+index-DKZ0jQNI.js:40 [Violation] 'setTimeout' handler took 123ms
+[Violation] Forced reflow while executing JavaScript took 54ms
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}
+[Violation] Forced reflow while executing JavaScript took 57ms
+index-DKZ0jQNI.js:235 🌐 API Request to /api/layup-schedule/molds (timeout: 15000ms, deployment: true)
+index-DKZ0jQNI.js:235  POST https://agcompepoch.xyz/api/layup-schedule/molds 404 (Not Found)
+Me @ index-DKZ0jQNI.js:235
+mutationFn @ index-DKZ0jQNI.js:4706
+fn @ index-DKZ0jQNI.js:51
+p @ index-DKZ0jQNI.js:51
+start @ index-DKZ0jQNI.js:51
+execute @ index-DKZ0jQNI.js:51
+await in execute
+mutate @ index-DKZ0jQNI.js:51
+(anonymous) @ index-DKZ0jQNI.js:51
+ne @ index-DKZ0jQNI.js:4706
+S7t @ index-DKZ0jQNI.js:37
+k7t @ index-DKZ0jQNI.js:37
+_7t @ index-DKZ0jQNI.js:37
+F6e @ index-DKZ0jQNI.js:37
+slt @ index-DKZ0jQNI.js:37
+(anonymous) @ index-DKZ0jQNI.js:37
+CEe @ index-DKZ0jQNI.js:40
+Eot @ index-DKZ0jQNI.js:37
+t0e @ index-DKZ0jQNI.js:37
+Z5e @ index-DKZ0jQNI.js:37
+H7t @ index-DKZ0jQNI.js:37
+index-DKZ0jQNI.js:235 ✅ API Response from /api/layup-schedule/molds: 404
+index-DKZ0jQNI.js:5203 API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/layup-schedule/molds</pre>
+</body>
+</html>
+
+console.error @ index-DKZ0jQNI.js:5203
+Me @ index-DKZ0jQNI.js:235
+await in Me
+mutationFn @ index-DKZ0jQNI.js:4706
+fn @ index-DKZ0jQNI.js:51
+p @ index-DKZ0jQNI.js:51
+start @ index-DKZ0jQNI.js:51
+execute @ index-DKZ0jQNI.js:51
+await in execute
+mutate @ index-DKZ0jQNI.js:51
+(anonymous) @ index-DKZ0jQNI.js:51
+ne @ index-DKZ0jQNI.js:4706
+S7t @ index-DKZ0jQNI.js:37
+k7t @ index-DKZ0jQNI.js:37
+_7t @ index-DKZ0jQNI.js:37
+F6e @ index-DKZ0jQNI.js:37
+slt @ index-DKZ0jQNI.js:37
+(anonymous) @ index-DKZ0jQNI.js:37
+CEe @ index-DKZ0jQNI.js:40
+Eot @ index-DKZ0jQNI.js:37
+t0e @ index-DKZ0jQNI.js:37
+Z5e @ index-DKZ0jQNI.js:37
+H7t @ index-DKZ0jQNI.js:37
+index-DKZ0jQNI.js:5203 💥 API Request failed for /api/layup-schedule/molds: Error: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/layup-schedule/molds</pre>
+</body>
+</html>
+
+    at Me (index-DKZ0jQNI.js:235:6362)
+console.error @ index-DKZ0jQNI.js:5203
+Me @ index-DKZ0jQNI.js:235
+await in Me
+mutationFn @ index-DKZ0jQNI.js:4706
+fn @ index-DKZ0jQNI.js:51
+p @ index-DKZ0jQNI.js:51
+start @ index-DKZ0jQNI.js:51
+execute @ index-DKZ0jQNI.js:51
+await in execute
+mutate @ index-DKZ0jQNI.js:51
+(anonymous) @ index-DKZ0jQNI.js:51
+ne @ index-DKZ0jQNI.js:4706
+S7t @ index-DKZ0jQNI.js:37
+k7t @ index-DKZ0jQNI.js:37
+_7t @ index-DKZ0jQNI.js:37
+F6e @ index-DKZ0jQNI.js:37
+slt @ index-DKZ0jQNI.js:37
+(anonymous) @ index-DKZ0jQNI.js:37
+CEe @ index-DKZ0jQNI.js:40
+Eot @ index-DKZ0jQNI.js:37
+t0e @ index-DKZ0jQNI.js:37
+Z5e @ index-DKZ0jQNI.js:37
+H7t @ index-DKZ0jQNI.js:37
+index-DKZ0jQNI.js:4706 🛒 P1 Purchase Orders received: {isArray: true, length: 3, isLoading: false, data: Array(2)}

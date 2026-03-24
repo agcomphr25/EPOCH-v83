@@ -3276,15 +3276,17 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      // Look up the proper item name from purchase_order_items (P1) or p2_purchase_order_items (P2) tables
-      const resolvedItemName = p2PoItemMap.get(po.p2PoItemId?.toString() || '') || poItemMap.get(po.itemId?.toString() || '') || p2PoItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
-      
       // Derive modelId with fallback chain for robust stock model resolution
+      // Must be computed before resolvedItemName so we can use the display name from stockModelMap
       let derivedModelId = parsedSpecs?.stockModel
         || parsedSpecs?.stock_model
         || (parsedSpecs?.specifications?.stockModel)
         || (parsedSpecs?.specifications?.stock_model)
         || po.itemId;
+      
+      // Look up the proper item name — prefer the stock model display name (from specifications.stockModel),
+      // then fall back to the FK-based poItemMap lookup, then itemName, then itemId
+      const resolvedItemName = stockModelMap.get(derivedModelId) || p2PoItemMap.get(po.p2PoItemId?.toString() || '') || poItemMap.get(po.itemId?.toString() || '') || p2PoItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
 
       // If modelId is still numeric or empty, attempt match from resolvedItemName
       if (!derivedModelId || /^\d+$/.test(String(derivedModelId))) {

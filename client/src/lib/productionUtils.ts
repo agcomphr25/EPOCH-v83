@@ -13,6 +13,7 @@ export interface ProductionOrder {
   itemId: string;
   itemName: string;
   specifications?: any;
+  sourceSnapshot?: any;
   orderDate: string;
   dueDate: string;
   productionStatus: 'PENDING' | 'LAID_UP' | 'SHIPPED';

@@ -245,22 +245,22 @@ export default function ShippingLabelPage(): JSX.Element {
                 <head>
                   <title>UPS Shipping Label - ${orderId}</title>
                   <style>
+                    @page {
+                      size: 4in 6in;
+                      margin: 0;
+                    }
                     body { 
                       margin: 0; 
-                      padding: 20px; 
+                      padding: 0; 
                       display: flex; 
                       justify-content: center; 
                       align-items: center; 
-                      min-height: 100vh;
                       background: #f5f5f5;
                     }
                     img { 
                       width: 4in;
                       height: 6in;
-                      border: 1px solid #ddd;
-                      background: white;
-                      padding: 10px;
-                      object-fit: contain;
+                      object-fit: fill;
                     }
                     .print-button {
                       position: fixed;
@@ -275,22 +275,17 @@ export default function ShippingLabelPage(): JSX.Element {
                       font-size: 16px;
                     }
                     @media print {
-                      @page {
-                        size: 4in 6in;
-                        margin: 0;
-                      }
                       .print-button { display: none; }
                       body { 
                         background: white; 
-                        padding: 0;
                         margin: 0;
+                        padding: 0;
                       }
                       img { 
-                        border: none; 
-                        padding: 0;
                         width: 4in;
                         height: 6in;
                         display: block;
+                        object-fit: fill;
                       }
                     }
                   </style>

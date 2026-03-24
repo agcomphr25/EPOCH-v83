@@ -1392,7 +1392,7 @@ function PrintShipmentPopup({
             img {
               width: 4in;
               height: 6in;
-              object-fit: contain;
+              object-fit: fill;
             }
             @media print {
               body { width: 4in; height: 6in; }

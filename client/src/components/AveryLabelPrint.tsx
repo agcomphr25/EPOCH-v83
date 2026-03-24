@@ -194,13 +194,13 @@ export function AveryLabelPrint({
                   font-family: Arial, sans-serif;
                 }
 
-                /* Avery 8160 Label Dimensions: 2.625" x 1" (30 labels per sheet, 3 cols x 10 rows) */
+                /* Avery 8162 Label Dimensions: 4" x 1.333" (14 labels per sheet, 2 cols x 7 rows) */
                 .avery-label {
-                  width: 2.625in;
-                  height: 1in;
+                  width: 4in;
+                  height: 1.333in;
                   border: 1px solid #ddd;
                   margin: 0;
-                  padding: 0.03in;
+                  padding: 0.05in 0.08in;
                   display: block;
                   box-sizing: border-box;
                   page-break-inside: avoid;
@@ -221,7 +221,7 @@ export function AveryLabelPrint({
 
                 /* Line 1: Order ID */
                 .line1 {
-                  font-size: 8pt;
+                  font-size: 11pt;
                   font-weight: bold;
                   color: #000;
                   margin-bottom: 2px;
@@ -233,9 +233,9 @@ export function AveryLabelPrint({
 
                 /* Line 2: Customer Name */
                 .line2 {
-                  font-size: 6pt;
+                  font-size: 9pt;
                   color: #000;
-                  margin: 1px 0;
+                  margin: 2px 0;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
@@ -244,10 +244,10 @@ export function AveryLabelPrint({
 
                 /* Line 3: Stock Model + Color */
                 .line3 {
-                  font-size: 5.5pt;
+                  font-size: 8pt;
                   font-weight: bold;
                   color: #000;
-                  margin: 1px 0;
+                  margin: 2px 0;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
@@ -256,22 +256,22 @@ export function AveryLabelPrint({
 
                 /* Line 4: Due Date */
                 .line4 {
-                  font-size: 6pt;
+                  font-size: 8pt;
                   font-weight: bold;
                   color: #000;
-                  margin-top: 1px;
+                  margin-top: 2px;
                   text-align: center;
                 }
 
                 /* Special options line for swivel studs and texture */
                 .line-special {
-                  font-size: 5pt;
-                  margin: 1px 0;
+                  font-size: 7pt;
+                  margin: 2px 0;
                   text-overflow: ellipsis;
                   overflow: hidden;
                   white-space: nowrap;
                   text-align: center;
-                  line-height: 1.1;
+                  line-height: 1.2;
                 }
 
                 .swivel-studs {
@@ -289,25 +289,25 @@ export function AveryLabelPrint({
                   display: flex;
                   justify-content: center;
                   align-items: center;
-                  margin: 2px 0;
-                  min-height: 0.3in;
+                  margin: 3px 0;
+                  min-height: 0.45in;
                 }
 
                 .barcode-img {
-                  max-width: 100%;
-                  max-height: 0.3in;
+                  max-width: 90%;
+                  max-height: 0.45in;
                   height: auto;
                   display: block;
                 }
 
-                /* Grid layout: 3 cols x 10 rows with exact Avery 8160 column gap of 0.125" */
+                /* Grid layout: 2 cols x 7 rows — Avery 8162 (4" x 1.333", 14 per sheet) */
                 .labels-container {
                   width: 8.5in;
-                  padding: 0.5in 0.1875in;
+                  padding: 0.83in 0.156in 0 0.156in;
                   display: grid;
-                  grid-template-columns: repeat(3, 2.625in);
-                  grid-template-rows: repeat(10, 1in);
-                  column-gap: 0.125in;
+                  grid-template-columns: repeat(2, 4in);
+                  grid-template-rows: repeat(7, 1.333in);
+                  column-gap: 0.1875in;
                   row-gap: 0;
                 }
 
@@ -316,8 +316,8 @@ export function AveryLabelPrint({
                   .avery-label {
                     border: none;
                     margin: 0;
-                    width: 2.625in;
-                    height: 1in;
+                    width: 4in;
+                    height: 1.333in;
                   }
                   @page {
                     size: letter;
@@ -378,10 +378,10 @@ export function AveryLabelPrint({
             <div
               className="bg-white border border-gray-400 p-2 text-center flex flex-col justify-between"
               style={{
-                width: '2.625in',
-                height: '1in',
-                fontSize: '8px',
-                lineHeight: '1.1',
+                width: '4in',
+                height: '1.333in',
+                fontSize: '10px',
+                lineHeight: '1.2',
               }}
             >
               <div className="font-bold text-xs">{orderId}</div>
@@ -495,13 +495,13 @@ export function AveryLabelPrint({
           {/* Print Button */}
           <Button onClick={handlePrintLabels} className="w-full">
             <Printer className="h-4 w-4 mr-2" />
-            Print {copies} Avery Labels (8160)
+            Print {copies} Avery Labels (8162)
           </Button>
 
           <div className="text-xs text-gray-600 mt-2">
             <p>
-              <strong>Compatible with:</strong> Avery 8160 labels (2.625" x 1",
-              30 labels per sheet)
+              <strong>Compatible with:</strong> Avery 8162 labels (4" x 1⅓",
+              14 labels per sheet)
             </p>
             <p>
               <strong>Note:</strong> Ensure your printer is set to actual size

@@ -57,6 +57,8 @@ import {
   ExternalLink,
   LayoutGrid,
   List,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -108,6 +110,7 @@ export default function BarcodeQueuePage() {
   const [kickbackOrderId, setKickbackOrderId] = useState('');
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   // Kickback form
@@ -1119,18 +1122,41 @@ export default function BarcodeQueuePage() {
                     );
                   });
 
+                  const isCollapsed = collapsedCategories.has(categoryKey);
+                  const toggleCategory = () => {
+                    setCollapsedCategories(prev => {
+                      const next = new Set(prev);
+                      if (next.has(categoryKey)) {
+                        next.delete(categoryKey);
+                      } else {
+                        next.add(categoryKey);
+                      }
+                      return next;
+                    });
+                  };
+
                   return [
-                    <tr key={`group-header-${categoryKey}`} className="bg-slate-100 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700">
+                    <tr
+                      key={`group-header-${categoryKey}`}
+                      onClick={toggleCategory}
+                      className={`cursor-pointer select-none border-t border-slate-200 dark:border-slate-700 ${isCollapsed ? 'bg-slate-200/70 dark:bg-slate-700/60' : 'bg-slate-100 dark:bg-slate-800/60'} hover:bg-slate-200 dark:hover:bg-slate-700/80 transition-colors`}
+                    >
                       <td colSpan={8} className="px-3 py-1.5">
-                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
-                          {categoryKey}
-                        </span>
-                        <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
-                          {(groupOrders as any[]).length} {(groupOrders as any[]).length === 1 ? 'order' : 'orders'}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {isCollapsed
+                            ? <ChevronRight className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                            : <ChevronDown className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                          }
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                            {categoryKey}
+                          </span>
+                          <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
+                            {(groupOrders as any[]).length} {(groupOrders as any[]).length === 1 ? 'order' : 'orders'}
+                          </span>
+                        </div>
                       </td>
                     </tr>,
-                    ...groupRows,
+                    ...(isCollapsed ? [] : groupRows),
                   ];
                 })}
               </tbody>

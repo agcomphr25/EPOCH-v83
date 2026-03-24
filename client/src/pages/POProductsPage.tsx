@@ -780,9 +780,9 @@ export default function POProductsPage() {
                     <div className="space-y-2">
                       <Label htmlFor="actionLength">Action Length</Label>
                       <Select
-                        value={formData.actionLength}
+                        value={formData.actionLength || '__NONE__'}
                         onValueChange={(value) =>
-                          handleInputChange('actionLength', value)
+                          handleInputChange('actionLength', value === '__NONE__' ? '' : value)
                         }
                         disabled={featuresLoading}
                       >
@@ -796,6 +796,7 @@ export default function POProductsPage() {
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {features
                             .find(
                               (f: any) =>
@@ -805,8 +806,7 @@ export default function POProductsPage() {
                             ?.options?.filter(
                               (option: any) =>
                                 option.value &&
-                                option.value.trim() !== '' &&
-                                option.value.toLowerCase() !== 'none'
+                                option.value.trim() !== ''
                             )
                             .map((option: any) => (
                               <SelectItem
@@ -834,9 +834,9 @@ export default function POProductsPage() {
                             )}
                           </Label>
                           <Select
-                            value={formData.actionInlet}
+                            value={formData.actionInlet || '__NONE__'}
                             onValueChange={(value) =>
-                              handleInputChange('actionInlet', value)
+                              handleInputChange('actionInlet', value === '__NONE__' ? '' : value)
                             }
                             disabled={featuresLoading}
                           >
@@ -850,6 +850,7 @@ export default function POProductsPage() {
                               />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="__NONE__">None</SelectItem>
                               {features
                                 .find(
                                   (f: any) =>
@@ -883,9 +884,9 @@ export default function POProductsPage() {
                     <div className="space-y-2">
                       <Label htmlFor="bottomMetal">Bottom Metal</Label>
                       <Select
-                        value={formData.bottomMetal}
+                        value={formData.bottomMetal || '__NONE__'}
                         onValueChange={(value) =>
-                          handleInputChange('bottomMetal', value)
+                          handleInputChange('bottomMetal', value === '__NONE__' ? '' : value)
                         }
                         disabled={featuresLoading}
                       >
@@ -899,6 +900,7 @@ export default function POProductsPage() {
                           />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__NONE__">None</SelectItem>
                           {features
                             .find(
                               (f: any) =>
@@ -935,9 +937,9 @@ export default function POProductsPage() {
                             )}
                           </Label>
                           <Select
-                            value={formData.barrelInlet}
+                            value={formData.barrelInlet || '__NONE__'}
                             onValueChange={(value) =>
-                              handleInputChange('barrelInlet', value)
+                              handleInputChange('barrelInlet', value === '__NONE__' ? '' : value)
                             }
                             disabled={featuresLoading}
                           >
@@ -951,6 +953,7 @@ export default function POProductsPage() {
                               />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="__NONE__">None</SelectItem>
                               {features
                                 .find(
                                   (f: any) =>

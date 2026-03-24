@@ -73,7 +73,7 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
   const [newMoldStockModelInput, setNewMoldStockModelInput] = useState('');
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof NewMoldForm, string>>>({});
 
-  const { data: moldsData, isLoading, refetch } = useQuery<{ success: boolean; molds: Mold[] }>({
+  const { data: moldsData, isLoading, refetch } = useQuery<Mold[]>({
     queryKey: ['/api/molds'],
     enabled: open,
   });
@@ -132,7 +132,7 @@ export function MoldSettings({ open, onOpenChange }: MoldSettingsProps) {
     },
   });
 
-  const molds = moldsData?.molds || [];
+  const molds = moldsData || [];
   const uniqueModelNames = Array.from(new Set(molds.map(m => m.modelName))).sort();
 
   const filteredMolds = molds.filter(mold => {

@@ -31,7 +31,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Package, Plus, Save, Edit, Trash2, Eye, Check, ChevronsUpDown, Search } from 'lucide-react';
+import { Package, Plus, Save, Edit, Trash2, Eye, Check, ChevronsUpDown, Search, Copy } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -111,6 +111,29 @@ interface POProductFormData {
   otherOptions: string[];
 }
 
+function duplicatePOProductTransform(product: POProduct): POProductFormData {
+  return {
+    customerName: product.customerName,
+    productName: `Copy of ${product.productName}`,
+    customerProductNumber: '',
+    productType: product.productType || '',
+    material: product.material || '',
+    handedness: product.handedness || '',
+    stockModel: product.stockModel || '',
+    actionLength: product.actionLength || '',
+    actionInlet: product.actionInlet || '',
+    bottomMetal: product.bottomMetal || '',
+    barrelInlet: product.barrelInlet || '',
+    qds: product.qds || '',
+    swivelStuds: product.swivelStuds || '',
+    paintOptions: product.paintOptions || '',
+    texture: product.texture || '',
+    flatTop: product.flatTop || false,
+    price: product.price.toString(),
+    otherOptions: [...(product.otherOptions || [])],
+  };
+}
+
 export default function POProductsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -140,6 +163,8 @@ export default function POProductsPage() {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [duplicatingFromName, setDuplicatingFromName] = useState<string | null>(null);
+  const [duplicatingFromId, setDuplicatingFromId] = useState<number | null>(null);
 
   // Fetch PO Products
   const {
@@ -264,6 +289,36 @@ export default function POProductsPage() {
     },
   });
 
+  const duplicateSubmitMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: object }) => {
+      return apiRequest(`/api/po-products/${id}/duplicate`, {
+        method: 'POST',
+        body: data,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/po-products'] });
+      toast({ title: 'Success', description: 'PO Product Item duplicated successfully' });
+      handleReset();
+      setShowCreateForm(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to duplicate PO Product Item',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleDuplicate = (product: POProduct) => {
+    setEditingProduct(null);
+    setDuplicatingFromName(product.productName);
+    setDuplicatingFromId(product.id);
+    setFormData(duplicatePOProductTransform(product));
+    setShowCreateForm(true);
+  };
+
   const handleInputChange = (
     field: keyof POProductFormData,
     value: string | boolean | string[]
@@ -278,7 +333,7 @@ export default function POProductsPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, duplicateFromId?: number) => {
     e.preventDefault();
 
     // Basic validation
@@ -298,6 +353,8 @@ export default function POProductsPage() {
 
     if (editingProduct) {
       updateMutation.mutate({ id: editingProduct.id, data: productData });
+    } else if (duplicateFromId != null) {
+      duplicateSubmitMutation.mutate({ id: duplicateFromId, data: productData });
     } else {
       createMutation.mutate(productData);
     }
@@ -325,6 +382,8 @@ export default function POProductsPage() {
       otherOptions: [],
     });
     setEditingProduct(null);
+    setDuplicatingFromName(null);
+    setDuplicatingFromId(null);
   };
 
   const handleEdit = (product: POProduct) => {
@@ -475,6 +534,15 @@ export default function POProductsPage() {
                         </Button>
                         <Button
                           size="sm"
+                          variant="outline"
+                          onClick={() => handleDuplicate(product)}
+                          data-testid={`button-duplicate-${product.id}`}
+                          title="Duplicate"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="destructive"
                           onClick={() => handleDelete(product.id)}
                           data-testid={`button-delete-${product.id}`}
@@ -493,15 +561,21 @@ export default function POProductsPage() {
       </Card>
 
       {/* Product Form Dialog */}
-      <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+      <Dialog open={showCreateForm} onOpenChange={(open) => { setShowCreateForm(open); if (!open) handleReset(); }}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingProduct ? 'Edit PO Product Item' : 'Create New PO Product Item'}
+              {editingProduct
+                ? 'Edit PO Product Item'
+                : duplicatingFromName
+                ? 'Duplicate PO Product Item'
+                : 'Create New PO Product Item'}
             </DialogTitle>
             <DialogDescription>
               {editingProduct
                 ? 'Update the product details below.'
+                : duplicatingFromName
+                ? `Duplicated from ${duplicatingFromName} — review and save.`
                 : 'Fill in the product details below to create a new PO Product Item.'}
             </DialogDescription>
           </DialogHeader>
@@ -509,11 +583,11 @@ export default function POProductsPage() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {editingProduct ? 'Edit Product' : 'Product Configuration'}
+                {editingProduct ? 'Edit Product' : duplicatingFromName ? 'Duplicate Product' : 'Product Configuration'}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={(e) => handleSubmit(e, duplicatingFromId ?? undefined)} className="space-y-6">
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">

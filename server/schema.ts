@@ -4328,8 +4328,8 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   productionLeadName: text('production_lead_name'), // Denormalized for display
   
   // Scrap rate tracking — incremented by nonconforming disposition workflow
-  scrappedItemCount: integer('scrapped_item_count').default(0),
-  scrapRatePercent: real('scrap_rate_percent').default(0),
+  scrappedItemCount: integer('scrapped_item_count').notNull().default(0),
+  scrapRatePercent: real('scrap_rate_percent').notNull().default(0),
 
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -13662,7 +13662,7 @@ export const p2Rmas = pgTable('p2_rmas', {
   rmaNumber: text('rma_number').notNull().unique(), // Auto-generated e.g. RMA-P2-20260324-1
   status: text('status').notNull().default('open'), // open | shipped | complete
   // Traceable materials used in repair (JSONB array: [{name, lot, qty}])
-  traceableMaterials: jsonb('traceable_materials').$type<{ name: string; lot: string; qty: string }[]>().default(sql`'[]'::jsonb`),
+  traceableMaterials: jsonb('traceable_materials').$type<{ name: string; lot: string; qty: string }[]>().notNull().default(sql`'[]'::jsonb`),
   shippedAt: timestamp('shipped_at'),
   completedAt: timestamp('completed_at'),
   notes: text('notes'),

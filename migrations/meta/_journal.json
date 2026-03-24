@@ -36,6 +36,20 @@
       "when": 1774150000000,
       "tag": "0004_job_allocations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774320000000,
+      "tag": "0005_backfill_production_orders_item_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774389600000,
+      "tag": "0006_nonconforming_rmas_and_schema_columns",
+      "breakpoints": true
     }
   ]
 }

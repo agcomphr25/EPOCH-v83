@@ -1566,14 +1566,14 @@ export default function TravelerExecution() {
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
                                               const packetBarcode = result?.packetBarcode || '';
-                                              const icnValue = consumption?.internalControlNumber || lot?.internalControlNumber || packetBarcode || '';
+                                              const icnValue = result?.internalControlNumber || consumption?.internalControlNumber || lot?.internalControlNumber || packetBarcode || '';
 
-                                              // Packet scan: batch all rolls into a single completeTaskMutation call
                                               if (packetBarcode) {
                                                 if (!packetBatchRef.current || packetBatchRef.current.packetBarcode !== packetBarcode) {
                                                   packetBatchRef.current = { packetBarcode, rolls: [], timeoutId: null };
                                                 }
-                                                packetBatchRef.current.rolls.push({ icn: icnValue, lot });
+                                                const safeIcn = icnValue || `${packetBarcode}-roll-${(packetBatchRef.current.rolls.length + 1)}`;
+                                                packetBatchRef.current.rolls.push({ icn: safeIcn, lot });
                                                 if (packetBatchRef.current.timeoutId !== null) {
                                                   clearTimeout(packetBatchRef.current.timeoutId);
                                                 }
@@ -1586,13 +1586,14 @@ export default function TravelerExecution() {
                                                   const primaryIcn = primaryRoll?.icn || batch.packetBarcode;
                                                   const primaryLot = primaryRoll?.lot;
                                                   const combinedIcns = batch.rolls.map((r) => r.icn).filter(Boolean).join(', ');
+                                                  const icnOrBarcode = combinedIcns || batch.packetBarcode;
 
                                                   const allScanVals: Record<string, string> = {
                                                     packetBarcode: batch.packetBarcode,
                                                     packet_barcode: batch.packetBarcode,
-                                                    material_internal_control_number: combinedIcns || batch.packetBarcode,
-                                                    internalControlNumber: combinedIcns || batch.packetBarcode,
-                                                    material_icn: combinedIcns || batch.packetBarcode,
+                                                    material_internal_control_number: icnOrBarcode,
+                                                    internalControlNumber: icnOrBarcode,
+                                                    material_icn: icnOrBarcode,
                                                     material_expiration_date: primaryLot?.expirationDate || '',
                                                     expirationDate: primaryLot?.expirationDate || '',
                                                     material_batch_number: primaryLot?.supplierLotNumber || '',
@@ -1610,7 +1611,6 @@ export default function TravelerExecution() {
                                                     rollNumber: primaryLot?.rollNumber || '',
                                                     receivedDate: primaryLot?.receivedDate || '',
                                                   };
-                                                  // Add per-roll ICN keys
                                                   batch.rolls.forEach((r, idx) => {
                                                     allScanVals[`internalControlNumber_${idx + 1}`] = r.icn;
                                                   });
@@ -1621,11 +1621,16 @@ export default function TravelerExecution() {
                                                       traceFieldVals[key] = val;
                                                     }
                                                   }
-                                                  // Always include packetBarcode and ICN even if not in taskFieldKeys
                                                   traceFieldVals['packetBarcode'] = batch.packetBarcode;
                                                   traceFieldVals['packet_barcode'] = batch.packetBarcode;
                                                   if (!traceFieldVals['internalControlNumber']) {
-                                                    traceFieldVals['internalControlNumber'] = combinedIcns || batch.packetBarcode;
+                                                    traceFieldVals['internalControlNumber'] = icnOrBarcode;
+                                                  }
+                                                  if (!traceFieldVals['material_icn']) {
+                                                    traceFieldVals['material_icn'] = icnOrBarcode;
+                                                  }
+                                                  if (!traceFieldVals['material_internal_control_number']) {
+                                                    traceFieldVals['material_internal_control_number'] = icnOrBarcode;
                                                   }
 
                                                   const inventoryValidation = {

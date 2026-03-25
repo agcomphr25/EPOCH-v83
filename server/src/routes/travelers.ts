@@ -1147,6 +1147,44 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
 
     // Server-side validation for TRACE tasks: verify inventory links
     if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
+      // Persist packet barcode as a dynamic task field if not already present
+      const resolvedFV = fieldValues || {};
+      const packetBarcodeValue = resolvedFV['packetBarcode'] || resolvedFV['packet_barcode'] || '';
+      if (packetBarcodeValue) {
+        const existingFields = await storage.getTravelerTaskFields(taskId);
+        const existingFieldKeys = new Set(existingFields.map((f: any) => f.fieldKey));
+        const dynamicPacketFields = [
+          { fieldKey: 'packetBarcode', fieldLabel: 'packetBarcode' },
+          { fieldKey: 'packet_barcode', fieldLabel: 'packet_barcode' },
+        ];
+        for (const df of dynamicPacketFields) {
+          if (!existingFieldKeys.has(df.fieldKey)) {
+            await storage.createTravelerTaskField({
+              travelerTaskId: taskId,
+              fieldKey: df.fieldKey,
+              fieldLabel: df.fieldLabel,
+              fieldType: 'text',
+              required: false,
+              value: packetBarcodeValue,
+              recordedBy: completedBy || 'system',
+              recordedAt: new Date(),
+              validation: resolvedFV['packetBarcode']
+                ? (fieldValidations || {})[df.fieldKey] || undefined
+                : undefined,
+            });
+          } else {
+            const existingField = existingFields.find((f: any) => f.fieldKey === df.fieldKey);
+            if (existingField && !existingField.value) {
+              await storage.updateTravelerTaskField(existingField.id, {
+                value: packetBarcodeValue,
+                recordedBy: completedBy || 'system',
+                recordedAt: new Date(),
+              });
+            }
+          }
+        }
+      }
+
       const traceWarnings: string[] = [];
       const updatedFields = await storage.getTravelerTaskFields(taskId);
       for (const field of updatedFields) {

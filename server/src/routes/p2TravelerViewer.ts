@@ -574,6 +574,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           department: dept,
           traceabilityType: f.fieldType || 'text',
           traceabilityLabel: f.fieldLabel,
+          traceabilityKey: f.fieldKey,
           traceabilityValue: f.value,
           recordedBy: resolveName(f.recordedBy) || f.recordedBy,
           recordedAt: f.recordedAt,
@@ -605,21 +606,34 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           const capturedTraceability = mergedTraceabilityData.filter((t: any) => {
             if (t.inventoryPartId && String(t.inventoryPartId) === String(mat.partId)) return true;
             if (t.inventoryPartNumber && t.inventoryPartNumber === mat.partNumber) return true;
-            if (t.department === dept && t.source === 'traveler_field') {
+            if (t.source === 'traveler_field') {
               const label = (t.traceabilityLabel || '').toLowerCase();
-              // Always include packet barcode fields so packet lookup can proceed
-              if (packetBarcodeFieldKeys.has(label)) return true;
-              if (requiredFieldLabels.some((rf: string) => label.includes(rf) || rf.includes(label))) return true;
-              const partName = (mat.partName || '').toLowerCase();
-              if (label.includes(partName) || partName.includes(label)) return true;
+              const key = (t.traceabilityKey || '').toLowerCase();
+              if (packetBarcodeFieldKeys.has(label) || packetBarcodeFieldKeys.has(key)) return true;
+              if (t.department === dept) {
+                if (requiredFieldLabels.some((rf: string) => label.includes(rf) || rf.includes(label))) return true;
+                const partName = (mat.partName || '').toLowerCase();
+                if (label.includes(partName) || partName.includes(label)) return true;
+              }
             }
             return false;
           });
 
           const fabricMatches: any[] = [];
-          const capturedValues = [
+          const rawCapturedValues = [
             ...capturedTraceability.map((t: any) => t.traceabilityValue),
           ].filter(Boolean);
+          const capturedValues: string[] = [];
+          for (const rv of rawCapturedValues) {
+            if (rv.includes(',')) {
+              for (const part of rv.split(',')) {
+                const p = part.trim();
+                if (p) capturedValues.push(p);
+              }
+            } else {
+              capturedValues.push(rv);
+            }
+          }
           
           for (const val of capturedValues) {
             const trimmedVal = val.trim();

@@ -171,23 +171,27 @@ export default function MaterialScanner({
       if (result.status === 'PACKET' && result.packet && result.fabricRolls) {
         const { packet, fabricRolls } = result;
         fabricRolls.forEach((roll, idx) => {
+          const rollFallbackIcn = `${packet.barcode}-roll-${idx + 1}`;
           const icn =
             roll.internalControlNumber ||
             roll.lotNumber ||
             roll.batchNumber ||
             roll.rollNumber ||
-            `${packet.barcode}-roll-${idx + 1}`;
+            rollFallbackIcn;
+          const safeIcn = icn || rollFallbackIcn;
           onMaterialConsumed?.({
-            internalControlNumber: icn,
+            internalControlNumber: safeIcn,
             entryMethod: 'barcode',
             travelerId,
             travelerStepId,
             packetBarcode: packet.barcode,
             packetId: packet.id,
             fabricInventoryId: roll.fabricInventoryId,
+            rollIndex: idx,
+            rollCount: fabricRolls.length,
             updatedLot: {
               id: roll.fabricInventoryId,
-              internalControlNumber: icn,
+              internalControlNumber: safeIcn,
               expirationDate: roll.expirationDate,
               supplierLotNumber: roll.lotNumber || roll.batchNumber,
               fabricType: roll.fabricType,

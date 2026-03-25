@@ -566,6 +566,40 @@ export const formSubmissions = pgTable('form_submissions', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Inventory Item Type Enums
+export const inventoryItemTypeEnum = pgEnum('inventory_item_type', ['PURCHASED', 'MANUFACTURED']);
+export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']);
+export const inventoryManufacturingLevelEnum = pgEnum('inventory_manufacturing_level', ['COMPONENT', 'INTERMEDIATE', 'FINAL']);
+
+// Supply source dashboard mapping — single source of truth for routing
+export type ManufacturedCategory = 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY';
+export type SupplySourceDashboard = 'CUTTING_TABLE' | 'CNC' | 'CORE' | 'ASSEMBLY';
+
+export function getSupplySourceDashboard(category: ManufacturedCategory | null | undefined): SupplySourceDashboard | null {
+  if (!category) return null;
+  const map: Record<ManufacturedCategory, SupplySourceDashboard> = {
+    PACKET: 'CUTTING_TABLE',
+    KIT: 'CUTTING_TABLE',
+    MACHINED_PART: 'CNC',
+    CORE: 'CORE',
+    SUB_ASSEMBLY: 'ASSEMBLY',
+    ASSEMBLY: 'ASSEMBLY',
+  };
+  return map[category] ?? null;
+}
+
+// Legacy dashboard name used by manufacturing_queue.department column
+export function supplySourceDashboardToLegacyDept(dashboard: SupplySourceDashboard | null): string | null {
+  if (!dashboard) return null;
+  const legacyMap: Record<SupplySourceDashboard, string> = {
+    CUTTING_TABLE: 'Cutting Table',
+    CNC: 'CNC',
+    CORE: 'Cores',
+    ASSEMBLY: 'Assembly',
+  };
+  return legacyMap[dashboard];
+}
+
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
   id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
@@ -634,6 +668,12 @@ export const inventoryItems = pgTable('inventory_items', {
   defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO' or 'WEBSITE'
   purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK → units (measurement unit for purchasing)
   usageUnitId: integer('usage_unit_id').references(() => units.id), // FK → units (measurement unit for consumption)
+  // Formal item type classification (replaces loose text `type` field)
+  itemType: inventoryItemTypeEnum('item_type'), // PURCHASED | MANUFACTURED
+  // Manufactured items only — category determines production routing
+  manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY
+  // Manufactured items only — production level independent of category
+  manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
 });
 
 // Inventory Item Cost History - Tracks price changes over time
@@ -2151,7 +2191,21 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     utilizedInAdmin: z.boolean().default(false),
     utilizedInServices: z.boolean().default(false),
     isActive: z.boolean().default(true),
-  });
+    itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
+    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']).optional().nullable(),
+    manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
+  }).refine(
+    (data) => {
+      if (data.itemType === 'MANUFACTURED') {
+        return !!data.manufacturedCategory;
+      }
+      return true;
+    },
+    {
+      message: 'manufacturedCategory is required when itemType is MANUFACTURED',
+      path: ['manufacturedCategory'],
+    }
+  );
 
 export const insertInventoryScanSchema = createInsertSchema(inventoryScans)
   .omit({
@@ -2814,6 +2868,7 @@ export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
+export type InventoryItemWithDashboard = InventoryItem & { supplySourceDashboard: SupplySourceDashboard | null };
 export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
 export type InsertItemGroup = z.infer<typeof insertItemGroupSchema>;

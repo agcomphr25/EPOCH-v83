@@ -22,7 +22,17 @@ import {
   DEPARTMENT_LOCATION_MAP,
   EnrichedInventoryBalance,
   DepartmentBalanceBreakdown,
+  getSupplySourceDashboard,
+  type ManufacturedCategory,
+  type InventoryItem,
 } from '@shared/schema';
+
+function withSupplySourceDashboard(item: InventoryItem) {
+  return {
+    ...item,
+    supplySourceDashboard: getSupplySourceDashboard(item.manufacturedCategory as ManufacturedCategory),
+  };
+}
 
 import { storage } from '../../storage';
 import { db } from '../../db';
@@ -80,7 +90,7 @@ const pdfUpload = multer({
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
-    res.json(items);
+    res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get enhanced inventory items error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory items' });
@@ -91,7 +101,7 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 router.get('/items', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
-    res.json(items);
+    res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get inventory items error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory items' });
@@ -182,7 +192,7 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
       costPer: response.costPer,
     });
     
-    res.json(response);
+    res.json(withSupplySourceDashboard(response as InventoryItem));
   } catch (error) {
     console.error('Get inventory item by part number error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory item' });
@@ -247,7 +257,7 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
       }
     }
     
-    res.json(updatedItem);
+    res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
     console.error('Update enhanced inventory item error:', error);
     if (error instanceof Error) {
@@ -273,7 +283,7 @@ router.delete('/inventory/items/:id', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
-    res.json(items);
+    res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get inventory items error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory items' });
@@ -319,7 +329,7 @@ router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'td
     }
 
     const newItem = await storage.createInventoryItem(itemData);
-    res.status(201).json(newItem);
+    res.status(201).json(withSupplySourceDashboard(newItem));
   } catch (error) {
     console.error('Create inventory item error:', error);
     if (error instanceof Error) {
@@ -360,7 +370,7 @@ router.put('/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: '
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
-    res.json(updatedItem);
+    res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
     console.error('Update inventory item error:', error);
     if (error instanceof Error) {
@@ -386,7 +396,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.get('/items', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
-    res.json(items);
+    res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get inventory items error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory items' });
@@ -408,6 +418,8 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
         sku: inventoryItems.sku,
         department: inventoryItems.department,
         usageUnit: inventoryItems.usageUnit,
+        itemType: inventoryItems.itemType,
+        manufacturedCategory: inventoryItems.manufacturedCategory,
         assignedDepartmentIds: sql<number[]>`COALESCE(
           (SELECT array_agg(iid.department_id) FROM inventory_item_departments iid WHERE iid.item_id = ${inventoryItems.id}),
           ARRAY[]::int[]
@@ -416,7 +428,10 @@ router.get('/items/all-for-request', async (req: Request, res: Response) => {
       .from(inventoryItems)
       .where(eq(inventoryItems.isActive, true));
 
-    res.json(items);
+    res.json(items.map((item) => ({
+      ...item,
+      supplySourceDashboard: getSupplySourceDashboard(item.manufacturedCategory as ManufacturedCategory),
+    })));
   } catch (error) {
     console.error('Get all items for request error:', error);
     res.status(500).json({ error: 'Failed to fetch items' });
@@ -432,7 +447,7 @@ router.get('/items/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
 
-    res.json(item);
+    res.json(withSupplySourceDashboard(item));
   } catch (error) {
     console.error('Get inventory item error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory item' });
@@ -483,7 +498,7 @@ router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name
       }
     }
     
-    res.status(201).json(newItem);
+    res.status(201).json(withSupplySourceDashboard(newItem));
   } catch (error) {
     console.error('Create inventory item error:', error);
     if (error instanceof Error) {
@@ -550,7 +565,7 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
       }
     }
     
-    res.json(updatedItem);
+    res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
     console.error('Update inventory item error:', error);
     if (error instanceof Error) {
@@ -1607,7 +1622,7 @@ router.get('/items/department/:departmentName', async (req: Request, res: Respon
     const isAdmin = username ? ['glennj', 'tasham', 'staciw'].includes(username.toLowerCase()) : false;
     
     const items = await storage.getInventoryItemsByDepartment(departmentName, isAdmin);
-    res.json(items);
+    res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get inventory items by department error:', error);
     res.status(500).json({ error: 'Failed to fetch department inventory items' });
@@ -2489,7 +2504,7 @@ router.get('/groups/:id/items', async (req: Request, res: Response) => {
   try {
     const groupId = parseInt(req.params.id);
     const items = await storage.getItemsByGroupId(groupId);
-    res.json(items);
+    res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get items by group error:', error);
     res.status(500).json({ error: 'Failed to fetch items' });

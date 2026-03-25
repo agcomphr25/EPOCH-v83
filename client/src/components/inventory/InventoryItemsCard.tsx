@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
-import type { InventoryItem, ItemGroup } from '@shared/schema';
+import type { InventoryItem, ItemGroup, ManufacturedCategory } from '@shared/schema';
+import { getSupplySourceDashboard, supplySourceDashboardToLegacyDept } from '@shared/schema';
 
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import TraceabilityConfigModal from './TraceabilityConfigModal';
@@ -51,6 +52,9 @@ interface InventoryFormData {
   sku: string;
   name: string;
   type: string;
+  itemType: string;
+  manufacturedCategory: string;
+  manufacturingLevel: string;
   manufacturingDepartment: string;
   source: string;
   vendorId: string;
@@ -246,37 +250,78 @@ const InventoryForm = ({
           />
         </div>
         <div>
-          <Label htmlFor="type">Type</Label>
+          <Label htmlFor="itemType">Item Type</Label>
           <Select
-            value={formData.type}
-            onValueChange={(value) => onSelectChange('type', value)}
+            value={formData.itemType || formData.type || 'PURCHASED'}
+            onValueChange={(value) => {
+              onSelectChange('itemType', value);
+              onSelectChange('type', value === 'MANUFACTURED' ? 'Manufactured' : 'Purchased');
+              if (value === 'PURCHASED') {
+                onSelectChange('manufacturedCategory', '');
+                onSelectChange('manufacturingLevel', '');
+              }
+            }}
           >
-            <SelectTrigger data-testid="select-type">
+            <SelectTrigger data-testid="select-itemType">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Purchased">Purchased</SelectItem>
-              <SelectItem value="Manufactured">Manufactured</SelectItem>
+              <SelectItem value="PURCHASED">Purchased</SelectItem>
+              <SelectItem value="MANUFACTURED">Manufactured</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        {formData.type === 'Manufactured' && (
-          <div>
-            <Label htmlFor="manufacturingDepartment">Manufacturing Department</Label>
-            <Select
-              value={formData.manufacturingDepartment}
-              onValueChange={(value) => onSelectChange('manufacturingDepartment', value)}
-            >
-              <SelectTrigger data-testid="select-manufacturingDepartment">
-                <SelectValue placeholder="Select department" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CNC">CNC</SelectItem>
-                <SelectItem value="Cutting Table">Cutting Table</SelectItem>
-                <SelectItem value="Cores">Cores</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        {(formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && (
+          <>
+            <div>
+              <Label htmlFor="manufacturedCategory">Category</Label>
+              <Select
+                value={formData.manufacturedCategory || ''}
+                onValueChange={(value) => onSelectChange('manufacturedCategory', value)}
+              >
+                <SelectTrigger data-testid="select-manufacturedCategory">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PACKET">Packet</SelectItem>
+                  <SelectItem value="KIT">Kit</SelectItem>
+                  <SelectItem value="MACHINED_PART">Machined Part</SelectItem>
+                  <SelectItem value="CORE">Core</SelectItem>
+                  <SelectItem value="SUB_ASSEMBLY">Sub-Assembly</SelectItem>
+                  <SelectItem value="ASSEMBLY">Assembly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="manufacturingLevel">Manufacturing Level</Label>
+              <Select
+                value={formData.manufacturingLevel || ''}
+                onValueChange={(value) => onSelectChange('manufacturingLevel', value)}
+              >
+                <SelectTrigger data-testid="select-manufacturingLevel">
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="COMPONENT">Component</SelectItem>
+                  <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
+                  <SelectItem value="FINAL">Final</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {formData.manufacturedCategory && (
+              <div className="md:col-span-2">
+                <Label>Supply Source Dashboard</Label>
+                <div className="mt-1">
+                  <Badge variant="secondary" className="text-sm">
+                    {supplySourceDashboardToLegacyDept(
+                      getSupplySourceDashboard(formData.manufacturedCategory as ManufacturedCategory)
+                    ) ?? 'Unknown'}
+                  </Badge>
+                  <p className="text-xs text-gray-500 mt-1">Derived automatically from category</p>
+                </div>
+              </div>
+            )}
+          </>
         )}
         <div className="flex items-center space-x-2 pt-6">
           <Checkbox
@@ -381,17 +426,6 @@ const InventoryForm = ({
             data-testid="checkbox-utilizedInServices"
           />
           <Label htmlFor="utilizedInServices" className="cursor-pointer">Services</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="isPacket"
-            checked={formData.isPacket}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('isPacket', checked as boolean)
-            }
-            data-testid="checkbox-isPacket"
-          />
-          <Label htmlFor="isPacket" className="cursor-pointer">Packet</Label>
         </div>
         <div className="flex items-center space-x-2">
           <Checkbox
@@ -1001,6 +1035,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     sku: '',
     name: '',
     type: 'Purchased',
+    itemType: 'PURCHASED',
+    manufacturedCategory: '',
+    manufacturingLevel: '',
     manufacturingDepartment: '',
     source: '',
     vendorId: 'none',
@@ -1481,6 +1518,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       sku: '',
       name: '',
       type: 'Purchased',
+      itemType: 'PURCHASED',
+      manufacturedCategory: '',
+      manufacturingLevel: '',
       manufacturingDepartment: '',
       source: '',
       vendorId: 'none',
@@ -1603,7 +1643,15 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         sku: formData.sku || null,
         name: formData.name,
         type: formData.type || 'Purchased',
+        itemType: (formData.itemType || (formData.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED')) as 'PURCHASED' | 'MANUFACTURED',
+        manufacturedCategory: (formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && formData.manufacturedCategory
+          ? formData.manufacturedCategory as 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY'
+          : null,
+        manufacturingLevel: (formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && formData.manufacturingLevel
+          ? formData.manufacturingLevel as 'COMPONENT' | 'INTERMEDIATE' | 'FINAL'
+          : null,
         manufacturingDepartment: formData.manufacturingDepartment || null,
+        isPacket: formData.manufacturedCategory === 'PACKET',
         source: formData.source || null,
         vendorId:
           formData.vendorId && formData.vendorId !== 'none'
@@ -1642,7 +1690,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
-        isPacket: formData.isPacket,
         isPacketPart: formData.isPacketPart,
         isFabric: formData.isFabric,
         hasSds: formData.hasSds,
@@ -1663,12 +1710,16 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
+    const resolvedItemType = item.itemType || (item.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED');
     setFormData({
       agPartNumber: item.agPartNumber,
       sku: item.sku || '',
       name: item.name,
       type: item.type || 'Purchased',
-      manufacturingDepartment: (item as any).manufacturingDepartment || '',
+      itemType: resolvedItemType,
+      manufacturedCategory: item.manufacturedCategory || (item.isPacket ? 'PACKET' : ''),
+      manufacturingLevel: item.manufacturingLevel || '',
+      manufacturingDepartment: item.manufacturingDepartment || '',
       source: item.source || '',
       vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',

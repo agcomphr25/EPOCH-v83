@@ -489,6 +489,9 @@ import {
   type InsertTicketOrder,
   type TicketActivity,
   type InsertTicketActivity,
+  getSupplySourceDashboard,
+  supplySourceDashboardToLegacyDept,
+  type ManufacturedCategory,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -13011,14 +13014,19 @@ export class DatabaseStorage implements IStorage {
             }
 
             const part = partInfo[0];
-            const isPacketItem = part.isPacket === true;
+            const isManufacturedNew = part.itemType === 'MANUFACTURED';
+            const isPacketItem = part.isPacket === true || part.manufacturedCategory === 'PACKET';
             
-            if (!isPacketItem && part.type !== 'Manufactured') {
+            if (!isManufacturedNew && !isPacketItem && part.type !== 'Manufactured') {
               console.log(`📦 Skipping purchased part ${line.childPartAgNumber} (type: ${part.type || 'undefined'})`);
               continue;
             }
 
-            const effectiveDepartment = isPacketItem ? 'Cutting Table' : part.manufacturingDepartment;
+            // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
+            const derivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = derivedDashboard
+              ? supplySourceDashboardToLegacyDept(derivedDashboard)
+              : (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
 
             if (!effectiveDepartment) {
               const skipMsg = `Manufactured part ${line.childPartAgNumber} has no manufacturing department assigned`;
@@ -13099,16 +13107,19 @@ export class DatabaseStorage implements IStorage {
               .limit(1);
 
             const part = partInfo.length > 0 ? partInfo[0] : null;
-            const isPacketItem = part?.isPacket === true;
+            const isPacketItem = part?.isPacket === true || part?.manufacturedCategory === 'PACKET';
+            const isManufacturedNew = part?.itemType === 'MANUFACTURED';
             
-            if (!isManufactured && !isPacketItem && part?.type !== 'Manufactured') {
+            if (!isManufactured && !isPacketItem && !isManufacturedNew && part?.type !== 'Manufactured') {
               console.log(`📦 Skipping non-manufactured part ${itemPartNumber}`);
               continue;
             }
 
-            const effectiveDepartment = isPacketItem 
-              ? 'Cutting Table' 
-              : (item.firstDept || part?.manufacturingDepartment || null);
+            // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
+            const derivedDashboard2 = getSupplySourceDashboard(part?.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = derivedDashboard2
+              ? supplySourceDashboardToLegacyDept(derivedDashboard2)
+              : (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
 
             if (!effectiveDepartment) {
               const skipMsg = `Part ${itemPartNumber} has no department assigned`;
@@ -13160,12 +13171,15 @@ export class DatabaseStorage implements IStorage {
         .where(eq(inventoryItems.agPartNumber, poItem.partNumber))
         .limit(1);
 
-      const topIsPacket = topLevelPart.length > 0 && topLevelPart[0].isPacket === true;
-      const topIsManufactured = topLevelPart.length > 0 && topLevelPart[0].type === 'Manufactured';
+      const topIsPacket = topLevelPart.length > 0 && (topLevelPart[0].isPacket === true || topLevelPart[0].manufacturedCategory === 'PACKET');
+      const topIsManufactured = topLevelPart.length > 0 && (topLevelPart[0].type === 'Manufactured' || topLevelPart[0].itemType === 'MANUFACTURED');
 
       if (topLevelPart.length > 0 && (topIsManufactured || topIsPacket)) {
         const part = topLevelPart[0];
-        const topDepartment = topIsPacket ? 'Cutting Table' : part.manufacturingDepartment;
+        const topDerivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
+        const topDepartment = topDerivedDashboard
+          ? supplySourceDashboardToLegacyDept(topDerivedDashboard)
+          : (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
         
         if (topDepartment) {
           console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - queuing ${poItem.quantity} production orders`);

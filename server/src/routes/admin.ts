@@ -1582,11 +1582,12 @@ router.get('/item-code-lookup', async (req: Request, res: Response) => {
               po.po_number,
               po.current_department,
               po.production_status,
-              COALESCE(NULLIF(poi.item_id, ''), NULLIF(po.item_id, '')) AS resolved_item_code
+              COALESCE(NULLIF(poi.item_name, ''), NULLIF(po.item_id, ''), NULLIF(po.item_name, '')) AS resolved_item_code
        FROM production_orders po
        LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
-       WHERE po.item_id ILIKE $1
-          OR poi.item_id ILIKE $1
+       WHERE po.item_id   ILIKE $1
+          OR po.item_name ILIKE $1
+          OR poi.item_name ILIKE $1
        ORDER BY po.order_id
        LIMIT 200`,
       [`%${itemCode.trim()}%`]

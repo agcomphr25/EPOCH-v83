@@ -44,7 +44,9 @@ import {
   Loader2,
   ChevronRight,
   Printer,
-  ExternalLink
+  ExternalLink,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -126,6 +128,7 @@ export default function P2ProductionQueue() {
   const [offSystemLinkedTraveler, setOffSystemLinkedTraveler] = useState('');
   const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
+  const [sortByPO, setSortByPO] = useState<'asc' | 'desc' | null>(null);
 
   const { data: queueData, isLoading } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],
@@ -631,13 +634,33 @@ export default function P2ProductionQueue() {
                           {dept.name === 'Layup' && <TableHead className="w-10"></TableHead>}
                           <TableHead>Barcode</TableHead>
                           <TableHead>Part Number</TableHead>
-                          <TableHead>PO / Customer</TableHead>
+                          <TableHead
+                            className="cursor-pointer select-none hover:bg-muted/50"
+                            onClick={() => setSortByPO(prev => prev === 'asc' ? 'desc' : 'asc')}
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              PO / Customer
+                              {sortByPO === 'asc' && <ArrowUp className="h-3 w-3" />}
+                              {sortByPO === 'desc' && <ArrowDown className="h-3 w-3" />}
+                            </span>
+                          </TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {dept.items.map((item) => (
+                        {(sortByPO
+                          ? [...dept.items].sort((a, b) => {
+                              const apo = a.poNumber || '';
+                              const bpo = b.poNumber || '';
+                              if (!apo && !bpo) return 0;
+                              if (!apo) return 1;
+                              if (!bpo) return -1;
+                              const cmp = apo.localeCompare(bpo);
+                              return sortByPO === 'asc' ? cmp : -cmp;
+                            })
+                          : dept.items
+                        ).map((item) => (
                           <TableRow key={item.id} className={dept.name === 'Layup' && selectedLayupItems.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''}>
                             {dept.name === 'Layup' && (
                               <TableCell>

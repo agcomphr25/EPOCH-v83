@@ -113,14 +113,6 @@ export default function BarcodeQueuePage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (viewMode === 'list') {
-      setCollapsedCategories(new Set(Object.keys(categorizedOrders)));
-    } else {
-      setCollapsedCategories(new Set());
-    }
-  }, [viewMode, categorizedOrders]);
-
   // Kickback form
   const kickbackForm = useForm<KickbackFormData>({
     resolver: zodResolver(kickbackFormSchema),
@@ -358,6 +350,14 @@ export default function BarcodeQueuePage() {
 
     return categories;
   }, [barcodeOrders, stockModels]);
+
+  useEffect(() => {
+    if (viewMode === 'list') {
+      setCollapsedCategories(new Set(Object.keys(categorizedOrders)));
+    } else {
+      setCollapsedCategories(new Set());
+    }
+  }, [viewMode, categorizedOrders]);
 
   // Flat list: all barcode orders sorted — overdue first, then latest due date first
   const flatSortedOrders = useMemo(() => {

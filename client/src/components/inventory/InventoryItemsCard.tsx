@@ -44,6 +44,12 @@ import {
 } from '@/components/ui/dialog';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@/components/ui/tabs';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 
@@ -1011,6 +1017,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [replaceAllItems, setReplaceAllItems] = useState(false);
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
   const [utilizedFilter, setUtilizedFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState<'purchased' | 'manufactured'>('purchased');
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
@@ -1215,6 +1222,24 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     return map;
   }, [balancesData]);
 
+  // Type-filtered item sets for tab counts and tab filtering
+  const purchasedItems = Array.isArray(allItems)
+    ? allItems.filter(
+        (item) =>
+          item.itemType === 'PURCHASED' ||
+          (!item.itemType && item.type !== 'Manufactured' && !item.isPacket)
+      )
+    : [];
+
+  const manufacturedItems = Array.isArray(allItems)
+    ? allItems.filter(
+        (item) =>
+          item.itemType === 'MANUFACTURED' ||
+          item.type === 'Manufactured' ||
+          item.isPacket
+      )
+    : [];
+
   // Sort handler function
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -1225,8 +1250,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     }
   };
 
+  const tabItems = activeTab === 'purchased' ? purchasedItems : manufacturedItems;
+
   const items = Array.isArray(allItems)
-    ? allItems
+    ? tabItems
         .filter((item) => {
           // Search filter
           if (searchTerm.trim()) {
@@ -2113,6 +2140,19 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         </DialogContent>
       </Dialog>
 
+      <Tabs value={activeTab} onValueChange={(v) => { if (v === 'purchased' || v === 'manufactured') { setActiveTab(v); } setSelectedItems(new Set()); }}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="purchased" className="flex items-center gap-2" data-testid="tab-purchased">
+            Purchased
+            <Badge variant="secondary" className="ml-1">{purchasedItems.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="manufactured" className="flex items-center gap-2" data-testid="tab-manufactured">
+            Manufactured
+            <Badge variant="secondary" className="ml-1">{manufacturedItems.length}</Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab}>
       <div className="mb-4 space-y-3">
         <div className="flex gap-4">
           <div className="relative flex-1 max-w-md">
@@ -2150,10 +2190,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           >
             Showing <span className="font-semibold">{items.length}</span>{' '}
             {items.length === 1 ? 'item' : 'items'}
-            {allItems.length !== items.length && (
+            {tabItems.length !== items.length && (
               <span className="text-gray-500">
                 {' '}
-                (filtered from {allItems.length} total)
+                (filtered from {tabItems.length} total)
               </span>
             )}
           </div>
@@ -2530,6 +2570,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           </div>
         </div>
       )}
+        </TabsContent>
+      </Tabs>
 
       <Dialog
         open={isEditOpen}

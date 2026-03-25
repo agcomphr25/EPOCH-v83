@@ -10566,6 +10566,45 @@ export class DatabaseStorage implements IStorage {
         console.log(`🏭 Production order ${orderId} created with canonical material: ${materialCanonical}`);
         const order = await this.createProductionOrder(orderData);
         orders.push(order);
+
+        // BOM explosion hook: if the PO item references an inventory part that is ASSEMBLY or
+        // SUB_ASSEMBLY and has a released BOM, fan out child demand into manufacturing_queue.
+        // This must not change behavior for PURCHASED items or non-BOM manufactured items.
+        try {
+          const { explodeBomDemand } = await import('./src/utils/manufacturingQueueHelper');
+          // itemCode is the canonicalized AG part number (uppercase, trimmed).
+          // itemId is the raw user-entered part number. itemName is a fallback.
+          // Try in priority order: itemCode → itemId → itemName
+          const partNumber = resolvedItemCode || item.itemId || item.itemName || null;
+          if (partNumber) {
+            const { inventoryItems: ivItems } = await import('./schema');
+            const { eq: eqOp } = await import('drizzle-orm');
+            const rows = await db
+              .select({ itemType: ivItems.itemType, manufacturedCategory: ivItems.manufacturedCategory })
+              .from(ivItems)
+              .where(eqOp(ivItems.agPartNumber, partNumber))
+              .limit(1);
+            const childInvItem = rows[0] ?? null;
+
+            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY or SUB_ASSEMBLY.
+            // itemType === 'MANUFACTURED' is an optional guard — some legacy rows may lack itemType
+            // while still having a valid manufacturedCategory, so category is the primary signal.
+            const isAssembly =
+              childInvItem?.manufacturedCategory === 'ASSEMBLY' ||
+              childInvItem?.manufacturedCategory === 'SUB_ASSEMBLY';
+            const isManufactured =
+              !childInvItem?.itemType || childInvItem?.itemType === 'MANUFACTURED';
+            if (isAssembly && isManufactured) {
+              const bomDemandItems = await explodeBomDemand(partNumber, 1, orderId);
+              if (bomDemandItems.length > 0) {
+                console.log(`🔧 BOM explosion for order ${orderId} (${partNumber}): created ${bomDemandItems.length} demand records`);
+              }
+            }
+          }
+        } catch (bomErr: unknown) {
+          const msg = bomErr instanceof Error ? bomErr.message : String(bomErr);
+          console.error(`⚠️ BOM explosion hook failed for order ${orderId} — non-fatal:`, msg);
+        }
       }
 
       // Update the PO item's order count

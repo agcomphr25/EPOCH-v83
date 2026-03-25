@@ -1,6 +1,16 @@
 import { db } from '../../db';
-import { inventoryItems, manufacturingQueue, boms, bomRevisions, bomLines } from '../../schema';
-import { insertManufacturingQueueSchema } from '../../schema';
+import {
+  inventoryItems,
+  manufacturingQueue,
+  boms,
+  bomRevisions,
+  bomLines,
+  getSupplySourceDashboard,
+  supplySourceDashboardToLegacyDept,
+  insertManufacturingQueueSchema,
+  type ManufacturedCategory,
+  type ManufacturingQueue,
+} from '../../schema';
 import { eq, and, or, desc } from 'drizzle-orm';
 
 /**
@@ -299,4 +309,153 @@ export async function explodeBOMForManufacturing(params: {
     console.error('❌ Failed to explode BOM for manufacturing queue:', error);
     return [];
   }
+}
+
+/**
+ * DEMAND FLOW:
+ *   inventory item (ASSEMBLY | SUB_ASSEMBLY)
+ *     → BOM explosion (boms → bom_revisions[isReleased=true] → bom_lines)
+ *     → demand record inserted into manufacturing_queue
+ *         - department derived from child.manufacturedCategory via getSupplySourceDashboard()
+ *         - parentProductionOrderId links back to the triggering order (traceable)
+ *         - notes contain parentPartNumber and context for human readability
+ *     → dashboard query reads manufacturing_queue.department
+ *         - Cutting Table dashboard: department = 'Cutting Table'  (PACKET | KIT)
+ *         - CNC queue:              department = 'CNC'             (MACHINED_PART)
+ *         - Assembly queue:         department = 'Assembly'        (ASSEMBLY | SUB_ASSEMBLY)
+ *         - Core queue:             department = 'Cores'           (CORE)
+ *
+ * Recursion: if a child item is ASSEMBLY or SUB_ASSEMBLY and has its own released BOM,
+ * explodeBomDemand is called recursively for that child (depth-first).
+ * Purchased items and items without BOMs are leaf nodes — no further explosion.
+ *
+ * @param parentPartNumber   AG part number of the item being manufactured
+ * @param qty                Quantity required (propagated × qtyPer down the tree)
+ * @param productionOrderId  The triggering production order ID (for lineage tracing)
+ * @param depth              Current recursion depth (guards against cycles; max 10)
+ * @returns Array of manufacturing_queue records created in this subtree
+ */
+export async function explodeBomDemand(
+  parentPartNumber: string,
+  qty: number,
+  productionOrderId: string,
+  depth = 0
+): Promise<ManufacturingQueue[]> {
+  if (depth > 10) {
+    console.warn(`⚠️ BOM explosion depth limit reached for ${parentPartNumber} — possible cycle`);
+    return [];
+  }
+
+  const created: ManufacturingQueue[] = [];
+
+  try {
+    const bom = await db.query.boms.findFirst({
+      where: eq(boms.parentPartAgNumber, parentPartNumber),
+    });
+
+    if (!bom) {
+      return [];
+    }
+
+    const releasedRevision = await db.query.bomRevisions.findFirst({
+      where: and(
+        eq(bomRevisions.bomId, bom.id),
+        eq(bomRevisions.isReleased, true)
+      ),
+      orderBy: [desc(bomRevisions.createdAt)],
+    });
+
+    if (!releasedRevision) {
+      console.log(`⚠️ No released BOM revision for ${parentPartNumber} — skipping demand explosion`);
+      return [];
+    }
+
+    const lines = await db
+      .select({
+        childPartNumber: bomLines.childPartAgNumber,
+        qtyPer: bomLines.qtyPer,
+      })
+      .from(bomLines)
+      .where(eq(bomLines.revisionId, releasedRevision.id));
+
+    if (lines.length === 0) {
+      return [];
+    }
+
+    for (const line of lines) {
+      const childItem = await db.query.inventoryItems.findFirst({
+        where: eq(inventoryItems.agPartNumber, line.childPartNumber),
+      });
+
+      if (!childItem) {
+        console.warn(`⚠️ BOM line child part ${line.childPartNumber} not found in inventory — skipping`);
+        continue;
+      }
+
+      // Skip purchased/buy parts — they are leaf nodes with no BOM to explode.
+      // Backward-compatible check: new itemType='PURCHASED' or legacy type field
+      const legacyType = childItem.type?.toLowerCase();
+      const isPurchased =
+        childItem.itemType === 'PURCHASED' ||
+        legacyType === 'purchased' ||
+        legacyType === 'buy';
+      if (isPurchased) {
+        continue;
+      }
+
+      const category = childItem.manufacturedCategory as ManufacturedCategory | null;
+      const dashboard = getSupplySourceDashboard(category);
+      const legacyDept = supplySourceDashboardToLegacyDept(dashboard);
+
+      if (!legacyDept) {
+        const fallbackDept = childItem.manufacturingDepartment;
+        if (!fallbackDept) {
+          console.warn(`⚠️ Cannot determine department for ${line.childPartNumber} (no category, no manufacturingDepartment) — skipping`);
+          continue;
+        }
+      }
+
+      const department = legacyDept || childItem.manufacturingDepartment!;
+      const requiredQty = qty * parseFloat(line.qtyPer || '1');
+
+      const queueData = insertManufacturingQueueSchema.parse({
+        inventoryItemId: childItem.id,
+        department,
+        quantityRequested: Math.ceil(requiredQty),
+        quantityCompleted: 0,
+        status: 'PENDING',
+        priority: 50,
+        parentProductionOrderId: productionOrderId,
+        notes: JSON.stringify({
+          source: 'BOM_EXPLOSION',
+          parentPartNumber,
+          childPartNumber: line.childPartNumber,
+          qtyPer: line.qtyPer,
+          supplySourceDashboard: dashboard,
+        }),
+      });
+
+      const [newItem] = await db
+        .insert(manufacturingQueue)
+        .values(queueData)
+        .returning();
+
+      created.push(newItem);
+      console.log(`✅ BOM demand: ${line.childPartNumber} → ${department} (qty ${Math.ceil(requiredQty)}, order ${productionOrderId})`);
+
+      if (category === 'ASSEMBLY' || category === 'SUB_ASSEMBLY') {
+        const childCreated = await explodeBomDemand(
+          line.childPartNumber,
+          requiredQty,
+          productionOrderId,
+          depth + 1
+        );
+        created.push(...childCreated);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ explodeBomDemand failed for ${parentPartNumber}:`, error);
+  }
+
+  return created;
 }

@@ -573,7 +573,7 @@ export const inventoryManufacturingLevelEnum = pgEnum('inventory_manufacturing_l
 
 // Supply source dashboard mapping — re-exported from canonical shared utility
 export type { ManufacturedCategory, SupplySourceDashboard } from '../shared/utils/supplySourceDashboard';
-export { getSupplySourceDashboard, supplySourceDashboardToLegacyDept } from '../shared/utils/supplySourceDashboard';
+export { getSupplySourceDashboard, supplySourceDashboardToLegacyDept, getDashboardCategories } from '../shared/utils/supplySourceDashboard';
 
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
@@ -8260,7 +8260,9 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   vendorPoItemId: integer('vendor_po_item_id').references(() => vendorPOItems.id, { onDelete: 'cascade' }), // FK to vendor_po_items.id (nullable — backfilled from line number)
   p2PoId: integer('p2_po_id'), // Reference to P2 PO that generated this queue entry
   p2PoItemId: integer('p2_po_item_id'), // Reference to P2 PO item
-  department: text('department').notNull(), // CNC, Cutting Table, or Cores
+  // BOM explosion lineage — set when this record is created by explodeBomDemand
+  parentProductionOrderId: text('parent_production_order_id'), // Production order that triggered this demand (FK to production_orders.order_id)
+  department: text('department').notNull(), // CNC, Cutting Table, Cores, or Assembly — derived via getSupplySourceDashboard()
   quantityRequested: integer('quantity_requested').notNull().default(1),
   quantityCompleted: integer('quantity_completed').default(0),
   priority: integer('priority').default(50), // 1-100, lower = higher priority

@@ -17,7 +17,11 @@ import {
   travelerSteps,
   travelerAuthorizedNotes,
   partRoutings,
+  inventoryItems,
+  getSupplySourceDashboard,
+  supplySourceDashboardToLegacyDept,
 } from '../../schema';
+import type { ManufacturedCategory } from '../../schema';
 
 const P2_DEPARTMENT_STAGES = [
   'Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC', 'Shipping'
@@ -294,6 +298,146 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     res.status(500).json({ error: 'Failed to create traveler', message: error.message });
+  }
+});
+
+// Suggest the best routing for a manufactured item based on its manufacturedCategory.
+// Uses getSupplySourceDashboard to determine the lead department, then finds
+// an active routing whose partNumber or inventoryItemId matches the item and whose
+// departmentSequence starts with that lead department.
+// Returns the best matching routing (or null if none found), for use by callers
+// that then invoke /from-routing/:partRoutingId to create a traveler.
+// This is the routing SELECTION logic — it does not modify generateTravelerFromRouting.
+router.get('/suggest-routing/:partNumber', async (req: Request, res: Response) => {
+  try {
+    const { partNumber } = req.params;
+
+    const invItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.agPartNumber, partNumber),
+    });
+
+    if (!invItem) {
+      return res.status(404).json({ error: 'Inventory item not found', partNumber });
+    }
+
+    const category = invItem.manufacturedCategory as ManufacturedCategory | null;
+    const dashboard = getSupplySourceDashboard(category);
+    const leadDepartment = supplySourceDashboardToLegacyDept(dashboard);
+
+    const exactRouting = await storage.getPartRoutingByPartNumber(partNumber);
+
+    if (exactRouting) {
+      return res.json({
+        routing: exactRouting,
+        matchType: 'exact_part_number',
+        supplySourceDashboard: dashboard,
+        leadDepartment,
+      });
+    }
+
+    const routingByItem = invItem.id
+      ? await storage.getPartRoutingByInventoryItem(String(invItem.id))
+      : null;
+
+    if (routingByItem) {
+      return res.json({
+        routing: routingByItem,
+        matchType: 'inventory_item_id',
+        supplySourceDashboard: dashboard,
+        leadDepartment,
+      });
+    }
+
+    return res.json({
+      routing: null,
+      matchType: 'none',
+      supplySourceDashboard: dashboard,
+      leadDepartment,
+      hint: leadDepartment
+        ? `No routing found. Create a routing whose departmentSequence starts with "${leadDepartment}" for part ${partNumber}.`
+        : `No routing found and no supplySourceDashboard mapped for category ${category}.`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Error suggesting routing for part:', err);
+    res.status(500).json({ error: 'Failed to suggest routing', message: msg });
+  }
+});
+
+// Generate a traveler by part number — uses manufacturedCategory-based routing selection.
+// Routing selection priority (uses supplySourceDashboard → leadDepartment):
+//   1. Active part routing matched by agPartNumber
+//   2. Active part routing matched by inventoryItemId
+//   3. Any active routing whose departmentSequence starts with the leadDepartment
+//      (category-based default — uses getDashboardCategories/getSupplySourceDashboard)
+//   4. 400 with hint if no routing can be resolved
+// Once a routing is found, delegates to generateTravelerFromRouting.
+router.post('/from-part-number/:partNumber', async (req: Request, res: Response) => {
+  try {
+    const { partNumber } = req.params;
+    const { workOrderId, salesOrderId, lotNumber, serialNumber, internalControlNumber, quantity, createdBy } = req.body;
+
+    if (!createdBy) {
+      return res.status(400).json({ error: 'createdBy is required' });
+    }
+
+    const invItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.agPartNumber, partNumber),
+    });
+
+    if (!invItem) {
+      return res.status(404).json({ error: 'Inventory item not found', partNumber });
+    }
+
+    const category = invItem.manufacturedCategory as ManufacturedCategory | null;
+    const dashboard = getSupplySourceDashboard(category);
+    const leadDepartment = supplySourceDashboardToLegacyDept(dashboard);
+
+    // Priority 1 & 2: exact part number or inventory item match
+    let routing: Awaited<ReturnType<typeof storage.getPartRoutingByPartNumber>> | null =
+      (await storage.getPartRoutingByPartNumber(partNumber)) ??
+      (invItem.id ? await storage.getPartRoutingByInventoryItem(String(invItem.id)) : null) ??
+      null;
+
+    // Priority 3: category-based fallback — find any active routing whose
+    // departmentSequence first element matches the lead department for this category.
+    if (!routing && leadDepartment) {
+      const allActive = await storage.getPartRoutings({ isActive: true });
+      const leadDeptNorm = leadDepartment.toLowerCase().trim();
+      routing = allActive.find(r => {
+        const seq = r.departmentSequence as string[] | null;
+        return Array.isArray(seq) && seq.length > 0 &&
+          seq[0].toLowerCase().trim() === leadDeptNorm;
+      }) ?? null;
+    }
+
+    if (!routing) {
+      return res.status(400).json({
+        error: 'No routing found for this part number',
+        partNumber,
+        supplySourceDashboard: dashboard,
+        leadDepartment,
+        hint: leadDepartment
+          ? `Create an active routing whose departmentSequence starts with "${leadDepartment}" for part ${partNumber}.`
+          : `Item has no manufacturedCategory. Classify the item (set manufacturedCategory) so a lead department can be determined.`,
+      });
+    }
+
+    const traveler = await storage.generateTravelerFromRouting(routing.id, {
+      workOrderId,
+      salesOrderId,
+      lotNumber,
+      serialNumber,
+      internalControlNumber,
+      quantity,
+      createdBy,
+    });
+
+    res.status(201).json({ ...traveler, supplySourceDashboard: dashboard, leadDepartment });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Error generating traveler from part number:', err);
+    res.status(500).json({ error: 'Failed to generate traveler', message: msg });
   }
 });
 

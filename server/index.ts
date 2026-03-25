@@ -1270,6 +1270,14 @@ async function initializeBackgroundServices() {
       }
 
       try {
+        const { sql: sqlMfgQ } = await import('drizzle-orm');
+        await db.execute(sqlMfgQ`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS parent_production_order_id TEXT`);
+        console.log('✅ Ensured manufacturing_queue has parent_production_order_id column');
+      } catch (mfgQErr: any) {
+        console.warn('⚠️ manufacturing_queue parent_production_order_id migration:', mfgQErr.message);
+      }
+
+      try {
         const { sql: sqlFkFix } = await import('drizzle-orm');
         // Drop the wrong FK (points to "departments" table which is empty/unused)
         await db.execute(sqlFkFix`

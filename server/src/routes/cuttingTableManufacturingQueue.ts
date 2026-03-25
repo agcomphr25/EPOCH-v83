@@ -1,22 +1,35 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories } from '../../schema';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like } from 'drizzle-orm';
 
 const router = express.Router();
 
-// Get manufacturing queue items for cutting table
+// Get manufacturing queue items for cutting table.
+// DEMAND ROUTING: A record belongs to the Cutting Table dashboard when:
+//   (a) manufacturing_queue.department = 'Cutting Table'  — legacy + BOM-exploded records
+//   (b) OR inventoryItems.manufacturedCategory IN ('PACKET','KIT') — additive category signal
+//       (these map to supplySourceDashboard=CUTTING_TABLE via getSupplySourceDashboard)
+// Using both conditions means records created before item classification (legacy dept filter)
+// and records created after classification (category-driven BOM explosion) both appear.
 router.get('/cutting-table', async (req: Request, res: Response) => {
   try {
     const { status } = req.query;
-    
+
+    // Routing signal via shared helper — additive: legacy dept OR mapped categories
+    const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+    const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+    const routingSignal = or(
+      eq(manufacturingQueue.department, cuttingTableDept),
+      inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+    );
+
     let whereClause;
-    
+
     if (status === 'ACTIVE') {
-      // Show both PENDING and IN_PROGRESS items
       whereClause = and(
-        eq(manufacturingQueue.department, 'Cutting Table'),
+        routingSignal,
         or(
           eq(manufacturingQueue.status, 'PENDING'),
           eq(manufacturingQueue.status, 'IN_PROGRESS')
@@ -24,11 +37,11 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       );
     } else if (status && status !== 'ALL') {
       whereClause = and(
-        eq(manufacturingQueue.department, 'Cutting Table'),
+        routingSignal,
         eq(manufacturingQueue.status, status as string)
       );
     } else {
-      whereClause = eq(manufacturingQueue.department, 'Cutting Table');
+      whereClause = routingSignal;
     }
     
     const queueItems = await db

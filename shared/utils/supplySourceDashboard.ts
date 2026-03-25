@@ -30,3 +30,14 @@ export function supplySourceDashboardToLegacyDept(
   if (!dashboard) return null;
   return DASHBOARD_TO_LEGACY_DEPT[dashboard] ?? null;
 }
+
+const DASHBOARD_TO_CATEGORIES: Record<SupplySourceDashboard, ManufacturedCategory[]> = {
+  CUTTING_TABLE: ['PACKET', 'KIT'],
+  CNC: ['MACHINED_PART'],
+  CORE: ['CORE'],
+  ASSEMBLY: ['ASSEMBLY', 'SUB_ASSEMBLY'],
+};
+
+export function getDashboardCategories(dashboard: SupplySourceDashboard): ManufacturedCategory[] {
+  return DASHBOARD_TO_CATEGORIES[dashboard] ?? [];
+}

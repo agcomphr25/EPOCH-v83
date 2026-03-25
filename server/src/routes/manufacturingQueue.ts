@@ -1,30 +1,66 @@
 import { Router } from 'express';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems } from '../../schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { manufacturingQueue, inventoryItems, supplySourceDashboardToLegacyDept, getDashboardCategories } from '../../schema';
+import type { SupplySourceDashboard } from '../../schema';
+import { eq, and, or, desc, inArray } from 'drizzle-orm';
 import { insertManufacturingQueueSchema } from '../../schema';
 
 const router = Router();
 
-// Get manufacturing queue items by department
+// Get manufacturing queue items.
+// DEMAND ROUTING — additive signal for `?department=` queries:
+// When `?department=<legacyDept>` is provided, records are matched by:
+//   (a) department = <legacyDept>  (legacy filter, backward-compatible)
+//   (b) OR inventoryItems.manufacturedCategory IN [categories for that dept]
+// This ensures BOM-exploded records with a category classification appear in the
+// right dashboard even if the department string hasn't been back-filled.
+// The same OR logic applies when a `?dashboard=` (SupplySourceDashboard) param is used.
 router.get('/', async (req, res) => {
   try {
-    const { department, status } = req.query;
-    
-    // Build where conditions
-    const conditions = [];
-    if (department) {
-      conditions.push(eq(manufacturingQueue.department, department as string));
+    const { department, status, dashboard } = req.query;
+
+    // Resolve routing signal — additive OR of dept and category matches
+    let routingSignal: ReturnType<typeof eq> | ReturnType<typeof or> | undefined;
+
+    const VALID_DASHBOARDS: SupplySourceDashboard[] = ['CUTTING_TABLE', 'CNC', 'CORE', 'ASSEMBLY'];
+
+    if (dashboard && typeof dashboard === 'string') {
+      // Strict validation — reject unknown dashboard values
+      if (!VALID_DASHBOARDS.includes(dashboard as SupplySourceDashboard)) {
+        return res.status(400).json({ error: `Invalid dashboard value: ${dashboard}. Valid: ${VALID_DASHBOARDS.join(', ')}` });
+      }
+      const dash = dashboard as SupplySourceDashboard;
+      const legacyDept = supplySourceDashboardToLegacyDept(dash);
+      const categories = getDashboardCategories(dash);
+      if (legacyDept) {
+        routingSignal = categories.length > 0
+          ? or(eq(manufacturingQueue.department, legacyDept), inArray(inventoryItems.manufacturedCategory, categories))
+          : eq(manufacturingQueue.department, legacyDept);
+      }
+    } else if (department && typeof department === 'string') {
+      // Legacy dept param — also match by category for this dept via getDashboardCategories
+      // Reverse-lookup from legacy dept name to dashboard, then get categories
+      const matchedDash = VALID_DASHBOARDS.find(d => supplySourceDashboardToLegacyDept(d) === department);
+      const categories = matchedDash ? getDashboardCategories(matchedDash) : [];
+      routingSignal = categories.length > 0
+        ? or(eq(manufacturingQueue.department, department), inArray(inventoryItems.manufacturedCategory, categories))
+        : eq(manufacturingQueue.department, department);
     }
-    if (status) {
-      conditions.push(eq(manufacturingQueue.status, status as string));
-    }
-    
-    let query = db
+
+    const statusFilter = (status && typeof status === 'string')
+      ? eq(manufacturingQueue.status, status)
+      : undefined;
+
+    const whereClause = routingSignal && statusFilter
+      ? and(routingSignal, statusFilter)
+      : routingSignal ?? statusFilter;
+
+    const baseQuery = db
       .select({
         id: manufacturingQueue.id,
         inventoryItemId: manufacturingQueue.inventoryItemId,
         department: manufacturingQueue.department,
+        parentProductionOrderId: manufacturingQueue.parentProductionOrderId,
         quantityRequested: manufacturingQueue.quantityRequested,
         quantityCompleted: manufacturingQueue.quantityCompleted,
         priority: manufacturingQueue.priority,
@@ -37,31 +73,97 @@ router.get('/', async (req, res) => {
         completedAt: manufacturingQueue.completedAt,
         createdAt: manufacturingQueue.createdAt,
         updatedAt: manufacturingQueue.updatedAt,
-        // Include inventory item details
         inventoryItem: {
           id: inventoryItems.id,
           agPartNumber: inventoryItems.agPartNumber,
           name: inventoryItems.name,
           sku: inventoryItems.sku,
           type: inventoryItems.type,
+          manufacturedCategory: inventoryItems.manufacturedCategory,
           manufacturingDepartment: inventoryItems.manufacturingDepartment,
           notes: inventoryItems.notes,
         },
       })
       .from(manufacturingQueue)
       .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id));
-    
-    // Apply combined filters if any
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-    
-    // Order by priority (lower number = higher priority), then by due date
-    const items = await query.orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
-    
+
+    const items = whereClause
+      ? await baseQuery.where(whereClause).orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate)
+      : await baseQuery.orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
+
     res.json(items);
   } catch (error) {
     console.error('Error fetching manufacturing queue:', error);
+    res.status(500).json({ error: 'Failed to fetch manufacturing queue' });
+  }
+});
+
+// Get manufacturing queue items by supplySourceDashboard signal.
+// DEMAND ROUTING: a record belongs to a dashboard when:
+//   (a) manufacturing_queue.department matches the legacy dept name for this dashboard, OR
+//   (b) inventoryItems.manufacturedCategory is in the category set for this dashboard
+// Using both conditions ensures both legacy records and BOM-exploded records appear.
+// Valid dashboard values: CUTTING_TABLE | CNC | ASSEMBLY | CORE
+router.get('/by-dashboard/:dashboard', async (req, res) => {
+  try {
+    const dashboard = req.params.dashboard as SupplySourceDashboard;
+    const legacyDept = supplySourceDashboardToLegacyDept(dashboard);
+    if (!legacyDept) {
+      return res.status(400).json({ error: `Unknown supplySourceDashboard: ${dashboard}` });
+    }
+
+    const categories = getDashboardCategories(dashboard);
+
+    // Additive routing signal: dept match OR category match
+    const routingSignal = categories.length > 0
+      ? or(
+          eq(manufacturingQueue.department, legacyDept),
+          inArray(inventoryItems.manufacturedCategory, categories)
+        )
+      : eq(manufacturingQueue.department, legacyDept);
+
+    const { status } = req.query;
+    const whereClause = (status && typeof status === 'string')
+      ? and(routingSignal, eq(manufacturingQueue.status, status))
+      : routingSignal;
+
+    const items = await db
+      .select({
+        id: manufacturingQueue.id,
+        inventoryItemId: manufacturingQueue.inventoryItemId,
+        department: manufacturingQueue.department,
+        parentProductionOrderId: manufacturingQueue.parentProductionOrderId,
+        quantityRequested: manufacturingQueue.quantityRequested,
+        quantityCompleted: manufacturingQueue.quantityCompleted,
+        priority: manufacturingQueue.priority,
+        status: manufacturingQueue.status,
+        dueDate: manufacturingQueue.dueDate,
+        notes: manufacturingQueue.notes,
+        requestedBy: manufacturingQueue.requestedBy,
+        assignedTo: manufacturingQueue.assignedTo,
+        startedAt: manufacturingQueue.startedAt,
+        completedAt: manufacturingQueue.completedAt,
+        createdAt: manufacturingQueue.createdAt,
+        updatedAt: manufacturingQueue.updatedAt,
+        inventoryItem: {
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          name: inventoryItems.name,
+          itemType: inventoryItems.itemType,
+          manufacturedCategory: inventoryItems.manufacturedCategory,
+        },
+      })
+      .from(manufacturingQueue)
+      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .where(whereClause)
+      .orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
+
+    res.json(items.map(item => ({
+      ...item,
+      supplySourceDashboard: dashboard,
+    })));
+  } catch (error) {
+    console.error('Error fetching manufacturing queue by dashboard:', error);
     res.status(500).json({ error: 'Failed to fetch manufacturing queue' });
   }
 });

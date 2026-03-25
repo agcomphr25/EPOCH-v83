@@ -2529,6 +2529,10 @@ async function initializeBackgroundServices() {
           ALTER TABLE p2_purchase_orders
           ADD COLUMN IF NOT EXISTS scrap_rate_percent REAL NOT NULL DEFAULT 0
         `);
+        await pool.query(`
+          ALTER TABLE p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS project_name TEXT
+        `);
         console.log('✅ Ensured p2_nonconforming_dispositions and p2_rmas tables exist');
       } catch (ncErr: any) {
         console.warn('⚠️ p2_nonconforming_dispositions/p2_rmas migration:', ncErr?.message);

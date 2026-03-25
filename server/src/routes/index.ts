@@ -2230,7 +2230,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
         assignedToId, assignedToName, productionLeadId, productionLeadName,
         customerName: bodyCustomerName, poDate: bodyPoDate, status: bodyStatus,
-        sourceQuoteId,
+        sourceQuoteId, projectName,
       } = req.body;
       
       // Use the customer-provided PO number — accept either field name
@@ -2265,6 +2265,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         assignedToName: assignedToName || null,
         productionLeadId: productionLeadId && productionLeadId !== 'none' ? parseInt(productionLeadId) : null,
         productionLeadName: productionLeadName || null,
+        projectName: projectName || null,
       };
       
       console.log('🔧 Creating PO with complete data:', JSON.stringify(poData, null, 2));
@@ -2803,6 +2804,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           inProductionItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
+          projectName: po.projectName || null,
           status: completedItems === poItems.length && poItems.length > 0 ? 'completed' : 
                   inProductionItems > 0 ? 'in_progress' : 'pending'
         };

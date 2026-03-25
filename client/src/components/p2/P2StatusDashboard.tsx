@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -5,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   FileText,
   Package,
@@ -14,7 +16,8 @@ import {
   ArrowRight,
   Layers,
   Factory,
-  TrendingUp
+  TrendingUp,
+  FolderOpen
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -34,9 +37,12 @@ interface POStatus {
   pendingItems: number;
   hasBOMsNeeded: boolean;
   status: 'pending' | 'in_progress' | 'completed';
+  projectName?: string | null;
 }
 
 export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDashboardProps) {
+  const [activeSortBy, setActiveSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
+
   const { data: poStatuses = [], isLoading } = useQuery<POStatus[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
   });
@@ -48,6 +54,17 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDash
   const activePOs = poStatuses.filter((po) => po.status !== 'completed');
   const completedPOs = poStatuses.filter((po) => po.status === 'completed');
   const posNeedingBOMs = poStatuses.filter((po) => po.hasBOMsNeeded);
+
+  const sortedActivePOs = [...activePOs].sort((a, b) => {
+    if (activeSortBy === 'default') return 0;
+    const aP = a.projectName || '';
+    const bP = b.projectName || '';
+    if (!aP && !bP) return 0;
+    if (!aP) return 1;
+    if (!bP) return -1;
+    const cmp = aP.localeCompare(bP);
+    return activeSortBy === 'project_asc' ? cmp : -cmp;
+  });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -140,7 +157,24 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDash
         </TabsList>
 
         <TabsContent value="active">
-          {activePOs.length === 0 ? (
+          {activePOs.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <Select
+                value={activeSortBy}
+                onValueChange={(v) => setActiveSortBy(v as typeof activeSortBy)}
+              >
+                <SelectTrigger className="w-44" data-testid="select-active-sort-by">
+                  <SelectValue placeholder="Sort by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default Order</SelectItem>
+                  <SelectItem value="project_asc">Project A→Z</SelectItem>
+                  <SelectItem value="project_desc">Project Z→A</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {sortedActivePOs.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -149,7 +183,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDash
             </Card>
           ) : (
             <div className="grid gap-4">
-              {activePOs.map((po) => (
+              {sortedActivePOs.map((po) => (
                 <Card key={po.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
@@ -165,7 +199,13 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDash
                             </Badge>
                           )}
                         </div>
-                        <p className="text-muted-foreground mb-3">{po.customerName}</p>
+                        <p className="text-muted-foreground mb-1">{po.customerName}</p>
+                        {po.projectName && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+                            <FolderOpen className="h-3 w-3" />
+                            <span>Project: <span className="font-medium text-foreground">{po.projectName}</span></span>
+                          </div>
+                        )}
                         
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">

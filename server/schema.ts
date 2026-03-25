@@ -4327,6 +4327,9 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   productionLeadId: integer('production_lead_id').references(() => employees.id), // Production lead for this PO
   productionLeadName: text('production_lead_name'), // Denormalized for display
   
+  // Project association — free-text field for internal project name or number
+  projectName: text('project_name'),
+
   // Scrap rate tracking — incremented by nonconforming disposition workflow
   scrappedItemCount: integer('scrapped_item_count').notNull().default(0),
   scrapRatePercent: real('scrap_rate_percent').notNull().default(0),

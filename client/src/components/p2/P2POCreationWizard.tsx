@@ -66,6 +66,7 @@ const detailsSchema = z.object({
   assignedTo: z.string().optional(), // Who is responsible for this PO
   productionLead: z.string().optional(), // Production lead for this PO
   notes: z.string().optional(),
+  projectName: z.string().optional(), // Optional project association
 });
 
 interface LineItem {
@@ -153,6 +154,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       assignedTo: '',
       productionLead: '',
       notes: '',
+      projectName: '',
     },
   });
 
@@ -293,6 +295,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       productionLeadName: productionLeadEmployee
         ? `${productionLeadEmployee.firstName} ${productionLeadEmployee.lastName}`
         : null,
+      projectName: poDetails?.projectName || null,
       lineItems: lineItems.map((item) => ({
         partNumber: `${item.sku}${item.revision ? ` Rev ${item.revision}` : ''}`,
         description: item.description,
@@ -536,6 +539,20 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                     <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl>
                       <Textarea {...field} placeholder="Any special instructions..." data-testid="input-notes" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={detailsForm.control}
+                name="projectName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project (Optional)</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., Project Alpha or PRJ-001" data-testid="input-project-name" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

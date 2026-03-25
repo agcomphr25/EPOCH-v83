@@ -51,6 +51,7 @@ import {
   Factory,
   Lock,
   LockOpen,
+  FolderOpen,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
@@ -69,6 +70,7 @@ const p2PurchaseOrderSchema = z.object({
   status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
   notes: z.string().optional(),
   sourceQuoteId: z.string().optional().nullable(),
+  projectName: z.string().optional().nullable(),
 });
 
 type P2PurchaseOrderForm = z.infer<typeof p2PurchaseOrderSchema>;
@@ -99,6 +101,7 @@ interface P2PurchaseOrder
   expectedDelivery: string;
   attachments?: string[];
   sourceQuoteId?: string | null;
+  projectName?: string | null;
   lockedAt?: string | null;
   lockedBy?: string | null;
   createdAt: string;
@@ -114,6 +117,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [generatingPoId, setGeneratingPoId] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -144,6 +148,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       status: 'OPEN',
       notes: '',
       sourceQuoteId: null,
+      projectName: null,
     },
   });
 
@@ -366,6 +371,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       status: po.status,
       notes: po.notes || '',
       sourceQuoteId: po.sourceQuoteId || null,
+      projectName: po.projectName || null,
     });
     setDialogOpen(true);
   };
@@ -383,6 +389,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       status: 'OPEN',
       notes: '',
       sourceQuoteId: null,
+      projectName: null,
     });
     setDialogOpen(true);
   };
@@ -498,13 +505,24 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     }
   };
 
+  const sortedPurchaseOrders = [...purchaseOrders].sort((a, b) => {
+    if (sortBy === 'default') return 0;
+    const aProject = a.projectName || '';
+    const bProject = b.projectName || '';
+    if (!aProject && !bProject) return 0;
+    if (!aProject) return 1;
+    if (!bProject) return -1;
+    const cmp = aProject.localeCompare(bProject);
+    return sortBy === 'project_asc' ? cmp : -cmp;
+  });
+
   if (isLoading) {
     return <div className="p-6">Loading P2 purchase orders...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">
             P2 Purchase Orders
@@ -513,6 +531,17 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
             Manage P2 purchase orders and line items
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="w-44" data-testid="select-sort-by">
+              <SelectValue placeholder="Sort by..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default Order</SelectItem>
+              <SelectItem value="project_asc">Project A→Z</SelectItem>
+              <SelectItem value="project_desc">Project Z→A</SelectItem>
+            </SelectContent>
+          </Select>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={openCreateDialog}>
@@ -697,6 +726,25 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="projectName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Project (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., Project Alpha or PRJ-001"
+                          {...field}
+                          value={field.value || ''}
+                          disabled={!!selectedPO?.lockedAt}
+                          data-testid="input-po-manager-project-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {/* PDF Attachments Section - Only show when editing */}
                 {selectedPO && (
@@ -804,6 +852,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -824,7 +873,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
             </CardContent>
           </Card>
         ) : (
-          purchaseOrders.map((po) => (
+          sortedPurchaseOrders.map((po) => (
             <Card key={po.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -871,6 +920,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     <span>Customer ID: {po.customerId}</span>
                   </div>
                 </div>
+                {po.projectName && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <FolderOpen className="h-4 w-4" />
+                    <span>Project: <span className="font-medium text-foreground">{po.projectName}</span></span>
+                  </div>
+                )}
                 {po.notes && (
                   <p className="text-sm text-muted-foreground mb-4">
                     {po.notes}

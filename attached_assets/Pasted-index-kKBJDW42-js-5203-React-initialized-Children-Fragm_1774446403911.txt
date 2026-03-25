@@ -1,0 +1,88 @@
+index-kKBJDW42.js:5203 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-kKBJDW42.js:5203 React hooks: {useState: ƒ, useEffect: ƒ}
+index-kKBJDW42.js:5203 [EPOCH SYNC] Sync engine starting
+index-kKBJDW42.js:5203 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-kKBJDW42.js:5200 App component is rendering...
+index-kKBJDW42.js:5200 Environment: production
+index-kKBJDW42.js:5200 Base URL: /
+index-kKBJDW42.js:1565 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-kKBJDW42.js:1565 [EPOCH] Install prompt captured and ready
+badge-scanner:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+badge-scanner:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) <input type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"Scan badge..." autocomplete=​"new-password" data-testid=​"input-employee-barcode" value>​flex
+index-kKBJDW42.js:235 🌐 API Request to /api/employee-badges/employee-badge-actions/by-employee/EMP001 (timeout: 15000ms, deployment: true)
+index-kKBJDW42.js:235 ✅ API Response from /api/employee-badges/employee-badge-actions/by-employee/EMP001: 200
+index-kKBJDW42.js:235 🌐 API Request to /api/employee-badges/execute-badge-action (timeout: 15000ms, deployment: true)
+index-kKBJDW42.js:235  POST https://agcompepoch.xyz/api/employee-badges/execute-badge-action 404 (Not Found)
+Be @ index-kKBJDW42.js:235
+mutationFn @ index-kKBJDW42.js:2988
+fn @ index-kKBJDW42.js:51
+p @ index-kKBJDW42.js:51
+start @ index-kKBJDW42.js:51
+execute @ index-kKBJDW42.js:51
+await in execute
+mutate @ index-kKBJDW42.js:51
+(anonymous) @ index-kKBJDW42.js:51
+onClick @ index-kKBJDW42.js:2988
+I7t @ index-kKBJDW42.js:37
+P7t @ index-kKBJDW42.js:37
+T7t @ index-kKBJDW42.js:37
+L6e @ index-kKBJDW42.js:37
+ilt @ index-kKBJDW42.js:37
+(anonymous) @ index-kKBJDW42.js:37
+_Ee @ index-kKBJDW42.js:40
+Iot @ index-kKBJDW42.js:37
+n0e @ index-kKBJDW42.js:37
+sEe @ index-kKBJDW42.js:37
+W7t @ index-kKBJDW42.js:37
+index-kKBJDW42.js:235 ✅ API Response from /api/employee-badges/execute-badge-action: 404
+index-kKBJDW42.js:5203 API error raw body: {"error":"Order 0046-174-9 not found"}
+console.error @ index-kKBJDW42.js:5203
+Be @ index-kKBJDW42.js:235
+await in Be
+mutationFn @ index-kKBJDW42.js:2988
+fn @ index-kKBJDW42.js:51
+p @ index-kKBJDW42.js:51
+start @ index-kKBJDW42.js:51
+execute @ index-kKBJDW42.js:51
+await in execute
+mutate @ index-kKBJDW42.js:51
+(anonymous) @ index-kKBJDW42.js:51
+onClick @ index-kKBJDW42.js:2988
+I7t @ index-kKBJDW42.js:37
+P7t @ index-kKBJDW42.js:37
+T7t @ index-kKBJDW42.js:37
+L6e @ index-kKBJDW42.js:37
+ilt @ index-kKBJDW42.js:37
+(anonymous) @ index-kKBJDW42.js:37
+_Ee @ index-kKBJDW42.js:40
+Iot @ index-kKBJDW42.js:37
+n0e @ index-kKBJDW42.js:37
+sEe @ index-kKBJDW42.js:37
+W7t @ index-kKBJDW42.js:37
+index-kKBJDW42.js:5203 💥 API Request failed for /api/employee-badges/execute-badge-action: Error: Order 0046-174-9 not found
+    at Be (index-kKBJDW42.js:235:6362)
+    at async Object.mutationFn (index-kKBJDW42.js:2988:12356)
+console.error @ index-kKBJDW42.js:5203
+Be @ index-kKBJDW42.js:235
+await in Be
+mutationFn @ index-kKBJDW42.js:2988
+fn @ index-kKBJDW42.js:51
+p @ index-kKBJDW42.js:51
+start @ index-kKBJDW42.js:51
+execute @ index-kKBJDW42.js:51
+await in execute
+mutate @ index-kKBJDW42.js:51
+(anonymous) @ index-kKBJDW42.js:51
+onClick @ index-kKBJDW42.js:2988
+I7t @ index-kKBJDW42.js:37
+P7t @ index-kKBJDW42.js:37
+T7t @ index-kKBJDW42.js:37
+L6e @ index-kKBJDW42.js:37
+ilt @ index-kKBJDW42.js:37
+(anonymous) @ index-kKBJDW42.js:37
+_Ee @ index-kKBJDW42.js:40
+Iot @ index-kKBJDW42.js:37
+n0e @ index-kKBJDW42.js:37
+sEe @ index-kKBJDW42.js:37
+W7t @ index-kKBJDW42.js:37
+badge-scanner:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) <input type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" placeholder=​"Scan badge..." autocomplete=​"new-password" data-testid=​"input-employee-barcode" value>​flex

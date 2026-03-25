@@ -1346,8 +1346,16 @@ router.patch(
         }
 
         await client.query('COMMIT');
-      } catch (txErr) {
+      } catch (txErr: any) {
         await client.query('ROLLBACK');
+        console.error('Override shipping data transaction error:', {
+          message: txErr?.message,
+          code: txErr?.code,
+          detail: txErr?.detail,
+          table: txErr?.table,
+          lotId,
+          actor,
+        });
         throw txErr;
       } finally {
         client.release();
@@ -1356,7 +1364,7 @@ router.patch(
       return res.json({ success: true, auditRowsWritten: auditInserts.length });
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
-      console.error('Override shipping data error:', err);
+      console.error('Override shipping data error:', { message: err?.message, code: err?.code });
       return res.status(500).json({ error: 'Failed to override shipping data' });
     }
   }

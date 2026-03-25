@@ -823,6 +823,27 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Cutting packet traceability migration skipped:', cpTErr.message);
       }
 
+      // Ensure p2_shipping_audit_log table exists (CMMC/DCAA compliant shipping override history)
+      try {
+        const { sql: sqlP2Audit } = await import('drizzle-orm');
+        await db.execute(sqlP2Audit`
+          CREATE TABLE IF NOT EXISTS p2_shipping_audit_log (
+            id          SERIAL PRIMARY KEY,
+            entity_type TEXT NOT NULL,
+            entity_id   TEXT NOT NULL,
+            field_name  TEXT NOT NULL,
+            old_value   TEXT,
+            new_value   TEXT,
+            changed_by  TEXT NOT NULL,
+            changed_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+            reason      TEXT NOT NULL
+          )
+        `);
+        console.log('✅ Ensured p2_shipping_audit_log table exists');
+      } catch (p2AuditErr: any) {
+        console.warn('⚠️ p2_shipping_audit_log table migration skipped:', p2AuditErr.message);
+      }
+
       // Ensure cutting_fabric_inventory has all required columns (runs after cutting_production_lines is created)
       try {
         const { sql: sqlFabInv } = await import('drizzle-orm');

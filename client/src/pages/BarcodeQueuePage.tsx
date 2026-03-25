@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -112,6 +112,14 @@ export default function BarcodeQueuePage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (viewMode === 'list') {
+      setCollapsedCategories(new Set(Object.keys(categorizedOrders)));
+    } else {
+      setCollapsedCategories(new Set());
+    }
+  }, [viewMode, categorizedOrders]);
 
   // Kickback form
   const kickbackForm = useForm<KickbackFormData>({

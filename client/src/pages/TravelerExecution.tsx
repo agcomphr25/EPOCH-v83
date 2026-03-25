@@ -252,6 +252,11 @@ export default function TravelerExecution() {
     signatureData: '' as string,
   });
   const sigPadRef = useRef<SignatureCanvas>(null);
+  const packetBatchRef = useRef<{
+    packetBarcode: string;
+    rolls: Array<{ icn: string; lot: any }>;
+    timeoutId: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
   const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
@@ -1560,7 +1565,94 @@ export default function TravelerExecution() {
                                               }
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
-                                              const icnValue = consumption?.internalControlNumber || lot?.internalControlNumber || '';
+                                              const packetBarcode = result?.packetBarcode || '';
+                                              const icnValue = consumption?.internalControlNumber || lot?.internalControlNumber || packetBarcode || '';
+
+                                              // Packet scan: batch all rolls into a single completeTaskMutation call
+                                              if (packetBarcode) {
+                                                if (!packetBatchRef.current || packetBatchRef.current.packetBarcode !== packetBarcode) {
+                                                  packetBatchRef.current = { packetBarcode, rolls: [], timeoutId: null };
+                                                }
+                                                packetBatchRef.current.rolls.push({ icn: icnValue, lot });
+                                                if (packetBatchRef.current.timeoutId !== null) {
+                                                  clearTimeout(packetBatchRef.current.timeoutId);
+                                                }
+                                                packetBatchRef.current.timeoutId = setTimeout(() => {
+                                                  const batch = packetBatchRef.current;
+                                                  packetBatchRef.current = null;
+                                                  if (!batch) return;
+
+                                                  const primaryRoll = batch.rolls[0];
+                                                  const primaryIcn = primaryRoll?.icn || batch.packetBarcode;
+                                                  const primaryLot = primaryRoll?.lot;
+                                                  const combinedIcns = batch.rolls.map((r) => r.icn).filter(Boolean).join(', ');
+
+                                                  const allScanVals: Record<string, string> = {
+                                                    packetBarcode: batch.packetBarcode,
+                                                    packet_barcode: batch.packetBarcode,
+                                                    material_internal_control_number: combinedIcns || batch.packetBarcode,
+                                                    internalControlNumber: combinedIcns || batch.packetBarcode,
+                                                    material_icn: combinedIcns || batch.packetBarcode,
+                                                    material_expiration_date: primaryLot?.expirationDate || '',
+                                                    expirationDate: primaryLot?.expirationDate || '',
+                                                    material_batch_number: primaryLot?.supplierLotNumber || '',
+                                                    batchLotNumber: primaryLot?.supplierLotNumber || '',
+                                                    material_type: primaryLot?.fabricType || primaryLot?.materialType || '',
+                                                    material_brand: primaryLot?.brand || primaryLot?.manufacturer || '',
+                                                    material_freezer: primaryLot?.freezerNumber || '',
+                                                    material_lot: primaryLot?.supplierLotNumber || '',
+                                                    qty_used: '',
+                                                    unit_of_measure: primaryLot?.unitOfMeasure || '',
+                                                    material_part_number: primaryLot?.materialPartNumber || '',
+                                                    inventoryPartNumber: primaryLot?.materialPartNumber || '',
+                                                    supplier: primaryLot?.supplier || '',
+                                                    manufacturer: primaryLot?.manufacturer || '',
+                                                    rollNumber: primaryLot?.rollNumber || '',
+                                                    receivedDate: primaryLot?.receivedDate || '',
+                                                  };
+                                                  // Add per-roll ICN keys
+                                                  batch.rolls.forEach((r, idx) => {
+                                                    allScanVals[`internalControlNumber_${idx + 1}`] = r.icn;
+                                                  });
+
+                                                  const traceFieldVals: Record<string, string> = {};
+                                                  for (const [key, val] of Object.entries(allScanVals)) {
+                                                    if (taskFieldKeys.has(key) || key === 'packetBarcode' || key === 'packet_barcode') {
+                                                      traceFieldVals[key] = val;
+                                                    }
+                                                  }
+                                                  // Always include packetBarcode and ICN even if not in taskFieldKeys
+                                                  traceFieldVals['packetBarcode'] = batch.packetBarcode;
+                                                  traceFieldVals['packet_barcode'] = batch.packetBarcode;
+                                                  if (!traceFieldVals['internalControlNumber']) {
+                                                    traceFieldVals['internalControlNumber'] = combinedIcns || batch.packetBarcode;
+                                                  }
+
+                                                  const inventoryValidation = {
+                                                    source: 'fabric_inventory',
+                                                    inventoryId: primaryLot?.id || '',
+                                                    internalControlNumber: primaryIcn,
+                                                    packetBarcode: batch.packetBarcode,
+                                                    batchNumber: primaryLot?.supplierLotNumber || '',
+                                                    expirationDate: primaryLot?.expirationDate || '',
+                                                    supplier: primaryLot?.supplier || '',
+                                                    manufacturer: primaryLot?.manufacturer || '',
+                                                    partNumber: primaryLot?.materialPartNumber || '',
+                                                    readonly: true,
+                                                  };
+                                                  const traceFieldValidations: Record<string, any> = {};
+                                                  for (const key of Object.keys(traceFieldVals)) {
+                                                    traceFieldValidations[key] = inventoryValidation;
+                                                  }
+                                                  completeTaskMutation.mutate({
+                                                    taskId: task.id,
+                                                    fieldVals: traceFieldVals,
+                                                    fieldValidations: traceFieldValidations,
+                                                  });
+                                                }, 0);
+                                                return;
+                                              }
+
                                               const allScanVals: Record<string, string> = {
                                                 material_internal_control_number: icnValue,
                                                 internalControlNumber: icnValue,

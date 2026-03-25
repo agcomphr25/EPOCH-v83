@@ -601,11 +601,14 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           }
 
           const requiredFieldLabels = (mat.requiredFields || []).map((f: string) => f.toLowerCase());
+          const packetBarcodeFieldKeys = new Set(['packetbarcode', 'packet_barcode']);
           const capturedTraceability = mergedTraceabilityData.filter((t: any) => {
             if (t.inventoryPartId && String(t.inventoryPartId) === String(mat.partId)) return true;
             if (t.inventoryPartNumber && t.inventoryPartNumber === mat.partNumber) return true;
             if (t.department === dept && t.source === 'traveler_field') {
               const label = (t.traceabilityLabel || '').toLowerCase();
+              // Always include packet barcode fields so packet lookup can proceed
+              if (packetBarcodeFieldKeys.has(label)) return true;
               if (requiredFieldLabels.some((rf: string) => label.includes(rf) || rf.includes(label))) return true;
               const partName = (mat.partName || '').toLowerCase();
               if (label.includes(partName) || partName.includes(label)) return true;
@@ -621,6 +624,54 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           for (const val of capturedValues) {
             const trimmedVal = val.trim();
             if (!trimmedVal) continue;
+
+            // Check if the value is a packet barcode — if so, associate all fabric sources from that packet
+            const packetMatch = await db.query.cuttingBuiltPackets.findFirst({
+              where: eq(cuttingBuiltPackets.barcode, trimmedVal),
+            });
+            if (packetMatch) {
+              const packetSources = await db.query.cuttingBuiltPacketFabricSources.findMany({
+                where: eq(cuttingBuiltPacketFabricSources.builtPacketId, packetMatch.id),
+              });
+              for (const src of packetSources) {
+                if (!src.fabricInventoryId) continue;
+                const fabRecord = await db.query.cuttingFabricInventory.findFirst({
+                  where: eq(cuttingFabricInventory.id, src.fabricInventoryId),
+                });
+                if (fabRecord && !fabricMatches.find((f: any) => f.id === fabRecord.id)) {
+                  fabricMatches.push({
+                    id: fabRecord.id,
+                    fabric: fabRecord.fabric,
+                    fabricPartNumber: fabRecord.fabricPartNumber,
+                    nickname: fabRecord.nickname,
+                    source: fabRecord.source,
+                    supplierPartNumber: fabRecord.supplierPartNumber,
+                    supplierPoNumber: fabRecord.supplierPoNumber,
+                    manufacturerPoNumber: fabRecord.manufacturerPoNumber,
+                    lotNumber: fabRecord.lotNumber,
+                    rollNumber: fabRecord.rollNumber,
+                    batchNumber: fabRecord.batchNumber,
+                    internalControlNumber: fabRecord.internalControlNumber,
+                    barcode: fabRecord.barcode,
+                    manufactureDate: fabRecord.manufactureDate,
+                    receivedDate: fabRecord.receivedDate,
+                    expirationDate: fabRecord.expirationDate,
+                    location: fabRecord.location,
+                    freezerNumber: fabRecord.freezerNumber,
+                    conformanceDocumentLink: fabRecord.conformanceDocumentLink,
+                    quantityInStock: fabRecord.quantityInStock,
+                    squareMeters: fabRecord.squareMeters,
+                    notes: fabRecord.notes,
+                    status: fabRecord.status,
+                    depletedAt: fabRecord.depletedAt,
+                    depletedBy: fabRecord.depletedBy,
+                    packetBarcode: packetMatch.barcode,
+                  });
+                }
+              }
+              continue;
+            }
+
             const fabricMatch = await db.query.cuttingFabricInventory.findFirst({
               where: or(
                 eq(cuttingFabricInventory.lotNumber, trimmedVal),

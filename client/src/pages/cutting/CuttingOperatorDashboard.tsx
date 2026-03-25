@@ -2298,7 +2298,7 @@ export default function CuttingOperatorDashboard() {
           ) : (
             <div className="space-y-1">
               {builtPackets.map((packet) => (
-                <div key={packet.id} className="border rounded-lg overflow-hidden">
+                <div key={packet.id} className={`border rounded-lg overflow-hidden${packet.status === 'CONSUMED' ? ' opacity-60 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : ''}`}>
                   <button
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-left"
                     onClick={() => setExpandedPacketId(expandedPacketId === packet.id ? null : packet.id)}
@@ -2311,8 +2311,8 @@ export default function CuttingOperatorDashboard() {
                       )}
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{packet.categoryName || 'Packet'} #{packet.packetNumber}</span>
-                          <Badge variant={packet.status === 'AVAILABLE' ? 'secondary' : packet.status === 'CONSUMED' ? 'outline' : 'default'} className="text-xs">
+                          <span className={`font-medium text-sm${packet.status === 'CONSUMED' ? ' line-through text-muted-foreground' : ''}`}>{packet.categoryName || 'Packet'} #{packet.packetNumber}</span>
+                          <Badge variant={packet.status === 'AVAILABLE' ? 'secondary' : packet.status === 'CONSUMED' ? 'destructive' : 'default'} className="text-xs">
                             {packet.status}
                           </Badge>
                           {packet.isMixedFabric && (

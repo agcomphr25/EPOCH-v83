@@ -110,8 +110,12 @@ export default function BarcodeQueuePage() {
   const [kickbackOrderId, setKickbackOrderId] = useState('');
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setExpandedCategories(new Set());
+  }, [viewMode]);
 
   // Kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -350,14 +354,6 @@ export default function BarcodeQueuePage() {
 
     return categories;
   }, [barcodeOrders, stockModels]);
-
-  useEffect(() => {
-    if (viewMode === 'list') {
-      setCollapsedCategories(new Set(Object.keys(categorizedOrders)));
-    } else {
-      setCollapsedCategories(new Set());
-    }
-  }, [viewMode, categorizedOrders]);
 
   // Flat list: all barcode orders sorted — overdue first, then latest due date first
   const flatSortedOrders = useMemo(() => {
@@ -1130,9 +1126,9 @@ export default function BarcodeQueuePage() {
                     );
                   });
 
-                  const isCollapsed = collapsedCategories.has(categoryKey);
+                  const isCollapsed = !expandedCategories.has(categoryKey);
                   const toggleCategory = () => {
-                    setCollapsedCategories(prev => {
+                    setExpandedCategories(prev => {
                       const next = new Set(prev);
                       if (next.has(categoryKey)) {
                         next.delete(categoryKey);

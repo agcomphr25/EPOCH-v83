@@ -415,135 +415,116 @@ router.post('/execute-badge-action', async (req, res) => {
             console.log(`✅ Badge scan progressed ${targetBarcode} from ${fromDepartment} to ${toDepartment}`);
             executionResult = { success: true, message: `Order progressed from ${fromDepartment} to ${toDepartment}` };
           } else {
-            // PO barcode path — look up production_orders by poNumber or orderId,
-            // filtered to only rows currently in the fromDepartment from actionConfig
-            const fromDepartment = actionConfig.fromDepartment;
+            // PO barcode path — look up production_orders by poNumber or orderId
             const toDepartment = actionConfig.toDepartment;
             const currentTimestamp = new Date();
             
-            // Skip no-op moves
-            if (fromDepartment === toDepartment) {
-              executionResult = { success: true, message: `Order already in ${toDepartment}` };
-              break;
-            }
-            
-            // Only advance units currently in the fromDepartment
+            // Find PO units by barcode only (no currentDepartment filter)
             const poMatches = await db
               .select()
               .from(productionOrders)
               .where(
-                and(
-                  or(eq(productionOrders.poNumber, targetBarcode), eq(productionOrders.orderId, targetBarcode)),
-                  eq(productionOrders.currentDepartment, fromDepartment)
-                )
+                or(eq(productionOrders.poNumber, targetBarcode), eq(productionOrders.orderId, targetBarcode))
               );
             
             if (!poMatches.length) {
-              throw new Error(`No units of order ${targetBarcode} found in department ${fromDepartment}`);
+              throw new Error(`No units of order ${targetBarcode} found`);
             }
-            
-            // Build base update data for production_orders
-            const poUpdateData: any = {
-              currentDepartment: toDepartment,
-              updatedAt: currentTimestamp,
+
+            // Helper: build completion timestamp fields based on the department being left
+            const completionFields = (dept: string): Record<string, Date> => {
+              if (dept === 'Barcode') return { barcodeCompletedAt: currentTimestamp };
+              if (dept === 'Layup' || dept === 'Layup/Plugging') return { layupCompletedAt: currentTimestamp };
+              if (dept === 'CNC') return { cncCompletedAt: currentTimestamp };
+              if (dept === 'Finish' || dept === 'Finish Queue') return { finishCompletedAt: currentTimestamp };
+              if (dept === 'Finish QC') return { finishCompletedAt: currentTimestamp };
+              if (dept === 'Gunsmith') return { gunsmithCompletedAt: currentTimestamp };
+              if (dept === 'Paint') return { paintCompletedAt: currentTimestamp };
+              if (dept === 'QC' || dept === 'QC Shipping Queue') return { qcCompletedAt: currentTimestamp };
+              if (dept === 'Shipping' || dept === 'Shipping Management') return { shippingCompletedAt: currentTimestamp };
+              return {};
             };
-            
-            // Set completion timestamp for the department being left
-            if (fromDepartment === 'Barcode') {
-              poUpdateData.barcodeCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Layup' || fromDepartment === 'Layup/Plugging') {
-              poUpdateData.layupCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'CNC') {
-              poUpdateData.cncCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
-              poUpdateData.finishCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Finish QC') {
-              poUpdateData.finishCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Gunsmith') {
-              poUpdateData.gunsmithCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Paint') {
-              poUpdateData.paintCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
-              poUpdateData.qcCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
-              poUpdateData.shippingCompletedAt = currentTimestamp;
-            }
-            
-            // Update each matched production_order row with its own per-row history
+
+            let progressedCount = 0;
+            // Track unique (poNumber, fromDepartment) pairs for allOrders sync (avoid duplicate updates)
+            const allOrdersSyncKeys = new Map<string, string>(); // key: "poNumber|fromDept" -> fromDepartment
+
+            // Update each matched production_order row using its own actual currentDepartment
             for (const poOrder of poMatches) {
+              const rowFromDepartment = poOrder.currentDepartment;
+
+              // Skip no-op: this unit is already in the target department
+              if (rowFromDepartment === toDepartment) continue;
+
               const existingHistory = (poOrder as any).departmentHistory || [];
               const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
               departmentHistory.push({
-                fromDepartment,
+                fromDepartment: rowFromDepartment,
                 toDepartment,
                 timestamp: currentTimestamp.toISOString(),
                 progressedBy: employeeCode,
                 scanMethod: 'badge',
               });
-              
+
               await db
                 .update(productionOrders)
-                .set({ ...poUpdateData, departmentHistory })
+                .set({
+                  currentDepartment: toDepartment,
+                  updatedAt: currentTimestamp,
+                  ...completionFields(rowFromDepartment),
+                  departmentHistory,
+                })
                 .where(eq(productionOrders.id, poOrder.id));
+
+              // Record this (poNumber, fromDepartment) pair for later allOrders sync
+              const syncKey = `${poOrder.poNumber}|${rowFromDepartment}`;
+              allOrdersSyncKeys.set(syncKey, rowFromDepartment);
+
+              progressedCount++;
             }
-            
-            // Sync corresponding all_orders rows (orderId starts with "PO-{poNumber}-")
-            // only those currently in the same fromDepartment to avoid moving wrong units
-            const poNumber = poMatches[0].poNumber;
-            const allOrdersUpdateData: any = {
-              currentDepartment: toDepartment,
-              updatedAt: currentTimestamp,
-            };
-            if (fromDepartment === 'Barcode') {
-              allOrdersUpdateData.barcodeCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Layup' || fromDepartment === 'Layup/Plugging') {
-              allOrdersUpdateData.layupCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'CNC') {
-              allOrdersUpdateData.cncCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
-              allOrdersUpdateData.finishCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Finish QC') {
-              allOrdersUpdateData.finishCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Gunsmith') {
-              allOrdersUpdateData.gunsmithCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Paint') {
-              allOrdersUpdateData.paintCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
-              allOrdersUpdateData.qcCompletedAt = currentTimestamp;
-            } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
-              allOrdersUpdateData.shippingCompletedAt = currentTimestamp;
+
+            // Sync corresponding all_orders rows once per unique (poNumber, fromDepartment) pair
+            for (const [syncKey, rowFromDepartment] of allOrdersSyncKeys) {
+              const poNumber = syncKey.split('|')[0];
+              const correspondingAllOrders = await db
+                .select()
+                .from(allOrders)
+                .where(
+                  and(
+                    like(allOrders.orderId, `PO-${poNumber}-%`),
+                    eq(allOrders.currentDepartment, rowFromDepartment)
+                  )
+                );
+
+              for (const aoOrder of correspondingAllOrders) {
+                const aoExistingHistory = (aoOrder as any).departmentHistory || [];
+                const aoDepartmentHistory = Array.isArray(aoExistingHistory) ? [...aoExistingHistory] : [];
+                aoDepartmentHistory.push({
+                  fromDepartment: rowFromDepartment,
+                  toDepartment,
+                  timestamp: currentTimestamp.toISOString(),
+                  progressedBy: employeeCode,
+                  scanMethod: 'badge',
+                });
+
+                await db
+                  .update(allOrders)
+                  .set({
+                    currentDepartment: toDepartment,
+                    updatedAt: currentTimestamp,
+                    ...completionFields(rowFromDepartment),
+                    departmentHistory: aoDepartmentHistory,
+                  })
+                  .where(eq(allOrders.id, aoOrder.id));
+              }
             }
-            
-            // Find all_orders rows for this PO currently in fromDepartment and update them
-            const correspondingAllOrders = await db
-              .select()
-              .from(allOrders)
-              .where(
-                and(
-                  like(allOrders.orderId, `PO-${poNumber}-%`),
-                  eq(allOrders.currentDepartment, fromDepartment)
-                )
-              );
-            
-            for (const aoOrder of correspondingAllOrders) {
-              const existingHistory = (aoOrder as any).departmentHistory || [];
-              const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
-              departmentHistory.push({
-                fromDepartment,
-                toDepartment,
-                timestamp: currentTimestamp.toISOString(),
-                progressedBy: employeeCode,
-                scanMethod: 'badge',
-              });
-              
-              await db
-                .update(allOrders)
-                .set({ ...allOrdersUpdateData, departmentHistory })
-                .where(eq(allOrders.id, aoOrder.id));
+
+            if (progressedCount === 0) {
+              executionResult = { success: true, message: `All units of order ${targetBarcode} already in ${toDepartment}` };
+            } else {
+              console.log(`✅ Badge scan progressed PO ${targetBarcode} (${progressedCount} production orders) to ${toDepartment}`);
+              executionResult = { success: true, message: `PO order progressed to ${toDepartment} (${progressedCount} units)` };
             }
-            
-            console.log(`✅ Badge scan progressed PO ${targetBarcode} (${poMatches.length} production orders) from ${fromDepartment} to ${toDepartment}`);
-            executionResult = { success: true, message: `PO order progressed from ${fromDepartment} to ${toDepartment} (${poMatches.length} units)` };
           }
           break;
         }

@@ -61,6 +61,7 @@ export const ACTION_TYPE_LABELS: Record<BadgeActionType, string> = {
 // Department options
 export const P1_DEPARTMENTS = [
   'P1 Production Queue',
+  'Barcode',
   'Layup/Plugging',
   'CNC',
   'Finish',

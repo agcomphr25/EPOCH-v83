@@ -1,0 +1,82 @@
+index-ru1oSyvr.js:5203 React initialized: Object
+index-ru1oSyvr.js:5203 React hooks: Object
+index-ru1oSyvr.js:5203 [EPOCH SYNC] Sync engine starting
+index-ru1oSyvr.js:5203 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-ru1oSyvr.js:5200 App component is rendering...
+index-ru1oSyvr.js:5200 Environment: production
+index-ru1oSyvr.js:5200 Base URL: /
+index-ru1oSyvr.js:1565 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-ru1oSyvr.js:1565 [EPOCH] Install prompt captured and ready
+badge-scanner:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+badge-scanner:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) null
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+badge-scanner:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) null
+index-ru1oSyvr.js:5203 [EPOCH SYNC] Connection restored — triggering sync
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-ru1oSyvr.js:5203 [EPOCH SYNC] Connection restored — triggering sync
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+badge-scanner:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) null
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-ru1oSyvr.js:5203 Failed to fetch session for redirect: Error: Not authenticated
+    at index-ru1oSyvr.js:5200:185647
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-ru1oSyvr.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/EMP001 (timeout: 15000ms, deployment: true)
+index-ru1oSyvr.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/EMP001: 200
+index-ru1oSyvr.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP001/FB307 (timeout: 15000ms, deployment: true)
+api/p2-traveler/verify-certification/EMP001/FB307:1  Failed to load resource: the server responded with a status of 404 ()
+index-ru1oSyvr.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP001/FB307: 404
+index-ru1oSyvr.js:5203 API error raw body: {"error":"Part not found. Verify the barcode and try again."}
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:5203 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/FB307: Error: Part not found. Verify the barcode and try again.
+    at Re (index-ru1oSyvr.js:235:6362)
+    at async et (index-ru1oSyvr.js:3308:156991)
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP001/PO#FB307 (timeout: 15000ms, deployment: true)
+api/p2-traveler/verify-certification/EMP001/PO#FB307:1  Failed to load resource: the server responded with a status of 404 ()
+index-ru1oSyvr.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP001/PO#FB307: 404
+index-ru1oSyvr.js:5203 API error raw body: {"error":"Part not found. Verify the barcode and try again."}
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:5203 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/PO#FB307: Error: Part not found. Verify the barcode and try again.
+    at Re (index-ru1oSyvr.js:235:6362)
+    at async et (index-ru1oSyvr.js:3308:156991)
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP001/PO#FB307 (timeout: 15000ms, deployment: true)
+api/p2-traveler/verify-certification/EMP001/PO#FB307:1  Failed to load resource: the server responded with a status of 404 ()
+index-ru1oSyvr.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP001/PO#FB307: 404
+index-ru1oSyvr.js:5203 API error raw body: {"error":"Part not found. Verify the barcode and try again."}
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:5203 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/PO#FB307: Error: Part not found. Verify the barcode and try again.
+    at Re (index-ru1oSyvr.js:235:6362)
+    at async et (index-ru1oSyvr.js:3308:156991)
+console.error @ index-ru1oSyvr.js:5203
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/20:1  Failed to load resource: the server responded with a status of 401 ()
+index-ru1oSyvr.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP001/FB307 (timeout: 15000ms, deployment: true)
+api/p2-traveler/verify-certification/EMP001/FB307:1  Failed to load resource: the server responded with a status of 404 ()
+index-ru1oSyvr.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP001/FB307: 404
+index-ru1oSyvr.js:5203 API error raw body: {"error":"Part not found. Verify the barcode and try again."}
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:5203 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/FB307: Error: Part not found. Verify the barcode and try again.
+    at Re (index-ru1oSyvr.js:235:6362)
+    at async et (index-ru1oSyvr.js:3308:156991)
+console.error @ index-ru1oSyvr.js:5203
+index-ru1oSyvr.js:1574  GET https://agcompepoch.xyz/api/internal-messages/unread/count/20 401 (Unauthorized)
+queryFn @ index-ru1oSyvr.js:1574
+o @ index-ru1oSyvr.js:51
+p @ index-ru1oSyvr.js:51
+start @ index-ru1oSyvr.js:51
+fetch @ index-ru1oSyvr.js:51
+wq @ index-ru1oSyvr.js:51
+(anonymous) @ index-ru1oSyvr.js:51

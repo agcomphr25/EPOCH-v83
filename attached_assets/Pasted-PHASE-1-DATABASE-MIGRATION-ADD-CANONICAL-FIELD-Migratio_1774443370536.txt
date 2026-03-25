@@ -1,0 +1,125 @@
+PHASE 1 — DATABASE MIGRATION (ADD CANONICAL FIELD)
+🧾 Migration: add_item_code_to_production_order_items.sql
+-- STEP 1 — Add canonical column
+ALTER TABLE production_order_items
+ADD COLUMN item_code TEXT;
+
+-- STEP 2 — Optional: index for fast lookup
+CREATE INDEX idx_production_order_items_item_code
+ON production_order_items (item_code);
+
+-- STEP 3 — Optional (recommended later, not yet enforced)
+-- ALTER TABLE production_order_items
+-- ADD CONSTRAINT item_code_not_null CHECK (item_code IS NOT NULL);
+🚀 PHASE 2 — BACKFILL (CRITICAL STEP)
+🧾 Backfill Script: backfill_item_code.sql
+-- BACKFILL PRIORITY ORDER:
+-- 1. purchase_order_items.item_name (MOST TRUSTED)
+-- 2. production_orders.item_name
+-- 3. production_orders.item_id (fallback only)
+
+UPDATE production_order_items poi_target
+SET item_code = COALESCE(
+    NULLIF(poi_source.item_name, ''),
+    NULLIF(po.item_name, ''),
+    NULLIF(po.item_id::text, '')
+)
+FROM production_orders po
+LEFT JOIN purchase_order_items poi_source
+  ON po.po_item_id = poi_source.id
+WHERE poi_target.production_order_id = po.id
+  AND (poi_target.item_code IS NULL OR poi_target.item_code = '');
+🚀 PHASE 3 — NORMALIZATION PASS (DO THIS IMMEDIATELY)
+🧾 Normalize all item codes
+UPDATE production_order_items
+SET item_code = UPPER(TRIM(item_code))
+WHERE item_code IS NOT NULL;
+🚀 PHASE 4 — VALIDATION (MAKE SURE NOTHING BROKE)
+🧾 Sanity checks
+-- 1. Any missing item codes?
+SELECT COUNT(*) AS missing_item_codes
+FROM production_order_items
+WHERE item_code IS NULL OR item_code = '';
+
+-- 2. Sample results
+SELECT item_code, COUNT(*) 
+FROM production_order_items
+GROUP BY item_code
+ORDER BY COUNT(*) DESC
+LIMIT 20;
+
+-- 3. Spot check known item
+SELECT *
+FROM production_order_items
+WHERE item_code ILIKE '%AG-CRB-P205-SR%';
+
+👉 You want:
+
+missing_item_codes = 0
+Known items returning rows
+🚀 PHASE 5 — UPDATE LOOKUP QUERY (SIMPLIFY EVERYTHING)
+🔥 Replace your current lookup logic with THIS:
+SELECT 
+  poi.item_code,
+  po.id AS production_order_id,
+  po.order_number,
+  po.status,
+  po.current_department,
+  po.created_at
+FROM production_order_items poi
+JOIN production_orders po
+  ON poi.production_order_id = po.id
+WHERE poi.item_code ILIKE $1
+ORDER BY po.created_at DESC;
+
+👉 This becomes your ONLY lookup path
+
+🚀 PHASE 6 — WRITE-PATH ENFORCEMENT (VERY IMPORTANT)
+Wherever production orders are created:
+🔧 In your service layer (Node/TS):
+const itemCode =
+  poi.item_name ||
+  po.item_name ||
+  po.item_id ||
+  null;
+
+const normalizedItemCode = itemCode
+  ? itemCode.trim().toUpperCase()
+  : null;
+
+Then:
+
+INSERT INTO production_order_items (
+  production_order_id,
+  item_code,
+  ...
+)
+VALUES (
+  $1,
+  $2, -- normalizedItemCode
+  ...
+);
+🚀 PHASE 7 — HARD ENFORCEMENT (DO AFTER CONFIDENCE)
+🧾 Make it NOT NULL
+ALTER TABLE production_order_items
+ALTER COLUMN item_code SET NOT NULL;
+🚀 PHASE 8 — REMOVE LEGACY DEPENDENCY (CLEANUP)
+
+After everything is stable:
+
+👉 Stop using:
+
+po.item_id for lookup
+po.item_name for lookup
+poi.item_name for lookup
+
+👉 Only use:
+
+production_order_items.item_code
+🔥 OPTIONAL (HIGHLY RECOMMENDED)
+Add uniqueness guard (if appropriate)
+-- Only if item_code should not vary per production order item
+-- Otherwise skip this
+
+CREATE INDEX idx_item_code_lookup
+ON production_order_items (item_code);

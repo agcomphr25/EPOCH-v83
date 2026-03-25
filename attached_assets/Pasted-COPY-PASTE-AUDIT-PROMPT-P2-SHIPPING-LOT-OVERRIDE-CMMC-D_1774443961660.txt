@@ -1,0 +1,213 @@
+COPY-PASTE AUDIT PROMPT — P2 SHIPPING + LOT OVERRIDE (CMMC/DCAA SAFE)
+You are performing a FULL SYSTEM AUDIT of the P2 Shipping + Lot/Batch workflow in EPOCH.
+
+OBJECTIVE:
+1) Understand how lots/batches are created during P2 Shipping
+2) Identify where shipped_date and lot_number are stored
+3) Determine if these fields can be safely overridden
+4) Design a CMMC/DCAA-compliant override system for shipments that occurred outside the system
+
+This is NOT a refactor yet. This is a forensic audit + safe design.
+
+----------------------------------------
+STEP 1 — TRACE SHIPPING FLOW (END-TO-END)
+----------------------------------------
+
+Find the FULL flow from UI → API → DB for P2 shipping:
+
+A) UI
+- Locate P2 Control Center / Shipping panel
+- Identify:
+  - Component(s) responsible (likely P2PipelineBoardPage, ShippingPanel, or similar)
+  - Button/action that triggers:
+    → "Finalize"
+    → "Create Lot"
+    → "Ship"
+
+B) API
+- Find corresponding route(s), likely in:
+  server/src/routes/projects.ts OR shipping.ts
+
+- Identify:
+  - Endpoint used to finalize shipping
+  - Endpoint used to create lot/batch
+  - Payload structure
+
+C) SERVICE LAYER
+- Identify service handling:
+  - lot creation
+  - shipment finalization
+  - status transitions
+
+D) DATABASE
+Find ALL tables involved:
+- lots / lot_numbers / batches
+- packing_slips (if applicable)
+- projects / p2 items
+- shipping records
+
+For each table, document:
+- id
+- lot_number
+- shipped_date
+- created_at
+- status
+- any foreign keys
+
+----------------------------------------
+STEP 2 — IDENTIFY SOURCE OF TRUTH
+----------------------------------------
+
+For each of these fields, determine EXACT source of truth:
+
+1) lot_number
+2) shipped_date
+3) shipment status
+
+Answer:
+- Which table owns the truth?
+- Is it duplicated anywhere?
+- Is it derived or manually entered?
+
+----------------------------------------
+STEP 3 — CHECK CURRENT EDITABILITY
+----------------------------------------
+
+Determine if the system currently allows:
+
+- Updating shipped_date after creation
+- Updating lot_number after creation
+
+Search for:
+- UPDATE queries
+- PATCH endpoints
+- "override" logic
+- admin routes
+
+If NOT editable:
+→ confirm fields are immutable after creation
+
+----------------------------------------
+STEP 4 — AUDIT TRAIL COVERAGE
+----------------------------------------
+
+CRITICAL for CMMC/DCAA
+
+Check if the system currently logs:
+
+- Who created the lot
+- When it was created
+- Any updates to shipping data
+
+Search for:
+- audit_log
+- activity_log
+- history tables
+
+Answer:
+- Are changes tracked?
+- Are before/after values stored?
+- Is actor (user_id) captured?
+
+----------------------------------------
+STEP 5 — IDENTIFY GAP (REAL-WORLD NEED)
+----------------------------------------
+
+We need to support:
+
+"Lots that were physically shipped OUTSIDE the system, but need to be recorded later with correct:
+- shipped_date
+- lot_number"
+
+Identify current limitations:
+- Cannot edit?
+- No audit trail?
+- No UI entry point?
+
+----------------------------------------
+STEP 6 — DESIGN SAFE OVERRIDE SYSTEM
+----------------------------------------
+
+Design a NEW feature called:
+
+"Shipping Data Override"
+
+REQUIREMENTS:
+
+1) Editable Fields:
+   - shipped_date
+   - lot_number
+
+2) ACCESS CONTROL:
+   - Only Admin / Production Manager roles
+   - Explicit permission required
+
+3) REQUIRED INPUTS:
+   - New value
+   - REQUIRED reason (text field)
+
+4) AUDIT LOG (MANDATORY):
+   Every override must write to audit table:
+
+   {
+     entity_type: "lot" | "shipment"
+     entity_id: <id>
+     field_name: "shipped_date" | "lot_number"
+     old_value: <previous>
+     new_value: <new>
+     changed_by: <user_id>
+     changed_at: <timestamp>
+     reason: <text>
+   }
+
+5) IMMUTABILITY RULE:
+   - Original record is NEVER deleted
+   - Only updated with full trace
+
+6) UI DESIGN:
+   - "Override Shipping Data" button on lot/shipment record
+   - Modal with:
+     - editable fields
+     - reason (required)
+     - confirmation warning
+
+----------------------------------------
+STEP 7 — OUTPUT REQUIRED
+----------------------------------------
+
+Return:
+
+1) FULL FLOW DIAGRAM
+(UI → API → DB)
+
+2) TABLE MAP
+(all tables + fields related to shipping + lots)
+
+3) CURRENT LIMITATIONS
+(what cannot be edited today)
+
+4) AUDIT GAP ANALYSIS
+(what is missing for compliance)
+
+5) IMPLEMENTATION PLAN:
+- New API endpoint(s)
+- DB changes (if needed)
+- Audit table schema (if missing)
+- UI changes
+
+6) EXACT FILE LOCATIONS:
+- Components
+- Routes
+- Services
+- Queries
+
+----------------------------------------
+IMPORTANT RULES
+----------------------------------------
+
+- DO NOT guess — trace actual code
+- DO NOT refactor yet
+- DO NOT simplify — be exhaustive
+- Highlight ANY risk to audit/compliance
+
+This is a forensic audit for production-critical data integrity.

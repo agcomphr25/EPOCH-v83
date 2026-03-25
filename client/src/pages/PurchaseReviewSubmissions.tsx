@@ -62,7 +62,7 @@ export default function PurchaseReviewSubmissions() {
 
   const fetchSubmissions = async () => {
     try {
-      const response = await fetch('/api/purchase-review-checklists');
+      const response = await fetch('/api/forms/purchase-review-checklists');
       if (response.ok) {
         const data = await response.json();
         setSubmissions(data);
@@ -103,7 +103,7 @@ export default function PurchaseReviewSubmissions() {
     if (!confirm('Are you sure you want to delete this submission?')) return;
 
     try {
-      const response = await fetch(`/api/purchase-review-checklists/${id}`, {
+      const response = await fetch(`/api/forms/purchase-review-checklists/${id}`, {
         method: 'DELETE',
       });
 
@@ -128,7 +128,7 @@ export default function PurchaseReviewSubmissions() {
 
     try {
       const response = await fetch(
-        `/api/purchase-review-checklists/${editingSubmission.id}`,
+        `/api/forms/purchase-review-checklists/${editingSubmission.id}`,
         {
           method: 'PUT',
           headers: {

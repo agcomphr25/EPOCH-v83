@@ -106,12 +106,12 @@ export default function PurchaseReviewChecklist() {
   const submitChecklistMutation = useMutation({
     mutationFn: async ({ data, isUpdate, updateId }: { data: any; isUpdate: boolean; updateId?: string }) => {
       if (isUpdate && updateId) {
-        return await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
+        return await apiRequest(`/api/forms/purchase-review-checklists/${updateId}`, {
           method: 'PUT',
           body: JSON.stringify(data),
         });
       } else {
-        return await apiRequest('/api/purchase-review-submissions', {
+        return await apiRequest('/api/forms/purchase-review-checklists', {
           method: 'POST',
           body: JSON.stringify(data),
         });
@@ -124,7 +124,7 @@ export default function PurchaseReviewChecklist() {
         description: `Purchase Review Checklist ${action} successfully!`,
       });
       // Invalidate queries to refresh submissions list
-      queryClient.invalidateQueries({ queryKey: ['/api/purchase-review-submissions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/forms/purchase-review-checklists'] });
     },
     onError: (error: Error) => {
       toast({
@@ -244,7 +244,7 @@ export default function PurchaseReviewChecklist() {
         setIsLoadingSubmission(true);
         
         try {
-          const response = await fetch(`/api/purchase-review-submissions/${id}`);
+          const response = await fetch(`/api/forms/purchase-review-checklists/${id}`);
           if (response.ok) {
             const submission = await response.json();
             

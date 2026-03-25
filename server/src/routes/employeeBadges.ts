@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../../db';
 import { employeeBadgeActions, employees, insertEmployeeBadgeActionSchema, badgeScanAuditLog } from '../../schema';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, like } from 'drizzle-orm';
 import { z } from 'zod';
 
 // Whitelist of allowed navigation pages
@@ -298,7 +298,7 @@ router.post('/execute-badge-action', async (req, res) => {
 
       // Validate P1 order exists (case-insensitive - barcodes normalized to uppercase)
       if (actionType === 'P1_DEPARTMENT_PROGRESS') {
-        const { allOrders } = await import('../../schema');
+        const { allOrders, productionOrders } = await import('../../schema');
         const order = await db
           .select()
           .from(allOrders)
@@ -306,8 +306,17 @@ router.post('/execute-badge-action', async (req, res) => {
           .limit(1);
 
         if (!order.length) {
-          await logBadgeScan(employeeId, employeeCode, actionType, { targetBarcode, actionConfig }, 'validation_failed', `Order ${targetBarcode} not found`);
-          return res.status(404).json({ error: `Order ${targetBarcode} not found` });
+          // Also check production_orders by poNumber (for PO barcode scans like "FB307")
+          const poOrders = await db
+            .select()
+            .from(productionOrders)
+            .where(or(eq(productionOrders.poNumber, targetBarcode), eq(productionOrders.orderId, targetBarcode)))
+            .limit(1);
+
+          if (!poOrders.length) {
+            await logBadgeScan(employeeId, employeeCode, actionType, { targetBarcode, actionConfig }, 'validation_failed', `Order ${targetBarcode} not found`);
+            return res.status(404).json({ error: `Order ${targetBarcode} not found` });
+          }
         }
       }
 
@@ -332,7 +341,7 @@ router.post('/execute-badge-action', async (req, res) => {
     try {
       switch (actionType) {
         case 'P1_DEPARTMENT_PROGRESS': {
-          const { allOrders } = await import('../../schema');
+          const { allOrders, productionOrders } = await import('../../schema');
           
           // First fetch the order to get current state (match by orderId or fbOrderNumber)
           const existingOrder = await db
@@ -341,72 +350,201 @@ router.post('/execute-badge-action', async (req, res) => {
             .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
             .limit(1);
           
-          if (!existingOrder.length) {
-            throw new Error(`Order ${targetBarcode} not found`);
+          if (existingOrder.length) {
+            // Standard sales order path
+            const order = existingOrder[0];
+            const fromDepartment = order.currentDepartment;
+            const toDepartment = actionConfig.toDepartment;
+            const currentTimestamp = new Date();
+            
+            // Skip no-op moves
+            if (fromDepartment === toDepartment) {
+              executionResult = { success: true, message: `Order already in ${toDepartment}` };
+              break;
+            }
+            
+            // Build department history entry
+            const existingHistory = (order as any).departmentHistory || [];
+            const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
+            departmentHistory.push({
+              fromDepartment,
+              toDepartment,
+              timestamp: currentTimestamp.toISOString(),
+              progressedBy: employeeCode,
+              scanMethod: 'badge',
+            });
+            
+            // Build update data with department history and completion timestamps
+            const updateData: any = {
+              currentDepartment: toDepartment,
+              updatedAt: currentTimestamp,
+              departmentHistory,
+            };
+            
+            // Set completion timestamp for the department being left
+            if (fromDepartment === 'Barcode') {
+              updateData.barcodeCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Layup' || fromDepartment === 'Layup/Plugging') {
+              updateData.layupCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'CNC') {
+              updateData.cncCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
+              updateData.finishCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Finish QC') {
+              updateData.finishCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Gunsmith') {
+              updateData.gunsmithCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Paint') {
+              updateData.paintCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
+              updateData.qcCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
+              updateData.shippingCompletedAt = currentTimestamp;
+            }
+            
+            const updatedOrders = await db
+              .update(allOrders)
+              .set(updateData)
+              .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
+              .returning();
+            
+            if (!updatedOrders.length) {
+              throw new Error(`Failed to update order ${targetBarcode} - order may have been deleted`);
+            }
+            
+            console.log(`✅ Badge scan progressed ${targetBarcode} from ${fromDepartment} to ${toDepartment}`);
+            executionResult = { success: true, message: `Order progressed from ${fromDepartment} to ${toDepartment}` };
+          } else {
+            // PO barcode path — look up production_orders by poNumber or orderId,
+            // filtered to only rows currently in the fromDepartment from actionConfig
+            const fromDepartment = actionConfig.fromDepartment;
+            const toDepartment = actionConfig.toDepartment;
+            const currentTimestamp = new Date();
+            
+            // Skip no-op moves
+            if (fromDepartment === toDepartment) {
+              executionResult = { success: true, message: `Order already in ${toDepartment}` };
+              break;
+            }
+            
+            // Only advance units currently in the fromDepartment
+            const poMatches = await db
+              .select()
+              .from(productionOrders)
+              .where(
+                and(
+                  or(eq(productionOrders.poNumber, targetBarcode), eq(productionOrders.orderId, targetBarcode)),
+                  eq(productionOrders.currentDepartment, fromDepartment)
+                )
+              );
+            
+            if (!poMatches.length) {
+              throw new Error(`No units of order ${targetBarcode} found in department ${fromDepartment}`);
+            }
+            
+            // Build base update data for production_orders
+            const poUpdateData: any = {
+              currentDepartment: toDepartment,
+              updatedAt: currentTimestamp,
+            };
+            
+            // Set completion timestamp for the department being left
+            if (fromDepartment === 'Barcode') {
+              poUpdateData.barcodeCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Layup' || fromDepartment === 'Layup/Plugging') {
+              poUpdateData.layupCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'CNC') {
+              poUpdateData.cncCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
+              poUpdateData.finishCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Finish QC') {
+              poUpdateData.finishCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Gunsmith') {
+              poUpdateData.gunsmithCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Paint') {
+              poUpdateData.paintCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
+              poUpdateData.qcCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
+              poUpdateData.shippingCompletedAt = currentTimestamp;
+            }
+            
+            // Update each matched production_order row with its own per-row history
+            for (const poOrder of poMatches) {
+              const existingHistory = (poOrder as any).departmentHistory || [];
+              const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
+              departmentHistory.push({
+                fromDepartment,
+                toDepartment,
+                timestamp: currentTimestamp.toISOString(),
+                progressedBy: employeeCode,
+                scanMethod: 'badge',
+              });
+              
+              await db
+                .update(productionOrders)
+                .set({ ...poUpdateData, departmentHistory })
+                .where(eq(productionOrders.id, poOrder.id));
+            }
+            
+            // Sync corresponding all_orders rows (orderId starts with "PO-{poNumber}-")
+            // only those currently in the same fromDepartment to avoid moving wrong units
+            const poNumber = poMatches[0].poNumber;
+            const allOrdersUpdateData: any = {
+              currentDepartment: toDepartment,
+              updatedAt: currentTimestamp,
+            };
+            if (fromDepartment === 'Barcode') {
+              allOrdersUpdateData.barcodeCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Layup' || fromDepartment === 'Layup/Plugging') {
+              allOrdersUpdateData.layupCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'CNC') {
+              allOrdersUpdateData.cncCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
+              allOrdersUpdateData.finishCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Finish QC') {
+              allOrdersUpdateData.finishCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Gunsmith') {
+              allOrdersUpdateData.gunsmithCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Paint') {
+              allOrdersUpdateData.paintCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
+              allOrdersUpdateData.qcCompletedAt = currentTimestamp;
+            } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
+              allOrdersUpdateData.shippingCompletedAt = currentTimestamp;
+            }
+            
+            // Find all_orders rows for this PO currently in fromDepartment and update them
+            const correspondingAllOrders = await db
+              .select()
+              .from(allOrders)
+              .where(
+                and(
+                  like(allOrders.orderId, `PO-${poNumber}-%`),
+                  eq(allOrders.currentDepartment, fromDepartment)
+                )
+              );
+            
+            for (const aoOrder of correspondingAllOrders) {
+              const existingHistory = (aoOrder as any).departmentHistory || [];
+              const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
+              departmentHistory.push({
+                fromDepartment,
+                toDepartment,
+                timestamp: currentTimestamp.toISOString(),
+                progressedBy: employeeCode,
+                scanMethod: 'badge',
+              });
+              
+              await db
+                .update(allOrders)
+                .set({ ...allOrdersUpdateData, departmentHistory })
+                .where(eq(allOrders.id, aoOrder.id));
+            }
+            
+            console.log(`✅ Badge scan progressed PO ${targetBarcode} (${poMatches.length} production orders) from ${fromDepartment} to ${toDepartment}`);
+            executionResult = { success: true, message: `PO order progressed from ${fromDepartment} to ${toDepartment} (${poMatches.length} units)` };
           }
-          
-          const order = existingOrder[0];
-          const fromDepartment = order.currentDepartment;
-          const toDepartment = actionConfig.toDepartment;
-          const currentTimestamp = new Date();
-          
-          // Skip no-op moves
-          if (fromDepartment === toDepartment) {
-            executionResult = { success: true, message: `Order already in ${toDepartment}` };
-            break;
-          }
-          
-          // Build department history entry
-          const existingHistory = (order as any).departmentHistory || [];
-          const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
-          departmentHistory.push({
-            fromDepartment,
-            toDepartment,
-            timestamp: currentTimestamp.toISOString(),
-            progressedBy: employeeCode,
-            scanMethod: 'badge',
-          });
-          
-          // Build update data with department history and completion timestamps
-          const updateData: any = {
-            currentDepartment: toDepartment,
-            updatedAt: currentTimestamp,
-            departmentHistory,
-          };
-          
-          // Set completion timestamp for the department being left
-          if (fromDepartment === 'Barcode') {
-            updateData.barcodeCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Layup' || fromDepartment === 'Layup/Plugging') {
-            updateData.layupCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'CNC') {
-            updateData.cncCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
-            updateData.finishCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Finish QC') {
-            updateData.finishCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Gunsmith') {
-            updateData.gunsmithCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Paint') {
-            updateData.paintCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
-            updateData.qcCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
-            updateData.shippingCompletedAt = currentTimestamp;
-          }
-          
-          const updatedOrders = await db
-            .update(allOrders)
-            .set(updateData)
-            .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
-            .returning();
-          
-          if (!updatedOrders.length) {
-            throw new Error(`Failed to update order ${targetBarcode} - order may have been deleted`);
-          }
-          
-          console.log(`✅ Badge scan progressed ${targetBarcode} from ${fromDepartment} to ${toDepartment}`);
-          executionResult = { success: true, message: `Order progressed from ${fromDepartment} to ${toDepartment}` };
           break;
         }
 

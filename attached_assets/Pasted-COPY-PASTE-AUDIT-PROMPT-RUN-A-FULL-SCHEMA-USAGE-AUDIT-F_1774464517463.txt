@@ -1,0 +1,160 @@
+COPY-PASTE AUDIT PROMPT
+RUN A FULL SCHEMA + USAGE AUDIT FOR DESTRUCTIVE MIGRATION WARNING
+
+We are seeing repeated publish warnings that the following columns will be DELETED:
+
+- production_orders.item_code (607 rows)
+- p2_purchase_orders.project_name
+- p2_lot_numbers.packing_slip_upload_url
+- p2_lot_numbers.certificate_upload_url
+
+This is NOT safe to apply without a full audit.
+
+Your job is to determine whether these columns are:
+A) Still in use (must be preserved)
+B) Deprecated but require migration/backfill
+C) Truly safe to delete
+
+-----------------------------------
+STEP 1 — SOURCE OF TRUTH (CRITICAL)
+-----------------------------------
+
+Locate ALL schema definitions:
+
+- server/db/schema/*
+- any drizzle schema exports
+- any duplicated schema files
+
+For EACH of the 4 columns above:
+
+1. Confirm if the column EXISTS in current schema code
+2. Confirm if the column EXISTS in production DB (assume yes from warning)
+3. Show the exact schema diff causing deletion
+
+Output:
+- Table
+- Column
+- Present in code? (Y/N)
+- Present in DB? (Y/N)
+- Migration action (DROP / ALTER / etc)
+
+-----------------------------------
+STEP 2 — FULL CODE USAGE TRACE
+-----------------------------------
+
+Search ENTIRE codebase for each column:
+
+- item_code
+- project_name (p2_purchase_orders)
+- packing_slip_upload_url
+- certificate_upload_url
+
+Include:
+
+- API routes (server/src/routes/*)
+- Services
+- DB queries (SELECT / INSERT / UPDATE)
+- Frontend usage (forms, tables, inspectors)
+- PDF generation / exports
+- Audit logs or history tracking
+
+Output for EACH column:
+
+- File path
+- Line number
+- Exact usage (read / write / display / filter / join)
+
+-----------------------------------
+STEP 3 — RELATIONSHIP + DATA FLOW TRACE
+-----------------------------------
+
+For each column, determine:
+
+1. Where is it populated?
+2. Where is it consumed?
+3. Is it duplicated elsewhere (ex: item_name vs item_code)?
+4. Is there a newer canonical field replacing it?
+
+Special focus:
+- production_orders.item_code → is this tied to PO items?
+- lot_numbers upload URLs → used for compliance / shipping docs?
+
+-----------------------------------
+STEP 4 — BUSINESS CRITICALITY CLASSIFICATION
+-----------------------------------
+
+Classify each column:
+
+- CRITICAL (traceability, compliance, financial)
+- IMPORTANT (operational but replaceable)
+- SAFE (unused / dead)
+
+-----------------------------------
+STEP 5 — MIGRATION RISK ASSESSMENT
+-----------------------------------
+
+For each column:
+
+- Row count affected
+- What breaks if deleted?
+- Any UI or workflow that fails?
+- Any audit/compliance impact?
+
+-----------------------------------
+STEP 6 — SAFE ACTION PLAN (REQUIRED)
+-----------------------------------
+
+For EACH column, recommend ONE:
+
+OPTION A — RESTORE COLUMN IN SCHEMA
+(if still in use)
+
+OPTION B — MIGRATE + DEPRECATE
+- create new canonical field
+- backfill data
+- update code references
+
+OPTION C — SAFE DELETE
+- confirm zero usage
+- confirm no downstream dependency
+
+-----------------------------------
+STEP 7 — OUTPUT FORMAT (STRICT)
+-----------------------------------
+
+Return a structured report:
+
+SECTION 1 — ROOT CAUSE
+Why this destructive migration is being generated
+
+SECTION 2 — COLUMN-BY-COLUMN ANALYSIS
+Table format:
+
+Column | In Code | In DB | Used? | Criticality | Risk | Recommendation
+
+SECTION 3 — BREAKAGE RISKS
+What WILL break if we apply migration now
+
+SECTION 4 — SAFE FIX PLAN
+Step-by-step actions to resolve WITHOUT data loss
+
+SECTION 5 — FINAL VERDICT
+Should we:
+- BLOCK migration
+- MODIFY schema
+- PROCEED with controlled migration
+
+-----------------------------------
+IMPORTANT RULES
+-----------------------------------
+
+- DO NOT assume columns are safe to delete
+- DO NOT recommend applying migration without verification
+- PRIORITIZE data integrity and audit traceability
+- FLAG anything related to:
+  - production tracking
+  - shipping
+  - compliance documents
+  - PO traceability
+
+This is a PRODUCTION-SAFE audit. Accuracy over speed.

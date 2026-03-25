@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../../db';
 import { employeeBadgeActions, employees, insertEmployeeBadgeActionSchema, badgeScanAuditLog } from '../../schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 // Whitelist of allowed navigation pages
@@ -302,7 +302,7 @@ router.post('/execute-badge-action', async (req, res) => {
         const order = await db
           .select()
           .from(allOrders)
-          .where(eq(allOrders.orderId, targetBarcode))
+          .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
           .limit(1);
 
         if (!order.length) {
@@ -334,11 +334,11 @@ router.post('/execute-badge-action', async (req, res) => {
         case 'P1_DEPARTMENT_PROGRESS': {
           const { allOrders } = await import('../../schema');
           
-          // First fetch the order to get current state
+          // First fetch the order to get current state (match by orderId or fbOrderNumber)
           const existingOrder = await db
             .select()
             .from(allOrders)
-            .where(eq(allOrders.orderId, targetBarcode))
+            .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
             .limit(1);
           
           if (!existingOrder.length) {
@@ -398,7 +398,7 @@ router.post('/execute-badge-action', async (req, res) => {
           const updatedOrders = await db
             .update(allOrders)
             .set(updateData)
-            .where(eq(allOrders.orderId, targetBarcode))
+            .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
             .returning();
           
           if (!updatedOrders.length) {

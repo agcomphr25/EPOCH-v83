@@ -1183,6 +1183,48 @@ async function initializeBackgroundServices() {
       }
 
       try {
+        const { sql: sqlItemType } = await import('drizzle-orm');
+        await db.execute(sqlItemType`
+          DO $$ BEGIN
+            CREATE TYPE inventory_item_type AS ENUM ('PURCHASED', 'MANUFACTURED');
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlItemType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS item_type inventory_item_type`);
+        console.log('✅ Ensured inventory_items has item_type column');
+      } catch (itemTypeErr: any) {
+        console.warn('⚠️ item_type migration:', itemTypeErr.message);
+      }
+
+      try {
+        const { sql: sqlManufCat } = await import('drizzle-orm');
+        await db.execute(sqlManufCat`
+          DO $$ BEGIN
+            CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY');
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlManufCat`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS manufactured_category inventory_manufactured_category`);
+        console.log('✅ Ensured inventory_items has manufactured_category column');
+      } catch (manufCatErr: any) {
+        console.warn('⚠️ manufactured_category migration:', manufCatErr.message);
+      }
+
+      try {
+        const { sql: sqlManufLevel } = await import('drizzle-orm');
+        await db.execute(sqlManufLevel`
+          DO $$ BEGIN
+            CREATE TYPE inventory_manufacturing_level AS ENUM ('COMPONENT', 'INTERMEDIATE', 'FINAL');
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$
+        `);
+        await db.execute(sqlManufLevel`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS manufacturing_level inventory_manufacturing_level`);
+        console.log('✅ Ensured inventory_items has manufacturing_level column');
+      } catch (manufLevelErr: any) {
+        console.warn('⚠️ manufacturing_level migration:', manufLevelErr.message);
+      }
+
+      try {
         const { sql: sqlFkFix } = await import('drizzle-orm');
         // Drop the wrong FK (points to "departments" table which is empty/unused)
         await db.execute(sqlFkFix`

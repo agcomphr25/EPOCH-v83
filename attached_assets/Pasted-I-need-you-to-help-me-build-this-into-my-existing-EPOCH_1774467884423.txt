@@ -1,0 +1,140 @@
+I need you to help me build this into my existing EPOCH app without creating a separate parallel system.
+
+Goal:
+EPOCH must remain the single source of truth for inventory items.
+Inventory items must first be separated into:
+- Purchased
+- Manufactured
+
+Then, manufactured items must be further classified into:
+- Packet
+- Kit
+- Machined Part
+- Core
+- Sub-Assembly
+- Assembly
+
+These manufactured classifications must be used to drive demand into the proper downstream dashboards such as:
+- Cutting Table
+- CNC
+- Core
+- Assembly / Sub-Assembly
+- other production dashboards as appropriate
+
+Important rules:
+1. Do NOT invent a separate item master.
+2. Do NOT hard-code dashboard logic if the routing/work order structure already supports a cleaner method.
+3. Work inside the existing EPOCH architecture.
+4. Preserve current functionality unless a change is required for this feature.
+5. Show me exactly what files and schema need to change before making major structural changes.
+
+What I need from you first:
+Please inspect the codebase and tell me exactly where these currently exist:
+
+1. Inventory item schema/model
+Find:
+- inventory item table/schema
+- fields for part number, description, UOM, revision, active status
+- whether make/buy or purchased/manufactured already exists
+- whether category/type already exists
+
+2. BOM structure
+Find:
+- parent/child BOM tables
+- how quantities are stored
+- whether BOM revisions exist
+- whether subassemblies are already supported
+
+3. Routing structure
+Find:
+- part routing schema/model
+- how department sequence is stored
+- how routing is attached to a part or item
+- how travelers are generated from routings
+
+4. Work order / production order structure
+Find:
+- work order tables or equivalent production-demand tables
+- how demand is currently created from sales orders or planning
+- whether parent/child work order relationships already exist
+
+5. Traveler structure
+Find:
+- traveler tables
+- traveler steps/tasks tables
+- traveler generation functions/endpoints
+- any queue logic based on travelers
+
+6. Dashboard demand logic
+Find where the following dashboards get their data:
+- Cutting Table
+- CNC
+- Core if it exists
+- any production/assembly dashboards
+
+7. Inventory UI
+Find:
+- inventory item create/edit form
+- inventory item list page
+- API endpoints and validation used for inventory item create/update
+
+What I want you to produce before coding:
+A clear implementation plan with:
+
+A. Existing files to modify
+B. New enum/field recommendations
+C. Whether current architecture should use:
+   - item classification only
+   - routing-driven dashboard assignment
+   - work-order-driven demand
+   - BOM explosion from assembly/subassembly to lower-level manufactured parts
+
+Recommended target design:
+Add/confirm fields similar to:
+
+- procurementType:
+  - PURCHASED
+  - MANUFACTURED
+
+- manufacturedCategory:
+  - PACKET
+  - KIT
+  - MACHINED_PART
+  - CORE
+  - SUB_ASSEMBLY
+  - ASSEMBLY
+
+Optional if useful:
+- manufacturingLevel:
+  - COMPONENT
+  - INTERMEDIATE
+  - FINAL
+
+Behavior I want:
+- Purchased items remain normal inventory items.
+- Manufactured items are classified by category.
+- Assemblies and sub-assemblies can create lower-level demand through BOM explosion.
+- Downstream dashboards consume demand from EPOCH rather than maintain separate lists.
+- Example mapping:
+  - PACKET -> Cutting Table dashboard demand
+  - MACHINED_PART -> CNC dashboard demand
+  - CORE -> Core dashboard demand
+  - KIT -> Kitting/staging dashboard demand if applicable
+  - SUB_ASSEMBLY -> Sub-Assembly queue
+  - ASSEMBLY -> Final Assembly queue
+
+Architectural preference:
+If possible, dashboard assignment should be derived from routing/work-order logic rather than manual hard-coded mappings.
+If existing architecture does not support that cleanly, explain the best practical fallback.
+
+What I want back from you in this order:
+1. File-by-file findings
+2. Schema impact summary
+3. Recommended implementation approach for THIS codebase
+4. Exact code changes you propose
+5. Then begin implementation
+
+Do not start by rewriting unrelated areas.
+Do not remove existing functionality.
+Do not create duplicate inventory concepts.
+Use the existing EPOCH patterns, naming, and conventions.

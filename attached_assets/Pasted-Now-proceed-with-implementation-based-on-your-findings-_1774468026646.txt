@@ -1,0 +1,191 @@
+Now proceed with implementation based on your findings and the agreed design.
+
+Follow these strict rules:
+- Do NOT create a new system separate from existing EPOCH architecture.
+- Extend existing schemas, routes, and UI components.
+- Keep backward compatibility wherever possible.
+- Make incremental, traceable changes (no massive rewrites in one step).
+- Show code changes clearly by file.
+
+Implementation goals:
+
+1. Inventory Item Enhancements
+
+Add fields to the existing inventory item model:
+
+- procurementType:
+  enum: PURCHASED | MANUFACTURED
+
+- manufacturedCategory (nullable if PURCHASED):
+  enum:
+    PACKET
+    KIT
+    MACHINED_PART
+    CORE
+    SUB_ASSEMBLY
+    ASSEMBLY
+
+Optional if useful:
+- manufacturingLevel:
+  enum:
+    COMPONENT
+    INTERMEDIATE
+    FINAL
+
+Tasks:
+- Update database schema (Drizzle or SQL)
+- Add validation (Zod if used)
+- Update API endpoints (create/update item)
+- Update inventory UI form (dropdowns for new fields)
+- Update list/table view to display these fields
+
+---
+
+2. Default Behavior Rules
+
+Implement logic:
+
+- If procurementType = PURCHASED:
+  manufacturedCategory must be null
+
+- If procurementType = MANUFACTURED:
+  manufacturedCategory is required
+
+- Prevent invalid combinations at validation level
+
+---
+
+3. Demand Routing Logic (Core of this feature)
+
+Implement a clean way to determine where demand should go.
+
+Preferred approach (if routing supports it):
+- Use routing department sequence to determine dashboard assignment
+
+Fallback approach (if needed):
+Create a mapping function:
+
+PACKET → Cutting Table
+MACHINED_PART → CNC
+CORE → Core
+KIT → Kitting/Staging
+SUB_ASSEMBLY → Sub-Assembly queue
+ASSEMBLY → Final Assembly queue
+
+This should NOT be hard-coded in multiple places.
+Create a single helper/service such as:
+
+getDemandDestination(item)
+
+---
+
+4. Work Order / Demand Integration
+
+Where demand is created (sales order, planning, or production trigger):
+
+- Ensure manufactured items generate production demand
+- If BOM exists:
+  explode demand into child items
+- Child items must retain their own inventory identity
+
+If work orders already exist:
+- attach manufacturedCategory to work order context
+- ensure routing is respected
+
+If work orders do NOT exist cleanly:
+- minimally introduce structured demand records without breaking current flows
+
+---
+
+5. Dashboard Integration
+
+Update existing dashboards to consume demand correctly:
+
+Cutting Table:
+- show items where manufacturedCategory = PACKET
+  OR routing indicates cutting
+
+CNC:
+- show items where manufacturedCategory = MACHINED_PART
+  OR routing includes CNC
+
+Core:
+- show CORE items
+
+Assembly/Sub-Assembly:
+- show SUB_ASSEMBLY and ASSEMBLY items
+
+Important:
+Dashboards must read from:
+- work orders / demand
+- NOT directly from inventory tables
+
+---
+
+6. BOM Explosion (if not already clean)
+
+Ensure:
+
+- ASSEMBLY → creates demand for SUB_ASSEMBLY + components
+- SUB_ASSEMBLY → creates demand for PACKET / CORE / MACHINED_PART / KIT / PURCHASED
+
+If partial system exists:
+- extend it, do not replace it
+
+---
+
+7. Traveler Alignment
+
+When generating travelers:
+
+- Ensure travelers are tied to:
+  - inventory item
+  - routing
+  - work order (if exists)
+
+- No duplicate logic for packets vs machined parts
+- Routing should drive traveler steps
+
+---
+
+8. Migration Plan
+
+- Add new fields safely (nullable first if needed)
+- Backfill existing items:
+  - infer PURCHASED vs MANUFACTURED if possible
+  - leave manufacturedCategory null initially if uncertain
+
+- Do NOT break existing records
+
+---
+
+9. Output Format (IMPORTANT)
+
+For every change, show:
+
+- File path
+- Before → After (or full new file if small)
+- Short explanation of why
+
+Group changes by:
+1. Schema
+2. Backend logic
+3. API
+4. Frontend
+
+---
+
+10. After Implementation
+
+Provide:
+
+- Summary of how demand now flows from:
+  inventory → BOM → work order → dashboard
+
+- Any remaining gaps or optional improvements
+
+---
+
+Begin implementation now.
+Start with schema changes, then backend, then UI, then dashboards.
+Do not skip steps.

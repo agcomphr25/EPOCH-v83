@@ -1,0 +1,196 @@
+COPY-PASTE AUDIT PROMPT — /admin/order-lookup Reverse Lookup Failure
+FULL FORENSIC AUDIT — ORDER LOOKUP (REVERSE LOOKUP FAILURE)
+
+You are auditing a broken reverse lookup feature in EPOCH.
+
+LOCATION:
+Route: /admin/order-lookup
+
+PROBLEM:
+The UI returns "No order found" even when valid data exists.
+
+CONTEXT:
+- We already have a WORKING forward lookup:
+  → Given a P1 PO → system returns production order item codes
+
+- We are now building the REVERSE:
+  → Given an item code → system should find the associated:
+      - Production Order
+      - PO line item
+      - PO number
+
+- The reverse lookup is FAILING at runtime
+
+---
+
+🎯 OBJECTIVE
+
+Determine EXACTLY why the lookup is failing and produce a FIX PLAN.
+
+DO NOT GUESS.
+TRACE THE DATA END-TO-END.
+
+---
+
+🧠 STEP 1 — UI INPUT TRACE
+
+Find:
+- The input field component
+- State variable storing the search value
+- The API call triggered on submit
+
+Answer:
+1. What EXACT value is being sent to the backend?
+2. Is it trimmed, normalized, or transformed?
+3. Are we sending:
+   - itemCode
+   - sku
+   - productionOrderItemId
+   - or something else?
+
+---
+
+🧠 STEP 2 — NETWORK REQUEST
+
+Trace the API call:
+
+Find:
+- Endpoint being hit
+- HTTP method
+- Payload
+
+Answer:
+1. What endpoint is used? (exact path)
+2. What is the request payload?
+3. Does it match what the backend expects?
+
+---
+
+🧠 STEP 3 — BACKEND ROUTE TRACE
+
+Find the backend route handling this request.
+
+Trace:
+- Express route
+- Controller/service function
+
+Answer:
+1. What function handles the lookup?
+2. What parameter does it expect?
+3. Is there validation (Zod or otherwise) that could reject input?
+
+---
+
+🧠 STEP 4 — DATABASE QUERY TRACE (CRITICAL)
+
+Find the exact query used.
+
+Answer:
+1. What table(s) are queried?
+   - production_orders?
+   - production_order_items?
+   - vendor_po_items?
+2. What column is being matched?
+3. Is it:
+   - exact match
+   - LIKE
+   - case-sensitive?
+
+🚨 MOST IMPORTANT:
+Compare:
+- The actual stored value in DB
+- The value being searched
+
+Identify mismatches such as:
+- casing differences
+- whitespace
+- prefixes/suffixes
+- different field (sku vs item_code vs display_code)
+
+---
+
+🧠 STEP 5 — DATA MODEL TRUTH
+
+Map the correct relationship chain:
+
+item code → production_order_item → production_order → PO line item → PO
+
+Answer:
+1. Where is the TRUE source of the item code?
+2. Is the query skipping a required join?
+3. Is the lookup happening on the wrong table?
+
+---
+
+🧠 STEP 6 — FAILURE POINT IDENTIFICATION
+
+You MUST identify the exact failure point:
+
+Choose one:
+A) UI sending wrong value
+B) API mismatch
+C) Validation rejecting input
+D) Query hitting wrong field/table
+E) Join missing
+F) Data formatting mismatch
+
+Explain WHY it results in "No order found"
+
+---
+
+🧠 STEP 7 — FIX PLAN (ACTIONABLE)
+
+Provide exact changes:
+
+1. UI Fix (if needed)
+   - normalize input (trim, uppercase, etc.)
+
+2. Backend Fix
+   - correct query
+   - correct field
+   - add joins
+
+3. Query Fix (WRITE THE QUERY)
+   - include proper joins across:
+     production_order_items
+     production_orders
+     vendor_po_items
+     vendor_pos
+
+4. Optional:
+   - Add fallback search (ILIKE / partial match)
+
+---
+
+🧠 STEP 8 — DEBUG OUTPUT (REQUIRED)
+
+Add temporary logs:
+
+- Incoming request value
+- Final query value
+- Query result count
+
+---
+
+🧾 DELIVERABLE FORMAT
+
+Return:
+
+1. ROOT CAUSE (1–2 sentences)
+2. EXACT FAILURE LOCATION (file + line)
+3. FIX PLAN (step-by-step)
+4. FINAL QUERY (corrected)
+5. OPTIONAL IMPROVEMENTS
+
+---
+
+🚫 DO NOT:
+- Guess
+- Summarize vaguely
+- Skip query tracing
+
+✅ DO:
+- Follow the data from UI → DB → response
+- Be precise and surgical
+
+This is a production-critical lookup feature.

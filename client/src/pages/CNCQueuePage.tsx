@@ -242,6 +242,14 @@ export default function CNCQueuePage() {
 
     if (!order.features) return false;
 
+    // Check if other_options includes 'tripod_tap' - requires physical tapping in Gunsmith
+    if (
+      Array.isArray(order.features.other_options) &&
+      order.features.other_options.includes('tripod_tap')
+    ) {
+      return true;
+    }
+
     // Check specific gunsmith features with proper array handling
     const railValue = normalizeFeatureValue(order.features.rail_accessory);
     const qdValue = normalizeFeatureValue(order.features.qd_accessory);

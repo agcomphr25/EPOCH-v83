@@ -11746,6 +11746,9 @@ export class DatabaseStorage implements IStorage {
           : currentOrder.features;
       const hasNoRail =
         features?.rail_accessory?.includes?.('no_rail') || false;
+      const hasTripodTap =
+        Array.isArray(features?.other_options) &&
+        features.other_options.includes('tripod_tap');
 
       let nextDept = nextDepartment;
       if (!nextDept) {
@@ -11757,7 +11760,8 @@ export class DatabaseStorage implements IStorage {
           );
         }
         // Orders with no_rail skip Gunsmith and go directly from CNC to Finish
-        else if (hasNoRail && currentOrder.currentDepartment === 'CNC') {
+        // UNLESS the order also has tripod_tap, which requires physical tapping work in Gunsmith
+        else if (hasNoRail && !hasTripodTap && currentOrder.currentDepartment === 'CNC') {
           nextDept = 'Finish';
           console.log(
             `🔧 Order ${orderId} has no_rail - bypassing Gunsmith, routing directly from CNC to Finish`

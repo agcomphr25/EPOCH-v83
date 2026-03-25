@@ -29,36 +29,12 @@ import {
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
-import { getSupplySourceDashboard, type ManufacturedCategory, type SupplySourceDashboard, type InventoryItemWithDashboard } from '@shared/schema';
+import { getSupplySourceDashboard, type InventoryItemWithDashboard, type ManufacturedCategory } from '@shared/schema';
+import { MANUFACTURED_CATEGORY_ORDER, CATEGORY_DISPLAY_NAMES, DASHBOARD_DISPLAY_NAMES } from '@/lib/inventoryConstants';
 import InventoryItemsCard from '../components/inventory/InventoryItemsCard';
 import PartsRequestsCard from '../components/inventory/PartsRequestsCard';
 import OutstandingOrdersCard from '../components/inventory/OutstandingOrdersCard';
 import OrderPlacementCard from '../components/inventory/OrderPlacementCard';
-
-const MANUFACTURED_CATEGORY_ORDER: ManufacturedCategory[] = [
-  'PACKET',
-  'KIT',
-  'MACHINED_PART',
-  'CORE',
-  'SUB_ASSEMBLY',
-  'ASSEMBLY',
-];
-
-const CATEGORY_DISPLAY_NAMES: Record<ManufacturedCategory, string> = {
-  PACKET: 'Packet',
-  KIT: 'Kit',
-  MACHINED_PART: 'Machined Part',
-  CORE: 'Core',
-  SUB_ASSEMBLY: 'Sub-Assembly',
-  ASSEMBLY: 'Assembly',
-};
-
-const DASHBOARD_DISPLAY_NAMES: Record<SupplySourceDashboard, string> = {
-  CUTTING_TABLE: 'Cutting Table',
-  CNC: 'CNC',
-  CORE: 'Core',
-  ASSEMBLY: 'Assembly',
-};
 
 function InventorySplitView() {
   const { data: allItems = [], isLoading } = useQuery<InventoryItemWithDashboard[]>({

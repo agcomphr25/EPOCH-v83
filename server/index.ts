@@ -1182,46 +1182,36 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ default_order_method migration:', domErr.message);
       }
 
+      // Ensure inventory_item_type, inventory_manufactured_category, inventory_manufacturing_level enums and columns exist
       try {
-        const { sql: sqlItemType } = await import('drizzle-orm');
-        await db.execute(sqlItemType`
+        const { sql: sqlInvClass } = await import('drizzle-orm');
+        await db.execute(sqlInvClass`
           DO $$ BEGIN
-            CREATE TYPE inventory_item_type AS ENUM ('PURCHASED', 'MANUFACTURED');
-          EXCEPTION WHEN duplicate_object THEN NULL;
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_item_type') THEN
+              CREATE TYPE inventory_item_type AS ENUM ('PURCHASED', 'MANUFACTURED');
+            END IF;
           END $$
         `);
-        await db.execute(sqlItemType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS item_type inventory_item_type`);
-        console.log('✅ Ensured inventory_items has item_type column');
-      } catch (itemTypeErr: any) {
-        console.warn('⚠️ item_type migration:', itemTypeErr.message);
-      }
-
-      try {
-        const { sql: sqlManufCat } = await import('drizzle-orm');
-        await db.execute(sqlManufCat`
+        await db.execute(sqlInvClass`
           DO $$ BEGIN
-            CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY');
-          EXCEPTION WHEN duplicate_object THEN NULL;
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufactured_category') THEN
+              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY');
+            END IF;
           END $$
         `);
-        await db.execute(sqlManufCat`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS manufactured_category inventory_manufactured_category`);
-        console.log('✅ Ensured inventory_items has manufactured_category column');
-      } catch (manufCatErr: any) {
-        console.warn('⚠️ manufactured_category migration:', manufCatErr.message);
-      }
-
-      try {
-        const { sql: sqlManufLevel } = await import('drizzle-orm');
-        await db.execute(sqlManufLevel`
+        await db.execute(sqlInvClass`
           DO $$ BEGIN
-            CREATE TYPE inventory_manufacturing_level AS ENUM ('COMPONENT', 'INTERMEDIATE', 'FINAL');
-          EXCEPTION WHEN duplicate_object THEN NULL;
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufacturing_level') THEN
+              CREATE TYPE inventory_manufacturing_level AS ENUM ('COMPONENT', 'INTERMEDIATE', 'FINAL');
+            END IF;
           END $$
         `);
-        await db.execute(sqlManufLevel`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS manufacturing_level inventory_manufacturing_level`);
-        console.log('✅ Ensured inventory_items has manufacturing_level column');
-      } catch (manufLevelErr: any) {
-        console.warn('⚠️ manufacturing_level migration:', manufLevelErr.message);
+        await db.execute(sqlInvClass`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS item_type inventory_item_type`);
+        await db.execute(sqlInvClass`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS manufactured_category inventory_manufactured_category`);
+        await db.execute(sqlInvClass`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS manufacturing_level inventory_manufacturing_level`);
+        console.log('✅ Ensured inventory_items has item_type, manufactured_category, and manufacturing_level columns');
+      } catch (invClassErr: any) {
+        console.warn('⚠️ inventory_items classification columns migration:', invClassErr.message);
       }
 
       try {

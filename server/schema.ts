@@ -571,34 +571,9 @@ export const inventoryItemTypeEnum = pgEnum('inventory_item_type', ['PURCHASED',
 export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']);
 export const inventoryManufacturingLevelEnum = pgEnum('inventory_manufacturing_level', ['COMPONENT', 'INTERMEDIATE', 'FINAL']);
 
-// Supply source dashboard mapping — single source of truth for routing
-export type ManufacturedCategory = 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY';
-export type SupplySourceDashboard = 'CUTTING_TABLE' | 'CNC' | 'CORE' | 'ASSEMBLY';
-
-export function getSupplySourceDashboard(category: ManufacturedCategory | null | undefined): SupplySourceDashboard | null {
-  if (!category) return null;
-  const map: Record<ManufacturedCategory, SupplySourceDashboard> = {
-    PACKET: 'CUTTING_TABLE',
-    KIT: 'CUTTING_TABLE',
-    MACHINED_PART: 'CNC',
-    CORE: 'CORE',
-    SUB_ASSEMBLY: 'ASSEMBLY',
-    ASSEMBLY: 'ASSEMBLY',
-  };
-  return map[category] ?? null;
-}
-
-// Legacy dashboard name used by manufacturing_queue.department column
-export function supplySourceDashboardToLegacyDept(dashboard: SupplySourceDashboard | null): string | null {
-  if (!dashboard) return null;
-  const legacyMap: Record<SupplySourceDashboard, string> = {
-    CUTTING_TABLE: 'Cutting Table',
-    CNC: 'CNC',
-    CORE: 'Cores',
-    ASSEMBLY: 'Assembly',
-  };
-  return legacyMap[dashboard];
-}
+// Supply source dashboard mapping — re-exported from canonical shared utility
+export type { ManufacturedCategory, SupplySourceDashboard } from '../shared/utils/supplySourceDashboard';
+export { getSupplySourceDashboard, supplySourceDashboardToLegacyDept } from '../shared/utils/supplySourceDashboard';
 
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
@@ -2194,18 +2169,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
     manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
-  }).refine(
-    (data) => {
-      if (data.itemType === 'MANUFACTURED') {
-        return !!data.manufacturedCategory;
-      }
-      return true;
-    },
-    {
-      message: 'manufacturedCategory is required when itemType is MANUFACTURED',
-      path: ['manufacturedCategory'],
-    }
-  );
+  });
 
 export const insertInventoryScanSchema = createInsertSchema(inventoryScans)
   .omit({

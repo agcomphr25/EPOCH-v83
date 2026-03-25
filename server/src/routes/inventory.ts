@@ -214,6 +214,19 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
       // Fallback to direct JSON body (for backwards compatibility)
       updates = insertInventoryItemSchema.partial().parse(req.body);
     }
+
+    // Validate itemType + manufacturedCategory consistency against merged effective state
+    if (updates.itemType !== undefined || updates.manufacturedCategory !== undefined) {
+      const existingItem = await storage.getInventoryItem(itemId);
+      const effectiveType = updates.itemType !== undefined ? updates.itemType : existingItem?.itemType;
+      const effectiveCategory = updates.manufacturedCategory !== undefined ? updates.manufacturedCategory : existingItem?.manufacturedCategory;
+      if (effectiveType === 'PURCHASED' && effectiveCategory) {
+        return res.status(400).json({ error: 'Purchased items must not have a manufactured category. Set itemType to MANUFACTURED or clear the category.' });
+      }
+      if (effectiveType === 'MANUFACTURED' && !effectiveCategory) {
+        return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
+      }
+    }
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -304,6 +317,14 @@ router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'td
       // Fallback to direct JSON body (for backwards compatibility)
       itemData = insertInventoryItemSchema.parse(req.body);
     }
+
+    // Validate itemType + manufacturedCategory consistency
+    if (itemData.itemType === 'PURCHASED' && itemData.manufacturedCategory) {
+      return res.status(400).json({ error: 'Purchased items must not have a manufactured category. Set itemType to MANUFACTURED or clear the category.' });
+    }
+    if (itemData.itemType === 'MANUFACTURED' && !itemData.manufacturedCategory) {
+      return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
+    }
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -353,6 +374,19 @@ router.put('/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: '
     } else {
       // Fallback to direct JSON body (for backwards compatibility)
       updates = insertInventoryItemSchema.partial().parse(req.body);
+    }
+
+    // Validate itemType + manufacturedCategory consistency against merged effective state
+    if (updates.itemType !== undefined || updates.manufacturedCategory !== undefined) {
+      const existingItem = await storage.getInventoryItem(itemId);
+      const effectiveType = updates.itemType !== undefined ? updates.itemType : existingItem?.itemType;
+      const effectiveCategory = updates.manufacturedCategory !== undefined ? updates.manufacturedCategory : existingItem?.manufacturedCategory;
+      if (effectiveType === 'PURCHASED' && effectiveCategory) {
+        return res.status(400).json({ error: 'Purchased items must not have a manufactured category. Set itemType to MANUFACTURED or clear the category.' });
+      }
+      if (effectiveType === 'MANUFACTURED' && !effectiveCategory) {
+        return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
+      }
     }
     
     // Add file paths if files were uploaded and set flags
@@ -467,6 +501,14 @@ router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name
       // Fallback to direct JSON body (for backwards compatibility)
       itemData = insertInventoryItemSchema.parse(req.body);
     }
+
+    // Validate itemType + manufacturedCategory consistency
+    if (itemData.itemType === 'PURCHASED' && itemData.manufacturedCategory) {
+      return res.status(400).json({ error: 'Purchased items must not have a manufactured category. Set itemType to MANUFACTURED or clear the category.' });
+    }
+    if (itemData.itemType === 'MANUFACTURED' && !itemData.manufacturedCategory) {
+      return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
+    }
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -521,6 +563,19 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
     } else {
       // Fallback to direct JSON body (for backwards compatibility)
       updates = insertInventoryItemSchema.partial().parse(req.body);
+    }
+
+    // Validate itemType + manufacturedCategory consistency against merged effective state
+    if (updates.itemType !== undefined || updates.manufacturedCategory !== undefined) {
+      const existingItem = await storage.getInventoryItem(itemId);
+      const effectiveType = updates.itemType !== undefined ? updates.itemType : existingItem?.itemType;
+      const effectiveCategory = updates.manufacturedCategory !== undefined ? updates.manufacturedCategory : existingItem?.manufacturedCategory;
+      if (effectiveType === 'PURCHASED' && effectiveCategory) {
+        return res.status(400).json({ error: 'Purchased items must not have a manufactured category. Set itemType to MANUFACTURED or clear the category.' });
+      }
+      if (effectiveType === 'MANUFACTURED' && !effectiveCategory) {
+        return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
+      }
     }
     
     // Add file paths if files were uploaded and set flags

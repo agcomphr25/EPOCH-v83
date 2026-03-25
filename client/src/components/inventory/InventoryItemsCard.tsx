@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -16,6 +17,13 @@ import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import type { InventoryItem, ItemGroup, ManufacturedCategory } from '@shared/schema';
 import { getSupplySourceDashboard, supplySourceDashboardToLegacyDept } from '@shared/schema';
+import { MANUFACTURED_CATEGORY_ORDER, CATEGORY_DISPLAY_NAMES, DASHBOARD_DISPLAY_NAMES } from '@/lib/inventoryConstants';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import TraceabilityConfigModal from './TraceabilityConfigModal';
@@ -280,7 +288,7 @@ const InventoryForm = ({
         {(formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && (
           <>
             <div>
-              <Label htmlFor="manufacturedCategory">Category</Label>
+              <Label htmlFor="manufacturedCategory">Category *</Label>
               <Select
                 value={formData.manufacturedCategory || ''}
                 onValueChange={(value) => onSelectChange('manufacturedCategory', value)}
@@ -1007,6 +1015,25 @@ interface InventoryItemsCardProps {
   initialSearchTerm?: string | null;
 }
 
+const inventoryFormSchema = z.object({
+  agPartNumber: z.string().min(1, 'AG Part# is required'),
+  name: z.string().min(1, 'Name is required'),
+  itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
+  manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']).optional().nullable(),
+}).refine(
+  (data) => {
+    if (data.itemType === 'MANUFACTURED') return !!data.manufacturedCategory;
+    return true;
+  },
+  { message: 'Manufactured items require a category. Please select a Manufactured Category.', path: ['manufacturedCategory'] }
+).refine(
+  (data) => {
+    if (data.itemType === 'PURCHASED') return !data.manufacturedCategory;
+    return true;
+  },
+  { message: 'Purchased items must not have a manufactured category.', path: ['manufacturedCategory'] }
+);
+
 export default function InventoryItemsCard({ initialSearchTerm }: InventoryItemsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -1239,6 +1266,22 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           item.isPacket
       )
     : [];
+
+  // Group manufactured items by category for accordion view
+  const groupedManufactured = React.useMemo(() => {
+    return MANUFACTURED_CATEGORY_ORDER.reduce((acc, cat) => {
+      acc[cat] = manufacturedItems.filter((item) => {
+        if (item.manufacturedCategory === cat) return true;
+        if (!item.manufacturedCategory && cat === 'PACKET' && item.isPacket) return true;
+        return false;
+      });
+      return acc;
+    }, {} as Record<ManufacturedCategory, InventoryItem[]>);
+  }, [manufacturedItems]);
+
+  const uncategorizedManufactured = React.useMemo(() => {
+    return manufacturedItems.filter((item) => !item.manufacturedCategory && !item.isPacket);
+  }, [manufacturedItems]);
 
   // Sort handler function
   const handleSort = (column: string) => {
@@ -1660,8 +1703,16 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!formData.agPartNumber || !formData.name) {
-        toast.error('Please fill in AG Part# and Name (required fields)');
+      const validation = inventoryFormSchema.safeParse({
+        agPartNumber: formData.agPartNumber,
+        name: formData.name,
+        itemType: formData.itemType || (formData.type === 'Manufactured' ? 'MANUFACTURED' : null),
+        manufacturedCategory: formData.manufacturedCategory || null,
+      });
+
+      if (!validation.success) {
+        const firstError = validation.error.errors[0];
+        toast.error(firstError?.message || 'Please fill in required fields');
         return;
       }
 
@@ -2152,7 +2203,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={activeTab}>
+        <TabsContent value="purchased">
       <div className="mb-4 space-y-3">
         <div className="flex gap-4">
           <div className="relative flex-1 max-w-md">
@@ -2570,6 +2621,218 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           </div>
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="manufactured">
+          <div className="mb-4 space-y-3">
+            <div className="flex gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Input
+                  placeholder="Search by AG Part #, SKU, Name, Notes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-manufactured"
+                />
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              </div>
+              <div className="w-48">
+                <Select value={utilizedFilter} onValueChange={setUtilizedFilter}>
+                  <SelectTrigger data-testid="select-utilized-filter-manufactured">
+                    <SelectValue placeholder="Filter by utilization" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Items</SelectItem>
+                    <SelectItem value="pl1">PL1 Only</SelectItem>
+                    <SelectItem value="pl2">PL2 Only</SelectItem>
+                    <SelectItem value="facilities">Facilities Only</SelectItem>
+                    <SelectItem value="admin">Admin Only</SelectItem>
+                    <SelectItem value="services">Services Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="text-center py-8">Loading inventory items...</div>
+          ) : (
+            <Accordion type="multiple" className="space-y-2">
+              {MANUFACTURED_CATEGORY_ORDER.map((category) => {
+                const catItems = (groupedManufactured[category] || []).filter((item) => {
+                  if (searchTerm.trim()) {
+                    const s = searchTerm.toLowerCase();
+                    if (
+                      !item.agPartNumber.toLowerCase().includes(s) &&
+                      !item.name.toLowerCase().includes(s) &&
+                      !(item.sku && item.sku.toLowerCase().includes(s)) &&
+                      !(item.source && item.source.toLowerCase().includes(s)) &&
+                      !(item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(s)) &&
+                      !(item.department && item.department.toLowerCase().includes(s)) &&
+                      !(item.notes && item.notes.toLowerCase().includes(s))
+                    ) return false;
+                  }
+                  if (utilizedFilter !== 'all') {
+                    switch (utilizedFilter) {
+                      case 'pl1': return item.utilizedInPL1;
+                      case 'pl2': return item.utilizedInPL2;
+                      case 'facilities': return item.utilizedInFacilities;
+                      case 'admin': return item.utilizedInAdmin;
+                      case 'services': return item.utilizedInServices;
+                      default: return true;
+                    }
+                  }
+                  return true;
+                });
+                const dashboard = getSupplySourceDashboard(category);
+                return (
+                  <AccordionItem key={category} value={category} className="border rounded-md">
+                    <AccordionTrigger className="px-4 hover:no-underline">
+                      <div className="flex items-center gap-3 text-left">
+                        <span className="font-semibold">{CATEGORY_DISPLAY_NAMES[category]}</span>
+                        <Badge variant="outline">{catItems.length}</Badge>
+                        {dashboard && (
+                          <Badge variant="secondary" className="text-xs">
+                            → {DASHBOARD_DISPLAY_NAMES[dashboard] ?? dashboard}
+                          </Badge>
+                        )}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/50">
+                              <th className="h-9 px-4 text-left font-medium">AG Part #</th>
+                              <th className="h-9 px-4 text-left font-medium">Name</th>
+                              <th className="h-9 px-4 text-left font-medium">Level</th>
+                              <th className="h-9 px-4 text-left font-medium">Utilized In</th>
+                              <th className="h-9 px-4 text-left font-medium">Current Qty</th>
+                              <th className="h-9 px-4 text-left font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {catItems.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="py-6 text-center text-gray-500 text-xs">
+                                  No {CATEGORY_DISPLAY_NAMES[category]} items
+                                  {(searchTerm || utilizedFilter !== 'all') && ' matching filters'}
+                                </td>
+                              </tr>
+                            ) : (
+                              catItems.map((item) => (
+                                <tr key={item.id} className="border-b hover:bg-muted/50 transition-colors">
+                                  <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
+                                  <td className="px-4 py-2 font-medium">{item.name}</td>
+                                  <td className="px-4 py-2">
+                                    {item.manufacturingLevel ? (
+                                      <Badge variant="outline" className="text-xs capitalize">
+                                        {item.manufacturingLevel.toLowerCase()}
+                                      </Badge>
+                                    ) : '—'}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    <div className="flex flex-wrap gap-1">
+                                      {item.utilizedInPL1 && <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 rounded">PL1</span>}
+                                      {item.utilizedInPL2 && <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 rounded">PL2</span>}
+                                      {item.utilizedInFacilities && <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 rounded">Facilities</span>}
+                                      {item.utilizedInAdmin && <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded">Admin</span>}
+                                      {item.utilizedInServices && <span className="px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 rounded">Services</span>}
+                                      {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2 font-medium">
+                                    {balancesByPart[item.agPartNumber] != null ? balancesByPart[item.agPartNumber] : 0}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    <div className="flex space-x-2">
+                                      <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit" data-testid={`button-edit-mfg-${item.id}`}>
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button variant="outline" size="sm" onClick={() => handleDelete(item.id)} disabled={deleteMutation.isPending} title="Delete" data-testid={`button-delete-mfg-${item.id}`}>
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+              {(() => {
+                const filteredUncategorized = uncategorizedManufactured.filter((item) => {
+                  if (searchTerm.trim()) {
+                    const s = searchTerm.toLowerCase();
+                    if (
+                      !item.agPartNumber.toLowerCase().includes(s) &&
+                      !item.name.toLowerCase().includes(s) &&
+                      !(item.sku && item.sku.toLowerCase().includes(s)) &&
+                      !(item.source && item.source.toLowerCase().includes(s)) &&
+                      !(item.supplierPartNumber && item.supplierPartNumber.toLowerCase().includes(s)) &&
+                      !(item.department && item.department.toLowerCase().includes(s)) &&
+                      !(item.notes && item.notes.toLowerCase().includes(s))
+                    ) return false;
+                  }
+                  if (utilizedFilter !== 'all') {
+                    switch (utilizedFilter) {
+                      case 'pl1': return item.utilizedInPL1;
+                      case 'pl2': return item.utilizedInPL2;
+                      case 'facilities': return item.utilizedInFacilities;
+                      case 'admin': return item.utilizedInAdmin;
+                      case 'services': return item.utilizedInServices;
+                      default: return true;
+                    }
+                  }
+                  return true;
+                });
+                if (filteredUncategorized.length === 0) return null;
+                return (
+                  <AccordionItem value="uncategorized" className="border rounded-md">
+                    <AccordionTrigger className="px-4 hover:no-underline">
+                      <div className="flex items-center gap-3 text-left">
+                        <span className="font-semibold text-amber-700">Uncategorized</span>
+                        <Badge variant="outline">{filteredUncategorized.length}</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-0">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="h-9 px-4 text-left font-medium">AG Part #</th>
+                            <th className="h-9 px-4 text-left font-medium">Name</th>
+                            <th className="h-9 px-4 text-left font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredUncategorized.map((item) => (
+                            <tr key={item.id} className="border-b hover:bg-muted/50 transition-colors">
+                              <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
+                              <td className="px-4 py-2 font-medium">{item.name}</td>
+                              <td className="px-4 py-2">
+                                <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => handleDelete(item.id)} disabled={deleteMutation.isPending} title="Delete">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })()}
+            </Accordion>
+          )}
         </TabsContent>
       </Tabs>
 

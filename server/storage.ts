@@ -566,6 +566,7 @@ const productionOrdersColumns = {
   qcCompletedAt: productionOrders.qcCompletedAt,
   shippingCompletedAt: productionOrders.shippingCompletedAt,
   p2PoItemId: productionOrders.p2PoItemId,
+  itemCode: productionOrders.itemCode,
 };
 
 // modify the interface with any CRUD methods
@@ -10422,13 +10423,20 @@ export class DatabaseStorage implements IStorage {
       'itemType', 'itemId', 'itemName', 'specifications', 'orderDate', 'dueDate',
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
       'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
-      'materialCanonical', 'sourceSnapshot'
+      'materialCanonical', 'sourceSnapshot', 'itemCode'
     ]);
     const safeData: Record<string, any> = {};
     for (const [key, value] of Object.entries(data as any)) {
       if (validColumns.has(key)) {
         safeData[key] = value;
       }
+    }
+    // Always normalize item_code: derive from explicit value or fall back to itemName/itemId
+    {
+      const explicit = typeof safeData.itemCode === 'string' ? safeData.itemCode.trim().toUpperCase() : null;
+      const fromName = typeof safeData.itemName === 'string' ? safeData.itemName.trim().toUpperCase() : null;
+      const fromId = typeof safeData.itemId === 'string' ? safeData.itemId.trim().toUpperCase() : null;
+      safeData.itemCode = explicit || fromName || fromId || null;
     }
     const [order] = await db.insert(productionOrders).values(safeData).returning(productionOrdersColumns);
     return order;
@@ -10529,6 +10537,8 @@ export class DatabaseStorage implements IStorage {
           created_at: new Date().toISOString(),
         };
 
+        const resolvedItemCode = (item.itemName || item.itemId || '').trim().toUpperCase() || null;
+
         const orderData: InsertProductionOrder = {
           orderId,
           poId: po.id,
@@ -10547,6 +10557,7 @@ export class DatabaseStorage implements IStorage {
           status: 'IN_PROGRESS',
           materialCanonical,
           sourceSnapshot,
+          itemCode: resolvedItemCode,
         };
 
         console.log(`🏭 Production order ${orderId} created with canonical material: ${materialCanonical}`);

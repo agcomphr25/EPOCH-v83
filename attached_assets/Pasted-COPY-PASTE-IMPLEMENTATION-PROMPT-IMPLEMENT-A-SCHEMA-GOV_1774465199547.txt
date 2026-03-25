@@ -1,0 +1,179 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+IMPLEMENT A SCHEMA GOVERNANCE SYSTEM FOR EPOCH
+
+We are experiencing schema drift between:
+- Drizzle schema (server/schema.ts)
+- Runtime SQL (ALTER TABLE in server/index.ts)
+- Production database
+
+This system must PREVENT destructive migrations and enforce a single source of truth.
+
+-----------------------------------
+PART 1 — SCHEMA DRIFT DETECTOR
+-----------------------------------
+
+Create a new module:
+
+/server/governance/schemaDrift.ts
+
+Responsibilities:
+
+1. Compare:
+   - Drizzle schema (introspected)
+   - Live database schema (information_schema)
+
+2. Detect:
+   - Missing columns in schema
+   - Extra columns in DB
+   - Type mismatches
+   - Index mismatches
+
+3. Output structured report:
+
+{
+  table: string,
+  column: string,
+  status: "MISSING_IN_SCHEMA" | "MISSING_IN_DB" | "TYPE_MISMATCH",
+  severity: "CRITICAL" | "WARNING",
+  rowCount: number
+}
+
+-----------------------------------
+PART 2 — DESTRUCTIVE MIGRATION GUARD
+-----------------------------------
+
+Create:
+
+/server/governance/migrationGuard.ts
+
+This must:
+
+1. Parse generated migration SQL
+2. Detect:
+   - DROP COLUMN
+   - DROP TABLE
+   - ALTER TYPE that shrinks data
+
+3. For each destructive action:
+   - Query row count of affected column/table
+   - Block execution if rowCount > 0
+
+Return:
+
+{
+  allowed: boolean,
+  violations: [
+    {
+      action: "DROP COLUMN",
+      table: "p2_lot_numbers",
+      column: "certificate_upload_url",
+      rowCount: 2,
+      severity: "CRITICAL"
+    }
+  ]
+}
+
+-----------------------------------
+PART 3 — SAFE MIGRATION POLICY
+-----------------------------------
+
+Create policy file:
+
+/server/governance/schemaPolicy.ts
+
+Rules:
+
+- CRITICAL columns (production, shipping, compliance) cannot be dropped automatically
+- Columns with rowCount > 0 require:
+  - backup OR
+  - explicit override flag
+- Raw ALTER TABLE usage is disallowed unless:
+  - mirrored in schema.ts
+  - logged in governance audit
+
+-----------------------------------
+PART 4 — GOVERNANCE AUDIT LOG
+-----------------------------------
+
+Create table:
+
+schema_change_log
+
+Columns:
+- id
+- timestamp
+- actor
+- action_type (ADD_COLUMN, DROP_COLUMN, ALTER)
+- table_name
+- column_name
+- before_state JSONB
+- after_state JSONB
+- approved_by
+- override_reason
+
+Every migration MUST log here.
+
+-----------------------------------
+PART 5 — PRE-PUBLISH HOOK
+-----------------------------------
+
+Before ANY publish:
+
+1. Run schema drift detector
+2. Run migration guard
+3. If violations exist:
+   - BLOCK publish
+   - Display report in UI
+
+-----------------------------------
+PART 6 — UI PANEL (Domain Truth Inspector Integration)
+-----------------------------------
+
+Add new panel:
+
+"Schema Governance"
+
+Show:
+
+- Drift summary
+- Destructive migration warnings
+- Columns at risk
+- Row counts
+- "Safe Fix Suggestions"
+
+-----------------------------------
+PART 7 — RAW SQL LOCKDOWN
+-----------------------------------
+
+Scan codebase for:
+
+ALTER TABLE
+DROP COLUMN
+CREATE COLUMN
+
+If found outside:
+- migrations/
+- schema.ts
+
+Flag as violation.
+
+-----------------------------------
+PART 8 — OUTPUT
+-----------------------------------
+
+Return:
+
+1. Files created
+2. Integration points
+3. Example violation output
+4. How to run governance check manually
+5. How to override safely (admin only)
+
+-----------------------------------
+CRITICAL RULES
+-----------------------------------
+
+- NEVER allow silent data loss
+- PRIORITIZE auditability over convenience
+- Assume manufacturing + compliance requirements
+- This is a permanent system, not a one-time fix

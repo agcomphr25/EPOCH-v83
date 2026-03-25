@@ -58,6 +58,7 @@ async function main() {
     '0002_fix_fabric_sources_inventory_id_uuid.sql',
     '0003_comprehensive_integer_to_uuid_audit.sql',
     '0005_backfill_production_orders_item_codes.sql',
+    '0007_p2_shipping_audit_log.sql',
   ];
 
   const migrationsDir = path.resolve(__dirname, '../migrations');

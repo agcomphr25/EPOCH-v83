@@ -52,6 +52,8 @@ interface ShipmentLot {
   tracking_number: string | null;
   carrier: string | null;
   bill_of_lading_url: string | null;
+  packing_slip_upload_url: string | null;
+  certificate_upload_url: string | null;
   created_by: string;
   created_at: string;
 }
@@ -153,7 +155,11 @@ export default function P2ShipmentDetail() {
   const [notes, setNotes] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingPs, setUploadingPs] = useState(false);
+  const [uploadingCert, setUploadingCert] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const psFileInputRef = useRef<HTMLInputElement>(null);
+  const certFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: currentUser } = useQuery<CurrentUser | null>({
     queryKey: ['currentUser'],
@@ -240,6 +246,38 @@ export default function P2ShipmentDetail() {
       toast({ title: 'Upload failed', variant: 'destructive' });
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handlePackingSlipUpload(file: File) {
+    setUploadingPs(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch(`/api/p2/shipments/${lotId}/upload-packing-slip`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('Upload failed');
+      toast({ title: 'Packing Slip uploaded' });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+    } catch {
+      toast({ title: 'Upload failed', variant: 'destructive' });
+    } finally {
+      setUploadingPs(false);
+    }
+  }
+
+  async function handleCertificateUpload(file: File) {
+    setUploadingCert(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch(`/api/p2/shipments/${lotId}/upload-certificate`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('Upload failed');
+      toast({ title: 'Certificate of Conformance uploaded' });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+    } catch {
+      toast({ title: 'Upload failed', variant: 'destructive' });
+    } finally {
+      setUploadingCert(false);
     }
   }
 
@@ -437,24 +475,59 @@ export default function P2ShipmentDetail() {
                     <Badge className={`ml-2 text-xs ${statusColor(packingSlip.status)}`}>{packingSlip.status}</Badge>
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Not generated</p>
+                  <p className="text-xs text-muted-foreground">
+                    {lot.packing_slip_upload_url ? 'External PDF attached' : 'Not generated'}
+                  </p>
                 )}
               </div>
             </div>
-            {packingSlip && (
-              <div className="flex gap-2">
+            <div className="flex gap-2">
+              {packingSlip && (
+                <>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/p2/packing-slip/${packingSlip.id}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
+                    </a>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/api/p2/packing-slips/${packingSlip.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-3.5 w-3.5 mr-1" /> PDF
+                    </a>
+                  </Button>
+                </>
+              )}
+              {lot.packing_slip_upload_url && (
                 <Button variant="outline" size="sm" asChild>
-                  <a href={`/p2/packing-slip/${packingSlip.id}`} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
+                  <a href={`/api/p2/shipments/${lotId}/packing-slip-upload`} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-3.5 w-3.5 mr-1" /> Download
                   </a>
                 </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={`/api/p2/packing-slips/${packingSlip.id}/pdf`} target="_blank" rel="noopener noreferrer">
-                    <Download className="h-3.5 w-3.5 mr-1" /> PDF
-                  </a>
-                </Button>
-              </div>
-            )}
+              )}
+              <input
+                ref={psFileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) handlePackingSlipUpload(f);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => psFileInputRef.current?.click()}
+                disabled={uploadingPs}
+              >
+                {uploadingPs ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 mr-1" />
+                )}
+                {lot.packing_slip_upload_url ? 'Replace' : 'Upload'}
+              </Button>
+            </div>
           </div>
 
           {/* Certificate of Conformance */}
@@ -469,24 +542,59 @@ export default function P2ShipmentDetail() {
                     <Badge className={`ml-2 text-xs ${statusColor(certificate.status)}`}>{certificate.status}</Badge>
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Not generated</p>
+                  <p className="text-xs text-muted-foreground">
+                    {lot.certificate_upload_url ? 'External PDF attached' : 'Not generated'}
+                  </p>
                 )}
               </div>
             </div>
-            {certificate && (
-              <div className="flex gap-2">
+            <div className="flex gap-2">
+              {certificate && (
+                <>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/p2/certificate/${certificate.id}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
+                    </a>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/api/p2/certificates/${certificate.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-3.5 w-3.5 mr-1" /> PDF
+                    </a>
+                  </Button>
+                </>
+              )}
+              {lot.certificate_upload_url && (
                 <Button variant="outline" size="sm" asChild>
-                  <a href={`/p2/certificate/${certificate.id}`} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
+                  <a href={`/api/p2/shipments/${lotId}/certificate-upload`} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-3.5 w-3.5 mr-1" /> Download
                   </a>
                 </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={`/api/p2/certificates/${certificate.id}/pdf`} target="_blank" rel="noopener noreferrer">
-                    <Download className="h-3.5 w-3.5 mr-1" /> PDF
-                  </a>
-                </Button>
-              </div>
-            )}
+              )}
+              <input
+                ref={certFileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) handleCertificateUpload(f);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => certFileInputRef.current?.click()}
+                disabled={uploadingCert}
+              >
+                {uploadingCert ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 mr-1" />
+                )}
+                {lot.certificate_upload_url ? 'Replace' : 'Upload'}
+              </Button>
+            </div>
           </div>
 
           {/* Bill of Lading */}

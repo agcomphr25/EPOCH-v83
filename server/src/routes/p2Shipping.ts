@@ -931,6 +931,8 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       notes: string | null;
       tracking_number: string | null; carrier: string | null;
       bill_of_lading_url: string | null;
+      packing_slip_upload_url: string | null;
+      certificate_upload_url: string | null;
       created_by: string; created_at: string;
     }>(
       `SELECT id, lot_number, lot_type, part_number, part_name,
@@ -938,6 +940,7 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
               serialized_item_ids, status, closed_at, closed_by,
               shipped_at, shipped_by, packing_slip_id, certificate_id, notes,
               tracking_number, carrier, bill_of_lading_url,
+              packing_slip_upload_url, certificate_upload_url,
               created_by, created_at
        FROM p2_lot_numbers WHERE id = $1`,
       [lotId]
@@ -1031,8 +1034,8 @@ router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
       vals
     );
 
-    // Also update packing slip tracking/carrier if it exists
-    if (trackingNumber !== undefined || carrier !== undefined) {
+    // Also update packing slip tracking/carrier/status if it exists
+    if (trackingNumber !== undefined || carrier !== undefined || markShipped) {
       const lotRow = await pool.query<{ packing_slip_id: string | null }>(
         `SELECT packing_slip_id FROM p2_lot_numbers WHERE id = $1`, [lotId]
       );
@@ -1107,6 +1110,100 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
   } catch (err: any) {
     console.error('BoL download error:', err);
     return res.status(500).json({ error: 'Failed to retrieve bill of lading' });
+  }
+});
+
+// POST /api/p2/shipments/:lotId/upload-packing-slip — upload external packing slip PDF
+router.post('/shipments/:lotId/upload-packing-slip', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const storagePath = await objectStorageService.uploadBuffer(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    await pool.query(
+      `UPDATE p2_lot_numbers SET packing_slip_upload_url = $1, updated_at = NOW() WHERE id = $2`,
+      [storagePath, lotId]
+    );
+
+    return res.json({ success: true, packingSlipUploadUrl: storagePath });
+  } catch (err: any) {
+    console.error('Packing slip upload error:', err);
+    return res.status(500).json({ error: 'Failed to upload packing slip' });
+  }
+});
+
+// GET /api/p2/shipments/:lotId/packing-slip-upload — download uploaded packing slip PDF
+router.get('/shipments/:lotId/packing-slip-upload', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const rows = await pool.query<{ packing_slip_upload_url: string | null }>(
+      `SELECT packing_slip_upload_url FROM p2_lot_numbers WHERE id = $1`, [lotId]
+    );
+    const fileUrl = rows[0]?.packing_slip_upload_url;
+    if (!fileUrl) return res.status(404).json({ error: 'No packing slip upload attached' });
+
+    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const ext = fileUrl.split('.').pop()?.toLowerCase();
+    const contentType = ext === 'pdf' ? 'application/pdf'
+      : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
+    res.set('Content-Type', contentType);
+    res.set('Content-Disposition', `inline; filename="packing-slip-upload"`);
+    return res.send(buffer);
+  } catch (err: any) {
+    console.error('Packing slip download error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve packing slip' });
+  }
+});
+
+// POST /api/p2/shipments/:lotId/upload-certificate — upload external certificate PDF
+router.post('/shipments/:lotId/upload-certificate', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const storagePath = await objectStorageService.uploadBuffer(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    await pool.query(
+      `UPDATE p2_lot_numbers SET certificate_upload_url = $1, updated_at = NOW() WHERE id = $2`,
+      [storagePath, lotId]
+    );
+
+    return res.json({ success: true, certificateUploadUrl: storagePath });
+  } catch (err: any) {
+    console.error('Certificate upload error:', err);
+    return res.status(500).json({ error: 'Failed to upload certificate' });
+  }
+});
+
+// GET /api/p2/shipments/:lotId/certificate-upload — download uploaded certificate PDF
+router.get('/shipments/:lotId/certificate-upload', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const rows = await pool.query<{ certificate_upload_url: string | null }>(
+      `SELECT certificate_upload_url FROM p2_lot_numbers WHERE id = $1`, [lotId]
+    );
+    const fileUrl = rows[0]?.certificate_upload_url;
+    if (!fileUrl) return res.status(404).json({ error: 'No certificate upload attached' });
+
+    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const ext = fileUrl.split('.').pop()?.toLowerCase();
+    const contentType = ext === 'pdf' ? 'application/pdf'
+      : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
+    res.set('Content-Type', contentType);
+    res.set('Content-Disposition', `inline; filename="certificate-upload"`);
+    return res.send(buffer);
+  } catch (err: any) {
+    console.error('Certificate download error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve certificate' });
   }
 });
 

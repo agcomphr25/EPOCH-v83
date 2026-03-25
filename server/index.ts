@@ -2297,6 +2297,18 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_lot_numbers shipment columns migration:', lotColErr?.message);
       }
 
+      // Ensure p2_lot_numbers has external PDF upload columns
+      try {
+        await pool.query(`
+          ALTER TABLE p2_lot_numbers
+            ADD COLUMN IF NOT EXISTS packing_slip_upload_url TEXT,
+            ADD COLUMN IF NOT EXISTS certificate_upload_url  TEXT
+        `);
+        console.log('✅ Ensured p2_lot_numbers has external PDF upload columns (packing slip, certificate)');
+      } catch (uploadColErr: any) {
+        console.warn('⚠️ p2_lot_numbers upload columns migration:', uploadColErr?.message);
+      }
+
       // Ensure project_documents table exists (manual PDF attachments on traceability tab)
       try {
         await pool.query(`

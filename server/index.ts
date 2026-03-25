@@ -664,11 +664,39 @@ async function initializeBackgroundServices() {
           const bpCount = await db.execute(sqlCpT`SELECT COUNT(*)::int AS cnt FROM cutting_built_packets`);
           const rowCount = (bpCount as any)?.rows?.[0]?.cnt || 0;
           if (rowCount === 0) {
-            console.log(`⚠️ cutting_built_packets.id is '${bpIdType}' (empty table) — recreating with SERIAL`);
-            await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packet_fabric_sources CASCADE`);
-            await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packets CASCADE`);
+            // Run through migration guard before executing DROP TABLE
+            const dropSql = [
+              'DROP TABLE IF EXISTS cutting_built_packet_fabric_sources CASCADE',
+              'DROP TABLE IF EXISTS cutting_built_packets CASCADE',
+            ].join(';\n');
+            const { executeSchemaMutation } = await import('./governance/executeMutation');
+            const { pgPool: pgPoolForGuard } = await import('./db');
+            // DROP cutting_built_packet_fabric_sources via centralized governance wrapper
+            const r1 = await executeSchemaMutation(
+              pgPoolForGuard,
+              'DROP TABLE IF EXISTS cutting_built_packet_fabric_sources CASCADE',
+              async () => { await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packet_fabric_sources CASCADE`); },
+              { tableName: 'cutting_built_packet_fabric_sources', actionType: 'DROP_TABLE' },
+              { actor: 'boot-migration', overrideReason: `Table had wrong id type (${bpIdType}) and was empty — recreated with SERIAL` }
+            );
+            if (!r1.executed && r1.blocked) {
+              console.warn(`⚠️ Governance guard blocked DROP TABLE on cutting_built_packet_fabric_sources: ${r1.reason}`);
+            } else if (r1.executed) {
+              console.log(`⚠️ cutting_built_packets.id is '${bpIdType}' (empty table) — recreating with SERIAL (governance guard: allowed)`);
+            }
+            // DROP cutting_built_packets via centralized governance wrapper
+            const r2 = await executeSchemaMutation(
+              pgPoolForGuard,
+              'DROP TABLE IF EXISTS cutting_built_packets CASCADE',
+              async () => { await db.execute(sqlCpT`DROP TABLE IF EXISTS cutting_built_packets CASCADE`); },
+              { tableName: 'cutting_built_packets', actionType: 'DROP_TABLE' },
+              { actor: 'boot-migration', overrideReason: `Table had wrong id type (${bpIdType}) and was empty — recreated with SERIAL` }
+            );
+            if (!r2.executed && r2.blocked) {
+              console.warn(`⚠️ Governance guard blocked DROP TABLE on cutting_built_packets: ${r2.reason}`);
+            }
           } else {
-            console.warn(`⚠️ cutting_built_packets.id is '${bpIdType}' with ${rowCount} rows — skipping destructive migration (manual fix required)`);
+            console.warn(`⚠️ cutting_built_packets.id is '${bpIdType}' with ${rowCount} rows — governance guard: skipping destructive migration (manual fix required)`);
           }
         }
 
@@ -753,60 +781,87 @@ async function initializeBackgroundServices() {
         await db.execute(sqlCpT`CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx ON cutting_built_packet_fabric_sources(fabric_inventory_id)`);
 
         // Safe migration: fabric_inventory_id integer → uuid (4-step, no data loss)
-        // If column is already uuid this block is a no-op (guarded by IF EXISTS check).
+        // If column is already uuid this block is a no-op (guarded by IF EXISTS check in SQL and pre-check below).
         // Backfill path: old integer FK matched cutting_fabric_inventory.inventory_item_id → maps to cutting_fabric_inventory.id (uuid).
         // Any rows whose integer value has no matching inventory_item_id get fabric_inventory_id = NULL (the reference was already broken).
+        // Governance guard runs first — DROP COLUMN is only executed if table is empty OR guard explicitly allows it.
         try {
-          await db.execute(sqlCpT`
-            DO $$
-            BEGIN
-              IF EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'cutting_built_packet_fabric_sources'
-                  AND column_name = 'fabric_inventory_id'
-                  AND data_type = 'integer'
-              ) THEN
-                -- Step 1: add temporary uuid column alongside the existing integer column
-                ALTER TABLE cutting_built_packet_fabric_sources
-                  ADD COLUMN IF NOT EXISTS fabric_inventory_uuid uuid;
-
-                -- Step 2: backfill — map old integer FK to uuid via cutting_fabric_inventory.inventory_item_id
-                UPDATE cutting_built_packet_fabric_sources cbpfs
-                SET fabric_inventory_uuid = fi.id
-                FROM cutting_fabric_inventory fi
-                WHERE fi.inventory_item_id = cbpfs.fabric_inventory_id
-                  AND cbpfs.fabric_inventory_id IS NOT NULL;
-
-                -- Step 3: drop any FK constraint on the old integer column (may or may not exist)
-                DO $inner$
-                BEGIN
-                  ALTER TABLE cutting_built_packet_fabric_sources
-                    DROP CONSTRAINT IF EXISTS cutting_built_packet_fabric_sources_fabric_inventory_id_fkey;
-                EXCEPTION WHEN OTHERS THEN NULL;
-                END $inner$;
-
-                -- Drop the old integer index so we can reuse the name after rename
-                DROP INDEX IF EXISTS cutting_built_packet_sources_inventory_idx;
-
-                -- Step 4: drop old integer column and promote the uuid column
-                ALTER TABLE cutting_built_packet_fabric_sources
-                  DROP COLUMN fabric_inventory_id;
-
-                ALTER TABLE cutting_built_packet_fabric_sources
-                  RENAME COLUMN fabric_inventory_uuid TO fabric_inventory_id;
-
-                -- Re-add FK constraint (references cutting_fabric_inventory.id which is uuid)
-                ALTER TABLE cutting_built_packet_fabric_sources
-                  ADD CONSTRAINT cutting_built_packet_fabric_sources_fabric_inventory_id_fkey
-                  FOREIGN KEY (fabric_inventory_id)
-                  REFERENCES cutting_fabric_inventory(id);
-
-                -- Recreate the index
-                CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx
-                  ON cutting_built_packet_fabric_sources(fabric_inventory_id);
-              END IF;
-            END $$
+          // Pre-check: does the column still need migration?
+          const fabColCheck = await db.execute(sqlCpT`
+            SELECT data_type FROM information_schema.columns
+            WHERE table_name = 'cutting_built_packet_fabric_sources'
+              AND column_name = 'fabric_inventory_id'
+              AND data_type = 'integer'
           `);
+          const needsMigration = (fabColCheck as any)?.rows?.length > 0;
+          if (needsMigration) {
+            // Route DROP COLUMN through centralized governance wrapper
+            const { executeSchemaMutation: execFabMutation } = await import('./governance/executeMutation');
+            const { pgPool: pgPoolFab } = await import('./db');
+            const fabDropSql = 'ALTER TABLE cutting_built_packet_fabric_sources DROP COLUMN fabric_inventory_id';
+            const fabResult = await execFabMutation(
+              pgPoolFab,
+              fabDropSql,
+              async () => {
+                // Full 4-step type rename: backfill uuid, drop integer, rename
+                await db.execute(sqlCpT`
+                  DO $$
+                  BEGIN
+                    IF EXISTS (
+                      SELECT 1 FROM information_schema.columns
+                      WHERE table_name = 'cutting_built_packet_fabric_sources'
+                        AND column_name = 'fabric_inventory_id'
+                        AND data_type = 'integer'
+                    ) THEN
+                      -- Step 1: add temporary uuid column alongside the existing integer column
+                      ALTER TABLE cutting_built_packet_fabric_sources
+                        ADD COLUMN IF NOT EXISTS fabric_inventory_uuid uuid;
+
+                      -- Step 2: backfill — map old integer FK to uuid via cutting_fabric_inventory.inventory_item_id
+                      UPDATE cutting_built_packet_fabric_sources cbpfs
+                      SET fabric_inventory_uuid = fi.id
+                      FROM cutting_fabric_inventory fi
+                      WHERE fi.inventory_item_id = cbpfs.fabric_inventory_id
+                        AND cbpfs.fabric_inventory_id IS NOT NULL;
+
+                      -- Step 3: drop any FK constraint on the old integer column
+                      DO $inner$
+                      BEGIN
+                        ALTER TABLE cutting_built_packet_fabric_sources
+                          DROP CONSTRAINT IF EXISTS cutting_built_packet_fabric_sources_fabric_inventory_id_fkey;
+                      EXCEPTION WHEN OTHERS THEN NULL;
+                      END $inner$;
+
+                      -- Drop the old integer index
+                      DROP INDEX IF EXISTS cutting_built_packet_sources_inventory_idx;
+
+                      -- Step 4: drop old integer column and promote the uuid column
+                      ALTER TABLE cutting_built_packet_fabric_sources
+                        DROP COLUMN fabric_inventory_id;
+
+                      ALTER TABLE cutting_built_packet_fabric_sources
+                        RENAME COLUMN fabric_inventory_uuid TO fabric_inventory_id;
+
+                      -- Re-add FK constraint
+                      ALTER TABLE cutting_built_packet_fabric_sources
+                        ADD CONSTRAINT cutting_built_packet_fabric_sources_fabric_inventory_id_fkey
+                        FOREIGN KEY (fabric_inventory_id)
+                        REFERENCES cutting_fabric_inventory(id);
+
+                      -- Recreate the index
+                      CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx
+                        ON cutting_built_packet_fabric_sources(fabric_inventory_id);
+                    END IF;
+                  END $$
+                `);
+              },
+              { tableName: 'cutting_built_packet_fabric_sources', columnName: 'fabric_inventory_id', actionType: 'DROP_COLUMN' },
+              { actor: 'boot-migration', overrideReason: 'Type rename migration: integer→uuid column (data backfilled, governance guard allowed)' }
+            );
+            if (!fabResult.executed && fabResult.blocked) {
+              console.warn(`⚠️ Governance guard blocked fabric_inventory_id DROP COLUMN (non-empty table): ${fabResult.reason}. Manual override required.`);
+            }
+          }
         } catch (fabFixErr: any) {
           console.warn('⚠️ fabric_sources.fabric_inventory_id type fix skipped:', fabFixErr.message);
         }
@@ -2589,6 +2644,44 @@ async function initializeBackgroundServices() {
         console.log('✅ Ensured p2_nonconforming_dispositions and p2_rmas tables exist');
       } catch (ncErr: any) {
         console.warn('⚠️ p2_nonconforming_dispositions/p2_rmas migration:', ncErr?.message);
+      }
+
+      // Ensure schema governance audit log table exists
+      try {
+        const { sql: sqlGov } = await import('drizzle-orm');
+        await db.execute(sqlGov`
+          CREATE TABLE IF NOT EXISTS schema_change_log (
+            id          SERIAL PRIMARY KEY,
+            timestamp   TIMESTAMP NOT NULL DEFAULT NOW(),
+            actor       TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            table_name  TEXT NOT NULL,
+            column_name TEXT,
+            before_state JSONB,
+            after_state  JSONB,
+            approved_by  TEXT,
+            override_reason TEXT
+          )
+        `);
+        await db.execute(sqlGov`CREATE INDEX IF NOT EXISTS idx_schema_change_log_timestamp ON schema_change_log (timestamp DESC)`);
+        // Idempotently expand the CHECK constraint to allow all known action_type values
+        await db.execute(sqlGov`
+          DO $$
+          BEGIN
+            ALTER TABLE schema_change_log
+              DROP CONSTRAINT IF EXISTS schema_change_log_action_type_check;
+            ALTER TABLE schema_change_log
+              ADD CONSTRAINT schema_change_log_action_type_check
+              CHECK (action_type IN (
+                'ADD_COLUMN','DROP_COLUMN','DROP_TABLE','ALTER_COLUMN',
+                'CREATE_TABLE','RAW_SQL','OVERRIDE','BOOT_MIGRATION','PRE_DEPLOY_MIGRATION'
+              ));
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$
+        `);
+        console.log('✅ Ensured schema_change_log governance table exists');
+      } catch (govErr: any) {
+        console.warn('⚠️ schema_change_log migration skipped:', govErr?.message);
       }
     }
 

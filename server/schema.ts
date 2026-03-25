@@ -13768,3 +13768,22 @@ export const insertQuickNoteShareSchema = createInsertSchema(quickNoteShares).om
 });
 export type QuickNoteShare = typeof quickNoteShares.$inferSelect;
 export type InsertQuickNoteShare = z.infer<typeof insertQuickNoteShareSchema>;
+
+// ─── Schema Governance Audit Log ────────────────────────────────────────────
+
+export const schemaChangeLog = pgTable('schema_change_log', {
+  id: serial('id').primaryKey(),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  actor: text('actor').notNull(),
+  actionType: text('action_type').notNull(), // ADD_COLUMN | DROP_COLUMN | ALTER | RAW_SQL | OVERRIDE
+  tableName: text('table_name').notNull(),
+  columnName: text('column_name'),
+  beforeState: jsonb('before_state'),
+  afterState: jsonb('after_state'),
+  approvedBy: text('approved_by'),
+  overrideReason: text('override_reason'),
+});
+
+export const insertSchemaChangeLogSchema = createInsertSchema(schemaChangeLog).omit({ id: true });
+export type SchemaChangeLog = typeof schemaChangeLog.$inferSelect;
+export type InsertSchemaChangeLog = z.infer<typeof insertSchemaChangeLogSchema>;

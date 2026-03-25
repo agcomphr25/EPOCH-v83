@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Search,
   CheckCircle,
@@ -31,8 +32,11 @@ import {
   LogOut,
   HelpCircle,
   Eye,
+  ShieldAlert,
+  BookOpen,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 
 const DEPARTMENT_FLOW = [
   'P1 Production Queue',
@@ -321,11 +325,426 @@ function sameMinuteAndType(a: any, b: any): boolean {
     ma.getMinutes() === mb.getMinutes();
 }
 
+// ─── Schema Governance Panel ─────────────────────────────────────────────────
+
+function SeverityBadge({ severity }: { severity: string }) {
+  if (severity === 'CRITICAL')
+    return <Badge className="bg-red-100 text-red-800 text-xs font-bold">CRITICAL</Badge>;
+  return <Badge className="bg-yellow-100 text-yellow-800 text-xs">WARNING</Badge>;
+}
+
+interface DriftRecord {
+  table: string;
+  column: string;
+  status: 'MISSING_IN_SCHEMA' | 'MISSING_IN_DB' | 'TYPE_MISMATCH';
+  severity: 'CRITICAL' | 'WARNING';
+  rowCount: number | null;
+  dbType?: string;
+  schemaType?: string;
+  suggestion?: string;
+}
+
+interface SqlViolation {
+  file: string;
+  line: number;
+  pattern: string;
+  snippet: string;
+}
+
+interface AuditEntry {
+  id: number;
+  timestamp: string;
+  actor: string;
+  action_type: string;
+  table_name: string;
+  column_name?: string;
+  before_state?: unknown;
+  after_state?: unknown;
+  approved_by?: string;
+  override_reason?: string;
+}
+
+interface GuardViolation {
+  type: 'DROP_COLUMN' | 'DROP_TABLE' | 'TYPE_CHANGE';
+  table: string;
+  column?: string;
+  rowCount: number;
+  sql: string;
+  blocked: boolean;
+  reason: string;
+  isShrink?: boolean;
+}
+
+interface OverrideFormState {
+  tableName: string;
+  columnName: string;
+  actionType: string;
+  overrideReason: string;
+  sql: string;
+}
+
+function SchemaGovernancePanel({ isAdmin }: { isAdmin: boolean }) {
+  const { toast } = useToast();
+  const [overrideForm, setOverrideForm] = useState<OverrideFormState | null>(null);
+
+  const { data: driftData, isLoading: driftLoading } = useQuery<{
+    drift: DriftRecord[];
+    summary: { total: number; critical: number; warning: number };
+  }>({
+    queryKey: ['/api/governance/drift'],
+    queryFn: () => apiRequest('/api/governance/drift'),
+    retry: false,
+  });
+
+  const { data: violationsData, isLoading: violationsLoading } = useQuery<{
+    violations: SqlViolation[];
+    total: number;
+  }>({
+    queryKey: ['/api/governance/sql-violations'],
+    queryFn: () => apiRequest('/api/governance/sql-violations'),
+    retry: false,
+  });
+
+  const [auditOffset, setAuditOffset] = useState(0);
+  const AUDIT_PAGE_SIZE = 50;
+
+  const { data: auditData, isLoading: auditLoading } = useQuery<{
+    entries: AuditEntry[];
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  }>({
+    queryKey: ['/api/governance/audit-log', auditOffset],
+    queryFn: () => apiRequest(`/api/governance/audit-log?limit=${AUDIT_PAGE_SIZE}&offset=${auditOffset}`),
+    retry: false,
+  });
+
+  const { data: guardData, isLoading: guardLoading } = useQuery<{
+    violations: GuardViolation[];
+    allowed: boolean;
+    summary: string;
+    blockedCount: number;
+    total: number;
+  }>({
+    queryKey: ['/api/governance/migration-guard'],
+    queryFn: () => apiRequest('/api/governance/migration-guard'),
+    retry: false,
+  });
+
+  const overrideMutation = useMutation({
+    mutationFn: (body: OverrideFormState) => apiRequest('/api/governance/override', { method: 'POST', body }),
+    onSuccess: () => {
+      toast({ title: 'Override logged', description: 'The schema override has been recorded in the audit log.' });
+      setOverrideForm(null);
+      setAuditOffset(0);
+      queryClient.invalidateQueries({ queryKey: ['/api/governance/audit-log'] });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Override failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const drift: DriftRecord[] = driftData?.drift ?? [];
+  const critical = drift.filter(d => d.severity === 'CRITICAL');
+  const warnings = drift.filter(d => d.severity === 'WARNING');
+  const violations: SqlViolation[] = violationsData?.violations ?? [];
+  const auditEntries: AuditEntry[] = auditData?.entries ?? [];
+  const guardViolations: GuardViolation[] = guardData?.violations ?? [];
+  const blockedGuard = guardViolations.filter(v => v.blocked);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Critical Drift', count: critical.length, color: critical.length > 0 ? 'text-red-700' : 'text-gray-500', bg: critical.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50' },
+          { label: 'Warning Drift', count: warnings.length, color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-200' },
+          { label: 'Blocked Migrations', count: blockedGuard.length, color: blockedGuard.length > 0 ? 'text-red-700' : 'text-gray-500', bg: blockedGuard.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50' },
+          { label: 'Raw SQL Violations', count: violations.length, color: violations.length > 0 ? 'text-orange-700' : 'text-gray-500', bg: violations.length > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50' },
+          { label: 'Audit Entries', count: auditEntries.length, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+        ].map(({ label, count, color, bg }) => (
+          <div key={label} className={`rounded-lg border p-3 ${bg}`}>
+            <p className="text-xs text-gray-500">{label}</p>
+            <p className={`text-2xl font-bold ${color}`}>{count}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Drift Summary */}
+      <SectionCard title="Schema Drift" icon={ShieldAlert} defaultOpen>
+        {driftLoading ? (
+          <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading drift report…</div>
+        ) : drift.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-green-600"><CheckCircle className="h-4 w-4" /> No drift detected between schema and live database.</div>
+        ) : (
+          <div className="space-y-2">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Table</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Column</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Status</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Severity</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Rows</th>
+                    <th className="text-left py-1 text-gray-500 font-medium">Safe Fix</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drift.map((d, i) => (
+                    <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <td className="py-1.5 pr-3 font-mono text-gray-800 dark:text-gray-200">{d.table}</td>
+                      <td className="py-1.5 pr-3 font-mono text-gray-600 dark:text-gray-400">{d.column}</td>
+                      <td className="py-1.5 pr-3">
+                        <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-gray-700 dark:text-gray-300">{d.status}</span>
+                      </td>
+                      <td className="py-1.5 pr-3"><SeverityBadge severity={d.severity} /></td>
+                      <td className="py-1.5 pr-3 text-gray-500">{d.rowCount ?? '—'}</td>
+                      <td className="py-1.5 text-gray-500 max-w-xs truncate" title={d.suggestion}>{d.suggestion ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Destructive Migration Warnings */}
+      <SectionCard title="Destructive Migration Guard" icon={ShieldAlert} defaultOpen={blockedGuard.length > 0}>
+        {guardLoading ? (
+          <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Running migration guard…</div>
+        ) : guardViolations.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-green-600"><CheckCircle className="h-4 w-4" /> {guardData?.summary ?? 'No destructive operations detected in migration SQL.'}</div>
+        ) : (
+          <div className="space-y-2">
+            <p className={`text-sm font-medium ${blockedGuard.length > 0 ? 'text-red-700' : 'text-yellow-700'}`}>
+              {guardData?.summary}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Action</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Table</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Column</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Rows</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Status</th>
+                    <th className="text-left py-1 text-gray-500 font-medium">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {guardViolations.map((v, i) => (
+                    <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <td className="py-1.5 pr-3 font-mono text-gray-700 dark:text-gray-300">{v.type}</td>
+                      <td className="py-1.5 pr-3 font-mono text-gray-800 dark:text-gray-200">{v.table}</td>
+                      <td className="py-1.5 pr-3 font-mono text-gray-500">{v.column ?? '—'}</td>
+                      <td className="py-1.5 pr-3 text-gray-500">{v.rowCount}</td>
+                      <td className="py-1.5 pr-3">
+                        {v.blocked
+                          ? <Badge className="bg-red-100 text-red-800 text-xs font-bold">BLOCKED</Badge>
+                          : <Badge className="bg-green-100 text-green-800 text-xs">ALLOWED</Badge>
+                        }
+                      </td>
+                      <td className="py-1.5 text-gray-500 max-w-xs truncate" title={v.reason}>{v.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Raw SQL Violations */}
+      <SectionCard title="Raw SQL Violations in Codebase" icon={AlertTriangle} defaultOpen={violations.length > 0}>
+        {violationsLoading ? (
+          <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Scanning files…</div>
+        ) : violations.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-green-600"><CheckCircle className="h-4 w-4" /> No raw DDL SQL detected in server source files.</div>
+        ) : (
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {violations.map((v, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                <AlertCircle className="h-3.5 w-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span className="font-mono text-orange-700 dark:text-orange-400 flex-shrink-0 w-14">{v.pattern}</span>
+                <span className="text-gray-500 flex-shrink-0">Line {v.line}</span>
+                <span className="font-mono text-gray-400 truncate flex-1" title={v.file}>{v.file.replace(/.*\/server\//, 'server/')}</span>
+                <span className="text-gray-600 dark:text-gray-300 font-mono text-xs truncate max-w-xs" title={v.snippet}>{v.snippet}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Audit Log */}
+      <SectionCard title={`Schema Change Audit Log${auditData?.total ? ` (${auditData.total} total)` : ''}`} icon={BookOpen} defaultOpen>
+        {auditLoading ? (
+          <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading audit log…</div>
+        ) : auditEntries.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">{(auditData as any)?.note ?? 'No schema change log entries yet.'}</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="overflow-x-auto max-h-80 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Time</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Actor</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Action</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Table</th>
+                    <th className="text-left py-1 pr-3 text-gray-500 font-medium">Column</th>
+                    <th className="text-left py-1 text-gray-500 font-medium">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditEntries.map((e, i) => (
+                    <tr key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <td className="py-1.5 pr-3 text-gray-400 font-mono whitespace-nowrap">
+                        {e.timestamp ? new Date(e.timestamp).toLocaleString() : '—'}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-gray-700 dark:text-gray-300">{e.actor}</td>
+                      <td className="py-1.5 pr-3">
+                        <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-mono">{e.action_type}</span>
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-gray-600 dark:text-gray-400">{e.table_name}</td>
+                      <td className="py-1.5 pr-3 font-mono text-gray-500">{e.column_name ?? '—'}</td>
+                      <td className="py-1.5 text-gray-500 max-w-xs truncate" title={e.override_reason}>{e.override_reason ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination controls */}
+            {(auditData?.total ?? 0) > AUDIT_PAGE_SIZE && (
+              <div className="flex items-center justify-between pt-1 text-xs text-gray-500">
+                <span>
+                  Showing {auditOffset + 1}–{Math.min(auditOffset + AUDIT_PAGE_SIZE, auditData?.total ?? 0)} of {auditData?.total} entries
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-xs"
+                    disabled={auditOffset === 0}
+                    onClick={() => setAuditOffset(Math.max(0, auditOffset - AUDIT_PAGE_SIZE))}
+                  >
+                    ← Prev
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-xs"
+                    disabled={!auditData?.hasMore}
+                    onClick={() => setAuditOffset(auditOffset + AUDIT_PAGE_SIZE)}
+                  >
+                    Next →
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Admin Override */}
+      {isAdmin && (
+        <SectionCard title="Admin Override" icon={Shield} defaultOpen={false}>
+          <p className="text-sm text-gray-500 mb-3">
+            Use this form to log an approved schema override action. All overrides are permanently recorded.
+          </p>
+          {overrideForm === null ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setOverrideForm({ tableName: '', columnName: '', actionType: 'OVERRIDE', overrideReason: '', sql: '' })}
+            >
+              + Log Override
+            </Button>
+          ) : (
+            <div className="space-y-3 max-w-lg">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Table Name *</label>
+                  <Input
+                    value={overrideForm.tableName}
+                    onChange={(e) => setOverrideForm({ ...overrideForm, tableName: e.target.value })}
+                    placeholder="e.g. all_orders"
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Column Name</label>
+                  <Input
+                    value={overrideForm.columnName}
+                    onChange={(e) => setOverrideForm({ ...overrideForm, columnName: e.target.value })}
+                    placeholder="optional"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Action Type *</label>
+                <select
+                  value={overrideForm.actionType}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, actionType: e.target.value })}
+                  className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm px-3 py-2"
+                >
+                  {['ADD_COLUMN', 'DROP_COLUMN', 'ALTER_COLUMN', 'DROP_TABLE', 'RAW_SQL', 'OVERRIDE'].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">
+                  DDL SQL <span className="text-gray-400 font-normal">(optional — if provided, will be validated and executed)</span>
+                </label>
+                <Textarea
+                  value={overrideForm.sql}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, sql: e.target.value })}
+                  placeholder="ALTER TABLE ... or DROP TABLE ... (leave blank to log as audit note only)"
+                  className="text-sm font-mono"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Override Reason * (required)</label>
+                <Textarea
+                  value={overrideForm.overrideReason}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, overrideReason: e.target.value })}
+                  placeholder="Explain why this override is approved…"
+                  className="text-sm"
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={!overrideForm.tableName || !overrideForm.overrideReason || overrideMutation.isPending}
+                  onClick={() => overrideMutation.mutate(overrideForm)}
+                >
+                  {overrideMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                  Submit Override
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setOverrideForm(null)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function DomainTruthInspector() {
   const [inputId, setInputId] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState('');
   const [explainActiveDept, setExplainActiveDept] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'inspector' | 'governance'>('inspector');
   const [location] = useLocation();
 
   // Auto-populate from ?orderId= and optional ?queue= query params
@@ -357,6 +776,13 @@ export default function DomainTruthInspector() {
     queryFn: () => apiRequest(`/api/admin/order-flight-recorder/${activeId}`),
     enabled: !!activeId,
     retry: false,
+  });
+
+  const { data: authData } = useQuery<{ role: string; username: string } | null>({
+    queryKey: ['/api/auth/session'],
+    queryFn: () => apiRequest('/api/auth/session').catch(() => null),
+    retry: false,
+    staleTime: 60_000,
   });
 
   const explainOrderId = (data as any)?.resolvedId ?? activeId;
@@ -391,6 +817,8 @@ export default function DomainTruthInspector() {
   const payments: any[] = data?.payments ?? [];
   const flightEvents: any[] = flightData?.events ?? [];
 
+  const isAdmin = authData?.role === 'ADMIN';
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -409,6 +837,35 @@ export default function DomainTruthInspector() {
             <Button variant="outline" size="sm">← Admin Panel</Button>
           </Link>
         </div>
+
+        {/* Tab navigation */}
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+          {[
+            { id: 'inspector', label: 'Order Inspector', icon: Database },
+            { id: 'governance', label: 'Schema Governance', icon: ShieldAlert },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as 'inspector' | 'governance')}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === id
+                  ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Governance Tab */}
+        {activeTab === 'governance' && (
+          <SchemaGovernancePanel isAdmin={isAdmin} />
+        )}
+
+        {/* Inspector Tab content below */}
+        {activeTab === 'inspector' && <>
 
         {/* Search */}
         <form onSubmit={handleSearch} className="flex gap-2">
@@ -1077,6 +1534,8 @@ export default function DomainTruthInspector() {
             <p className="text-sm">Enter an Order ID above to inspect its system state.</p>
           </div>
         )}
+
+        </>}
       </div>
     </div>
   );

@@ -2,9 +2,12 @@
  * Pre-deploy migration runner.
  *
  * This script runs BEFORE drizzle-kit push during deployment.
- * It applies all known integer → uuid type conversions using safe,
- * idempotent SQL so that subsequent db:push sees no type mismatches
- * and generates NO destructive ALTER COLUMN SET DATA TYPE statements.
+ *
+ * ORDER OF OPERATIONS (fail-safe):
+ *  1. Run Schema Governance checks (drift + migration guard) BEFORE applying anything.
+ *     If CRITICAL violations are found → exit(1), block deploy.
+ *  2. Apply safe idempotent migrations.
+ *  3. Final verification of integer→uuid mismatches.
  *
  * Run: npx tsx server/pre-deploy-migrate.ts
  */
@@ -13,6 +16,10 @@ import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { detectSchemaDrift, DriftRecord } from './governance/schemaDrift';
+import { checkMigration, GuardViolation } from './governance/migrationGuard';
+import { evaluate } from './governance/schemaPolicy';
+import { logMutation, logMigrationBatch } from './governance/mutationLogger';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,21 +32,181 @@ if (!DATABASE_URL) {
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 
-async function runSql(sql: string, label: string): Promise<void> {
+/**
+ * Execute a SQL statement and return whether it actually succeeded.
+ * Used for idempotent migrations where a failure is non-fatal but must NOT be counted as applied.
+ */
+async function runSql(sql: string, label: string): Promise<boolean> {
   try {
     await pool.query(sql);
     console.log(`✅ ${label}`);
-  } catch (err: any) {
-    console.warn(`⚠️  ${label} — skipped: ${err.message}`);
+    return true;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`⚠️  ${label} — skipped: ${message}`);
+    return false;
   }
 }
 
+/**
+ * Compute the set of migration SQL files that have NOT yet been applied to the DB.
+ *
+ * Strategy: compare the explicit migration file list against the hashes already
+ * recorded in drizzle.__drizzle_migrations. A migration is "pending" if its
+ * filename-derived hash is not present in that table OR the table doesn't exist yet.
+ */
+async function getPendingMigrationFiles(migrationsDir: string, knownFiles: string[]): Promise<string[]> {
+  let appliedHashes: Set<string> = new Set();
+  try {
+    const result = await pool.query(`SELECT hash FROM drizzle.__drizzle_migrations`);
+    appliedHashes = new Set(result.rows.map((r: { hash: string }) => r.hash));
+  } catch {
+    // Table doesn't exist yet — all migrations are pending
+  }
+
+  const pending: string[] = [];
+  for (const file of knownFiles) {
+    const filePath = path.join(migrationsDir, file);
+    if (!fs.existsSync(filePath)) continue;
+    // Use the bare filename (without .sql) as the hash key — matches drizzle-kit convention
+    const hashKey = file.replace(/\.sql$/, '');
+    if (!appliedHashes.has(hashKey)) {
+      pending.push(file);
+    }
+  }
+  return pending;
+}
+
+/**
+ * Run governance checks BEFORE applying any migrations.
+ * Evaluates ONLY pending (not yet applied) migration files.
+ * This function is FAIL-CLOSED — any internal error causes exit(1).
+ */
+async function runGovernanceGate(migrationsDir: string, migrationFiles: string[]): Promise<void> {
+  console.log('\n🛡️  Running Schema Governance gate (pre-migration)...');
+
+  let driftRecords: DriftRecord[];
+  try {
+    driftRecords = await detectSchemaDrift(pool);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Schema drift detector failed — blocking deploy to ensure safety');
+    console.error('   Error:', message);
+    await pool.end();
+    process.exit(1);
+  }
+
+  // CRITICAL drift = MISSING_IN_SCHEMA on critical tables (data removed without migration)
+  //                  or TYPE_MISMATCH on critical tables (potential data corruption).
+  // WARNING drift = MISSING_IN_DB (normal forward-migration target — pending SQL will fix it)
+  //                 or TYPE_MISMATCH on non-critical tables.
+  // Only CRITICAL drift blocks deployment.
+  const criticalDrift = driftRecords.filter(d => d.severity === 'CRITICAL');
+  const warningDrift = driftRecords.filter(d => d.severity === 'WARNING');
+  console.log(`   Schema drift: ${criticalDrift.length} CRITICAL (blockers), ${warningDrift.length} WARNING (informational)`);
+
+  if (criticalDrift.length > 0) {
+    console.error('\n❌ CRITICAL schema drift detected — these indicate data loss risk, not forward migrations:');
+    for (const d of criticalDrift) {
+      console.error(`   [${d.status}] ${d.table}.${d.column} — ${d.suggestion ?? ''}`);
+    }
+  } else if (warningDrift.length > 0) {
+    console.log(`   ℹ️  ${warningDrift.length} WARNING drift items (MISSING_IN_DB expected for pending migrations, not blockers)`);
+  }
+
+  // Only evaluate PENDING migrations — not historical ones already applied
+  let pendingFiles: string[];
+  try {
+    pendingFiles = await getPendingMigrationFiles(migrationsDir, migrationFiles);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Pending migration check failed — blocking deploy to ensure safety');
+    console.error('   Error:', message);
+    await pool.end();
+    process.exit(1);
+  }
+
+  console.log(`   Pending migrations: ${pendingFiles.length} of ${migrationFiles.length} total`);
+  if (pendingFiles.length > 0) {
+    console.log(`   Files to guard: ${pendingFiles.join(', ')}`);
+  }
+
+  let combinedSql = '';
+  for (const f of pendingFiles) {
+    combinedSql += fs.readFileSync(path.join(migrationsDir, f), 'utf-8') + '\n';
+  }
+
+  let guardViolations: GuardViolation[] = [];
+  if (combinedSql) {
+    let guardResult;
+    try {
+      guardResult = await checkMigration(combinedSql, pool, false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('❌ Migration guard failed — blocking deploy to ensure safety');
+      console.error('   Error:', message);
+      await pool.end();
+      process.exit(1);
+    }
+    guardViolations = guardResult.violations;
+    const blocked = guardResult.violations.filter(v => v.blocked);
+    console.log(`   Migration guard: ${guardResult.violations.length} violations, ${blocked.length} blocked`);
+    if (blocked.length > 0) {
+      console.error('\n❌ Blocked destructive migration operations in PENDING migrations:');
+      for (const v of blocked) {
+        console.error(`   [${v.type}] ${v.table}${v.column ? '.' + v.column : ''} — ${v.reason}`);
+      }
+    }
+  } else {
+    console.log('   Migration guard: no pending migrations to evaluate');
+  }
+
+  const policyDecision = evaluate(guardViolations, driftRecords, false);
+
+  if (!policyDecision.allowed || criticalDrift.length > 0) {
+    console.error('\n❌ BLOCKING REPORT — Schema Governance violations prevent deployment:');
+    console.error(JSON.stringify({
+      criticalDrift: criticalDrift.length,
+      criticalDriftItems: criticalDrift.map(d => `${d.table}.${d.column} [${d.status}]`),
+      policyViolations: policyDecision.criticalViolations,
+      explanation: policyDecision.explanation,
+    }, null, 2));
+    console.error('\nResolve all violations before deploying.');
+    await pool.end();
+    process.exit(1);
+  }
+
+  console.log('✅ Schema Governance gate passed — safe to apply migrations');
+}
+
 async function main() {
-  console.log('🔧 Pre-deploy migration: applying safe integer→uuid conversions...');
-  console.log(`   DATABASE_URL host: ${DATABASE_URL.replace(/:[^:@]*@/, ':***@')}`);
+  console.log('🔧 Pre-deploy migration runner starting...');
+  console.log(`   DATABASE_URL host: ${DATABASE_URL!.replace(/:[^:@]*@/, ':***@')}`);
+
+  const migrationsDir = path.resolve(__dirname, '../migrations');
+
+  // Dynamically discover ALL *.sql files in migrations/ directory, sorted lexicographically
+  // (numeric prefixes like 0000_, 0001_, etc. ensure correct order).
+  // This ensures new migration files are automatically included in governance checks.
+  const migrationFiles: string[] = fs.existsSync(migrationsDir)
+    ? fs.readdirSync(migrationsDir)
+        .filter(f => f.endsWith('.sql'))
+        .sort()
+    : [];
+
+  if (migrationFiles.length === 0) {
+    console.warn('⚠️  No migration SQL files found in migrations/');
+  } else {
+    console.log(`   Found ${migrationFiles.length} migration file(s): ${migrationFiles.join(', ')}`);
+  }
 
   // ------------------------------------------------------------------
-  // Ensure the drizzle migration tracking schema/table exist
+  // STEP 1: Run governance gate BEFORE any migrations (pending only)
+  // ------------------------------------------------------------------
+  await runGovernanceGate(migrationsDir, migrationFiles);
+
+  // ------------------------------------------------------------------
+  // STEP 2: Ensure the drizzle migration tracking schema/table exist
   // ------------------------------------------------------------------
   await runSql(`CREATE SCHEMA IF NOT EXISTS drizzle`, 'Ensure drizzle schema');
   await runSql(`
@@ -51,31 +218,28 @@ async function main() {
   `, 'Ensure __drizzle_migrations table');
 
   // ------------------------------------------------------------------
-  // Run migration SQL files in order (idempotent — safe to re-run)
+  // STEP 3: Apply all discovered migration SQL files in sorted order
   // ------------------------------------------------------------------
-  const migrationFiles = [
-    '0001_fix_cutting_built_packets_category_uuid.sql',
-    '0002_fix_fabric_sources_inventory_id_uuid.sql',
-    '0003_comprehensive_integer_to_uuid_audit.sql',
-    '0005_backfill_production_orders_item_codes.sql',
-    '0007_p2_shipping_audit_log.sql',
-  ];
 
-  const migrationsDir = path.resolve(__dirname, '../migrations');
-
+  const appliedFiles: string[] = [];
   for (const file of migrationFiles) {
     const filePath = path.join(migrationsDir, file);
-    if (!fs.existsSync(filePath)) {
-      console.warn(`⚠️  Migration file not found: ${file}`);
-      continue;
-    }
     const sql = fs.readFileSync(filePath, 'utf-8');
-    await runSql(sql, `Migration: ${file}`);
+    const succeeded = await runSql(sql, `Migration: ${file}`);
+    // Only record migrations that actually executed successfully
+    if (succeeded) {
+      appliedFiles.push(file);
+    }
+  }
+
+  // Log each applied migration to the schema_change_log audit table
+  if (appliedFiles.length > 0) {
+    await logMigrationBatch(pool, 'pre-deploy-migrate', appliedFiles);
+    console.log(`✅ Logged ${appliedFiles.length} migration(s) to schema_change_log`);
   }
 
   // ------------------------------------------------------------------
-  // Quick verification — report any remaining integer columns where
-  // the schema expects uuid/text. If any remain, db:push will still fail.
+  // STEP 4: Quick verification — report remaining integer→uuid mismatches
   // ------------------------------------------------------------------
   try {
     const result = await pool.query(`
@@ -97,19 +261,19 @@ async function main() {
           'notification_triggers','orders','order_drafts','credit_card_transactions'
         )
       ORDER BY table_name, column_name
-    `) as any;
+    `);
 
-    const rows = Array.isArray(result) ? result : (result.rows ?? []);
-    if (rows.length === 0) {
+    if (result.rows.length === 0) {
       console.log('✅ Verification: no integer→uuid mismatches remain');
     } else {
       console.warn('⚠️  Remaining mismatches after pre-deploy migrations:');
-      rows.forEach((r: any) => {
+      result.rows.forEach((r) => {
         console.warn(`   ${r.table_name}.${r.column_name} is ${r.data_type}`);
       });
     }
-  } catch (verifyErr: any) {
-    console.warn('⚠️  Verification query skipped:', verifyErr.message);
+  } catch (verifyErr: unknown) {
+    const message = verifyErr instanceof Error ? verifyErr.message : String(verifyErr);
+    console.warn('⚠️  Verification query skipped:', message);
   }
 
   await pool.end();

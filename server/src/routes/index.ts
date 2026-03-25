@@ -162,6 +162,7 @@ import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
 import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
+import governanceRoutes from './governance';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Temporary debug route - raw order data inspector
@@ -9966,6 +9967,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // QuickNotes routes - collaborative note-taking with sharing
   app.use('/api/quick-notes', authenticateToken, quickNotesRoutes);
+
+  // Schema Governance routes - drift detection, audit log, override
+  app.use('/api/governance', authenticateToken, governanceRoutes);
 
   // Return the pre-existing server if one was passed in (early-bind pattern),
   // otherwise create a new one (backward-compatible fallback).

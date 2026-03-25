@@ -1,0 +1,105 @@
+COPY-PASTE DEBUG PROMPT
+We implemented the Shipping Data Override feature, but the UI returns:
+
+"Failed to override shipping data"
+
+We need a FAST, precise debug.
+
+----------------------------------------
+STEP 1 — FIND THE ENDPOINT
+----------------------------------------
+
+Locate the override endpoint in:
+
+server/src/routes/p2Shipping.ts
+
+Identify:
+- exact route path
+- method (PATCH/POST)
+- handler function
+
+----------------------------------------
+STEP 2 — LOG THE ERROR
+----------------------------------------
+
+Wrap the endpoint in:
+
+try {
+  ...
+} catch (err) {
+  console.error("OVERRIDE ERROR:", err);
+  return res.status(500).json({
+    error: "Override failed",
+    details: err.message
+  });
+}
+
+----------------------------------------
+STEP 3 — LOG INCOMING PAYLOAD
+----------------------------------------
+
+Add:
+
+console.log("OVERRIDE PAYLOAD:", req.body);
+
+----------------------------------------
+STEP 4 — VERIFY FIELD NAMES
+----------------------------------------
+
+Confirm backend expects EXACTLY:
+
+- lot_number OR lotNumber
+- shipped_at OR shipped_date OR shippedAt
+- reason
+
+List exact expected keys
+
+----------------------------------------
+STEP 5 — VERIFY ROLE CHECK
+----------------------------------------
+
+Log:
+
+console.log("USER:", req.user);
+
+Confirm:
+- role exists
+- matches ADMIN or OWNER
+
+----------------------------------------
+STEP 6 — VERIFY DATE PARSING
+----------------------------------------
+
+Log:
+
+console.log("PARSED DATE:", new Date(shipped_date));
+
+Check for:
+- Invalid Date
+
+----------------------------------------
+STEP 7 — VERIFY DB OPERATIONS
+----------------------------------------
+
+Check each step:
+
+1) update p2_lot_numbers
+2) update p2_packing_slips
+3) insert into p2_shipping_audit_log
+
+Wrap EACH with logs:
+
+console.log("STEP X SUCCESS");
+
+----------------------------------------
+STEP 8 — RETURN ROOT CAUSE
+----------------------------------------
+
+Output:
+
+1) Exact failing line
+2) Exact error message
+3) Fix required
+
+DO NOT GUESS
+TRACE ACTUAL EXECUTION

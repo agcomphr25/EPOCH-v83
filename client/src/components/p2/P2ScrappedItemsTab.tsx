@@ -492,14 +492,18 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
   );
 }
 
-export default function P2NonconformingTab() {
+export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOIds?: number[] } = {}) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<ScrappedItem | null>(null);
 
-  const { data: scrappedItems = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
+  const { data: scrappedItemsRaw = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
     queryKey: ['/api/p2/serialized-items/scrapped'],
     refetchInterval: 60000,
   });
+
+  const scrappedItems = selectedPOIds.length > 0
+    ? scrappedItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
+    : scrappedItemsRaw;
 
   const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
     queryKey: ['/api/p2/rmas'],

@@ -42,14 +42,22 @@ interface GroupedPart {
   itemIds: string[];
 }
 
-export default function P2ProductionScheduler() {
+interface P2ProductionSchedulerProps {
+  selectedPONumbers?: string[];
+}
+
+export default function P2ProductionScheduler({ selectedPONumbers = [] }: P2ProductionSchedulerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [scheduleAmounts, setScheduleAmounts] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
-  const { data: schedulingList = [], isLoading, refetch } = useQuery<SchedulableItem[]>({
+  const { data: schedulingListRaw = [], isLoading, refetch } = useQuery<SchedulableItem[]>({
     queryKey: ['/api/p2/control-center/scheduling-list'],
   });
+
+  const schedulingList = selectedPONumbers.length > 0
+    ? schedulingListRaw.filter((item) => selectedPONumbers.includes(item.poNumber))
+    : schedulingListRaw;
 
   // Group items by PO + Part Number
   const groupedParts = useMemo(() => {

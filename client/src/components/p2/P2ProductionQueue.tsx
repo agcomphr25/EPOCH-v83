@@ -113,7 +113,11 @@ interface PartInfo {
   traceabilityRequirements: any[];
 }
 
-export default function P2ProductionQueue() {
+interface P2ProductionQueueProps {
+  selectedPONumbers?: string[];
+}
+
+export default function P2ProductionQueue({ selectedPONumbers = [] }: P2ProductionQueueProps) {
   const { toast } = useToast();
   const [scanInput, setScanInput] = useState('');
   const [scannedItem, setScannedItem] = useState<PartInfo | null>(null);
@@ -130,10 +134,32 @@ export default function P2ProductionQueue() {
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
   const [sortByPO, setSortByPO] = useState<'asc' | 'desc' | null>(null);
 
-  const { data: queueData, isLoading } = useQuery<ProductionQueueData>({
+  const { data: queueDataRaw, isLoading } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],
     refetchInterval: 10000,
   });
+
+  const queueData: ProductionQueueData | undefined = queueDataRaw && selectedPONumbers.length > 0
+    ? {
+        departments: queueDataRaw.departments.map((dept) => ({
+          ...dept,
+          items: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber)),
+          totalItems: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber)).length,
+          inProgress: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber) && item.hasActiveTask).length,
+          waiting: dept.items.filter((item) => selectedPONumbers.includes(item.poNumber) && !item.hasActiveTask).length,
+        })).filter((dept) => dept.items.length > 0),
+        summary: {
+          totalActive: queueDataRaw.departments
+            .flatMap((d) => d.items)
+            .filter((item) => selectedPONumbers.includes(item.poNumber)).length,
+          totalInProgress: queueDataRaw.departments
+            .flatMap((d) => d.items)
+            .filter((item) => selectedPONumbers.includes(item.poNumber) && item.hasActiveTask).length,
+          departmentCount: queueDataRaw.departments
+            .filter((d) => d.items.some((item) => selectedPONumbers.includes(item.poNumber))).length,
+        },
+      }
+    : queueDataRaw;
 
   const scanMutation = useMutation({
     mutationFn: async (barcode: string) => {

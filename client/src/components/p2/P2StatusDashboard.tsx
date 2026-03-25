@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 interface P2StatusDashboardProps {
   onStartBOM: (poId: number) => void;
   onViewPO?: (poId: number) => void;
+  selectedPOIds?: number[];
 }
 
 interface POStatus {
@@ -40,7 +41,7 @@ interface POStatus {
   projectName?: string | null;
 }
 
-export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDashboardProps) {
+export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds = [] }: P2StatusDashboardProps) {
   const [activeSortBy, setActiveSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
 
   const { data: poStatuses = [], isLoading } = useQuery<POStatus[]>({
@@ -51,9 +52,13 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDash
     queryKey: ['/api/p2/control-center/recent-activity'],
   });
 
-  const activePOs = poStatuses.filter((po) => po.status !== 'completed');
-  const completedPOs = poStatuses.filter((po) => po.status === 'completed');
-  const posNeedingBOMs = poStatuses.filter((po) => po.hasBOMsNeeded);
+  const filteredPOStatuses = selectedPOIds.length > 0
+    ? poStatuses.filter((po) => selectedPOIds.includes(po.id))
+    : poStatuses;
+
+  const activePOs = filteredPOStatuses.filter((po) => po.status !== 'completed');
+  const completedPOs = filteredPOStatuses.filter((po) => po.status === 'completed');
+  const posNeedingBOMs = filteredPOStatuses.filter((po) => po.hasBOMsNeeded);
 
   const sortedActivePOs = [...activePOs].sort((a, b) => {
     if (activeSortBy === 'default') return 0;

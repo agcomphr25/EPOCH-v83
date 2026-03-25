@@ -110,9 +110,10 @@ interface P2PurchaseOrder
 
 interface P2POManagerProps {
   onManageItems?: (poId: number, poNumber: string) => void;
+  selectedPOIds?: number[];
 }
 
-export function P2POManager({ onManageItems }: P2POManagerProps) {
+export function P2POManager({ onManageItems, selectedPOIds = [] }: P2POManagerProps) {
   const [selectedPO, setSelectedPO] = useState<P2PurchaseOrder | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
@@ -505,7 +506,11 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     }
   };
 
-  const sortedPurchaseOrders = [...purchaseOrders].sort((a, b) => {
+  const filteredPurchaseOrders = selectedPOIds.length > 0
+    ? purchaseOrders.filter((po) => selectedPOIds.includes(po.id))
+    : purchaseOrders;
+
+  const sortedPurchaseOrders = [...filteredPurchaseOrders].sort((a, b) => {
     if (sortBy === 'default') return 0;
     const aProject = a.projectName || '';
     const bProject = b.projectName || '';

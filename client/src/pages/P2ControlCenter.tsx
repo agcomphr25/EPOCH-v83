@@ -36,7 +36,9 @@ import {
   FileWarning,
   Truck,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Filter,
+  X
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -61,6 +63,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface P2Stats {
   openPOs: number;
@@ -114,6 +118,7 @@ export default function P2ControlCenter() {
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
   const [poItemsView, setPOItemsView] = useState<{ poId: number; poNumber: string } | null>(null);
+  const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
 
   const { data: stats } = useQuery<P2Stats>({
     queryKey: ['/api/p2/control-center/stats'],
@@ -124,6 +129,36 @@ export default function P2ControlCenter() {
     queryKey: ['/api/p2/control-center/pending-actions'],
     refetchInterval: 30000,
   });
+
+  const { data: allPOStatuses = [] } = useQuery<{ id: number; poNumber: string; customerName: string; status: string }[]>({
+    queryKey: ['/api/p2/control-center/po-statuses'],
+    refetchInterval: 30000,
+  });
+
+  const openPOs = allPOStatuses.filter((po) => po.status !== 'completed');
+
+  useEffect(() => {
+    if (selectedPOIds.length === 0) return;
+    const openPOIdSet = new Set(openPOs.map((po) => po.id));
+    const pruned = selectedPOIds.filter((id) => openPOIdSet.has(id));
+    if (pruned.length !== selectedPOIds.length) {
+      setSelectedPOIds(pruned);
+    }
+  }, [openPOs]);
+
+  const selectedPONumbers = selectedPOIds.length > 0
+    ? openPOs.filter((po) => selectedPOIds.includes(po.id)).map((po) => po.poNumber)
+    : [];
+
+  const togglePOFilter = (poId: number) => {
+    setSelectedPOIds((prev) =>
+      prev.includes(poId) ? prev.filter((id) => id !== poId) : [...prev, poId]
+    );
+  };
+
+  const clearPOFilter = () => {
+    setSelectedPOIds([]);
+  };
 
   const handlePOCreated = (poId: number) => {
     setShowPOWizard(false);
@@ -395,6 +430,109 @@ export default function P2ControlCenter() {
         </Card>
       )}
 
+      {/* PO Filter Bar */}
+      {openPOs.length > 1 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              Filter by PO:
+            </div>
+
+            {/* Multi-select PO picker dropdown */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                  {selectedPOIds.length === 0 ? (
+                    <>All POs <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /></>
+                  ) : (
+                    <>{selectedPOIds.length} PO{selectedPOIds.length > 1 ? 's' : ''} selected <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /></>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-2" align="start">
+                <div className="space-y-1">
+                  {/* All POs option */}
+                  <button
+                    onClick={clearPOFilter}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${
+                      selectedPOIds.length === 0
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'hover:bg-accent'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                      selectedPOIds.length === 0 ? 'bg-primary border-primary' : 'border-muted-foreground'
+                    }`}>
+                      {selectedPOIds.length === 0 && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
+                    </div>
+                    All POs
+                  </button>
+
+                  <div className="h-px bg-border my-1" />
+
+                  {/* Individual PO options */}
+                  {openPOs.map((po) => {
+                    const isChecked = selectedPOIds.includes(po.id);
+                    return (
+                      <div
+                        key={po.id}
+                        role="option"
+                        aria-selected={isChecked}
+                        onClick={() => togglePOFilter(po.id)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left hover:bg-accent transition-colors cursor-pointer select-none"
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          className="flex-shrink-0 pointer-events-none"
+                          tabIndex={-1}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{po.poNumber}</span>
+                          <span className="text-muted-foreground ml-1.5 text-xs truncate block">{po.customerName}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Clear button */}
+            {selectedPOIds.length > 0 && (
+              <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={clearPOFilter}>
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear filter
+              </Button>
+            )}
+          </div>
+
+          {/* Active filter chips */}
+          {selectedPOIds.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground">Showing:</span>
+              {openPOs.filter((po) => selectedPOIds.includes(po.id)).map((po) => (
+                <Badge
+                  key={po.id}
+                  variant="secondary"
+                  className="gap-1 pl-2 pr-1 py-0.5 text-xs font-normal"
+                >
+                  <span className="font-medium">{po.poNumber}</span>
+                  <span className="text-muted-foreground">— {po.customerName}</span>
+                  <button
+                    onClick={() => togglePOFilter(po.id)}
+                    className="ml-0.5 rounded-full hover:bg-muted p-0.5"
+                    aria-label={`Remove ${po.poNumber} filter`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex flex-wrap w-full">
@@ -462,6 +600,7 @@ export default function P2ControlCenter() {
               setSelectedPOForBOM(poId);
               setActiveTab('schedule');
             }}
+            selectedPOIds={selectedPOIds}
           />
         </TabsContent>
 
@@ -478,7 +617,8 @@ export default function P2ControlCenter() {
             />
           ) : (
             <P2POManager 
-              onManageItems={(poId, poNumber) => setPOItemsView({ poId, poNumber })} 
+              onManageItems={(poId, poNumber) => setPOItemsView({ poId, poNumber })}
+              selectedPOIds={selectedPOIds}
             />
           )}
         </TabsContent>
@@ -532,11 +672,11 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="schedule">
-          <P2ProductionScheduler />
+          <P2ProductionScheduler selectedPONumbers={selectedPONumbers} />
         </TabsContent>
 
         <TabsContent value="production">
-          <P2ProductionQueue />
+          <P2ProductionQueue selectedPONumbers={selectedPONumbers} />
         </TabsContent>
 
         <TabsContent value="shipping" className="space-y-4">
@@ -546,7 +686,7 @@ export default function P2ControlCenter() {
               Ready to Ship Dashboard
             </Link>
           </div>
-          <P2ShippingTab initialPO={poFromUrl} />
+          <P2ShippingTab initialPO={poFromUrl} selectedPOIds={selectedPOIds} />
         </TabsContent>
 
         <TabsContent value="travelers">
@@ -570,7 +710,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="scrapped">
-          <P2NonconformingTab />
+          <P2NonconformingTab selectedPOIds={selectedPOIds} />
         </TabsContent>
       </Tabs>
     </div>

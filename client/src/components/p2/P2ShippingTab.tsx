@@ -72,7 +72,7 @@ type CreatedShipment = {
   certNumber?: string;
 };
 
-export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}) {
+export default function P2ShippingTab({ initialPO, selectedPOIds = [] }: { initialPO?: string; selectedPOIds?: number[] } = {}) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedPO, setExpandedPO] = useState<string | null>(null);
@@ -94,10 +94,14 @@ export default function P2ShippingTab({ initialPO }: { initialPO?: string } = {}
 
   const autoTriggered = useRef(false);
 
-  const { data: shippingUnits = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
+  const { data: shippingUnitsRaw = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
     queryKey: ['/api/p2/serialized-items/shipping-queue'],
     refetchInterval: 15000,
   });
+
+  const shippingUnits = selectedPOIds.length > 0
+    ? shippingUnitsRaw.filter((u) => selectedPOIds.includes(u.poId))
+    : shippingUnitsRaw;
 
   type ExistingShipmentRow = {
     po_id: number;

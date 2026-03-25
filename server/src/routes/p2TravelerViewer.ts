@@ -822,6 +822,98 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           fabricSources: sourcesWithInventory,
         };
       }));
+      // ICN-based packet lookup: find packets whose fabric sources contain ICNs recorded as traceability
+      const icnValues = [
+        ...traceabilityData.map((t: any) => t.traceabilityValue),
+        ...travelerFieldTraceability.map((t: any) => t.traceabilityValue),
+      ]
+        .filter((v: any) => v && typeof v === 'string' && v.trim() !== '')
+        .map((v: string) => v.trim());
+
+      const uniqueIcnValues = [...new Set(icnValues)];
+
+      for (const val of uniqueIcnValues) {
+        const fabricRecords = await db.query.cuttingFabricInventory.findMany({
+          where: or(
+            eq(cuttingFabricInventory.internalControlNumber, val),
+            eq(cuttingFabricInventory.lotNumber, val),
+            eq(cuttingFabricInventory.rollNumber, val),
+            eq(cuttingFabricInventory.barcode, val),
+          ),
+        });
+        if (!fabricRecords.length) continue;
+
+        const packetSources: any[] = [];
+        for (const fabricRecord of fabricRecords) {
+          const srcs = await db.query.cuttingBuiltPacketFabricSources.findMany({
+            where: eq(cuttingBuiltPacketFabricSources.fabricInventoryId, fabricRecord.id),
+          });
+          packetSources.push(...srcs);
+        }
+
+        for (const src of packetSources) {
+          const alreadyIncluded = allocatedPackets.find((p: any) => p.id === src.builtPacketId);
+          if (alreadyIncluded) continue;
+
+          const packet = await db.query.cuttingBuiltPackets.findFirst({
+            where: eq(cuttingBuiltPackets.id, src.builtPacketId),
+          });
+          if (!packet) continue;
+
+          const allSources = await db.query.cuttingBuiltPacketFabricSources.findMany({
+            where: eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id),
+          });
+
+          const sourcesWithInventory = await Promise.all(allSources.map(async (source) => {
+            let inventoryDetail: any = null;
+            if (source.fabricInventoryId) {
+              const fabRecord = await db.query.cuttingFabricInventory.findFirst({
+                where: eq(cuttingFabricInventory.id, source.fabricInventoryId),
+              });
+              if (fabRecord) {
+                inventoryDetail = {
+                  fabricId: fabRecord.id,
+                  fabric: fabRecord.fabric,
+                  fabricPartNumber: fabRecord.fabricPartNumber,
+                  nickname: fabRecord.nickname,
+                  source: fabRecord.source,
+                  supplierPartNumber: fabRecord.supplierPartNumber,
+                  supplierPoNumber: fabRecord.supplierPoNumber,
+                  manufacturerPoNumber: fabRecord.manufacturerPoNumber,
+                  lotNumber: fabRecord.lotNumber,
+                  rollNumber: fabRecord.rollNumber,
+                  batchNumber: fabRecord.batchNumber,
+                  internalControlNumber: fabRecord.internalControlNumber,
+                  barcode: fabRecord.barcode,
+                  manufactureDate: fabRecord.manufactureDate,
+                  receivedDate: fabRecord.receivedDate,
+                  expirationDate: fabRecord.expirationDate,
+                  location: fabRecord.location,
+                  freezerNumber: fabRecord.freezerNumber,
+                  conformanceDocumentLink: fabRecord.conformanceDocumentLink,
+                  quantityInStock: fabRecord.quantityInStock,
+                  squareMeters: fabRecord.squareMeters,
+                  notes: fabRecord.notes,
+                  status: fabRecord.status,
+                };
+              }
+            }
+            return { ...source, inventoryDetail };
+          }));
+
+          allocatedPackets.push({
+            id: packet.id,
+            barcode: packet.barcode,
+            packetNumber: packet.packetNumber,
+            buildDate: packet.buildDate,
+            status: packet.status,
+            isMixedFabric: packet.isMixedFabric,
+            fabricSourceCount: packet.fabricSourceCount,
+            notes: packet.notes,
+            fabricSources: sourcesWithInventory,
+          });
+        }
+      }
     } catch (e) {
       console.log('Cutting packets query not available:', (e as Error).message);
     }

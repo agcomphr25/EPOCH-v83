@@ -25,7 +25,10 @@ import {
   ClipboardList,
   Shield,
   Receipt,
+  ShieldAlert,
+  History,
 } from 'lucide-react';
+import OverrideShippingDataModal from '@/components/p2/OverrideShippingDataModal';
 
 interface ShipmentLot {
   id: string;
@@ -101,6 +104,24 @@ interface ShipmentDetail {
   invoice: Invoice | null;
 }
 
+interface AuditLogEntry {
+  id: number;
+  entity_type: string;
+  entity_id: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: string;
+  changed_at: string;
+  reason: string;
+}
+
+interface CurrentUser {
+  id: number;
+  username: string;
+  role: string;
+}
+
 function statusColor(status: string) {
   switch (status?.toUpperCase()) {
     case 'SHIPPED': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
@@ -132,6 +153,23 @@ export default function P2ShipmentDetail() {
   const [notes, setNotes] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+
+  const { data: currentUser } = useQuery<CurrentUser | null>({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/auth/session', { credentials: 'include' });
+        if (res.ok) return res.json();
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const canOverride = currentUser?.role === 'ADMIN' || currentUser?.role === 'OWNER';
 
   const { data, isLoading, error, refetch } = useQuery<ShipmentDetail>({
     queryKey: ['/api/p2/shipments', lotId],
@@ -141,6 +179,16 @@ export default function P2ShipmentDetail() {
       return r.json();
     },
     enabled: !!lotId,
+  });
+
+  const { data: auditLog = [], refetch: refetchAuditLog } = useQuery<AuditLogEntry[]>({
+    queryKey: ['/api/p2/lots', lotId, 'audit-log'],
+    queryFn: async () => {
+      const r = await fetch(`/api/p2/lots/${lotId}/audit-log`, { credentials: 'include' });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!lotId && canOverride,
   });
 
   useEffect(() => {
@@ -264,21 +312,34 @@ export default function P2ShipmentDetail() {
               </div>
             </div>
 
-            {!isShipped && (
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white shrink-0"
-                onClick={() => markShippedMutation.mutate()}
-                disabled={markShippedMutation.isPending}
-              >
-                {markShippedMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4 mr-1" />
-                )}
-                Mark as Shipped
-              </Button>
-            )}
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              {!isShipped && (
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => markShippedMutation.mutate()}
+                  disabled={markShippedMutation.isPending}
+                >
+                  {markShippedMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                  )}
+                  Mark as Shipped
+                </Button>
+              )}
+              {canOverride && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                  onClick={() => setShowOverrideModal(true)}
+                >
+                  <ShieldAlert className="h-4 w-4 mr-1" />
+                  Override Shipping Data
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -542,10 +603,63 @@ export default function P2ShipmentDetail() {
         </CardContent>
       </Card>
 
+      {/* Override Audit Log (visible to admin/owner only) */}
+      {canOverride && auditLog.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-4 w-4 text-amber-500" />
+              Shipping Data Override History
+              <Badge variant="secondary" className="ml-1">{auditLog.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {auditLog.map((entry) => (
+                <div key={entry.id} className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="font-semibold font-mono text-amber-800 dark:text-amber-300">{entry.field_name}</span>
+                    <span className="text-muted-foreground">changed by</span>
+                    <span className="font-medium">{entry.changed_by}</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-muted-foreground text-xs">{fmt(entry.changed_at)}</span>
+                    <Badge variant="outline" className="text-xs">{entry.entity_type}</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                    <span><span className="font-medium text-foreground">From:</span> {entry.old_value || '—'}</span>
+                    <span><span className="font-medium text-foreground">To:</span> {entry.new_value || '—'}</span>
+                  </div>
+                  <div className="mt-1 text-xs">
+                    <span className="font-medium text-foreground">Reason:</span>{' '}
+                    <span className="text-muted-foreground italic">{entry.reason}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Lot metadata footer */}
       <div className="text-xs text-muted-foreground text-center pb-4">
         Lot created by {lot.created_by} on {fmt(lot.created_at)} · ID: <span className="font-mono">{lot.id}</span>
       </div>
+
+      {/* Override Shipping Data Modal */}
+      {showOverrideModal && (
+        <OverrideShippingDataModal
+          lotId={lot.id}
+          currentLotNumber={lot.lot_number}
+          currentShippedAt={lot.shipped_at}
+          onSuccess={() => {
+            setShowOverrideModal(false);
+            toast({ title: 'Override applied', description: 'Shipping data updated and audit log entry created.' });
+            qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+            qc.invalidateQueries({ queryKey: ['/api/p2/lots', lotId, 'audit-log'] });
+          }}
+          onClose={() => setShowOverrideModal(false)}
+        />
+      )}
     </div>
   );
 }

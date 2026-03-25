@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { db, pool } from '../../db';
+import { db, pool, pgPool } from '../../db';
 import {
   p2SerializedItems,
   p2Customers,
@@ -8,7 +8,8 @@ import {
   p2PackingSlips,
   p2CertificatesOfConformance,
 } from '../../schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, desc } from 'drizzle-orm';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
   COMPANY_INFO,
@@ -1108,6 +1109,193 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
     return res.status(500).json({ error: 'Failed to retrieve bill of lading' });
   }
 });
+
+// ── Override Shipping Data endpoints (CMMC/DCAA compliant) ─────────────────
+
+const OVERRIDE_ALLOWED_ROLES = ['ADMIN', 'OWNER'];
+
+const overrideShippingSchema = z.object({
+  shipped_date: z.string().optional(),
+  lot_number: z.string().optional(),
+  reason: z.string().min(1, 'Reason is required'),
+}).refine(
+  (d) => d.shipped_date !== undefined || d.lot_number !== undefined,
+  { message: 'At least one of shipped_date or lot_number must be provided' }
+);
+
+// PATCH /api/p2/lots/:id/override — override shipped_at and/or lot_number with audit trail
+router.patch(
+  '/lots/:id/override',
+  authenticateToken,
+  requireRole(...OVERRIDE_ALLOWED_ROLES),
+  async (req: Request, res: Response) => {
+    try {
+      const { id: lotId } = req.params;
+      const input = overrideShippingSchema.parse(req.body);
+      const actor = req.user!.username;
+
+      // Validate shipped_date format up front
+      let parsedDate: Date | undefined;
+      if (input.shipped_date !== undefined) {
+        parsedDate = new Date(input.shipped_date);
+        if (isNaN(parsedDate.getTime())) {
+          return res.status(400).json({ error: 'Invalid shipped_date format. Use ISO 8601 or YYYY-MM-DD.' });
+        }
+      }
+
+      // Fetch current lot values
+      const lotRows = await pool.query<{
+        id: string;
+        lot_number: string;
+        shipped_at: string | null;
+        packing_slip_id: string | null;
+      }>(
+        `SELECT id, lot_number, shipped_at, packing_slip_id FROM p2_lot_numbers WHERE id = $1`,
+        [lotId]
+      );
+      if (lotRows.length === 0) return res.status(404).json({ error: 'Lot not found' });
+      const lot = lotRows[0];
+
+      // Collect changes (before touching the DB) so we can detect no-ops
+      type AuditEntry = { entityType: string; entityId: string; fieldName: string; oldValue: string | null; newValue: string | null };
+      const auditInserts: AuditEntry[] = [];
+
+      const lotUpdates: string[] = [];
+      const lotVals: any[] = [];
+      let lotIdx = 1;
+
+      if (input.lot_number !== undefined && input.lot_number !== lot.lot_number) {
+        auditInserts.push({ entityType: 'lot_number', entityId: lotId, fieldName: 'lot_number', oldValue: lot.lot_number, newValue: input.lot_number });
+        lotUpdates.push(`lot_number = $${lotIdx++}`);
+        lotVals.push(input.lot_number);
+      }
+
+      if (parsedDate !== undefined) {
+        const oldVal = lot.shipped_at ? new Date(lot.shipped_at).toISOString() : null;
+        const newVal = parsedDate.toISOString();
+        if (oldVal !== newVal) {
+          auditInserts.push({ entityType: 'lot_number', entityId: lotId, fieldName: 'shipped_at', oldValue: oldVal, newValue: newVal });
+          lotUpdates.push(`shipped_at = $${lotIdx++}`);
+          lotVals.push(parsedDate.toISOString());
+        }
+      }
+
+      // Packing slip preamble (needed to detect changes before transaction)
+      let psShipDateChange: { oldPsDate: string | null; newDateIso: string } | null = null;
+      let psLotNumberChange: { oldPsLotNumber: string | null } | null = null;
+
+      if (lot.packing_slip_id) {
+        if (parsedDate !== undefined) {
+          const psRows = await pool.query<{ ship_date: string | null }>(
+            `SELECT ship_date FROM p2_packing_slips WHERE id = $1`,
+            [lot.packing_slip_id]
+          );
+          const oldPsDate = psRows[0]?.ship_date ? new Date(psRows[0].ship_date).toISOString() : null;
+          const newDateIso = parsedDate.toISOString();
+          if (oldPsDate !== newDateIso) {
+            psShipDateChange = { oldPsDate, newDateIso };
+            auditInserts.push({ entityType: 'packing_slip', entityId: lot.packing_slip_id, fieldName: 'ship_date', oldValue: oldPsDate, newValue: newDateIso });
+          }
+        }
+        if (input.lot_number !== undefined && input.lot_number !== lot.lot_number) {
+          const psLotRows = await pool.query<{ lot_number: string | null }>(
+            `SELECT lot_number FROM p2_packing_slips WHERE id = $1`,
+            [lot.packing_slip_id]
+          );
+          psLotNumberChange = { oldPsLotNumber: psLotRows[0]?.lot_number ?? null };
+          auditInserts.push({ entityType: 'packing_slip', entityId: lot.packing_slip_id, fieldName: 'lot_number', oldValue: psLotRows[0]?.lot_number ?? null, newValue: input.lot_number });
+        }
+      }
+
+      // Server-side no-op guard — reject if nothing would actually change
+      if (auditInserts.length === 0) {
+        return res.status(400).json({ error: 'No changes detected. The provided values are identical to the current values.' });
+      }
+
+      // Execute all writes atomically
+      const client = await pgPool.connect();
+      try {
+        await client.query('BEGIN');
+
+        if (lotUpdates.length > 0) {
+          lotUpdates.push(`updated_at = NOW()`);
+          lotVals.push(lotId);
+          await client.query(
+            `UPDATE p2_lot_numbers SET ${lotUpdates.join(', ')} WHERE id = $${lotIdx}`,
+            lotVals
+          );
+        }
+
+        if (lot.packing_slip_id) {
+          if (psShipDateChange) {
+            await client.query(
+              `UPDATE p2_packing_slips SET ship_date = $1, updated_at = NOW() WHERE id = $2`,
+              [psShipDateChange.newDateIso, lot.packing_slip_id]
+            );
+          }
+          if (psLotNumberChange && input.lot_number) {
+            await client.query(
+              `UPDATE p2_packing_slips SET lot_number = $1, updated_at = NOW() WHERE id = $2`,
+              [input.lot_number, lot.packing_slip_id]
+            );
+          }
+        }
+
+        for (const entry of auditInserts) {
+          await client.query(
+            `INSERT INTO p2_shipping_audit_log (entity_type, entity_id, field_name, old_value, new_value, changed_by, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [entry.entityType, entry.entityId, entry.fieldName, entry.oldValue, entry.newValue, actor, input.reason]
+          );
+        }
+
+        await client.query('COMMIT');
+      } catch (txErr) {
+        await client.query('ROLLBACK');
+        throw txErr;
+      } finally {
+        client.release();
+      }
+
+      return res.json({ success: true, auditRowsWritten: auditInserts.length });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+      console.error('Override shipping data error:', err);
+      return res.status(500).json({ error: 'Failed to override shipping data' });
+    }
+  }
+);
+
+// GET /api/p2/lots/:id/audit-log — retrieve audit log for a lot (admin/owner only)
+router.get(
+  '/lots/:id/audit-log',
+  authenticateToken,
+  requireRole(...OVERRIDE_ALLOWED_ROLES),
+  async (req: Request, res: Response) => {
+    try {
+      const { id: lotId } = req.params;
+
+      // Verify lot exists
+      const lotCheck = await pool.query<{ id: string; packing_slip_id: string | null }>(
+        `SELECT id, packing_slip_id FROM p2_lot_numbers WHERE id = $1`,
+        [lotId]
+      );
+      if (lotCheck.length === 0) return res.status(404).json({ error: 'Lot not found' });
+
+      const entityIds = [lotId];
+      if (lotCheck[0].packing_slip_id) entityIds.push(lotCheck[0].packing_slip_id);
+
+      const placeholders = entityIds.map((_, i) => `$${i + 1}`).join(', ');
+      const rows = await pool.query(
+        `SELECT * FROM p2_shipping_audit_log WHERE entity_id IN (${placeholders}) ORDER BY changed_at DESC`,
+        entityIds
+      );
+      return res.json(rows);
+    } catch (err: any) {
+      console.error('Audit log fetch error:', err);
+      return res.status(500).json({ error: 'Failed to fetch audit log' });
+    }
+  }
+);
 
 // GET /api/p2/serial-search?q=XXXX — partial serial number search with project linkage
 router.get('/serial-search', async (req: Request, res: Response) => {

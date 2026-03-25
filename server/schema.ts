@@ -5191,6 +5191,26 @@ export const p2CertificatesOfConformance = pgTable('p2_certificates_of_conforman
   lotNumberIdx: index('p2_coc_lot_number_idx').on(table.lotNumber),
 }));
 
+// P2 Shipping Audit Log - CMMC/DCAA compliant override history for shipped data
+export const p2ShippingAuditLog = pgTable('p2_shipping_audit_log', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(), // 'lot_number' | 'packing_slip'
+  entityId: text('entity_id').notNull(), // UUID of the lot or packing slip
+  fieldName: text('field_name').notNull(), // e.g. 'lot_number', 'shipped_at', 'ship_date'
+  oldValue: text('old_value'),
+  newValue: text('new_value'),
+  changedBy: text('changed_by').notNull(), // username of actor
+  changedAt: timestamp('changed_at').defaultNow().notNull(),
+  reason: text('reason').notNull(),
+});
+
+export const insertP2ShippingAuditLogSchema = createInsertSchema(p2ShippingAuditLog).omit({
+  id: true,
+  changedAt: true,
+});
+export type InsertP2ShippingAuditLog = z.infer<typeof insertP2ShippingAuditLogSchema>;
+export type P2ShippingAuditLog = typeof p2ShippingAuditLog.$inferSelect;
+
 // P2 Test for Conformance Reports - Customer-facing conformance test reports
 export const p2TestForConformanceReports = pgTable('p2_test_for_conformance_reports', {
   id: uuid('id').defaultRandom().primaryKey(),

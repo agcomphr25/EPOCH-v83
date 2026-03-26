@@ -1096,11 +1096,13 @@ export default function POManager() {
   });
 
   const groupedPOs = (() => {
-    const groups: Record<string, { customerName: string; customerId: string; pos: typeof filteredPOs }> = {};
+    // Group by customer name (case-insensitive) so that POs for the same customer
+    // are merged even when they carry different internal customer IDs.
+    const groups: Record<string, { customerName: string; customerId: string; groupKey: string; pos: typeof filteredPOs }> = {};
     filteredPOs.forEach((po) => {
-      const key = po.customerId;
+      const key = (po.customerName || '').toLowerCase().trim();
       if (!groups[key]) {
-        groups[key] = { customerName: po.customerName, customerId: po.customerId, pos: [] };
+        groups[key] = { customerName: po.customerName, customerId: po.customerId, groupKey: key, pos: [] };
       }
       groups[key].pos.push(po);
     });
@@ -1114,25 +1116,25 @@ export default function POManager() {
     return Object.values(groups).sort((a, b) => a.customerName.localeCompare(b.customerName));
   })();
 
-  const allCustomerIds = groupedPOs.map((g) => g.customerId);
+  const allGroupKeys = groupedPOs.map((g) => g.groupKey);
 
-  // Default all customer groups to expanded; add any newly appeared customers
+  // Default all customer groups to expanded; add any newly appeared groups
   useEffect(() => {
     setExpandedCustomers((prev) => {
       const prevSet = new Set(prev);
-      const newIds = allCustomerIds.filter((id) => !prevSet.has(id));
-      if (newIds.length === 0) return prev;
-      return [...prev, ...newIds];
+      const newKeys = allGroupKeys.filter((k) => !prevSet.has(k));
+      if (newKeys.length === 0) return prev;
+      return [...prev, ...newKeys];
     });
-  }, [allCustomerIds.join(',')]);
+  }, [allGroupKeys.join(',')]);
 
-  const allExpanded = allCustomerIds.length > 0 && allCustomerIds.every((id) => expandedCustomers.includes(id));
+  const allExpanded = allGroupKeys.length > 0 && allGroupKeys.every((k) => expandedCustomers.includes(k));
 
   const toggleAllAccordions = () => {
     if (allExpanded) {
       setExpandedCustomers([]);
     } else {
-      setExpandedCustomers(allCustomerIds);
+      setExpandedCustomers(allGroupKeys);
     }
   };
 
@@ -1510,8 +1512,8 @@ export default function POManager() {
               >
                 {groupedPOs.map((group) => (
                   <AccordionItem
-                    key={group.customerId}
-                    value={group.customerId}
+                    key={group.groupKey}
+                    value={group.groupKey}
                     className="border rounded-lg px-4"
                   >
                     <AccordionTrigger className="hover:no-underline py-3">

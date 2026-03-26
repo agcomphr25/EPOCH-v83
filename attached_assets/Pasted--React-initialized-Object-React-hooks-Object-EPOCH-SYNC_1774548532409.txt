@@ -1,0 +1,105 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+cutting-control-center/bom:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ 📅 Calendar state: Object
+ 📅 Calendar state: Object
+ 📅 Local events raw data: Array(0)
+ 📅 Local events transformed: 0
+ 📅 Local events raw data: Array(0)
+ 📅 Local events transformed: 0
+ 📅 Calendar state: Object
+api/calendar/google-events:1  Failed to load resource: the server responded with a status of 409 ()
+ 📅 Local events raw data: Array(0)
+ 📅 Local events transformed: 0
+ 📅 Calendar state: Object
+ 📅 Local events raw data: Array(0)
+ 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:1571 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DNfkPrRR.js:1571
+index-DNfkPrRR.js:3963 ✅ Direct PDF URL loaded successfully in iframe
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:1571 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DNfkPrRR.js:1571
+index-DNfkPrRR.js:3963 ✅ Direct PDF URL loaded successfully in iframe
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:1571 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DNfkPrRR.js:1571
+index-DNfkPrRR.js:3963 ✅ Direct PDF URL loaded successfully in iframe
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:3963 📅 Local events raw data: Array(0)
+index-DNfkPrRR.js:3963 📅 Local events transformed: 0
+index-DNfkPrRR.js:3963 📅 Calendar state: Object
+index-DNfkPrRR.js:2011 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-DNfkPrRR.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DNfkPrRR.js:235 ✅ API Response from /api/tickets/by-orders: 200
+api/barcode/scan/1395:1  Failed to load resource: the server responded with a status of 404 ()
+api/barcode/scan/392:1  Failed to load resource: the server responded with a status of 404 ()
+index-DNfkPrRR.js:1571 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DNfkPrRR.js:1571
+index-DNfkPrRR.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-DNfkPrRR.js:235 ✅ API Response from /api/tickets/by-orders: 200
+api/orders/FC1369:1  Failed to load resource: the server responded with a status of 404 ()
+index-DNfkPrRR.js:3483 Response status: 404
+index-DNfkPrRR.js:3483 Response ok: false
+api/orders/FC1376:1  Failed to load resource: the server responded with a status of 404 ()
+index-DNfkPrRR.js:3483 Response status: 404
+index-DNfkPrRR.js:3483 Response ok: false

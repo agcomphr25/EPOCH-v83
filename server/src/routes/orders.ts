@@ -4527,4 +4527,19 @@ router.get('/locate/:orderId', async (req, res) => {
   }
 });
 
+// Generic order lookup by orderId — must be last to avoid shadowing specific routes
+router.get('/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    return res.json(order);
+  } catch (error) {
+    console.error('Get order by orderId error:', error);
+    return res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
 export default router;

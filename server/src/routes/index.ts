@@ -7258,6 +7258,38 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
 
+      // Last-resort: if barcode is a plain numeric string, search production_orders by integer id
+      if (!order && /^\d+$/.test(barcode)) {
+        try {
+          const { pool } = await import('../../db');
+          const numericId = parseInt(barcode, 10);
+          const prodByIdResult = await pool.query(
+            'SELECT order_id FROM production_orders WHERE id = $1 LIMIT 1',
+            [numericId]
+          );
+          const prodRows = Array.isArray(prodByIdResult) ? prodByIdResult : prodByIdResult.rows || [];
+          if (prodRows.length > 0) {
+            const foundOrderId = prodRows[0].order_id;
+            if (foundOrderId) {
+              orderId = foundOrderId;
+              console.log(`✅ Barcode numeric ${barcode} → production order ${foundOrderId}`);
+              const allOrders = await storage.getAllOrders();
+              order = allOrders.find((o) => o.orderId === foundOrderId);
+              if (order) {
+                orderSource = 'all_orders';
+              } else {
+                const productionOrders = await storage.getAllProductionOrders();
+                const po = productionOrders.find((p) => p.orderId === foundOrderId);
+                if (po) { order = po; orderSource = 'production'; }
+              }
+            }
+          }
+        } catch (numIdErr) {
+          console.error('Error searching by numeric production order id:', numIdErr);
+        }
+      }
+
+
       if (!order) {
         return res.status(404).json({ _error: 'Order not found' });
       }

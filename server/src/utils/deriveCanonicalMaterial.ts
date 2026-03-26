@@ -25,5 +25,11 @@ export function deriveCanonicalMaterial(stockModelId: string): string {
   // All other bare Tikka models (privateer-tikka, alpine_hunter_tikka, etc.) are Carbon Fiber.
   if (lower.includes('tikka') && !lower.startsWith('mesa_')) return 'Carbon Fiber';
 
+  // AG Composites part-number conventions (e.g. AG-FG-AHV105-CDN, AG-CRB-P105-SR)
+  // AG-FG-* → Fiberglass; AG-CRB-* (Carbon Rifle Blank) → Carbon Fiber; AG-CF-* → Carbon Fiber
+  if (lower.includes('-fg-') || lower.startsWith('ag-fg')) return 'Fiberglass';
+  if (lower.includes('-crb-') || lower.startsWith('ag-crb')) return 'Carbon Fiber';
+  if (lower.includes('-cf-') || lower.startsWith('ag-cf')) return 'Carbon Fiber';
+
   return '';
 }

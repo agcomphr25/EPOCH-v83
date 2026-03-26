@@ -6652,10 +6652,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     return PO_NON_STOCK_PATTERNS.some(pattern => pattern.test(allIdentifiers));
   };
 
+  // Returns the best available product identifier for a PO item.
+  // Prefer stockModelId (canonical stock model slug) but fall back to itemName (AG part number)
+  // or itemId when stockModelId is absent — common when POs are imported with part numbers only.
+  const getPOItemProductId = (item: any): string =>
+    (item.stockModelId && item.stockModelId.trim() && item.stockModelId !== 'no_stock'
+      ? item.stockModelId
+      : null) ||
+    (item.itemName && item.itemName.trim() && item.itemName !== 'no_stock'
+      ? item.itemName
+      : null) ||
+    item.itemId ||
+    '';
+
   const isPOItemEligibleForProduction = (item: any): boolean => {
-    const stockModelId = item.stockModelId || '';
-    const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
-    return hasValidStockModel && !isPOItemNonStock(item);
+    const productId = getPOItemProductId(item);
+    return !!productId && !isPOItemNonStock(item);
   };
 
   // Preview Production Orders (dry-run) from Purchase Order Items
@@ -6675,12 +6687,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const willSkip: { name: string; quantity: number; reason: string }[] = [];
 
       for (const item of poItems) {
-        const stockModelId = item.stockModelId || '';
-        const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
-        const name = item.stockModelName || item.itemName || stockModelId || 'Unknown';
+        const productId = getPOItemProductId(item);
+        const name = item.stockModelName || item.itemName || item.stockModelId || 'Unknown';
 
-        if (!hasValidStockModel) {
-          willSkip.push({ name, quantity: item.quantity, reason: 'No stock model' });
+        if (!productId) {
+          willSkip.push({ name, quantity: item.quantity, reason: 'No product identifier' });
           continue;
         }
 
@@ -6747,7 +6758,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       });
 
       console.log(
-        `🏭 Found ${stockModelItems.length} items with valid stock models to convert to production orders (filtered out ${poItems.length - stockModelItems.length} items without stock models)`
+        `🏭 Found ${stockModelItems.length} eligible items to convert to production orders (filtered out ${poItems.length - stockModelItems.length} non-eligible items)`
       );
 
       const { deriveCanonicalMaterial } = await import('../../src/utils/deriveCanonicalMaterial');
@@ -6756,8 +6767,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       for (const item of stockModelItems) {
         // Create individual production orders for each quantity
         for (let i = 0; i < item.quantity; i++) {
-          // Use stockModelId for proper mold/schedule matching, fallback to itemId
-          const stockModelForOrder = item.stockModelId || item.itemId || '';
+          // Use stockModelId for mold/schedule matching; fall back to itemName (AG part number)
+          // or itemId for POs entered with product codes rather than stock model slugs
+          const stockModelForOrder = getPOItemProductId(item);
           // CENTRALIZED: Use atomic order ID generator instead of inline pattern
           const orderId = await storage.generateNextOrderId();
 

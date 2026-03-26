@@ -215,9 +215,11 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
       updates = insertInventoryItemSchema.partial().parse(req.body);
     }
 
+    // Fetch existing item once for all validations below
+    const existingItem = await storage.getInventoryItem(itemId);
+
     // Validate itemType + manufacturedCategory consistency against merged effective state
     if (updates.itemType !== undefined || updates.manufacturedCategory !== undefined) {
-      const existingItem = await storage.getInventoryItem(itemId);
       const effectiveType = updates.itemType !== undefined ? updates.itemType : existingItem?.itemType;
       const effectiveCategory = updates.manufacturedCategory !== undefined ? updates.manufacturedCategory : existingItem?.manufacturedCategory;
       if (effectiveType === 'PURCHASED' && effectiveCategory) {
@@ -243,11 +245,18 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
     }
     
     if (updates.purchaseUnitId && updates.usageUnitId) {
-      const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
-      if (!familyCheck.valid) {
-        return res.status(400).json({
-          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
-        });
+      // Only validate cross-family if at least one unit actually changed — legacy items
+      // may have mismatched units from before this validation existed and should not be
+      // permanently blocked from edits that don't touch their units.
+      const purchaseChanged = existingItem?.purchaseUnitId !== updates.purchaseUnitId;
+      const usageChanged = existingItem?.usageUnitId !== updates.usageUnitId;
+      if (purchaseChanged || usageChanged) {
+        const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+        if (!familyCheck.valid) {
+          return res.status(400).json({
+            error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+          });
+        }
       }
     }
 
@@ -565,9 +574,11 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
       updates = insertInventoryItemSchema.partial().parse(req.body);
     }
 
+    // Fetch existing item once for all validations below
+    const existingItem = await storage.getInventoryItem(itemId);
+
     // Validate itemType + manufacturedCategory consistency against merged effective state
     if (updates.itemType !== undefined || updates.manufacturedCategory !== undefined) {
-      const existingItem = await storage.getInventoryItem(itemId);
       const effectiveType = updates.itemType !== undefined ? updates.itemType : existingItem?.itemType;
       const effectiveCategory = updates.manufacturedCategory !== undefined ? updates.manufacturedCategory : existingItem?.manufacturedCategory;
       if (effectiveType === 'PURCHASED' && effectiveCategory) {
@@ -593,11 +604,18 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
     }
     
     if (updates.purchaseUnitId && updates.usageUnitId) {
-      const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
-      if (!familyCheck.valid) {
-        return res.status(400).json({
-          error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
-        });
+      // Only validate cross-family if at least one unit actually changed — legacy items
+      // may have mismatched units from before this validation existed and should not be
+      // permanently blocked from edits that don't touch their units.
+      const purchaseChanged = existingItem?.purchaseUnitId !== updates.purchaseUnitId;
+      const usageChanged = existingItem?.usageUnitId !== updates.usageUnitId;
+      if (purchaseChanged || usageChanged) {
+        const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+        if (!familyCheck.valid) {
+          return res.status(400).json({
+            error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+          });
+        }
       }
     }
 

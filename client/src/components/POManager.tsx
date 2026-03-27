@@ -115,17 +115,11 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
-// Component to display production status breakdown for a PO
-function ProductionStatusBadge({ poId }: { poId: number }) {
-  const { data: productionOrders = [], isLoading } = useQuery({
-    queryKey: [`/api/production-orders/by-po/${poId}`],
-    queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`),
-  });
-
-  if (isLoading) {
-    return null;
-  }
-
+// Component to display production status breakdown — receives pre-fetched orders from POCard
+function ProductionStatusBadge({ productionOrders, totalPoQuantity }: {
+  productionOrders: any[];
+  totalPoQuantity: number;
+}) {
   if (productionOrders.length === 0) {
     return null;
   }
@@ -135,10 +129,18 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
   const inProgress = productionOrders.filter((o: any) => o.productionStatus === 'LAID_UP').length;
   const shipped = productionOrders.filter((o: any) => o.productionStatus === 'SHIPPED').length;
   const cancelled = productionOrders.filter((o: any) => o.productionStatus === 'CANCELLED').length;
-  const active = total - cancelled; // exclude cancelled from denominator
+  const active = total - cancelled;
+  // Flag when orders outnumber the PO quantity — likely indicates duplicate generation
+  const hasDuplicates = totalPoQuantity > 0 && total > totalPoQuantity;
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
+      {/* Duplicate warning */}
+      {hasDuplicates && (
+        <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold" title={`${total} orders generated but PO only has ${totalPoQuantity} units — possible duplicate generation`}>
+          ⚠ {total - totalPoQuantity} Duplicate{total - totalPoQuantity !== 1 ? 's' : ''}
+        </Badge>
+      )}
       {/* Overall total */}
       <Badge variant="outline" className="text-xs font-medium">
         {total} Orders
@@ -525,10 +527,20 @@ function POCard({
   isLoadingPreview: boolean;
   isGeneratingOrdersForThisPO: boolean;
 }) {
-  const { data: productionOrders = [], isLoading } = useQuery({
+  const { data: productionOrders = [] } = useQuery({
     queryKey: [`/api/production-orders/by-po/${po.id}`],
     queryFn: () => apiRequest(`/api/production-orders/by-po/${po.id}`),
   });
+
+  const { data: poItems = [] } = useQuery({
+    queryKey: [`/api/pos/${po.id}/items`],
+    queryFn: () => fetchPOItems(po.id),
+  });
+
+  const totalPoQuantity = (poItems as PurchaseOrderItem[]).reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
 
   const hasOrders = productionOrders.length > 0;
   const orderCount = productionOrders.length;
@@ -555,13 +567,14 @@ function POCard({
             <CardDescription className="mt-1">
               {po.customerName} ({po.customerId})
             </CardDescription>
-            <div className="mt-2">
-              <POQuantityDisplay poId={po.id} />
+            <div className="mt-2 flex items-center gap-1">
+              <Package className="w-4 h-4 text-blue-600" />
+              <span className="font-medium text-blue-600">{totalPoQuantity} items</span>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
             <Badge className={getStatusColor(po.status)}>{po.status}</Badge>
-            <ProductionStatusBadge poId={po.id} />
+            <ProductionStatusBadge productionOrders={productionOrders} totalPoQuantity={totalPoQuantity} />
             <div className="flex gap-1 flex-wrap">
               <Button
                 variant="outline"

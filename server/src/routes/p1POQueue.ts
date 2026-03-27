@@ -247,6 +247,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     }
 
     const scheduledOrders: string[] = [];
+    const warnings: Array<{ poProductId: number; warning: string }> = [];
     const errors: Array<{ poProductId: number; error: string }> = [];
 
     for (const selection of selections) {
@@ -269,163 +270,199 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
         }
 
         const item = poItem[0];
+
+        // Pre-release guard: skip items already fully released to avoid duplicates
+        const existingOrderCount = item.order_count || 0;
+        if (existingOrderCount >= quantity) {
+          console.warn(`⚠️  P1 PO Schedule: PO item ${poItemId} already fully released (order_count=${existingOrderCount} >= quantity=${quantity}), skipping`);
+          warnings.push({
+            poProductId: poItemId,
+            warning: `Already fully released (${existingOrderCount} of ${quantity} orders exist)`,
+          });
+          continue;
+        }
+
         const specs = item.specifications || {};
         const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-        // Create orders in all_orders table with Layup/Plugging department
-        for (let i = 0; i < quantity; i++) {
-          // Use PO-format order ID for consistency with other PO releases
-          // Format: PO-{po_number}-{po_item_id}-{sequence}
-          const orderId = `PO-${item.po_number}-${poItemId}-${i + 1}`;
-          const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
-          const features = JSON.stringify({
-            po_item_id: poItemId,
-            po_number: item.po_number,
-            po_id: item.po_id,
-            specifications: specs,
-            action_length: specs.action_length || '',
-          });
+        // Wrap all inserts and the order_count update for this item in a transaction
+        // so the count cannot drift if something fails mid-loop.
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
 
-          // Insert into all_orders table with P1 Production Queue department
-          // order_source = 'PO_RELEASE' marks this as a Production-Only Order (non-invoiceable)
-          // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
-          const insertOrderQuery = `
-            INSERT INTO all_orders (
-              order_id,
-              order_date,
-              due_date,
-              customer_id,
-              model_id,
-              current_department,
-              status,
+          let insertedCount = 0;
+
+          // Create orders in all_orders table with P1 Production Queue department
+          for (let i = 0; i < quantity; i++) {
+            // Use PO-format order ID for consistency with other PO releases
+            // Format: PO-{po_number}-{po_item_id}-{sequence}
+            const orderId = `PO-${item.po_number}-${poItemId}-${i + 1}`;
+            const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
+            const features = JSON.stringify({
+              po_item_id: poItemId,
+              po_number: item.po_number,
+              po_id: item.po_id,
+              specifications: specs,
+              action_length: specs.action_length || '',
+            });
+
+            // Insert into all_orders table with P1 Production Queue department.
+            // ON CONFLICT DO NOTHING ensures idempotency now that a unique index exists on order_id.
+            const insertOrderQuery = `
+              INSERT INTO all_orders (
+                order_id,
+                order_date,
+                due_date,
+                customer_id,
+                model_id,
+                current_department,
+                status,
+                notes,
+                features,
+                order_source,
+                source_po_id,
+                source_po_item_id,
+                department_history,
+                created_at,
+                updated_at
+              ) VALUES (
+                $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb,
+                'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
+              )
+              ON CONFLICT (order_id) DO NOTHING
+              RETURNING id
+            `;
+            const allOrderResult = await client.query(insertOrderQuery, [
+              orderId,
+              dueDate,
+              item.customer_id || item.customer_name,
+              item.item_id || '',
               notes,
               features,
-              order_source,
-              source_po_id,
-              source_po_item_id,
-              department_history,
-              created_at,
-              updated_at
-            ) VALUES (
-              $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb, 
-              'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
-            )
-            RETURNING id
-          `;
-          const allOrderResult = await pool.query(insertOrderQuery, [
-            orderId,
-            dueDate,
-            item.customer_id || item.customer_name,
-            item.item_id || '',
-            notes,
-            features,
-            item.po_id,
-            poItemId,
-          ]);
-          const allOrdersId = allOrderResult[0]?.id;
+              item.po_id,
+              poItemId,
+            ]);
 
-          await pool.query(
-            `INSERT INTO admin_audit_log
-               (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
-             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
-            [
+            // Only proceed with downstream inserts/audit for rows that were actually inserted
+            if (!allOrderResult.rows || allOrderResult.rows.length === 0) {
+              console.warn(`⚠️  P1 PO Schedule: order ${orderId} already exists in all_orders, skipping`);
+              continue;
+            }
+
+            insertedCount++;
+
+            await client.query(
+              `INSERT INTO admin_audit_log
+                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+              [
+                orderId,
+                'ORDER_CREATED',
+                'Order Created',
+                JSON.stringify(null),
+                JSON.stringify({
+                  order_id: orderId,
+                  current_department: 'P1 Production Queue',
+                  status: 'IN_PROGRESS',
+                  order_source: 'PO_RELEASE',
+                  source_po_id: item.po_id,
+                  source_po_item_id: poItemId,
+                }),
+                (req as any).user?.username || 'SYSTEM',
+                (req as any).user?.role || 'SYSTEM',
+                'ORDER_CREATE',
+                `Order created from PO release: PO #${item.po_number}`,
+                req.ip ?? null,
+                req.headers['user-agent'] ?? null,
+              ]
+            );
+
+            // Also create a production_orders record for queue visibility
+            const insertProductionOrderQuery = `
+              INSERT INTO production_orders (
+                order_id,
+                po_id,
+                po_item_id,
+                customer_id,
+                customer_name,
+                po_number,
+                item_type,
+                item_id,
+                item_name,
+                specifications,
+                order_date,
+                due_date,
+                production_status,
+                current_department,
+                department_history,
+                created_at,
+                updated_at
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
+                'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
+              )
+              ON CONFLICT (order_id) DO UPDATE
+              SET current_department = 'P1 Production Queue',
+                  production_status = 'PENDING',
+                  updated_at = NOW()
+            `;
+            await client.query(insertProductionOrderQuery, [
               orderId,
-              'ORDER_CREATED',
-              'Order Created',
-              JSON.stringify(null),
-              JSON.stringify({
-                order_id: orderId,
-                current_department: 'P1 Production Queue',
-                status: 'IN_PROGRESS',
-                order_source: 'PO_RELEASE',
-                source_po_id: item.po_id,
-                source_po_item_id: poItemId,
-              }),
-              (req as any).user?.username || 'SYSTEM',
-              (req as any).user?.role || 'SYSTEM',
-              'ORDER_CREATE',
-              `Order created from PO release: PO #${item.po_number}`,
-              req.ip ?? null,
-              req.headers['user-agent'] ?? null,
-            ]
-          );
+              item.po_id,
+              poItemId,
+              item.customer_id || '',
+              item.customer_name || '',
+              item.po_number || '',
+              specs.item_type || 'Stock',
+              item.item_id || '',
+              item.item_name || '',
+              JSON.stringify(specs),
+              dueDate,
+            ]);
 
-          // Also create a production_orders record for queue visibility
-          const insertProductionOrderQuery = `
-            INSERT INTO production_orders (
-              order_id,
-              po_id,
-              po_item_id,
-              customer_id,
-              customer_name,
-              po_number,
-              item_type,
-              item_id,
-              item_name,
-              specifications,
-              order_date,
-              due_date,
-              production_status,
-              current_department,
-              department_history,
-              created_at,
-              updated_at
-            ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11, 
-              'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
-            )
-            ON CONFLICT (order_id) DO UPDATE
-            SET current_department = 'P1 Production Queue',
-                production_status = 'PENDING',
-                updated_at = NOW()
-          `;
-          await pool.query(insertProductionOrderQuery, [
-            orderId,
-            item.po_id,
-            poItemId,
-            item.customer_id || '',
-            item.customer_name || '',
-            item.po_number || '',
-            specs.item_type || 'Stock',
-            item.item_id || '',
-            item.item_name || '',
-            JSON.stringify(specs),
-            dueDate,
-          ]);
+            // Also add to layup_schedule table for scheduler visibility
+            const scheduledDate = targetWeek
+              ? new Date(targetWeek)
+              : new Date(dueDate);
 
-          // Also add to layup_schedule table for scheduler visibility
-          const scheduledDate = targetWeek 
-            ? new Date(targetWeek) 
-            : new Date(dueDate);
+            const insertScheduleQuery = `
+              INSERT INTO layup_schedule (
+                order_id,
+                scheduled_date,
+                priority_score,
+                is_locked,
+                created_at,
+                updated_at
+              ) VALUES (
+                $1, $2, 1500, false, NOW(), NOW()
+              )
+              ON CONFLICT (order_id) DO UPDATE
+              SET scheduled_date = $2,
+                  updated_at = NOW()
+            `;
+            await client.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
 
-          const insertScheduleQuery = `
-            INSERT INTO layup_schedule (
-              order_id,
-              scheduled_date,
-              priority_score,
-              is_locked,
-              created_at,
-              updated_at
-            ) VALUES (
-              $1, $2, 1500, false, NOW(), NOW()
-            )
-            ON CONFLICT (order_id) DO UPDATE
-            SET scheduled_date = $2,
-                updated_at = NOW()
-          `;
-          await pool.query(insertScheduleQuery, [orderId, scheduledDate.toISOString()]);
+            scheduledOrders.push(orderId);
+          }
 
-          scheduledOrders.push(orderId);
+          // Atomically update order_count by only the number of rows actually inserted
+          if (insertedCount > 0) {
+            const updatePOQuery = `
+              UPDATE purchase_order_items
+              SET order_count = COALESCE(order_count, 0) + $1, updated_at = NOW()
+              WHERE id = $2
+            `;
+            await client.query(updatePOQuery, [insertedCount, poItemId]);
+          }
+
+          await client.query('COMMIT');
+        } catch (txError) {
+          await client.query('ROLLBACK');
+          throw txError;
+        } finally {
+          client.release();
         }
-
-        // Update the orderCount in purchase_order_items
-        const newOrderCount = (item.order_count || 0) + quantity;
-        const updatePOQuery = `
-          UPDATE purchase_order_items
-          SET order_count = $1, updated_at = NOW()
-          WHERE id = $2
-        `;
-        await pool.query(updatePOQuery, [newOrderCount, poItemId]);
 
       } catch (error) {
         console.error(`Error scheduling PO item ${selection.poProductId}:`, error);
@@ -447,6 +484,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
       targetDepartment: 'P1 Production Queue',
       orderSource: 'PO_RELEASE',
       orderIds: scheduledOrders,
+      warnings: warnings.length > 0 ? warnings : undefined,
       errors: errors.length > 0 ? errors : undefined,
       message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`,
     };

@@ -6631,19 +6631,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   const PO_NON_STOCK_PATTERNS = [
     /bottom.?metal/i,
     /^bm[-_]/i,          // BM-xxx patterns for bottom metals
-    /rail/i,
-    /swivel/i,
-    /stud/i,
+    /\brail\b/i,
+    /\bswivel\b/i,
+    /\bstud\b/i,
     /qd.?accessory/i,
     /^qd[-_]/i,          // QD-xxx patterns
-    /hardware/i,
-    /screw/i,
-    /bolt/i,
-    /nut/i,
-    /washer/i,
-    /pin/i,
-    /spring/i,
-    /accessory/i,
+    /\bhardware\b/i,
+    /\bscrew\b/i,
+    /\bbolt\b/i,
+    /\bnut\b/i,
+    /\bwasher\b/i,
+    /\bpin\b/i,
+    /\bspring\b/i,
+    /\baccessory\b/i,
     /part.?only/i,
   ];
 

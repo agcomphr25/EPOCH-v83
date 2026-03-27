@@ -29,6 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
@@ -174,9 +176,33 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity }: {
 }
 
 function POProductionOrdersTab({ poId }: { poId: number }) {
+  const queryClient = useQueryClient();
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>('');
+  const [cancelReason, setCancelReason] = useState('');
+
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${poId}`],
     queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
+      return apiRequest(`/api/orders/cancel/${orderId}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason, sendToRts: false }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      toast.success('Order cancelled successfully.');
+      setCancelDialogOpen(false);
+      setCancelReason('');
+      setOrderToCancel('');
+    },
+    onError: (error: any) => {
+      toast.error('Failed to cancel order: ' + (error.message || 'Unknown error'));
+    },
   });
 
   const getStatusBadge = (status: string) => {
@@ -241,13 +267,14 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                 <th className="text-left p-3 font-medium">Status</th>
                 <th className="text-left p-3 font-medium">Department</th>
                 <th className="text-left p-3 font-medium">Created</th>
+                <th className="text-left p-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {productionOrders.map((order: any) => (
                 <tr
                   key={order.id}
-                  className="border-b cursor-pointer hover:bg-muted/50 transition-colors"
+                  className="border-b hover:bg-muted/50 transition-colors"
                 >
                   <td className="p-3 font-medium text-blue-600">
                     <a href={`/barcode-queue?highlight=${order.orderId}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
@@ -261,12 +288,65 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                   <td className="p-3 text-muted-foreground">
                     {order.createdAt ? formatDate(new Date(order.createdAt), 'M/d/yy') : '—'}
                   </td>
+                  <td className="p-3">
+                    {order.productionStatus !== 'CANCELLED' && order.productionStatus !== 'SHIPPED' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2"
+                        onClick={() => {
+                          setOrderToCancel(order.orderId);
+                          setCancelDialogOpen(true);
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" />
+                        Cancel
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </CardContent>
+
+      <Dialog open={cancelDialogOpen} onOpenChange={(open) => {
+        setCancelDialogOpen(open);
+        if (!open) { setCancelReason(''); setOrderToCancel(''); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Production Order</DialogTitle>
+            <DialogDescription>
+              Cancel order <strong>{orderToCancel}</strong>. Please provide a reason for cancellation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label htmlFor="cancel-reason" className="mb-1 block">Reason</Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Enter cancellation reason..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Keep Order
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!cancelReason.trim() || cancelMutation.isPending}
+              onClick={() => cancelMutation.mutate({ orderId: orderToCancel, reason: cancelReason.trim() })}
+            >
+              {cancelMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Confirm Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -244,10 +244,18 @@ export default function CustomerSatisfactionSurvey({
       return;
     }
 
-    // Calculate scores - get highest rating for overall satisfaction
-    const productQuality = responses['product-quality'] || null;
-    const recommendationLikelihood =
-      responses['recommendation-likelihood'] || null;
+    // Dynamically find NPS and overall satisfaction question IDs from survey
+    const npsQuestion = selectedSurvey.questions?.find(
+      (q: SurveyQuestion) => q.type === 'nps'
+    );
+    const qualityQuestion = selectedSurvey.questions?.find(
+      (q: SurveyQuestion) => q.type === 'rating'
+    );
+
+    const npsScore = npsQuestion ? (responses[npsQuestion.id] ?? null) : null;
+    const overallSatisfaction = qualityQuestion
+      ? (responses[qualityQuestion.id] ?? null)
+      : null;
 
     // Calculate aggregate score (sum of all numeric responses)
     const aggregateScore = Object.values(responses).reduce(
@@ -265,8 +273,8 @@ export default function CustomerSatisfactionSurvey({
       customerId: selectedCustomerId,
       orderId: orderNumber || orderId || null,
       responses,
-      overallSatisfaction: productQuality || null,
-      npsScore: recommendationLikelihood || null,
+      overallSatisfaction: overallSatisfaction || null,
+      npsScore: npsScore || null,
       aggregateScore: aggregateScore || null,
       responseTimeSeconds: Math.floor(
         (new Date().getTime() - startTime.getTime()) / 1000

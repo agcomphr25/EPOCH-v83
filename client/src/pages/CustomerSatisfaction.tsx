@@ -820,7 +820,10 @@ export default function CustomerSatisfaction() {
       />
 
       {/* Take Survey Dialog */}
-      <Dialog open={isTakeSurveyOpen} onOpenChange={setIsTakeSurveyOpen}>
+      <Dialog open={isTakeSurveyOpen} onOpenChange={(open) => {
+        setIsTakeSurveyOpen(open);
+        if (!open) setSelectedCustomer(null);
+      }}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Customer Satisfaction Survey</DialogTitle>

@@ -2641,6 +2641,23 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
     // Try to cancel the order (check if it exists first)
     const order = await storage.getOrderById(orderId);
     if (!order) {
+      console.log('🔧 Order not found in allOrders/orderDrafts, checking productionOrders:', orderId);
+      // Fallback: check if the order exists only in productionOrders (e.g. PO Manager orders)
+      const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+      if (productionOrder) {
+        console.log('🔧 Found production order, marking as CANCELLED:', productionOrder.id);
+        const updatedProductionOrder = await storage.updateProductionOrder(productionOrder.id, {
+          productionStatus: 'CANCELLED',
+          updatedAt: new Date(),
+        });
+        console.log('🔧 Production order cancelled successfully:', orderId);
+        return res.json({
+          success: true,
+          message: 'Order cancelled successfully.',
+          order: updatedProductionOrder,
+          rtsInventoryCreated: false,
+        });
+      }
       console.log('🔧 Order not found:', orderId);
       return res.status(404).json({ error: 'Order not found' });
     }

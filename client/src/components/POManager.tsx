@@ -83,6 +83,7 @@ import {
   X,
   Loader2,
   ArrowLeftRight,
+  RotateCcw,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -241,6 +242,19 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/production-orders/${orderId}/reactivate`, { method: 'POST' });
+    },
+    onSuccess: (_data, orderId) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      toast.success(`Order ${orderId} reactivated — status reset to Pending.`);
+    },
+    onError: (error: any) => {
+      toast.error('Failed to reactivate order: ' + (error.message || 'Unknown error'));
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PENDING':
@@ -339,8 +353,22 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                   <td className="p-3 text-muted-foreground">
                     {order.createdAt ? formatDate(new Date(order.createdAt), 'M/d/yy') : '—'}
                   </td>
-                  <td className="p-3">
-                    {order.productionStatus !== 'CANCELLED' && order.productionStatus !== 'SHIPPED' && (
+                  <td className="p-3 flex items-center gap-1">
+                    {order.productionStatus === 'CANCELLED' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-green-700 hover:text-green-800 hover:bg-green-50 border-green-300 h-7 px-2"
+                        disabled={reactivateMutation.isPending}
+                        onClick={() => reactivateMutation.mutate(order.orderId)}
+                        title="Reset this order to Pending so it re-enters the production queue"
+                      >
+                        {reactivateMutation.isPending && reactivateMutation.variables === order.orderId
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                        Reactivate
+                      </Button>
+                    ) : order.productionStatus !== 'SHIPPED' && (
                       <Button
                         variant={isDuplicate ? 'destructive' : 'ghost'}
                         size="sm"

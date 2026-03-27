@@ -6880,6 +6880,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // Reactivate a cancelled production order (sets status back to PENDING)
+  app.post('/api/production-orders/:orderId/reactivate', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { orderId } = req.params;
+
+      const order = await storage.getProductionOrderByOrderId(orderId);
+      if (!order) {
+        return res.status(404).json({ _error: `Production order ${orderId} not found` });
+      }
+      if (order.productionStatus !== 'CANCELLED') {
+        return res.status(400).json({ _error: `Order ${orderId} is not cancelled (current status: ${order.productionStatus})` });
+      }
+
+      const updated = await storage.updateProductionOrder(order.id, {
+        productionStatus: 'PENDING',
+        currentDepartment: order.currentDepartment || 'P1 Production Queue',
+      });
+
+      console.log(`🔄 Reactivated production order ${orderId} → PENDING`);
+      res.json({ success: true, order: updated });
+    } catch (_error) {
+      console.error('🔄 Reactivate production order error:', _error);
+      res.status(500).json({ _error: 'Failed to reactivate production order' });
+    }
+  });
+
   // Get All Production Orders
   app.get('/api/production-orders', async (req, res) => {
     try {

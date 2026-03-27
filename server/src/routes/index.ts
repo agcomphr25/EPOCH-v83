@@ -6681,9 +6681,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ _error: 'Purchase order not found' });
       }
 
-      const poItems = await storage.getPurchaseOrderItems(poId);
+      const [poItems, existingOrders] = await Promise.all([
+        storage.getPurchaseOrderItems(poId),
+        storage.getProductionOrdersByPoId(poId),
+      ]);
 
-      const willGenerate: { name: string; quantity: number; orderCount: number }[] = [];
+      // Build per-item existing count map using poItemId
+      const existingByItemId = new Map<number, number>();
+      for (const order of existingOrders) {
+        if (order.poItemId) {
+          existingByItemId.set(order.poItemId, (existingByItemId.get(order.poItemId) ?? 0) + 1);
+        }
+      }
+
+      const willGenerate: { name: string; quantity: number; orderCount: number; alreadyGenerated?: number }[] = [];
       const willSkip: { name: string; quantity: number; reason: string }[] = [];
 
       for (const item of poItems) {
@@ -6700,7 +6711,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           continue;
         }
 
-        willGenerate.push({ name, quantity: item.quantity, orderCount: item.quantity });
+        const alreadyGenerated = existingByItemId.get(item.id) ?? 0;
+        const remaining = item.quantity - alreadyGenerated;
+
+        if (remaining <= 0) {
+          willSkip.push({ name, quantity: item.quantity, reason: `Already generated (${alreadyGenerated}/${item.quantity})` });
+          continue;
+        }
+
+        willGenerate.push({ name, quantity: item.quantity, orderCount: remaining, alreadyGenerated });
       }
 
       const totalOrderCount = willGenerate.reduce((sum, i) => sum + i.orderCount, 0);
@@ -6722,23 +6741,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const poId = parseInt(req.params.id);
 
-      // Check if production orders already exist for this PO
-      const existingOrders = await storage.getProductionOrdersByPoId(poId);
-      if (existingOrders.length > 0) {
-        return res.status(409).json({
-          _error: `Production orders already exist for this PO (${existingOrders.length} orders found). Cannot generate duplicates.`,
-          existingCount: existingOrders.length,
-        });
-      }
-
       // Get the purchase order details
       const purchaseOrder = await storage.getPurchaseOrder(poId);
       if (!purchaseOrder) {
         return res.status(404).json({ _error: 'Purchase order not found' });
       }
 
-      // Get all items for this purchase order
-      const poItems = await storage.getPurchaseOrderItems(poId);
+      // Get all items and existing orders in parallel
+      const [poItems, existingOrders] = await Promise.all([
+        storage.getPurchaseOrderItems(poId),
+        storage.getProductionOrdersByPoId(poId),
+      ]);
+
+      // Build per-item existing count map (gap-fill: only generate what's missing)
+      const existingByItemId = new Map<number, number>();
+      for (const order of existingOrders) {
+        if (order.poItemId) {
+          existingByItemId.set(order.poItemId, (existingByItemId.get(order.poItemId) ?? 0) + 1);
+        }
+      }
       
       // Include items that have a valid stock model ID (not 'no_stock' or empty)
       // AND are not non-stock parts (bottom metals, rails, etc.)
@@ -6765,8 +6786,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const createdOrders = [];
 
       for (const item of stockModelItems) {
-        // Create individual production orders for each quantity
-        for (let i = 0; i < item.quantity; i++) {
+        // Gap-fill: only create orders for units that haven't been generated yet
+        const alreadyGenerated = existingByItemId.get(item.id) ?? 0;
+        const remaining = item.quantity - alreadyGenerated;
+        if (remaining <= 0) {
+          console.log(`⏭ Skipping item ${item.id} (${item.itemName || item.stockModelId}): already generated ${alreadyGenerated}/${item.quantity}`);
+          continue;
+        }
+        console.log(`🏭 Item ${item.id} (${item.itemName || item.stockModelId}): generating ${remaining} of ${item.quantity} (${alreadyGenerated} already exist)`);
+        for (let i = 0; i < remaining; i++) {
           // Use stockModelId for mold/schedule matching; fall back to itemName (AG part number)
           // or itemId for POs entered with product codes rather than stock model slugs
           const stockModelForOrder = getPOItemProductId(item);

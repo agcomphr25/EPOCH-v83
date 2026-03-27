@@ -744,25 +744,36 @@ function POCard({
                 >
                   Calculate Schedule
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onGenerateProductionOrders(po.id)}
-                  disabled={isGeneratingOrdersForThisPO || isLoadingPreview || hasOrders}
-                  title={
-                    hasOrders
-                      ? `Production orders already exist (${orderCount} orders)`
-                      : 'Generate production orders from this PO'
-                  }
-                >
-                  {isGeneratingOrdersForThisPO
-                    ? 'Generating...'
-                    : isLoadingPreview
-                      ? 'Loading Preview...'
-                      : hasOrders
-                        ? `Orders Generated (${orderCount})`
-                        : 'Generate Production Orders'}
-                </Button>
+                {(() => {
+                  const hasGap = hasOrders && orderCount < totalPoQuantity;
+                  const fullyGenerated = hasOrders && orderCount >= totalPoQuantity;
+                  return (
+                    <Button
+                      variant={hasGap ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => onGenerateProductionOrders(po.id)}
+                      disabled={isGeneratingOrdersForThisPO || isLoadingPreview || fullyGenerated}
+                      className={hasGap ? 'bg-amber-500 hover:bg-amber-600 text-white border-0' : ''}
+                      title={
+                        fullyGenerated
+                          ? `All ${orderCount} production orders already generated`
+                          : hasGap
+                            ? `${totalPoQuantity - orderCount} item(s) missing production orders — click to fill gaps`
+                            : 'Generate production orders from this PO'
+                      }
+                    >
+                      {isGeneratingOrdersForThisPO
+                        ? 'Generating...'
+                        : isLoadingPreview
+                          ? 'Loading Preview...'
+                          : fullyGenerated
+                            ? `Orders Generated (${orderCount})`
+                            : hasGap
+                              ? `Fill Missing Orders (${totalPoQuantity - orderCount})`
+                              : 'Generate Production Orders'}
+                    </Button>
+                  );
+                })()}
               </div>
               <Button
                 variant="ghost"
@@ -2188,11 +2199,15 @@ export default function POManager() {
                         </tr>
                       </thead>
                       <tbody>
-                        {previewData.willGenerate.map((item, i) => (
+                        {previewData.willGenerate.map((item: any, i: number) => (
                           <tr key={i} className="border-b last:border-0">
                             <td className="p-2">{item.name}</td>
                             <td className="p-2 text-right">{item.quantity}</td>
-                            <td className="p-2 text-right font-medium text-green-700">{item.orderCount}</td>
+                            <td className="p-2 text-right font-medium text-green-700">
+                              {item.alreadyGenerated > 0
+                                ? <span title={`${item.alreadyGenerated} already exist; generating ${item.orderCount} more`}>+{item.orderCount} <span className="text-gray-400 font-normal text-xs">({item.alreadyGenerated} exist)</span></span>
+                                : item.orderCount}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

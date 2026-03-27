@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchPOs,
@@ -186,6 +186,42 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     queryFn: () => apiRequest(`/api/production-orders/by-po/${poId}`),
   });
 
+  const { data: poItems = [] } = useQuery({
+    queryKey: [`/api/pos/${poId}/items`],
+    queryFn: () => fetchPOItems(poId),
+  });
+
+  // Build a set of production order IDs that are duplicates.
+  // Group by normalized itemName; expected count = matching PO item quantity.
+  // Within each group, sort by id ascending (oldest = original); the tail are duplicates.
+  const duplicateOrderIds = useMemo((): Set<number> => {
+    const result = new Set<number>();
+    // Build expected quantity map: normalized itemName → quantity
+    const expectedQty = new Map<string, number>();
+    for (const item of poItems as PurchaseOrderItem[]) {
+      const key = (item.itemName || item.stockModelId || item.itemId || '').toLowerCase().trim();
+      if (key) expectedQty.set(key, (expectedQty.get(key) ?? 0) + item.quantity);
+    }
+    // Group orders by normalized itemName
+    const groups = new Map<string, any[]>();
+    for (const order of productionOrders) {
+      const key = (order.itemName || order.itemCode || '').toLowerCase().trim();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(order);
+    }
+    // Within each group, sort oldest first; mark excess as duplicates
+    for (const [key, group] of groups) {
+      const expected = expectedQty.get(key) ?? 0;
+      if (expected === 0) continue; // can't determine expected — skip
+      const sorted = [...group].sort((a, b) => a.id - b.id);
+      const extras = sorted.slice(expected);
+      for (const o of extras) result.add(o.id);
+    }
+    return result;
+  }, [productionOrders, poItems]);
+
+  const duplicateCount = duplicateOrderIds.size;
+
   const cancelMutation = useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
       return apiRequest(`/api/orders/cancel/${orderId}`, {
@@ -254,7 +290,17 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
         <CardTitle className="text-lg flex items-center gap-2">
           <Package className="h-5 w-5" />
           Production Orders ({productionOrders.length})
+          {duplicateCount > 0 && (
+            <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold ml-1">
+              ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''} detected
+            </Badge>
+          )}
         </CardTitle>
+        {duplicateCount > 0 && (
+          <p className="text-xs text-orange-700 mt-1">
+            Rows highlighted in orange were generated beyond the PO item quantity. Cancel them to clean up.
+          </p>
+        )}
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
@@ -271,15 +317,20 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
               </tr>
             </thead>
             <tbody>
-              {productionOrders.map((order: any) => (
+              {productionOrders.map((order: any) => {
+                const isDuplicate = duplicateOrderIds.has(order.id);
+                return (
                 <tr
                   key={order.id}
-                  className="border-b hover:bg-muted/50 transition-colors"
+                  className={`border-b transition-colors ${isDuplicate ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-muted/50'}`}
                 >
                   <td className="p-3 font-medium text-blue-600">
                     <a href={`/barcode-queue?highlight=${order.orderId}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
                       {order.orderId}
                     </a>
+                    {isDuplicate && (
+                      <Badge className="bg-orange-200 text-orange-900 text-[10px] ml-1.5 px-1 py-0">DUPE</Badge>
+                    )}
                   </td>
                   <td className="p-3">{order.itemName || '—'}</td>
                   <td className="p-3">{order.materialCanonical || '—'}</td>
@@ -291,21 +342,23 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                   <td className="p-3">
                     {order.productionStatus !== 'CANCELLED' && order.productionStatus !== 'SHIPPED' && (
                       <Button
-                        variant="ghost"
+                        variant={isDuplicate ? 'destructive' : 'ghost'}
                         size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2"
+                        className={isDuplicate ? 'h-7 px-2 text-xs' : 'text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2'}
                         onClick={() => {
                           setOrderToCancel(order.orderId);
+                          setCancelReason(isDuplicate ? 'Duplicate order — generated beyond PO item quantity' : '');
                           setCancelDialogOpen(true);
                         }}
                       >
                         <X className="h-3.5 w-3.5 mr-1" />
-                        Cancel
+                        {isDuplicate ? 'Cancel Duplicate' : 'Cancel'}
                       </Button>
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

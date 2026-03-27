@@ -115,7 +115,7 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
-// Component to display production status badge
+// Component to display production status breakdown for a PO
 function ProductionStatusBadge({ poId }: { poId: number }) {
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${poId}`],
@@ -127,38 +127,47 @@ function ProductionStatusBadge({ poId }: { poId: number }) {
   }
 
   if (productionOrders.length === 0) {
-    return null; // No production orders yet
+    return null;
   }
 
-  const totalOrders = productionOrders.length;
-  const pendingOrders = productionOrders.filter(
-    (order: any) => order.productionStatus === 'PENDING'
-  ).length;
-  const laidUpOrders = productionOrders.filter(
-    (order: any) => order.productionStatus === 'LAID_UP'
-  ).length;
-  const shippedOrders = productionOrders.filter(
-    (order: any) => order.productionStatus === 'SHIPPED'
-  ).length;
-
-  let badgeColor = 'bg-blue-100 text-blue-800';
-  let statusText = 'In Production';
-
-  if (shippedOrders === totalOrders) {
-    badgeColor = 'bg-green-100 text-green-800';
-    statusText = 'Shipped';
-  } else if (laidUpOrders > 0) {
-    badgeColor = 'bg-yellow-100 text-yellow-800';
-    statusText = 'In Progress';
-  } else {
-    badgeColor = 'bg-blue-100 text-blue-800';
-    statusText = 'Scheduled';
-  }
+  const total = productionOrders.length;
+  const pending = productionOrders.filter((o: any) => o.productionStatus === 'PENDING').length;
+  const inProgress = productionOrders.filter((o: any) => o.productionStatus === 'LAID_UP').length;
+  const shipped = productionOrders.filter((o: any) => o.productionStatus === 'SHIPPED').length;
+  const cancelled = productionOrders.filter((o: any) => o.productionStatus === 'CANCELLED').length;
+  const active = total - cancelled; // exclude cancelled from denominator
 
   return (
-    <Badge className={badgeColor}>
-      {statusText} ({totalOrders})
-    </Badge>
+    <div className="flex items-center gap-1 flex-wrap">
+      {/* Overall total */}
+      <Badge variant="outline" className="text-xs font-medium">
+        {total} Orders
+      </Badge>
+      {/* In Progress */}
+      {inProgress > 0 && (
+        <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+          {inProgress} In Progress
+        </Badge>
+      )}
+      {/* Pending */}
+      {pending > 0 && (
+        <Badge className="bg-blue-100 text-blue-800 text-xs">
+          {pending} Pending
+        </Badge>
+      )}
+      {/* Shipped */}
+      {shipped > 0 && (
+        <Badge className={shipped === active ? 'bg-green-100 text-green-800 text-xs' : 'bg-emerald-50 text-emerald-700 text-xs'}>
+          {shipped}/{active} Shipped
+        </Badge>
+      )}
+      {/* Cancelled — only show when present */}
+      {cancelled > 0 && (
+        <Badge className="bg-red-100 text-red-700 text-xs">
+          {cancelled} Cancelled
+        </Badge>
+      )}
+    </div>
   );
 }
 

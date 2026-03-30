@@ -6241,9 +6241,30 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       console.log('🔧 Create Purchase Order Item endpoint called');
       const { insertPurchaseOrderItemSchema } = await import('@shared/schema');
       const { storage } = await import('../../storage');
+      const { pgPool: itemsPool } = await import('../../db');
       const { id } = req.params;
       const itemData = { ...req.body, poId: parseInt(id) };
       const validatedData = insertPurchaseOrderItemSchema.parse(itemData);
+
+      // Server-side deduplication: if the exact same item (same po_id + item_id + unit_price)
+      // was inserted within the last 10 seconds, return the existing row instead of inserting again.
+      // This prevents multi-click / rapid-resubmit from creating duplicates even if the client
+      // guard is somehow bypassed.
+      const recentDupe = await itemsPool.query(`
+        SELECT * FROM purchase_order_items
+        WHERE po_id = $1
+          AND item_id = $2
+          AND unit_price = $3
+          AND created_at > NOW() - INTERVAL '10 seconds'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [validatedData.poId, validatedData.itemId, validatedData.unitPrice]);
+
+      if (recentDupe.rows.length > 0) {
+        console.log(`🔧 Duplicate PO item suppressed (po_id=${validatedData.poId} item_id=${validatedData.itemId} within 10s)`);
+        return res.status(201).json(recentDupe.rows[0]);
+      }
+
       const newItem = await storage.createPurchaseOrderItem(validatedData);
       console.log('🔧 Created PO item:', newItem.id);
 

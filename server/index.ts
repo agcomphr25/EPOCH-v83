@@ -512,6 +512,41 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ PO P19802 duplicate cleanup skipped:', corrErr.message);
       }
 
+      // Data correction: PO P18321 (id=7) — production orders 1651–1660 were created with
+      // stock model display names ("Alpine Hunter", "Privateer", etc.) as item_id/item_name
+      // instead of the actual SKU from purchase_order_items. Fix by joining on po_item_id.
+      try {
+        const { pgPool: p18321Pool } = await import('./db');
+        const p18321Check = await p18321Pool.query(
+          `SELECT COUNT(*) AS cnt
+           FROM production_orders po
+           JOIN purchase_order_items poi ON po.po_item_id = poi.id
+           WHERE po.po_id = 7
+             AND po.item_name NOT LIKE 'AG-%'
+             AND po.item_name NOT LIKE 'P1-%'
+             AND poi.item_name LIKE 'AG-%'`
+        );
+        const p18321BadCount = parseInt(p18321Check.rows[0]?.cnt ?? '0', 10);
+        if (p18321BadCount > 0) {
+          const p18321Fix = await p18321Pool.query(
+            `UPDATE production_orders po
+             SET item_name = poi.item_name,
+                 item_id   = poi.item_id
+             FROM purchase_order_items poi
+             WHERE po.po_item_id = poi.id
+               AND po.po_id = 7
+               AND po.item_name NOT LIKE 'AG-%'
+               AND po.item_name NOT LIKE 'P1-%'
+               AND poi.item_name LIKE 'AG-%'`
+          );
+          console.log(`✅ Data correction: Fixed ${p18321Fix.rowCount} production order(s) in PO P18321 — replaced display names with SKU item names`);
+        } else {
+          console.log('✅ Data correction: PO P18321 item names already correct, skipping');
+        }
+      } catch (corrErr: any) {
+        console.warn('⚠️ PO P18321 item name correction skipped:', corrErr.message);
+      }
+
       // Sync serialized items stuck at "Pending Layup" with their actual work task progress
       try {
         const { sql: sqlDeptSync } = await import('drizzle-orm');

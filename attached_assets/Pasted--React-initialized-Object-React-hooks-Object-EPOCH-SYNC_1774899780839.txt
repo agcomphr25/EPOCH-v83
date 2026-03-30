@@ -1,0 +1,197 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+purchase-orders:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/auth/session:1  Failed to load resource: the server responded with a status of 404 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 404 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 404 ()
+ Failed to fetch session for redirect: 
+console.error @ index-BZMZjF--.js:5203
+api/auth/session:1  Failed to load resource: the server responded with a status of 404 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=30053f200be23589ca116b876369b501aa48418bc76102609f7589a4a0196902' failed: 
+(anonymous) @ index-BZMZjF--.js:1574
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=30053f200be23589ca116b876369b501aa48418bc76102609f7589a4a0196902' failed: 
+(anonymous) @ index-BZMZjF--.js:1574
+api/auth/login:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+ 🌐 API Request to /api/pos (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/customers (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/stock-models (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/pos: 200
+ ✅ API Response from /api/stock-models: 200
+ ✅ API Response from /api/customers: 200
+ 🌐 API Request to /api/production-orders/by-po/60 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/60/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/41 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/41/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/5 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/5/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/7 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/7/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/10 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/10/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/9 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/9/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/11 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/11/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/12 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/12/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/13 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/13/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/14 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/14/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/15 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/15/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/16 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/16/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/17 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/17/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/18 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/18/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/4 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/4/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/38 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/38/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/39 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/39/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/40 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/40/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/70 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/70/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/62 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/62/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/71 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/71/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/69 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/69/items (timeout: 15000ms, deployment: true)
+api/production-orders/by-po/17:1  Failed to load resource: the server responded with a status of 429 ()
+ ✅ API Response from /api/production-orders/by-po/17: 429
+ API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+ 💥 API Request failed for /api/production-orders/by-po/17: 
+console.error @ index-BZMZjF--.js:5203
+ ✅ API Response from /api/production-orders/by-po/41: 200
+ ✅ API Response from /api/production-orders/by-po/9: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/60: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/5: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/10: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/7/items: 200
+index-BZMZjF--.js:235 🌐 API Request to /api/production-orders/by-po/17 (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/17: 200
+api/production-orders/by-po/38:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/38: 429
+api/pos/62/items:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/62/items: 429
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/production-orders/by-po/38: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/pos/62/items: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+    at async iPt (index-BZMZjF--.js:3221:114007)
+console.error @ index-BZMZjF--.js:5203
+api/production-orders/by-po/4:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/4: 429
+api/pos/11/items:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/11/items: 429
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/production-orders/by-po/4: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/pos/11/items: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+    at async iPt (index-BZMZjF--.js:3221:114007)
+console.error @ index-BZMZjF--.js:5203
+api/production-orders/by-po/70:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/70: 429
+api/production-orders/by-po/12:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/12: 429
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/production-orders/by-po/70: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/production-orders/by-po/12: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/60/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/5/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/7: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/9/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/17/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/10/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/18/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/14/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/12/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/14: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/11: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/38/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/71/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/16/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/13: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/40: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/70/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/15/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/15: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/4/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/18: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/71: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/62: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/16: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/39/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/69: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/69/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/41/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/13/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/39: 200
+index-BZMZjF--.js:235 🌐 API Request to /api/production-orders/by-po/38 (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 🌐 API Request to /api/pos/62/items (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 🌐 API Request to /api/production-orders/by-po/4 (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 🌐 API Request to /api/pos/11/items (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 🌐 API Request to /api/production-orders/by-po/70 (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 🌐 API Request to /api/production-orders/by-po/12 (timeout: 15000ms, deployment: true)
+api/production-orders/by-po/12:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/12: 429
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/production-orders/by-po/12: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+console.error @ index-BZMZjF--.js:5203
+api/pos/62/items:1  Failed to load resource: the server responded with a status of 429 ()
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/62/items: 429
+index-BZMZjF--.js:5203 API error raw body: Too many requests
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:5203 💥 API Request failed for /api/pos/62/items: Error: Too many requests
+    at Oe (index-BZMZjF--.js:235:6362)
+    at async iPt (index-BZMZjF--.js:3221:114007)
+console.error @ index-BZMZjF--.js:5203
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/40/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/pos/11/items: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/70: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/38: 200
+index-BZMZjF--.js:235 ✅ API Response from /api/production-orders/by-po/4: 200
+index-BZMZjF--.js:235 Tabs is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+(anonymous) @ index-BZMZjF--.js:235
+index-BZMZjF--.js:235 🌐 API Request to /api/po-products (timeout: 15000ms, deployment: true)
+index-BZMZjF--.js:235 ✅ API Response from /api/po-products: 200

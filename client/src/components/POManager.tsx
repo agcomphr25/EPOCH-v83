@@ -862,6 +862,7 @@ export default function POManager() {
   const [statusFilter, setStatusFilter] = useState<
     'ALL' | 'OPEN' | 'CLOSED' | 'CANCELED'
   >('ALL');
+  const [poListTab, setPoListTab] = useState<'active' | 'completed'>('active');
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [showOrderEntry, setShowOrderEntry] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
@@ -1286,8 +1287,11 @@ export default function POManager() {
       po.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesTab =
+      poListTab === 'active'
+        ? po.status === 'OPEN'
+        : po.status === 'CLOSED' || po.status === 'CANCELED';
+    return matchesSearch && matchesTab;
   });
 
   const groupedPOs = (() => {
@@ -1652,98 +1656,107 @@ export default function POManager() {
             </Dialog>
           </div>
 
-          {/* Search and Filter Controls */}
-          <div className="flex gap-4 items-center">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search POs by number, customer ID, or name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as any)}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Status</SelectItem>
-                <SelectItem value="OPEN">Open</SelectItem>
-                <SelectItem value="CLOSED">Closed</SelectItem>
-                <SelectItem value="CANCELED">Canceled</SelectItem>
-              </SelectContent>
-            </Select>
-            {groupedPOs.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleAllAccordions}
-              >
-                {allExpanded ? 'Collapse All' : 'Expand All'}
-              </Button>
-            )}
-          </div>
+          {/* Active / Completed tabs + search */}
+          <Tabs value={poListTab} onValueChange={(v) => { setPoListTab(v as 'active' | 'completed'); setSearchTerm(''); }}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <TabsList>
+                <TabsTrigger value="active">
+                  Active POs
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {pos.filter((p) => p.status === 'OPEN').length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger value="completed">
+                  Completed POs
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {pos.filter((p) => p.status === 'CLOSED' || p.status === 'CANCELED').length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
 
-          {/* Purchase Orders List - Grouped by Customer */}
-          <div className="space-y-2">
-            {isLoading ? (
-              <div className="text-center py-8">Loading purchase orders...</div>
-            ) : filteredPOs.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                {searchTerm || statusFilter !== 'ALL'
-                  ? 'No purchase orders match your search.'
-                  : 'No purchase orders yet. Click "Add Purchase Order" to create your first one.'}
-              </div>
-            ) : (
-              <Accordion
-                type="multiple"
-                value={expandedCustomers}
-                onValueChange={setExpandedCustomers}
-                className="space-y-4"
-              >
-                {groupedPOs.map((group) => (
-                  <AccordionItem
-                    key={group.groupKey}
-                    value={group.groupKey}
-                    className="border rounded-lg px-4"
+              <div className="flex gap-3 items-center flex-1 min-w-0">
+                <div className="flex-1 relative min-w-0">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by PO number or customer..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                {groupedPOs.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAllAccordions}
                   >
-                    <AccordionTrigger className="hover:no-underline py-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-semibold text-gray-800">{group.customerName}</h3>
-                        <Badge variant="secondary" className="text-xs">{group.pos.length} PO{group.pos.length !== 1 ? 's' : ''}</Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid gap-4 pt-2 pb-2">
-                        {group.pos.map((po) => (
-                          <POCard
-                            key={po.id}
-                            po={po}
-                            onEdit={handleEdit}
-                            onDelete={handleDelete}
-                            onViewItems={handleViewItems}
-                            onCalculateSchedule={handleCalculateSchedule}
-                            onGenerateProductionOrders={handleGenerateProductionOrders}
-                            onReassignCustomer={(po) => {
-                              setReassignPO(po);
-                              setReassignTargetCustomer(null);
-                              setReassignCustomerSearch('');
-                            }}
-                            isLoadingPreview={loadingPreviewPoId === po.id}
-                            isGeneratingOrdersForThisPO={isGeneratingOrders && previewPoId === po.id}
-                          />
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
-          </div>
+                    {allExpanded ? 'Collapse All' : 'Expand All'}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Purchase Orders List - Grouped by Customer */}
+            <TabsContent value={poListTab} className="mt-4">
+              <div className="space-y-2">
+                {isLoading ? (
+                  <div className="text-center py-8">Loading purchase orders...</div>
+                ) : filteredPOs.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    {searchTerm
+                      ? 'No purchase orders match your search.'
+                      : poListTab === 'active'
+                      ? 'No open purchase orders. Click "Add Purchase Order" to create one.'
+                      : 'No completed purchase orders yet.'}
+                  </div>
+                ) : (
+                  <Accordion
+                    type="multiple"
+                    value={expandedCustomers}
+                    onValueChange={setExpandedCustomers}
+                    className="space-y-4"
+                  >
+                    {groupedPOs.map((group) => (
+                      <AccordionItem
+                        key={group.groupKey}
+                        value={group.groupKey}
+                        className="border rounded-lg px-4"
+                      >
+                        <AccordionTrigger className="hover:no-underline py-3">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-gray-800">{group.customerName}</h3>
+                            <Badge variant="secondary" className="text-xs">{group.pos.length} PO{group.pos.length !== 1 ? 's' : ''}</Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="grid gap-4 pt-2 pb-2">
+                            {group.pos.map((po) => (
+                              <POCard
+                                key={po.id}
+                                po={po}
+                                onEdit={handleEdit}
+                                onDelete={handleDelete}
+                                onViewItems={handleViewItems}
+                                onCalculateSchedule={handleCalculateSchedule}
+                                onGenerateProductionOrders={handleGenerateProductionOrders}
+                                onReassignCustomer={(po) => {
+                                  setReassignPO(po);
+                                  setReassignTargetCustomer(null);
+                                  setReassignCustomerSearch('');
+                                }}
+                                isLoadingPreview={loadingPreviewPoId === po.id}
+                                isGeneratingOrdersForThisPO={isGeneratingOrders && previewPoId === po.id}
+                              />
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       )}
 

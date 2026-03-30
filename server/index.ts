@@ -512,39 +512,36 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ PO P19802 duplicate cleanup skipped:', corrErr.message);
       }
 
-      // Data correction: PO P18321 (id=7) — production orders 1651–1660 were created with
-      // stock model display names ("Alpine Hunter", "Privateer", etc.) as item_id/item_name
-      // instead of the actual SKU from purchase_order_items. Fix by joining on po_item_id.
+      // Data correction (global): production orders where item_name = item_id (e.g. "81", "Alpine Hunter")
+      // instead of the real SKU from purchase_order_items. Affects 15 POs (P18321, P18666, P18918, etc.)
+      // created before the order-creation bug was fixed. Uses po_item_id FK to find the correct name.
+      // Idempotent: only runs when affected rows exist. Also corrects item_id for display-name cases.
       try {
-        const { pgPool: p18321Pool } = await import('./db');
-        const p18321Check = await p18321Pool.query(
+        const { pgPool: itemNamePool } = await import('./db');
+        const itemNameCheck = await itemNamePool.query(
           `SELECT COUNT(*) AS cnt
            FROM production_orders po
            JOIN purchase_order_items poi ON po.po_item_id = poi.id
-           WHERE po.po_id = 7
-             AND po.item_name NOT LIKE 'AG-%'
-             AND po.item_name NOT LIKE 'P1-%'
+           WHERE po.item_name = po.item_id
              AND poi.item_name LIKE 'AG-%'`
         );
-        const p18321BadCount = parseInt(p18321Check.rows[0]?.cnt ?? '0', 10);
-        if (p18321BadCount > 0) {
-          const p18321Fix = await p18321Pool.query(
+        const itemNameBadCount = parseInt(itemNameCheck.rows[0]?.cnt ?? '0', 10);
+        if (itemNameBadCount > 0) {
+          const itemNameFix = await itemNamePool.query(
             `UPDATE production_orders po
              SET item_name = poi.item_name,
                  item_id   = poi.item_id
              FROM purchase_order_items poi
              WHERE po.po_item_id = poi.id
-               AND po.po_id = 7
-               AND po.item_name NOT LIKE 'AG-%'
-               AND po.item_name NOT LIKE 'P1-%'
+               AND po.item_name = po.item_id
                AND poi.item_name LIKE 'AG-%'`
           );
-          console.log(`✅ Data correction: Fixed ${p18321Fix.rowCount} production order(s) in PO P18321 — replaced display names with SKU item names`);
+          console.log(`✅ Data correction: Fixed ${itemNameFix.rowCount} production order(s) across all POs — replaced stub item names with correct SKUs`);
         } else {
-          console.log('✅ Data correction: PO P18321 item names already correct, skipping');
+          console.log('✅ Data correction: All production order item names already correct, skipping');
         }
       } catch (corrErr: any) {
-        console.warn('⚠️ PO P18321 item name correction skipped:', corrErr.message);
+        console.warn('⚠️ Global production order item name correction skipped:', corrErr.message);
       }
 
       // Sync serialized items stuck at "Pending Layup" with their actual work task progress

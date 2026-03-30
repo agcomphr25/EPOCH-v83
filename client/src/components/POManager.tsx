@@ -203,9 +203,10 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
       const key = (item.itemName || item.stockModelId || item.itemId || '').toLowerCase().trim();
       if (key) expectedQty.set(key, (expectedQty.get(key) ?? 0) + item.quantity);
     }
-    // Group orders by normalized itemName
+    // Group orders by normalized itemName, excluding cancelled orders
     const groups = new Map<string, any[]>();
     for (const order of productionOrders) {
+      if (order.productionStatus === 'CANCELLED') continue;
       const key = (order.itemName || order.itemCode || '').toLowerCase().trim();
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(order);

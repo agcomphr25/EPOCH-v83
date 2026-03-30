@@ -490,6 +490,28 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ PO P18665 item 82 data correction skipped:', corrErr.message);
       }
 
+      // Data correction: PO P19802 (Red Hawk) — remove 14 duplicate line items created by
+      // multi-click on "Add to Order". User entered 7 items but they were submitted 3 times
+      // resulting in 21 rows. Keep the first instance of each unique item_name (IDs 273-278, 284)
+      // and delete the 14 extras (IDs 279-293 except 284).
+      try {
+        const { pgPool: p19802Pool } = await import('./db');
+        const dupeCheck = await p19802Pool.query(
+          `SELECT COUNT(*) AS cnt FROM purchase_order_items WHERE id IN (279,280,281,282,283,285,286,287,288,289,290,291,292,293)`
+        );
+        const dupeCount = parseInt(dupeCheck.rows[0]?.cnt ?? '0', 10);
+        if (dupeCount > 0) {
+          await p19802Pool.query(
+            `DELETE FROM purchase_order_items WHERE id IN (279,280,281,282,283,285,286,287,288,289,290,291,292,293)`
+          );
+          console.log(`✅ Data correction: Removed ${dupeCount} duplicate line items from PO P19802 (Red Hawk)`);
+        } else {
+          console.log('✅ Data correction: PO P19802 duplicates already cleaned up, skipping');
+        }
+      } catch (corrErr: any) {
+        console.warn('⚠️ PO P19802 duplicate cleanup skipped:', corrErr.message);
+      }
+
       // Sync serialized items stuck at "Pending Layup" with their actual work task progress
       try {
         const { sql: sqlDeptSync } = await import('drizzle-orm');

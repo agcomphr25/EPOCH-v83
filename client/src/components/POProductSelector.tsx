@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Package, Plus, ShoppingCart, Search } from 'lucide-react';
+import { Package, Plus, ShoppingCart, Search, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface POProduct {
@@ -82,6 +82,7 @@ export default function POProductSelector({
     []
   );
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -174,6 +175,10 @@ export default function POProductSelector({
       return;
     }
 
+    // Prevent double-submission
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     try {
       // Save each selected product as a PO item
       for (const sp of selectedProducts) {
@@ -230,6 +235,8 @@ export default function POProductSelector({
         description: error.message || 'Failed to add products to order',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -464,9 +471,17 @@ export default function POProductSelector({
                           </Button>
                           <Button
                             onClick={handleAddToOrder}
+                            disabled={isSubmitting}
                             data-testid="button-add-to-order"
                           >
-                            Add to Order
+                            {isSubmitting ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Adding...
+                              </>
+                            ) : (
+                              'Add to Order'
+                            )}
                           </Button>
                         </div>
                       </div>

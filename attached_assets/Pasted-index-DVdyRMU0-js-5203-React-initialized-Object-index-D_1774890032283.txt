@@ -1,0 +1,42 @@
+index-DVdyRMU0.js:5203 React initialized: Object
+index-DVdyRMU0.js:5203 React hooks: Object
+index-DVdyRMU0.js:5203 [EPOCH SYNC] Sync engine starting
+index-DVdyRMU0.js:5203 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DVdyRMU0.js:5200 App component is rendering...
+index-DVdyRMU0.js:5200 Environment: production
+index-DVdyRMU0.js:5200 Base URL: /
+index-DVdyRMU0.js:1565 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-DVdyRMU0.js:1565 [EPOCH] Install prompt captured and ready
+po-products:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-DVdyRMU0.js:235 🌐 API Request to /api/po-products (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/stock-models (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/features (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/customers (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 ✅ API Response from /api/features: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/stock-models: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/po-products: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/customers: 200
+index-DVdyRMU0.js:235 🌐 API Request to /api/auth/session (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/customers/bypass (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/addresses/all (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/marketing/customer-types (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 ✅ API Response from /api/auth/session: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/marketing/customer-types: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/addresses/all: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/customers/bypass: 200
+index-DVdyRMU0.js:1574 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=30053f200be23589ca116b876369b501aa48418bc76102609f7589a4a0196902' failed: 
+(anonymous) @ index-DVdyRMU0.js:1574
+index-DVdyRMU0.js:235 🌐 API Request to /api/po-products (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/stock-models (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/features (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 🌐 API Request to /api/customers (timeout: 15000ms, deployment: true)
+index-DVdyRMU0.js:235 ✅ API Response from /api/po-products: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/stock-models: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/customers: 200
+index-DVdyRMU0.js:235 ✅ API Response from /api/features: 200
+api/orders/FB176:1  Failed to load resource: the server responded with a status of 429 ()
+index-DVdyRMU0.js:3483 Response status: 429
+index-DVdyRMU0.js:3483 Response ok: false
+api/orders/FB176:1  Failed to load resource: the server responded with a status of 404 ()
+index-DVdyRMU0.js:3483 Response status: 404
+index-DVdyRMU0.js:3483 Response ok: false

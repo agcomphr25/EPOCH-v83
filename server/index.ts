@@ -400,6 +400,42 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ PO item 225 data correction skipped:', corrErr.message);
       }
 
+      // Data correction: PO P18665 item 82 — fix duplicate AG-FG-ADJ-AHV105-CDN → AG-FG-AHV105-CDN
+      // Item 82 was entered as AG-FG-ADJ-AHV105-CDN (same as item 78) but should be
+      // AG-FG-AHV105-CDN (non-adjustable, fg_alpine_hunter, $489). Corrects both the
+      // purchase_order_items row and the production_order spawned from it.
+      try {
+        const { pgPool: p18665Pool } = await import('./db');
+        const p18665Check = await p18665Pool.query(
+          `SELECT id FROM purchase_order_items WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN' AND item_id = '72'`
+        );
+        if (p18665Check.rows.length > 0) {
+          await p18665Pool.query(`
+            UPDATE purchase_order_items
+            SET item_name  = 'AG-FG-AHV105-CDN',
+                item_id    = '36',
+                unit_price = 489.00,
+                total_price = 489.00,
+                updated_at = NOW()
+            WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'
+          `);
+          await p18665Pool.query(`
+            UPDATE production_orders
+            SET item_name  = 'AG-FG-AHV105-CDN',
+                item_id    = '36',
+                item_code  = 'AG-FG-AHV105-CDN',
+                specifications = specifications || '{"stockModel": "fg_alpine_hunter"}'::jsonb,
+                updated_at = NOW()
+            WHERE po_item_id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'
+          `);
+          console.log('✅ Data correction: PO P18665 item 82 corrected ADJ-AHV105-CDN → AHV105-CDN (non-adjustable)');
+        } else {
+          console.log('✅ Data correction: PO P18665 item 82 already correct or not found, skipping');
+        }
+      } catch (corrErr: any) {
+        console.warn('⚠️ PO P18665 item 82 data correction skipped:', corrErr.message);
+      }
+
       // Sync serialized items stuck at "Pending Layup" with their actual work task progress
       try {
         const { sql: sqlDeptSync } = await import('drizzle-orm');

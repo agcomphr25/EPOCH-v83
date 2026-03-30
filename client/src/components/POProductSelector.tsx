@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import {
@@ -82,6 +83,7 @@ export default function POProductSelector({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   // Fetch customer-associated PO products
   const { data: allPOProducts = [], isLoading: productsLoading } = useQuery<
@@ -278,11 +280,16 @@ export default function POProductSelector({
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     No Products Available
                   </h3>
-                  <p className="text-gray-500">
-                    No PO products have been created for customer "
-                    {customerName}". Products must be created on the PO Product Items
-                    page first.
+                  <p className="text-gray-500 mb-4">
+                    No PO products have been created for customer &quot;{customerName}&quot;. Products must be added to the PO Product Items catalog first.
                   </p>
+                  <Button
+                    variant="default"
+                    onClick={() => { handleClose(); navigate('/po-products'); }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Go to PO Product Items
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -291,17 +298,28 @@ export default function POProductSelector({
               {/* Available Products */}
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4">
                     <CardTitle>Available Products</CardTitle>
-                    <div className="relative w-72">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Search by product name or customer #..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9"
-                        data-testid="input-product-search"
-                      />
+                    <div className="flex items-center gap-2">
+                      <div className="relative w-72">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="Search by product name or customer #..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-9"
+                          data-testid="input-product-search"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { handleClose(); navigate('/po-products'); }}
+                        title="Go to PO Product Items to add new products to the catalog"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        New Product
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>

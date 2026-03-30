@@ -614,23 +614,25 @@ export default function POProductsPage() {
                             <CommandEmpty>No customer found.</CommandEmpty>
                             <CommandGroup>
                               {customers.map((customer) => {
-                                const displayName = customer.company || customer.name;
+                                const displayLabel = customer.company
+                                  ? `${customer.name} (${customer.company})`
+                                  : customer.name;
                                 return (
                                   <CommandItem
                                     key={customer.id}
-                                    value={displayName}
+                                    value={displayLabel}
                                     onSelect={() => {
-                                      handleInputChange('customerName', displayName);
+                                      handleInputChange('customerName', customer.name);
                                       setCustomerComboOpen(false);
                                     }}
                                   >
                                     <Check
                                       className={cn(
                                         "mr-2 h-4 w-4",
-                                        formData.customerName === displayName ? "opacity-100" : "opacity-0"
+                                        formData.customerName === customer.name ? "opacity-100" : "opacity-0"
                                       )}
                                     />
-                                    {displayName}
+                                    {displayLabel}
                                   </CommandItem>
                                 );
                               })}

@@ -402,23 +402,48 @@ async function initializeBackgroundServices() {
 
       // Data correction: PO P18665 item 82 — fix duplicate AG-FG-ADJ-AHV105-CDN → AG-FG-AHV105-CDN
       // Item 82 was entered as AG-FG-ADJ-AHV105-CDN (same as item 78) but should be
-      // AG-FG-AHV105-CDN (non-adjustable, fg_alpine_hunter, $489). Corrects both the
-      // purchase_order_items row and the production_order spawned from it.
+      // AG-FG-AHV105-CDN (non-adjustable, fg_alpine_hunter, $489). Three-part fix:
+      //   1. Correct item_name / item_id on purchase_order_items row (if not yet done)
+      //   2. Correct item_name on any production_orders still carrying the old ADJ name
+      //   3. Reactivate the newest cancelled order if no active/pending order exists
       try {
         const { pgPool: p18665Pool } = await import('./db');
-        const p18665Check = await p18665Pool.query(
-          `SELECT id FROM purchase_order_items WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN' AND item_id = '72'`
+
+        // Part 1 – fix item_name if still wrong
+        const p18665NameCheck = await p18665Pool.query(
+          `SELECT id FROM purchase_order_items WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'`
         );
-        if (p18665Check.rows.length > 0) {
+        if (p18665NameCheck.rows.length > 0) {
           await p18665Pool.query(`
             UPDATE purchase_order_items
-            SET item_name  = 'AG-FG-AHV105-CDN',
-                item_id    = '36',
-                unit_price = 489.00,
+            SET item_name   = 'AG-FG-AHV105-CDN',
+                item_id     = '36',
+                unit_price  = 489.00,
                 total_price = 489.00,
-                updated_at = NOW()
+                updated_at  = NOW()
             WHERE id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'
           `);
+          console.log('✅ Data correction: PO P18665 item 82 item_name corrected ADJ-AHV105-CDN → AHV105-CDN');
+        }
+
+        // Part 2 – fix item_id if it was only partially corrected (name fixed but id still 72)
+        const p18665IdCheck = await p18665Pool.query(
+          `SELECT id FROM purchase_order_items WHERE id = 82 AND item_id = '72' AND item_name = 'AG-FG-AHV105-CDN'`
+        );
+        if (p18665IdCheck.rows.length > 0) {
+          await p18665Pool.query(`
+            UPDATE purchase_order_items
+            SET item_id = '36', updated_at = NOW()
+            WHERE id = 82 AND item_id = '72'
+          `);
+          console.log('✅ Data correction: PO P18665 item 82 item_id corrected 72 → 36');
+        }
+
+        // Part 3 – fix production_orders still carrying the ADJ item name for po_item_id=82
+        const p18665ProdCheck = await p18665Pool.query(
+          `SELECT id FROM production_orders WHERE po_item_id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'`
+        );
+        if (p18665ProdCheck.rows.length > 0) {
           await p18665Pool.query(`
             UPDATE production_orders
             SET item_name  = 'AG-FG-AHV105-CDN',
@@ -428,9 +453,38 @@ async function initializeBackgroundServices() {
                 updated_at = NOW()
             WHERE po_item_id = 82 AND item_name = 'AG-FG-ADJ-AHV105-CDN'
           `);
-          console.log('✅ Data correction: PO P18665 item 82 corrected ADJ-AHV105-CDN → AHV105-CDN (non-adjustable)');
+          console.log(`✅ Data correction: ${p18665ProdCheck.rows.length} production_order(s) for PO item 82 renamed ADJ-AHV105-CDN → AHV105-CDN`);
+        }
+
+        // Part 4 – if every production order for item 82 is CANCELLED, reactivate the newest one
+        const p18665ActiveCheck = await p18665Pool.query(`
+          SELECT COUNT(*) AS cnt
+          FROM production_orders
+          WHERE po_item_id = 82 AND production_status NOT IN ('CANCELLED', 'SHIPPED')
+        `);
+        const activeCnt = parseInt(p18665ActiveCheck.rows[0]?.cnt ?? '0', 10);
+        if (activeCnt === 0) {
+          const newestCancelled = await p18665Pool.query(`
+            SELECT id, order_id FROM production_orders
+            WHERE po_item_id = 82 AND production_status = 'CANCELLED'
+            ORDER BY id DESC LIMIT 1
+          `);
+          if (newestCancelled.rows.length > 0) {
+            const { id: ncId, order_id: ncOrderId } = newestCancelled.rows[0];
+            await p18665Pool.query(`
+              UPDATE production_orders
+              SET production_status = 'PENDING',
+                  item_name  = 'AG-FG-AHV105-CDN',
+                  item_id    = '36',
+                  item_code  = 'AG-FG-AHV105-CDN',
+                  specifications = specifications || '{"stockModel": "fg_alpine_hunter"}'::jsonb,
+                  updated_at = NOW()
+              WHERE id = ${ncId}
+            `);
+            console.log(`✅ Data correction: Reactivated production order ${ncOrderId} (id ${ncId}) for PO P18665 item 82 — set to PENDING`);
+          }
         } else {
-          console.log('✅ Data correction: PO P18665 item 82 already correct or not found, skipping');
+          console.log(`✅ Data correction: PO P18665 item 82 already has ${activeCnt} active/pending production order(s), no reactivation needed`);
         }
       } catch (corrErr: any) {
         console.warn('⚠️ PO P18665 item 82 data correction skipped:', corrErr.message);

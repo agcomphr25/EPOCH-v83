@@ -1538,15 +1538,15 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
     // Try to find the order in both drafts and finalized tables
     let order = await storage.getOrderById(orderId);
 
-    // If not found in regular orders, check production_orders table (P1/PO orders)
-    // Case-insensitive check for PO- or P1- prefixes
+    // If not found in regular orders, check production_orders table
+    // Supports all order ID formats: P1-, PO-, FA, FB, and any other series
     const upperOrderId = orderId.toUpperCase();
-    if (!order && (upperOrderId.startsWith('P1-') || upperOrderId.startsWith('PO-'))) {
-      console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
+    if (!order) {
+      console.log(`🔍 Not found in orders table, checking production_orders for: ${orderId}`);
       const { pool } = await import('../../db');
       
       try {
-        // Use UPPER() for case-insensitive matching
+        // Use UPPER() for case-insensitive matching; also search by po_number as fallback
         const productionOrderResult = await pool.query(
           `SELECT 
             order_id,

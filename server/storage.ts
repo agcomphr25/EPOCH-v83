@@ -3335,6 +3335,7 @@ export class DatabaseStorage implements IStorage {
         modelId: derivedModelId,
         itemId: po.itemId,
         itemName: resolvedItemName,
+        rawItemName: po.itemName || null,
         handedness: parsedSpecs?.handedness ?? null,
         shankLength: parsedSpecs?.shank_length ?? parsedSpecs?.shankLength ?? null,
         features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,

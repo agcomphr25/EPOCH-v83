@@ -956,9 +956,9 @@ export default function BarcodeQueuePage() {
                           )}
                           {isOverdue && <Badge variant="destructive" className="text-xs">OVERDUE</Badge>}
                         </div>
-                        {/* Model name label in flat view */}
+                        {/* Item name / model name label in flat view */}
                         <div className="text-xs font-medium text-muted-foreground">
-                          {getModelDisplayName(order.modelId)}
+                          {(order as any).rawItemName || getModelDisplayName(order.modelId)}
                         </div>
                         {order.customerPO && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1075,7 +1075,7 @@ export default function BarcodeQueuePage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{getModelDisplayName(order.modelId)}</td>
+                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{(order as any).rawItemName || getModelDisplayName(order.modelId)}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1 flex-wrap">
                             {materialType !== 'Tikka' && (

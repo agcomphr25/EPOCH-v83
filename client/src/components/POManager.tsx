@@ -1317,16 +1317,6 @@ export default function POManager() {
 
   const allGroupKeys = groupedPOs.map((g) => g.groupKey);
 
-  // Default all customer groups to expanded; add any newly appeared groups
-  useEffect(() => {
-    setExpandedCustomers((prev) => {
-      const prevSet = new Set(prev);
-      const newKeys = allGroupKeys.filter((k) => !prevSet.has(k));
-      if (newKeys.length === 0) return prev;
-      return [...prev, ...newKeys];
-    });
-  }, [allGroupKeys.join(',')]);
-
   const allExpanded = allGroupKeys.length > 0 && allGroupKeys.every((k) => expandedCustomers.includes(k));
 
   const toggleAllAccordions = () => {

@@ -5,6 +5,7 @@ import { insertPOProductSelectionSchema } from '@shared/schema';
 import { nanoid } from 'nanoid';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { idempotencyMiddleware, logIdempotencyEvent } from '../../middleware/idempotency';
+import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
 
 const router = Router();
 
@@ -416,7 +417,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               item.po_number || '',
               specs.item_type || 'Stock',
               item.item_id || '',
-              item.item_name || '',
+              resolveItemDisplayName(item.item_name || ''),
               JSON.stringify(specs),
               dueDate,
             ]);
@@ -592,7 +593,7 @@ router.post('/progress', async (req: Request, res: Response) => {
             item.customer_name,
             item.po_number,
             item.item_id || '',
-            item.item_name || '',
+            resolveItemDisplayName(item.item_name || ''),
             JSON.stringify(specs),
             dueDate,
           ]);
@@ -879,7 +880,7 @@ router.post('/retry-stuck/:poNumber', async (req: Request, res: Response) => {
             sel.po_number || '',
             specs.item_type || 'Stock',
             sel.item_id || '',
-            sel.item_name || '',
+            resolveItemDisplayName(sel.item_name || ''),
             JSON.stringify(specs),
             dueDate,
           ]);

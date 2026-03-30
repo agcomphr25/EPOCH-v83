@@ -1875,5 +1875,58 @@ router.post(
   }
 );
 
-export default router;
+// POST /api/admin/backfill-item-names
+// One-time backfill: resolve AG part numbers to human-readable display names
+// in the production_orders table for all existing rows that store raw part numbers.
+router.post(
+  '/backfill-item-names',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { resolveItemDisplayName } = await import('../utils/resolveItemDisplayName');
 
+      const findQuery = `
+        SELECT id, item_name
+        FROM production_orders
+        WHERE item_name ILIKE 'AG-%'
+      `;
+      const rows = await pool.query(findQuery) as any[];
+      const candidates = Array.isArray(rows) ? rows : (rows as any).rows || [];
+
+      console.log(`[backfill-item-names] Found ${candidates.length} production_orders rows with AG- part numbers`);
+
+      let updatedCount = 0;
+      const skipped: string[] = [];
+
+      for (const row of candidates) {
+        const resolved = resolveItemDisplayName(row.item_name);
+        if (resolved === row.item_name) {
+          skipped.push(row.item_name);
+          continue;
+        }
+        await pool.query(
+          `UPDATE production_orders SET item_name = $1, updated_at = NOW() WHERE id = $2`,
+          [resolved, row.id]
+        );
+        updatedCount++;
+      }
+
+      console.log(`[backfill-item-names] Updated ${updatedCount} rows, skipped ${skipped.length} unrecognised part numbers`);
+
+      res.json({
+        success: true,
+        candidatesFound: candidates.length,
+        updatedCount,
+        skippedCount: skipped.length,
+        skippedSamples: [...new Set(skipped)].slice(0, 20),
+        message: `Updated ${updatedCount} of ${candidates.length} production_orders rows to display names`,
+      });
+    } catch (err: any) {
+      console.error('[backfill-item-names] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+export default router;

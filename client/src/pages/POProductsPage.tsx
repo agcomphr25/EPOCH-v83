@@ -608,7 +608,14 @@ export default function POProductsPage() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[400px] p-0" align="start">
-                        <Command>
+                        <Command filter={(itemValue, search) => {
+                          const customer = customers.find(c => String(c.id) === itemValue);
+                          if (!customer) return 0;
+                          const label = customer.company
+                            ? `${customer.name} (${customer.company})`
+                            : customer.name;
+                          return label.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
+                        }}>
                           <CommandInput placeholder="Type to search customers..." />
                           <CommandList>
                             <CommandEmpty>No customer found.</CommandEmpty>
@@ -620,7 +627,7 @@ export default function POProductsPage() {
                                 return (
                                   <CommandItem
                                     key={customer.id}
-                                    value={displayLabel}
+                                    value={String(customer.id)}
                                     onSelect={() => {
                                       handleInputChange('customerName', customer.name);
                                       setCustomerComboOpen(false);

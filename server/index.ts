@@ -544,6 +544,33 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Global production order item name correction skipped:', corrErr.message);
       }
 
+      // Auto-close OPEN POs where every non-cancelled production order is SHIPPED
+      // Fixes POs like SWS2501/SWS2502 that show "6/6 Shipped" but remain in Active tab
+      try {
+        const { pgPool: autoClosePool } = await import('./db');
+        const autoCloseResult = await autoClosePool.query(`
+          UPDATE purchase_orders po
+          SET status = 'CLOSED'
+          WHERE po.status = 'OPEN'
+            AND EXISTS (
+              SELECT 1 FROM production_orders pr WHERE pr.po_id = po.id
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM production_orders pr
+              WHERE pr.po_id = po.id
+                AND pr.production_status <> 'SHIPPED'
+                AND pr.production_status <> 'CANCELLED'
+            )
+        `);
+        if (autoCloseResult.rowCount && autoCloseResult.rowCount > 0) {
+          console.log(`✅ Auto-closed ${autoCloseResult.rowCount} OPEN PO(s) where all production orders are SHIPPED`);
+        } else {
+          console.log('✅ Auto-close POs: no newly eligible POs found');
+        }
+      } catch (acErr: any) {
+        console.warn('⚠️ Auto-close fully-shipped POs migration skipped:', acErr.message);
+      }
+
       // Sync serialized items stuck at "Pending Layup" with their actual work task progress
       try {
         const { sql: sqlDeptSync } = await import('drizzle-orm');

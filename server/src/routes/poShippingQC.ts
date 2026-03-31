@@ -7,6 +7,36 @@ import { auditUpdateOrders } from '../services/orderAuditWrapper';
 
 const router = Router();
 
+// Auto-close a PO when all non-cancelled production orders are SHIPPED
+async function autoClosePOIfFullyShipped(poId: number): Promise<void> {
+  try {
+    const rows = await pool.query<{ total: string; shipped: string; cancelled: string }>(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE production_status = 'SHIPPED') AS shipped,
+         COUNT(*) FILTER (WHERE production_status = 'CANCELLED') AS cancelled
+       FROM production_orders
+       WHERE po_id = $1`,
+      [poId]
+    );
+    const row = rows[0];
+    if (!row) return;
+    const total = parseInt(row.total, 10);
+    const shipped = parseInt(row.shipped, 10);
+    const cancelled = parseInt(row.cancelled, 10);
+    const active = total - cancelled;
+    if (active > 0 && shipped >= active) {
+      await pool.query(
+        `UPDATE purchase_orders SET status = 'CLOSED' WHERE id = $1 AND status = 'OPEN'`,
+        [poId]
+      );
+      console.log(`✅ PO id=${poId} auto-closed — all ${active} active order(s) shipped`);
+    }
+  } catch (err: any) {
+    console.warn(`⚠️ Auto-close check for PO ${poId} failed: ${err.message}`);
+  }
+}
+
 // GET /api/po-orders/shipping-qc
 // Returns PO orders in Shipping QC department, grouped by customer → PO → items
 router.get('/shipping-qc', authenticateToken, async (req, res) => {
@@ -1314,6 +1344,7 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
     const { storage } = await import('../../storage');
     const results: any[] = [];
     const shippedAt = new Date();
+    const shippedPoIds = new Set<number>();
     
     for (const id of idsToProcess) {
       // Check if this is a PO item (non-stock/metal accessory) or a production order
@@ -1358,12 +1389,19 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
         shippedAt: shouldFulfill ? shippedAt : null,
       });
 
+      if (shouldFulfill && order.poId) shippedPoIds.add(order.poId);
+
       console.log(`✅ ${id} fulfillment status updated: ${shouldFulfill}`);
       results.push({
         orderId: id,
         success: true,
         isFulfilled: shouldFulfill,
       });
+    }
+
+    // Auto-close any POs where all active production orders are now SHIPPED
+    for (const poId of shippedPoIds) {
+      await autoClosePOIfFullyShipped(poId);
     }
 
     // Note: Shipment records are created by process-shipment endpoint, not here
@@ -1995,6 +2033,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     }
 
     // 9. UPDATE ORDER/ITEM STATUSES TO SHIPPED
+    const mainShipPoIds = new Set<number>();
     for (const detail of orderDetails) {
       try {
         if (detail.order.isNonStock) {
@@ -2008,10 +2047,17 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             shippedAt,
           });
           console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
+          const poId = detail.order?.poId ?? (detail.order as any)?.po_id;
+          if (poId) mainShipPoIds.add(Number(poId));
         }
       } catch (updateError: any) {
         console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
       }
+    }
+
+    // Auto-close any POs where all active production orders are now SHIPPED
+    for (const poId of mainShipPoIds) {
+      await autoClosePOIfFullyShipped(poId);
     }
 
     // 10. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers

@@ -1,0 +1,148 @@
+COPY-PASTE PROMPT — FINAL CONTROLLED IMPLEMENTATION
+
+This is clean, surgical, and safe.
+
+You are implementing a controlled, single-source-of-truth date normalization rule in the EPOCH codebase.
+
+==================================================
+GOAL
+==================================================
+
+Enforce:
+
+"All dueDate and forecastCompletionDate values must land on a Tuesday"
+
+==================================================
+NORMALIZATION RULE
+==================================================
+
+- If date is already Tuesday → KEEP SAME DATE
+- Otherwise → MOVE FORWARD to the next Tuesday
+- NEVER move backward
+- NEVER skip an extra week if already Tuesday
+
+==================================================
+SCOPE
+==================================================
+
+Apply ONLY to:
+- dueDate
+- forecastCompletionDate (if persisted)
+
+DO NOT apply to:
+- internal timestamps (QC, CNC, etc.)
+- shippedDate
+- actualCompletionDate
+
+==================================================
+ARCHITECTURE RULES (CRITICAL)
+==================================================
+
+1. SINGLE SOURCE OF TRUTH
+
+Create ONE shared function:
+
+normalizeToTuesday(date)
+
+This function must:
+- operate in local time (not UTC date parsing)
+- treat input as date-only
+- return a normalized date (midnight local)
+
+--------------------------------------------------
+
+2. SINGLE ENFORCEMENT LAYER
+
+Enforce normalization ONLY at server-side write boundaries.
+
+DO NOT:
+- add logic to frontend
+- add logic in React components
+- scatter normalization across multiple layers
+
+--------------------------------------------------
+
+3. APPLY AT ALL WRITE PATHS
+
+Before writing to the database, normalize:
+
+- POST /api/orders/finalized
+- PATCH /api/orders/:orderId
+- POST /api/orders/bulk-update
+- websiteOrderImport (+42 days → then normalize)
+- any forecast persistence logic
+- any admin override endpoints
+
+--------------------------------------------------
+
+4. FORECAST ALIGNMENT
+
+Ensure that:
+- suggestedDueDate from forecast services is normalized BEFORE being returned or persisted
+
+BUT:
+- DO NOT alter simulation math itself
+- normalization happens AFTER calculation, before storage/output
+
+--------------------------------------------------
+
+5. NO DUPLICATION
+
+Ensure:
+- normalization happens exactly once per write path
+- no double-normalization
+- no frontend normalization
+
+==================================================
+IMPLEMENTATION STEPS
+==================================================
+
+1. Create shared utility:
+   normalizeToTuesday(date)
+
+2. Add helper:
+   normalizeDueDateForStorage(date)
+
+3. Identify all write paths (list them)
+
+4. Apply normalization at each write boundary
+
+5. Verify:
+   - no other normalization logic exists elsewhere
+   - no UI-level enforcement remains
+
+==================================================
+VALIDATION CHECKS
+==================================================
+
+Confirm:
+
+- All dueDate values in DB resolve to Tuesday
+- All forecastCompletionDate values resolve to Tuesday
+- No other date fields are affected
+- No duplicate normalization occurs
+- No timezone drift (no off-by-one errors)
+
+==================================================
+OUTPUT
+==================================================
+
+Return:
+
+1. List of files modified
+2. List of write paths updated
+3. Confirmation that:
+   - normalization is centralized
+   - frontend has no enforcement
+   - simulation logic is unchanged
+   - website import correctly normalizes after +42 days
+
+==================================================
+IMPORTANT
+==================================================
+
+This is a GOVERNANCE rule, not a scheduling change.
+
+We are standardizing the FINAL stored date — not altering production logic.
+
+Begin implementation.

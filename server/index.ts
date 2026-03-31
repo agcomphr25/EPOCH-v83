@@ -552,6 +552,80 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Global production order item name correction skipped:', corrErr.message);
       }
 
+      // Data correction: fix production orders where item_id, item_name, or specifications
+      // don't match the linked purchase_order_items row (via po_item_id). Excludes SHIPPED orders.
+      // Also cancels excess duplicate production orders for PO lines that have more active orders
+      // than the line's quantity (keeping the earliest-created one per PO line, excluding SHIPPED).
+      // Idempotent: checks before updating.
+      try {
+        const { pgPool: mismatchPool } = await import('./db');
+
+        // Step 1: fix item_id / item_name / specifications mismatches
+        const mismatchCheck = await mismatchPool.query(
+          `SELECT COUNT(*) AS cnt
+           FROM production_orders po
+           JOIN purchase_order_items poi ON po.po_item_id = poi.id
+           WHERE po.production_status != 'SHIPPED'
+             AND (
+               po.item_id       IS DISTINCT FROM poi.item_id
+               OR po.item_name  IS DISTINCT FROM poi.item_name
+               OR po.specifications IS DISTINCT FROM poi.specifications::jsonb
+             )`
+        );
+        const mismatchCount = parseInt(mismatchCheck.rows[0]?.cnt ?? '0', 10);
+        if (mismatchCount > 0) {
+          const mismatchFix = await mismatchPool.query(
+            `UPDATE production_orders po
+             SET item_id        = poi.item_id,
+                 item_name      = poi.item_name,
+                 specifications = poi.specifications::jsonb,
+                 updated_at     = NOW()
+             FROM purchase_order_items poi
+             WHERE po.po_item_id = poi.id
+               AND po.production_status != 'SHIPPED'
+               AND (
+                 po.item_id       IS DISTINCT FROM poi.item_id
+                 OR po.item_name  IS DISTINCT FROM poi.item_name
+                 OR po.specifications IS DISTINCT FROM poi.specifications::jsonb
+               )`
+          );
+          console.log(`✅ Data correction: Fixed ${mismatchFix.rowCount} production order(s) with mismatched item_id/item_name/specifications`);
+        } else {
+          console.log('✅ Data correction: All production order item data matches PO lines, skipping');
+        }
+
+        // Step 2: cancel excess duplicate production orders where a PO line has more active
+        // orders than its quantity (keep the earliest-created one, cancel the rest)
+        const excessResult = await mismatchPool.query(
+          `WITH ranked AS (
+             SELECT po.id,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY po.po_item_id
+                      ORDER BY po.created_at ASC
+                    ) AS rn,
+                    poi.quantity
+             FROM production_orders po
+             JOIN purchase_order_items poi ON po.po_item_id = poi.id
+             WHERE po.production_status != 'SHIPPED'
+               AND po.production_status != 'CANCELLED'
+           ),
+           excess AS (
+             SELECT id FROM ranked WHERE rn > quantity
+           )
+           UPDATE production_orders
+           SET production_status = 'CANCELLED',
+               updated_at        = NOW()
+           WHERE id IN (SELECT id FROM excess)`
+        );
+        if (excessResult.rowCount && excessResult.rowCount > 0) {
+          console.log(`✅ Data correction: Cancelled ${excessResult.rowCount} excess duplicate production order(s)`);
+        } else {
+          console.log('✅ Data correction: No excess duplicate production orders found');
+        }
+      } catch (mismatchErr: any) {
+        console.warn('⚠️ Production order mismatch correction skipped:', mismatchErr.message);
+      }
+
       // Auto-close OPEN POs where every non-cancelled production order is SHIPPED
       // Fixes POs like SWS2501/SWS2502 that show "6/6 Shipped" but remain in Active tab
       try {

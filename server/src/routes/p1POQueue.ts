@@ -272,13 +272,21 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
         const item = poItem[0];
 
-        // Pre-release guard: skip items already fully released to avoid duplicates
-        const existingOrderCount = item.order_count || 0;
-        if (existingOrderCount >= quantity) {
-          console.warn(`⚠️  P1 PO Schedule: PO item ${poItemId} already fully released (order_count=${existingOrderCount} >= quantity=${quantity}), skipping`);
+        // Pre-release guard: use real-time count from production_orders (not cached order_count)
+        // to avoid duplicates even when order_count has drifted due to partial failures.
+        const realCountRows = await pool.query(
+          `SELECT COUNT(*) AS cnt
+           FROM production_orders
+           WHERE po_item_id = $1
+             AND production_status != 'CANCELLED'`,
+          [poItemId]
+        );
+        const realOrderCount = parseInt(realCountRows[0]?.cnt ?? '0', 10);
+        if (realOrderCount >= quantity) {
+          console.warn(`⚠️  P1 PO Schedule: PO item ${poItemId} already fully released (${realOrderCount} active production orders >= quantity=${quantity}), skipping`);
           warnings.push({
             poProductId: poItemId,
-            warning: `Already fully released (${existingOrderCount} of ${quantity} orders exist)`,
+            warning: `Already fully released (${realOrderCount} of ${quantity} orders exist)`,
           });
           continue;
         }
@@ -294,11 +302,17 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
 
           let insertedCount = 0;
 
+          // Only create the orders that are still missing (quantity minus what already exists).
+          // Start the sequence after the already-existing orders so IDs are deterministic.
+          const remainingToCreate = quantity - realOrderCount;
+
           // Create orders in all_orders table with P1 Production Queue department
-          for (let i = 0; i < quantity; i++) {
+          for (let i = 0; i < remainingToCreate; i++) {
             // Use PO-format order ID for consistency with other PO releases
             // Format: PO-{po_number}-{po_item_id}-{sequence}
-            const orderId = `PO-${item.po_number}-${poItemId}-${i + 1}`;
+            // Sequence starts after existing orders so we never collide.
+            const seqNum = realOrderCount + i + 1;
+            const orderId = `PO-${item.po_number}-${poItemId}-${seqNum}`;
             const notes = `PO Item: ${item.item_name || ''} - PO #${item.po_number} (Unit ${i + 1} of ${quantity})`;
             const features = JSON.stringify({
               po_item_id: poItemId,

@@ -1,0 +1,90 @@
+COPY-PASTE FIX PROMPT (SURGICAL)
+
+This will fix it without blowing anything up:
+
+You are fixing a forecast modal data-loading issue in the EPOCH codebase.
+
+==================================================
+PROBLEM
+==================================================
+
+The forecast modal opens but shows only the header.
+
+Root cause:
+- Forecast API requests are being aborted
+- AbortError is silently ignored
+- No data, no error, no loading state remains
+- Modal receives null forecastData
+
+==================================================
+GOAL
+==================================================
+
+Ensure the modal ALWAYS has usable data or a valid state.
+
+==================================================
+FIX STRATEGY
+==================================================
+
+1. PRESERVE LAST VALID FORECAST DATA
+
+In OrderEntry.tsx:
+
+- When a fetch is aborted (AbortError):
+  DO NOT clear or overwrite existing fullForecastData
+
+- Only update fullForecastData on successful response
+
+--------------------------------------------------
+
+2. ENSURE MODAL NEVER OPENS EMPTY
+
+When opening ForecastDateModal:
+
+IF fullForecastData is null:
+  - trigger a forecast fetch
+  OR
+  - show loading state
+
+--------------------------------------------------
+
+3. LOADING STATE SAFETY
+
+Ensure:
+- isForecastLoading is true when modal opens without data
+- modal shows spinner instead of empty state
+
+--------------------------------------------------
+
+4. DO NOT CHANGE:
+
+- Forecast API logic
+- Simulation logic
+- Modal layout
+- Dependency arrays (unless required)
+
+==================================================
+VALIDATION
+==================================================
+
+Confirm:
+
+- Modal NEVER renders empty (header-only)
+- Either:
+   - loading spinner appears
+   - OR forecast data appears
+   - OR error state appears
+
+- Abort does not leave system in blank state
+
+==================================================
+OUTPUT
+==================================================
+
+Return:
+
+1. Files modified
+2. Exact logic added/changed
+3. Confirmation modal cannot open empty anymore
+
+Begin fix.

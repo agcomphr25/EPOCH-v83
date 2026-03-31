@@ -99,6 +99,7 @@ function getLabelCode(product: ProductItem): string {
 export default function ProductLabelsPage() {
   const { toast } = useToast();
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [productSearch, setProductSearch] = useState<string>('');
   const [labelItems, setLabelItems] = useState<LabelItem[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -194,8 +195,18 @@ export default function ProductLabelsPage() {
     setLabelItems(labelItems.filter((item) => item.productId !== productId));
   };
 
+  const filteredProducts = productSearch.trim()
+    ? products.filter((p) => {
+        const search = productSearch.toLowerCase();
+        return (
+          p.product_name?.toLowerCase().includes(search) ||
+          p.customer_product_number?.toLowerCase().includes(search)
+        );
+      })
+    : products;
+
   const selectAll = () => {
-    const newItems: LabelItem[] = products
+    const newItems: LabelItem[] = filteredProducts
       .filter((p) => !labelItems.find((l) => l.productId === p.id))
       .map((product) => ({
         productId: product.id,
@@ -263,7 +274,7 @@ export default function ProductLabelsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+            <Select value={selectedCustomer} onValueChange={(v) => { setSelectedCustomer(v); setProductSearch(''); }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a customer..." />
               </SelectTrigger>
@@ -275,6 +286,14 @@ export default function ProductLabelsPage() {
             </Select>
 
             {selectedCustomer && (
+              <Input
+                placeholder="Search by name or product number..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+              />
+            )}
+
+            {selectedCustomer && (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={selectAll}>Select All</Button>
                 <Button variant="outline" size="sm" onClick={clearAll}>Clear All</Button>
@@ -284,7 +303,7 @@ export default function ProductLabelsPage() {
             {productsLoading && <p className="text-muted-foreground text-sm">Loading products...</p>}
 
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {products.map((product) => {
+              {filteredProducts.map((product) => {
                 const inQueue = labelItems.find((l) => l.productId === product.id);
                 const code = getLabelCode(product);
                 return (

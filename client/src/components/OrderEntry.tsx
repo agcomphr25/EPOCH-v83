@@ -531,26 +531,31 @@ export default function OrderEntry() {
               setDueDate(fallback);
             }
           }
+          setIsForecastLoading(false);
         })
         .catch((err) => {
-          if (err.name !== 'AbortError') {
-            const fallback = calculateBaseDueDate();
-            setBaseDueDate(fallback);
-            setForecastConfidence(null);
-            setForecastCycleDays(null);
-            setFullForecastData(null);
-            setForecastError('Could not reach forecast engine');
-
-            const otherOptions = features.other_options || [];
-            const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
-            if (!hasAnyRushFee && !isManualDueDate) {
-              setDueDate(fallback);
-            }
+          if (err.name === 'AbortError') {
+            return;
           }
-        })
-        .finally(() => setIsForecastLoading(false));
+          const fallback = calculateBaseDueDate();
+          setBaseDueDate(fallback);
+          setForecastConfidence(null);
+          setForecastCycleDays(null);
+          setFullForecastData(null);
+          setForecastError('Could not reach forecast engine');
 
-      return () => controller.abort();
+          const otherOptions = features.other_options || [];
+          const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+          if (!hasAnyRushFee && !isManualDueDate) {
+            setDueDate(fallback);
+          }
+          setIsForecastLoading(false);
+        });
+
+      return () => {
+        controller.abort();
+        setIsForecastLoading(false);
+      };
     }
   }, [
     modelId,
@@ -563,6 +568,67 @@ export default function OrderEntry() {
     isManualDueDate,
     isLoadingOrder,
   ]);
+
+  const triggerForecastFetch = useCallback(() => {
+    if (!modelId || isForecastLoading) return;
+    setIsForecastLoading(true);
+    fetch('/api/admin/order-forecast/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        model_id: modelId,
+        is_flattop: isFlattop,
+        features,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.suggestedDueDate) {
+          const suggested = new Date(data.suggestedDueDate);
+          setBaseDueDate(suggested);
+          setForecastConfidence(data.confidence || null);
+          setForecastCycleDays(data.totalBusinessDays || null);
+          setFullForecastData(data);
+          setForecastError(null);
+
+          const otherOptions = features.other_options || [];
+          const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+          if (!hasAnyRushFee && !isManualDueDate) {
+            setDueDate(suggested);
+          }
+        } else {
+          const fallback = calculateBaseDueDate();
+          setBaseDueDate(fallback);
+          setForecastConfidence(null);
+          setForecastCycleDays(null);
+          setFullForecastData(null);
+          setForecastError('No forecast data returned');
+
+          const otherOptions = features.other_options || [];
+          const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+          if (!hasAnyRushFee && !isManualDueDate) {
+            setDueDate(fallback);
+          }
+        }
+        setIsForecastLoading(false);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        const fallback = calculateBaseDueDate();
+        setBaseDueDate(fallback);
+        setForecastConfidence(null);
+        setForecastCycleDays(null);
+        setForecastError('Could not reach forecast engine');
+
+        const otherOptions = features.other_options || [];
+        const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
+        if (!hasAnyRushFee && !isManualDueDate) {
+          setDueDate(fallback);
+        }
+        setIsForecastLoading(false);
+      });
+  }, [modelId, isFlattop, features, isManualDueDate, isForecastLoading, calculateBaseDueDate]);
 
   // Auto-adjust due date based on rush fee selections (only for new orders, not when editing existing ones)
   useEffect(() => {
@@ -3012,7 +3078,12 @@ export default function OrderEntry() {
                       {!isEditMode ? (
                         <div
                           className="flex-1 flex items-center h-10 px-3 border rounded-md bg-background cursor-pointer hover:border-blue-400 transition-colors"
-                          onClick={() => setForecastModalOpen(true)}
+                          onClick={() => {
+                            if (!fullForecastData && !isForecastLoading) {
+                              triggerForecastFetch();
+                            }
+                            setForecastModalOpen(true);
+                          }}
                         >
                           <span className={dueDate && !isNaN(dueDate.getTime()) ? 'text-foreground' : 'text-muted-foreground'}>
                             {dueDate && !isNaN(dueDate.getTime())
@@ -3054,7 +3125,12 @@ export default function OrderEntry() {
                           variant="outline"
                           size="sm"
                           className="shrink-0 text-xs"
-                          onClick={() => setForecastModalOpen(true)}
+                          onClick={() => {
+                            if (!fullForecastData && !isForecastLoading) {
+                              triggerForecastFetch();
+                            }
+                            setForecastModalOpen(true);
+                          }}
                         >
                           Forecast Options
                         </Button>

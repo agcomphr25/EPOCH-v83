@@ -1,4 +1,5 @@
 import { useState, useReducer, useEffect, useMemo } from 'react';
+import { openLabelPrintWindow } from '@/lib/labelPrint';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -1347,69 +1348,7 @@ function PrintShipmentPopup({
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=500,height=700');
-    if (!printWindow) {
-      alert('Please allow popups for this site to print');
-      return;
-    }
-
-    const mimeType = labelFormat === 'ZPL' ? 'text/plain' : 'image/gif';
-
-    if (labelFormat === 'ZPL') {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Shipping Label - ${trackingNumber}</title>
-          <style>
-            body { font-family: monospace; padding: 20px; white-space: pre-wrap; font-size: 10px; }
-            @media print { body { padding: 0; margin: 0; } }
-          </style>
-        </head>
-        <body>${atob(labelData)}</body>
-        </html>
-      `);
-    } else {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Shipping Label - ${trackingNumber}</title>
-          <style>
-            @page {
-              size: 4in 6in;
-              margin: 0;
-            }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              width: 4in;
-              height: 6in;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              background: #fff;
-            }
-            img {
-              width: 4in;
-              height: 6in;
-              object-fit: fill;
-            }
-            @media print {
-              body { width: 4in; height: 6in; }
-              img { width: 4in; height: 6in; }
-            }
-          </style>
-        </head>
-        <body>
-          <img src="data:${mimeType};base64,${labelData}" alt="UPS Shipping Label" />
-        </body>
-        </html>
-      `);
-    }
-
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 500);
+    openLabelPrintWindow(labelData, `Shipping Label - ${trackingNumber}`, labelFormat);
   };
 
   return (

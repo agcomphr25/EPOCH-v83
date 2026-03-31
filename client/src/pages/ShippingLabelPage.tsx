@@ -6,6 +6,7 @@ import { ArrowLeft, Package, Truck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { openLabelPrintWindow } from '@/lib/labelPrint';
 
 interface OrderDetailsResponse {
   orderId: string;
@@ -233,74 +234,7 @@ export default function ShippingLabelPage(): JSX.Element {
 
         // Handle label display - open in new window for printing
         if (labelData.labelBase64) {
-          // Create a data URL from the Base64 string
-          const dataUrl = `data:image/gif;base64,${labelData.labelBase64}`;
-
-          // Open in new window for printing (like in development)
-          const printWindow = window.open('', '_blank');
-          if (printWindow) {
-            printWindow.document.write(`
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <title>UPS Shipping Label - ${orderId}</title>
-                  <style>
-                    @page {
-                      size: 4in 6in;
-                      margin: 0;
-                    }
-                    body { 
-                      margin: 0; 
-                      padding: 0; 
-                      display: flex; 
-                      justify-content: center; 
-                      align-items: center; 
-                      background: #f5f5f5;
-                    }
-                    img { 
-                      width: 4in;
-                      height: 6in;
-                      object-fit: fill;
-                    }
-                    .print-button {
-                      position: fixed;
-                      top: 20px;
-                      right: 20px;
-                      padding: 10px 20px;
-                      background: #007cba;
-                      color: white;
-                      border: none;
-                      border-radius: 5px;
-                      cursor: pointer;
-                      font-size: 16px;
-                    }
-                    @media print {
-                      .print-button { display: none; }
-                      body { 
-                        background: white; 
-                        margin: 0;
-                        padding: 0;
-                      }
-                      img { 
-                        width: 4in;
-                        height: 6in;
-                        display: block;
-                        object-fit: fill;
-                      }
-                    }
-                  </style>
-                </head>
-                <body>
-                  <img src="${dataUrl}" alt="UPS Shipping Label" />
-                  <button class="print-button" onclick="window.print()">Print Label</button>
-                </body>
-              </html>
-            `);
-            printWindow.document.close();
-
-            // Focus the window so user can see it
-            printWindow.focus();
-          }
+          openLabelPrintWindow(labelData.labelBase64, `UPS Shipping Label - ${orderId}`);
 
           toast({
             title: 'Label Generated',

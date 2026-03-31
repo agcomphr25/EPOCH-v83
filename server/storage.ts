@@ -10082,6 +10082,11 @@ export class DatabaseStorage implements IStorage {
       INNER JOIN purchase_order_items poi ON po.id = poi.po_id
       LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
       WHERE po.status = 'OPEN'
+         OR (po.status = 'CLOSED' AND EXISTS (
+               SELECT 1 FROM production_orders
+               WHERE po_id = po.id
+                 AND production_status NOT IN ('SHIPPED', 'CANCELLED')
+             ))
       ORDER BY po.customer_name ASC, po.po_number ASC, poi.id ASC
     `);
     

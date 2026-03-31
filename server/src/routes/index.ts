@@ -6268,6 +6268,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const newItem = await storage.createPurchaseOrderItem(validatedData);
       console.log('🔧 Created PO item:', newItem.id);
 
+      // Re-open the parent PO if it is CLOSED (item added to a closed P1 customer PO).
+      // Single atomic UPDATE — only touches the row when status is actually CLOSED.
+      try {
+        const reopenResult = await itemsPool.query(
+          `UPDATE purchase_orders SET status = 'OPEN' WHERE id = $1 AND status = 'CLOSED' RETURNING id`,
+          [validatedData.poId]
+        );
+        if (reopenResult.rowCount && reopenResult.rowCount > 0) {
+          console.log(`🔧 Reopened CLOSED PO ${validatedData.poId} after new item was added`);
+        }
+      } catch (reopenError) {
+        // Log as error so ops notices if the reopen fails (item was still created).
+        console.error(`🔧 ALERT: Failed to reopen CLOSED PO ${validatedData.poId} after item add — manual intervention may be required:`, reopenError);
+      }
+
       // Check if this item should be automatically added to production queue
       // If item type is custom_model, check the associated PO Product's productType
       if (validatedData.itemType === 'custom_model') {

@@ -469,6 +469,21 @@ export const customerStockModelPrices = pgTable('customer_stock_model_prices', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Bulk payment batches table for grouping bulk payment submissions
+export const bulkPaymentBatches = pgTable('bulk_payment_batches', {
+  id: serial('id').primaryKey(),
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: text('created_by').notNull(),
+  customerId: text('customer_id').notNull(),
+  totalAmount: real('total_amount').notNull(),
+  paymentMethod: text('payment_method').notNull(),
+  notes: text('notes'),
+});
+
+export const insertBulkPaymentBatchSchema = createInsertSchema(bulkPaymentBatches).omit({ id: true, createdAt: true });
+export type BulkPaymentBatch = typeof bulkPaymentBatches.$inferSelect;
+export type InsertBulkPaymentBatch = z.infer<typeof insertBulkPaymentBatchSchema>;
+
 // Payments table for multiple payments per order
 export const payments = pgTable('payments', {
   id: serial('id').primaryKey(),
@@ -480,6 +495,7 @@ export const payments = pgTable('payments', {
   paymentDate: timestamp('payment_date').notNull(),
   notes: text('notes'), // Optional notes for the payment
   processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
+  batchId: integer('batch_id').references(() => bulkPaymentBatches.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

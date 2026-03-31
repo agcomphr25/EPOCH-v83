@@ -84,6 +84,7 @@ import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
+import BulkPaymentHistoryPage from './pages/BulkPaymentHistoryPage';
 import AccountingPage from './pages/AccountingPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
@@ -810,6 +811,10 @@ function App() {
                   <Route
                     path="/finance/bulk-payment"
                     component={BulkPaymentPage}
+                  />
+                  <Route
+                    path="/finance/bulk-payment-history"
+                    component={BulkPaymentHistoryPage}
                   />
                   <Route
                     path="/finance/accounting"

@@ -889,6 +889,12 @@ export default function Navigation() {
       description: 'Record payments for multiple customer orders at once',
     },
     {
+      path: '/finance/bulk-payment-history',
+      label: 'Bulk Payment History',
+      icon: CreditCard,
+      description: 'Audit log of all bulk payment batches',
+    },
+    {
       path: '/refund-request',
       label: 'Refund Request',
       icon: TrendingDown,

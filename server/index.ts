@@ -296,6 +296,7 @@ async function initializeBackgroundServices() {
           '0009_schema_change_log.sql',
           '0010_all_orders_unique_order_id.sql',
           '0011_fix_finalized_orders_in_production_departments.sql',
+          '0012_bulk_payment_batches.sql',
         ];
         for (const f of safeFiles) {
           const filePath = join(migrationsDir, f);

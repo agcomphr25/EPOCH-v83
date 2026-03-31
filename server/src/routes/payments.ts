@@ -6,10 +6,11 @@ import {
   payments,
   creditCardTransactions,
   allOrders,
+  bulkPaymentBatches,
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, desc, inArray, count, sql } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 import { auditService } from '../services/auditService';
 import * as accountingService from '../services/accountingService';
@@ -466,6 +467,22 @@ router.post('/batch', async (req, res) => {
     const results = [];
     let ordersUpdated = 0;
 
+    // Determine the customer from the first order
+    const firstOrder = existingOrders[0];
+    const customerId = firstOrder?.customerId || 'unknown';
+
+    // Create the batch record
+    const [batch] = await db
+      .insert(bulkPaymentBatches)
+      .values({
+        createdBy: (req as any).user?.username || (req as any).user?.role || 'system',
+        customerId,
+        totalAmount: batchData.totalAmount,
+        paymentMethod: batchData.paymentMethod,
+        notes: batchData.notes || null,
+      })
+      .returning();
+
     // Process each order payment
     for (const allocation of batchData.orderAllocations) {
       if (allocation.amount > 0) {
@@ -480,6 +497,7 @@ router.post('/batch', async (req, res) => {
             notes:
               batchData.notes ||
               `${batchData.paymentMethod.replace('_', ' ').toUpperCase()} payment via batch processing`,
+            batchId: batch.id,
           })
           .returning();
 
@@ -686,6 +704,22 @@ router.post('/bulk-live', async (req, res) => {
     const cardType = result.rawResponse?.card_type || 
       result.rawResponse?.transaction?.card_details?.card_type;
 
+    // Determine customer from the first existing order
+    const firstExistingOrder = existingOrders[0];
+    const liveCustomerId = firstExistingOrder?.customerId || 'unknown';
+
+    // Create the batch record for this bulk live payment
+    const [liveBatch] = await db
+      .insert(bulkPaymentBatches)
+      .values({
+        createdBy: (req as any).user?.username || (req as any).user?.role || 'system',
+        customerId: liveCustomerId,
+        totalAmount: paymentData.totalAmount,
+        paymentMethod: 'credit_card',
+        notes: `Live CC bulk payment - Trans: ${transactionId}`,
+      })
+      .returning();
+
     // Now distribute the payment to each order
     const paymentResults = [];
     let ordersProcessed = 0;
@@ -702,6 +736,7 @@ router.post('/bulk-live', async (req, res) => {
               paymentAmount: allocation.amount,
               paymentDate: new Date(),
               notes: `Live credit card payment - Trans: ${transactionId}, Auth: ${result.authCode || 'N/A'}`,
+              batchId: liveBatch.id,
             })
             .returning();
 
@@ -843,6 +878,73 @@ router.post('/bulk-live', async (req, res) => {
       success: false,
       error: 'Payment processing failed' 
     });
+  }
+});
+
+// Get all bulk payment batches (most recent first) with order count
+router.get('/batches', async (req, res) => {
+  try {
+    const batches = await db
+      .select({
+        id: bulkPaymentBatches.id,
+        createdAt: bulkPaymentBatches.createdAt,
+        createdBy: bulkPaymentBatches.createdBy,
+        customerId: bulkPaymentBatches.customerId,
+        totalAmount: bulkPaymentBatches.totalAmount,
+        paymentMethod: bulkPaymentBatches.paymentMethod,
+        notes: bulkPaymentBatches.notes,
+        orderCount: count(payments.id),
+      })
+      .from(bulkPaymentBatches)
+      .leftJoin(payments, eq(payments.batchId, bulkPaymentBatches.id))
+      .groupBy(bulkPaymentBatches.id)
+      .orderBy(desc(bulkPaymentBatches.createdAt));
+
+    res.json({ batches });
+  } catch (error) {
+    console.error('Error fetching bulk payment batches:', error);
+    res.status(500).json({ error: 'Failed to fetch bulk payment batches' });
+  }
+});
+
+// Get a single bulk payment batch with its associated payments
+router.get('/batches/:id', async (req, res) => {
+  try {
+    const batchId = parseInt(req.params.id, 10);
+    if (isNaN(batchId)) {
+      return res.status(400).json({ error: 'Invalid batch ID' });
+    }
+
+    const [batch] = await db
+      .select()
+      .from(bulkPaymentBatches)
+      .where(eq(bulkPaymentBatches.id, batchId))
+      .limit(1);
+
+    if (!batch) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+
+    const batchPayments = await db
+      .select({
+        paymentId: payments.id,
+        orderId: payments.orderId,
+        paymentAmount: payments.paymentAmount,
+        paymentDate: payments.paymentDate,
+        paymentType: payments.paymentType,
+        notes: payments.notes,
+        orderDate: allOrders.orderDate,
+        customerPO: allOrders.customerPO,
+      })
+      .from(payments)
+      .leftJoin(allOrders, eq(allOrders.orderId, payments.orderId))
+      .where(eq(payments.batchId, batchId))
+      .orderBy(payments.orderId);
+
+    res.json({ batch, payments: batchPayments });
+  } catch (error) {
+    console.error('Error fetching bulk payment batch:', error);
+    res.status(500).json({ error: 'Failed to fetch bulk payment batch' });
   }
 });
 

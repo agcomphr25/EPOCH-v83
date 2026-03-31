@@ -1,0 +1,212 @@
+You are performing a deep forensic audit of how “Estimated Completion Dates” / forecast dates / due dates are calculated, stored, modified, and overridden inside the EPOCH codebase.
+
+Your goal is to fully trace the due-date lifecycle so we can enforce a business rule:
+
+ALL estimated completion / forecast / shipping dates must always land on a TUESDAY.
+
+==================================================
+PRIMARY OBJECTIVES
+==================================================
+
+1. Identify where estimated completion dates are:
+   - initially calculated
+   - recalculated
+   - pushed to a different forecast date
+   - manually overridden
+
+2. Identify all database fields that store:
+   - estimated completion date
+   - forecast date
+   - due date
+   - ship date
+   - promised date
+   - any related scheduling date
+
+3. Identify all backend logic responsible for:
+   - date calculation
+   - lead-time offsets
+   - business-day adjustments
+   - production scheduling
+   - forecast push logic
+   - shipping date logic
+
+4. Identify all frontend UI components where:
+   - dates are displayed
+   - dates are edited
+   - dates are overridden
+   - dates are pushed forward/backward
+
+5. Determine whether date logic is:
+   - centralized in one scheduling engine/service
+   - partially centralized
+   - fragmented across multiple modules
+
+==================================================
+CRITICAL QUESTIONS TO ANSWER
+==================================================
+
+A. SOURCE OF TRUTH
+- What is the single source of truth for estimated completion date?
+- What table(s) hold it?
+- What column name(s) hold it?
+- Are there multiple competing date fields?
+
+B. DATE LIFECYCLE
+Trace the full lifecycle from start to finish:
+
+1. order created
+2. initial estimated completion date assigned
+3. production / workflow dates updated
+4. forecast pushed or rescheduled
+5. shipping finalized
+
+For each step, identify:
+- file path
+- function name
+- API route if applicable
+- database write
+- UI entry point if applicable
+
+C. DATE CALCULATION LOGIC
+Find all code that:
+- adds days to a date
+- calculates lead times
+- adjusts for weekends
+- adjusts for business days
+- derives estimated completion from another date
+- recalculates forecast dates after changes
+
+Search for terms like:
+- dueDate
+- forecastDate
+- estimatedCompletion
+- estimatedCompletionDate
+- completionDate
+- shipDate
+- promisedDate
+- leadTime
+- businessDays
+- addDays
+- setDate
+- date-fns
+- dayjs
+- moment
+- schedule
+- forecast
+- push date
+- override
+
+D. FORECAST PUSH / OVERRIDE FLOW
+- Where does “push to new forecast date” happen?
+- Is the logic a direct overwrite?
+- Is it a delta adjustment?
+- Is it a full recalculation?
+- Are pushes / overrides logged?
+- Is there an audit trail with before/after values, reason, actor, and timestamp?
+
+E. UI TOUCHPOINTS
+List every screen / component where users can:
+- see the current estimated completion date
+- push the date
+- override the date
+- edit shipping-related dates
+
+For each, provide:
+- file path
+- component name
+- action taken
+- API endpoint called
+
+F. API / SERVICE LAYER
+List every endpoint / controller / service function that:
+- creates dates
+- updates dates
+- overrides dates
+- recalculates dates
+
+For each, provide:
+- route
+- handler/controller
+- service function
+- database mutation performed
+
+G. CENTRALIZATION CHECK
+Answer clearly:
+- Is there one central function or service responsible for due date calculation?
+- If yes, what is it?
+- If no, where is the logic duplicated?
+
+H. TUESDAY ENFORCEMENT READINESS
+For every place a due/forecast/ship date is set, classify it as:
+- SAFE to enforce Tuesday here
+- RISKY to enforce here
+- SHOULD NOT enforce here
+
+Explain why.
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return the results in this structure:
+
+1. DATABASE MAP
+- table
+- column
+- purpose
+- notes
+
+2. DATE FLOW DIAGRAM
+- step-by-step lifecycle of estimated completion / forecast / ship dates
+
+3. CODE LOCATIONS
+- file path
+- function name
+- responsibility
+
+4. UI TOUCHPOINTS
+- screen
+- component
+- user action
+- endpoint called
+
+5. API / BACKEND TOUCHPOINTS
+- route
+- handler
+- service
+- effect on dates
+
+6. AUDIT / OVERRIDE ANALYSIS
+- where overrides exist
+- what audit controls exist
+- what is missing
+
+7. RISK ANALYSIS
+- where Tuesday enforcement could break existing logic
+
+8. RECOMMENDED INSERTION POINTS
+Identify the TOP 3 best places to enforce this rule:
+“All estimated completion / forecast / ship dates must resolve to Tuesday.”
+
+==================================================
+IMPORTANT RULES
+==================================================
+
+- Do not assume. Trace actual code.
+- Follow imports and function calls deeply.
+- If logic is duplicated, explicitly call it out.
+- If no central scheduler exists, explicitly state that.
+- Show the actual paths and function names involved.
+- Distinguish between UI-only behavior and true backend source-of-truth behavior.
+
+==================================================
+FINAL GOAL
+==================================================
+
+We want to determine the best architectural place to introduce a rule such as:
+
+normalizeToTuesday(date)
+
+so that all estimated completion dates, pushed forecast dates, and shipping-related dates consistently land on a Tuesday without breaking production scheduling logic, audit history, or downstream workflows.
+
+Begin the full audit now.

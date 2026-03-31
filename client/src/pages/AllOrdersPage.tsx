@@ -159,6 +159,7 @@ interface PaginatedOrdersResponse {
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [departmentFilterMode, setDepartmentFilterMode] = useState<'include' | 'exclude'>('include');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [statusFilterMode, setStatusFilterMode] = useState<'include' | 'exclude'>('include');
   const [sortBy, setSortBy] = useState<
@@ -589,10 +590,15 @@ export default function AllOrdersPage() {
         return false;
       }
 
-      // Department filter
-      const departmentMatch =
-        selectedDepartment === 'all' ||
-        order.currentDepartment === selectedDepartment;
+      // Department filter (include or exclude mode)
+      let departmentMatch: boolean;
+      if (selectedDepartment === 'all') {
+        departmentMatch = true;
+      } else if (departmentFilterMode === 'exclude') {
+        departmentMatch = order.currentDepartment !== selectedDepartment;
+      } else {
+        departmentMatch = order.currentDepartment === selectedDepartment;
+      }
 
       // Status filter (include or exclude mode)
       let statusMatch: boolean;
@@ -625,7 +631,7 @@ export default function AllOrdersPage() {
 
       return departmentMatch && statusMatch && searchMatch;
     });
-  }, [allOrders, searchTerm, selectedDepartment, selectedStatus, statusFilterMode]);
+  }, [allOrders, searchTerm, selectedDepartment, departmentFilterMode, selectedStatus, statusFilterMode]);
 
   // Function to calculate search relevance score
   const getSearchRelevanceScore = (order: any, searchTerm: string) => {
@@ -688,7 +694,7 @@ export default function AllOrdersPage() {
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedDepartment, selectedStatus, statusFilterMode, sortBy]);
+  }, [searchTerm, selectedDepartment, departmentFilterMode, selectedStatus, statusFilterMode, sortBy]);
 
   // Calculate client-side pagination
   const paginationData = React.useMemo(() => {
@@ -791,7 +797,10 @@ export default function AllOrdersPage() {
               <span className="text-sm font-medium">Department:</span>
               <Select
                 value={selectedDepartment}
-                onValueChange={setSelectedDepartment}
+                onValueChange={(val) => {
+                  setSelectedDepartment(val);
+                  if (val === 'all') setDepartmentFilterMode('include');
+                }}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Departments" />
@@ -805,6 +814,17 @@ export default function AllOrdersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {selectedDepartment !== 'all' && (
+                <Button
+                  variant={departmentFilterMode === 'exclude' ? 'destructive' : 'outline'}
+                  size="sm"
+                  onClick={() => setDepartmentFilterMode(departmentFilterMode === 'include' ? 'exclude' : 'include')}
+                  className="text-xs px-2 h-8"
+                  title={departmentFilterMode === 'include' ? 'Click to exclude this department instead' : 'Click to include this department instead'}
+                >
+                  {departmentFilterMode === 'include' ? 'Include' : 'Exclude'}
+                </Button>
+              )}
             </div>
 
             {/* Status Filter */}

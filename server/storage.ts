@@ -3693,7 +3693,7 @@ export class DatabaseStorage implements IStorage {
       const features = order.features as any;
       if (features.miscItems && Array.isArray(features.miscItems)) {
         features.miscItems.forEach((item: any) => {
-          const itemPrice = Number(item.price || 0);
+          const itemPrice = Number(item.unitPrice ?? item.price ?? 0);
           const itemQuantity = Number(item.quantity || 1);
           if (!isNaN(itemPrice) && !isNaN(itemQuantity)) {
             total += itemPrice * itemQuantity;

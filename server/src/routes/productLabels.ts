@@ -20,7 +20,7 @@ const ROWS = 7;
 const LABELS_PER_PAGE = COLUMNS * ROWS;            // 14
 
 const LEFT_MARGIN = 0.156 * POINTS_PER_INCH;      // ~11.2pt
-const TOP_MARGIN = 0.83 * POINTS_PER_INCH;        // ~59.8pt
+const TOP_MARGIN = 0.5 * POINTS_PER_INCH;         // 36pt (Avery 8162 spec)
 const H_GAP = 0.1875 * POINTS_PER_INCH;           // 13.5pt
 const V_GAP = 0;
 
@@ -162,17 +162,29 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
 
         // Avery 8162: 288pt wide x ~96pt tall
         // Layout (from top): code text → barcode image → description
+        // All offsets are proportional to LABEL_HEIGHT to avoid hardcoded pixel misalignment
         const padding = 8;
         const labelInnerWidth = LABEL_WIDTH - padding * 2;  // ~272pt usable width
         const centerX = x + LABEL_WIDTH / 2;
+
+        // Vertical zones (proportional within LABEL_HEIGHT ~96pt):
+        //   Code text baseline: top 15% of label height from top edge
+        //   Barcode: 20%–65% of label height (centered in upper-middle band)
+        //   Description: bottom 20% of label height
+
+        const codeTopOffset = LABEL_HEIGHT * 0.15;      // ~14.4pt from top of label
+        const barcodeTopOffset = LABEL_HEIGHT * 0.20;   // ~19.2pt from top
+        const barcodeHeight = LABEL_HEIGHT * 0.40;      // ~38.4pt tall
+        const descTopOffset = LABEL_HEIGHT * 0.72;      // ~69.1pt from top (leaves ~27pt for desc)
 
         // Code value text at top (size 12 bold)
         const codeText = item.barcodeValue;
         const codeFontSize = 12;
         const codeWidth = boldFont.widthOfTextAtSize(codeText, codeFontSize);
+        // y is the bottom-left of the label cell; pdf-lib draws text from baseline up
         page.drawText(codeText, {
           x: centerX - codeWidth / 2,
-          y: y + LABEL_HEIGHT - 16,   // ~6pt from top
+          y: y + LABEL_HEIGHT - codeTopOffset - codeFontSize,
           size: codeFontSize,
           font: boldFont,
           color: rgb(0, 0, 0),
@@ -185,15 +197,15 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
             const barcodeImage = await pdfDoc.embedPng(pngBuffer);
 
             const barcodeDisplayWidth = Math.min(labelInnerWidth - 16, 250);
-            const barcodeDisplayHeight = 32;
             const barcodeX = centerX - barcodeDisplayWidth / 2;
-            const barcodeY = y + LABEL_HEIGHT - 58;   // centered vertically
+            // y-coordinate: label bottom + (label height minus offset from top minus barcode height)
+            const barcodeY = y + LABEL_HEIGHT - barcodeTopOffset - barcodeHeight;
 
             page.drawImage(barcodeImage, {
               x: barcodeX,
               y: barcodeY,
               width: barcodeDisplayWidth,
-              height: barcodeDisplayHeight,
+              height: barcodeHeight,
             });
           } catch (barcodeError) {
             console.error('Barcode generation error:', barcodeError);
@@ -209,15 +221,17 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
 
         // Description text at bottom (size 9, up to 2 lines)
         const descFontSize = 9;
+        const lineSpacing = LABEL_HEIGHT * 0.115;  // ~11pt, proportional to label height
         const maxDescLines = 2;
         const descLines = wrapText(item.description, font, descFontSize, labelInnerWidth - 8).slice(0, maxDescLines);
-        const descStartY = y + LABEL_HEIGHT - 70;   // bottom text area
+        // First description line baseline from label bottom
+        const descBaseY = y + LABEL_HEIGHT - descTopOffset - descFontSize;
 
         descLines.forEach((line, lineIndex) => {
           const lineWidth = font.widthOfTextAtSize(line, descFontSize);
           page.drawText(line, {
             x: centerX - lineWidth / 2,
-            y: descStartY - lineIndex * 12,
+            y: descBaseY - lineIndex * lineSpacing,
             size: descFontSize,
             font: font,
             color: rgb(0, 0, 0),

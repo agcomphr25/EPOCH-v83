@@ -8374,6 +8374,22 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Reopen a fully-received (closed) PO when a new item is added
+    if (data.vendorPoId) {
+      try {
+        const parentPO = await this.getVendorPO(data.vendorPoId);
+        if (parentPO && parentPO.status === 'Fully Received') {
+          await db
+            .update(vendorPOs)
+            .set({ status: 'Partially Received', updatedAt: new Date() })
+            .where(eq(vendorPOs.id, data.vendorPoId));
+        }
+      } catch (error) {
+        console.error('Error reopening closed vendor PO:', error);
+        // Don't fail PO item creation if status update fails
+      }
+    }
+
     // Auto-populate manufacturing queue if this is a manufactured part
     try {
       const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
@@ -12835,6 +12851,17 @@ export class DatabaseStorage implements IStorage {
       .insert(p2PurchaseOrderItems)
       .values({ ...data, totalPrice })
       .returning();
+
+    // Reopen a CLOSED P2 PO when a new item is added
+    try {
+      const parentPO = await this.getP2PurchaseOrder(item.poId);
+      if (parentPO && parentPO.status === 'CLOSED') {
+        await this.updateP2PurchaseOrder(item.poId, { status: 'OPEN' });
+      }
+    } catch (error) {
+      console.error('Error reopening closed P2 PO:', error);
+      // Don't fail PO item creation if status update fails
+    }
 
     try {
       // Get the P2 PO to extract due date

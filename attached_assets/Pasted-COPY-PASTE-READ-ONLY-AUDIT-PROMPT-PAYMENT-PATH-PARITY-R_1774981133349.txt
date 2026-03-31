@@ -1,0 +1,153 @@
+COPY-PASTE: READ-ONLY AUDIT PROMPT (PAYMENT PATH PARITY)
+READ-ONLY AUDIT MODE — DO NOT MODIFY ANY FILES
+
+You are performing a forensic audit of the EPOCH codebase to understand why two different payment flows produce different charge amounts.
+
+CRITICAL RULES:
+- DO NOT edit, write, refactor, or suggest code changes yet
+- DO NOT generate patches or diffs
+- ONLY read and report findings
+- Be precise, structured, and reference exact files, functions, and line numbers
+
+---
+
+## 🎯 OBJECTIVE
+
+We have TWO payment flows:
+
+1) SINGLE ORDER PAYMENT FLOW
+   - User opens a specific order
+   - Clicks "Take Payment" (or similar)
+   - System calculates the correct, fully updated charge amount
+
+2) BULK STOCK PAYMENT FLOW
+   - User selects multiple stocks/orders
+   - Uses "Bulk Payment"
+   - System DOES NOT pick up all updated amounts correctly
+
+We need to understand WHY these two flows produce different totals and where the divergence occurs.
+
+---
+
+## 🧭 AUDIT TASKS
+
+### 1. TRACE SINGLE ORDER PAYMENT FLOW (SOURCE OF TRUTH)
+
+Identify:
+- Entry point (UI component, button handler)
+- API endpoint called
+- Service layer function(s)
+- Final calculation logic for amount charged
+
+For this flow, document:
+- File paths
+- Function names
+- Exact variables used for:
+  - subtotal
+  - discounts
+  - taxes
+  - fees
+  - shipping
+  - overrides
+  - final total
+
+IMPORTANT:
+- Identify the EXACT function that produces the final charge amount
+- Treat this as the "correct" reference implementation
+
+---
+
+### 2. TRACE BULK PAYMENT FLOW
+
+Identify:
+- Entry point (bulk payment UI)
+- API endpoint(s)
+- Service layer logic
+- Aggregation logic across multiple stocks/orders
+
+For this flow, document:
+- How each item’s amount is retrieved
+- Whether it:
+  - recalculates totals
+  - uses stored values
+  - uses cached/denormalized fields
+  - skips any adjustments
+
+---
+
+### 3. SIDE-BY-SIDE COMPARISON
+
+Create a structured comparison:
+
+| Step | Single Order Flow | Bulk Flow | Difference |
+|------|------------------|----------|------------|
+
+Focus specifically on:
+- Source of truth for totals
+- Whether recalculation happens
+- Whether stale fields are used
+- Missing components (tax, shipping, adjustments, etc.)
+- Any rounding or aggregation differences
+
+---
+
+### 4. IDENTIFY ROOT CAUSE(S)
+
+Explicitly answer:
+- Where do the two flows diverge?
+- Which function(s) are NOT shared but should be?
+- Is bulk flow:
+  - using outdated fields?
+  - bypassing calculation logic?
+  - missing adjustments?
+  - summing incorrect columns?
+
+Call out exact files + line numbers.
+
+---
+
+### 5. DATA MODEL ANALYSIS
+
+Inspect relevant tables/models:
+- orders
+- order_items
+- stocks
+- payments
+- invoices (if applicable)
+
+Determine:
+- Which fields represent:
+  - stored totals
+  - calculated totals
+  - overridden totals
+
+Identify if bulk flow is relying on:
+- persisted totals instead of recalculated ones
+
+---
+
+### 6. RISKS / EDGE CASES
+
+Identify potential issues such as:
+- partial payments
+- updated pricing after order creation
+- manual overrides
+- tax recalculations
+- shipping adjustments
+- multi-stock aggregation errors
+
+---
+
+## 📦 OUTPUT FORMAT
+
+Provide a structured report with:
+
+1) Flow diagrams (text-based is fine)
+2) File + function references
+3) Side-by-side comparison table
+4) Clear root cause explanation
+5) List of mismatched logic points
+
+DO NOT propose fixes yet.
+
+END INSTRUCTION

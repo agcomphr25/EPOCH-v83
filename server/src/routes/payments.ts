@@ -10,10 +10,11 @@ import {
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
-import { eq, desc, inArray, count, sql } from 'drizzle-orm';
+import { eq, desc, inArray, count, sql, isNull } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 import { auditService } from '../services/auditService';
 import * as accountingService from '../services/accountingService';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 
 const router = Router();
 
@@ -947,5 +948,226 @@ router.get('/batches/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch bulk payment batch' });
   }
 });
+
+// Backfill historical payments into synthetic bulk_payment_batches records
+// Protected: ADMIN only. Safe to run multiple times (idempotent).
+router.post(
+  '/backfill-history',
+  authenticateToken,
+  requireRole('ADMIN', 'admin'),
+  async (req, res) => {
+    try {
+      console.log('🔄 Starting bulk payment history backfill...');
+
+      // 1. Find all payments that have no batch_id assigned yet
+      const orphanedPayments = await db
+        .select({
+          id: payments.id,
+          orderId: payments.orderId,
+          paymentType: payments.paymentType,
+          paymentAmount: payments.paymentAmount,
+          paymentDate: payments.paymentDate,
+          notes: payments.notes,
+          customerId: allOrders.customerId,
+        })
+        .from(payments)
+        .leftJoin(allOrders, eq(allOrders.orderId, payments.orderId))
+        .where(isNull(payments.batchId));
+
+      if (orphanedPayments.length === 0) {
+        console.log('✅ No orphaned payments found — backfill not needed.');
+        return res.json({
+          success: true,
+          message: 'No orphaned payments found. Backfill not needed.',
+          batchesCreated: 0,
+          paymentsUpdated: 0,
+        });
+      }
+
+      console.log(`Found ${orphanedPayments.length} orphaned payments to backfill.`);
+
+      // 2. Separate credit card payments from manual payments.
+      // Manual types include cash, check, wire, ach, and agr — all non-card payment
+      // methods supported by the batch payment flow in this codebase.
+      const manualPaymentTypes = new Set(['cash', 'check', 'wire', 'ach', 'agr']);
+      const manualPayments = orphanedPayments.filter((p) =>
+        manualPaymentTypes.has(p.paymentType)
+      );
+      const creditCardPayments = orphanedPayments.filter(
+        (p) => p.paymentType === 'credit_card'
+      );
+      const otherPayments = orphanedPayments.filter(
+        (p) => !manualPaymentTypes.has(p.paymentType) && p.paymentType !== 'credit_card'
+      );
+
+      // 3. Compute groupings in memory before touching the DB
+      const batchUpdates: Array<{ paymentIds: number[]; batchValues: typeof bulkPaymentBatches.$inferInsert }> = [];
+
+      // Group manual payments: customer_id + calendar day (UTC) + payment_type
+      const manualGroups = new Map<string, typeof manualPayments>();
+      for (const payment of manualPayments) {
+        const customerId = payment.customerId || 'unknown';
+        const day = payment.paymentDate
+          ? new Date(payment.paymentDate).toISOString().slice(0, 10)
+          : 'unknown-date';
+        const key = `${customerId}|${day}|${payment.paymentType}`;
+        if (!manualGroups.has(key)) {
+          manualGroups.set(key, []);
+        }
+        manualGroups.get(key)!.push(payment);
+      }
+
+      for (const [, group] of manualGroups) {
+        const customerId = group[0].customerId || 'unknown';
+        const totalAmount = group.reduce((sum, p) => sum + (p.paymentAmount || 0), 0);
+        const paymentMethod = group[0].paymentType;
+        const paymentDate = group[0].paymentDate ? new Date(group[0].paymentDate) : new Date();
+        batchUpdates.push({
+          paymentIds: group.map((p) => p.id),
+          batchValues: {
+            createdBy: 'backfill',
+            customerId,
+            totalAmount,
+            paymentMethod,
+            notes: `Backfilled historical ${paymentMethod} payment(s) — ${group.length} order(s)`,
+            createdAt: paymentDate,
+          },
+        });
+      }
+
+      // Group credit card payments by shared credit_card_transactions record.
+      // For bulk-live payments the stored transactionId is `{masterRef}-{orderId}`:
+      //   masterRef = numeric Accept.Blue reference number (no dashes)
+      //   orderId   = order identifier (may contain letters/dashes)
+      // Group by masterRef so all allocations of the same charge share one batch.
+      if (creditCardPayments.length > 0) {
+        const ccPaymentIds = creditCardPayments.map((p) => p.id);
+
+        const ccTransactions = await db
+          .select({
+            paymentId: creditCardTransactions.paymentId,
+            transactionId: creditCardTransactions.transactionId,
+          })
+          .from(creditCardTransactions)
+          .where(inArray(creditCardTransactions.paymentId, ccPaymentIds));
+
+        const paymentToTxn = new Map<number, string>();
+        for (const txn of ccTransactions) {
+          paymentToTxn.set(txn.paymentId, txn.transactionId);
+        }
+
+        const txnGroups = new Map<string, typeof creditCardPayments>();
+        const noTxnGroup: typeof creditCardPayments = [];
+
+        for (const payment of creditCardPayments) {
+          const txnId = paymentToTxn.get(payment.id);
+          if (!txnId) {
+            noTxnGroup.push(payment);
+            continue;
+          }
+
+          // Derive master key: if the prefix before the first dash is all-numeric
+          // (Accept.Blue reference number), use it; otherwise use the full txnId.
+          const firstDashIdx = txnId.indexOf('-');
+          const masterTxnId =
+            firstDashIdx > -1 && /^\d+$/.test(txnId.slice(0, firstDashIdx))
+              ? txnId.slice(0, firstDashIdx)
+              : txnId;
+
+          if (!txnGroups.has(masterTxnId)) {
+            txnGroups.set(masterTxnId, []);
+          }
+          txnGroups.get(masterTxnId)!.push(payment);
+        }
+
+        for (const [, group] of txnGroups) {
+          const customerId = group[0].customerId || 'unknown';
+          const totalAmount = group.reduce((sum, p) => sum + (p.paymentAmount || 0), 0);
+          const paymentDate = group[0].paymentDate ? new Date(group[0].paymentDate) : new Date();
+          batchUpdates.push({
+            paymentIds: group.map((p) => p.id),
+            batchValues: {
+              createdBy: 'backfill',
+              customerId,
+              totalAmount,
+              paymentMethod: 'credit_card',
+              notes: `Backfilled historical credit card payment — ${group.length} order(s)`,
+              createdAt: paymentDate,
+            },
+          });
+        }
+
+        // Credit card payments with no transaction record — individual batch each
+        for (const payment of noTxnGroup) {
+          const customerId = payment.customerId || 'unknown';
+          const paymentDate = payment.paymentDate ? new Date(payment.paymentDate) : new Date();
+          batchUpdates.push({
+            paymentIds: [payment.id],
+            batchValues: {
+              createdBy: 'backfill',
+              customerId,
+              totalAmount: payment.paymentAmount || 0,
+              paymentMethod: 'credit_card',
+              notes: 'Backfilled historical credit card payment (no transaction record)',
+              createdAt: paymentDate,
+            },
+          });
+        }
+      }
+
+      // Any remaining payment types — individual batch each
+      for (const payment of otherPayments) {
+        const customerId = payment.customerId || 'unknown';
+        const paymentDate = payment.paymentDate ? new Date(payment.paymentDate) : new Date();
+        batchUpdates.push({
+          paymentIds: [payment.id],
+          batchValues: {
+            createdBy: 'backfill',
+            customerId,
+            totalAmount: payment.paymentAmount || 0,
+            paymentMethod: payment.paymentType,
+            notes: `Backfilled historical ${payment.paymentType} payment`,
+            createdAt: paymentDate,
+          },
+        });
+      }
+
+      // 4. Execute all inserts + updates inside a single transaction so a partial
+      //    failure doesn't leave orphan batch rows or double-assign batch_ids.
+      let paymentsUpdated = 0;
+      let batchesCreated = 0;
+
+      await db.transaction(async (tx) => {
+        for (const { paymentIds, batchValues } of batchUpdates) {
+          if (paymentIds.length === 0) continue;
+          const [batch] = await tx
+            .insert(bulkPaymentBatches)
+            .values(batchValues)
+            .returning();
+          await tx
+            .update(payments)
+            .set({ batchId: batch.id })
+            .where(inArray(payments.id, paymentIds));
+          paymentsUpdated += paymentIds.length;
+          batchesCreated++;
+        }
+      });
+
+      console.log(
+        `✅ Backfill complete: ${batchesCreated} batches created, ${paymentsUpdated} payments updated.`
+      );
+
+      return res.json({
+        success: true,
+        message: `Backfill complete: ${batchesCreated} batches created, ${paymentsUpdated} payments updated.`,
+        batchesCreated,
+        paymentsUpdated,
+      });
+    } catch (error) {
+      console.error('Backfill error:', error);
+      return res.status(500).json({ error: 'Backfill failed', details: String(error) });
+    }
+  }
+);
 
 export default router;

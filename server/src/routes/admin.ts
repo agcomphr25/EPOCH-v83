@@ -9,6 +9,7 @@ import { validatePipelineState } from '../services/pipelineValidationService';
 import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipelineRepairService';
 import { forecastActiveOrders, forecastOrder, simulateNewOrder } from '../services/productionForecastService';
 import { simulateFactoryCompletion, invalidateSimulationCache } from '../services/productionSimulator';
+import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 
 const router = Router();
 
@@ -1781,10 +1782,15 @@ router.post(
       const resolvedOrderId = currentRows[0].order_id;
       const oldValue = currentRows[0][columnName];
 
+      // Normalize due_date to Tuesday before persisting
+      const effectiveValue = (columnName === 'due_date' && newValue && newValue !== '')
+        ? normalizeToTuesday(newValue)
+        : (newValue === '' ? null : newValue);
+
       // Apply the update — use parameterized column name via safe whitelist check above
       await pool.query(
         `UPDATE all_orders SET "${columnName}" = $1, updated_at = NOW() WHERE order_id = $2`,
-        [newValue === '' ? null : newValue, resolvedOrderId]
+        [effectiveValue, resolvedOrderId]
       );
 
       // Write to admin_audit_log (picked up by flight recorder as FIELD_CHANGE)
@@ -1797,7 +1803,7 @@ router.post(
           columnName,
           columnName.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
           JSON.stringify(oldValue),
-          JSON.stringify(newValue === '' ? null : newValue),
+          JSON.stringify(effectiveValue),
           user.username,
           user.role ?? 'OWNER',
           reason,
@@ -1817,7 +1823,7 @@ router.post(
           user.role ?? 'OWNER',
           reason,
           JSON.stringify([columnName]),
-          JSON.stringify({ column: columnName, oldValue, newValue: newValue === '' ? null : newValue }),
+          JSON.stringify({ column: columnName, oldValue, newValue: effectiveValue }),
         ]
       ).catch((err: any) => {
         // audit_events may have schema differences — don't fail the whole request
@@ -1829,7 +1835,7 @@ router.post(
         orderId: resolvedOrderId,
         column: columnName,
         oldValue,
-        newValue: newValue === '' ? null : newValue,
+        newValue: effectiveValue,
       });
     } catch (err: any) {
       console.error('[OrderOverride] Update error:', err);

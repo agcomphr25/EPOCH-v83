@@ -4,6 +4,7 @@ import { allOrders, customers, customerAddresses, stockModels, features, payment
 import { eq } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { z } from 'zod';
+import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 
 const router = Router();
 
@@ -667,11 +668,12 @@ router.post('/', async (req: Request, res: Response) => {
         
         const dueDate = new Date(orderDate);
         dueDate.setDate(dueDate.getDate() + 42);
+        const normalizedDueDate = normalizeToTuesday(dueDate);
 
         const isPaid = isPaidFromCSV(websiteOrder);
         const totalAmount = parseFloat(websiteOrder.total) || 0;
 
-        console.log(`[Order ${websiteOrder.OrderID}] Order date: ${orderDate.toISOString()}, Due date: ${dueDate.toISOString()}`);
+        console.log(`[Order ${websiteOrder.OrderID}] Order date: ${orderDate.toISOString()}, Due date (pre-normalize): ${dueDate.toISOString()}, Due date (normalized): ${normalizedDueDate.toISOString()}`);
         console.log(`[Order ${websiteOrder.OrderID}] Matched model: ${modelId}, Features: ${JSON.stringify(orderFeatures)}`);
         console.log(`[Order ${websiteOrder.OrderID}] Is paid: ${isPaid}, Total: ${totalAmount}`);
 
@@ -684,7 +686,7 @@ router.post('/', async (req: Request, res: Response) => {
         const newOrder = await storage.createFinalizedOrder({
           orderId,
           orderDate,
-          dueDate,
+          dueDate: normalizedDueDate,
           customerId,
           customerPO: websiteOrder.order_number || undefined,
           fbOrderNumber: websiteOrder.OrderID || undefined,

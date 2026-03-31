@@ -1,5 +1,6 @@
 import { auditUpdateOrders } from './orderAuditWrapper';
 import { DEPARTMENTS } from '../constants/departments';
+import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 
 const ALLOWED_FIELDS = [
   'due_date',
@@ -33,7 +34,11 @@ export async function adminOverrideOrder({
     if (!ALLOWED_FIELDS.includes(key)) {
       throw new Error(`Field not allowed: ${key}`);
     }
-    safeChanges[key] = changes[key];
+    if (key === 'due_date' && changes[key] != null && changes[key] !== '') {
+      safeChanges[key] = normalizeToTuesday(changes[key]);
+    } else {
+      safeChanges[key] = changes[key];
+    }
   }
 
   if (safeChanges.status) {

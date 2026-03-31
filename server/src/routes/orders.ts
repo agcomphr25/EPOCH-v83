@@ -18,6 +18,7 @@ import {
   insertP2ProductionOrderSchema,
   insertPaymentSchema,
 } from '@shared/schema';
+import { normalizeDueDateForStorage } from '@shared/utils/dateNormalization';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { allocateForOrder } from '../services/productionOrderAllocationService';
 import { 
@@ -533,6 +534,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
     
     const order = await storage.createFinalizedOrder({
       ...orderData,
+      dueDate: orderData.dueDate ? normalizeDueDateForStorage(orderData.dueDate) : orderData.dueDate,
       status: orderStatus,
       currentDepartment: orderDepartment,
       bottomMetalSource,
@@ -2991,6 +2993,11 @@ router.patch(
         }
       }
 
+      // Normalize dueDate to Tuesday before persisting
+      if (fieldName === 'dueDate' && validatedValue != null) {
+        validatedValue = normalizeDueDateForStorage(validatedValue);
+      }
+
       // Build update data object using JavaScript field name for Drizzle
       const updateData: any = {
         [jsField]: validatedValue,
@@ -3133,6 +3140,11 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
           );
         }
       }
+    }
+
+    // Normalize dueDate to Tuesday if present in updates
+    if (updates.dueDate != null) {
+      updates.dueDate = normalizeDueDateForStorage(updates.dueDate);
     }
 
     // Try to find and update the order in finalized orders first
@@ -3694,11 +3706,16 @@ router.patch(
       const dbField = fieldConfig.dbField;
       const oldValue = (currentOrder as any)[dbField];
 
+      // Normalize dueDate to Tuesday before persisting
+      const normalizedFieldValue = fieldName === 'dueDate' && newValue != null
+        ? normalizeDueDateForStorage(newValue)
+        : newValue;
+
       // Update the order
       await db
         .update(allOrders)
         .set({ 
-          [dbField]: newValue,
+          [dbField]: normalizedFieldValue,
           updatedAt: new Date(),
         })
         .where(eq(allOrders.orderId, orderId));
@@ -3709,7 +3726,7 @@ router.patch(
         fieldName,
         fieldLabel: fieldConfig.label,
         oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
-        newValue,
+        newValue: normalizedFieldValue,
         changedBy: (req as any).user?.username || 'unknown',
         userRole: (req as any).user?.role || 'ADMIN',
         changeType: 'INLINE',
@@ -3788,6 +3805,12 @@ router.patch(
       }
 
       const dbField = fieldConfig.dbField;
+
+      // Normalize dueDate to Tuesday for bulk updates targeting the due_date field
+      const normalizedValue = fieldName === 'dueDate' && newValue != null
+        ? normalizeDueDateForStorage(newValue)
+        : newValue;
+
       const results = {
         success: [] as string[],
         failed: [] as { orderId: string; error: string }[],
@@ -3812,7 +3835,7 @@ router.patch(
           await db
             .update(allOrders)
             .set({ 
-              [dbField]: newValue,
+              [dbField]: normalizedValue,
               updatedAt: new Date(),
             })
             .where(eq(allOrders.orderId, orderId));
@@ -3823,7 +3846,7 @@ router.patch(
             fieldName,
             fieldLabel: fieldConfig.label,
             oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
-            newValue,
+            newValue: normalizedValue,
             changedBy: (req as any).user?.username || 'unknown',
             userRole: (req as any).user?.role || 'ADMIN',
             changeType: 'BULK',

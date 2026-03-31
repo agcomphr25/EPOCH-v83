@@ -1,5 +1,6 @@
 import { pool } from '../../db';
 import { auditUpdateOrders } from './orderAuditWrapper';
+import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 
 export interface ForecastAccuracyMetrics {
   totalCompleted: number;
@@ -24,7 +25,9 @@ export async function stampForecastOnOrders(): Promise<number> {
     for (const [orderId, result] of snapshot.results) {
       if (!result.projectedCompletion) continue;
       try {
+        const forecastDate = normalizeToTuesday(new Date(result.projectedCompletion));
         // Pre-check: only stamp orders that meet all original WHERE conditions
+        // Compare against the normalized date so idempotency holds after the first write
         const eligibleRows = await pool.query(
           `SELECT order_id FROM all_orders
            WHERE order_id = $1
@@ -32,13 +35,13 @@ export async function stampForecastOnOrders(): Promise<number> {
              AND shipped_date IS NULL
              AND (forecast_completion_date IS NULL OR forecast_completion_date != $2)
              AND status NOT IN ('FULFILLED', 'CANCELLED', 'SCRAPPED')`,
-          [orderId, new Date(result.projectedCompletion)]
+          [orderId, forecastDate]
         ) as any[];
         if (eligibleRows.length > 0) {
           await auditUpdateOrders({
             db: pool,
             orderIds: [orderId],
-            changes: { forecast_completion_date: new Date(result.projectedCompletion) },
+            changes: { forecast_completion_date: forecastDate },
             source: 'FORECAST_STAMP',
             user: null,
             reason: 'Nightly forecast stamp',

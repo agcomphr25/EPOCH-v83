@@ -3,6 +3,7 @@ import { PIPELINE_STAGES } from './pipelineValidationService';
 import type { PipelineStage } from './pipelineValidationService';
 import { runSimulation, simulateFactoryCompletion, simulateNewOrderDES } from './productionSimulator';
 import type { SimulationOrderResult, DepartmentForecastEntry } from './productionSimulator';
+import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 
 function addBusinessDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -433,7 +434,7 @@ export async function simulateNewOrder(params: {
   const projectedCompletion = addBusinessDays(new Date(), totalBusinessDays);
 
   const bufferDays = 5;
-  const suggestedDueDate = addBusinessDays(new Date(), totalBusinessDays + bufferDays);
+  const suggestedDueDate = normalizeToTuesday(addBusinessDays(new Date(), totalBusinessDays + bufferDays));
 
   let confidence: SimulationConfidence = 'HIGH';
   const totalBacklog = Object.values(backlogs).reduce((s, v) => s + v, 0);

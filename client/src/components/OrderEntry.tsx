@@ -4914,6 +4914,7 @@ export default function OrderEntry() {
                                     'arca_4',
                                     'pic_rail',
                                     'pic_intgrated_stud',
+                                    'alamo_rail_spacing',
                                   ];
 
                                   // Filter options based on model type

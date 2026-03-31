@@ -302,8 +302,8 @@ router.post('/schedule-packet', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
     
-    if (!inventoryItem.isPacketPart) {
-      return res.status(400).json({ error: 'This item is not marked as a packet item. Enable "Packet (Cutting Table)" in the inventory item settings.' });
+    if (inventoryItem.manufacturedCategory !== 'PACKET') {
+      return res.status(400).json({ error: 'This item is not a packet item. Set the manufactured category to "Packet" in the inventory item settings.' });
     }
     
     // Create the manufacturing queue entry
@@ -335,7 +335,7 @@ router.post('/schedule-packet', async (req: Request, res: Response) => {
   }
 });
 
-// Get all packet items that can be scheduled (isPacketPart = true)
+// Get all packet items that can be scheduled (manufacturedCategory = 'PACKET')
 router.get('/available-packets', async (req: Request, res: Response) => {
   try {
     const packetItems = await db
@@ -348,7 +348,7 @@ router.get('/available-packets', async (req: Request, res: Response) => {
         onHand: inventoryItems.onHand,
       })
       .from(inventoryItems)
-      .where(eq(inventoryItems.isPacketPart, true))
+      .where(eq(inventoryItems.manufacturedCategory, 'PACKET'))
       .orderBy(inventoryItems.agPartNumber);
     
     res.json(packetItems);

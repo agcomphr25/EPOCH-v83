@@ -50,6 +50,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { ChevronDown } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import {
@@ -97,7 +103,6 @@ interface InventoryFormData {
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
   isPacket: boolean;
-  isPacketPart: boolean;
   isFabric: boolean;
   hasSds: boolean;
   hasTds: boolean;
@@ -204,6 +209,16 @@ const InventoryForm = ({
       setDuplicateWarning(null);
     }
   }, [formData.agPartNumber, editingItem, checkDuplicate]);
+
+  type UtilizedKey = 'utilizedInPL1' | 'utilizedInPL2' | 'utilizedInFacilities' | 'utilizedInAdmin' | 'utilizedInServices';
+  const utilizedOptions: { key: UtilizedKey; label: string }[] = [
+    { key: 'utilizedInPL1', label: 'PL1' },
+    { key: 'utilizedInPL2', label: 'PL2' },
+    { key: 'utilizedInFacilities', label: 'Facilities' },
+    { key: 'utilizedInAdmin', label: 'Admin' },
+    { key: 'utilizedInServices', label: 'Services' },
+  ];
+  const selectedUtilizedLabels = utilizedOptions.filter(o => formData[o.key]).map(o => o.label);
 
   return (
   <form
@@ -351,31 +366,44 @@ const InventoryForm = ({
           </Label>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInPL1"
-            checked={formData.utilizedInPL1}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInPL1', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInPL1"
-          />
-          <Label htmlFor="utilizedInPL1" className="cursor-pointer">PL1</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInPL2"
-            checked={formData.utilizedInPL2}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInPL2', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInPL2"
-          />
-          <Label htmlFor="utilizedInPL2" className="cursor-pointer">PL2</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+        <div>
+          <Label>Utilized In</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center justify-between w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <span className="flex flex-wrap gap-1">
+                  {selectedUtilizedLabels.length === 0 ? (
+                    <span className="text-muted-foreground">Select areas...</span>
+                  ) : (
+                    selectedUtilizedLabels.map((label) => (
+                      <Badge key={label} variant="secondary" className="text-xs">{label}</Badge>
+                    ))
+                  )}
+                </span>
+                <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              {utilizedOptions.map(({ key, label }) => (
+                <div key={key} className="flex items-center space-x-2 py-1.5 px-1 rounded hover:bg-accent cursor-pointer" onClick={() => onCheckboxChange(key, !formData[key])}>
+                  <Checkbox
+                    id={key}
+                    checked={formData[key]}
+                    onCheckedChange={(checked) => onCheckboxChange(key, checked as boolean)}
+                    data-testid={`checkbox-${key}`}
+                  />
+                  <Label htmlFor={key} className="cursor-pointer text-sm font-normal">{label}</Label>
+                </div>
+              ))}
+            </PopoverContent>
+          </Popover>
         </div>
         {formData.utilizedInPL2 && (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 pt-6">
             <Checkbox
               id="traceabilityRequired"
               checked={formData.traceabilityRequired}
@@ -408,51 +436,7 @@ const InventoryForm = ({
             </Label>
           </div>
         )}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInFacilities"
-            checked={formData.utilizedInFacilities}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInFacilities', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInFacilities"
-          />
-          <Label htmlFor="utilizedInFacilities" className="cursor-pointer">Facilities</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInAdmin"
-            checked={formData.utilizedInAdmin}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInAdmin', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInAdmin"
-          />
-          <Label htmlFor="utilizedInAdmin" className="cursor-pointer">Admin</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="utilizedInServices"
-            checked={formData.utilizedInServices}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('utilizedInServices', checked as boolean)
-            }
-            data-testid="checkbox-utilizedInServices"
-          />
-          <Label htmlFor="utilizedInServices" className="cursor-pointer">Services</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="isPacketPart"
-            checked={formData.isPacketPart}
-            onCheckedChange={(checked) =>
-              onCheckboxChange('isPacketPart', checked as boolean)
-            }
-            data-testid="checkbox-isPacketPart"
-          />
-          <Label htmlFor="isPacketPart" className="cursor-pointer">Packet Part</Label>
-        </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 pt-6">
           <Checkbox
             id="isFabric"
             checked={formData.isFabric}
@@ -1102,7 +1086,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInAdmin: false,
     utilizedInServices: false,
     isPacket: false,
-    isPacketPart: false,
     isFabric: false,
     hasSds: false,
     hasTds: false,
@@ -1621,7 +1604,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInAdmin: false,
       utilizedInServices: false,
       isPacket: false,
-      isPacketPart: false,
       isFabric: false,
       hasSds: false,
       hasTds: false,
@@ -1768,7 +1750,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
-        isPacketPart: formData.isPacketPart,
         isFabric: formData.isFabric,
         hasSds: formData.hasSds,
         hasTds: formData.hasTds,
@@ -1833,7 +1814,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
       isPacket: (item as any).isPacket || false,
-      isPacketPart: item.isPacketPart || false,
       isFabric: item.isFabric || false,
       hasSds: item.hasSds || false,
       hasTds: item.hasTds || false,

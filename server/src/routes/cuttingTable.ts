@@ -361,12 +361,12 @@ router.get('/packet-items', async (req, res) => {
   }
 });
 
-// Packet Part Items - Get inventory items marked as packet parts (is_packet_part = true)
+// Packet Part Items - Get inventory items with manufacturedCategory = 'PACKET'
 router.get('/packet-part-items', async (req, res) => {
   try {
     const allItems = await storage.getAllInventoryItems();
     const packetPartItems = allItems
-      .filter((item) => item.isPacketPart === true)
+      .filter((item) => item.manufacturedCategory === 'PACKET')
       .map((item) => ({
         id: item.id,
         agPartNumber: item.agPartNumber,
@@ -463,7 +463,7 @@ router.post('/packet-sessions/build', async (req, res) => {
     for (const comp of compositions) {
       if (comp.componentId && !comp.inventoryItemId) {
         return res.status(400).json({ 
-          error: 'This recipe contains legacy component-based items. Please update the recipe:\n1. Go to Configure Recipes tab\n2. Select this packet type\n3. Click "Clear All" to remove old items\n4. Add new items using inventory parts with the "Packet Part" checkbox enabled' 
+          error: 'This recipe contains legacy component-based items. Please update the recipe:\n1. Go to Configure Recipes tab\n2. Select this packet type\n3. Click "Clear All" to remove old items\n4. Add new items using inventory parts with manufactured category set to "Packet"' 
         });
       }
     }

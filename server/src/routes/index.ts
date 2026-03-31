@@ -8165,10 +8165,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               break;
           }
 
+          // Departments that are initial queue placements — orders there can keep FINALIZED
+          const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+
+          // If the destination is a real production department (not an initial queue),
+          // always force status to IN_PROGRESS regardless of what the caller sent.
+          const resolvedStatus =
+            INITIAL_QUEUE_DEPARTMENTS.includes(department)
+              ? (status || 'IN_PROGRESS')
+              : 'IN_PROGRESS';
+
           // Prepare update data
           const updateData: any = {
             currentDepartment: department,
-            status: status || 'IN_PROGRESS',
+            status: resolvedStatus,
             ...completionUpdates,
           };
 

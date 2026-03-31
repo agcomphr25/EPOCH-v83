@@ -11138,8 +11138,15 @@ export class DatabaseStorage implements IStorage {
     status: string
   ): Promise<{ success: boolean; message: string }> {
     try {
+      // Departments that are initial queue placements — orders there may keep FINALIZED.
+      // Any other department is a real production department and must be IN_PROGRESS.
+      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
+      const resolvedStatus = INITIAL_QUEUE_DEPARTMENTS.includes(department)
+        ? status
+        : 'IN_PROGRESS';
+
       console.log(
-        ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${status}`
+        ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${resolvedStatus}`
       );
 
       // Try to update in allOrders table first
@@ -11147,7 +11154,7 @@ export class DatabaseStorage implements IStorage {
         .update(allOrders)
         .set({
           currentDepartment: department,
-          status: status,
+          status: resolvedStatus,
           updatedAt: new Date(),
         })
         .where(eq(allOrders.orderId, orderId));
@@ -11174,7 +11181,7 @@ export class DatabaseStorage implements IStorage {
         .update(productionOrders)
         .set({
           currentDepartment: department,
-          productionStatus: status,
+          productionStatus: resolvedStatus,
           updatedAt: new Date(),
         })
         .where(eq(productionOrders.orderId, orderId))
@@ -11186,7 +11193,7 @@ export class DatabaseStorage implements IStorage {
         );
         return {
           success: true,
-          message: `Production order ${orderId} updated to ${status} status`,
+          message: `Production order ${orderId} updated to ${resolvedStatus} status`,
         };
       }
 

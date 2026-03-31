@@ -3676,18 +3676,6 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Apply custom discount if present
-    if (order.showCustomDiscount && order.customDiscountValue) {
-      const discountValue = Number(order.customDiscountValue);
-      if (!isNaN(discountValue)) {
-        if (order.customDiscountType === 'percent') {
-          total = total * (1 - discountValue / 100);
-        } else {
-          total = Math.max(0, total - discountValue);
-        }
-      }
-    }
-
     // Add miscellaneous items (stored in features.miscItems from OrderEntry fix)
     if (order.features && typeof order.features === 'object') {
       const features = order.features as any;
@@ -3699,6 +3687,18 @@ export class DatabaseStorage implements IStorage {
             total += itemPrice * itemQuantity;
           }
         });
+      }
+    }
+
+    // Apply custom discount if present
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      const discountValue = Number(order.customDiscountValue);
+      if (!isNaN(discountValue)) {
+        if (order.customDiscountType === 'percent') {
+          total = total * (1 - discountValue / 100);
+        } else {
+          total = Math.max(0, total - discountValue);
+        }
       }
     }
 

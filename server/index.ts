@@ -288,6 +288,14 @@ async function initializeBackgroundServices() {
           '0001_fix_cutting_built_packets_category_uuid.sql',
           '0002_fix_fabric_sources_inventory_id_uuid.sql',
           '0003_comprehensive_integer_to_uuid_audit.sql',
+          '0004_job_allocations.sql',
+          '0005_backfill_production_orders_item_codes.sql',
+          '0006_nonconforming_rmas_and_schema_columns.sql',
+          '0007_p2_shipping_audit_log.sql',
+          '0008_inventory_item_type_category.sql',
+          '0009_schema_change_log.sql',
+          '0010_all_orders_unique_order_id.sql',
+          '0011_fix_finalized_orders_in_production_departments.sql',
         ];
         for (const f of safeFiles) {
           const filePath = join(migrationsDir, f);

@@ -46,6 +46,16 @@ import { duplicateOrder } from '@/lib/queryClient';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
 import AuditDrawer from '@/components/AuditDrawer';
 import toast from 'react-hot-toast';
+import { BookOpen } from 'lucide-react';
+import {
+  Sheet as StorySheet,
+  SheetContent as StorySheetContent,
+  SheetHeader as StorySheetHeader,
+  SheetTitle as StorySheetTitle,
+  SheetDescription as StorySheetDescription,
+} from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import OrderStoryPanel from '@/components/OrderStoryPanel';
 
 interface OrderActionsDrawerProps {
   orderId: string;
@@ -93,6 +103,7 @@ export function OrderActionsDrawer({
   const [cancelReason, setCancelReason] = useState('');
   const [sendToRts, setSendToRts] = useState(true);
   const [linkOrdersOpen, setLinkOrdersOpen] = useState(false);
+  const [storyPanelOpen, setStoryPanelOpen] = useState(false);
   const [, setLocation] = useLocation();
 
   const {
@@ -422,6 +433,14 @@ export function OrderActionsDrawer({
               <Button
                 variant="outline"
                 className="w-full justify-start gap-2"
+                onClick={() => { setOpen(false); setStoryPanelOpen(true); }}
+              >
+                <BookOpen className="h-4 w-4" />
+                Order Story
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
                 onClick={handleViewTimeline}
               >
                 <Clock className="h-4 w-4" />
@@ -514,6 +533,26 @@ export function OrderActionsDrawer({
         onClose={() => setLinkOrdersOpen(false)}
         currentUser="System"
       />
+
+      <StorySheet open={storyPanelOpen} onOpenChange={setStoryPanelOpen}>
+        <StorySheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
+          <StorySheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+            <StorySheetTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              Order Story
+              <span className="text-muted-foreground font-normal text-sm ml-1">
+                — {orderId}
+              </span>
+            </StorySheetTitle>
+            <StorySheetDescription>
+              Full chronological history of every event for this order
+            </StorySheetDescription>
+          </StorySheetHeader>
+          <ScrollArea className="flex-1 px-6 py-4">
+            {storyPanelOpen && <OrderStoryPanel orderId={orderId} />}
+          </ScrollArea>
+        </StorySheetContent>
+      </StorySheet>
     </>
   );
 }

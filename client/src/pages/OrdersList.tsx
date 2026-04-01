@@ -98,7 +98,16 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import AuditDrawer from '@/components/AuditDrawer';
-import { History, Clock, CopyPlus, Eraser, RefreshCw, FileDown } from 'lucide-react';
+import { History, Clock, CopyPlus, Eraser, RefreshCw, FileDown, BookOpen } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import OrderStoryPanel from '@/components/OrderStoryPanel';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -333,6 +342,9 @@ export default function OrdersList() {
 
   // Link Orders dialog state
   const [linkOrdersDialogOpen, setLinkOrdersDialogOpen] = useState<string | null>(null);
+
+  // Order Story panel state
+  const [storyPanelOrderId, setStoryPanelOrderId] = useState<string | null>(null);
 
   // Initialize kickback form
   const kickbackForm = useForm<KickbackFormData>({
@@ -1908,6 +1920,16 @@ export default function OrdersList() {
                                 }
                               />
                               <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setStoryPanelOrderId(order.orderId);
+                                }}
+                                data-testid={`button-order-story-${order.orderId}`}
+                              >
+                                <BookOpen className="mr-2 h-4 w-4" />
+                                Order Story
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => window.location.href = `/order-timeline/p1_order/${order.orderId}`}
                                 data-testid={`button-view-timeline-${order.orderId}`}
                               >
@@ -2377,6 +2399,34 @@ export default function OrdersList() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Order Story Mode Panel */}
+        <Sheet
+          open={!!storyPanelOrderId}
+          onOpenChange={(open) => { if (!open) setStoryPanelOrderId(null); }}
+        >
+          <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
+            <SheetHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+              <SheetTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Order Story
+                {storyPanelOrderId && (
+                  <span className="text-muted-foreground font-normal text-sm ml-1">
+                    — {storyPanelOrderId}
+                  </span>
+                )}
+              </SheetTitle>
+              <SheetDescription>
+                Full chronological history of every event for this order
+              </SheetDescription>
+            </SheetHeader>
+            <ScrollArea className="flex-1 px-6 py-4">
+              {storyPanelOrderId && (
+                <OrderStoryPanel orderId={storyPanelOrderId} />
+              )}
+            </ScrollArea>
+          </SheetContent>
+        </Sheet>
       </div>
     );
   } catch (error) {

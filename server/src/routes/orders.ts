@@ -4567,6 +4567,327 @@ router.get('/locate/:orderId', async (req, res) => {
   }
 });
 
+// Order Story Mode activity endpoint — unified event timeline for a single order
+router.get('/:orderId/activity', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { category, actor, source, from, to, limit: limitParam } = req.query;
+    const limit = Math.min(parseInt(limitParam as string) || 200, 500);
+
+    const [events, transitions, scrapCycles] = await Promise.all([
+      auditService.getAuditHistory('p1_order', orderId, limit),
+      auditService.getDepartmentTransitions(orderId),
+      auditService.getScrapCycles(orderId),
+    ]);
+
+    type EventCategory =
+      | 'status_department'
+      | 'spec_change'
+      | 'shipping'
+      | 'payment'
+      | 'ncr_scrap'
+      | 'admin_override'
+      | 'production';
+
+    const ACTION_CATEGORY_MAP: Record<string, EventCategory> = {
+      DEPARTMENT_CHANGE: 'status_department',
+      STATUS_CHANGE: 'status_department',
+      DEPARTMENT_ENTRY: 'status_department',
+      DEPARTMENT_EXIT: 'status_department',
+      ORDER_FINALIZED: 'status_department',
+      ORDER_CREATED: 'production',
+      TECHNICIAN_ASSIGNED: 'production',
+      PRIORITY_CHANGE: 'admin_override',
+      ORDER_CANCELLED: 'admin_override',
+      ADMIN_OVERRIDE: 'admin_override',
+      FIELD_CHANGE: 'spec_change',
+      SPEC_CHANGE: 'spec_change',
+      PAYMENT_RECEIVED: 'payment',
+      PAYMENT_ADDED: 'payment',
+      PAYMENT_VOIDED: 'payment',
+      REFUND_ISSUED: 'payment',
+      DISCOUNT_APPLIED: 'payment',
+      PRICE_CHANGE: 'payment',
+      CREDIT_MEMO_CREATED: 'payment',
+      SHIPPING_UPDATE: 'shipping',
+      ADDRESS_CHANGED: 'shipping',
+      TRACKING_ADDED: 'shipping',
+      ORDER_SHIPPED: 'shipping',
+      QC_PASSED: 'ncr_scrap',
+      QC_FAILED: 'ncr_scrap',
+      NCR_CREATED: 'ncr_scrap',
+      SCRAP_DECLARED: 'ncr_scrap',
+      SCRAP_CYCLE: 'ncr_scrap',
+      ORDER_RESTARTED: 'production',
+    };
+
+    function getCategoryForAction(action: string): EventCategory {
+      return ACTION_CATEGORY_MAP[action] || 'production';
+    }
+
+    function deriveSource(event: any): string {
+      if (event.meta?.source) return event.meta.source;
+      if (event.meta?.badgeScan) return 'badge_scan';
+      if (event.actorRole === 'admin' || event.actorRole === 'superadmin') return 'admin';
+      if (event.meta?.isBackfill || event.meta?.legacy) return 'legacy';
+      if (event.actorId === null && event.actorName === null) return 'system';
+      return 'admin';
+    }
+
+    function humanTitle(action: string, fieldsChanged: any, meta: any): string {
+      // Generate rich narrative titles for well-known event types
+      if (action === 'DEPARTMENT_CHANGE' && fieldsChanged) {
+        const deptChange = fieldsChanged['department'] || fieldsChanged['currentDepartment'];
+        if (deptChange?.before && deptChange?.after) {
+          const source = meta?.source;
+          if (source === 'badge_scan' || meta?.badgeScan) {
+            return `Badge scan moved order from ${deptChange.before} to ${deptChange.after}`;
+          }
+          return `Order moved from ${deptChange.before} to ${deptChange.after}`;
+        }
+      }
+
+      if (action === 'STATUS_CHANGE' && fieldsChanged) {
+        const statusChange = fieldsChanged['status'];
+        if (statusChange?.before && statusChange?.after) {
+          // Detect NCR repair / reopen pattern
+          if (statusChange.after === 'IN_PROGRESS' && statusChange.before === 'FINALIZED') {
+            return `NCR repair reopened order — status ${statusChange.before} → ${statusChange.after}`;
+          }
+          return `Status changed from ${statusChange.before} to ${statusChange.after}`;
+        }
+      }
+
+      if ((action === 'FIELD_CHANGE' || action === 'SPEC_CHANGE' || action === 'ADMIN_OVERRIDE') && fieldsChanged) {
+        const keys = Object.keys(fieldsChanged);
+        if (keys.length === 1) {
+          const key = keys[0];
+          const chg = fieldsChanged[key];
+          if (chg?.before !== undefined && chg?.after !== undefined) {
+            // Due date change
+            if (key === 'dueDate' || key === 'due_date') {
+              return `Admin changed due date from ${chg.before} to ${chg.after}`;
+            }
+            // Spec/feature changes (barrel finish, etc.)
+            if (key.includes('finish') || key.includes('barrel') || key.includes('stock') || key.includes('feature')) {
+              return `Spec patch changed ${key.replace(/_/g, ' ')} from ${chg.before} to ${chg.after}`;
+            }
+            // Generic admin field change
+            const prefix = action === 'ADMIN_OVERRIDE' ? 'Admin changed' : 'Changed';
+            return `${prefix} ${key.replace(/_/g, ' ')} from ${chg.before} to ${chg.after}`;
+          }
+        }
+        if (keys.length > 1) {
+          return `${action === 'ADMIN_OVERRIDE' ? 'Admin updated' : 'Updated'} ${keys.length} fields: ${keys.map(k => k.replace(/_/g, ' ')).join(', ')}`;
+        }
+      }
+
+      const labels: Record<string, string> = {
+        DEPARTMENT_CHANGE: 'Department changed',
+        STATUS_CHANGE: 'Status updated',
+        ORDER_CREATED: 'Order created',
+        ORDER_FINALIZED: 'Order finalized',
+        ORDER_CANCELLED: 'Order cancelled',
+        TECHNICIAN_ASSIGNED: 'Technician assigned',
+        PRIORITY_CHANGE: 'Priority changed',
+        PAYMENT_RECEIVED: 'Payment received',
+        PAYMENT_ADDED: 'Payment added',
+        PAYMENT_VOIDED: 'Payment voided',
+        REFUND_ISSUED: 'Refund issued',
+        DISCOUNT_APPLIED: 'Discount applied',
+        PRICE_CHANGE: 'Price changed',
+        CREDIT_MEMO_CREATED: 'Credit memo created',
+        SHIPPING_UPDATE: 'Shipping updated',
+        ADDRESS_CHANGED: 'Shipping address changed',
+        TRACKING_ADDED: 'Tracking number added',
+        ORDER_SHIPPED: 'Order shipped',
+        QC_PASSED: 'QC inspection passed',
+        QC_FAILED: 'QC inspection failed',
+        NCR_CREATED: 'Non-conformance report created',
+        SCRAP_DECLARED: 'Order declared scrap',
+        FIELD_CHANGE: 'Field updated',
+        SPEC_CHANGE: 'Specification changed',
+        ADMIN_OVERRIDE: 'Admin override',
+        ORDER_RESTARTED: 'Order restarted after scrap',
+      };
+      let label = labels[action] || action.replace(/_/g, ' ').toLowerCase();
+      if (fieldsChanged && typeof fieldsChanged === 'object') {
+        const keys = Object.keys(fieldsChanged);
+        if (keys.length === 1) {
+          const key = keys[0];
+          const chg = fieldsChanged[key];
+          if (chg?.before !== undefined && chg?.after !== undefined) {
+            label += ` — ${key.replace(/_/g, ' ')}: ${chg.before} → ${chg.after}`;
+          }
+        }
+      }
+      return label;
+    }
+
+    interface ActivityEvent {
+      id: string;
+      eventType: string;
+      eventCategory: EventCategory;
+      timestamp: string;
+      title: string;
+      actorName: string | null;
+      actorRole: string | null;
+      source: string;
+      isLegacy: boolean;
+      beforeAfterSummary: string | null;
+      fieldsChanged: Record<string, { before: any; after: any }> | null;
+      reason: string | null;
+      meta: Record<string, any> | null;
+      rawType: 'audit' | 'transition' | 'scrap';
+      department?: string;
+      cycleNumber?: number;
+      durationMinutes?: number;
+    }
+
+    const items: ActivityEvent[] = [];
+
+    for (const event of events) {
+      const isLegacy = !!(event.meta?.isBackfill || event.meta?.legacy);
+      items.push({
+        id: `audit-${event.id}`,
+        eventType: event.action,
+        eventCategory: getCategoryForAction(event.action),
+        timestamp: (event.timestamp || event.createdAt) as unknown as string,
+        title: humanTitle(event.action, event.fieldsChanged, event.meta),
+        actorName: event.actorName || null,
+        actorRole: event.actorRole || null,
+        source: deriveSource(event),
+        isLegacy,
+        beforeAfterSummary:
+          event.fieldsChanged && Object.keys(event.fieldsChanged).length > 0
+            ? Object.entries(event.fieldsChanged)
+                .map(([k, v]: [string, any]) => `${k}: ${v.before} → ${v.after}`)
+                .join(', ')
+            : null,
+        fieldsChanged: event.fieldsChanged || null,
+        reason: event.reason || null,
+        meta: event.meta || null,
+        rawType: 'audit',
+      });
+    }
+
+    for (const t of transitions) {
+      items.push({
+        id: `transition-entry-${t.id}`,
+        eventType: 'DEPARTMENT_ENTRY',
+        eventCategory: 'status_department',
+        timestamp: t.enteredAt as unknown as string,
+        title: `Entered department: ${t.department}`,
+        actorName: null,
+        actorRole: null,
+        source: 'system',
+        isLegacy: false,
+        beforeAfterSummary: null,
+        fieldsChanged: null,
+        reason: null,
+        meta: { department: t.department, cycleNumber: t.cycleNumber, durationMinutes: t.durationMinutes },
+        rawType: 'transition',
+        department: t.department,
+        cycleNumber: t.cycleNumber,
+        durationMinutes: t.durationMinutes || undefined,
+      });
+      if (t.exitedAt) {
+        items.push({
+          id: `transition-exit-${t.id}`,
+          eventType: 'DEPARTMENT_EXIT',
+          eventCategory: 'status_department',
+          timestamp: t.exitedAt as unknown as string,
+          title: `Exited department: ${t.department}${t.exitReason ? ` (${t.exitReason})` : ''}`,
+          actorName: null,
+          actorRole: null,
+          source: 'system',
+          isLegacy: false,
+          beforeAfterSummary: null,
+          fieldsChanged: null,
+          reason: t.exitReason || null,
+          meta: { department: t.department, cycleNumber: t.cycleNumber },
+          rawType: 'transition',
+          department: t.department,
+          cycleNumber: t.cycleNumber,
+          durationMinutes: t.durationMinutes || undefined,
+        });
+      }
+    }
+
+    for (const scrap of scrapCycles) {
+      items.push({
+        id: `scrap-${scrap.id}`,
+        eventType: 'SCRAP_CYCLE',
+        eventCategory: 'ncr_scrap',
+        timestamp: scrap.scrappedAt as unknown as string,
+        title: `Order scrapped in ${scrap.scrapDepartment || 'unknown department'}: ${scrap.scrapReason}`,
+        actorName: null,
+        actorRole: null,
+        source: 'system',
+        isLegacy: false,
+        beforeAfterSummary: null,
+        fieldsChanged: null,
+        reason: scrap.scrapReason || null,
+        meta: { cycleNumber: scrap.cycleNumber, scrapDepartment: scrap.scrapDepartment, restartEntityId: scrap.restartEntityId },
+        rawType: 'scrap',
+        cycleNumber: scrap.cycleNumber,
+      });
+      if (scrap.restartedAt) {
+        items.push({
+          id: `restart-${scrap.id}`,
+          eventType: 'ORDER_RESTARTED',
+          eventCategory: 'production',
+          timestamp: scrap.restartedAt as unknown as string,
+          title: `Order restarted as ${scrap.restartEntityId || 'new order'}`,
+          actorName: null,
+          actorRole: null,
+          source: 'system',
+          isLegacy: false,
+          beforeAfterSummary: null,
+          fieldsChanged: null,
+          reason: null,
+          meta: { restartEntityId: scrap.restartEntityId, originalCycle: scrap.cycleNumber },
+          rawType: 'scrap',
+          cycleNumber: scrap.cycleNumber,
+        });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    let filtered = items;
+
+    if (category && category !== 'all') {
+      filtered = filtered.filter(item => item.eventCategory === category);
+    }
+    if (actor && typeof actor === 'string' && actor.trim() !== '') {
+      const actorLower = actor.toLowerCase();
+      filtered = filtered.filter(item => item.actorName?.toLowerCase().includes(actorLower));
+    }
+    if (source && source !== 'all') {
+      filtered = filtered.filter(item => item.source === source);
+    }
+    if (from) {
+      const fromDate = new Date(from as string);
+      if (!isNaN(fromDate.getTime())) {
+        filtered = filtered.filter(item => new Date(item.timestamp) >= fromDate);
+      }
+    }
+    if (to) {
+      const toDate = new Date(to as string);
+      if (!isNaN(toDate.getTime())) {
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(item => new Date(item.timestamp) <= toDate);
+      }
+    }
+
+    return res.json(filtered.slice(0, limit));
+  } catch (error) {
+    console.error('Get order activity error:', error);
+    return res.status(500).json({ error: 'Failed to fetch order activity' });
+  }
+});
+
 // Generic order lookup by orderId — must be last to avoid shadowing specific routes
 router.get('/:orderId', async (req: Request, res: Response) => {
   try {

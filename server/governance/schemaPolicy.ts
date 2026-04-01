@@ -25,6 +25,10 @@ export const CRITICAL_COLUMNS: Record<string, Set<string>> = {
   ]),
   payments: new Set([
     'id', 'order_id', 'payment_type', 'payment_amount', 'payment_date', 'created_at',
+    'batch_id',
+  ]),
+  bulk_payment_batches: new Set([
+    'id', 'created_at', 'created_by', 'customer_id', 'total_amount', 'payment_method', 'notes',
   ]),
   followup_orders: new Set([
     'id', 'order_id', 'customer_id', 'customer_email', 'signature_signed',
@@ -42,6 +46,7 @@ export const CRITICAL_COLUMNS: Record<string, Set<string>> = {
 export const CRITICAL_TABLES: Set<string> = new Set([
   'all_orders',
   'payments',
+  'bulk_payment_batches',
   'followup_orders',
   'schema_change_log',
   'nonconformance_records',

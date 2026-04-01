@@ -1,0 +1,121 @@
+COPY-PASTE AUDIT PROMPT (READ-ONLY)
+
+Drop this directly into your Replit agent (Claude / GPT / etc):
+
+You are performing a READ-ONLY forensic audit of the Vendor PO Revision system.
+
+DO NOT modify any code.
+DO NOT suggest fixes yet.
+ONLY trace, map, and explain.
+
+-------------------------------------
+OBJECTIVE
+-------------------------------------
+
+A foreign key constraint is failing:
+
+"po_optional_settings_vendor_po_id_fkey"
+
+This occurs when creating a revision of a Vendor PO that has already been sent.
+
+Your job is to trace the full lifecycle of:
+- Vendor PO creation
+- Vendor PO revision creation
+- po_optional_settings inserts/updates
+
+-------------------------------------
+SCOPE
+-------------------------------------
+
+Search the entire repo for:
+
+1. Vendor PO logic:
+   - "vendor_po"
+   - "VendorPO"
+   - "createVendorPO"
+   - "createVendorPORevision"
+   - "revision"
+   - "po_revision"
+
+2. Optional settings:
+   - "po_optional_settings"
+   - "optional_settings"
+   - any inserts/updates into this table
+
+3. Database schema:
+   - Definition of po_optional_settings
+   - Foreign key constraints
+   - vendor_po_id relationship
+
+4. API routes:
+   - Routes handling PO creation
+   - Routes handling PO revision
+   - Any transactional logic
+
+5. Frontend trigger:
+   - "Create Revision" button
+   - What payload is sent
+   - What ID is passed (IMPORTANT)
+
+-------------------------------------
+DELIVERABLE FORMAT
+-------------------------------------
+
+Return a structured report with:
+
+1. DATABASE STRUCTURE
+   - Table: vendor_pos (columns, PK)
+   - Table: po_optional_settings (columns, FK constraints)
+   - Exact FK definition for vendor_po_id
+
+2. REVISION FLOW TRACE (STEP-BY-STEP)
+   From button click → API → DB write:
+   - What function is called?
+   - What ID is used as vendor_po_id?
+   - When is the new PO created?
+   - When are optional settings inserted?
+
+3. FAILURE POINT IDENTIFICATION
+   - Exact line/file where FK violation is triggered
+   - What value is being inserted as vendor_po_id?
+   - Why that ID does NOT exist at that moment
+
+4. IDENTITY CONFUSION CHECK
+   Determine if the system is mixing:
+   - original_po_id
+   - revision_po_id
+   - temporary/client-side ID
+   - undefined/null
+
+5. TRANSACTION ANALYSIS
+   - Is revision creation wrapped in a DB transaction?
+   - Are inserts happening in the wrong order?
+   - Is optional_settings inserted BEFORE the PO row exists?
+
+6. DATA FLOW DIAGRAM (TEXT)
+   Show:
+   UI → API → Service → DB writes
+   Include exact variable names for IDs
+
+7. ROOT CAUSE SUMMARY (NO FIXES YET)
+   One paragraph:
+   - Why the FK violation is happening
+   - Under what exact condition (e.g., only when status = "Sent")
+
+-------------------------------------
+IMPORTANT RULES
+-------------------------------------
+
+- DO NOT propose fixes yet
+- DO NOT modify code
+- DO NOT summarize vaguely — be precise with file paths and function names
+- If multiple possible causes exist, list them ALL with confidence levels
+
+-------------------------------------
+GOAL
+-------------------------------------
+
+By the end, we should know EXACTLY:
+- Which ID is wrong
+- Where it originates
+- Why the FK constraint is violated

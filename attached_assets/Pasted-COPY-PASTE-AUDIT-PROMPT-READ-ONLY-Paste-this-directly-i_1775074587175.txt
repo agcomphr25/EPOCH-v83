@@ -1,0 +1,181 @@
+COPY-PASTE AUDIT PROMPT (READ-ONLY)
+
+Paste this directly into your Replit agent / Claude:
+
+You are performing a READ-ONLY forensic audit of the EPOCH codebase.
+
+DO NOT modify any files.
+DO NOT suggest changes yet.
+ONLY analyze and report.
+
+-----------------------------------
+OBJECTIVE
+-----------------------------------
+
+We have a critical visibility issue:
+
+Users can SAVE (but not submit) the following P2 forms:
+- Purchase Review Checklists
+- RFQ Risk Assessments
+
+However, once saved, these records cannot be found or resumed in the UI.
+
+We need to trace EXACTLY:
+1. Where saved (draft) data is stored
+2. Why it is not appearing in listing screens
+3. Whether the issue is:
+   - storage
+   - retrieval
+   - filtering
+   - routing
+   - or UI rendering
+
+-----------------------------------
+STEP 1 — DATA MODEL DISCOVERY
+-----------------------------------
+
+Find ALL database tables related to:
+
+- purchase review checklist
+- rfq risk assessment
+- purchase review submissions
+- rfq submissions
+- checklist
+- risk assessment
+
+For EACH table, report:
+- table name
+- all columns
+- especially:
+  - id
+  - status
+  - isDraft / isSubmitted flags
+  - createdBy / userId
+  - timestamps
+  - foreign keys (PO, RFQ, etc.)
+
+-----------------------------------
+STEP 2 — SAVE FLOW TRACE (CRITICAL)
+-----------------------------------
+
+Locate ALL code paths where a form is SAVED (not submitted).
+
+Search for:
+- "save"
+- "draft"
+- "autosave"
+- "handleSave"
+- "onSave"
+
+For BOTH:
+- Purchase Review Checklist
+- RFQ Risk Assessment
+
+Trace:
+1. Frontend save handler
+2. API endpoint called
+3. Backend route/controller
+4. DB write operation
+
+For each flow, report:
+- exact file paths
+- function names
+- payload sent
+- fields written
+- status value stored (THIS IS CRITICAL)
+
+-----------------------------------
+STEP 3 — SUBMIT FLOW (FOR COMPARISON)
+-----------------------------------
+
+Repeat the same trace for SUBMIT actions.
+
+We want to compare:
+- what changes between save vs submit
+- especially status fields
+
+-----------------------------------
+STEP 4 — LIST / VIEW SCREENS (WHERE THEY SHOULD APPEAR)
+-----------------------------------
+
+Find ALL listing pages for:
+
+- Purchase Review Checklist Submissions
+- RFQ Risk Assessments
+
+(Example already identified:)
+- /purchase-review-submissions page
+
+For each page:
+
+1. Identify API endpoint used
+2. Extract query logic
+3. Identify filters applied:
+   - status filters
+   - submitted = true
+   - draft exclusion
+   - user-specific filters
+
+-----------------------------------
+STEP 5 — ROOT CAUSE ANALYSIS
+-----------------------------------
+
+Determine which of the following is happening:
+
+A. Drafts ARE saved in DB but:
+   - filtered out by query
+   - wrong status value
+   - missing join condition
+
+B. Drafts are saved to a DIFFERENT table not queried by UI
+
+C. Drafts are saved WITHOUT required foreign keys (PO, RFQ, etc.)
+   → causing them to not show
+
+D. Drafts are ONLY stored client-side (not persisted)
+
+E. Drafts are tied to userId/session and not retrieved properly
+
+F. API route exists but UI is not calling correct endpoint
+
+-----------------------------------
+STEP 6 — UI GAP ANALYSIS
+-----------------------------------
+
+Check if the UI even SUPPORTS drafts:
+
+- Is there a "Drafts" tab?
+- Is there a status filter including drafts?
+- Is there a way to resume saved forms?
+
+-----------------------------------
+STEP 7 — DELIVERABLE
+-----------------------------------
+
+Provide a structured report:
+
+1. DATA STORAGE LOCATION
+   - exact table(s)
+   - example record structure
+
+2. SAVE VS SUBMIT DIFFERENCE
+   - exact status values used
+
+3. WHY SAVED FORMS ARE NOT VISIBLE
+   - precise root cause
+
+4. MISSING OR BROKEN LINKS
+   - API mismatch, filtering issue, etc.
+
+5. CONFIDENCE LEVEL
+   - High / Medium / Low
+
+-----------------------------------
+IMPORTANT
+-----------------------------------
+
+DO NOT FIX ANYTHING.
+DO NOT WRITE CODE.
+DO NOT SPECULATE WITHOUT EVIDENCE.
+
+TRACE REAL EXECUTION PATHS ONLY.

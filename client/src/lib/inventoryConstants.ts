@@ -11,7 +11,7 @@ export const MANUFACTURED_CATEGORY_ORDER: ManufacturedCategory[] = [
 
 export const CATEGORY_DISPLAY_NAMES: Record<ManufacturedCategory, string> = {
   PACKET: 'Packet',
-  KIT: 'Kit',
+  KIT: 'Kitting',
   MACHINED_PART: 'Machined Part',
   CORE: 'Core',
   SUB_ASSEMBLY: 'Sub-Assembly',

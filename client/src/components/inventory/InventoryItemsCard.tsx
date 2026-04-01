@@ -315,7 +315,7 @@ const InventoryForm = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PACKET">Packet</SelectItem>
-                  <SelectItem value="KIT">Kit</SelectItem>
+                  <SelectItem value="KIT">Kitting</SelectItem>
                   <SelectItem value="MACHINED_PART">Machined Part</SelectItem>
                   <SelectItem value="CORE">Core</SelectItem>
                   <SelectItem value="SUB_ASSEMBLY">Sub-Assembly</SelectItem>

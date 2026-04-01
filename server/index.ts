@@ -278,7 +278,8 @@ async function initializeBackgroundServices() {
       // schema expects uuid/text (which would generate unsafe SET DATA TYPE SQL).
       // Every migration file is idempotent (DO $$ IF EXISTS guards) — running on
       // an already-correct database is a complete no-op.
-      try {
+      // Each file runs in its own try/catch so a failure in one never blocks later migrations.
+      {
         const { Pool: MigrPool } = await import('pg');
         const { readFileSync, existsSync } = await import('fs');
         const { join } = await import('path');
@@ -298,16 +299,19 @@ async function initializeBackgroundServices() {
           '0011_fix_finalized_orders_in_production_departments.sql',
           '0012_bulk_payment_batches.sql',
         ];
+        let appliedCount = 0;
         for (const f of safeFiles) {
           const filePath = join(migrationsDir, f);
-          if (existsSync(filePath)) {
+          if (!existsSync(filePath)) continue;
+          try {
             await migrPool.query(readFileSync(filePath, 'utf-8'));
+            appliedCount++;
+          } catch (fileErr: any) {
+            console.warn(`⚠️ Migration ${f} skipped: ${fileErr.message}`);
           }
         }
-        await migrPool.end();
-        console.log('✅ Pre-deploy integer→uuid migrations applied (or already correct)');
-      } catch (preDeployErr: any) {
-        console.warn('⚠️ Pre-deploy migrations skipped:', preDeployErr.message);
+        try { await migrPool.end(); } catch (_) {}
+        console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeFiles.length} applied (or already correct)`);
       }
 
       // One-time migration: Reassign Red Hawk Rifles LLC POs from inactive customer 698 to active customer 547

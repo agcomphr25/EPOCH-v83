@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-npm install
+npm install --ignore-scripts
 
 # Create any new tables directly via SQL instead of using db:push (which is interactive)
 psql "$DATABASE_URL" <<'SQL'

@@ -8,7 +8,7 @@
     "build": "vite build && mkdir -p dist/attached_assets dist/public && ( [ -d attached_assets ] && cp -r attached_assets dist/attached_assets || true ) && ( [ -f client/public/logo_updated.png ] && cp client/public/logo_updated.png dist/public/logo_updated.png || true )",
     "start": "NODE_ENV=production tsx server/index.ts",
     "deploy": "npm run predb:push && npm run build",
-    "postinstall": "npm run deploy",
+    "install": "npm run predb:push && npm run build",
     "check": "tsc",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings 0",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",

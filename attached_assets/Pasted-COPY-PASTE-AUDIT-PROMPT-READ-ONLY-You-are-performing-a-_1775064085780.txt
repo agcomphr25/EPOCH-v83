@@ -1,0 +1,144 @@
+COPY-PASTE AUDIT PROMPT (READ-ONLY)
+You are performing a READ-ONLY forensic audit of the codebase.
+
+DO NOT modify any files.
+DO NOT run any write operations.
+DO NOT generate migrations.
+DO NOT change configuration.
+
+Your goal is to fully understand why deployment build is failing in Replit and how the system is wired.
+
+==================================================
+CONTEXT
+==================================================
+
+- Deployment command: npm run predb:push && npm run build
+- Local build succeeds
+- predb:push previously failed due to schema drift (now resolved)
+- Build stage in Replit still fails and shows npm help output
+- This suggests command execution or environment misconfiguration
+
+==================================================
+TASKS
+==================================================
+
+1. PACKAGE.JSON ANALYSIS
+- Locate package.json
+- Output FULL "scripts" section
+- Identify:
+  - build script
+  - predb:push script
+  - start script
+- Confirm whether scripts are valid and executable
+
+--------------------------------------------------
+
+2. BUILD TOOLCHAIN ANALYSIS
+- Identify build system:
+  (vite / tsx / tsc / next / custom)
+- Locate:
+  - vite.config.ts (if exists)
+  - tsconfig.json
+- Confirm:
+  - build output directory
+  - entry points
+  - whether server and client builds are separate
+
+--------------------------------------------------
+
+3. DEPLOYMENT CONFIG ANALYSIS
+- Inspect:
+  - .replit file
+  - any deployment config files
+- Extract:
+  - build command
+  - run command
+  - environment variables if defined
+- Determine EXACT command Replit is executing
+
+--------------------------------------------------
+
+4. PREDEPLOY PIPELINE ANALYSIS
+- Locate implementation of:
+  - predb:push
+- Trace:
+  - what script runs
+  - what files it calls
+  - exit conditions (what returns non-zero)
+- Confirm:
+  - whether it could still fail silently
+  - whether it prints logs correctly
+
+--------------------------------------------------
+
+5. SERVER ENTRY ANALYSIS
+- Locate:
+  - server/index.ts
+- Confirm:
+  - how app starts in production
+  - whether build output matches runtime expectations
+  - whether tsx is used in production (potential issue)
+
+--------------------------------------------------
+
+6. DIST OUTPUT VALIDATION
+- Identify:
+  - where build outputs files (dist/, dist/public, etc.)
+- Confirm:
+  - whether server expects compiled JS or TS at runtime
+
+--------------------------------------------------
+
+7. ENVIRONMENT MISMATCH CHECK
+- Identify anything that differs between:
+  - local environment (working)
+  - Replit deployment environment
+- Focus on:
+  - Node version
+  - npm version
+  - shell execution
+  - path differences
+
+--------------------------------------------------
+
+8. FAILURE HYPOTHESIS (CRITICAL)
+Based on all findings, provide:
+
+- Top 3 most likely causes of build failure
+- Which layer is failing:
+  (command execution / script / environment / build tool)
+- Whether issue is:
+  - command parsing
+  - missing script
+  - runtime incompatibility
+  - environment mismatch
+
+--------------------------------------------------
+
+9. MINIMAL FIX STRATEGY (NO CODE CHANGES)
+Provide:
+
+- The smallest possible fix to get deployment working
+- Prefer:
+  - config changes
+  - script wrapping
+  - command adjustment
+
+DO NOT propose large refactors
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return a structured report:
+
+1. Scripts Summary
+2. Build System Summary
+3. Deployment Command Analysis
+4. predb:push Behavior
+5. Runtime/Server Alignment
+6. Root Cause Hypothesis (Top 3)
+7. Recommended Fix (Minimal)
+
+Keep output concise but precise.
+Focus only on facts from the codebase.

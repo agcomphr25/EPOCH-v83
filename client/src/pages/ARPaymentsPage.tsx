@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
 import { format } from 'date-fns';
 import {
   DollarSign,
@@ -8,14 +7,16 @@ import {
   Trash2,
   Loader2,
   CreditCard,
+  Eye,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -92,8 +93,27 @@ interface AllocationRow {
   applyAmount: string;
 }
 
+interface OpenInvoiceCheckItem {
+  invoiceId: string;
+  invoiceNumber: string;
+  dueDate: string | null;
+  balance: string;
+  checked: boolean;
+}
+
+function statusBadgeVariant(status: string | null | undefined) {
+  if (!status) return 'outline';
+  switch (status.toUpperCase()) {
+    case 'PAID': return 'default';
+    case 'OPEN': return 'secondary';
+    case 'PARTIAL': return 'outline';
+    case 'OVERDUE': return 'destructive';
+    case 'VOID': return 'outline';
+    default: return 'outline';
+  }
+}
+
 export default function ARPaymentsPage() {
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -103,6 +123,13 @@ export default function ARPaymentsPage() {
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
 
+  const [openInvoiceItems, setOpenInvoiceItems] = useState<OpenInvoiceCheckItem[]>([]);
+  const [openInvoicesLoading, setOpenInvoicesLoading] = useState(false);
+  const [amountManuallyEdited, setAmountManuallyEdited] = useState(false);
+
+  const [detailPaymentId, setDetailPaymentId] = useState<string | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+
   const { data: payments = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/ar-payments'],
   });
@@ -111,7 +138,67 @@ export default function ARPaymentsPage() {
     queryKey: ['/api/p2-customers-bypass'],
   });
 
-  const [allocateExistingPayment, setAllocateExistingPayment] = useState<any>(null);
+  const { data: paymentDetail, isLoading: detailLoading } = useQuery<any>({
+    queryKey: ['/api/ar-payments', detailPaymentId],
+    enabled: !!detailPaymentId && detailDialogOpen,
+  });
+
+  const fetchOpenInvoicesForCustomer = async (customerId: string) => {
+    if (!customerId) {
+      setOpenInvoiceItems([]);
+      return;
+    }
+    setOpenInvoicesLoading(true);
+    try {
+      const res = await fetch(
+        `/api/ar-invoices?customerId=${encodeURIComponent(customerId)}`,
+        { credentials: 'include' }
+      );
+      const invoices = res.ok ? await res.json() : [];
+      const open = (invoices || []).filter(
+        (inv: any) => inv.status !== 'PAID' && inv.status !== 'VOID' && parseFloat(inv.balance ?? inv.totalAmount) > 0
+      );
+      setOpenInvoiceItems(open.map((inv: any) => ({
+        invoiceId: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        dueDate: inv.dueDate || null,
+        balance: String(parseFloat(inv.balance ?? inv.totalAmount)),
+        checked: false,
+      })));
+    } catch {
+      setOpenInvoiceItems([]);
+    } finally {
+      setOpenInvoicesLoading(false);
+    }
+  };
+
+  const handleCustomerChange = (customerId: string) => {
+    setPaymentForm((p) => ({ ...p, customerId, amount: '' }));
+    setAmountManuallyEdited(false);
+    setOpenInvoiceItems([]);
+    fetchOpenInvoicesForCustomer(customerId);
+  };
+
+  const handleInvoiceCheckChange = (invoiceId: string, checked: boolean) => {
+    const updated = openInvoiceItems.map((item) =>
+      item.invoiceId === invoiceId ? { ...item, checked } : item
+    );
+    setOpenInvoiceItems(updated);
+
+    if (!amountManuallyEdited) {
+      const total = updated
+        .filter((item) => item.checked)
+        .reduce((sum, item) => sum + parseFloat(item.balance), 0);
+      setPaymentForm((p) => ({ ...p, amount: total > 0 ? total.toFixed(2) : '' }));
+    }
+  };
+
+  const handleAmountChange = (val: string) => {
+    setAmountManuallyEdited(true);
+    setPaymentForm((p) => ({ ...p, amount: val }));
+  };
+
+  const checkedInvoices = openInvoiceItems.filter((i) => i.checked);
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
@@ -126,37 +213,71 @@ export default function ARPaymentsPage() {
           notes: data.notes || null,
         },
       });
+
+      if (checkedInvoices.length > 0) {
+        const paymentAmount = parseFloat(data.amount);
+        let remaining = paymentAmount;
+        const allocItems: { invoiceId: string; amount: number }[] = [];
+
+        for (const inv of checkedInvoices) {
+          if (remaining <= 0.005) break;
+          const bal = parseFloat(inv.balance);
+          const apply = Math.min(bal, remaining);
+          allocItems.push({ invoiceId: inv.invoiceId, amount: parseFloat(apply.toFixed(2)) });
+          remaining -= apply;
+        }
+
+        if (allocItems.length > 0) {
+          await apiRequest(`/api/ar-payments/${result.id}/allocate`, {
+            method: 'POST',
+            body: allocItems,
+          });
+        }
+
+        return { payment: result, autoAllocated: true };
+      }
+
       const invoicesRes = await fetch(
         `/api/ar-invoices?customerId=${encodeURIComponent(data.customerId)}`,
         { credentials: 'include' }
       );
       const freshInvoices = invoicesRes.ok ? await invoicesRes.json() : [];
-      return { payment: result, invoices: freshInvoices };
+      return { payment: result, invoices: freshInvoices, autoAllocated: false };
     },
-    onSuccess: ({ payment, invoices }: any) => {
-      toast({ title: 'Payment recorded' });
-      setCreatedPaymentId(payment.id);
-      setCreateDialogOpen(false);
+    onSuccess: ({ payment, invoices, autoAllocated }: any) => {
+      if (autoAllocated) {
+        toast({ title: 'Payment recorded and allocated' });
+        setCreateDialogOpen(false);
+        setPaymentForm(defaultPaymentForm());
+        setOpenInvoiceItems([]);
+        setAmountManuallyEdited(false);
+      } else {
+        toast({ title: 'Payment recorded' });
+        setCreatedPaymentId(payment.id);
+        setCreateDialogOpen(false);
 
-      const openInvoices = (invoices || []).filter(
-        (inv: any) => inv.status !== 'PAID' && inv.status !== 'VOID' && parseFloat(inv.balance || inv.totalAmount) > 0
-      );
+        const openInvoices = (invoices || []).filter(
+          (inv: any) => inv.status !== 'PAID' && inv.status !== 'VOID' && parseFloat(inv.balance || inv.totalAmount) > 0
+        );
 
-      setAllocations(
-        openInvoices.map((inv: any) => ({
-          invoiceId: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          invoiceDate: inv.invoiceDate,
-          totalAmount: inv.totalAmount,
-          balance: String(parseFloat(inv.balance ?? inv.totalAmount)),
-          applyAmount: '',
-        }))
-      );
-      setAllocationDialogOpen(true);
+        setAllocations(
+          openInvoices.map((inv: any) => ({
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            invoiceDate: inv.invoiceDate,
+            totalAmount: inv.totalAmount,
+            balance: String(parseFloat(inv.balance ?? inv.totalAmount)),
+            applyAmount: '',
+          }))
+        );
+        setAllocationDialogOpen(true);
+      }
 
       queryClient.invalidateQueries({
         predicate: (query) =>
-          Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-payments',
+          Array.isArray(query.queryKey) && (
+            query.queryKey[0] === '/api/ar-payments' || query.queryKey[0] === '/api/ar-invoices'
+          ),
       });
     },
     onError: (error: any) => {
@@ -176,6 +297,8 @@ export default function ARPaymentsPage() {
       setCreatedPaymentId(null);
       setAllocations([]);
       setPaymentForm(defaultPaymentForm());
+      setOpenInvoiceItems([]);
+      setAmountManuallyEdited(false);
       queryClient.invalidateQueries({
         predicate: (query) =>
           Array.isArray(query.queryKey) && (
@@ -310,6 +433,11 @@ export default function ARPaymentsPage() {
     }
   };
 
+  const handleViewDetails = (payment: any) => {
+    setDetailPaymentId(payment.id);
+    setDetailDialogOpen(true);
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
@@ -317,7 +445,7 @@ export default function ARPaymentsPage() {
           <DollarSign className="h-6 w-6" />
           <h1 className="text-2xl font-bold">AR Payments</h1>
         </div>
-        <Button onClick={() => { setPaymentForm(defaultPaymentForm()); setCreateDialogOpen(true); }}>
+        <Button onClick={() => { setPaymentForm(defaultPaymentForm()); setOpenInvoiceItems([]); setAmountManuallyEdited(false); setCreateDialogOpen(true); }}>
           <DollarSign className="mr-2 h-4 w-4" />
           Record Payment
         </Button>
@@ -360,7 +488,7 @@ export default function ARPaymentsPage() {
                   <TableHead>Reference</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Allocated</TableHead>
-                  <TableHead className="w-20"></TableHead>
+                  <TableHead className="w-28"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -389,6 +517,14 @@ export default function ARPaymentsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleViewDetails(payment)}
+                            title="View payment details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           {!fullyAllocated && (
                             <Button
                               variant="ghost"
@@ -420,7 +556,7 @@ export default function ARPaymentsPage() {
       </Card>
 
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
@@ -432,7 +568,7 @@ export default function ARPaymentsPage() {
               <Label>Customer</Label>
               <Select
                 value={paymentForm.customerId}
-                onValueChange={(v) => setPaymentForm((p) => ({ ...p, customerId: v }))}
+                onValueChange={handleCustomerChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select customer" />
@@ -446,6 +582,48 @@ export default function ARPaymentsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {paymentForm.customerId && (
+              <div className="space-y-2">
+                <Label>Open Invoices</Label>
+                {openInvoicesLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading open invoices...
+                  </div>
+                ) : openInvoiceItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No open invoices for this customer.</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                    {openInvoiceItems.map((item) => (
+                      <div key={item.invoiceId} className="flex items-center gap-3 px-3 py-2">
+                        <Checkbox
+                          id={`inv-${item.invoiceId}`}
+                          checked={item.checked}
+                          onCheckedChange={(checked) => handleInvoiceCheckChange(item.invoiceId, !!checked)}
+                        />
+                        <label
+                          htmlFor={`inv-${item.invoiceId}`}
+                          className="flex flex-1 items-center justify-between text-sm cursor-pointer"
+                        >
+                          <span className="font-medium">{item.invoiceNumber}</span>
+                          <span className="text-muted-foreground">
+                            {item.dueDate ? `Due ${formatDate(item.dueDate)}` : 'No due date'}
+                          </span>
+                          <span className="font-medium">{formatCurrency(item.balance)}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {checkedInvoices.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {checkedInvoices.length} invoice{checkedInvoices.length > 1 ? 's' : ''} selected — amount auto-filled. You can override it below.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Payment Date</Label>
               <Input
@@ -485,7 +663,7 @@ export default function ARPaymentsPage() {
                 min="0"
                 step="0.01"
                 value={paymentForm.amount}
-                onChange={(e) => setPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                onChange={(e) => handleAmountChange(e.target.value)}
                 placeholder="0.00"
               />
             </div>
@@ -593,6 +771,96 @@ export default function ARPaymentsPage() {
               {allocateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Allocate Payment
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailDialogOpen} onOpenChange={(open) => { setDetailDialogOpen(open); if (!open) setDetailPaymentId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+            {paymentDetail && (
+              <DialogDescription>
+                {paymentDetail.customerName || paymentDetail.customerId} — {formatDate(paymentDetail.paymentDate)} — {paymentDetail.paymentMethod}
+                {paymentDetail.referenceNumber ? ` — Ref: ${paymentDetail.referenceNumber}` : ''}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="space-y-3 py-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : paymentDetail ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total Payment Amount</span>
+                <span className="font-semibold">{formatCurrency(paymentDetail.amount)}</span>
+              </div>
+
+              <Separator />
+
+              {(!paymentDetail.allocations || paymentDetail.allocations.length === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No invoices have been allocated to this payment yet.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Invoice #</TableHead>
+                      <TableHead className="text-right">Invoice Total</TableHead>
+                      <TableHead className="text-right">Amount Applied</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paymentDetail.allocations.map((alloc: any) => (
+                      <TableRow key={alloc.id}>
+                        <TableCell className="font-medium">{alloc.invoiceNumber || '—'}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(alloc.invoiceTotalAmount)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(alloc.amountApplied)}</TableCell>
+                        <TableCell>
+                          <Badge variant={statusBadgeVariant(alloc.invoiceStatus)}>
+                            {alloc.invoiceStatus || '—'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
+              {paymentDetail.allocations && paymentDetail.allocations.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Total Allocated</span>
+                    <span className="font-semibold">
+                      {formatCurrency(
+                        paymentDetail.allocations.reduce(
+                          (sum: number, a: any) => sum + parseFloat(a.amountApplied || '0'),
+                          0
+                        )
+                      )}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {paymentDetail.notes && (
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Notes: </span>
+                  <span>{paymentDetail.notes}</span>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

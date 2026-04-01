@@ -84,6 +84,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         invoiceId: arPaymentAllocations.invoiceId,
         invoiceNumber: arInvoices.invoiceNumber,
         invoiceTotalAmount: arInvoices.totalAmount,
+        invoiceStatus: arInvoices.status,
         amountApplied: arPaymentAllocations.amountApplied,
         createdAt: arPaymentAllocations.createdAt,
       })

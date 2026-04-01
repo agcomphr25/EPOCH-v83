@@ -1,0 +1,90 @@
+EXACT FIX (COPY-PASTE FOR AGENT)
+
+Now that we have the audit, here is your implementation prompt:
+
+You are implementing a fix for a transaction boundary bug in Vendor PO revision creation.
+
+-------------------------------------
+PROBLEM
+-------------------------------------
+
+createVendorPORevision uses a transaction (tx), but calls:
+
+- getPOOptionalSettings()
+- addPOOptionalSetting()
+
+These functions use `db` instead of `tx`, causing FK violations because the new revision row is not visible outside the transaction.
+
+-------------------------------------
+GOAL
+-------------------------------------
+
+Ensure ALL database operations inside createVendorPORevision use the SAME transaction (tx).
+
+-------------------------------------
+REQUIRED CHANGES
+-------------------------------------
+
+1. Modify function signatures:
+
+- getPOOptionalSettings(poId, dbOrTx)
+- addPOOptionalSetting(vendorPoId, optionalSettingId, dbOrTx)
+
+These functions must:
+- Accept a database client (tx or db)
+- Default to `db` if not provided (for backward compatibility)
+
+-------------------------------------
+
+2. Update implementations:
+
+Replace all internal `db` calls with the injected client:
+
+Example:
+const client = dbOrTx || db;
+
+await client.insert(...)
+
+-------------------------------------
+
+3. Update createVendorPORevision:
+
+Replace:
+
+const originalSettings = await this.getPOOptionalSettings(poId);
+
+with:
+
+const originalSettings = await this.getPOOptionalSettings(poId, tx);
+
+AND
+
+await this.addPOOptionalSetting(newRevision.id, setting.id);
+
+with:
+
+await this.addPOOptionalSetting(newRevision.id, setting.id, tx);
+
+-------------------------------------
+
+4. Verify ALL calls inside the transaction use tx:
+
+- vendorPOs insert ✅ already using tx
+- vendorPOItems insert ✅ already using tx
+- optional settings ❌ MUST be switched to tx
+
+-------------------------------------
+
+5. DO NOT change business logic
+6. DO NOT change schema
+7. DO NOT remove FK constraints
+
+-------------------------------------
+DELIVERABLE
+-------------------------------------
+
+- Updated function signatures
+- Updated implementations
+- Updated createVendorPORevision usage
+
+Ensure everything compiles and follows existing patterns.

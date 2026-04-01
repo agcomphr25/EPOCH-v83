@@ -1487,6 +1487,15 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ assigned_to_asset migration:', assetErr.message);
       }
 
+      // Ensure inventory_items has utilized_in_pl3 column
+      try {
+        const { sql: sqlPL3 } = await import('drizzle-orm');
+        await db.execute(sqlPL3`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS utilized_in_pl3 BOOLEAN DEFAULT FALSE`);
+        console.log('✅ Ensured inventory_items has utilized_in_pl3 column');
+      } catch (pl3Err: any) {
+        console.warn('⚠️ utilized_in_pl3 migration:', pl3Err.message);
+      }
+
       try {
         const { sql: sqlDom } = await import('drizzle-orm');
         await db.execute(sqlDom`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS default_order_method TEXT`);

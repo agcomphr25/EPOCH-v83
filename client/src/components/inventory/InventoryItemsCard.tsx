@@ -97,6 +97,7 @@ interface InventoryFormData {
   isStockItem: boolean;
   utilizedInPL1: boolean;
   utilizedInPL2: boolean;
+  utilizedInPL3: boolean;
   traceabilityRequired: boolean;
   traceabilityFields: string[];
   utilizedInFacilities: boolean;
@@ -210,10 +211,11 @@ const InventoryForm = ({
     }
   }, [formData.agPartNumber, editingItem, checkDuplicate]);
 
-  type UtilizedKey = 'utilizedInPL1' | 'utilizedInPL2' | 'utilizedInFacilities' | 'utilizedInAdmin' | 'utilizedInServices';
+  type UtilizedKey = 'utilizedInPL1' | 'utilizedInPL2' | 'utilizedInPL3' | 'utilizedInFacilities' | 'utilizedInAdmin' | 'utilizedInServices';
   const utilizedOptions: { key: UtilizedKey; label: string }[] = [
     { key: 'utilizedInPL1', label: 'PL1' },
     { key: 'utilizedInPL2', label: 'PL2' },
+    { key: 'utilizedInPL3', label: 'PL3' },
     { key: 'utilizedInFacilities', label: 'Facilities' },
     { key: 'utilizedInAdmin', label: 'Admin' },
     { key: 'utilizedInServices', label: 'Services' },
@@ -1043,6 +1045,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [bulkUtilizedFields, setBulkUtilizedFields] = useState({
     utilizedInPL1: false,
     utilizedInPL2: false,
+    utilizedInPL3: false,
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
@@ -1080,6 +1083,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     isStockItem: false,
     utilizedInPL1: false,
     utilizedInPL2: false,
+    utilizedInPL3: false,
     traceabilityRequired: false,
     traceabilityFields: [],
     utilizedInFacilities: false,
@@ -1305,6 +1309,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 return item.utilizedInPL1;
               case 'pl2':
                 return item.utilizedInPL2;
+              case 'pl3':
+                return item.utilizedInPL3;
               case 'facilities':
                 return item.utilizedInFacilities;
               case 'admin':
@@ -1598,6 +1604,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       isStockItem: false,
       utilizedInPL1: false,
       utilizedInPL2: false,
+      utilizedInPL3: false,
       traceabilityRequired: false,
       traceabilityFields: [],
       utilizedInFacilities: false,
@@ -1745,6 +1752,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         isStockItem: formData.isStockItem,
         utilizedInPL1: formData.utilizedInPL1,
         utilizedInPL2: formData.utilizedInPL2,
+        utilizedInPL3: formData.utilizedInPL3,
         traceabilityRequired: formData.traceabilityRequired,
         traceabilityFields: formData.traceabilityFields,
         utilizedInFacilities: formData.utilizedInFacilities,
@@ -1808,6 +1816,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       isStockItem: item.isStockItem || false,
       utilizedInPL1: item.utilizedInPL1 || false,
       utilizedInPL2: item.utilizedInPL2 || false,
+      utilizedInPL3: item.utilizedInPL3 || false,
       traceabilityRequired: item.traceabilityRequired || false,
       traceabilityFields: (item as any).traceabilityFields || [],
       utilizedInFacilities: item.utilizedInFacilities || false,
@@ -1927,6 +1936,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       setBulkUtilizedFields({
         utilizedInPL1: false,
         utilizedInPL2: false,
+        utilizedInPL3: false,
         utilizedInFacilities: false,
         utilizedInAdmin: false,
         utilizedInServices: false,
@@ -1953,6 +1963,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     const fieldsToUpdate = {
       utilizedInPL1: bulkUtilizedFields.utilizedInPL1,
       utilizedInPL2: bulkUtilizedFields.utilizedInPL2,
+      utilizedInPL3: bulkUtilizedFields.utilizedInPL3,
       utilizedInFacilities: bulkUtilizedFields.utilizedInFacilities,
       utilizedInAdmin: bulkUtilizedFields.utilizedInAdmin,
       utilizedInServices: bulkUtilizedFields.utilizedInServices,
@@ -2206,6 +2217,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 <SelectItem value="all">All Items</SelectItem>
                 <SelectItem value="pl1">PL1 Only</SelectItem>
                 <SelectItem value="pl2">PL2 Only</SelectItem>
+                <SelectItem value="pl3">PL3 Only</SelectItem>
                 <SelectItem value="facilities">Facilities Only</SelectItem>
                 <SelectItem value="admin">Admin Only</SelectItem>
                 <SelectItem value="services">Services Only</SelectItem>
@@ -2545,6 +2557,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                             PL2
                           </span>
                         )}
+                        {item.utilizedInPL3 && (
+                          <span className="px-2 py-1 text-xs bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-100 rounded">
+                            PL3
+                          </span>
+                        )}
                         {item.utilizedInFacilities && (
                           <span className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 rounded">
                             Facilities
@@ -2562,6 +2579,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         )}
                         {!item.utilizedInPL1 &&
                           !item.utilizedInPL2 &&
+                          !item.utilizedInPL3 &&
                           !item.utilizedInFacilities &&
                           !item.utilizedInAdmin &&
                           !item.utilizedInServices &&
@@ -2625,6 +2643,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     <SelectItem value="all">All Items</SelectItem>
                     <SelectItem value="pl1">PL1 Only</SelectItem>
                     <SelectItem value="pl2">PL2 Only</SelectItem>
+                    <SelectItem value="pl3">PL3 Only</SelectItem>
                     <SelectItem value="facilities">Facilities Only</SelectItem>
                     <SelectItem value="admin">Admin Only</SelectItem>
                     <SelectItem value="services">Services Only</SelectItem>
@@ -2656,6 +2675,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     switch (utilizedFilter) {
                       case 'pl1': return item.utilizedInPL1;
                       case 'pl2': return item.utilizedInPL2;
+                      case 'pl3': return item.utilizedInPL3;
                       case 'facilities': return item.utilizedInFacilities;
                       case 'admin': return item.utilizedInAdmin;
                       case 'services': return item.utilizedInServices;
@@ -2715,10 +2735,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                     <div className="flex flex-wrap gap-1">
                                       {item.utilizedInPL1 && <span className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 rounded">PL1</span>}
                                       {item.utilizedInPL2 && <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 rounded">PL2</span>}
+                                      {item.utilizedInPL3 && <span className="px-2 py-0.5 text-xs bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-100 rounded">PL3</span>}
                                       {item.utilizedInFacilities && <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 rounded">Facilities</span>}
                                       {item.utilizedInAdmin && <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded">Admin</span>}
                                       {item.utilizedInServices && <span className="px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 rounded">Services</span>}
-                                      {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && '—'}
+                                      {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInPL3 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && '—'}
                                     </div>
                                   </td>
                                   <td className="px-4 py-2 font-medium">
@@ -2762,6 +2783,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     switch (utilizedFilter) {
                       case 'pl1': return item.utilizedInPL1;
                       case 'pl2': return item.utilizedInPL2;
+                      case 'pl3': return item.utilizedInPL3;
                       case 'facilities': return item.utilizedInFacilities;
                       case 'admin': return item.utilizedInAdmin;
                       case 'services': return item.utilizedInServices;
@@ -2998,6 +3020,25 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="bulk-utilizedInPL3"
+                    checked={bulkUtilizedFields.utilizedInPL3}
+                    onCheckedChange={(checked) =>
+                      setBulkUtilizedFields({
+                        ...bulkUtilizedFields,
+                        utilizedInPL3: checked as boolean,
+                      })
+                    }
+                    data-testid="checkbox-bulk-utilizedInPL3"
+                  />
+                  <Label
+                    htmlFor="bulk-utilizedInPL3"
+                    className="cursor-pointer"
+                  >
+                    PL3
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
                     id="bulk-utilizedInFacilities"
                     checked={bulkUtilizedFields.utilizedInFacilities}
                     onCheckedChange={(checked) =>
@@ -3068,6 +3109,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 setBulkUtilizedFields({
                   utilizedInPL1: false,
                   utilizedInPL2: false,
+                  utilizedInPL3: false,
                   utilizedInFacilities: false,
                   utilizedInAdmin: false,
                   utilizedInServices: false,

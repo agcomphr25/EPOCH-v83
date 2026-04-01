@@ -649,6 +649,7 @@ export const inventoryItems = pgTable('inventory_items', {
   isStockItem: boolean('is_stock_item').default(false), // Used in stock models
   utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
   utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
+  utilizedInPL3: boolean('utilized_in_pl3').default(false), // Used in Production Line 3
   traceabilityRequired: boolean('traceability_required').default(false), // Traceability required for P2 items
   traceabilityFields: jsonb('traceability_fields').$type<string[]>().default(sql`'[]'::jsonb`), // Specific traceability fields required (Lot #, Batch #, Exp Date, Part #)
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
@@ -2187,6 +2188,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     isStockItem: z.boolean().default(false),
     utilizedInPL1: z.boolean().default(false),
     utilizedInPL2: z.boolean().default(false),
+    utilizedInPL3: z.boolean().default(false),
     traceabilityRequired: z.boolean().default(false),
     traceabilityFields: z.array(z.string()).default([]),
     utilizedInFacilities: z.boolean().default(false),

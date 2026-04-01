@@ -700,6 +700,9 @@ router.post('/items/bulk-update-utilized', async (req: Request, res: Response) =
     if ('utilizedInPL2' in utilizedFields) {
       updates.utilizedInPL2 = Boolean(utilizedFields.utilizedInPL2);
     }
+    if ('utilizedInPL3' in utilizedFields) {
+      updates.utilizedInPL3 = Boolean(utilizedFields.utilizedInPL3);
+    }
     if ('utilizedInFacilities' in utilizedFields) {
       updates.utilizedInFacilities = Boolean(utilizedFields.utilizedInFacilities);
     }
@@ -1755,6 +1758,7 @@ function parseCostValue(value: string): number | null {
 function parseUtilizedColumn(value: string): {
   utilizedInPL1: boolean;
   utilizedInPL2: boolean;
+  utilizedInPL3: boolean;
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
@@ -1763,6 +1767,7 @@ function parseUtilizedColumn(value: string): {
   return {
     utilizedInPL1: valueLower.includes('pl1'),
     utilizedInPL2: valueLower.includes('pl2'),
+    utilizedInPL3: valueLower.includes('pl3'),
     utilizedInFacilities: valueLower.includes('facilities'),
     utilizedInAdmin: valueLower.includes('admin'),
     utilizedInServices: valueLower.includes('services'),
@@ -1820,6 +1825,7 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
         const itemData: any = {
           utilizedInPL1: false,
           utilizedInPL2: false,
+          utilizedInPL3: false,
           utilizedInFacilities: false,
           utilizedInAdmin: false,
           utilizedInServices: false,
@@ -1964,7 +1970,8 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
             purchaseUnit: itemData.purchaseUnit,
             utilized: {
               PL1: itemData.utilizedInPL1,
-              PL2: itemData.utilizedInPL2
+              PL2: itemData.utilizedInPL2,
+              PL3: itemData.utilizedInPL3
             },
             rawValuesPreview: values.slice(0, 7).map((v, idx) => `${headers[idx]}="${v}"`)
           });
@@ -2115,6 +2122,7 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
       const utilized: string[] = [];
       if (item.utilizedInPL1) utilized.push('PL1');
       if (item.utilizedInPL2) utilized.push('PL2');
+      if (item.utilizedInPL3) utilized.push('PL3');
       if (item.utilizedInFacilities) utilized.push('Facilities');
       if (item.utilizedInAdmin) utilized.push('Admin');
       if (item.utilizedInServices) utilized.push('Services');

@@ -1,0 +1,320 @@
+Copy-paste implementation prompt
+
+Use this in your coding agent exactly as written:
+
+You are implementing a HARD-ENFORCED ORDER ACTIVITY AND AUDIT ARCHITECTURE in the EPOCH codebase.
+
+IMPORTANT:
+- Make code changes directly in the codebase.
+- Be careful and incremental.
+- Preserve existing business behavior wherever possible.
+- Do not do a giant rewrite in one step.
+- Implement in phases.
+- At the end, provide a structured changelog with exact files modified, functions added, routes migrated, and any remaining bypass paths.
+
+==================================================
+OBJECTIVE
+==================================================
+
+EPOCH must capture the FULL STORY of every order:
+
+- every status change
+- every department move
+- every badge scan
+- every NCR / repair routing action
+- every shipping update
+- every admin override
+- every spec / field change
+- every finalization / payment-related state change
+- every automation-driven mutation
+
+This must become HARD ENFORCED:
+
+NO route, service, worker, storage helper, or admin flow may directly mutate order state/spec fields unless it goes through a canonical audited write path.
+
+==================================================
+ARCHITECTURAL GOAL
+==================================================
+
+Implement a canonical evented order history system with two truths:
+
+1. CURRENT SNAPSHOT
+   - the allOrders row remains the current state for fast reads
+
+2. IMMUTABLE EVENT LEDGER
+   - every meaningful change writes a canonical event row
+   - replayable in exact order
+   - used to explain how the order got to its current state
+
+==================================================
+PHASE 1 — INVENTORY AND TARGET FIELDS
+==================================================
+
+First identify and centralize the fields considered "audited order state/spec fields".
+
+At minimum include:
+- status
+- statusId
+- currentDepartment
+- currentDepartmentId
+- dueDate
+- shipDate / shippedDate
+- trackingNumber
+- shippingCarrier
+- shipping method fields
+- quantity fields
+- scrappedQuantity
+- urgency
+- cancellation fields
+- payment/finalization fields
+- core order specification fields that affect manufacturing or fulfillment
+- any JSON/spec fields used to define the product/order build
+
+Create a shared constant/module for these tracked fields.
+
+==================================================
+PHASE 2 — CANONICAL EVENT LEDGER
+==================================================
+
+Create or extend a canonical table for order events.
+
+Preferred approach:
+- reuse audit_events only if it can cleanly support full replay
+- otherwise create a new canonical table such as order_activity_events
+
+Each event row must support at least:
+- id
+- orderId
+- eventType
+- eventCategory
+- occurredAt
+- actorId
+- actorType
+- actorDisplayName
+- source
+- sourceRoute
+- correlationId
+- requestId
+- reasonCode
+- reasonText
+- beforeSnapshot JSON
+- afterSnapshot JSON
+- fieldDiff JSON
+- statusFrom
+- statusTo
+- departmentFrom
+- departmentTo
+- relatedEntityType
+- relatedEntityId
+- metadata JSON
+- createdAt
+
+Design this so the UI can reconstruct a full story timeline from this table alone.
+
+==================================================
+PHASE 3 — CANONICAL WRITE SERVICE
+==================================================
+
+Create a single canonical service layer for audited writes.
+
+Implement functions like:
+
+- transitionOrderState(...)
+- moveOrderDepartment(...)
+- applyOrderFieldPatch(...)
+- applyOrderSpecPatch(...)
+- applyAdminOverride(...)
+- recordBadgeScanTransition(...)
+- recordShippingUpdate(...)
+- recordNcrRepairTransition(...)
+- recordPaymentStateTransition(...)
+
+Rules:
+- these functions must read the current row first
+- compute before/after snapshot
+- compute fieldDiff
+- write the order update
+- write the canonical event
+- do this in a transaction where possible
+- if event write fails, the state change must fail
+- no silent failure
+- no best-effort logging
+- no swallowed exceptions
+
+==================================================
+PHASE 4 — HARD ENFORCEMENT
+==================================================
+
+Refactor known bypass paths so they no longer directly mutate audited order fields.
+
+Priority migration targets:
+
+1. server/src/routes/employeeBadges.ts
+2. server/routes/nonconformance.ts
+3. server/storage.ts
+4. server/src/routes/shipping.ts
+5. server/src/routes/rtsSales.ts
+6. admin order update flows in server/src/routes/orders.ts
+7. any label generation or fulfillment routes
+8. any offline replay routes that re-dispatch state changes
+
+For each migrated path:
+- replace raw db.update on audited order fields with canonical service calls
+- preserve route behavior
+- map route context into event source metadata
+- include actor/source/reason/correlation info
+
+==================================================
+PHASE 5 — UNIFY SHADOW AUDIT SYSTEMS
+==================================================
+
+Unify or bridge these systems into the canonical story:
+
+- badge_scan_audit_log
+- admin_audit_log
+- departmentHistory JSON
+- order_department_transitions
+- audit_events legacy writes if separate
+
+Requirements:
+- do not lose existing data
+- keep backward compatibility if needed
+- but the UI and future writes must rely on the canonical event stream
+- if legacy tables remain, they should either feed the canonical timeline or be explicitly marked legacy
+
+==================================================
+PHASE 6 — STATE TRANSITION ENFORCEMENT
+==================================================
+
+Introduce legal transition validation.
+
+Implement:
+- allowed status transitions
+- allowed department transitions
+- explicit exceptional transitions
+
+Examples of exceptions:
+- FINALIZED -> IN_PROGRESS may only happen through a named NCR repair / authorized reopen flow
+- regression transitions must require explicit reason + actor + event type
+- badge scan movement must respect department flow rules unless an override flag is present
+
+The system must reject illegal transitions.
+
+==================================================
+PHASE 7 — SPEC CHANGE TRACKING
+==================================================
+
+Implement deep tracking for order spec changes.
+
+Whenever a spec or editable order field changes:
+- capture changed field paths
+- old value
+- new value
+- normalized value if applicable
+- classification of impact:
+  - manufacturing
+  - scheduling
+  - QC
+  - shipping
+  - pricing
+  - admin only
+
+Prefer a fieldDiff structure that works for both scalar and nested JSON/spec changes.
+
+==================================================
+PHASE 8 — FULL STORY TIMELINE API
+==================================================
+
+Create or upgrade an API that returns a unified chronological replay for one order.
+
+Requirements:
+- reads canonical event ledger first
+- can include legacy-linked records if needed
+- returns story-friendly event rows
+- supports filters by:
+  - event family
+  - actor
+  - source
+  - date range
+- includes before/after and field diff data where allowed
+
+This API should support a UI with tabs like:
+- Story
+- Status / Department
+- Spec Changes
+- Shipping
+- Payments
+- NCR / Scrap
+- Admin Overrides
+- Raw Event Log
+
+==================================================
+PHASE 9 — UI STORY MODE
+==================================================
+
+Upgrade the order audit UI so it no longer only shows narrow status chips.
+
+Add a story/replay mode that makes it obvious:
+- what happened
+- when
+- who did it
+- from where
+- why
+- what changed
+
+For each event card show:
+- human-readable title
+- timestamp
+- actor
+- source
+- before -> after summary
+- expandable diff
+- correlation / related action info if available
+
+Examples:
+- "Badge scan moved order from Finish QC to Paint"
+- "NCR repair reopened order and set status FINALIZED -> IN_PROGRESS"
+- "Admin override changed due date from X to Y"
+- "Spec patch changed barrel finish from A to B"
+
+==================================================
+PHASE 10 — BACKFILL / LEGACY COMPATIBILITY
+==================================================
+
+Where practical, create a migration/backfill plan so historical data from:
+- admin_audit_log
+- badge_scan_audit_log
+- departmentHistory JSON
+- existing audit_events
+can appear in the unified story as legacy-origin events.
+
+Do not fabricate certainty where data is incomplete.
+If an old event is partial, mark it as legacy/incomplete in metadata.
+
+==================================================
+SAFETY / ENFORCEMENT RULES
+==================================================
+
+- No silent logging failures.
+- No try/catch that swallows canonical event write failures.
+- If audited order state changes, canonical event write is mandatory.
+- If canonical event write fails, mutation fails.
+- Avoid circular service dependencies.
+- Preserve existing endpoints unless a small API adjustment is required.
+- Keep migration incremental and explain any remaining follow-up items.
+
+==================================================
+DELIVERABLES
+==================================================
+
+At the end provide:
+
+1. SUMMARY OF WHAT WAS IMPLEMENTED
+2. FILES CHANGED
+3. NEW TABLES / MIGRATIONS
+4. NEW CANONICAL SERVICES
+5. ROUTES MIGRATED OFF DIRECT WRITES
+6. REMAINING BYPASS PATHS, if any
+7. TRANSITION RULES ADDED
+8. UI CHANGES
+9. RISKS / FOLLOW-UP ITEMS

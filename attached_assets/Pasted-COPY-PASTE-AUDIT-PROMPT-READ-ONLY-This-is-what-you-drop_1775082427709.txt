@@ -1,0 +1,177 @@
+COPY-PASTE AUDIT PROMPT (READ ONLY)
+
+This is what you drop into your Replit / Claude agent 👇
+
+You are performing a READ-ONLY FORENSIC AUDIT of the EPOCH codebase.
+
+DO NOT MODIFY ANY CODE.
+DO NOT SUGGEST IMPLEMENTATION YET.
+ONLY ANALYZE AND REPORT.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Determine why ORDER STATUS CHANGES are not being consistently captured in the audit trail, and how an order can move into a state (e.g., IN_PROGRESS) without a corresponding audit record.
+
+==================================================
+SCOPE OF INVESTIGATION
+==================================================
+
+Trace the COMPLETE lifecycle of order status updates across the system.
+
+You must identify:
+
+1. ALL LOCATIONS WHERE STATUS IS MUTATED
+2. ALL PATHWAYS THAT BYPASS AUDITING
+3. WHETHER A SINGLE SOURCE OF TRUTH EXISTS
+4. WHETHER AUDIT LOGGING IS GUARANTEED OR OPTIONAL
+
+==================================================
+STEP 1 — FIND STATUS WRITE PATHS
+==================================================
+
+Search for all mutations of:
+
+- order.status
+- currentDepartment
+- orderState / status enums
+
+Include:
+
+- direct DB updates (Drizzle, SQL, ORM)
+- service functions
+- route handlers
+- background jobs
+- badge scan flows
+- automation logic
+
+OUTPUT:
+
+A list of all files and functions where status is changed.
+
+For each:
+- file path
+- function name
+- how status is updated
+- whether audit is triggered
+
+==================================================
+STEP 2 — TRACE AUDIT LOGGING SYSTEM
+==================================================
+
+Locate:
+
+- auditTrail / audit_logs table
+- audit service or helper functions
+- any "logEvent", "createAuditEntry", etc.
+
+Determine:
+
+- where audit is written
+- what fields are captured:
+  - beforeStatus
+  - afterStatus
+  - actorId
+  - actorType
+  - timestamp
+  - source (UI/system/etc.)
+  - correlationId
+
+OUTPUT:
+
+- audit schema
+- audit write function(s)
+- missing fields (if any)
+
+==================================================
+STEP 3 — CHECK FOR BYPASSES
+==================================================
+
+For EACH status mutation found in Step 1:
+
+Answer:
+
+- Does it ALWAYS call the audit logging system?
+- Can it run without audit logging?
+- Is audit enforced or optional?
+
+Highlight:
+
+🚨 Any path where status changes WITHOUT audit logging
+
+==================================================
+STEP 4 — IDENTIFY MULTIPLE SOURCES OF TRUTH
+==================================================
+
+Determine if status is derived from:
+
+- order.status
+- production queue
+- department assignments
+- scan events
+- derived/computed fields
+
+Answer:
+
+- Is there ONE canonical status field?
+- Or multiple competing representations?
+
+==================================================
+STEP 5 — TRACE A REAL FAILURE CASE
+==================================================
+
+Simulate or trace how an order could end up:
+
+FULFILLED → FINALIZED → IN_PROGRESS
+
+WITHOUT an audit entry.
+
+You must:
+
+- reconstruct possible execution paths
+- identify which code path caused this
+- explain why audit did not capture it
+
+==================================================
+STEP 6 — STATE TRANSITION RULES
+==================================================
+
+Check if there is:
+
+- a defined state machine
+- allowed transitions
+- validation layer
+
+Answer:
+
+- Can any status transition to any other?
+- Are invalid transitions blocked?
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Provide a structured report:
+
+1. ALL STATUS WRITE PATHS
+2. AUDIT SYSTEM ANALYSIS
+3. BYPASS PATHS (CRITICAL)
+4. SOURCE OF TRUTH ANALYSIS
+5. FAILURE SCENARIO RECONSTRUCTION
+6. STATE MACHINE ANALYSIS
+7. ROOT CAUSE SUMMARY
+
+DO NOT FIX.
+DO NOT WRITE CODE.
+ONLY REPORT.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+We should clearly understand:
+
+- why audit logs are incomplete
+- how status changes are escaping audit
+- what structural flaws exist in the system

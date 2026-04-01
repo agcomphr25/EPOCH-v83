@@ -1,0 +1,658 @@
+Yes — this should be its own **CNC Dashboard / CNC Control Center** inside EPOCH.
+
+What you are describing is not just a queue. It is really a **work instruction + programming + setup + execution + QC control system** for machined parts tied back to the **PO / sales order / work order / traveler**.
+
+The best way to build it is to make the CNC dashboard the place where a job goes through these stages:
+
+## CNC dashboard flow
+
+**1. Queue**
+Jobs arrive automatically from:
+
+* manufactured parts on a PO
+* internal production orders
+* subassembly demand
+* assembly demand
+* rework jobs
+
+Each job should show:
+
+* work order number
+* linked PO / SO
+* part number
+* part description
+* revision
+* quantity
+* due date
+* priority
+* material status
+* traveler status
+* routing status
+
+**2. Engineering / Routing Review**
+This is where the CNC lead or programmer confirms:
+
+* machine required
+* number of operations
+* estimated cycle/setup time
+* fixtures required
+* tooling required
+* workholding required
+* reference documents
+* QC requirements
+
+**3. Programming**
+The machinist/programmer defines the actual machining package:
+
+* machine program name / number
+* program revision
+* post processor / machine family
+* setup sheet
+* work offset / reference point
+* tool list
+* fixture orientation
+* photos for setup
+* special instructions
+* prove-out required yes/no
+
+**4. Ready for Setup**
+Everything is approved and complete:
+
+* material available
+* fixtures available
+* tools loaded
+* program approved
+* docs attached
+* QC checkpoints loaded
+
+**5. Running**
+Operator starts work:
+
+* setup start/end
+* run start/end
+* part counts
+* scrap
+* pause reasons
+* notes
+
+**6. In-Process QC**
+Operator or QC performs checkpoint verification.
+
+**7. Complete / Send Forward**
+Job moves to:
+
+* anodize/vendor
+* deburr
+* inspection
+* assembly
+* stock
+* shipping
+
+---
+
+# What the CNC dashboard should contain
+
+I would split it into these tabs or panels:
+
+## 1. Job Queue
+
+This is the main list.
+
+Columns:
+
+* Status
+* Priority
+* Work Order
+* PO / SO
+* Part Number
+* Part Name
+* Revision
+* Qty
+* Machine
+* Programmer
+* Due Date
+* Estimated Hours
+* QC Hold flag
+* Material Ready flag
+
+Filters:
+
+* machine
+* programmer
+* status
+* due date
+* hot jobs
+* outside process required
+* first article required
+
+---
+
+## 2. Job Detail
+
+When the machinist opens a job, this becomes the digital setup/work package.
+
+Sections:
+
+### Job header
+
+* work order
+* part number
+* description
+* revision
+* quantity
+* customer
+* linked traveler
+* linked routing
+* due date
+* priority
+
+### Setup instructions
+
+* machine name
+* machine number
+* op number
+* operation description
+* work reference point
+* fixture name
+* vise / chuck / rotary setup
+* raw stock orientation
+* clamp locations
+* zero point / datum notes
+* warmup or pre-check notes
+
+### Tooling
+
+For each tool:
+
+* tool number
+* holder position
+* tool description
+* cutter diameter
+* stickout
+* gauge length if needed
+* insert type
+* offset notes
+* replacement frequency
+* image of correct holder/tool setup
+
+### Program
+
+* program name
+* program number
+* file version
+* operation linked to program
+* machine it runs on
+* estimated cycle time
+* prove-out required
+* approved by
+* approved date
+* attached setup sheet / NC file reference
+
+### Photos / Visuals
+
+* fixture setup photos
+* tool holder placement photos
+* part orientation photos
+* finished part example photo
+* critical feature close-up photos
+
+### Tips / tribal knowledge
+
+This is important.
+Store practical notes like:
+
+* “touch off carefully on top face”
+* “part likes to lift on op 20”
+* “watch tool 6 wear after 8 parts”
+* “use air blast before finish pass”
+* “deburr pocket before flip”
+
+This becomes a real production advantage over time.
+
+---
+
+## 3. Operation Planning
+
+Each CNC job should have **operations**, not just one flat instruction block.
+
+Example:
+
+* Op 10 – Saw cut blank
+* Op 20 – Mill top side
+* Op 30 – Flip and machine back side
+* Op 40 – Drill/ream critical holes
+* Op 50 – Deburr
+* Op 60 – In-process inspection
+* Op 70 – Send to anodize
+
+For each operation store:
+
+* operation number
+* operation name
+* work center
+* machine
+* estimated setup time
+* estimated cycle time
+* standard labor hours
+* required skill level
+* predecessor operation
+* required documents
+* tooling package
+* QC checkpoint set
+* outside processing flag
+* completion signoff
+
+This is how you avoid CNC becoming a black box.
+
+---
+
+# QC checkpoints should be built directly into the CNC operations
+
+Do not leave QC as a separate afterthought.
+
+For each operation, define QC checkpoints like:
+
+### Example checkpoint fields
+
+* checkpoint name
+* characteristic
+* spec / nominal
+* tolerance
+* method of inspection
+* tool required
+* frequency
+* record result
+* pass/fail required
+* who verifies
+* photo required yes/no
+
+### Example CNC QC checkpoints
+
+* raw stock dimensions verified
+* fixture alignment verified
+* first part datum verified
+* hole diameter checked
+* thread inspected
+* surface finish visually acceptable
+* critical thickness verified
+* deburr complete
+* part marked correctly
+
+### Frequencies
+
+* setup only
+* first piece
+* every piece
+* every 5 pieces
+* last piece
+* final inspection
+
+### Recommended checkpoint types
+
+* numeric entry
+* pass/fail
+* yes/no
+* text note
+* barcode scan
+* photo upload
+* signature required
+
+For aerospace/compliance, some checkpoints should be **fail-closed**, meaning the operator cannot continue until the checkpoint is completed.
+
+---
+
+# Best data structure for EPOCH
+
+You already have travelers and routings, so I would not make CNC a totally separate universe.
+
+I would structure it like this:
+
+## Existing logic
+
+* **Work Order** = the manufacturing demand
+* **Traveler** = the execution record
+* **Routing** = template of departments and instructions
+* **CNC Dashboard** = department-specific control center for CNC jobs
+
+## Add CNC-specific layers
+
+### 1. cnc_jobs
+
+One row per work order entering CNC.
+
+Fields:
+
+* id
+* work_order_id
+* traveler_id
+* part_number
+* revision
+* qty
+* status
+* assigned_machine_id
+* assigned_programmer_id
+* assigned_operator_id
+* due_date
+* priority
+* estimated_setup_minutes
+* estimated_run_minutes
+* actual_setup_minutes
+* actual_run_minutes
+* notes
+
+### 2. cnc_job_operations
+
+One row per machining operation.
+
+Fields:
+
+* id
+* cnc_job_id
+* operation_number
+* name
+* description
+* machine_id
+* setup_minutes_est
+* cycle_minutes_est
+* labor_minutes_est
+* sequence
+* status
+* nc_program_id
+* qc_plan_id
+* tips
+* requires_proveout
+* requires_first_article
+
+### 3. cnc_programs
+
+Fields:
+
+* id
+* part_number
+* revision
+* operation_number
+* program_name
+* program_number
+* machine_id
+* version
+* status
+* posted_by
+* approved_by
+* file_path or document link
+* notes
+
+### 4. cnc_tool_lists
+
+Fields:
+
+* id
+* cnc_job_operation_id
+* tool_number
+* holder_position
+* tool_name
+* diameter
+* description
+* offset_notes
+* image_url
+* life_notes
+
+### 5. cnc_setup_photos
+
+Fields:
+
+* id
+* cnc_job_operation_id
+* image_url
+* image_type
+* caption
+* uploaded_by
+
+image_type examples:
+
+* workholding
+* tool_holder
+* part_orientation
+* finished_example
+* qc_reference
+
+### 6. cnc_qc_checkpoints
+
+Fields:
+
+* id
+* cnc_job_operation_id
+* checkpoint_name
+* spec_type
+* nominal
+* tolerance_plus
+* tolerance_minus
+* method
+* frequency
+* required
+* requires_photo
+* requires_signature
+* sequence
+
+### 7. cnc_qc_results
+
+Fields:
+
+* id
+* checkpoint_id
+* traveler_step_id or operation_execution_id
+* measured_value
+* pass_fail
+* note
+* photo_url
+* inspected_by
+* inspected_at
+
+---
+
+# Recommended screen layout
+
+## Left side
+
+Queue / operation list
+
+## Center
+
+Selected job details
+
+* operation instructions
+* tool list
+* setup reference
+* program info
+* uploaded pictures
+
+## Right side
+
+Execution panel
+
+* start setup
+* finish setup
+* start run
+* pause
+* scrap entry
+* complete op
+* QC checkpoints
+* notes/signoff
+
+That would feel very natural on the floor.
+
+---
+
+# What the machinist should be able to do
+
+The CNC machinist should be able to:
+
+* claim a job
+* view setup instructions
+* view tool list
+* see machine assignment
+* see correct tool holder placement photos
+* see work offset / datum reference
+* open the required program
+* record setup time
+* record run time
+* enter notes
+* upload prove-out notes/photos
+* complete QC checkpoints
+* sign off operation complete
+* move the part to the next step
+
+---
+
+# What the programmer / lead should be able to do
+
+The CNC programmer or lead should be able to:
+
+* define operations
+* assign machine
+* upload setup sheets
+* link programs to operations
+* define tool numbers and holder positions
+* upload pictures for setup
+* add tips and known issues
+* set estimated time
+* define QC checkpoints
+* require first article or prove-out
+* approve package before release
+
+---
+
+# What should auto-populate from the work order
+
+When a work order enters CNC, EPOCH should auto-fill:
+
+* work order number
+* part number
+* part revision
+* quantity
+* due date
+* routing reference
+* customer/PO reference
+* material type
+* next required process
+* linked traveler
+
+Then the CNC team adds the shop-floor details.
+
+---
+
+# Important design rule
+
+Do **not** bury all this inside one giant traveler note.
+
+Instead, make the traveler point to a **structured CNC operation package**.
+
+That gives you:
+
+* traceability
+* reusable setup knowledge
+* standard times
+* operator guidance
+* better training
+* QC enforcement
+* future scheduling/capacity planning
+
+---
+
+# Best status flow
+
+Use something like:
+
+* Awaiting Review
+* Waiting on Material
+* Waiting on Program
+* Waiting on Tooling
+* Ready for Setup
+* Setup in Progress
+* Ready to Run
+* Running
+* QC Hold
+* Complete
+* Sent to Outside Process
+* Moved to Next Department
+
+---
+
+# My recommendation for EPOCH
+
+I would build this in 3 phases.
+
+## Phase 1
+
+Basic CNC queue + job detail
+
+* jobs from work orders
+* machine assignment
+* operation list
+* programs
+* tool list
+* setup notes
+* estimated times
+
+## Phase 2
+
+Execution
+
+* setup/run timers
+* operator signoff
+* scrap/rework logging
+* machine status
+* actual hours vs estimated
+
+## Phase 3
+
+Quality and standardization
+
+* in-process QC checkpoints
+* photo-required setup verification
+* prove-out control
+* first article checkpoints
+* reusable setup packages by part/revision
+
+---
+
+# Simplest way to think about it
+
+A CNC job in EPOCH should equal:
+
+**Demand from work order**
+→ **operation plan**
+→ **digital setup package**
+→ **execution tracking**
+→ **QC verification**
+→ **release to next process**
+
+---
+
+# What I would call it
+
+A good name would be:
+
+* **CNC Control Center**
+* **CNC Work Center**
+* **CNC Dashboard**
+* **CNC Programming & Setup Center**
+
+My favorite for EPOCH is:
+
+**CNC Control Center**
+
+because it covers queue, setup, programming, execution, and QC.
+
+---
+
+# Bottom line
+
+Yes, you should absolutely build this.
+
+The strongest structure is:
+
+**PO / Order → Work Order → Traveler → CNC Job → CNC Operations → Program / Tooling / Setup / QC**
+
+That keeps EPOCH as the source of truth while giving machinists the exact practical information they need.
+
+I can turn this into a **copy-paste Replit build spec with database tables, API routes, and UI pages** next.

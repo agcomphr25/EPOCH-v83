@@ -1,15 +1,16 @@
+import { jsPDF } from 'jspdf';
+
 export function openLabelPrintWindow(
   labelBase64: string,
   title: string,
   labelFormat: string = 'GIF'
 ): void {
-  const printWindow = window.open('', '_blank', 'width=520,height=720');
-  if (!printWindow) {
-    alert('Please allow popups for this site to print');
-    return;
-  }
-
   if (labelFormat === 'ZPL') {
+    const printWindow = window.open('', '_blank', 'width=520,height=720');
+    if (!printWindow) {
+      alert('Please allow popups for this site to print');
+      return;
+    }
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -49,7 +50,24 @@ export function openLabelPrintWindow(
     return;
   }
 
-  const mimeType = 'image/gif';
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'in',
+    format: [4, 6],
+  });
+
+  const imageDataUrl = `data:image/gif;base64,${labelBase64}`;
+  pdf.addImage(imageDataUrl, 'GIF', 0, 0, 4, 6);
+
+  const pdfBlob = pdf.output('blob');
+  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
+
+  const printWindow = window.open('', '_blank', 'width=540,height=780');
+  if (!printWindow) {
+    alert('Please allow popups for this site to print');
+    URL.revokeObjectURL(pdfBlobUrl);
+    return;
+  }
 
   printWindow.document.write(`
     <!DOCTYPE html>
@@ -57,80 +75,71 @@ export function openLabelPrintWindow(
     <head>
       <title>${title}</title>
       <style>
-        @page {
-          size: 4in 6in;
-          margin: 0;
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          width: 4in;
-          height: 6in;
-          background: white;
+        body { background: #525659; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; }
+        .toolbar {
+          background: #3d4043;
+          padding: 8px 16px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          print-color-adjust: exact;
-          -webkit-print-color-adjust: exact;
-        }
-        img {
-          width: 4in;
-          height: 6in;
-          object-fit: fill;
-          display: block;
+          gap: 12px;
+          flex-shrink: 0;
+          z-index: 10;
         }
         .print-btn {
-          position: fixed;
-          top: 12px;
-          right: 12px;
-          padding: 8px 18px;
+          padding: 8px 20px;
           background: #007cba;
           color: white;
           border: none;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 15px;
-          z-index: 999;
+          font-size: 14px;
+          font-weight: 600;
         }
         .print-btn:hover { background: #005f8e; }
+        .label-text { color: #ccc; font-size: 13px; }
+        .pdf-frame {
+          flex: 1;
+          width: 100%;
+          border: none;
+          display: block;
+        }
         @media print {
-          .print-btn { display: none; }
-          body {
-            width: 4in;
-            height: 6in;
-            background: white;
-            margin: 0;
-            padding: 0;
-          }
-          img {
-            width: 4in;
-            height: 6in;
-            object-fit: fill;
-          }
+          .toolbar { display: none !important; }
+          body { background: white; height: auto; }
         }
       </style>
     </head>
     <body>
-      <img
-        id="label-img"
-        src="data:${mimeType};base64,${labelBase64}"
-        alt="UPS Shipping Label"
-      />
-      <button class="print-btn" onclick="window.print()">Print</button>
+      <div class="toolbar">
+        <button class="print-btn" id="printBtn">Print</button>
+        <span class="label-text">4&times;6 Shipping Label</span>
+      </div>
+      <iframe class="pdf-frame" id="pdfFrame" src="${pdfBlobUrl}"></iframe>
       <script>
-        var img = document.getElementById('label-img');
-        function triggerPrint() {
-          window.focus();
-          window.print();
+        var blobUrl = '${pdfBlobUrl}';
+        var frame = document.getElementById('pdfFrame');
+        var btn = document.getElementById('printBtn');
+
+        function doPrint() {
+          try {
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+          } catch (e) {
+            window.print();
+          }
         }
-        if (img.complete) {
-          triggerPrint();
-        } else {
-          img.onload = triggerPrint;
-          img.onerror = function() {
-            console.error('Label image failed to load');
-          };
-        }
-      </script>
+
+        btn.addEventListener('click', doPrint);
+
+        frame.addEventListener('load', function() {
+          setTimeout(doPrint, 500);
+        });
+
+        setTimeout(function() {
+          try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+        }, 120000);
+      <\/script>
     </body>
     </html>
   `);

@@ -212,6 +212,17 @@ export const allOrders = pgTable('all_orders', {
   productionReadinessStatus: text('production_readiness_status').default('pending'), // 'ready', 'missing_model', 'missing_action_length', 'pending'
   // Bottom Metal Demand Tracking
   bottomMetalSource: text('bottom_metal_source').default('AG_SUPPLIES'), // 'AG_SUPPLIES' or 'CUSTOMER_OWNS'
+  // Additional Department Completion Timestamps (populated by department transitions)
+  p1ProductionQueueCompletedAt: timestamp('p1_production_queue_completed_at'),
+  layupPluggingCompletedAt: timestamp('layup_plugging_completed_at'),
+  barcodeCompletedAt: timestamp('barcode_completed_at'),
+  finishAssignmentCompletedAt: timestamp('finish_assignment_completed_at'),
+  qcFinishCompletedAt: timestamp('qc_finish_completed_at'),
+  qcShippingCompletedAt: timestamp('qc_shipping_completed_at'),
+  // Calculated total (used for payment and discount calculations)
+  calculatedTotal: numeric('calculated_total'),
+  // Order source as separate column (SALES, PO_RELEASE) — distinct from legacy 'source' column
+  orderSourceV2: text('order_source').default('SALES'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -4092,6 +4103,14 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   notes: text('notes'),
   status: text('status').default('Open'), // Open, Resolved
   resolvedAt: timestamp('resolved_at'),
+  // Classification fields (added to DB before Drizzle ORM tracking)
+  p1OrP2: text('p1_or_p2').notNull().default('P1'), // 'P1' or 'P2'
+  type: text('type').notNull().default('return'), // 'return', 'warranty', etc.
+  sku: text('sku'),
+  customerId: integer('customer_id'),
+  dispositionAction: text('disposition_action'),
+  resolutionType: text('resolution_type'),
+  newOrderId: text('new_order_id'),
   repairDepartment: text('repair_department'),
   repairNotes: text('repair_notes'),
   hasCustomerPartsToReturn: boolean('has_customer_parts_to_return').default(false),

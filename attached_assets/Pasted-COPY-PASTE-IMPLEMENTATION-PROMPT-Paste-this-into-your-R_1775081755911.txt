@@ -1,0 +1,203 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+
+Paste this into your Replit / Claude agent:
+
+You are implementing a targeted fix and UX improvement for EPOCH P2 forms.
+
+DO NOT refactor unrelated systems.
+MAKE MINIMAL, SAFE CHANGES.
+PRESERVE all existing API contracts.
+
+-----------------------------------
+OBJECTIVES
+-----------------------------------
+
+Fix 3 issues:
+
+1. CRITICAL BUG:
+   Purchase Review Checklist creates duplicate draft records on every save
+
+2. UX GAP:
+   After saving, user cannot easily resume or locate draft
+
+3. DISCOVERABILITY:
+   RFQ drafts are hidden behind a non-default tab
+
+-----------------------------------
+PART 1 — FIX DUPLICATE DRAFT BUG
+-----------------------------------
+
+File:
+client/src/pages/PurchaseReviewChecklist.tsx
+
+Locate the mutation for saving the checklist.
+
+Inside the `onSuccess` callback:
+
+CURRENT PROBLEM:
+submissionId is never set after a successful POST
+
+IMPLEMENT:
+
+onSuccess: (data, variables) => {
+  const action = variables.isUpdate ? 'updated' : 'saved';
+
+  toast({
+    title: 'Success',
+    description: `Purchase review checklist ${action} successfully!`,
+  });
+
+  queryClient.invalidateQueries({
+    queryKey: ['/api/forms/purchase-review-checklists'],
+  });
+
+  // ✅ CRITICAL FIX — set submissionId after save
+  if (data?.id) {
+    setSubmissionId(String(data.id));
+  }
+}
+
+-----------------------------------
+PART 2 — ENSURE UPDATE VS CREATE LOGIC IS CORRECT
+-----------------------------------
+
+In the same file:
+
+Find where mutation decides POST vs PUT.
+
+Ensure logic is:
+
+IF submissionId exists:
+  → use PUT /api/forms/purchase-review-checklists/:id
+
+ELSE:
+  → use POST /api/forms/purchase-review-checklists
+
+DO NOT rely on stale state.
+Use submissionId directly.
+
+-----------------------------------
+PART 3 — ADD AUTO-RESUME URL (HIGH VALUE UX)
+-----------------------------------
+
+After setting submissionId, update URL WITHOUT reload:
+
+Add:
+
+import { useNavigate } from "react-router-dom";
+
+const navigate = useNavigate();
+
+Then inside onSuccess:
+
+if (data?.id && !submissionId) {
+  navigate(`/purchase-review-checklist?id=${data.id}`, { replace: true });
+}
+
+This ensures:
+- Future saves are updates
+- Page is resumable on refresh
+- URL reflects actual record
+
+-----------------------------------
+PART 4 — ADD “VIEW DRAFTS” CTA AFTER SAVE
+-----------------------------------
+
+Immediately after save, show an action button in toast or UI:
+
+Option (preferred):
+
+Extend toast:
+
+toast({
+  title: 'Draft Saved',
+  description: 'Your checklist has been saved.',
+  action: {
+    label: 'View Drafts',
+    onClick: () => navigate('/purchase-review-submissions')
+  }
+});
+
+If toast system doesn’t support actions, add a small inline button under Save.
+
+-----------------------------------
+PART 5 — RFQ TAB DEFAULT FIX
+-----------------------------------
+
+File:
+client/src/pages/RFQRiskAssessment.tsx
+
+Find tab state (likely something like activeTab)
+
+CURRENT:
+default = "create"
+
+IMPLEMENT:
+
+If assessments exist:
+  default tab = "view"
+ELSE:
+  default = "create"
+
+Pseudo:
+
+const [activeTab, setActiveTab] = useState(
+  assessments.length > 0 ? "view" : "create"
+);
+
+OR after fetch:
+
+useEffect(() => {
+  if (assessments?.length > 0) {
+    setActiveTab("view");
+  }
+}, [assessments]);
+
+-----------------------------------
+PART 6 — OPTIONAL (SAFE IMPROVEMENT)
+-----------------------------------
+
+PurchaseReviewSubmissions.tsx
+
+Ensure default filter shows ALL records:
+
+statusFilter default = "all"
+
+AND confirm:
+no filtering excludes DRAFT
+
+-----------------------------------
+CONSTRAINTS
+-----------------------------------
+
+- DO NOT modify backend schema
+- DO NOT change API endpoints
+- DO NOT remove any fields
+- DO NOT refactor unrelated components
+
+-----------------------------------
+SUCCESS CRITERIA
+-----------------------------------
+
+1. Saving a new checklist:
+   - creates ONE record
+   - subsequent saves update same record
+
+2. URL updates to:
+   /purchase-review-checklist?id=123
+
+3. Refreshing page reloads the draft
+
+4. User can navigate to:
+   /purchase-review-submissions
+   and see their draft
+
+5. RFQ page opens on View tab if drafts exist
+
+-----------------------------------
+OUTPUT FORMAT
+-----------------------------------
+
+1. List of files modified
+2. Exact code changes (diff-style preferred)
+3. Brief explanation of each change

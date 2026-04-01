@@ -1,0 +1,233 @@
+Here’s what I hate about the current receiving flow and what I want instead.
+
+What I hate about the current setup
+
+1. It feels like receiving is still a side feature instead of a core traceability workflow.
+Right now it looks like the main action is “add to inventory,” but I need receiving to be the first controlled traceability event in EPOCH.
+
+2. It is too PO-line / quantity based and not traceable-unit based.
+I do not just want to receive “50 units” or “300 square meters.”
+I need the ability to split one PO line into multiple real traceable units such as:
+- individual rolls
+- containers
+- boxes
+- bars/tubes
+- serialized pieces
+
+Each unit should be able to carry its own barcode, lot/batch, expiration, certs, and status.
+
+3. Document capture is not integrated enough into the receipt itself.
+I want to capture documents and photos during receiving, not as an afterthought:
+- SDS
+- TDS
+- CoC
+- packing slip
+- test report
+- supplier label photo
+- condition/damage photo
+
+These should be tied to the receipt and, where needed, to the specific received unit/lot.
+
+4. The current flow does not look strict enough for aerospace-style control.
+I need receiving statuses and dispositions like:
+- pending inspection
+- accepted
+- quarantine
+- rejected / NCR hold
+
+I do not want material automatically treated as usable just because it was received.
+
+5. Traceability fields need to be broader and more structured.
+For different material types I need to capture things like:
+- lot number
+- batch number
+- serial number
+- internal control number
+- roll number
+- heat lot / heat number
+- manufacture date
+- expiration date
+- shelf-life / storage requirements
+- thaw/open date for freezer materials later
+- cert reference numbers
+
+6. Allocation needs to be more intentional.
+I want to be able to receive material and then:
+- put it into stock
+- reserve it to a PO / work order / job
+- send it to quarantine
+- assign it to a location/freezer/staging area
+
+I do not want “received” and “available for use” to always mean the same thing.
+
+7. I want barcode printing to be built into receiving, not bolted on.
+When material is received, I want to print labels for each traceable unit immediately.
+This needs to work especially well for composite materials, aluminum, chemicals, and purchased parts.
+
+8. The current experience likely makes the user work line-by-line instead of shipment-by-shipment.
+I want receiving to reflect how shipments actually arrive:
+- one shipment
+- one packing slip
+- multiple PO lines
+- multiple containers/rolls
+- multiple attached documents
+That whole event should feel connected.
+
+What I want instead
+
+I want a new Receiving Control Center inside EPOCH.
+
+Core workflow I want
+
+1. Start from expected receipts
+User opens open vendor POs that are ready to receive.
+
+2. Select PO and shipment
+User can receive against one or more PO lines from that shipment.
+
+3. Create a receipt record
+The receipt should store shipment-level details like:
+- receipt number
+- date/time
+- receiver
+- carrier/tracking
+- packing slip number
+- vendor
+- notes
+- overall condition on arrival
+
+4. Receive line items
+For each PO line, enter actual quantity received and whether it is partial/complete.
+
+5. Split line items into traceable units
+Example:
+PO line = 3 rolls of prepreg
+Create:
+- Roll A
+- Roll B
+- Roll C
+Each gets its own traceability info and barcode.
+
+6. Capture traceability details per unit
+Fields should be dynamic based on item/material type.
+
+7. Upload or photograph documents during receiving
+These should be typed and linked properly.
+At minimum:
+- SDS
+- TDS
+- CoC
+- packing slip
+- test report
+- supplier label photos
+- damage photos
+
+8. Print barcode labels during receipt
+Label should show:
+- part number
+- description
+- barcode
+- lot/batch/serial/internal ID
+- qty/UOM
+- expiration if applicable
+- PO number
+- receipt date
+- disposition
+- location if assigned
+
+9. Set disposition
+Each received unit should be marked as:
+- pending inspection
+- accepted
+- quarantine
+- rejected
+
+10. Putaway / reserve
+After disposition, user should be able to:
+- assign storage location
+- assign freezer
+- reserve to a work order/job/PO demand
+- leave in stock as available
+- hold in quarantine
+
+11. Full downstream traceability
+I need the chain to be:
+vendor -> PO -> receipt -> received unit -> inventory lot/unit -> allocation/reservation -> traveler/work order consumption
+
+UI I want
+
+I want the new page to feel like a control center, not just a form.
+
+Recommended layout:
+- Left panel: Open / expected receipts and vendor POs
+- Center panel: Active receipt workflow
+- Right panel: Documents, photos, inspection/disposition, barcode preview/print, receipt history
+
+Or equivalent tabs/sections if that fits the codebase better.
+
+Main sections I want:
+- Expected Receipts
+- Active Receipt
+- Documents & Photos
+- Inspection / Disposition
+- Putaway / Allocation
+- Receiving History / Audit Trail
+
+Important behaviors I want
+
+- Receive one shipment across multiple PO lines
+- Split one PO line into multiple traceable units
+- Batch barcode print
+- Required-doc rules by item/material type
+- Dynamic traceability fields by item/material type
+- Quarantine workflow
+- Partial receipt handling
+- Over/under receipt visibility
+- Audit trail for who received, edited, printed, dispositioned, and uploaded docs
+- Mobile/tablet friendly photo capture if possible
+
+What must connect to the rest of EPOCH
+
+The new receiving flow needs to tie directly into:
+- vendor POs
+- inventory items
+- inventory transactions
+- location control
+- reservations/allocations
+- traveler material traceability later
+- NCR/quality flow if rejected or quarantined
+
+What I want Replit to do next
+
+Please analyze the current receiving implementation and propose:
+1. a replacement architecture
+2. the new schema changes needed
+3. whether to introduce new tables such as:
+   - receipts
+   - receipt_lines
+   - received_units or inventory_lots
+   - receipt_documents
+   - receipt_photos
+   - receipt_dispositions
+   - material_allocations
+4. route changes needed
+5. a phased migration plan from current receiving to the new receiving control center
+6. UI implementation plan using the current EPOCH patterns
+
+Priority for phase 1
+
+Phase 1 should include:
+- receiving against vendor POs
+- receipt record creation
+- line item receipt
+- split into traceable units
+- traceability field capture
+- document/photo upload
+- barcode label printing
+- disposition status
+- location assignment
+- reservation/allocation support
+- audit trail
+
+Do not optimize only for simple stock receipt.
+Optimize for aerospace/composites traceability and future traveler integration.

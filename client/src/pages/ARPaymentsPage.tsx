@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -17,6 +17,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import {
   Dialog,
   DialogContent,
@@ -111,6 +117,32 @@ function statusBadgeVariant(status: string | null | undefined) {
     case 'VOID': return 'outline';
     default: return 'outline';
   }
+}
+
+interface CustomerPaymentGroup {
+  customerId: string;
+  customerName: string;
+  payments: any[];
+  totalPaid: number;
+}
+
+function groupPaymentsByCustomer(payments: any[]): CustomerPaymentGroup[] {
+  const map = new Map<string, CustomerPaymentGroup>();
+  for (const p of payments) {
+    const key = p.customerId;
+    if (!map.has(key)) {
+      map.set(key, {
+        customerId: p.customerId,
+        customerName: p.customerName || p.customerId,
+        payments: [],
+        totalPaid: 0,
+      });
+    }
+    const group = map.get(key)!;
+    group.payments.push(p);
+    group.totalPaid += parseFloat(p.amount || '0');
+  }
+  return Array.from(map.values());
 }
 
 export default function ARPaymentsPage() {
@@ -395,6 +427,19 @@ export default function ARPaymentsPage() {
     );
   });
 
+  const customerGroups = groupPaymentsByCustomer(filteredPayments);
+
+  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+  const customerGroupKey = customerGroups.map((g) => g.customerId).join('|');
+
+  useEffect(() => {
+    if (customerGroups.length === 1) {
+      setOpenAccordions([customerGroups[0].customerId]);
+    } else {
+      setOpenAccordions((prev) => prev.filter((id) => customerGroups.some((g) => g.customerId === id)));
+    }
+  }, [customerGroupKey]);
+
   const handleAllocateExisting = async (payment: any) => {
     try {
       const res = await fetch(
@@ -465,92 +510,119 @@ export default function ARPaymentsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
-            <div className="space-y-3">
+            <div className="p-4 space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : filteredPayments.length === 0 ? (
+          ) : customerGroups.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <CreditCard className="mx-auto h-12 w-12 mb-3 opacity-40" />
               <p className="text-lg">No AR payments found</p>
               <p className="text-sm">Record a payment to get started.</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Allocated</TableHead>
-                  <TableHead className="w-28"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPayments.map((payment: any) => {
-                  const allocated = parseFloat(payment.allocatedAmount || '0');
-                  const amount = parseFloat(payment.amount || '0');
-                  const fullyAllocated = Math.abs(allocated - amount) < 0.01;
-                  return (
-                    <TableRow key={payment.id}>
-                      <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                      <TableCell className="font-medium">{payment.customerName || payment.customerId}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{payment.paymentMethod}</Badge>
-                      </TableCell>
-                      <TableCell>{payment.referenceNumber || '—'}</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(payment.amount)}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={fullyAllocated ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}>
-                          {formatCurrency(allocated)}
-                        </span>
-                        {!fullyAllocated && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({formatCurrency(amount - allocated)} unallocated)
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewDetails(payment)}
-                            title="View payment details"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {!fullyAllocated && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleAllocateExisting(payment)}
-                              title="Allocate payment to invoices"
-                            >
-                              <DollarSign className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeletePayment(payment.id)}
-                            disabled={deleteMutation.isPending}
-                            title="Delete payment"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <Accordion
+              type="multiple"
+              value={openAccordions}
+              onValueChange={setOpenAccordions}
+              className="divide-y"
+            >
+              {customerGroups.map((group) => (
+                <AccordionItem
+                  key={group.customerId}
+                  value={group.customerId}
+                  className="border-0"
+                >
+                  <AccordionTrigger className="px-4 hover:no-underline hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <div className="flex items-center gap-4 text-left">
+                      <span className="font-semibold text-base">{group.customerName}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {group.payments.length} payment{group.payments.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                        <DollarSign className="h-3.5 w-3.5" />
+                        {formatCurrency(group.totalPaid)} total paid
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Method</TableHead>
+                          <TableHead>Reference</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Allocated</TableHead>
+                          <TableHead className="w-28"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.payments.map((payment: any) => {
+                          const allocated = parseFloat(payment.allocatedAmount || '0');
+                          const amount = parseFloat(payment.amount || '0');
+                          const fullyAllocated = Math.abs(allocated - amount) < 0.01;
+                          return (
+                            <TableRow key={payment.id}>
+                              <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{payment.paymentMethod}</Badge>
+                              </TableCell>
+                              <TableCell>{payment.referenceNumber || '—'}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(payment.amount)}</TableCell>
+                              <TableCell className="text-right">
+                                <span className={fullyAllocated ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}>
+                                  {formatCurrency(allocated)}
+                                </span>
+                                {!fullyAllocated && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({formatCurrency(amount - allocated)} unallocated)
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleViewDetails(payment)}
+                                    title="View payment details"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  {!fullyAllocated && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleAllocateExisting(payment)}
+                                      title="Allocate payment to invoices"
+                                    >
+                                      <DollarSign className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeletePayment(payment.id)}
+                                    disabled={deleteMutation.isPending}
+                                    title="Delete payment"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           )}
         </CardContent>
       </Card>

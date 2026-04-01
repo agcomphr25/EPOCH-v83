@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { format } from 'date-fns';
@@ -21,6 +21,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Search, FileText, DollarSign } from 'lucide-react';
 
@@ -38,6 +44,13 @@ type Invoice = {
 type Customer = {
   customerId: string;
   customerName: string;
+};
+
+type CustomerGroup = {
+  customerId: string;
+  customerName: string;
+  invoices: Invoice[];
+  total: number;
 };
 
 function getStatusBadge(status: string) {
@@ -58,6 +71,25 @@ function getStatusBadge(status: string) {
 function formatCurrency(amount: string | number) {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
+}
+
+function groupByCustomer(invoices: Invoice[]): CustomerGroup[] {
+  const map = new Map<string, CustomerGroup>();
+  for (const inv of invoices) {
+    const key = inv.customerId;
+    if (!map.has(key)) {
+      map.set(key, {
+        customerId: inv.customerId,
+        customerName: inv.customerName || inv.customerId,
+        invoices: [],
+        total: 0,
+      });
+    }
+    const group = map.get(key)!;
+    group.invoices.push(inv);
+    group.total += parseFloat(inv.totalAmount) || 0;
+  }
+  return Array.from(map.values());
 }
 
 export default function InvoicesPage() {
@@ -82,6 +114,19 @@ export default function InvoicesPage() {
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ['/api/p2-customers-bypass'],
   });
+
+  const customerGroups = invoices ? groupByCustomer(invoices) : [];
+
+  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+  const customerGroupKey = customerGroups.map((g) => g.customerId).join('|');
+
+  useEffect(() => {
+    if (customerGroups.length === 1) {
+      setOpenAccordions([customerGroups[0].customerId]);
+    } else {
+      setOpenAccordions((prev) => prev.filter((id) => customerGroups.some((g) => g.customerId === id)));
+    }
+  }, [customerGroupKey]);
 
   return (
     <div className="p-6 space-y-6">
@@ -142,70 +187,86 @@ export default function InvoicesPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Invoice #</TableHead>
-                <TableHead>Invoice Date</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <DollarSign className="h-4 w-4" />
-                    Amount
-                  </div>
-                </TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                  </TableRow>
-                ))
-              ) : invoices && invoices.length > 0 ? (
-                invoices.map((invoice) => (
-                  <TableRow
-                    key={invoice.id}
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => setLocation(`/finance/invoices/${invoice.id}`)}
-                  >
-                    <TableCell className="font-medium">
-                      {invoice.customerName || invoice.customerId}
-                    </TableCell>
-                    <TableCell>{invoice.invoiceNumber}</TableCell>
-                    <TableCell>
-                      {invoice.invoiceDate
-                        ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      {invoice.dueDate
-                        ? format(new Date(invoice.dueDate), 'MM/dd/yyyy')
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(invoice.totalAmount)}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    No invoices found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          {isLoading ? (
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : customerGroups.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">No invoices found</div>
+          ) : (
+            <Accordion
+              type="multiple"
+              value={openAccordions}
+              onValueChange={setOpenAccordions}
+              className="divide-y"
+            >
+              {customerGroups.map((group) => (
+                <AccordionItem
+                  key={group.customerId}
+                  value={group.customerId}
+                  className="border-0"
+                >
+                  <AccordionTrigger className="px-4 hover:no-underline hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <div className="flex items-center gap-4 text-left">
+                      <span className="font-semibold text-base">{group.customerName}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {group.invoices.length} invoice{group.invoices.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                        <DollarSign className="h-3.5 w-3.5" />
+                        {formatCurrency(group.total)}
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Invoice #</TableHead>
+                          <TableHead>Invoice Date</TableHead>
+                          <TableHead>Due Date</TableHead>
+                          <TableHead className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <DollarSign className="h-4 w-4" />
+                              Amount
+                            </div>
+                          </TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.invoices.map((invoice) => (
+                          <TableRow
+                            key={invoice.id}
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => setLocation(`/finance/invoices/${invoice.id}`)}
+                          >
+                            <TableCell>{invoice.invoiceNumber}</TableCell>
+                            <TableCell>
+                              {invoice.invoiceDate
+                                ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')
+                                : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {invoice.dueDate
+                                ? format(new Date(invoice.dueDate), 'MM/dd/yyyy')
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(invoice.totalAmount)}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(invoice.status)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
         </CardContent>
       </Card>
     </div>

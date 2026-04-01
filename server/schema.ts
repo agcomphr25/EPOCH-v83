@@ -13826,3 +13826,79 @@ export const schemaChangeLog = pgTable('schema_change_log', {
 export const insertSchemaChangeLogSchema = createInsertSchema(schemaChangeLog).omit({ id: true });
 export type SchemaChangeLog = typeof schemaChangeLog.$inferSelect;
 export type InsertSchemaChangeLog = z.infer<typeof insertSchemaChangeLogSchema>;
+
+// ─── Order Activity Events — canonical append-only audit ledger ──────────────
+//
+// Every meaningful mutation to an order writes a row here atomically.
+// If the insert fails the outer DB transaction rolls back — no silent logging.
+//
+// Shadow tables (admin_audit_log, badge_scan_audit_log, departmentHistory,
+// order_department_transitions) remain intact for backward compatibility;
+// new writes additionally land here.
+
+export const orderActivityEvents = pgTable(
+  'order_activity_events',
+  {
+    id: serial('id').primaryKey(),
+    orderId: text('order_id').notNull(),
+
+    // Event classification
+    eventType: text('event_type').notNull(),     // e.g. DEPARTMENT_MOVE, STATUS_TRANSITION, SHIPPING_UPDATE
+    eventCategory: text('event_category').notNull(), // production | shipping | finance | spec | admin
+
+    // When
+    occurredAt: timestamp('occurred_at').notNull().defaultNow(),
+
+    // Who
+    actorId: integer('actor_id'),
+    actorType: text('actor_type'),          // user | employee | system | offline_replay
+    actorDisplayName: text('actor_display_name'),
+
+    // Where / origin
+    source: text('source').notNull().default('server'), // server | badge_scan | offline_replay | admin | ncr | rts | shipping
+    sourceRoute: text('source_route'),       // e.g. /api/orders/:id/field
+    correlationId: text('correlation_id'),   // idempotency / batch grouping key
+
+    // Why
+    reasonCode: text('reason_code'),
+    reasonText: text('reason_text'),
+
+    // What changed (snapshots & diffs)
+    beforeSnapshot: jsonb('before_snapshot'), // full order row before mutation
+    afterSnapshot: jsonb('after_snapshot'),   // full order row after mutation
+    fieldDiff: jsonb('field_diff'),           // { fieldName: { before, after, label } }
+
+    // Transition helpers (denormalized for fast queries)
+    statusFrom: text('status_from'),
+    statusTo: text('status_to'),
+    departmentFrom: text('department_from'),
+    departmentTo: text('department_to'),
+
+    // Related entity (e.g. NCR record, RTS sale, badge action)
+    relatedEntityType: text('related_entity_type'),
+    relatedEntityId: text('related_entity_id'),
+
+    // Catch-all extension bag
+    metadata: jsonb('metadata'),
+
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    orderIdIdx: index('oae_order_id_idx').on(table.orderId),
+    eventTypeIdx: index('oae_event_type_idx').on(table.eventType),
+    eventCategoryIdx: index('oae_event_category_idx').on(table.eventCategory),
+    occurredAtIdx: index('oae_occurred_at_idx').on(table.occurredAt),
+    actorIdIdx: index('oae_actor_id_idx').on(table.actorId),
+    sourceIdx: index('oae_source_idx').on(table.source),
+    orderOccurredIdx: index('oae_order_occurred_idx').on(table.orderId, table.occurredAt),
+    correlationIdx: index('oae_correlation_id_idx').on(table.correlationId),
+  })
+);
+
+export const insertOrderActivityEventSchema = createInsertSchema(orderActivityEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type OrderActivityEvent = typeof orderActivityEvents.$inferSelect;
+export type InsertOrderActivityEvent = z.infer<typeof insertOrderActivityEventSchema>;

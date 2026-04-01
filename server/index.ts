@@ -2958,6 +2958,49 @@ async function initializeBackgroundServices() {
       } catch (govErr: any) {
         console.warn('⚠️ schema_change_log migration skipped:', govErr?.message);
       }
+
+      // ── Order Activity Events (canonical audit ledger) ──────────────────────
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS order_activity_events (
+            id                  SERIAL PRIMARY KEY,
+            order_id            TEXT NOT NULL,
+            event_type          TEXT NOT NULL,
+            event_category      TEXT NOT NULL,
+            occurred_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+            actor_id            INTEGER,
+            actor_type          TEXT,
+            actor_display_name  TEXT,
+            source              TEXT NOT NULL DEFAULT 'server',
+            source_route        TEXT,
+            correlation_id      TEXT,
+            reason_code         TEXT,
+            reason_text         TEXT,
+            before_snapshot     JSONB,
+            after_snapshot      JSONB,
+            field_diff          JSONB,
+            status_from         TEXT,
+            status_to           TEXT,
+            department_from     TEXT,
+            department_to       TEXT,
+            related_entity_type TEXT,
+            related_entity_id   TEXT,
+            metadata            JSONB,
+            created_at          TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_order_id_idx       ON order_activity_events(order_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_event_type_idx     ON order_activity_events(event_type)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_event_category_idx ON order_activity_events(event_category)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_occurred_at_idx    ON order_activity_events(occurred_at)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_actor_id_idx       ON order_activity_events(actor_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_source_idx         ON order_activity_events(source)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_order_occurred_idx ON order_activity_events(order_id, occurred_at)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS oae_correlation_id_idx ON order_activity_events(correlation_id)`);
+        console.log('✅ Ensured order_activity_events canonical audit ledger exists');
+      } catch (oaeErr: any) {
+        console.warn('⚠️ order_activity_events migration skipped:', oaeErr?.message);
+      }
     }
 
     // Set up quarterly vendor evaluation reset (runs on Jan 1, Apr 1, Jul 1, Oct 1)

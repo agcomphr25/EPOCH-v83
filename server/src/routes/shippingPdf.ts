@@ -18,6 +18,7 @@ import {
   getLogoDimensions,
 } from '../../utils/pdf/pdfConfig';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
+import { recordShippingUpdate } from '../services/orderActivityService';
 
 const router = Router();
 
@@ -1609,52 +1610,34 @@ router.post(
           );
         }
 
-        // Save tracking information to database and update order status
-        const { updateTrackingInfo, sendCustomerNotification } = await import(
+        // Update order status and move to Fulfilled via canonical audit service (hard fail — atomic)
+        // updateTrackingInfo removed — recordShippingUpdate handles all audited fields atomically.
+        // If the order update fails, we propagate the error (label was generated but state is inconsistent).
+        console.log(`Moving order ${orderId} to Fulfilled after individual label creation`);
+        await recordShippingUpdate(
+          orderId,
+          {
+            trackingNumber: trackingNumber,
+            shippingCarrier: 'UPS',
+            shippingMethod: 'UPS Ground',
+            currentDepartment: 'Fulfilled',
+            shippedDate: new Date(),
+            shippingLabelGenerated: true,
+            status: 'COMPLETED',
+            updatedAt: new Date(),
+          },
+          { actorType: 'system' },
+          {
+            source: 'ups_label',
+            sourceRoute: '/api/shipping/pdf/create-ups-label',
+            metadata: { trackingNumber, labelType: 'ups_real' },
+          }
+        );
+        console.log(`Updated order ${orderId} status to Fulfilled`);
+
+        const { sendCustomerNotification } = await import(
           '../../utils/notifications'
         );
-        await updateTrackingInfo(orderId, {
-          trackingNumber,
-          carrier: 'UPS',
-          shippedDate: new Date(),
-          estimatedDelivery: undefined, // UPS response may include this
-        });
-
-        // Update order status and move to Fulfilled
-        try {
-          console.log(
-            `Moving order ${orderId} to Fulfilled after individual label creation`
-          );
-
-          const { db } = await import('../../db');
-          const { eq } = await import('drizzle-orm');
-          const { allOrders } = await import('../../schema');
-
-          // Update order in allOrders table
-          await db
-            .update(allOrders)
-            .set({
-              trackingNumber: trackingNumber,
-              shippingCarrier: 'UPS',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date(),
-            })
-            .where(eq(allOrders.orderId, orderId));
-
-          console.log(
-            `Updated order ${orderId} status to Fulfilled`
-          );
-        } catch (updateError) {
-          console.error(
-            `Failed to update order ${orderId} status:`,
-            updateError
-          );
-          // Continue processing even if status update fails
-        }
 
         // Send customer notification
         try {
@@ -1753,52 +1736,29 @@ router.post(
         // Generate placeholder tracking number
         const placeholderTrackingNumber = `PH${orderId}-${Date.now().toString().slice(-6)}`;
 
-        // Save placeholder tracking information to database and update order status
-        const { updateTrackingInfo } = await import(
-          '../../utils/notifications'
+        // Update order status and move to Fulfilled even for placeholder labels via canonical audit service (hard fail)
+        // updateTrackingInfo removed — recordShippingUpdate handles all audited fields atomically.
+        console.log(`Moving order ${orderId} to Fulfilled after placeholder label creation`);
+        await recordShippingUpdate(
+          orderId,
+          {
+            trackingNumber: placeholderTrackingNumber,
+            shippingCarrier: 'UPS (Placeholder)',
+            shippingMethod: 'UPS Ground',
+            currentDepartment: 'Fulfilled',
+            shippedDate: new Date(),
+            shippingLabelGenerated: true,
+            status: 'COMPLETED',
+            updatedAt: new Date(),
+          },
+          { actorType: 'system' },
+          {
+            source: 'ups_label',
+            sourceRoute: '/api/shipping/pdf/create-ups-label',
+            metadata: { trackingNumber: placeholderTrackingNumber, labelType: 'ups_placeholder' },
+          }
         );
-        await updateTrackingInfo(orderId, {
-          trackingNumber: placeholderTrackingNumber,
-          carrier: 'UPS (Placeholder)',
-          shippedDate: new Date(),
-          estimatedDelivery: undefined,
-        });
-
-        // Update order status and move to Fulfilled even for placeholder labels
-        try {
-          console.log(
-            `Moving order ${orderId} to Fulfilled after placeholder label creation`
-          );
-
-          const { db } = await import('../../db');
-          const { eq } = await import('drizzle-orm');
-          const { allOrders } = await import('../../schema');
-
-          // Update order in allOrders table
-          await db
-            .update(allOrders)
-            .set({
-              trackingNumber: placeholderTrackingNumber,
-              shippingCarrier: 'UPS (Placeholder)',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date(),
-            })
-            .where(eq(allOrders.orderId, orderId));
-
-          console.log(
-            `Updated order ${orderId} status to Fulfilled`
-          );
-        } catch (updateError) {
-          console.error(
-            `Failed to update order ${orderId} status:`,
-            updateError
-          );
-          // Continue processing even if status update fails
-        }
+        console.log(`Updated order ${orderId} status to Fulfilled`);
 
         // Tracking number placeholder
         currentY -= 30;
@@ -2193,22 +2153,26 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
               status: 'COMPLETED',
             };
 
-            // Update the order with tracking information using direct database calls
-            const { db } = await import('../../db');
-            const { eq } = await import('drizzle-orm');
-            const { allOrders } = await import('../../schema');
-
-            // Update order in allOrders table
-            await db
-              .update(allOrders)
-              .set({
+            // Update the order with all tracking + status fields via canonical audit service
+            await recordShippingUpdate(
+              order.orderId,
+              {
                 trackingNumber: trackingNumber,
                 shippingCarrier: 'UPS',
+                shippingMethod: 'UPS Ground',
                 currentDepartment: 'Fulfilled',
                 shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
                 updatedAt: new Date(),
-              })
-              .where(eq(allOrders.orderId, order.orderId));
+              },
+              { actorType: 'system' },
+              {
+                source: 'ups_label',
+                sourceRoute: '/api/shipping/pdf/bulk/generate-labels',
+                metadata: { trackingNumber, labelType: 'ups_bulk' },
+              }
+            );
 
             console.log(
               `Updated order ${order.orderId} with tracking info`
@@ -2832,18 +2796,31 @@ router.post(
         return res.status(400).json({ error: 'Tracking number is required' });
       }
 
-      // Update tracking information
-      const { updateTrackingInfo, sendCustomerNotification } = await import(
+      // Update tracking information via canonical audit service (atomic update + event)
+      const updatePatch: Record<string, unknown> = {
+        trackingNumber,
+        shippingCarrier: carrier || 'UPS',
+        shippedDate: new Date(),
+        shippingLabelGenerated: true,
+        updatedAt: new Date(),
+      };
+      if (estimatedDelivery) {
+        updatePatch.estimatedDelivery = new Date(estimatedDelivery);
+      }
+      await recordShippingUpdate(
+        orderId,
+        updatePatch,
+        { actorType: 'user' },
+        {
+          source: 'shipping',
+          sourceRoute: req.path,
+          metadata: { trackingNumber, carrier: carrier || 'UPS' },
+        }
+      );
+
+      const { sendCustomerNotification } = await import(
         '../../utils/notifications'
       );
-      await updateTrackingInfo(orderId, {
-        trackingNumber,
-        carrier: carrier || 'UPS',
-        shippedDate: new Date(),
-        estimatedDelivery: estimatedDelivery
-          ? new Date(estimatedDelivery)
-          : undefined,
-      });
 
       // Send customer notification if requested
       let notificationResult = null;

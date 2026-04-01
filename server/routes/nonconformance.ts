@@ -10,6 +10,7 @@ import {
   allOrders,
   customerAddresses,
 } from '../schema';
+import { recordNcrRepairTransition } from '../src/services/orderActivityService';
 
 const router = Router();
 
@@ -370,14 +371,21 @@ router.post('/', async (req, res) => {
     // If this is a Repair disposition with a repair department, move the order to that department
     if (newRecord.disposition === 'Repair' && newRecord.repairDepartment && newRecord.orderId) {
       try {
-        await db
-          .update(allOrders)
-          .set({
-            currentDepartment: newRecord.repairDepartment,
-            status: 'IN_PROGRESS', // Set status to IN_PROGRESS so order appears in department queue
-            updatedAt: new Date(),
-          })
-          .where(eq(allOrders.orderId, newRecord.orderId));
+        await recordNcrRepairTransition(
+          newRecord.orderId,
+          newRecord.repairDepartment,
+          newRecord.id,
+          {
+            actorDisplayName: (req as any).user?.username || 'System',
+            actorType: 'user',
+          },
+          {
+            source: 'ncr',
+            sourceRoute: '/api/nonconformance',
+            reasonText: `NCR #${newRecord.id} (${newRecord.rmaNumber || 'N/A'}) - Repair disposition`,
+            metadata: { ncrId: newRecord.id, rmaNumber: newRecord.rmaNumber },
+          }
+        );
         
         console.log(`✅ Moved order ${newRecord.orderId} to ${newRecord.repairDepartment} department for nonconformance repair (status: IN_PROGRESS)`);
       } catch (error) {

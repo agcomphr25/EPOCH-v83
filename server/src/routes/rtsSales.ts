@@ -14,6 +14,7 @@ import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { createShipment } from '../utils/upsShipping';
 import { storage } from '../../storage';
+import { recordOrderCreatedEvent } from '../services/orderActivityService';
 
 const router = Router();
 
@@ -199,37 +200,57 @@ router.post('/', async (req, res) => {
     const firstItem = selectedItems[0];
     const modelDescription = `RTS - ${firstItem.stockModel}${data.items.length > 1 ? ` (+${data.items.length - 1} more)` : ''}`;
 
-    // Create order in allOrders table
-    // Store the RTS sale subtotal as priceOverride so OrderEntry displays the correct price
-    const [order] = await db.insert(allOrders).values({
-      orderId: newOrderId,
-      orderDate: new Date(),
-      dueDate: new Date(), // Due today since it's ready to ship
-      customerId: data.customerId,
-      modelId: firstItem.stockModel, // Use stock model as modelId
-      status: 'IN_PROGRESS',
-      currentDepartment: data.department, // Send to selected department
-      notes: `RTS Sale: ${saleNumber}. ${modelDescription}`,
-      isRtsOrder: true, // Mark as RTS order
-      rtsSaleId: sale.id, // Link to RTS sale
-      priceOverride: subtotal, // Store RTS sale subtotal as price override for display in OrderEntry
-      shipping: data.shipping.cost,
-      shippingCarrier: data.shipping.carrier,
-      shippingMethod: data.shipping.method,
-      // Copy shipping address to alt ship to fields
-      hasAltShipTo: true,
-      altShipToName: data.shipTo.name,
-      altShipToCompany: data.shipTo.company || null,
-      altShipToPhone: data.shipTo.phone || null,
-      altShipToAddress: {
-        street: data.shipTo.street,
-        street2: data.shipTo.street2,
-        city: data.shipTo.city,
-        state: data.shipTo.state,
-        zipCode: data.shipTo.zipCode,
-        country: data.shipTo.country,
-      },
-    }).returning();
+    // Create order in allOrders table and write ORDER_CREATED audit event atomically.
+    // Both writes are in the same transaction — if either fails, both roll back.
+    const order = await db.transaction(async (tx) => {
+      const [insertedOrder] = await tx.insert(allOrders).values({
+        orderId: newOrderId,
+        orderDate: new Date(),
+        dueDate: new Date(), // Due today since it's ready to ship
+        customerId: data.customerId,
+        modelId: firstItem.stockModel, // Use stock model as modelId
+        status: 'IN_PROGRESS',
+        currentDepartment: data.department, // Send to selected department
+        notes: `RTS Sale: ${saleNumber}. ${modelDescription}`,
+        isRtsOrder: true, // Mark as RTS order
+        rtsSaleId: sale.id, // Link to RTS sale
+        priceOverride: subtotal, // Store RTS sale subtotal as price override for display in OrderEntry
+        shipping: data.shipping.cost,
+        shippingCarrier: data.shipping.carrier,
+        shippingMethod: data.shipping.method,
+        // Copy shipping address to alt ship to fields
+        hasAltShipTo: true,
+        altShipToName: data.shipTo.name,
+        altShipToCompany: data.shipTo.company || null,
+        altShipToPhone: data.shipTo.phone || null,
+        altShipToAddress: {
+          street: data.shipTo.street,
+          street2: data.shipTo.street2,
+          city: data.shipTo.city,
+          state: data.shipTo.state,
+          zipCode: data.shipTo.zipCode,
+          country: data.shipTo.country,
+        },
+      }).returning();
+
+      // Record ORDER_CREATED event in the same transaction — atomically guaranteed
+      await recordOrderCreatedEvent(
+        tx,
+        insertedOrder,
+        { actorType: 'system', actorDisplayName: 'RTS Sales' },
+        {
+          source: 'rts_sales',
+          sourceRoute: '/api/rts-sales',
+          reasonCode: 'RTS_SALE',
+          reasonText: `RTS Sale ${saleNumber} — initial department: ${data.department}`,
+          relatedEntityType: 'rts_sale',
+          relatedEntityId: String(sale.id),
+          metadata: { saleNumber, rtsSaleId: sale.id },
+        }
+      );
+
+      return insertedOrder;
+    });
 
     // Update sale with order ID reference
     await db

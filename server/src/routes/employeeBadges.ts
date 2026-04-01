@@ -3,6 +3,7 @@ import { db } from '../../db';
 import { employeeBadgeActions, employees, insertEmployeeBadgeActionSchema, badgeScanAuditLog } from '../../schema';
 import { eq, and, or, like } from 'drizzle-orm';
 import { z } from 'zod';
+import { recordBadgeScanTransition } from '../services/orderActivityService';
 
 // Whitelist of allowed navigation pages
 const ALLOWED_NAVIGATION_PAGES = [
@@ -402,15 +403,21 @@ router.post('/execute-badge-action', async (req, res) => {
               updateData.shippingCompletedAt = currentTimestamp;
             }
             
-            const updatedOrders = await db
-              .update(allOrders)
-              .set(updateData)
-              .where(or(eq(allOrders.orderId, targetBarcode), eq(allOrders.fbOrderNumber, targetBarcode)))
-              .returning();
-            
-            if (!updatedOrders.length) {
-              throw new Error(`Failed to update order ${targetBarcode} - order may have been deleted`);
-            }
+            await recordBadgeScanTransition(
+              order.orderId,
+              fromDepartment ?? '',
+              toDepartment,
+              updateData,
+              {
+                actorDisplayName: employeeCode,
+                actorType: 'employee',
+              },
+              {
+                source: 'badge_scan',
+                sourceRoute: '/api/execute-badge-action',
+                metadata: { employeeCode, actionType, targetBarcode },
+              }
+            );
             
             console.log(`✅ Badge scan progressed ${targetBarcode} from ${fromDepartment} to ${toDepartment}`);
             executionResult = { success: true, message: `Order progressed from ${fromDepartment} to ${toDepartment}` };
@@ -507,15 +514,26 @@ router.post('/execute-badge-action', async (req, res) => {
                   scanMethod: 'badge',
                 });
 
-                await db
-                  .update(allOrders)
-                  .set({
+                await recordBadgeScanTransition(
+                  aoOrder.orderId,
+                  rowFromDepartment ?? '',
+                  toDepartment,
+                  {
                     currentDepartment: toDepartment,
                     updatedAt: currentTimestamp,
                     ...completionFields(rowFromDepartment),
                     departmentHistory: aoDepartmentHistory,
-                  })
-                  .where(eq(allOrders.id, aoOrder.id));
+                  },
+                  {
+                    actorDisplayName: employeeCode,
+                    actorType: 'employee',
+                  },
+                  {
+                    source: 'badge_scan',
+                    sourceRoute: '/api/execute-badge-action',
+                    metadata: { employeeCode, actionType, targetBarcode, isPOSync: true },
+                  }
+                );
               }
             }
 

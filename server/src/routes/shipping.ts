@@ -7,6 +7,7 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { auditService } from '../services/auditService';
 import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots, stockModels } from '../../schema';
+import { recordShippingUpdate } from '../services/orderActivityService';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getOperationalWeek,
@@ -568,11 +569,17 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
     // If order doesn't have a shipped date, set it now
     updateData.shippedDate = new Date();
 
-    // Update in allOrders table
-    await db
-      .update(allOrders)
-      .set(updateData)
-      .where(eq(allOrders.orderId, orderId));
+    // Update in allOrders table via canonical audit service
+    await recordShippingUpdate(
+      orderId,
+      updateData,
+      { actorType: 'user' },
+      {
+        source: 'shipping',
+        sourceRoute: '/api/shipping/update-tracking',
+        metadata: { trackingNumber: trackingNumber.trim(), carrier: carrier || 'UPS' },
+      }
+    );
 
     console.log(`Updated tracking for order ${orderId}: ${trackingNumber}`);
 
@@ -1694,15 +1701,21 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Tracking number is required' });
     }
 
-    // Update order with tracking number
-    await db
-      .update(allOrders)
-      .set({
+    // Update order with tracking number via canonical audit service
+    await recordShippingUpdate(
+      orderId,
+      {
         trackingNumber: trackingNumber.trim(),
         shippingCarrier: shippingCarrier || 'UPS',
         updatedAt: new Date(),
-      })
-      .where(eq(allOrders.orderId, orderId));
+      },
+      { actorType: 'user' },
+      {
+        source: 'shipping',
+        sourceRoute: `/api/shipping/add-tracking/${orderId}`,
+        metadata: { trackingNumber: trackingNumber.trim() },
+      }
+    );
 
     console.log(
       `Updated order ${orderId} with tracking number ${trackingNumber}`

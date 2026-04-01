@@ -1981,8 +1981,8 @@ export interface IStorage {
   deleteOptionalSetting(id: number): Promise<void>;
   
   // PO Optional Settings (junction table)
-  getPOOptionalSettings(vendorPoId: number): Promise<any[]>;
-  addPOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<any>;
+  getPOOptionalSettings(vendorPoId: number, tx?: any): Promise<any[]>;
+  addPOOptionalSetting(vendorPoId: number, optionalSettingId: number, tx?: any): Promise<any>;
   removePOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<void>;
   updatePOOptionalSettings(vendorPoId: number, optionalSettingIds: number[]): Promise<void>;
 
@@ -8254,9 +8254,9 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Copy optional settings from original PO
-      const originalSettings = await this.getPOOptionalSettings(poId);
+      const originalSettings = await this.getPOOptionalSettings(poId, tx);
       for (const setting of originalSettings) {
-        await this.addPOOptionalSetting(newRevision.id, setting.id);
+        await this.addPOOptionalSetting(newRevision.id, setting.id, tx);
       }
 
       return newRevision;
@@ -9089,8 +9089,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // PO Optional Settings (junction table)
-  async getPOOptionalSettings(vendorPoId: number): Promise<OptionalSetting[]> {
-    const results = await db
+  async getPOOptionalSettings(vendorPoId: number, tx?: any): Promise<OptionalSetting[]> {
+    const client = tx ?? db;
+    const results = await client
       .select({
         id: optionalSettings.id,
         name: optionalSettings.name,
@@ -9107,8 +9108,9 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async addPOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<POOptionalSetting> {
-    const [newLink] = await db
+  async addPOOptionalSetting(vendorPoId: number, optionalSettingId: number, tx?: any): Promise<POOptionalSetting> {
+    const client = tx ?? db;
+    const [newLink] = await client
       .insert(poOptionalSettings)
       .values({ vendorPoId, optionalSettingId })
       .returning();

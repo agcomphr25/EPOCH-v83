@@ -1,0 +1,96 @@
+COPY-PASTE IMPLEMENTATION PROMPT (FULL FIX)
+
+Use this exactly:
+
+You are implementing a production deployment hardening fix.
+
+DO NOT analyze. DO NOT explain. JUST implement.
+
+GOAL:
+Ensure the app builds successfully in Replit deployment even if the build command is incorrectly set to `npm`.
+
+==================================================
+TASKS
+==================================================
+
+1. PACKAGE.JSON HARDENING
+
+Open package.json and modify scripts as follows:
+
+A) Add a deploy script:
+"deploy": "npm run predb:push && npm run build"
+
+B) Ensure build script exists and is correct:
+"build": "vite build"
+
+C) Modify prepare script to prevent CI failure:
+Change:
+"prepare": "husky"
+To:
+"prepare": "husky || true"
+
+--------------------------------------------------
+
+2. ADD NPM DEFAULT BEHAVIOR FALLBACK
+
+Add the following to package.json (TOP LEVEL, not inside scripts):
+
+"scripts": {
+  ...
+},
+"config": {
+  "script-shell": "bash"
+}
+
+(If config already exists, merge it safely)
+
+--------------------------------------------------
+
+3. ADD POSTINSTALL SAFETY BUILD
+
+Add a postinstall script so build runs automatically during deployment:
+
+"postinstall": "npm run deploy"
+
+This ensures that even if Replit runs only `npm install` or `npm`, the build still happens.
+
+--------------------------------------------------
+
+4. ENSURE TSX IS AVAILABLE IN PRODUCTION
+
+Move "tsx" from devDependencies → dependencies
+
+Reason:
+Replit production install may skip devDependencies, causing runtime failure.
+
+--------------------------------------------------
+
+5. VERIFY BUILD OUTPUT PATH
+
+Confirm vite.config.ts outputs to:
+dist/public
+
+DO NOT change if already correct.
+
+--------------------------------------------------
+
+6. NO OTHER CHANGES
+
+- Do NOT modify schema
+- Do NOT modify migrations
+- Do NOT modify server logic
+- Do NOT remove predb:push
+
+==================================================
+OUTPUT
+==================================================
+
+Return ONLY:
+1. Updated package.json
+2. Confirmation checklist:
+   - deploy script added
+   - postinstall added
+   - husky hardened
+   - tsx moved to dependencies
+
+No explanations

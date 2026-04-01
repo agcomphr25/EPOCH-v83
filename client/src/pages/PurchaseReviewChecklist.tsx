@@ -64,6 +64,7 @@ export default function PurchaseReviewChecklist() {
   const [location] = useLocation();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
+  const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
 
   // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
@@ -125,6 +126,12 @@ export default function PurchaseReviewChecklist() {
       });
       // Invalidate queries to refresh submissions list
       queryClient.invalidateQueries({ queryKey: ['/api/forms/purchase-review-checklists'] });
+      // If this was a new record, capture the returned id and update the URL
+      if (!variables.isUpdate && data?.id) {
+        setSubmissionId(String(data.id));
+        window.history.replaceState(null, '', `/purchase-review-checklist?id=${data.id}`);
+        setSavedDraftId(String(data.id));
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -484,7 +491,7 @@ export default function PurchaseReviewChecklist() {
           </h2>
 
           {/* Action Buttons */}
-          <div className="flex justify-center gap-3 mb-6">
+          <div className="flex justify-center gap-3 mb-3">
             <Button 
               onClick={handleSave} 
               className="flex items-center gap-2"
@@ -507,6 +514,16 @@ export default function PurchaseReviewChecklist() {
               Export PDF
             </Button>
           </div>
+          {(savedDraftId || submissionId) && (
+            <div className="flex justify-center mb-6">
+              <a
+                href="/purchase-review-submissions"
+                className="text-sm text-blue-600 hover:text-blue-800 underline"
+              >
+                Draft saved — view all submissions
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Customer Selection - Moved to top */}

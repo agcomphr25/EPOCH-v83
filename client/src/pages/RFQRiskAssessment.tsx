@@ -46,6 +46,7 @@ interface RFQAssessment {
 export default function RFQRiskAssessment() {
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
+  const [userSwitchedTab, setUserSwitchedTab] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
   const [isViewingSubmitted, setIsViewingSubmitted] = useState(false);
@@ -116,8 +117,14 @@ export default function RFQRiskAssessment() {
   // Fetch all RFQ assessments for list view
   const { data: assessments = [], refetch: refetchAssessments } = useQuery<RFQAssessment[]>({
     queryKey: ['/api/customers/rfq-assessments'],
-    enabled: activeTab === 'view',
   });
+
+  // Default to "view" tab when assessments exist and the user hasn't manually switched tabs
+  useEffect(() => {
+    if (!userSwitchedTab && assessments.length > 0) {
+      setActiveTab('view');
+    }
+  }, [assessments.length, userSwitchedTab]);
 
   // Authorization logic for high-risk RFQs (score > 16)
   const isHighRisk = formData.totalOverallPoints > 16;
@@ -947,7 +954,7 @@ export default function RFQRiskAssessment() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={(tab) => { setUserSwitchedTab(true); setActiveTab(tab); }} className="w-full">
           <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
             <TabsTrigger value="create" className="flex items-center gap-2" data-testid="tab-create-rfq">
               <Plus className="h-4 w-4" />

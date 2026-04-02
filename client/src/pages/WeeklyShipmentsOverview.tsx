@@ -228,8 +228,8 @@ export default function WeeklyShipmentsOverview() {
 
   const addBulkEntry = useCallback(() => {
     const qty = parseInt(bulkQuantity, 10);
-    if (isNaN(qty) || qty <= 0) {
-      toast({ title: 'Invalid quantity', description: 'Please enter a positive number.' });
+    if (isNaN(qty) || qty === 0) {
+      toast({ title: 'Invalid quantity', description: 'Please enter a non-zero number.' });
       return;
     }
     const now = new Date().toISOString();
@@ -247,7 +247,7 @@ export default function WeeklyShipmentsOverview() {
     setBulkNote('');
     toast({
       title: `Added bulk entry`,
-      description: `${qty} unit${qty !== 1 ? 's' : ''}${newEntry.note ? ` — ${newEntry.note}` : ''}`,
+      description: `${qty} unit${Math.abs(qty) !== 1 ? 's' : ''}${newEntry.note ? ` — ${newEntry.note}` : ''}`,
     });
   }, [bulkQuantity, bulkNote, adHocEntries, selectedWeek, selectedYear, toast]);
 
@@ -721,7 +721,6 @@ export default function WeeklyShipmentsOverview() {
                   <div className="flex gap-2">
                     <Input
                       type="number"
-                      min="1"
                       placeholder="Quantity (e.g. 12)"
                       value={bulkQuantity}
                       onChange={(e) => setBulkQuantity(e.target.value)}

@@ -1,0 +1,139 @@
+Implement the next phase of the Routing Hub in EPOCH: barcode-driven parent-child association capture.
+
+Context:
+The app already supports:
+- routingType on part_routings
+- routing operations
+- traveler generation from routing operations with legacy fallback
+- OSP/anodize gating
+- routing dependencies with mustBeCompleted, mustBeIssued, mustBeScannedToParent
+- traveler dependency status endpoints and UI
+- traveler_component_associations table and routes
+- dependency evaluation that uses real association records for scan-to-parent logic
+
+Do not break any existing routing, traveler, dependency, OSP, inventory, or P2 behavior.
+
+Goal:
+Allow operators to satisfy parent-child dependency association requirements by scanning a barcode or identifier during traveler execution, which creates a traveler_component_associations record when the scan matches a valid required dependency.
+
+Requirements:
+
+1. Scan resolution logic
+Add a scan resolution helper/service that accepts a scan value and attempts to resolve it against existing system records.
+
+Search in a careful order using real project fields only:
+- traveler number
+- traveler barcode if such a field/pattern exists
+- serial number
+- internal control number
+- lot number
+- part number only as a controlled fallback
+
+Return a structured candidate result including:
+- matchFound
+- matchType
+- childTravelerId if matched
+- childInventoryItemId if matched
+- childPartNumber
+- childSerialNumber
+- childLotNumber
+- childInternalControlNumber
+- displayLabel
+- exactMatch boolean
+- ambiguity details if multiple matches are found
+
+Do not invent identifiers that do not exist in the codebase.
+
+2. Storage / service methods
+Add methods such as:
+- resolveScanToAssociationCandidate(scanValue)
+- validateAssociationAgainstDependencies(parentTravelerId, stepId, candidate)
+- createTravelerComponentAssociationFromScan(parentTravelerId, stepId, scanValue, options?)
+
+The validation should confirm the scan actually satisfies an outstanding dependency for the parent traveler or parent traveler step.
+
+Support matching against:
+- required child traveler
+- required inventory item
+- required part number fallback
+- future-friendly support for serial/lot/internal control number matching
+
+3. API routes
+Add endpoints:
+- POST /api/travelers/:travelerId/steps/:stepId/component-associations/scan
+- POST /api/travelers/:travelerId/component-associations/scan
+
+Request body:
+- scanValue
+- optional notes
+- optional quantity if useful
+
+Response should include:
+- whether a candidate was found
+- whether it matched a required dependency
+- whether an association was created
+- created association record when applicable
+- clear rejection reason when not applicable
+
+4. Duplicate and mismatch handling
+Handle carefully:
+- duplicate scan of the same child component/traveler
+- scan matches a real record but not one required by the parent
+- ambiguous scan with multiple possible matches
+- scan not found
+- dependency already satisfied
+
+Do not create bad associations.
+
+5. TravelerExecution UI
+Enhance the existing Component Associations panel:
+- add a scan input
+- add a Scan/Add button
+- show the result of the scan
+- indicate whether the scan satisfied a dependency
+- refresh component associations and dependency status after successful scan
+- preserve any existing manual association capability
+
+Keep the UI minimal and aligned with the current design.
+
+6. Dependency enforcement
+Required behavior:
+- if mustBeScannedToParent is true, a valid matching scan should help satisfy the dependency
+- if mustBeCompleted is also true, scanning alone should not satisfy completion if the child is still incomplete
+- if mustBeIssued is true, preserve that check too
+- preserve OSP blocking logic
+
+7. Backward compatibility
+Critical:
+- do not break manual association creation
+- do not break dependency evaluation
+- do not break TravelerExecution
+- if users do not use scanning, current behavior must remain intact
+
+8. Verification
+Run or simulate checks to confirm:
+- TypeScript passes for changed files
+- routes mount correctly
+- valid scan resolves and creates an association
+- invalid scan is rejected
+- duplicate scan is handled safely
+- dependency status updates correctly after valid scan
+- OSP blocking still works after this change
+
+9. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — service/storage methods added
+SECTION C — API endpoints added
+SECTION D — scan resolution logic
+SECTION E — UI changes
+SECTION F — duplicate/mismatch handling
+SECTION G — backward compatibility confirmation
+SECTION H — recommended next phase
+
+Implementation notes:
+- be incremental
+- do not refactor unrelated systems
+- prefer exact identifier matching before looser fallback matching
+- reuse existing traveler/inventory/barcode conventions already in the repo
+- prioritize traceability and correctness over convenience

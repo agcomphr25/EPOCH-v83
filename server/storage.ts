@@ -67,6 +67,14 @@ import {
   cncQcResults,
   cncTimeLogs,
   partRoutings,
+  routingOperations,
+  routingCncOperations,
+  routingTemplates,
+  routingTemplateOperations,
+  routingDependencies,
+  anodizeJobs,
+  anodizeJobDocuments,
+  anodizeJobReceivingInspections,
   travelers,
   travelerSteps,
   travelerTasks,
@@ -526,6 +534,31 @@ import {
   type InsertCncTimeLog,
   orderActivityEvents,
   type InsertOrderActivityEvent,
+  type RoutingOperation,
+  type InsertRoutingOperation,
+  type RoutingCncOperation,
+  type InsertRoutingCncOperation,
+  type RoutingTemplate,
+  type InsertRoutingTemplate,
+  type UpdateRoutingTemplate,
+  type RoutingTemplateOperation,
+  type InsertRoutingTemplateOperation,
+  type RoutingDependency,
+  type InsertRoutingDependency,
+  type UpdateRoutingDependency,
+  type AnodizeJob,
+  type InsertAnodizeJob,
+  type UpdateAnodizeJob,
+  type AnodizeJobDocument,
+  type InsertAnodizeJobDocument,
+  type UpdateAnodizeJobDocument,
+  type AnodizeJobReceivingInspection,
+  type InsertAnodizeJobReceivingInspection,
+  type UpdateAnodizeJobReceivingInspection,
+  travelerComponentAssociations,
+  type TravelerComponentAssociation,
+  type InsertTravelerComponentAssociation,
+  p2LotNumbers,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -608,6 +641,92 @@ const productionOrdersColumns = {
 
 // modify the interface with any CRUD methods
 // you might need
+
+export interface DependencyStatus {
+  dependencyId: number;
+  dependencyType: string;
+  requiredPartNumber: string | null;
+  requiredDescription: string | null;
+  requiredQty: number | null;
+  blockingScope: string;
+  satisfied: boolean;
+  reason: string;
+  availableQty?: number;
+}
+
+export interface AssemblyReadinessResult {
+  ready: boolean;
+  partRoutingId?: string;
+  travelerId?: string;
+  totalDependencies: number;
+  satisfiedCount: number;
+  blockingCount: number;
+  completionPct: number;
+  blockingItems: DependencyStatus[];
+  satisfiedItems: DependencyStatus[];
+  warnings: string[];
+}
+
+export interface AnodizeJobCompletionResult {
+  jobId: number;
+  clear: boolean;
+  status: string;
+  reasons: string[];
+  certRequired: boolean;
+  certSatisfied: boolean;
+  inspectionRequired: boolean;
+  inspectionSatisfied: boolean;
+  requiredDocsCount: number;
+  acceptedRequiredDocsCount: number;
+}
+
+export interface AnodizeBlockingResult {
+  blocked: boolean;
+  travelerId: string;
+  travelerStepId: string;
+  jobs: {
+    jobId: number;
+    status: string;
+    partNumber: string;
+    blocking: boolean;
+    reason: string;
+    completion?: AnodizeJobCompletionResult;
+  }[];
+}
+
+// Scan-to-parent association types
+export interface ScanCandidate {
+  matchFound: boolean;
+  matchType: 'TRAVELER' | 'SERIALIZED_ITEM' | 'LOT' | 'INVENTORY_ITEM' | null;
+  childTravelerId?: string;
+  childInventoryItemId?: number;
+  childPartNumber?: string;
+  childSerialNumber?: string;
+  childLotNumber?: string;
+  childInternalControlNumber?: string;
+  displayLabel: string;
+  exactMatch: boolean;
+  ambiguous: boolean;
+  ambiguityReason?: string;
+}
+
+export interface ScanValidationResult {
+  valid: boolean;
+  matchedDependencyId?: number;
+  rejectionReason?: string;
+  alreadySatisfied?: boolean;
+  duplicate?: boolean;
+}
+
+export interface ScanCreateResult {
+  candidateFound: boolean;
+  matchedDependency: boolean;
+  associationCreated: boolean;
+  association?: TravelerComponentAssociation;
+  rejectionReason?: string;
+  candidate?: ScanCandidate;
+  duplicate?: boolean;
+}
 
 export interface IStorage {
   // User authentication methods
@@ -1430,6 +1549,96 @@ export interface IStorage {
   getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined>;
   updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting>;
   deletePartRouting(id: string): Promise<void>;
+
+  // Routing Operations
+  getRoutingOperations(partRoutingId: string): Promise<RoutingOperation[]>;
+  createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation>;
+  updateRoutingOperation(id: number, data: Partial<InsertRoutingOperation>): Promise<RoutingOperation>;
+  deleteRoutingOperation(id: number): Promise<void>;
+  replaceRoutingOperations(partRoutingId: string, operations: InsertRoutingOperation[]): Promise<RoutingOperation[]>;
+
+  // Routing CNC Operations
+  getRoutingCncOperation(routingOperationId: number): Promise<RoutingCncOperation | undefined>;
+  upsertRoutingCncOperation(data: InsertRoutingCncOperation): Promise<RoutingCncOperation>;
+  deleteRoutingCncOperation(routingOperationId: number): Promise<void>;
+
+  // Routing Templates
+  getRoutingTemplates(filters?: { routingType?: string; isActive?: boolean }): Promise<RoutingTemplate[]>;
+  getRoutingTemplate(id: string): Promise<RoutingTemplate | undefined>;
+  createRoutingTemplate(data: InsertRoutingTemplate): Promise<RoutingTemplate>;
+  updateRoutingTemplate(id: string, data: UpdateRoutingTemplate): Promise<RoutingTemplate>;
+  deleteRoutingTemplate(id: string): Promise<void>;
+
+  // Routing Template Operations
+  getRoutingTemplateOperations(templateId: string): Promise<RoutingTemplateOperation[]>;
+  replaceRoutingTemplateOperations(templateId: string, operations: Omit<InsertRoutingTemplateOperation, 'routingTemplateId'>[]): Promise<RoutingTemplateOperation[]>;
+
+  // Create Part Routing from Template
+  createPartRoutingFromTemplate(templateId: string, partRoutingData: {
+    inventoryItemId: string;
+    partNumber: string;
+    partName: string;
+    routingName?: string;
+    routingRevision?: number;
+    createdBy: string;
+  }): Promise<{ routing: import('./schema').PartRouting; operations: RoutingOperation[] }>;
+
+  // Routing Dependencies
+  getRoutingDependencies(partRoutingId: string): Promise<RoutingDependency[]>;
+  createRoutingDependency(data: InsertRoutingDependency): Promise<RoutingDependency>;
+  updateRoutingDependency(id: number, data: UpdateRoutingDependency): Promise<RoutingDependency>;
+  deleteRoutingDependency(id: number): Promise<void>;
+  replaceRoutingDependencies(partRoutingId: string, deps: InsertRoutingDependency[]): Promise<RoutingDependency[]>;
+
+  // Assembly Readiness
+  evaluateRoutingDependencies(partRoutingId: string, context?: { partNumber?: string }): Promise<AssemblyReadinessResult>;
+  evaluateTravelerDependencies(travelerId: string): Promise<AssemblyReadinessResult>;
+  getAssemblyReadinessForRouting(partRoutingId: string, context?: { partNumber?: string }): Promise<AssemblyReadinessResult>;
+  getAssemblyReadinessForTraveler(travelerId: string): Promise<AssemblyReadinessResult>;
+  // Assembly dependency status (spec aliases + step-scoped evaluation)
+  evaluateAssemblyDependencyStatus(travelerId: string, stepId?: string): Promise<AssemblyReadinessResult>;
+  getTravelerDependencyRequirements(travelerId: string): Promise<RoutingDependency[]>;
+  getTravelerDependencyStatus(travelerId: string): Promise<AssemblyReadinessResult>;
+
+  // Traveler Component Associations (scan-to-parent)
+  getTravelerComponentAssociations(parentTravelerId: string, stepId?: string): Promise<TravelerComponentAssociation[]>;
+  createTravelerComponentAssociation(data: InsertTravelerComponentAssociation): Promise<TravelerComponentAssociation>;
+  deleteTravelerComponentAssociation(id: number): Promise<void>;
+  replaceTravelerComponentAssociations(parentTravelerId: string, stepId: string | undefined, associations: InsertTravelerComponentAssociation[]): Promise<TravelerComponentAssociation[]>;
+  evaluateDependencyScanAssociation(travelerId: string, stepId?: string): Promise<{
+    travelerId: string; stepId?: string;
+    scanDependencies: Array<{ dependencyId: number; requiredPartNumber: string | null; requiredQty: number | null; scannedQty: number; satisfied: boolean; reason: string }>;
+    allSatisfied: boolean;
+  }>;
+  resolveScanToAssociationCandidate(scanValue: string): Promise<ScanCandidate>;
+  validateAssociationAgainstDependencies(parentTravelerId: string, stepId: string | undefined, candidate: ScanCandidate): Promise<ScanValidationResult>;
+  createTravelerComponentAssociationFromScan(parentTravelerId: string, stepId: string | undefined, scanValue: string, options?: { notes?: string; quantity?: number; scannedBy?: string }): Promise<ScanCreateResult>;
+
+  // ============================================================================
+  // ANODIZE JOB TRACKING
+  // ============================================================================
+
+  getAnodizeJobs(filters?: { status?: string; vendorId?: number; partNumber?: string; travelerId?: string }): Promise<AnodizeJob[]>;
+  getAnodizeJob(id: number): Promise<AnodizeJob | undefined>;
+  createAnodizeJob(data: InsertAnodizeJob): Promise<AnodizeJob>;
+  updateAnodizeJob(id: number, data: UpdateAnodizeJob): Promise<AnodizeJob>;
+  getTravelerAnodizeJobs(travelerId: string): Promise<AnodizeJob[]>;
+  getRoutingOperationAnodizeJobs(routingOperationId: number): Promise<AnodizeJob[]>;
+  markAnodizeJobSent(id: number, sentBy: string, vendorPoNumber?: string): Promise<AnodizeJob>;
+  markAnodizeJobReceived(id: number, receivedBy: string, certReceived?: boolean): Promise<AnodizeJob>;
+  verifyAnodizeJob(id: number, inspectionPassed: boolean, notes?: string): Promise<AnodizeJob>;
+  evaluateAnodizeJobCompletion(jobId: number): Promise<AnodizeJobCompletionResult>;
+  evaluateAnodizeBlockingForTravelerStep(travelerId: string, travelerStepId: string): Promise<AnodizeBlockingResult>;
+
+  // Anodize Job Documents
+  getAnodizeJobDocuments(jobId: number): Promise<AnodizeJobDocument[]>;
+  addAnodizeJobDocument(data: InsertAnodizeJobDocument): Promise<AnodizeJobDocument>;
+  updateAnodizeJobDocument(id: number, data: UpdateAnodizeJobDocument): Promise<AnodizeJobDocument>;
+  deleteAnodizeJobDocument(id: number): Promise<void>;
+
+  // Anodize Job Receiving Inspections
+  getAnodizeJobReceivingInspection(jobId: number): Promise<AnodizeJobReceivingInspection | undefined>;
+  upsertAnodizeJobReceivingInspection(jobId: number, data: UpdateAnodizeJobReceivingInspection): Promise<AnodizeJobReceivingInspection>;
 
   // ============================================================================
   // TRAVELER SYSTEM CRUD
@@ -14200,6 +14409,1086 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ============================================================================
+  // ROUTING OPERATIONS CRUD
+  // ============================================================================
+
+  async getRoutingOperations(partRoutingId: string): Promise<RoutingOperation[]> {
+    return await db
+      .select()
+      .from(routingOperations)
+      .where(eq(routingOperations.partRoutingId, partRoutingId))
+      .orderBy(routingOperations.stepNumber);
+  }
+
+  async createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation> {
+    const [op] = await db.insert(routingOperations).values(data).returning();
+    return op;
+  }
+
+  async updateRoutingOperation(id: number, data: Partial<InsertRoutingOperation>): Promise<RoutingOperation> {
+    const [updated] = await db
+      .update(routingOperations)
+      .set(data)
+      .where(eq(routingOperations.id, id))
+      .returning();
+    if (!updated) throw new Error(`Routing operation ${id} not found`);
+    return updated;
+  }
+
+  async deleteRoutingOperation(id: number): Promise<void> {
+    await db.delete(routingOperations).where(eq(routingOperations.id, id));
+  }
+
+  async replaceRoutingOperations(partRoutingId: string, operations: InsertRoutingOperation[]): Promise<RoutingOperation[]> {
+    await db.delete(routingOperations).where(eq(routingOperations.partRoutingId, partRoutingId));
+    if (operations.length === 0) return [];
+    const inserted = await db
+      .insert(routingOperations)
+      .values(operations.map(op => ({ ...op, partRoutingId })))
+      .returning();
+    return inserted;
+  }
+
+  // Routing CNC Operations
+
+  async getRoutingCncOperation(routingOperationId: number): Promise<RoutingCncOperation | undefined> {
+    const [row] = await db
+      .select()
+      .from(routingCncOperations)
+      .where(eq(routingCncOperations.routingOperationId, routingOperationId));
+    return row;
+  }
+
+  async upsertRoutingCncOperation(data: InsertRoutingCncOperation): Promise<RoutingCncOperation> {
+    const existing = await this.getRoutingCncOperation(data.routingOperationId);
+    if (existing) {
+      const [updated] = await db
+        .update(routingCncOperations)
+        .set(data)
+        .where(eq(routingCncOperations.routingOperationId, data.routingOperationId))
+        .returning();
+      return updated;
+    }
+    const [inserted] = await db.insert(routingCncOperations).values(data).returning();
+    return inserted;
+  }
+
+  async deleteRoutingCncOperation(routingOperationId: number): Promise<void> {
+    await db
+      .delete(routingCncOperations)
+      .where(eq(routingCncOperations.routingOperationId, routingOperationId));
+  }
+
+  // ============================================================================
+  // ROUTING TEMPLATE IMPLEMENTATIONS
+  // ============================================================================
+
+  async getRoutingTemplates(filters?: { routingType?: string; isActive?: boolean }): Promise<RoutingTemplate[]> {
+    const conditions = [];
+    if (filters?.routingType) {
+      conditions.push(eq(routingTemplates.routingType, filters.routingType as any));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(routingTemplates.isActive, filters.isActive));
+    }
+    const query = db.select().from(routingTemplates);
+    if (conditions.length > 0) {
+      return query.where(and(...conditions)).orderBy(routingTemplates.templateName);
+    }
+    return query.orderBy(routingTemplates.templateName);
+  }
+
+  async getRoutingTemplate(id: string): Promise<RoutingTemplate | undefined> {
+    const [template] = await db.select().from(routingTemplates).where(eq(routingTemplates.id, id));
+    return template;
+  }
+
+  async createRoutingTemplate(data: InsertRoutingTemplate): Promise<RoutingTemplate> {
+    const [template] = await db.insert(routingTemplates).values(data).returning();
+    return template;
+  }
+
+  async updateRoutingTemplate(id: string, data: UpdateRoutingTemplate): Promise<RoutingTemplate> {
+    const [template] = await db
+      .update(routingTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(routingTemplates.id, id))
+      .returning();
+    return template;
+  }
+
+  async deleteRoutingTemplate(id: string): Promise<void> {
+    await db.delete(routingTemplateOperations).where(eq(routingTemplateOperations.routingTemplateId, id));
+    await db.delete(routingTemplates).where(eq(routingTemplates.id, id));
+  }
+
+  async getRoutingTemplateOperations(templateId: string): Promise<RoutingTemplateOperation[]> {
+    return db
+      .select()
+      .from(routingTemplateOperations)
+      .where(eq(routingTemplateOperations.routingTemplateId, templateId))
+      .orderBy(routingTemplateOperations.stepNumber);
+  }
+
+  async replaceRoutingTemplateOperations(
+    templateId: string,
+    operations: Omit<InsertRoutingTemplateOperation, 'routingTemplateId'>[]
+  ): Promise<RoutingTemplateOperation[]> {
+    await db.delete(routingTemplateOperations).where(eq(routingTemplateOperations.routingTemplateId, templateId));
+    if (operations.length === 0) return [];
+    const rows = operations.map((op) => ({ ...op, routingTemplateId: templateId }));
+    return db.insert(routingTemplateOperations).values(rows).returning();
+  }
+
+  async createPartRoutingFromTemplate(
+    templateId: string,
+    partRoutingData: {
+      inventoryItemId: string;
+      partNumber: string;
+      partName: string;
+      routingName?: string;
+      routingRevision?: number;
+      createdBy: string;
+    }
+  ): Promise<{ routing: import('./schema').PartRouting; operations: RoutingOperation[] }> {
+    const template = await this.getRoutingTemplate(templateId);
+    if (!template) throw new Error(`Routing template ${templateId} not found`);
+
+    const templateOps = await this.getRoutingTemplateOperations(templateId);
+
+    const [routing] = await db
+      .insert(partRoutings)
+      .values({
+        inventoryItemId: partRoutingData.inventoryItemId,
+        partNumber: partRoutingData.partNumber,
+        partName: partRoutingData.partName,
+        routingName: partRoutingData.routingName ?? template.templateName,
+        routingRevision: partRoutingData.routingRevision ?? 1,
+        routingType: template.routingType,
+        departmentSequence: template.departmentSequence,
+        departmentConfig: template.departmentConfig,
+        traceabilityConfig: {},
+        isActive: true,
+        createdBy: partRoutingData.createdBy,
+      })
+      .returning();
+
+    let operations: RoutingOperation[] = [];
+    if (templateOps.length > 0) {
+      const opRows = templateOps.map((top) => ({
+        partRoutingId: routing.id,
+        stepNumber: top.stepNumber,
+        departmentName: top.departmentName,
+        operationName: top.operationName,
+        operationType: top.operationType as InsertRoutingOperation['operationType'],
+        workCenter: top.workCenter,
+        estimatedMinutes: top.estimatedMinutes,
+        requiresSignature: top.requiresSignature,
+        requiresCertification: top.requiresCertification,
+        isOutsideProcess: top.isOutsideProcess,
+        vendorId: top.vendorId,
+        instructionPack: top.instructionPack,
+      }));
+      operations = await db.insert(routingOperations).values(opRows).returning();
+    }
+
+    return { routing, operations };
+  }
+
+  // ============================================================================
+  // ROUTING DEPENDENCY IMPLEMENTATIONS
+  // ============================================================================
+
+  async getRoutingDependencies(partRoutingId: string): Promise<RoutingDependency[]> {
+    return db
+      .select()
+      .from(routingDependencies)
+      .where(eq(routingDependencies.partRoutingId, partRoutingId))
+      .orderBy(routingDependencies.id);
+  }
+
+  async createRoutingDependency(data: InsertRoutingDependency): Promise<RoutingDependency> {
+    const [dep] = await db.insert(routingDependencies).values(data).returning();
+    return dep;
+  }
+
+  async updateRoutingDependency(id: number, data: UpdateRoutingDependency): Promise<RoutingDependency> {
+    const [dep] = await db
+      .update(routingDependencies)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(routingDependencies.id, id))
+      .returning();
+    return dep;
+  }
+
+  async deleteRoutingDependency(id: number): Promise<void> {
+    await db.delete(routingDependencies).where(eq(routingDependencies.id, id));
+  }
+
+  async replaceRoutingDependencies(partRoutingId: string, deps: InsertRoutingDependency[]): Promise<RoutingDependency[]> {
+    await db.delete(routingDependencies).where(eq(routingDependencies.partRoutingId, partRoutingId));
+    if (deps.length === 0) return [];
+    const rows = deps.map((d) => ({ ...d, partRoutingId }));
+    return db.insert(routingDependencies).values(rows).returning();
+  }
+
+  private async _checkScanAssociation(dep: RoutingDependency, travelerId: string, stepId?: string): Promise<{ matched: boolean; count: number; reason: string }> {
+    const conditions: ReturnType<typeof and>[] = [
+      eq(travelerComponentAssociations.parentTravelerId, travelerId),
+    ];
+    if (stepId) {
+      const stepIdNum = parseInt(stepId, 10);
+      if (!isNaN(stepIdNum)) {
+        conditions.push(eq(travelerComponentAssociations.parentTravelerStepId, stepIdNum));
+      }
+    }
+    if (dep.requiredPartNumber) {
+      conditions.push(eq(travelerComponentAssociations.childPartNumber, dep.requiredPartNumber));
+    } else if (dep.requiredItemId) {
+      conditions.push(eq(travelerComponentAssociations.childInventoryItemId, dep.requiredItemId));
+    }
+    const rows = await db.select().from(travelerComponentAssociations).where(and(...conditions));
+    const totalQty = rows.reduce((s, r) => s + (r.quantity ?? 1), 0);
+    const required = dep.requiredQty ?? 1;
+    if (totalQty >= required) {
+      return { matched: true, count: totalQty, reason: `${totalQty} component(s) scanned to parent (need ${required})` };
+    }
+    return { matched: false, count: totalQty, reason: `Requires ${required} scanned component(s); only ${totalQty} associated so far` };
+  }
+
+  private async _evaluateSingleDependency(dep: RoutingDependency, context?: { travelerId?: string; stepId?: string }): Promise<DependencyStatus> {
+    const base: DependencyStatus = {
+      dependencyId: dep.id,
+      dependencyType: dep.dependencyType,
+      requiredPartNumber: dep.requiredPartNumber,
+      requiredDescription: dep.requiredDescription,
+      requiredQty: dep.requiredQty,
+      blockingScope: dep.blockingScope,
+      satisfied: false,
+      reason: 'Not evaluated',
+    };
+
+    try {
+      // TRAVELER type: check a specific traveler by ID stored in requiredPartNumber
+      if (dep.dependencyType === 'TRAVELER') {
+        const travelerId = dep.requiredPartNumber;
+        if (!travelerId) {
+          return { ...base, satisfied: false, reason: 'No traveler ID specified in required part number field' };
+        }
+        const [t] = await db.select().from(travelers).where(eq(travelers.id, travelerId)).limit(1);
+        if (!t) {
+          return { ...base, satisfied: false, reason: `Traveler ${travelerId} not found` };
+        }
+        if (dep.mustBeCompleted) {
+          if (t.status === 'COMPLETED') {
+            return { ...base, satisfied: true, reason: `Traveler ${travelerId} is COMPLETED` };
+          }
+          return { ...base, satisfied: false, reason: `Traveler ${travelerId} status is ${t.status}; must be COMPLETED` };
+        }
+        if (dep.mustBeIssued) {
+          const issuedStatuses = ['RELEASED', 'ACTIVE', 'IN_PROGRESS', 'COMPLETED'];
+          if (issuedStatuses.includes(t.status ?? '')) {
+            return { ...base, satisfied: true, reason: `Traveler ${travelerId} is issued (status: ${t.status})` };
+          }
+          return { ...base, satisfied: false, reason: `Traveler ${travelerId} not yet issued (status: ${t.status})` };
+        }
+        return { ...base, satisfied: true, reason: `Traveler ${travelerId} exists (status: ${t.status})` };
+      }
+
+      if (dep.dependencyType === 'CHILD_PART' || dep.dependencyType === 'SUB_ASSEMBLY') {
+        if (!dep.requiredPartNumber) {
+          return { ...base, satisfied: false, reason: 'No part number specified' };
+        }
+        const completedTravelers = await db
+          .select()
+          .from(travelers)
+          .where(
+            and(
+              eq(travelers.partNumber, dep.requiredPartNumber),
+              eq(travelers.status, 'COMPLETED')
+            )
+          )
+          .limit(10);
+
+        const inProgressTravelers = await db
+          .select()
+          .from(travelers)
+          .where(
+            and(
+              eq(travelers.partNumber, dep.requiredPartNumber),
+              inArray(travelers.status, ['IN_PROGRESS', 'ACTIVE', 'RELEASED'])
+            )
+          )
+          .limit(5);
+
+        if (dep.mustBeCompleted) {
+          const completedQty = completedTravelers.reduce((s, t) => s + (t.quantity ?? 1), 0);
+          const required = dep.requiredQty ?? 1;
+          if (completedQty >= required) {
+            if (dep.mustBeScannedToParent) {
+              if (context?.travelerId) {
+                const scan = await this._checkScanAssociation(dep, context.travelerId, context.stepId);
+                return { ...base, satisfied: scan.matched, reason: `${completedQty} completed — ${scan.reason}`, availableQty: completedQty };
+              }
+              return { ...base, satisfied: false, reason: `${completedQty} completed unit(s) found but scan-to-parent not yet verified (no traveler context)`, availableQty: completedQty };
+            }
+            return { ...base, satisfied: true, reason: `${completedQty} completed unit(s) found`, availableQty: completedQty };
+          }
+          return {
+            ...base,
+            satisfied: false,
+            reason: dep.requiredQty
+              ? `Requires ${required} completed unit(s); found ${completedQty} completed, ${inProgressTravelers.length} in-progress`
+              : `No completed travelers found for ${dep.requiredPartNumber}`,
+            availableQty: completedQty,
+          };
+        }
+
+        if (dep.mustBeIssued) {
+          const issuedQty = inProgressTravelers.reduce((s, t) => s + (t.quantity ?? 1), 0);
+          const completedQty = completedTravelers.reduce((s, t) => s + (t.quantity ?? 1), 0);
+          const totalIssued = issuedQty + completedQty;
+          const required = dep.requiredQty ?? 1;
+          if (totalIssued >= required) {
+            if (dep.mustBeScannedToParent) {
+              if (context?.travelerId) {
+                const scan = await this._checkScanAssociation(dep, context.travelerId, context.stepId);
+                return { ...base, satisfied: scan.matched, reason: `${totalIssued} issued/completed — ${scan.reason}`, availableQty: totalIssued };
+              }
+              return { ...base, satisfied: false, reason: `${totalIssued} issued unit(s) found but scan-to-parent not yet verified (no traveler context)`, availableQty: totalIssued };
+            }
+            return { ...base, satisfied: true, reason: `${totalIssued} issued/completed unit(s) found for ${dep.requiredPartNumber}`, availableQty: totalIssued };
+          }
+          return { ...base, satisfied: false, reason: `Requires ${required} issued unit(s) for ${dep.requiredPartNumber}; found ${totalIssued}`, availableQty: totalIssued };
+        }
+
+        const totalAvail = completedTravelers.length + inProgressTravelers.length;
+        if (totalAvail > 0) {
+          if (dep.mustBeScannedToParent) {
+            if (context?.travelerId) {
+              const scan = await this._checkScanAssociation(dep, context.travelerId, context.stepId);
+              return { ...base, satisfied: scan.matched, reason: `${totalAvail} traveler(s) found — ${scan.reason}`, availableQty: totalAvail };
+            }
+            return { ...base, satisfied: false, reason: `${totalAvail} traveler(s) found but scan-to-parent not yet verified`, availableQty: totalAvail };
+          }
+          return { ...base, satisfied: true, reason: `${totalAvail} traveler(s) found (completed or in-progress)`, availableQty: totalAvail };
+        }
+        return { ...base, satisfied: false, reason: `No travelers found for part ${dep.requiredPartNumber}` };
+      }
+
+      if (dep.dependencyType === 'MATERIAL' || dep.dependencyType === 'KIT') {
+        const requiredQty = dep.requiredQty ?? 1;
+        let invItem = null;
+
+        if (dep.requiredItemId) {
+          const [item] = await db
+            .select()
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, dep.requiredItemId));
+          invItem = item;
+        } else if (dep.requiredPartNumber) {
+          const [item] = await db
+            .select()
+            .from(inventoryItems)
+            .where(eq(inventoryItems.agPartNumber, dep.requiredPartNumber));
+          invItem = item;
+        }
+
+        if (!invItem) {
+          return { ...base, satisfied: false, reason: dep.requiredPartNumber ? `Item ${dep.requiredPartNumber} not found in inventory` : 'No item ID or part number specified' };
+        }
+
+        const availQty = invItem.available ?? invItem.onHand ?? invItem.quantityInStock ?? 0;
+        if (availQty >= requiredQty) {
+          return { ...base, satisfied: true, reason: `${availQty} units available (need ${requiredQty})`, availableQty: availQty };
+        }
+        return { ...base, satisfied: false, reason: `Insufficient inventory: ${availQty} available, ${requiredQty} required`, availableQty: availQty };
+      }
+
+      if (dep.dependencyType === 'DOCUMENT' || dep.dependencyType === 'CERTIFICATION') {
+        return {
+          ...base,
+          satisfied: false,
+          reason: `${dep.dependencyType} check not yet automated — manual verification required`,
+        };
+      }
+
+      return { ...base, satisfied: false, reason: `Unknown dependency type: ${dep.dependencyType}` };
+    } catch (err: any) {
+      return { ...base, satisfied: false, reason: `Evaluation error: ${err.message}` };
+    }
+  }
+
+  // Step-scoped dependency evaluation: only include deps whose blockingScope applies at this step
+  async evaluateAssemblyDependencyStatus(travelerId: string, stepId?: string): Promise<AssemblyReadinessResult> {
+    const traveler = await this.getTraveler(travelerId);
+    if (!traveler) {
+      return {
+        ready: false, travelerId,
+        totalDependencies: 0, satisfiedCount: 0, blockingCount: 1, completionPct: 0,
+        blockingItems: [], satisfiedItems: [],
+        warnings: [`Traveler ${travelerId} not found`],
+      };
+    }
+    if (!traveler.partRoutingId) {
+      return {
+        ready: true, travelerId,
+        totalDependencies: 0, satisfiedCount: 0, blockingCount: 0, completionPct: 100,
+        blockingItems: [], satisfiedItems: [],
+        warnings: [],
+      };
+    }
+    let deps = await this.getRoutingDependencies(traveler.partRoutingId);
+    // If stepId is provided, limit to STEP_START and TASK_COMPLETE scopes (skip TRAVELER_START — already checked)
+    if (stepId) {
+      deps = deps.filter((d) => d.blockingScope === 'STEP_START' || d.blockingScope === 'TASK_COMPLETE');
+    }
+    return this._buildReadinessResult(deps, { travelerId, partRoutingId: traveler.partRoutingId }, { travelerId, stepId });
+  }
+
+  async getTravelerDependencyRequirements(travelerId: string): Promise<RoutingDependency[]> {
+    const traveler = await this.getTraveler(travelerId);
+    if (!traveler?.partRoutingId) return [];
+    return this.getRoutingDependencies(traveler.partRoutingId);
+  }
+
+  async getTravelerDependencyStatus(travelerId: string): Promise<AssemblyReadinessResult> {
+    return this.evaluateTravelerDependencies(travelerId);
+  }
+
+  // ============================================================================
+  // TRAVELER COMPONENT ASSOCIATION IMPLEMENTATIONS
+  // ============================================================================
+
+  async getTravelerComponentAssociations(parentTravelerId: string, stepId?: string): Promise<TravelerComponentAssociation[]> {
+    const conditions = [eq(travelerComponentAssociations.parentTravelerId, parentTravelerId)];
+    if (stepId !== undefined) {
+      const stepIdNum = parseInt(stepId, 10);
+      if (!isNaN(stepIdNum)) {
+        conditions.push(eq(travelerComponentAssociations.parentTravelerStepId, stepIdNum));
+      }
+    }
+    return db.select().from(travelerComponentAssociations).where(and(...conditions)).orderBy(asc(travelerComponentAssociations.id));
+  }
+
+  async createTravelerComponentAssociation(data: InsertTravelerComponentAssociation): Promise<TravelerComponentAssociation> {
+    const [row] = await db.insert(travelerComponentAssociations).values(data).returning();
+    return row;
+  }
+
+  async deleteTravelerComponentAssociation(id: number): Promise<void> {
+    await db.delete(travelerComponentAssociations).where(eq(travelerComponentAssociations.id, id));
+  }
+
+  async replaceTravelerComponentAssociations(
+    parentTravelerId: string,
+    stepId: string | undefined,
+    associations: InsertTravelerComponentAssociation[]
+  ): Promise<TravelerComponentAssociation[]> {
+    const conditions = [eq(travelerComponentAssociations.parentTravelerId, parentTravelerId)];
+    if (stepId !== undefined) {
+      const stepIdNum = parseInt(stepId, 10);
+      if (!isNaN(stepIdNum)) {
+        conditions.push(eq(travelerComponentAssociations.parentTravelerStepId, stepIdNum));
+      }
+    }
+    await db.delete(travelerComponentAssociations).where(and(...conditions));
+    if (associations.length === 0) return [];
+    return db.insert(travelerComponentAssociations).values(associations.map((a) => ({ ...a, parentTravelerId }))).returning();
+  }
+
+  async evaluateDependencyScanAssociation(travelerId: string, stepId?: string): Promise<{
+    travelerId: string;
+    stepId?: string;
+    scanDependencies: Array<{
+      dependencyId: number;
+      requiredPartNumber: string | null;
+      requiredQty: number | null;
+      scannedQty: number;
+      satisfied: boolean;
+      reason: string;
+    }>;
+    allSatisfied: boolean;
+  }> {
+    const traveler = await this.getTraveler(travelerId);
+    if (!traveler?.partRoutingId) {
+      return { travelerId, stepId, scanDependencies: [], allSatisfied: true };
+    }
+    const allDeps = await this.getRoutingDependencies(traveler.partRoutingId);
+    const scanDeps = allDeps.filter((d) => d.mustBeScannedToParent);
+    if (scanDeps.length === 0) {
+      return { travelerId, stepId, scanDependencies: [], allSatisfied: true };
+    }
+    const results = await Promise.all(
+      scanDeps.map(async (dep) => {
+        const scan = await this._checkScanAssociation(dep, travelerId, stepId);
+        return {
+          dependencyId: dep.id,
+          requiredPartNumber: dep.requiredPartNumber,
+          requiredQty: dep.requiredQty,
+          scannedQty: scan.count,
+          satisfied: scan.matched,
+          reason: scan.reason,
+        };
+      })
+    );
+    return {
+      travelerId,
+      stepId,
+      scanDependencies: results,
+      allSatisfied: results.every((r) => r.satisfied),
+    };
+  }
+
+  async resolveScanToAssociationCandidate(scanValue: string): Promise<ScanCandidate> {
+    const v = (scanValue || '').trim();
+    if (!v) {
+      return { matchFound: false, matchType: null, displayLabel: '', exactMatch: false, ambiguous: false };
+    }
+
+    // 1. Exact travelerNumber match
+    const [byTravelerNumber] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.travelerNumber, v))
+      .limit(1);
+    if (byTravelerNumber) {
+      return {
+        matchFound: true, matchType: 'TRAVELER', exactMatch: true, ambiguous: false,
+        childTravelerId: byTravelerNumber.id,
+        childPartNumber: byTravelerNumber.partNumber ?? undefined,
+        childSerialNumber: byTravelerNumber.serialNumber ?? undefined,
+        childLotNumber: byTravelerNumber.lotNumber ?? undefined,
+        childInternalControlNumber: byTravelerNumber.internalControlNumber ?? undefined,
+        displayLabel: `Traveler ${byTravelerNumber.travelerNumber} (${byTravelerNumber.partNumber ?? '—'})`,
+      };
+    }
+
+    // 2. Exact travelers.id match
+    const [byTravelerId] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.id, v))
+      .limit(1);
+    if (byTravelerId) {
+      return {
+        matchFound: true, matchType: 'TRAVELER', exactMatch: true, ambiguous: false,
+        childTravelerId: byTravelerId.id,
+        childPartNumber: byTravelerId.partNumber ?? undefined,
+        childSerialNumber: byTravelerId.serialNumber ?? undefined,
+        childLotNumber: byTravelerId.lotNumber ?? undefined,
+        childInternalControlNumber: byTravelerId.internalControlNumber ?? undefined,
+        displayLabel: `Traveler ${byTravelerId.travelerNumber ?? byTravelerId.id} (${byTravelerId.partNumber ?? '—'})`,
+      };
+    }
+
+    // 3. Barcode / travelerBarcode in p2_serialized_items
+    const [byBarcode] = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(or(eq(p2SerializedItems.barcode, v), eq(p2SerializedItems.travelerBarcode, v)))
+      .limit(1);
+    if (byBarcode) {
+      return {
+        matchFound: true, matchType: 'SERIALIZED_ITEM', exactMatch: true, ambiguous: false,
+        childSerialNumber: byBarcode.serialNumber ?? undefined,
+        childPartNumber: byBarcode.partNumber ?? undefined,
+        displayLabel: `Serialized Item ${byBarcode.barcode ?? byBarcode.serialNumber ?? '—'} (${byBarcode.partNumber ?? '—'})`,
+      };
+    }
+
+    // 4. Serial number — check travelers first, then p2SerializedItems
+    const [byTravelerSerial] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.serialNumber, v))
+      .limit(1);
+    if (byTravelerSerial) {
+      return {
+        matchFound: true, matchType: 'TRAVELER', exactMatch: true, ambiguous: false,
+        childTravelerId: byTravelerSerial.id,
+        childPartNumber: byTravelerSerial.partNumber ?? undefined,
+        childSerialNumber: byTravelerSerial.serialNumber ?? undefined,
+        childInternalControlNumber: byTravelerSerial.internalControlNumber ?? undefined,
+        displayLabel: `Traveler ${byTravelerSerial.travelerNumber ?? byTravelerSerial.id} S/N ${v}`,
+      };
+    }
+    const serialMatches = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.serialNumber, v))
+      .limit(2);
+    if (serialMatches.length === 1) {
+      const s = serialMatches[0];
+      return {
+        matchFound: true, matchType: 'SERIALIZED_ITEM', exactMatch: true, ambiguous: false,
+        childSerialNumber: s.serialNumber ?? undefined,
+        childPartNumber: s.partNumber ?? undefined,
+        displayLabel: `Serialized Item S/N ${v} (${s.partNumber ?? '—'})`,
+      };
+    }
+    if (serialMatches.length > 1) {
+      return {
+        matchFound: true, matchType: 'SERIALIZED_ITEM', exactMatch: false, ambiguous: true,
+        childSerialNumber: v,
+        displayLabel: `Serial ${v}`,
+        ambiguityReason: `${serialMatches.length} serialized items share serial number ${v}`,
+      };
+    }
+
+    // 5. Internal control number on travelers
+    const [byICN] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.internalControlNumber, v))
+      .limit(1);
+    if (byICN) {
+      return {
+        matchFound: true, matchType: 'TRAVELER', exactMatch: true, ambiguous: false,
+        childTravelerId: byICN.id,
+        childPartNumber: byICN.partNumber ?? undefined,
+        childSerialNumber: byICN.serialNumber ?? undefined,
+        childInternalControlNumber: byICN.internalControlNumber ?? undefined,
+        displayLabel: `Traveler ${byICN.travelerNumber ?? byICN.id} ICN ${v}`,
+      };
+    }
+
+    // 6. Lot number in p2_lot_numbers
+    const [byLot] = await db
+      .select()
+      .from(p2LotNumbers)
+      .where(eq(p2LotNumbers.lotNumber, v))
+      .limit(1);
+    if (byLot) {
+      return {
+        matchFound: true, matchType: 'LOT', exactMatch: true, ambiguous: false,
+        childLotNumber: byLot.lotNumber,
+        childPartNumber: byLot.partNumber ?? undefined,
+        displayLabel: `Lot ${byLot.lotNumber} (${byLot.partNumber ?? '—'})`,
+      };
+    }
+
+    // 7. Part number fallback — inventory_items only (controlled, unambiguous single match)
+    const [byPartNumber] = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, v))
+      .limit(1);
+    if (byPartNumber) {
+      return {
+        matchFound: true, matchType: 'INVENTORY_ITEM', exactMatch: false, ambiguous: false,
+        childInventoryItemId: byPartNumber.id,
+        childPartNumber: byPartNumber.agPartNumber ?? undefined,
+        displayLabel: `Inventory Part ${byPartNumber.agPartNumber ?? '—'} (${byPartNumber.name ?? '—'})`,
+      };
+    }
+
+    return {
+      matchFound: false, matchType: null, displayLabel: '', exactMatch: false, ambiguous: false,
+    };
+  }
+
+  async validateAssociationAgainstDependencies(
+    parentTravelerId: string,
+    stepId: string | undefined,
+    candidate: ScanCandidate
+  ): Promise<ScanValidationResult> {
+    if (!candidate.matchFound) {
+      return { valid: false, rejectionReason: 'No matching record found for scan value' };
+    }
+    if (candidate.ambiguous) {
+      return { valid: false, rejectionReason: candidate.ambiguityReason ?? 'Scan value is ambiguous' };
+    }
+
+    const traveler = await this.getTraveler(parentTravelerId);
+    if (!traveler?.partRoutingId) {
+      return { valid: false, rejectionReason: 'Parent traveler has no routing attached' };
+    }
+
+    const allDeps = await this.getRoutingDependencies(traveler.partRoutingId);
+    const scanDeps = allDeps.filter((d) => d.mustBeScannedToParent);
+    if (scanDeps.length === 0) {
+      return { valid: false, rejectionReason: 'Parent traveler has no scan-to-parent dependencies' };
+    }
+
+    // Check for existing duplicate association
+    const existing = await this.getTravelerComponentAssociations(parentTravelerId, stepId);
+    const isDuplicate = existing.some((a) => {
+      if (candidate.childTravelerId && a.childTravelerId === candidate.childTravelerId) return true;
+      if (candidate.childSerialNumber && a.childSerialNumber === candidate.childSerialNumber) return true;
+      if (candidate.childLotNumber && a.childLotNumber === candidate.childLotNumber) return true;
+      if (candidate.childInternalControlNumber && a.childInternalControlNumber === candidate.childInternalControlNumber) return true;
+      return false;
+    });
+    if (isDuplicate) {
+      return { valid: false, duplicate: true, rejectionReason: 'This component has already been associated with this traveler' };
+    }
+
+    // Try to match against a scan dependency
+    for (const dep of scanDeps) {
+      const depPartNumber = dep.requiredPartNumber;
+      let matches = false;
+
+      if (depPartNumber) {
+        if (candidate.childPartNumber && candidate.childPartNumber === depPartNumber) matches = true;
+        // Also match via traveler's partNumber when childTravelerId is present
+        if (!matches && candidate.childTravelerId) {
+          const childTraveler = await this.getTraveler(candidate.childTravelerId);
+          if (childTraveler?.partNumber === depPartNumber) matches = true;
+        }
+      } else {
+        // No required part number — any scan satisfies this dep
+        matches = true;
+      }
+
+      if (matches) {
+        // Check if this dep is already fully satisfied
+        const check = await this._checkScanAssociation(dep, parentTravelerId, stepId);
+        if (check.matched) {
+          return { valid: false, alreadySatisfied: true, matchedDependencyId: dep.id, rejectionReason: 'Dependency already satisfied by existing association(s)' };
+        }
+        return { valid: true, matchedDependencyId: dep.id };
+      }
+    }
+
+    return { valid: false, rejectionReason: 'Scanned component does not match any required scan-to-parent dependency' };
+  }
+
+  async createTravelerComponentAssociationFromScan(
+    parentTravelerId: string,
+    stepId: string | undefined,
+    scanValue: string,
+    options?: { notes?: string; quantity?: number; scannedBy?: string }
+  ): Promise<ScanCreateResult> {
+    const candidate = await this.resolveScanToAssociationCandidate(scanValue);
+    if (!candidate.matchFound) {
+      return { candidateFound: false, matchedDependency: false, associationCreated: false, rejectionReason: 'Scan value not found in any system record', candidate };
+    }
+    if (candidate.ambiguous) {
+      return { candidateFound: true, matchedDependency: false, associationCreated: false, rejectionReason: candidate.ambiguityReason ?? 'Ambiguous scan', candidate };
+    }
+
+    const validation = await this.validateAssociationAgainstDependencies(parentTravelerId, stepId, candidate);
+    if (!validation.valid) {
+      return {
+        candidateFound: true,
+        matchedDependency: false,
+        associationCreated: false,
+        rejectionReason: validation.rejectionReason,
+        duplicate: validation.duplicate,
+        candidate,
+      };
+    }
+
+    // Determine associationType
+    let associationType = 'TRAVELER';
+    if (candidate.matchType === 'SERIALIZED_ITEM') associationType = 'SERIALIZED_COMPONENT';
+    else if (candidate.matchType === 'LOT') associationType = 'LOT_COMPONENT';
+    else if (candidate.matchType === 'INVENTORY_ITEM') associationType = 'INVENTORY_ITEM';
+
+    const stepIdNum = stepId !== undefined ? parseInt(stepId, 10) : undefined;
+
+    const payload: InsertTravelerComponentAssociation = {
+      parentTravelerId,
+      parentTravelerStepId: stepIdNum && !isNaN(stepIdNum) ? stepIdNum : undefined,
+      childTravelerId: candidate.childTravelerId ?? null,
+      childInventoryItemId: candidate.childInventoryItemId ?? null,
+      childPartNumber: candidate.childPartNumber ?? null,
+      childSerialNumber: candidate.childSerialNumber ?? null,
+      childLotNumber: candidate.childLotNumber ?? null,
+      childInternalControlNumber: candidate.childInternalControlNumber ?? null,
+      associationType,
+      quantity: options?.quantity ?? 1,
+      scannedBy: options?.scannedBy ?? null,
+      notes: options?.notes ?? null,
+    };
+
+    const association = await this.createTravelerComponentAssociation(payload);
+    return { candidateFound: true, matchedDependency: true, associationCreated: true, association, candidate };
+  }
+
+  private async _buildReadinessResult(
+    deps: RoutingDependency[],
+    anchor: { partRoutingId?: string; travelerId?: string },
+    context?: { travelerId?: string; stepId?: string }
+  ): Promise<AssemblyReadinessResult> {
+    if (deps.length === 0) {
+      return {
+        ready: true,
+        ...anchor,
+        totalDependencies: 0,
+        satisfiedCount: 0,
+        blockingCount: 0,
+        completionPct: 100,
+        blockingItems: [],
+        satisfiedItems: [],
+        warnings: [],
+      };
+    }
+
+    const statuses = await Promise.all(deps.map((d) => this._evaluateSingleDependency(d, context)));
+    const blocking = statuses.filter((s) => !s.satisfied);
+    const satisfied = statuses.filter((s) => s.satisfied);
+    const warnings: string[] = statuses
+      .filter((s) => s.dependencyType === 'DOCUMENT' || s.dependencyType === 'CERTIFICATION')
+      .map((s) => s.reason);
+
+    return {
+      ready: blocking.length === 0,
+      ...anchor,
+      totalDependencies: deps.length,
+      satisfiedCount: satisfied.length,
+      blockingCount: blocking.length,
+      completionPct: Math.round((satisfied.length / deps.length) * 100),
+      blockingItems: blocking,
+      satisfiedItems: satisfied,
+      warnings,
+    };
+  }
+
+  async evaluateRoutingDependencies(partRoutingId: string, _context?: { partNumber?: string }): Promise<AssemblyReadinessResult> {
+    const deps = await this.getRoutingDependencies(partRoutingId);
+    return this._buildReadinessResult(deps, { partRoutingId });
+  }
+
+  async getAssemblyReadinessForRouting(partRoutingId: string, context?: { partNumber?: string }): Promise<AssemblyReadinessResult> {
+    return this.evaluateRoutingDependencies(partRoutingId, context);
+  }
+
+  async evaluateTravelerDependencies(travelerId: string): Promise<AssemblyReadinessResult> {
+    const traveler = await this.getTraveler(travelerId);
+    if (!traveler) {
+      return {
+        ready: false,
+        travelerId,
+        totalDependencies: 0,
+        satisfiedCount: 0,
+        blockingCount: 1,
+        completionPct: 0,
+        blockingItems: [],
+        satisfiedItems: [],
+        warnings: [`Traveler ${travelerId} not found`],
+      };
+    }
+
+    const partRoutingId = traveler.partRoutingId;
+    if (!partRoutingId) {
+      return {
+        ready: true,
+        travelerId,
+        totalDependencies: 0,
+        satisfiedCount: 0,
+        blockingCount: 0,
+        completionPct: 100,
+        blockingItems: [],
+        satisfiedItems: [],
+        warnings: ['No routing attached — no dependency checks performed'],
+      };
+    }
+
+    const deps = await this.getRoutingDependencies(partRoutingId);
+    const result = await this._buildReadinessResult(deps, { travelerId, partRoutingId }, { travelerId });
+    return result;
+  }
+
+  async getAssemblyReadinessForTraveler(travelerId: string): Promise<AssemblyReadinessResult> {
+    return this.evaluateTravelerDependencies(travelerId);
+  }
+
+  // ============================================================================
+  // ANODIZE JOB TRACKING IMPLEMENTATIONS
+  // ============================================================================
+
+  async getAnodizeJobs(filters?: { status?: string; vendorId?: number; partNumber?: string; travelerId?: string }): Promise<AnodizeJob[]> {
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(anodizeJobs.status, filters.status));
+    if (filters?.vendorId) conditions.push(eq(anodizeJobs.vendorId, filters.vendorId));
+    if (filters?.partNumber) conditions.push(ilike(anodizeJobs.partNumber, `%${filters.partNumber}%`));
+    if (filters?.travelerId) conditions.push(eq(anodizeJobs.travelerId, filters.travelerId));
+
+    const query = conditions.length > 0
+      ? db.select().from(anodizeJobs).where(and(...conditions)).orderBy(desc(anodizeJobs.createdAt))
+      : db.select().from(anodizeJobs).orderBy(desc(anodizeJobs.createdAt));
+    return await query;
+  }
+
+  async getAnodizeJob(id: number): Promise<AnodizeJob | undefined> {
+    const [job] = await db.select().from(anodizeJobs).where(eq(anodizeJobs.id, id));
+    return job;
+  }
+
+  async createAnodizeJob(data: InsertAnodizeJob): Promise<AnodizeJob> {
+    const [job] = await db.insert(anodizeJobs).values({ ...data, updatedAt: new Date() }).returning();
+    return job;
+  }
+
+  async updateAnodizeJob(id: number, data: UpdateAnodizeJob): Promise<AnodizeJob> {
+    const [job] = await db
+      .update(anodizeJobs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(anodizeJobs.id, id))
+      .returning();
+    return job;
+  }
+
+  async getTravelerAnodizeJobs(travelerId: string): Promise<AnodizeJob[]> {
+    return await db.select().from(anodizeJobs).where(eq(anodizeJobs.travelerId, travelerId)).orderBy(desc(anodizeJobs.createdAt));
+  }
+
+  async getRoutingOperationAnodizeJobs(routingOperationId: number): Promise<AnodizeJob[]> {
+    return await db.select().from(anodizeJobs).where(eq(anodizeJobs.routingOperationId, routingOperationId)).orderBy(desc(anodizeJobs.createdAt));
+  }
+
+  async markAnodizeJobSent(id: number, sentBy: string, vendorPoNumber?: string): Promise<AnodizeJob> {
+    const update: UpdateAnodizeJob = {
+      status: 'SENT',
+      sentBy,
+      sentAt: new Date(),
+    };
+    if (vendorPoNumber) update.vendorPoNumber = vendorPoNumber;
+    return this.updateAnodizeJob(id, update);
+  }
+
+  async markAnodizeJobReceived(id: number, receivedBy: string, certReceived?: boolean): Promise<AnodizeJob> {
+    return this.updateAnodizeJob(id, {
+      status: 'RECEIVED',
+      receivedBy,
+      receivedAt: new Date(),
+      ...(certReceived !== undefined ? { certReceived } : {}),
+    });
+  }
+
+  async verifyAnodizeJob(id: number, inspectionPassed: boolean, notes?: string): Promise<AnodizeJob> {
+    const job = await this.getAnodizeJob(id);
+    if (!job) throw new Error(`Anodize job ${id} not found`);
+
+    const update: UpdateAnodizeJob = { inspectionPassed };
+    if (inspectionPassed && job.status === 'RECEIVED') update.status = 'VERIFIED';
+    if (notes) update.notes = notes;
+    return this.updateAnodizeJob(id, update);
+  }
+
+  async evaluateAnodizeJobCompletion(jobId: number): Promise<AnodizeJobCompletionResult> {
+    const job = await this.getAnodizeJob(jobId);
+    if (!job) throw new Error(`Anodize job ${jobId} not found`);
+
+    const routingOp = await db.select().from(routingOperations).where(eq(routingOperations.id, job.routingOperationId)).then(r => r[0]);
+    const docs = await this.getAnodizeJobDocuments(jobId);
+    const inspection = await this.getAnodizeJobReceivingInspection(jobId);
+
+    const reasons: string[] = [];
+
+    // Check status
+    const passedStatus = job.status === 'RECEIVED' || job.status === 'VERIFIED';
+    if (!passedStatus) {
+      reasons.push(`Job status is ${job.status}; must be RECEIVED or VERIFIED`);
+    }
+
+    // Check certificate/doc requirements
+    const certRequired = routingOp?.certificateRequired ?? false;
+    const requiredDocs = docs.filter(d => d.isRequired);
+    const acceptedRequiredDocs = requiredDocs.filter(d => d.isAccepted);
+    let certSatisfied = true;
+    if (certRequired) {
+      const certDocs = docs.filter(d => ['CERT', 'COC', 'PROCESS_CERT'].includes(d.documentType) && d.isRequired && d.isAccepted);
+      if (certDocs.length === 0) {
+        certSatisfied = false;
+        reasons.push('Required certification document not yet uploaded and accepted');
+      }
+    }
+
+    // Check receiving inspection
+    const inspectionRequired = routingOp?.receivingInspectionRequired ?? false;
+    let inspectionSatisfied = true;
+    if (inspectionRequired) {
+      if (!inspection || inspection.inspectionStatus !== 'PASS') {
+        inspectionSatisfied = false;
+        reasons.push('Receiving inspection required but ' + (!inspection ? 'not started' : `status is ${inspection.inspectionStatus}`));
+      }
+    }
+
+    const clear = passedStatus && certSatisfied && inspectionSatisfied;
+    return {
+      jobId,
+      clear,
+      status: job.status,
+      reasons,
+      certRequired,
+      certSatisfied,
+      inspectionRequired,
+      inspectionSatisfied,
+      requiredDocsCount: requiredDocs.length,
+      acceptedRequiredDocsCount: acceptedRequiredDocs.length,
+    };
+  }
+
+  async evaluateAnodizeBlockingForTravelerStep(travelerId: string, travelerStepId: string): Promise<AnodizeBlockingResult> {
+    const jobs = await db
+      .select()
+      .from(anodizeJobs)
+      .where(and(eq(anodizeJobs.travelerId, travelerId), eq(anodizeJobs.travelerStepId, travelerStepId)));
+
+    if (jobs.length === 0) {
+      return { blocked: false, travelerId, travelerStepId, jobs: [] };
+    }
+
+    const evaluated = await Promise.all(jobs.map(async (job) => {
+      const completion = await this.evaluateAnodizeJobCompletion(job.id);
+      const blocking = !completion.clear;
+      const reason = blocking
+        ? completion.reasons[0] ?? 'OSP requirements not yet satisfied'
+        : 'OK';
+      return { jobId: job.id, status: job.status, partNumber: job.partNumber, blocking, reason, completion };
+    }));
+
+    const blocked = evaluated.some(e => e.blocking);
+    return { blocked, travelerId, travelerStepId, jobs: evaluated };
+  }
+
+  // Anodize Job Documents
+  async getAnodizeJobDocuments(jobId: number): Promise<AnodizeJobDocument[]> {
+    return await db.select().from(anodizeJobDocuments).where(eq(anodizeJobDocuments.anodizeJobId, jobId)).orderBy(asc(anodizeJobDocuments.uploadedAt));
+  }
+
+  async addAnodizeJobDocument(data: InsertAnodizeJobDocument): Promise<AnodizeJobDocument> {
+    const [doc] = await db.insert(anodizeJobDocuments).values(data).returning();
+    return doc;
+  }
+
+  async updateAnodizeJobDocument(id: number, data: UpdateAnodizeJobDocument): Promise<AnodizeJobDocument> {
+    const [doc] = await db.update(anodizeJobDocuments).set(data).where(eq(anodizeJobDocuments.id, id)).returning();
+    return doc;
+  }
+
+  async deleteAnodizeJobDocument(id: number): Promise<void> {
+    await db.delete(anodizeJobDocuments).where(eq(anodizeJobDocuments.id, id));
+  }
+
+  // Anodize Job Receiving Inspections
+  async getAnodizeJobReceivingInspection(jobId: number): Promise<AnodizeJobReceivingInspection | undefined> {
+    const [inspection] = await db.select().from(anodizeJobReceivingInspections).where(eq(anodizeJobReceivingInspections.anodizeJobId, jobId));
+    return inspection;
+  }
+
+  async upsertAnodizeJobReceivingInspection(jobId: number, data: UpdateAnodizeJobReceivingInspection): Promise<AnodizeJobReceivingInspection> {
+    const existing = await this.getAnodizeJobReceivingInspection(jobId);
+    if (existing) {
+      const [updated] = await db
+        .update(anodizeJobReceivingInspections)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(anodizeJobReceivingInspections.anodizeJobId, jobId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(anodizeJobReceivingInspections)
+        .values({ anodizeJobId: jobId, ...data })
+        .returning();
+      return created;
+    }
+  }
+
+  // ============================================================================
   // TRAVELER SYSTEM CRUD IMPLEMENTATIONS
   // ============================================================================
 
@@ -14649,6 +15938,12 @@ export class DatabaseStorage implements IStorage {
       partRoutingRevision: (routing as any).routingRevision || 1,
       createdBy: data.createdBy,
     });
+
+    // Check for structured routing operations first
+    const ops = await this.getRoutingOperations(routing.id);
+    if (ops.length > 0) {
+      return await this._generateTravelerFromOperations(traveler, routing, ops, data.createdBy);
+    }
 
     // Create steps from routing departmentSequence
     const departmentSequence = routing.departmentSequence as string[];
@@ -15363,6 +16658,101 @@ export class DatabaseStorage implements IStorage {
         fromRoutingRevision: (routing as any).routingRevision || 1,
         departmentCount: stepCounter,
         skippedDepartments: departmentSequence.length - stepCounter,
+      },
+    });
+
+    return traveler;
+  }
+
+  // Generate traveler from structured routing operations (new path)
+  private async _generateTravelerFromOperations(
+    traveler: any,
+    routing: PartRouting,
+    ops: RoutingOperation[],
+    createdBy: string
+  ): Promise<any> {
+    const operationTypeToTaskType = (t: string) => {
+      switch (t) {
+        case 'SETUP': return 'PROCESS';
+        case 'RUN': return 'PROCESS';
+        case 'INSPECT': return 'QC';
+        case 'OSP': return 'SPECIAL_PROCESS';
+        case 'MATERIAL': return 'TRACE';
+        case 'QC': return 'QC';
+        default: return 'CHECK';
+      }
+    };
+    const operationTypeToPhase = (t: string) => {
+      switch (t) {
+        case 'SETUP': return 'START';
+        case 'MATERIAL': return 'START';
+        case 'QC': return 'FINISH';
+        case 'INSPECT': return 'FINISH';
+        default: return 'WORK';
+      }
+    };
+
+    // Group ops by unique (stepNumber, departmentName)
+    const stepGroups: Map<string, RoutingOperation[]> = new Map();
+    for (const op of ops) {
+      const key = `${op.stepNumber}__${op.departmentName}`;
+      if (!stepGroups.has(key)) stepGroups.set(key, []);
+      stepGroups.get(key)!.push(op);
+    }
+    const sortedKeys = Array.from(stepGroups.keys()).sort((a, b) => {
+      const [aStep] = a.split('__').map(Number);
+      const [bStep] = b.split('__').map(Number);
+      return aStep - bStep;
+    });
+
+    let stepCounter = 0;
+    for (const key of sortedKeys) {
+      const groupOps = stepGroups.get(key)!;
+      const deptName = groupOps[0].departmentName;
+      stepCounter++;
+      const step = await this.createTravelerStep({
+        travelerId: traveler.id,
+        departmentName: deptName,
+        stepNumber: stepCounter,
+        status: 'NOT_STARTED',
+        assignedTechnicianId: null,
+      });
+
+      let sortOrder = 0;
+      for (const op of groupOps) {
+        const taskType = operationTypeToTaskType(op.operationType);
+        const taskPhase = operationTypeToPhase(op.operationType);
+        const instPack = op.instructionPack as any;
+        const instructions = instPack?.specialNotes || op.operationName;
+
+        await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: taskType as any,
+          taskPhase: taskPhase as any,
+          title: op.operationName,
+          instructions,
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: op.requiresSignature ?? false,
+          requiresCertification: op.requiresCertification ?? false,
+          signatureRole: op.requiresSignature ? 'OPERATOR' : null,
+          status: 'NOT_STARTED',
+          instructionPack: op.instructionPack as any,
+        });
+      }
+    }
+
+    await this.createTravelerEvent({
+      travelerId: traveler.id,
+      actor: createdBy,
+      action: 'CREATED',
+      details: {
+        fromRoutingId: routing.id,
+        fromRoutingRevision: (routing as any).routingRevision || 1,
+        departmentCount: stepCounter,
+        generatedFromOperations: true,
+        operationCount: ops.length,
       },
     });
 

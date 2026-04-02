@@ -4575,6 +4575,18 @@ export const insertP2RoutingDepartmentSchema = createInsertSchema(p2RoutingDepar
 export type InsertP2RoutingDepartment = z.infer<typeof insertP2RoutingDepartmentSchema>;
 export type P2RoutingDepartment = typeof p2RoutingDepartments.$inferSelect;
 
+// Routing Type Enum - Manufacturing mode classification for part routings
+export const routingTypeEnum = pgEnum('routing_type', [
+  'COMPOSITE',
+  'CNC',
+  'CORE',
+  'KIT',
+  'SUB_ASSEMBLY',
+  'ASSEMBLY',
+  'OUTSIDE_PROCESS',
+  'INSPECTION',
+]);
+
 // Part Routing Definitions - Custom department sequences and traceability requirements per inventory item
 export const partRoutings = pgTable('part_routings', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -4592,12 +4604,245 @@ export const partRoutings = pgTable('part_routings', {
   qcStandards: jsonb('qc_standards'), // QC standards configuration: [{standardName, specification, tolerance, requirement, measurementType}]
   customFields: jsonb('custom_fields'), // Custom data entry fields: [{fieldName, fieldLabel, fieldType, isRequired, options, defaultValue}]
   preferredMachine: text('preferred_machine'), // Preferred CNC machine or workstation for this routing
+  routingType: routingTypeEnum('routing_type').default('COMPOSITE').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdBy: text('created_by').notNull(), // Username who created routing
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+}));
+
+// Routing Operations - Step-by-step operations within a part routing
+export const routingOperations = pgTable('routing_operations', {
+  id: serial('id').primaryKey(),
+
+  partRoutingId: uuid('part_routing_id')
+    .references(() => partRoutings.id)
+    .notNull(),
+
+  stepNumber: integer('step_number').notNull(),
+  departmentName: text('department_name').notNull(),
+
+  operationName: text('operation_name').notNull(),
+
+  operationType: text('operation_type', {
+    enum: ['SETUP', 'RUN', 'INSPECT', 'OSP', 'MATERIAL', 'QC'],
+  }).notNull(),
+
+  workCenter: text('work_center'),
+
+  estimatedMinutes: integer('estimated_minutes'),
+
+  requiresSignature: boolean('requires_signature').default(false),
+  requiresCertification: boolean('requires_certification').default(false),
+
+  isOutsideProcess: boolean('is_outside_process').default(false),
+  vendorId: integer('vendor_id'),
+
+  outsideProcessType: text('outside_process_type'),
+  expectedLeadDays: integer('expected_lead_days'),
+  certificateRequired: boolean('certificate_required').default(false),
+  receivingInspectionRequired: boolean('receiving_inspection_required').default(false),
+
+  instructionPack: jsonb('instruction_pack').default('{}'),
+
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// CNC Extension for Routing Operations - links CNC-specific data to a routing operation
+export const routingCncOperations = pgTable('routing_cnc_operations', {
+  id: serial('id').primaryKey(),
+
+  routingOperationId: integer('routing_operation_id')
+    .references(() => routingOperations.id)
+    .notNull(),
+
+  machineClass: text('machine_class'),
+  preferredMachineId: integer('preferred_machine_id'),
+
+  programId: integer('program_id')
+    .references(() => cncPrograms.id),
+
+  fixture: text('fixture'),
+
+  estimatedSetupMinutes: integer('estimated_setup_minutes'),
+  estimatedCycleMinutes: integer('estimated_cycle_minutes'),
+
+  proveOutRequired: boolean('prove_out_required').default(false),
+});
+
+// Routing Templates - Reusable routing configurations by manufacturing type
+export const routingTemplates = pgTable('routing_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateName: text('template_name').notNull(),
+  routingType: routingTypeEnum('routing_type').notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').default(true).notNull(),
+  departmentSequence: jsonb('department_sequence').default([]).notNull(),
+  departmentConfig: jsonb('department_config').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  routingTypeIdx: index('routing_templates_routing_type_idx').on(table.routingType),
+  isActiveIdx: index('routing_templates_is_active_idx').on(table.isActive),
+}));
+
+// Routing Template Operations - Standard operations for a template
+export const routingTemplateOperations = pgTable('routing_template_operations', {
+  id: serial('id').primaryKey(),
+  routingTemplateId: uuid('routing_template_id')
+    .references(() => routingTemplates.id)
+    .notNull(),
+  stepNumber: integer('step_number').notNull(),
+  departmentName: text('department_name').notNull(),
+  operationName: text('operation_name').notNull(),
+  operationType: text('operation_type', {
+    enum: ['SETUP', 'RUN', 'INSPECT', 'OSP', 'MATERIAL', 'QC'],
+  }).notNull(),
+  workCenter: text('work_center'),
+  estimatedMinutes: integer('estimated_minutes'),
+  requiresSignature: boolean('requires_signature').default(false),
+  requiresCertification: boolean('requires_certification').default(false),
+  isOutsideProcess: boolean('is_outside_process').default(false),
+  vendorId: integer('vendor_id'),
+  instructionPack: jsonb('instruction_pack').default('{}'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  templateIdIdx: index('routing_template_operations_template_id_idx').on(table.routingTemplateId),
+}));
+
+// Anodize Jobs - Outside process tracking for anodizing
+export const anodizeJobs = pgTable('anodize_jobs', {
+  id: serial('id').primaryKey(),
+
+  routingOperationId: integer('routing_operation_id')
+    .references(() => routingOperations.id)
+    .notNull(),
+
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 }),
+  partRoutingId: uuid('part_routing_id'),
+
+  partNumber: text('part_number').notNull(),
+  partName: text('part_name').notNull(),
+  quantity: integer('quantity').default(1).notNull(),
+
+  vendorId: integer('vendor_id'),
+  vendorRef: text('vendor_ref'),
+
+  anodizeType: text('anodize_type'),
+  finishSpec: text('finish_spec'),
+  color: text('color'),
+
+  status: text('status', {
+    enum: ['PENDING', 'READY_TO_SEND', 'SENT', 'RECEIVED', 'VERIFIED', 'HOLD', 'CANCELLED'],
+  }).default('PENDING').notNull(),
+
+  sentAt: timestamp('sent_at'),
+  sentBy: text('sent_by'),
+  vendorPoNumber: text('vendor_po_number'),
+  expectedReturnDate: date('expected_return_date'),
+
+  receivedAt: timestamp('received_at'),
+  receivedBy: text('received_by'),
+  certReceived: boolean('cert_received').default(false),
+  inspectionPassed: boolean('inspection_passed').default(false),
+
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  statusIdx: index('anodize_jobs_status_idx').on(table.status),
+  travelerIdIdx: index('anodize_jobs_traveler_id_idx').on(table.travelerId),
+  routingOpIdIdx: index('anodize_jobs_routing_operation_id_idx').on(table.routingOperationId),
+  partNumberIdx: index('anodize_jobs_part_number_idx').on(table.partNumber),
+  vendorIdIdx: index('anodize_jobs_vendor_id_idx').on(table.vendorId),
+}));
+
+// Anodize Job Documents - Cert/CoC/process doc tracking for OSP jobs
+export const anodizeJobDocuments = pgTable('anodize_job_documents', {
+  id: serial('id').primaryKey(),
+  anodizeJobId: integer('anodize_job_id')
+    .references(() => anodizeJobs.id, { onDelete: 'cascade' })
+    .notNull(),
+  documentType: text('document_type', {
+    enum: ['CERT', 'COC', 'PROCESS_CERT', 'THICKNESS_REPORT', 'PACKING_SLIP', 'OTHER'],
+  }).default('OTHER').notNull(),
+  fileName: text('file_name').notNull(),
+  fileUrl: text('file_url'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  uploadedBy: text('uploaded_by'),
+  notes: text('notes'),
+  isRequired: boolean('is_required').default(false).notNull(),
+  isAccepted: boolean('is_accepted').default(false).notNull(),
+}, (table) => ({
+  jobIdIdx: index('anodize_job_documents_job_id_idx').on(table.anodizeJobId),
+}));
+
+// Anodize Job Receiving Inspections - One per job, tracks receiving inspection result
+export const anodizeJobReceivingInspections = pgTable('anodize_job_receiving_inspections', {
+  id: serial('id').primaryKey(),
+  anodizeJobId: integer('anodize_job_id')
+    .references(() => anodizeJobs.id, { onDelete: 'cascade' })
+    .notNull()
+    .unique(),
+  inspectionStatus: text('inspection_status', {
+    enum: ['PENDING', 'PASS', 'FAIL'],
+  }).default('PENDING').notNull(),
+  inspectedAt: timestamp('inspected_at'),
+  inspectedBy: text('inspected_by'),
+  notes: text('notes'),
+  thicknessVerified: boolean('thickness_verified').default(false).notNull(),
+  colorVerified: boolean('color_verified').default(false).notNull(),
+  damageFree: boolean('damage_free').default(false).notNull(),
+  quantityVerified: boolean('quantity_verified').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  jobIdIdx: index('anodize_job_receiving_inspections_job_id_idx').on(table.anodizeJobId),
+}));
+
+// Routing Dependencies - Assembly/sub-assembly prerequisite gating
+export const routingDependencies = pgTable('routing_dependencies', {
+  id: serial('id').primaryKey(),
+
+  partRoutingId: uuid('part_routing_id')
+    .references(() => partRoutings.id)
+    .notNull(),
+
+  dependencyType: text('dependency_type', {
+    enum: ['CHILD_PART', 'SUB_ASSEMBLY', 'KIT', 'MATERIAL', 'TRAVELER', 'DOCUMENT', 'CERTIFICATION'],
+  }).notNull(),
+
+  requiredItemId: integer('required_item_id'),
+  requiredPartNumber: text('required_part_number'),
+  requiredDescription: text('required_description'),
+  requiredQty: integer('required_qty'),
+
+  isSerialized: boolean('is_serialized').default(false),
+  mustBeCompleted: boolean('must_be_completed').default(true),
+  mustBeAllocated: boolean('must_be_allocated').default(false),
+  mustBeScanned: boolean('must_be_scanned').default(false),
+  mustBeIssued: boolean('must_be_issued').default(false),
+  mustBeScannedToParent: boolean('must_be_scanned_to_parent').default(false),
+
+  blockingScope: text('blocking_scope', {
+    enum: ['TRAVELER_START', 'STEP_START', 'TASK_COMPLETE'],
+  }).default('TRAVELER_START').notNull(),
+
+  routingOperationId: integer('routing_operation_id'),
+  appliesToDepartment: text('applies_to_department'),
+  appliesToOperationId: integer('applies_to_operation_id'),
+
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  partRoutingIdIdx: index('routing_dependencies_part_routing_id_idx').on(table.partRoutingId),
+  dependencyTypeIdx: index('routing_dependencies_dependency_type_idx').on(table.dependencyType),
+  requiredItemIdIdx: index('routing_dependencies_required_item_id_idx').on(table.requiredItemId),
+  appliesToDeptIdx: index('routing_dependencies_applies_to_department_idx').on(table.appliesToDepartment),
 }));
 
 // ============================================================================
@@ -5873,6 +6118,130 @@ export const insertP2WorkTaskSchema = createInsertSchema(p2WorkTasks)
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
 export type PartRouting = typeof partRoutings.$inferSelect;
+
+// Routing Operations Insert Schema and Types
+export const insertRoutingOperationSchema = createInsertSchema(routingOperations).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertRoutingOperation = z.infer<typeof insertRoutingOperationSchema>;
+export type RoutingOperation = typeof routingOperations.$inferSelect;
+
+// Routing CNC Operations Insert Schema and Types
+export const insertRoutingCncOperationSchema = createInsertSchema(routingCncOperations).omit({
+  id: true,
+});
+export type InsertRoutingCncOperation = z.infer<typeof insertRoutingCncOperationSchema>;
+export type RoutingCncOperation = typeof routingCncOperations.$inferSelect;
+
+// Routing Templates Insert/Update Schemas and Types
+export const insertRoutingTemplateSchema = createInsertSchema(routingTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateRoutingTemplateSchema = insertRoutingTemplateSchema.partial();
+export type InsertRoutingTemplate = z.infer<typeof insertRoutingTemplateSchema>;
+export type UpdateRoutingTemplate = z.infer<typeof updateRoutingTemplateSchema>;
+export type RoutingTemplate = typeof routingTemplates.$inferSelect;
+
+// Routing Template Operations Insert/Update Schemas and Types
+export const insertRoutingTemplateOperationSchema = createInsertSchema(routingTemplateOperations).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateRoutingTemplateOperationSchema = insertRoutingTemplateOperationSchema.partial();
+export type InsertRoutingTemplateOperation = z.infer<typeof insertRoutingTemplateOperationSchema>;
+export type UpdateRoutingTemplateOperation = z.infer<typeof updateRoutingTemplateOperationSchema>;
+export type RoutingTemplateOperation = typeof routingTemplateOperations.$inferSelect;
+
+// Routing Dependencies Insert/Update Schemas and Types
+export const insertRoutingDependencySchema = createInsertSchema(routingDependencies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateRoutingDependencySchema = insertRoutingDependencySchema.partial();
+export type InsertRoutingDependency = z.infer<typeof insertRoutingDependencySchema>;
+export type UpdateRoutingDependency = z.infer<typeof updateRoutingDependencySchema>;
+export type RoutingDependency = typeof routingDependencies.$inferSelect;
+
+// Anodize Jobs Insert/Update Schemas and Types
+export const insertAnodizeJobSchema = createInsertSchema(anodizeJobs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateAnodizeJobSchema = insertAnodizeJobSchema.partial();
+export type InsertAnodizeJob = z.infer<typeof insertAnodizeJobSchema>;
+export type UpdateAnodizeJob = z.infer<typeof updateAnodizeJobSchema>;
+export type AnodizeJob = typeof anodizeJobs.$inferSelect;
+
+// Anodize Job Documents Insert/Update Schemas and Types
+export const insertAnodizeJobDocumentSchema = createInsertSchema(anodizeJobDocuments).omit({
+  id: true,
+  uploadedAt: true,
+});
+export const updateAnodizeJobDocumentSchema = insertAnodizeJobDocumentSchema.partial();
+export type InsertAnodizeJobDocument = z.infer<typeof insertAnodizeJobDocumentSchema>;
+export type UpdateAnodizeJobDocument = z.infer<typeof updateAnodizeJobDocumentSchema>;
+export type AnodizeJobDocument = typeof anodizeJobDocuments.$inferSelect;
+
+// Anodize Job Receiving Inspections Insert/Update Schemas and Types
+export const insertAnodizeJobReceivingInspectionSchema = createInsertSchema(anodizeJobReceivingInspections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateAnodizeJobReceivingInspectionSchema = insertAnodizeJobReceivingInspectionSchema.partial();
+export type InsertAnodizeJobReceivingInspection = z.infer<typeof insertAnodizeJobReceivingInspectionSchema>;
+export type UpdateAnodizeJobReceivingInspection = z.infer<typeof updateAnodizeJobReceivingInspectionSchema>;
+export type AnodizeJobReceivingInspection = typeof anodizeJobReceivingInspections.$inferSelect;
+
+// ============================================================================
+// TRAVELER COMPONENT ASSOCIATIONS - Parent-child scan/association records
+// ============================================================================
+export const travelerComponentAssociations = pgTable('traveler_component_associations', {
+  id: serial('id').primaryKey(),
+
+  parentTravelerId: varchar('parent_traveler_id', { length: 255 })
+    .references(() => travelers.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  parentTravelerStepId: integer('parent_traveler_step_id'),
+
+  childTravelerId: varchar('child_traveler_id', { length: 255 }),
+  childInventoryItemId: integer('child_inventory_item_id'),
+  childPartNumber: text('child_part_number'),
+  childSerialNumber: text('child_serial_number'),
+  childLotNumber: text('child_lot_number'),
+  childInternalControlNumber: text('child_internal_control_number'),
+
+  associationType: text('association_type', {
+    enum: ['TRAVELER', 'INVENTORY_ITEM', 'SERIALIZED_COMPONENT', 'LOT_COMPONENT'],
+  }).notNull().default('TRAVELER'),
+
+  quantity: integer('quantity').notNull().default(1),
+  scannedAt: timestamp('scanned_at').defaultNow().notNull(),
+  scannedBy: text('scanned_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  parentTravelerIdIdx: index('tca_parent_traveler_id_idx').on(table.parentTravelerId),
+  parentStepIdIdx: index('tca_parent_step_id_idx').on(table.parentTravelerStepId),
+  childTravelerIdIdx: index('tca_child_traveler_id_idx').on(table.childTravelerId),
+  childInventoryItemIdIdx: index('tca_child_inventory_item_id_idx').on(table.childInventoryItemId),
+  childPartNumberIdx: index('tca_child_part_number_idx').on(table.childPartNumber),
+  childSerialNumberIdx: index('tca_child_serial_number_idx').on(table.childSerialNumber),
+  childIcnIdx: index('tca_child_icn_idx').on(table.childInternalControlNumber),
+}));
+
+export const insertTravelerComponentAssociationSchema = createInsertSchema(travelerComponentAssociations).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertTravelerComponentAssociation = z.infer<typeof insertTravelerComponentAssociationSchema>;
+export type TravelerComponentAssociation = typeof travelerComponentAssociations.$inferSelect;
 
 // ============================================================================
 // MATERIAL TRACEABILITY SYSTEM - Insert Schemas and Types

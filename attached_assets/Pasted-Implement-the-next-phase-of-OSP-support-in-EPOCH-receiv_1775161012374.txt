@@ -1,0 +1,155 @@
+Implement the next phase of OSP support in EPOCH: receiving inspection and certification gating for anodize/outside process jobs.
+
+Context:
+The app already supports:
+- routing operations with OSP fields
+- anodizeJobs table and lifecycle
+- storage methods and API routes for anodize jobs
+- traveler/anodize blocking logic
+- OSP operations in routing
+- UI page for anodize jobs
+- status lifecycle confirmed: SENT -> RECEIVED -> VERIFIED
+
+Do not break any existing routing, traveler, P2, or anodize job behavior.
+
+Goal:
+Add required certification/document tracking and receiving inspection gating so outside process jobs cannot fully verify/clear traveler blocking until required certs and inspection are complete.
+
+Requirements:
+
+1. Schema
+Add support for OSP certification and receiving inspection records.
+
+Preferred structure:
+A. anodize_job_documents table
+- id
+- anodizeJobId (FK to anodize_jobs)
+- documentType (text or enum; examples: CERT, COC, PROCESS_CERT, THICKNESS_REPORT, PACKING_SLIP, OTHER)
+- fileName
+- fileUrl or stored path (follow existing document/file pattern in project)
+- uploadedAt
+- uploadedBy if user pattern exists
+- notes
+- isRequired boolean default false
+- isAccepted boolean default false
+
+B. anodize_job_receiving_inspections table
+- id
+- anodizeJobId (FK to anodize_jobs, unique if one inspection per job)
+- inspectionStatus (PENDING, PASS, FAIL)
+- inspectedAt
+- inspectedBy if pattern exists
+- notes
+- thicknessVerified boolean default false
+- colorVerified boolean default false
+- damageFree boolean default false
+- quantityVerified boolean default false
+
+If the repo already has a better document attachment pattern, reuse it instead of inventing a conflicting one.
+
+2. OSP routing-operation gating fields
+If not already present, make sure routing_operations supports:
+- certificateRequired
+- receivingInspectionRequired
+
+Do not duplicate fields if they already exist.
+
+3. Migration
+Create idempotent SQL migration(s).
+Register them in the startup migration runner if safeFiles is hardcoded.
+Do not break existing migrations.
+
+4. Storage
+Add storage methods:
+- getAnodizeJobDocuments(jobId)
+- addAnodizeJobDocument(data)
+- updateAnodizeJobDocument(id, data)
+- deleteAnodizeJobDocument(id)
+
+- getAnodizeJobReceivingInspection(jobId)
+- upsertAnodizeJobReceivingInspection(jobId, data)
+
+- evaluateAnodizeJobCompletion(jobId)
+This should determine whether the job is truly clear based on:
+- job status
+- certificate requirements
+- accepted required documents
+- receiving inspection requirement
+- receiving inspection pass result
+
+- evaluateTravelerStepAnodizeBlocking(travelerId, stepId)
+Update/extend the blocking logic so traveler steps remain blocked when required cert/docs or receiving inspection are incomplete.
+
+5. API routes
+Add endpoints:
+- GET /api/anodize-jobs/:id/documents
+- POST /api/anodize-jobs/:id/documents
+- PUT /api/anodize-job-documents/:documentId
+- DELETE /api/anodize-job-documents/:documentId
+
+- GET /api/anodize-jobs/:id/receiving-inspection
+- PUT /api/anodize-jobs/:id/receiving-inspection
+
+- GET /api/anodize-jobs/:id/completion-status
+- GET /api/travelers/:travelerId/steps/:stepId/anodize-blocking
+
+Use the project’s existing route and validation patterns.
+
+6. UI
+Enhance the existing Anodize Jobs page:
+- show document count/status
+- show receiving inspection status
+- allow adding/updating documents
+- allow marking required docs as accepted
+- allow entering receiving inspection result
+- clearly show whether the job is “Ready to Clear” or still blocked
+
+Keep UI minimal and aligned with current style.
+Do not redesign the page.
+
+7. Blocking behavior
+Required logic:
+- if certificateRequired = true, required cert docs must be uploaded and accepted
+- if receivingInspectionRequired = true, inspection must exist and be PASS
+- traveler step should remain blocked until OSP job completion criteria are satisfied
+- if no anodize/OSP jobs exist for the step, current behavior should remain unchanged
+
+8. Backward compatibility
+Critical:
+- do not break existing anodize jobs
+- old jobs without docs/inspection should still load
+- only enforce cert/inspection gating when the routing operation requires it
+- do not break traveler execution pages
+
+9. Verification
+Run or simulate checks to confirm:
+- TypeScript passes for changed files
+- migration applies cleanly
+- documents can be added and updated
+- receiving inspection can be recorded
+- completion status reflects cert/inspection requirements correctly
+- traveler blocking works correctly for:
+  a. pending job
+  b. received but missing cert
+  c. cert accepted but inspection pending
+  d. fully complete job
+  e. no anodize jobs
+
+10. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — schema added
+SECTION C — migrations added
+SECTION D — storage methods added
+SECTION E — API endpoints added
+SECTION F — UI changes
+SECTION G — completion/blocking logic
+SECTION H — backward compatibility confirmation
+SECTION I — recommended next phase
+
+Implementation notes:
+- be incremental
+- reuse existing patterns where possible
+- do not refactor unrelated systems
+- preserve current anodize job lifecycle
+- keep the new cert/inspection layer optional and requirement-driven

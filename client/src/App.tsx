@@ -164,6 +164,8 @@ import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from './pages/DocumentManagement';
 import RoutingDocumentManagement from './pages/RoutingDocumentManagement';
+import RoutingTemplates from './pages/RoutingTemplates';
+import AnodizeJobs from './pages/AnodizeJobs';
 import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
 import TrainingControlCenter from '@/pages/TrainingControlCenter';
@@ -950,6 +952,14 @@ function App() {
                   <Route
                     path="/routing-document-management"
                     component={RoutingDocumentManagement}
+                  />
+                  <Route
+                    path="/routing-templates"
+                    component={RoutingTemplates}
+                  />
+                  <Route
+                    path="/anodize-jobs"
+                    component={AnodizeJobs}
                   />
                   <Route
                     path="/document-intelligence"

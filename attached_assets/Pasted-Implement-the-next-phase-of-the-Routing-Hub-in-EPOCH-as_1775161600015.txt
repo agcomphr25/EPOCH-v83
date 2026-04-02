@@ -1,0 +1,156 @@
+Implement the next phase of the Routing Hub in EPOCH: assembly dependency gating.
+
+Context:
+The app already supports:
+- routingType on part_routings
+- routing operations
+- traveler generation from routing operations with legacy fallback
+- OSP/anodize operations
+- anodize job lifecycle
+- OSP document/certification gating
+- OSP receiving inspection gating
+- traveler blocking based on OSP completion logic
+
+Do not break any existing routing, traveler, P2, inventory, or OSP behavior.
+
+Goal:
+Add dependency gating so subassembly and assembly travelers can be blocked until required child parts, kits, or subassemblies are completed and available.
+
+Requirements:
+
+1. Schema
+Add a new table for assembly routing dependencies.
+
+Suggested table:
+assembly_routing_dependencies
+- id
+- partRoutingId (FK to part_routings.id, required)
+- routingOperationId (nullable FK to routing_operations.id if dependency is tied to a specific operation, otherwise nullable)
+- dependencyType (enum or constrained text):
+  CHILD_PART, SUB_ASSEMBLY, KIT, MATERIAL, TRAVELER
+- requiredInventoryItemId (nullable FK to inventory_items.id)
+- requiredPartNumber (nullable text for denormalized/fallback matching)
+- requiredQuantity (numeric or integer, default 1)
+- mustBeCompleted (boolean default true)
+- mustBeIssued (boolean default false)
+- mustBeScannedToParent (boolean default false)
+- notes (text nullable)
+- createdAt
+
+Add indexes for:
+- partRoutingId
+- routingOperationId
+- requiredInventoryItemId
+- requiredPartNumber
+
+2. Migration
+Create an idempotent SQL migration.
+Register it in the startup migration runner if safeFiles is hardcoded.
+Do not disturb existing migrations.
+
+3. Storage
+Add storage methods:
+- getAssemblyRoutingDependencies(partRoutingId)
+- createAssemblyRoutingDependency(data)
+- updateAssemblyRoutingDependency(id, data)
+- deleteAssemblyRoutingDependency(id)
+- replaceAssemblyRoutingDependencies(partRoutingId, dependencies)
+
+Add evaluation methods:
+- evaluateAssemblyDependencyStatus(travelerId, stepId)
+- getTravelerDependencyRequirements(travelerId)
+- getTravelerDependencyStatus(travelerId)
+
+The evaluation should determine whether a traveler step is blocked based on required child dependencies.
+
+4. Dependency evaluation logic
+Support these rules:
+- if dependency requires completion, linked child traveler(s) or required manufactured child items must be complete
+- if dependency requires issue, required child must at least be issued / released / in queue based on current system patterns
+- if dependency requires scan-to-parent, block until scan/association record exists if such a pattern already exists; if no scan model exists yet, design the schema/API so this can be added later without breaking anything
+- if no dependencies exist, no blocking
+- only apply dependency blocking to relevant subassembly / assembly workflows
+
+Be careful to reuse current traveler / manufacturing queue / inventory relationships rather than inventing a disconnected parallel model.
+
+5. API routes
+Add endpoints:
+- GET /api/part-routings/:id/dependencies
+- POST /api/part-routings/:id/dependencies
+- PUT /api/part-routings/:id/dependencies/:dependencyId
+- DELETE /api/part-routings/:id/dependencies/:dependencyId
+- PUT /api/part-routings/:id/dependencies/replace
+
+Traveler status endpoints:
+- GET /api/travelers/:travelerId/dependencies
+- GET /api/travelers/:travelerId/steps/:stepId/dependency-blocking
+
+Use the repo’s existing validation and route conventions.
+
+6. Traveler blocking integration
+Integrate dependency evaluation into traveler blocking logic carefully:
+- keep current OSP blocking intact
+- add dependency blocking alongside it
+- return clear structured reasons why a step is blocked
+- do not break TravelerExecution
+
+Expected result:
+A parent assembly/subassembly step can be blocked because:
+- required child part traveler not complete
+- required kit not available
+- required subassembly not complete
+- required child not yet issued
+
+7. UI
+Add minimal dependency management to the routing management flow:
+- show dependencies for a routing
+- add/edit/delete dependency rules
+- display dependency type, required part/item, quantity, and gating flags
+
+Add a simple dependency status panel in traveler UI if feasible without heavy redesign:
+- blocked / not blocked
+- reasons
+- which required child items are incomplete
+
+Keep UI minimal and aligned with current style.
+
+8. Backward compatibility
+Critical:
+- do not break legacy routings
+- do not force dependencies on all routings
+- if a routing has no dependencies, behavior stays exactly the same
+- do not break OSP blocking
+- do not break existing traveler execution pages
+
+9. Verification
+Run or simulate checks to confirm:
+- TypeScript passes for changed files
+- migration applies cleanly
+- dependencies can be created and loaded
+- traveler dependency status endpoint works
+- blocking works correctly for:
+  a. no dependencies
+  b. required child incomplete
+  c. required child issued but not complete
+  d. required child complete
+  e. mixed dependency states
+- OSP blocking still works after dependency logic is added
+
+10. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — schema added
+SECTION C — migrations added
+SECTION D — storage methods added
+SECTION E — API endpoints added
+SECTION F — traveler blocking changes
+SECTION G — UI changes
+SECTION H — backward compatibility confirmation
+SECTION I — recommended next phase
+
+Implementation notes:
+- be incremental
+- do not refactor unrelated systems
+- reuse current traveler/manufacturing/inventory patterns
+- preserve existing execution pages
+- design for future scan-to-parent support even if full barcode parent-child linking is not implemented in this phase

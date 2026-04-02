@@ -1,0 +1,191 @@
+Implement the next phase of the Routing Hub in EPOCH: assembly dependency gating.
+
+Context:
+The app now supports:
+- routingType on part_routings
+- routing operations
+- traveler generation from routing operations with backward compatibility
+- routing templates by type
+- template-to-routing creation flow
+
+Do not break existing routing, traveler, P2 Control Center, manufacturing queue, or legacy behavior.
+
+Goal:
+Add assembly dependency gating so SUB_ASSEMBLY and ASSEMBLY routings can define required child parts / kits / prerequisites, and so travelers and production flow can block assembly work until dependencies are satisfied.
+
+Primary outcome:
+The system should be able to determine whether an assembly operation or assembly traveler can start based on completion/availability of required child items.
+
+Requirements:
+
+1. Database schema
+Add structured dependency tables.
+
+A. routing_dependencies
+Fields:
+- id
+- partRoutingId (FK to part_routings.id, required)
+- dependencyType enum/text:
+  CHILD_PART, SUB_ASSEMBLY, KIT, MATERIAL, DOCUMENT, CERTIFICATION
+- requiredItemId (nullable FK to inventory_items.id if consistent with existing schema)
+- requiredPartNumber (nullable text for fallback/reference)
+- requiredDescription (nullable text)
+- requiredQty (numeric/integer nullable)
+- isSerialized (boolean default false)
+- mustBeCompleted (boolean default true)
+- mustBeAllocated (boolean default false)
+- mustBeScanned (boolean default false)
+- blockingScope enum/text:
+  TRAVELER_START, STEP_START, TASK_COMPLETE
+- appliesToDepartment (nullable text)
+- appliesToOperationId (nullable FK to routing_operations.id if appropriate)
+- notes (nullable text)
+- createdAt
+- updatedAt
+
+Add indexes for:
+- partRoutingId
+- dependencyType
+- requiredItemId
+- appliesToDepartment
+
+B. assembly_serialized_links (if needed and if no existing structure already covers this)
+Fields:
+- id
+- travelerId or workOrderId (use whichever is already the right execution anchor in this project)
+- parentPartNumber
+- childPartNumber
+- childSerialNumber
+- linkedAt
+- linkedBy
+
+Only add this if the current traveler/material traceability system does not already cover serialized child linkage cleanly.
+
+2. Migration
+Create idempotent SQL migration(s).
+Register in startup migration runner if safeFiles is used.
+Do not disturb prior migrations.
+
+3. Types and validation
+Add inferred TS types and insert/update schemas:
+- RoutingDependency
+- InsertRoutingDependency
+- UpdateRoutingDependency
+
+4. Storage layer
+Add storage methods:
+- getRoutingDependencies(partRoutingId)
+- createRoutingDependency(data)
+- updateRoutingDependency(id, data)
+- deleteRoutingDependency(id)
+- replaceRoutingDependencies(partRoutingId, dependencies)
+
+Also add dependency evaluation methods:
+- evaluateRoutingDependencies(partRoutingId, context)
+- evaluateTravelerDependencies(travelerId)
+- getAssemblyReadinessForRouting(partRoutingId, context)
+- getAssemblyReadinessForTraveler(travelerId)
+
+These should return structured status like:
+- ready: boolean
+- blockingItems: [...]
+- satisfiedItems: [...]
+- warnings: [...]
+- completionPct if useful
+
+Use existing inventory/work order/traveler/manufacturing queue data where possible.
+Do not invent fake assumptions if a needed data source does not exist — use best-effort grounded checks and clearly structure missing-data cases.
+
+5. API routes
+Add endpoints consistent with current route style:
+- GET /api/part-routings/:id/dependencies
+- POST /api/part-routings/:id/dependencies
+- PUT /api/part-routings/:id/dependencies/:dependencyId
+- DELETE /api/part-routings/:id/dependencies/:dependencyId
+- PUT /api/part-routings/:id/dependencies/replace
+- GET /api/part-routings/:id/assembly-readiness
+- GET /api/travelers/:id/assembly-readiness
+
+If serialized linking table is added, include endpoints only if they can be done cleanly.
+
+6. Assembly readiness logic
+Implement practical, incremental readiness rules.
+
+At minimum:
+- For dependencyType CHILD_PART / SUB_ASSEMBLY:
+  check whether required part/work/traveler records show completion or sufficient available quantity
+- For KIT:
+  check kit availability/allocation if the project already tracks it
+- For MATERIAL:
+  use available inventory/allocation data if present
+- For DOCUMENT / CERTIFICATION:
+  support schema and readiness output, even if current validation is placeholder
+
+Do not overcomplicate this phase.
+Prefer clear, explainable blocking logic over perfect manufacturing theory.
+
+7. Traveler gating
+Add non-breaking gating behavior:
+
+- Only for routingType SUB_ASSEMBLY or ASSEMBLY
+- If dependencies exist and are not satisfied:
+  - traveler can still exist if needed for planning visibility
+  - but assembly execution should show blocked/not-ready status
+- Do not break legacy travelers
+- Prefer gating step/task start rather than preventing traveler creation entirely, unless current architecture strongly supports a safer gating point
+
+Recommended behavior:
+- traveler record can be created
+- first assembly step or first blocked operation shows readiness failure and cannot start until dependencies are satisfied
+- UI should clearly list blocking dependencies
+
+8. UI
+Update routing management to support dependency authoring:
+- simple dependencies section for SUB_ASSEMBLY / ASSEMBLY routings
+- list/add/edit/delete dependencies
+- allow choosing dependency type, required part/item, quantity, blocking scope, and basic flags
+
+Update traveler or routing viewer UI to show:
+- Assembly Readiness
+- Ready / Blocked badge
+- list of blocking items
+- list of satisfied items if easy to show
+
+Minimal UI only. No big redesign.
+
+9. Backward compatibility
+Critical:
+- do not break legacy routing behavior
+- do not break non-assembly routing types
+- do not require dependencies for all routings
+- if no dependencies exist, behavior should remain unchanged
+
+10. Verification
+Run or simulate checks to confirm:
+- schema compiles
+- migration applies
+- dependency endpoints work
+- readiness endpoint returns structured results
+- a routing with unsatisfied dependencies shows blocked
+- a routing/traveler with no dependencies behaves normally
+- assembly travelers are gated without breaking creation
+
+11. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — schema added
+SECTION C — migration added
+SECTION D — storage methods added
+SECTION E — API endpoints added
+SECTION F — readiness logic added
+SECTION G — UI changes
+SECTION H — backward compatibility confirmation
+SECTION I — limitations / assumptions
+SECTION J — recommended next phase
+
+Implementation notes:
+- Be incremental
+- Use current traveler / manufacturing queue / inventory data rather than inventing a parallel planning engine
+- Respect uuid vs integer types carefully
+- Prefer explainable readiness logic
+- Do not refactor unrelated systems

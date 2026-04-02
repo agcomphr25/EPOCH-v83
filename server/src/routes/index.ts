@@ -102,7 +102,9 @@ import p2TravelerViewerRoutes from './p2TravelerViewer';
 import p2ProductionQueueRoutes from './p2ProductionQueue';
 import p2SerializedItemsRoutes from './p2SerializedItems';
 import partRoutingsRoutes from './partRoutings';
-import travelersRoutes from './travelers';
+import routingTemplatesRoutes from './routingTemplates';
+import anodizeJobsRoutes from './anodizeJobs';
+import travelersRoutes, { travelerComponentAssociationsRouter } from './travelers';
 import materialLotsRoutes from './materialLots';
 import routingDocumentsRoutes from './routingDocuments';
 import mrpRoutes from './mrp';
@@ -135,6 +137,7 @@ import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
+import { storage } from '../../storage';
 import { registerCodebaseChatRoutes } from '../../replit_integrations/chat/codebase-chat-routes';
 import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
@@ -635,9 +638,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Part routing management routes
   app.use('/api/part-routings', partRoutingsRoutes);
-  
+  app.use('/api/routing-templates', routingTemplatesRoutes);
+
+  // Anodize job tracking (outside process)
+  app.use('/api/anodize-jobs', anodizeJobsRoutes);
+
+  // Routing operation sub-resources
+  app.get('/api/routing-operations/:id/anodize-jobs', async (req: any, res: any) => {
+    try {
+      const jobs = await storage.getRoutingOperationAnodizeJobs(Number(req.params.id));
+      res.json(jobs);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to get routing operation anodize jobs', message: err.message });
+    }
+  });
+
   // Travelers management routes (AS9100-compliant traveler execution)
   app.use('/api/travelers', travelersRoutes);
+  // Traveler component associations standalone DELETE endpoint
+  app.use('/api/traveler-component-associations', travelerComponentAssociationsRouter);
   
   // Material Lot management routes (AS9100-compliant material traceability)
   app.use('/api/material-lots', materialLotsRoutes);

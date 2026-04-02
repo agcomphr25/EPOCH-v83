@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { insertPartRoutingSchema } from '../../schema';
+import { insertPartRoutingSchema, insertRoutingOperationSchema, insertRoutingCncOperationSchema, insertRoutingDependencySchema, updateRoutingDependencySchema } from '../../schema';
 import { pool } from '../../db';
 import OpenAI from 'openai';
 
@@ -624,6 +624,212 @@ router.get('/:id/training', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching training packages:', error);
     res.status(500).json({ error: 'Failed to fetch training packages' });
+  }
+});
+
+// ============================================================================
+// ROUTING OPERATIONS ENDPOINTS
+// ============================================================================
+
+// GET /api/part-routings/:id/operations
+router.get('/:id/operations', async (req: Request, res: Response) => {
+  try {
+    const ops = await storage.getRoutingOperations(req.params.id);
+    res.json(ops);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch routing operations', message: error.message });
+  }
+});
+
+// POST /api/part-routings/:id/operations
+router.post('/:id/operations', async (req: Request, res: Response) => {
+  try {
+    const data = insertRoutingOperationSchema.parse({ ...req.body, partRoutingId: req.params.id });
+    const op = await storage.createRoutingOperation(data);
+    res.status(201).json(op);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', issues: error.issues });
+    }
+    res.status(500).json({ error: 'Failed to create routing operation', message: error.message });
+  }
+});
+
+// PUT /api/part-routings/:id/operations/replace
+router.put('/:id/operations/replace', async (req: Request, res: Response) => {
+  try {
+    const rawOps = z.array(insertRoutingOperationSchema.partial().required({ stepNumber: true, departmentName: true, operationName: true, operationType: true })).parse(req.body);
+    const ops = rawOps.map((op: any) => ({ ...op, partRoutingId: req.params.id }));
+    const result = await storage.replaceRoutingOperations(req.params.id, ops as any);
+    res.json(result);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', issues: error.issues });
+    }
+    res.status(500).json({ error: 'Failed to replace routing operations', message: error.message });
+  }
+});
+
+// PUT /api/part-routings/:id/operations/:operationId
+router.put('/:id/operations/:operationId', async (req: Request, res: Response) => {
+  try {
+    const operationId = parseInt(req.params.operationId, 10);
+    if (isNaN(operationId)) return res.status(400).json({ error: 'Invalid operation id' });
+    const data = insertRoutingOperationSchema.partial().parse(req.body);
+    const op = await storage.updateRoutingOperation(operationId, data);
+    res.json(op);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', issues: error.issues });
+    }
+    if (error.message?.includes('not found')) return res.status(404).json({ error: 'Operation not found' });
+    res.status(500).json({ error: 'Failed to update routing operation', message: error.message });
+  }
+});
+
+// DELETE /api/part-routings/:id/operations/:operationId
+router.delete('/:id/operations/:operationId', async (req: Request, res: Response) => {
+  try {
+    const operationId = parseInt(req.params.operationId, 10);
+    if (isNaN(operationId)) return res.status(400).json({ error: 'Invalid operation id' });
+    await storage.deleteRoutingOperation(operationId);
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to delete routing operation', message: error.message });
+  }
+});
+
+// ============================================================================
+// ROUTING CNC OPERATION ENDPOINTS
+// Mounted at /api/part-routings/operations/:operationId/cnc
+// ============================================================================
+
+// GET /api/part-routings/operations/:operationId/cnc
+router.get('/operations/:operationId/cnc', async (req: Request, res: Response) => {
+  try {
+    const operationId = parseInt(req.params.operationId, 10);
+    if (isNaN(operationId)) return res.status(400).json({ error: 'Invalid operation id' });
+    const cnc = await storage.getRoutingCncOperation(operationId);
+    if (!cnc) return res.status(404).json({ error: 'CNC operation not found' });
+    res.json(cnc);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch CNC operation', message: error.message });
+  }
+});
+
+// PUT /api/part-routings/operations/:operationId/cnc
+router.put('/operations/:operationId/cnc', async (req: Request, res: Response) => {
+  try {
+    const operationId = parseInt(req.params.operationId, 10);
+    if (isNaN(operationId)) return res.status(400).json({ error: 'Invalid operation id' });
+    const data = insertRoutingCncOperationSchema.parse({ ...req.body, routingOperationId: operationId });
+    const cnc = await storage.upsertRoutingCncOperation(data);
+    res.json(cnc);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', issues: error.issues });
+    }
+    res.status(500).json({ error: 'Failed to upsert CNC operation', message: error.message });
+  }
+});
+
+// DELETE /api/part-routings/operations/:operationId/cnc
+router.delete('/operations/:operationId/cnc', async (req: Request, res: Response) => {
+  try {
+    const operationId = parseInt(req.params.operationId, 10);
+    if (isNaN(operationId)) return res.status(400).json({ error: 'Invalid operation id' });
+    await storage.deleteRoutingCncOperation(operationId);
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to delete CNC operation', message: error.message });
+  }
+});
+
+// ============================================================================
+// ROUTING DEPENDENCIES ENDPOINTS
+// ============================================================================
+
+// GET /api/part-routings/:id/dependencies
+router.get('/:id/dependencies', async (req, res) => {
+  try {
+    const deps = await storage.getRoutingDependencies(req.params.id);
+    res.json(deps);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get dependencies', message: error.message });
+  }
+});
+
+// POST /api/part-routings/:id/dependencies
+router.post('/:id/dependencies', async (req, res) => {
+  try {
+    const parsed = insertRoutingDependencySchema.safeParse({ ...req.body, partRoutingId: req.params.id });
+    if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
+    const dep = await storage.createRoutingDependency(parsed.data);
+    res.status(201).json(dep);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to create dependency', message: error.message });
+  }
+});
+
+// PUT /api/part-routings/:id/dependencies/:dependencyId
+router.put('/:id/dependencies/:dependencyId', async (req, res) => {
+  try {
+    const dependencyId = parseInt(req.params.dependencyId);
+    if (isNaN(dependencyId)) return res.status(400).json({ error: 'Invalid dependency id' });
+    const parsed = updateRoutingDependencySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
+    const dep = await storage.updateRoutingDependency(dependencyId, parsed.data);
+    res.json(dep);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to update dependency', message: error.message });
+  }
+});
+
+// DELETE /api/part-routings/:id/dependencies/:dependencyId
+router.delete('/:id/dependencies/:dependencyId', async (req, res) => {
+  try {
+    const dependencyId = parseInt(req.params.dependencyId);
+    if (isNaN(dependencyId)) return res.status(400).json({ error: 'Invalid dependency id' });
+    await storage.deleteRoutingDependency(dependencyId);
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to delete dependency', message: error.message });
+  }
+});
+
+// PUT /api/part-routings/:id/dependencies/replace
+router.put('/:id/dependencies/replace', async (req, res) => {
+  try {
+    const arraySchema = z.array(insertRoutingDependencySchema.omit({ partRoutingId: true }));
+    const parsed = arraySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
+    const fullDeps = parsed.data.map((d) => ({ ...d, partRoutingId: req.params.id }));
+    const deps = await storage.replaceRoutingDependencies(req.params.id, fullDeps);
+    res.json(deps);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to replace dependencies', message: error.message });
+  }
+});
+
+// GET /api/part-routings/:id/assembly-readiness
+router.get('/:id/assembly-readiness', async (req, res) => {
+  try {
+    const result = await storage.getAssemblyReadinessForRouting(req.params.id);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate assembly readiness', message: error.message });
+  }
+});
+
+// GET /api/routing-operations/:operationId/anodize-jobs
+// Note: mounted at /api/part-routings but serves routing-operation sub-resource
+router.get('/routing-operations/:operationId/anodize-jobs', async (req, res) => {
+  try {
+    const opId = Number(req.params.operationId);
+    const jobs = await storage.getRoutingOperationAnodizeJobs(opId);
+    res.json(jobs);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get routing operation anodize jobs', message: error.message });
   }
 });
 

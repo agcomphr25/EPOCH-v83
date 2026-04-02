@@ -12,6 +12,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  GitBranch,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
@@ -64,6 +67,8 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useLocation } from 'wouter';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 
@@ -1236,6 +1241,95 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     return map;
   }, [balancesData]);
 
+  const [, navigateTo] = useLocation();
+
+  // Routing query — only for manufactured items in the edit dialog
+  const editingItemId = editingItem?.id ?? null;
+  const isManufactured = editingItem?.itemType === 'MANUFACTURED';
+
+  const {
+    data: itemRouting,
+    isLoading: isRoutingLoading,
+    refetch: refetchRouting,
+  } = useQuery<any>({
+    queryKey: ['/api/inventory/items', editingItemId, 'routing'],
+    queryFn: () => apiRequest(`/api/inventory/items/${editingItemId}/routing`),
+    enabled: !!editingItemId && isManufactured && isEditOpen,
+    staleTime: 0,
+  });
+
+  // Routing creation mode: null = show buttons, 'blank' | 'template' | 'link'
+  const [routingCreateMode, setRoutingCreateMode] = useState<'template' | 'link' | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [selectedExistingRoutingId, setSelectedExistingRoutingId] = useState('');
+
+  const createRoutingMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/inventory/items/${editingItemId}/routing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ createdBy: 'system' }),
+      }),
+    onSuccess: () => {
+      toast.success('Routing created successfully');
+      refetchRouting();
+    },
+    onError: (err: any) => {
+      const msg = err?.message || 'Failed to create routing';
+      toast.error(msg);
+    },
+  });
+
+  const { data: routingTemplatesList = [], isLoading: isTemplatesLoading } = useQuery<any[]>({
+    queryKey: ['/api/inventory/items', editingItemId, 'routing-templates'],
+    queryFn: () => apiRequest(`/api/inventory/items/${editingItemId}/routing-templates`),
+    enabled: !!editingItemId && isManufactured && routingCreateMode === 'template',
+    retry: false,
+  });
+
+  const { data: availableRoutingsList = [], isLoading: isAvailableRoutingsLoading } = useQuery<any[]>({
+    queryKey: ['/api/inventory/items', editingItemId, 'available-routings'],
+    queryFn: () => apiRequest(`/api/inventory/items/${editingItemId}/available-routings`),
+    enabled: !!editingItemId && isManufactured && routingCreateMode === 'link',
+    retry: false,
+  });
+
+  const createFromTemplateMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/inventory/items/${editingItemId}/routing-from-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId: selectedTemplateId, createdBy: 'system' }),
+      }),
+    onSuccess: () => {
+      toast.success('Routing created from template');
+      setRoutingCreateMode(null);
+      setSelectedTemplateId('');
+      refetchRouting();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to create routing from template');
+    },
+  });
+
+  const linkExistingRoutingMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/inventory/items/${editingItemId}/routing-link`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routingId: selectedExistingRoutingId }),
+      }),
+    onSuccess: () => {
+      toast.success('Routing linked successfully');
+      setRoutingCreateMode(null);
+      setSelectedExistingRoutingId('');
+      refetchRouting();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to link routing');
+    },
+  });
+
   // Type-filtered item sets for tab counts and tab filtering
   const purchasedItems = Array.isArray(allItems)
     ? allItems.filter(
@@ -1447,6 +1541,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       setIsEditOpen(false);
       setEditingItem(null);
       resetForm();
+      setRoutingCreateMode(null);
+      setSelectedTemplateId('');
+      setSelectedExistingRoutingId('');
       queryClient.invalidateQueries({
         queryKey: ['/api/enhanced/inventory/items'],
       });
@@ -2845,6 +2942,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           if (!open) {
             setEditingItem(null);
             resetForm();
+            setRoutingCreateMode(null);
+            setSelectedTemplateId('');
+            setSelectedExistingRoutingId('');
           }
         }}
       >
@@ -2867,6 +2967,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               setIsEditOpen(false);
               setEditingItem(null);
               resetForm();
+              setRoutingCreateMode(null);
+              setSelectedTemplateId('');
+              setSelectedExistingRoutingId('');
             }}
             vendors={vendors}
             assets={assets}
@@ -2892,6 +2995,200 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 consumptionRate={editingItem.consumptionRate || undefined}
                 usageUnit={editingItem.usageUnit || undefined}
               />
+            </div>
+          )}
+
+          {/* Routing Section — only for manufactured items */}
+          {isManufactured && (
+            <div className="mt-6 border-t pt-6">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <GitBranch className="h-4 w-4" />
+                    Part Routing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isRoutingLoading ? (
+                    <div className="text-sm text-muted-foreground animate-pulse">Loading routing…</div>
+                  ) : itemRouting && itemRouting.id ? (
+                    /* ── Routing linked ── */
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Name</span>
+                          <p className="font-medium mt-0.5">{itemRouting.routingName}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Type</span>
+                          <p className="font-medium mt-0.5">{itemRouting.routingType}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Revision</span>
+                          <p className="font-medium mt-0.5">Rev {itemRouting.routingRevision}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Status</span>
+                          <div className="mt-0.5">
+                            <Badge variant={itemRouting.isActive ? 'default' : 'secondary'}>
+                              {itemRouting.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => navigateTo('/p2-control-center')}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View / Edit in Routing Hub
+                      </Button>
+                    </div>
+                  ) : (
+                    /* ── No routing yet ── */
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                        <span>No routing is linked to this part. Choose how to create one below.</span>
+                      </div>
+
+                      {/* Mode selector buttons */}
+                      {routingCreateMode === null && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => createRoutingMutation.mutate()}
+                            disabled={createRoutingMutation.isPending}
+                          >
+                            <GitBranch className="h-3.5 w-3.5" />
+                            {createRoutingMutation.isPending ? 'Creating…' : 'Create Blank'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => { setRoutingCreateMode('template'); setSelectedTemplateId(''); }}
+                          >
+                            <GitBranch className="h-3.5 w-3.5" />
+                            From Template
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => { setRoutingCreateMode('link'); setSelectedExistingRoutingId(''); }}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Link Existing
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* From Template sub-panel */}
+                      {routingCreateMode === 'template' && (
+                        <div className="rounded-md border p-4 space-y-3 bg-muted/30">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium">Select a Routing Template</Label>
+                            <Button variant="ghost" size="sm" onClick={() => setRoutingCreateMode(null)} className="h-6 px-2 text-xs">
+                              Cancel
+                            </Button>
+                          </div>
+                          {isTemplatesLoading ? (
+                            <p className="text-sm text-muted-foreground animate-pulse">Loading templates…</p>
+                          ) : routingTemplatesList.length === 0 ? (
+                            <div className="text-sm text-muted-foreground flex items-start gap-2">
+                              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                              <span>No active routing templates found. Create templates in the Routing Hub first.</span>
+                            </div>
+                          ) : (
+                            <>
+                              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Choose a template…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {routingTemplatesList.map((t: any) => (
+                                    <SelectItem key={t.id} value={t.id}>
+                                      <span className="font-medium">{t.templateName}</span>
+                                      <span className="ml-2 text-xs text-muted-foreground">{t.routingType}</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {selectedTemplateId && (
+                                <div className="text-xs text-muted-foreground px-1">
+                                  {(() => {
+                                    const t = routingTemplatesList.find((x: any) => x.id === selectedTemplateId);
+                                    return t?.description ? <p>{t.description}</p> : null;
+                                  })()}
+                                </div>
+                              )}
+                              <Button
+                                size="sm"
+                                disabled={!selectedTemplateId || createFromTemplateMutation.isPending}
+                                onClick={() => createFromTemplateMutation.mutate()}
+                                className="gap-2"
+                              >
+                                <GitBranch className="h-3.5 w-3.5" />
+                                {createFromTemplateMutation.isPending ? 'Creating…' : 'Create from Template'}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Link Existing sub-panel */}
+                      {routingCreateMode === 'link' && (
+                        <div className="rounded-md border p-4 space-y-3 bg-muted/30">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium">Link an Existing Routing</Label>
+                            <Button variant="ghost" size="sm" onClick={() => setRoutingCreateMode(null)} className="h-6 px-2 text-xs">
+                              Cancel
+                            </Button>
+                          </div>
+                          {isAvailableRoutingsLoading ? (
+                            <p className="text-sm text-muted-foreground animate-pulse">Loading routings…</p>
+                          ) : availableRoutingsList.length === 0 ? (
+                            <div className="text-sm text-muted-foreground flex items-start gap-2">
+                              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                              <span>No other routings available to link. Create a routing in the Routing Hub first.</span>
+                            </div>
+                          ) : (
+                            <>
+                              <Select value={selectedExistingRoutingId} onValueChange={setSelectedExistingRoutingId}>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Choose a routing…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableRoutingsList.map((r: any) => (
+                                    <SelectItem key={r.id} value={r.id}>
+                                      <span className="font-medium">{r.routingName}</span>
+                                      <span className="ml-2 text-xs text-muted-foreground">{r.partNumber} · Rev {r.routingRevision}</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                disabled={!selectedExistingRoutingId || linkExistingRoutingMutation.isPending}
+                                onClick={() => linkExistingRoutingMutation.mutate()}
+                                className="gap-2"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                {linkExistingRoutingMutation.isPending ? 'Linking…' : 'Link Routing'}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </DialogContent>

@@ -1,0 +1,165 @@
+Implement the next phase of the Routing Hub in EPOCH: Anodize outside-process tracking.
+
+Context:
+Right now anodizing is the only outside process we use.
+Do not build a broad multi-OSP architecture yet unless needed for clean reuse.
+Keep the implementation narrow, practical, and backward compatible.
+
+The app already supports:
+- routingType on part_routings
+- routing operations
+- traveler generation from routing operations with legacy fallback
+- routing templates
+- assembly dependency gating
+
+Goal:
+Add anodize tracking for machined parts that leave the facility for anodizing and then return before moving to stock, assembly, or downstream work.
+
+Primary outcome:
+A routing operation can be marked as an anodize operation, an anodize job/tracking record can be created, and downstream use of the part can be blocked until anodize is completed and verified.
+
+Requirements:
+
+1. Schema
+Add only what is needed for anodize tracking.
+
+A. Extend routing_operations if needed
+Support anodize-specific routing fields such as:
+- isOutsideProcess
+- outsideProcessType or anodizeProcessType
+- vendorId or vendorRef
+- expectedLeadDays
+- certificateRequired
+- receivingInspectionRequired
+
+Only add fields if they do not already exist.
+
+B. Add anodize_jobs table
+Fields:
+- id
+- routingOperationId (FK to routing_operations.id, required)
+- travelerId (nullable if traveler-linked execution is used)
+- travelerStepId (nullable if step-linked execution is better)
+- partRoutingId (nullable if useful)
+- partNumber
+- partName
+- quantity
+- vendorId or vendorRef
+- anodizeType / finishSpec / color (nullable text)
+- status enum/text:
+  PENDING, READY_TO_SEND, SENT, RECEIVED, VERIFIED, HOLD, CANCELLED
+- sentAt
+- sentBy
+- vendorPoNumber (nullable)
+- expectedReturnDate
+- receivedAt
+- receivedBy
+- certReceived (boolean default false)
+- inspectionPassed (boolean default false)
+- notes
+- createdAt
+- updatedAt
+
+Add indexes for:
+- status
+- travelerId
+- routingOperationId
+- partNumber
+- vendorId/vendorRef
+
+2. Migration
+Create idempotent SQL migration(s).
+Register in startup migration runner if safeFiles is used.
+Do not disturb previous migrations.
+
+3. Types and validation
+Add inferred TS types and insert/update schemas:
+- AnodizeJob
+- InsertAnodizeJob
+- UpdateAnodizeJob
+
+4. Storage layer
+Add storage methods:
+- getAnodizeJobs(filters?)
+- getAnodizeJob(id)
+- createAnodizeJob(data)
+- updateAnodizeJob(id, data)
+- getTravelerAnodizeJobs(travelerId)
+- getRoutingOperationAnodizeJobs(routingOperationId)
+- createAnodizeJobFromRoutingOperation(...)
+- markAnodizeJobSent(...)
+- markAnodizeJobReceived(...)
+- verifyAnodizeJob(...)
+- evaluateAnodizeBlockingForTravelerStep(...) or equivalent
+
+5. API routes
+Add endpoints:
+- GET /api/anodize-jobs
+- GET /api/anodize-jobs/:id
+- POST /api/anodize-jobs
+- PUT /api/anodize-jobs/:id
+- POST /api/anodize-jobs/:id/send
+- POST /api/anodize-jobs/:id/receive
+- POST /api/anodize-jobs/:id/verify
+- GET /api/travelers/:id/anodize-jobs
+- GET /api/routing-operations/:id/anodize-jobs
+
+6. Traveler integration
+Add non-breaking gating logic:
+- if a routing operation is marked as anodize, the traveler should recognize it
+- downstream work should be blocked until anodize conditions are met when required
+- minimum conditions:
+  - job status RECEIVED or VERIFIED
+  - certReceived if certificateRequired is true
+  - inspectionPassed if receivingInspectionRequired is true
+- do not block traveler creation
+- prefer blocking step/task progression
+
+7. UI
+Add minimal UI:
+- anodize jobs list
+- filter by status/vendor/part
+- send / receive / verify actions
+- linked traveler/routing operation display
+- traveler or routing viewer should show anodize status and blocking state
+
+Keep UI minimal and aligned with current app style.
+
+8. Vendor linkage
+If a clean vendor table already exists, reuse it.
+If not, use vendorRef text or nullable vendorId consistent with current project patterns.
+Do not refactor purchasing.
+
+9. Backward compatibility
+Critical:
+- do not affect routings that do not use anodize
+- do not break legacy travelers
+- do not require anodize tracking unless the routing operation explicitly uses it
+
+10. Verification
+Run or simulate checks to confirm:
+- schema compiles
+- migration applies
+- anodize endpoints work
+- job lifecycle works: create → send → receive → verify
+- traveler is blocked until anodize is complete when required
+- legacy behavior remains unchanged
+
+11. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — schema added/extended
+SECTION C — migration added
+SECTION D — storage methods added
+SECTION E — API endpoints added
+SECTION F — traveler blocking logic
+SECTION G — UI changes
+SECTION H — vendor linkage notes
+SECTION I — backward compatibility confirmation
+SECTION J — recommended next phase
+
+Implementation notes:
+- Keep this anodize-specific and practical
+- Reuse current routing/traveler patterns
+- Respect uuid vs integer types carefully
+- Do not refactor unrelated systems

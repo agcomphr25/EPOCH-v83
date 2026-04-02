@@ -1,0 +1,139 @@
+Implement the next phase of the Routing Hub in EPOCH: parent-child scan association for assemblies and subassemblies.
+
+Context:
+The app already supports:
+- routingType on part_routings
+- routing operations
+- traveler generation from routing operations with legacy fallback
+- OSP/anodize gating
+- dependency-based traveler blocking using routing_dependencies
+- dependency flags including mustBeCompleted, mustBeIssued, and mustBeScannedToParent
+- traveler dependency endpoints and dependency status UI
+
+Do not break any existing routing, traveler, OSP, dependency, inventory, or P2 behavior.
+
+Goal:
+Add a real parent-child association model so assembly/subassembly dependencies with mustBeScannedToParent can be enforced using actual scan/association records instead of placeholder logic.
+
+Requirements:
+
+1. Schema
+Add a new table for parent-child traveler/component association.
+
+Suggested table:
+traveler_component_associations
+- id
+- parentTravelerId (FK to travelers.id, required)
+- parentTravelerStepId (nullable FK to traveler_steps.id if association is step-specific)
+- childTravelerId (nullable FK to travelers.id)
+- childInventoryItemId (nullable FK to inventory_items.id)
+- childPartNumber (nullable text, denormalized/fallback)
+- childSerialNumber (nullable text)
+- childLotNumber (nullable text)
+- childInternalControlNumber (nullable text)
+- associationType (enum or constrained text):
+  TRAVELER, INVENTORY_ITEM, SERIALIZED_COMPONENT, LOT_COMPONENT
+- quantity (numeric or integer default 1)
+- scannedAt
+- scannedBy if user pattern exists
+- notes
+- createdAt
+
+Add indexes for:
+- parentTravelerId
+- parentTravelerStepId
+- childTravelerId
+- childInventoryItemId
+- childPartNumber
+- childSerialNumber
+- childInternalControlNumber
+
+2. Migration
+Create an idempotent SQL migration.
+Register it in the startup migration runner if required by the project’s safeFiles migration list.
+Do not disturb existing migrations.
+
+3. Storage
+Add storage methods:
+- getTravelerComponentAssociations(parentTravelerId, stepId?)
+- createTravelerComponentAssociation(data)
+- deleteTravelerComponentAssociation(id)
+- replaceTravelerComponentAssociations(parentTravelerId, stepId, associations)
+
+Add evaluation helpers:
+- evaluateDependencyScanAssociation(travelerId, stepId)
+- update dependency evaluation logic so mustBeScannedToParent is only satisfied when matching association records exist
+
+The matching logic should support:
+- dependency tied to child traveler
+- dependency tied to required inventory item
+- fallback by required part number when necessary
+- future-friendly matching for serial / ICN / lot where available
+
+4. Dependency evaluation update
+Extend the existing dependency blocking logic:
+- if mustBeScannedToParent is false, preserve current behavior
+- if mustBeScannedToParent is true, dependency remains blocked until a matching traveler_component_associations record exists
+- preserve existing mustBeCompleted and mustBeIssued behavior
+- do not break OSP blocking
+- return clear structured blocking reasons
+
+5. API routes
+Add endpoints:
+- GET /api/travelers/:travelerId/component-associations
+- GET /api/travelers/:travelerId/steps/:stepId/component-associations
+- POST /api/travelers/:travelerId/component-associations
+- DELETE /api/traveler-component-associations/:associationId
+
+Optional if clean:
+- PUT /api/travelers/:travelerId/steps/:stepId/component-associations/replace
+
+Traveler evaluation endpoints should continue to work and now reflect scan association logic accurately.
+
+6. UI
+Add minimal UI in TravelerExecution:
+- show associated child parts/components for the active traveler or active step
+- allow adding an association manually for now
+- show whether dependency scan association is satisfied
+- keep UI minimal and aligned with current design
+
+If there is already a barcode scan task pattern that can be reused safely, integrate with it incrementally. If not, build the association model first and leave barcode-device integration for a later phase.
+
+7. Backward compatibility
+Critical:
+- do not break existing traveler execution
+- do not change dependency behavior for dependencies that do not require scan-to-parent
+- if no association records exist and mustBeScannedToParent is false, behavior stays unchanged
+- preserve current OSP and dependency blocking logic
+
+8. Verification
+Run or simulate checks to confirm:
+- TypeScript passes for changed files
+- migration applies cleanly
+- associations can be created and deleted
+- dependency blocking works correctly for:
+  a. no dependencies
+  b. dependency requires scan-to-parent and no association exists
+  c. association exists but completion not satisfied when mustBeCompleted is also true
+  d. association exists and dependency is fully satisfied
+  e. mixed dependencies
+- OSP blocking still works after this change
+
+9. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — schema added
+SECTION C — migration added
+SECTION D — storage methods added
+SECTION E — API endpoints added
+SECTION F — dependency evaluation changes
+SECTION G — UI changes
+SECTION H — backward compatibility confirmation
+SECTION I — recommended next phase
+
+Implementation notes:
+- be incremental
+- do not refactor unrelated systems
+- reuse existing traveler/inventory/dependency relationships
+- prioritize a durable data model first, barcode automation second
+- keep future support open for serial, lot, and internal control number traceability

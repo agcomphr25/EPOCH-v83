@@ -1,0 +1,162 @@
+Implement the next phase of the Routing Hub in EPOCH: routing templates by type.
+
+Context:
+The app now supports:
+- routingType on part_routings
+- routing operations tables
+- storage methods for routing operations
+- API endpoints for routing operations
+- traveler generation that uses routing operations when present and falls back to legacy behavior otherwise
+- UI support for managing routing operations
+
+Do not break any existing routing, traveler, or P2 Control Center behavior.
+
+Goal:
+Add reusable routing templates so users can create standardized routings by manufacturing type instead of building every routing manually.
+
+Requirements:
+
+1. Database schema
+Add a new table for routing templates, following project schema conventions.
+
+Suggested fields:
+- id (uuid or serial, consistent with project patterns)
+- templateName (required)
+- routingType (same enum as part_routings.routingType, required)
+- description (nullable)
+- isActive (boolean default true)
+- departmentSequence (jsonb default '[]')
+- departmentConfig (jsonb default '{}')
+- createdAt
+- updatedAt
+
+Add a second table for template operations:
+
+routing_template_operations
+- id
+- routingTemplateId (FK to routing_templates)
+- stepNumber
+- departmentName
+- operationName
+- operationType
+- workCenter
+- estimatedMinutes
+- requiresSignature
+- requiresCertification
+- isOutsideProcess
+- vendorId
+- instructionPack
+- createdAt
+
+If a CNC extension table pattern already exists for routing operations, add a matching template CNC table only if it can be done cleanly without overcomplicating this phase.
+
+Add sensible indexes.
+
+2. Migration
+Create idempotent SQL migration(s) for the new template tables.
+Register them in the startup migration runner if required by the project’s safeFiles migration list.
+Do not disturb existing migrations.
+
+3. Types and schemas
+Add inferred TS types and insert/update schemas following existing project patterns:
+- RoutingTemplate
+- InsertRoutingTemplate
+- UpdateRoutingTemplate
+- RoutingTemplateOperation
+- InsertRoutingTemplateOperation
+- UpdateRoutingTemplateOperation
+
+4. Storage layer
+Add storage methods:
+- getRoutingTemplates(filters?)
+- getRoutingTemplate(id)
+- createRoutingTemplate(data)
+- updateRoutingTemplate(id, data)
+- deleteRoutingTemplate(id) or deactivate if soft-delete pattern exists
+- getRoutingTemplateOperations(templateId)
+- replaceRoutingTemplateOperations(templateId, operations)
+
+Most important:
+- createPartRoutingFromTemplate(templateId, partRoutingBaseData)
+
+This method should:
+- create a new part_routing using template defaults
+- copy departmentSequence and departmentConfig
+- copy template operations into routing_operations
+- preserve routingType from template
+- allow overriding part-specific fields like inventoryItemId, partNumber, partName, routingName, routingRevision
+
+5. API routes
+Add endpoints consistent with current route style:
+- GET /api/routing-templates
+- GET /api/routing-templates/:id
+- POST /api/routing-templates
+- PUT /api/routing-templates/:id
+- DELETE /api/routing-templates/:id
+- GET /api/routing-templates/:id/operations
+- PUT /api/routing-templates/:id/operations/replace
+- POST /api/routing-templates/:id/create-routing
+
+Use existing validation conventions.
+
+6. Frontend
+Add a simple Routing Templates page or panel, minimal UI only.
+
+Requirements:
+- list templates
+- filter by routingType
+- create/edit template
+- manage template operations
+- button to “Create Routing From Template”
+
+In the existing part routing creation flow:
+- add an option to start from a template
+- when selected, create the routing from template and then allow normal editing
+
+Keep UI minimal and aligned with current design system.
+Do not redesign the routing module.
+
+7. Seed starter templates
+Add a small starter set if the project has any seed pattern or safe default initialization pattern.
+
+At minimum create conceptual support for these template families:
+- CNC basic part
+- Composite layup part
+- Assembly / subassembly basic build
+
+Do not hardcode too much if this repo does not use seed data patterns cleanly.
+
+8. Backward compatibility
+Critical:
+- do not remove or alter legacy routing behavior
+- do not break traveler generation
+- do not force all routings to use templates
+- templates are optional accelerators only
+
+9. Verification
+Run or simulate checks to confirm:
+- TypeScript passes for changed files
+- migrations apply cleanly
+- templates can be created
+- a routing can be created from a template
+- copied operations appear under the new routing
+- traveler generation still works for legacy routings and template-based routings
+
+10. Output
+After implementation provide:
+SECTION A — files changed
+SECTION B — schema added
+SECTION C — migrations added
+SECTION D — storage methods added
+SECTION E — API endpoints added
+SECTION F — UI changes
+SECTION G — how template-to-routing creation works
+SECTION H — backward compatibility confirmation
+SECTION I — recommended next phase
+
+Implementation notes:
+- Be incremental
+- Reuse the existing routingType and routing_operations patterns
+- Keep template operations structurally aligned with routing operations
+- Avoid refactoring unrelated systems
+- Respect uuid vs integer types according to existing schema conventions

@@ -301,6 +301,14 @@ async function initializeBackgroundServices() {
           '0013_add_composite_manufactured_category.sql',
           '0014_receiving_control_center.sql',
           '0015_receiving_fk_constraints.sql',
+          '0016_routing_type_enum.sql',
+          '0017_routing_operations_tables.sql',
+          '0018_routing_templates.sql',
+          '0019_routing_dependencies.sql',
+          '0020_anodize_jobs.sql',
+          '0021_anodize_cert_inspection.sql',
+          '0022_routing_dependency_enhancements.sql',
+          '0023_traveler_component_associations.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {

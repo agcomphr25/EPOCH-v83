@@ -659,6 +659,205 @@ router.delete('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// INVENTORY ITEM ROUTING ENDPOINTS
+// Allows manufactured items to access and create routings at the item-master
+// level, without requiring PO context.
+// ============================================================================
+
+// GET /api/inventory/items/:id/routing — get active routing for a manufactured item
+// Returns { routing: null } with 200 when no routing is linked (avoids client-side error on expected not-found)
+router.get('/items/:id/routing', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) return res.status(400).json({ error: 'Invalid item ID' });
+    const routing = await storage.getPartRoutingByInventoryItem(itemId.toString());
+    res.json(routing ?? null);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get routing for inventory item', message: error.message });
+  }
+});
+
+// POST /api/inventory/items/:id/routing — create a routing linked to a manufactured item
+router.post('/items/:id/routing', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) return res.status(400).json({ error: 'Invalid item ID' });
+
+    const item = await storage.getInventoryItem(itemId);
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+
+    // Prevent creating routing for non-manufactured items
+    if (item.itemType !== 'MANUFACTURED') {
+      return res.status(422).json({ error: 'Routings can only be created for manufactured items' });
+    }
+
+    // Check for existing routing
+    const existing = await storage.getPartRoutingByInventoryItem(itemId.toString());
+    if (existing) {
+      return res.status(409).json({ error: 'A routing already exists for this item', existing });
+    }
+
+    const {
+      routingName,
+      departmentSequence,
+      traceabilityConfig,
+      createdBy,
+      routingType,
+      routingRevision,
+      departmentConfig,
+      materialsConfig,
+      qcStandards,
+      customFields,
+    } = req.body;
+
+    // Infer a sensible routingType from manufacturedCategory when not explicitly provided.
+    // Valid enum values: COMPOSITE, CNC, CORE, KIT, SUB_ASSEMBLY, ASSEMBLY, OUTSIDE_PROCESS, INSPECTION
+    const inferredRoutingType = (() => {
+      if (routingType) return routingType;
+      const cat = (item as any).manufacturedCategory;
+      if (cat === 'ASSEMBLY') return 'ASSEMBLY';
+      if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
+      if (cat === 'MACHINED_PART') return 'CNC';
+      if (cat === 'KIT') return 'KIT';
+      if (cat === 'CORE') return 'CORE';
+      return 'COMPOSITE'; // PACKET, unknown
+    })();
+
+    const routingData = {
+      inventoryItemId: itemId.toString(),
+      partNumber: item.agPartNumber || '',
+      partName: item.name || '',
+      routingName: routingName || `${item.agPartNumber || item.name} Routing`,
+      routingRevision: routingRevision ?? 1,
+      departmentSequence: departmentSequence ?? ['Manufacturing'],
+      traceabilityConfig: traceabilityConfig ?? {},
+      createdBy: createdBy || 'system',
+      routingType: inferredRoutingType,
+      ...(departmentConfig !== undefined && { departmentConfig }),
+      ...(materialsConfig !== undefined && { materialsConfig }),
+      ...(qcStandards !== undefined && { qcStandards }),
+      ...(customFields !== undefined && { customFields }),
+    };
+
+    const routing = await storage.createPartRouting(routingData as any);
+    res.status(201).json(routing);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to create routing for inventory item', message: error.message });
+  }
+});
+
+// PUT /api/inventory/items/:id/routing-link — link an existing routing to an inventory item
+router.put('/items/:id/routing-link', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) return res.status(400).json({ error: 'Invalid item ID' });
+
+    const { routingId } = req.body;
+    if (!routingId) return res.status(400).json({ error: 'routingId is required' });
+
+    const item = await storage.getInventoryItem(itemId);
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+
+    if (item.itemType !== 'MANUFACTURED') {
+      return res.status(422).json({ error: 'Routing link can only be set for manufactured items' });
+    }
+
+    const routing = await storage.updatePartRouting(routingId, {
+      inventoryItemId: itemId.toString(),
+      partNumber: item.agPartNumber || undefined,
+      partName: item.name || undefined,
+    } as any);
+    res.json(routing);
+  } catch (error: any) {
+    if (error.message?.includes('not found')) return res.status(404).json({ error: 'Routing not found' });
+    res.status(500).json({ error: 'Failed to link routing to inventory item', message: error.message });
+  }
+});
+
+// GET /api/inventory/items/:id/routing-templates — list active routing templates (for template-based creation)
+router.get('/items/:id/routing-templates', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) return res.status(400).json({ error: 'Invalid item ID' });
+    const { routingType } = req.query;
+    const templates = await storage.getRoutingTemplates({
+      isActive: true,
+      ...(routingType ? { routingType: routingType as string } : {}),
+    });
+    res.json(templates);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get routing templates', message: error.message });
+  }
+});
+
+// POST /api/inventory/items/:id/routing-from-template — create a routing from a template for this item
+router.post('/items/:id/routing-from-template', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) return res.status(400).json({ error: 'Invalid item ID' });
+
+    const { templateId, routingName, routingRevision, createdBy } = req.body;
+    if (!templateId) return res.status(400).json({ error: 'templateId is required' });
+
+    const item = await storage.getInventoryItem(itemId);
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+
+    if (item.itemType !== 'MANUFACTURED') {
+      return res.status(422).json({ error: 'Template-based routing can only be created for manufactured items' });
+    }
+
+    // Prevent duplicate routing
+    const existing = await storage.getPartRoutingByInventoryItem(itemId.toString());
+    if (existing) {
+      return res.status(409).json({ error: 'A routing already exists for this item', existing });
+    }
+
+    const result = await storage.createPartRoutingFromTemplate(templateId, {
+      inventoryItemId: itemId.toString(),
+      partNumber: item.agPartNumber || '',
+      partName: item.name || '',
+      routingName: routingName || undefined,
+      routingRevision: routingRevision ?? 1,
+      createdBy: createdBy || 'system',
+    });
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    if (error.message?.includes('not found')) return res.status(404).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to create routing from template', message: error.message });
+  }
+});
+
+// GET /api/inventory/items/:id/available-routings — list all routings eligible for linking
+// Returns routings that are either unlinked or linked to a different item.
+router.get('/items/:id/available-routings', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) return res.status(400).json({ error: 'Invalid item ID' });
+
+    const allRoutings = await storage.getPartRoutings();
+
+    // Return all routings except the one already linked to this item, with key fields for display
+    const eligible = allRoutings
+      .filter((r) => r.inventoryItemId !== itemId.toString())
+      .map((r) => ({
+        id: r.id,
+        routingName: r.routingName,
+        partNumber: r.partNumber,
+        partName: r.partName,
+        routingType: r.routingType,
+        routingRevision: r.routingRevision,
+        isActive: r.isActive,
+        inventoryItemId: r.inventoryItemId,
+      }));
+
+    res.json(eligible);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get available routings', message: error.message });
+  }
+});
+
 // GET /api/inventory/items/:agPartNumber/cost-history - Get cost history for an inventory item
 router.get('/items/:agPartNumber/cost-history', async (req: Request, res: Response) => {
   try {

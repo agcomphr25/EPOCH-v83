@@ -1,0 +1,95 @@
+Implement the next integration phase for the new routing tables already added to EPOCH.
+
+Context:
+The schema and migration for the new routing tables are already complete and applied successfully.
+partRoutings.id is uuid.
+The new tables now exist in Postgres.
+Do not break existing P2 Control Center, traveler generation, or legacy routings.
+
+Goal:
+Wire the new routing operations layer into storage, API, traveler generation, and the existing routing UI.
+
+Requirements:
+
+1. Storage layer
+Add storage methods for the new routing operations tables:
+- getRoutingOperations(partRoutingId)
+- createRoutingOperation(data)
+- updateRoutingOperation(id, data)
+- deleteRoutingOperation(id)
+- replaceRoutingOperations(partRoutingId, operations)
+
+If a CNC extension table was also added, include:
+- getRoutingCncOperation(routingOperationId)
+- upsertRoutingCncOperation(data)
+- deleteRoutingCncOperation(routingOperationId)
+
+Follow existing storage conventions and return shapes already used in the project.
+
+2. API routes
+Add endpoints consistent with the existing route style:
+- GET /api/part-routings/:id/operations
+- POST /api/part-routings/:id/operations
+- PUT /api/part-routings/:id/operations/:operationId
+- DELETE /api/part-routings/:id/operations/:operationId
+- PUT /api/part-routings/:id/operations/replace
+
+If CNC extension exists, add:
+- GET /api/routing-operations/:operationId/cnc
+- PUT /api/routing-operations/:operationId/cnc
+- DELETE /api/routing-operations/:operationId/cnc
+
+Use the project’s existing zod / drizzle validation patterns.
+Do not break current part routing endpoints.
+
+3. Traveler generation
+Update traveler generation carefully:
+- If routing operations exist for the part routing, generate traveler tasks from routing operations
+- If no routing operations exist, preserve current legacy behavior exactly
+- Keep departmentSequence-based traveler step generation unless the code already has a stronger structured step source
+- Group operations under their departmentName and stepNumber
+- operationName should become the traveler task title/name
+- preserve requiresSignature, requiresCertification, and instructionPack
+- map operationType into the closest current taskType/taskPhase model already used by the traveler system
+- do not break TravelerExecution or TravelerManagement pages
+
+4. Routing UI
+Update the existing routing management flow to support operations:
+- load operations for a routing
+- show a simple operations list grouped by department and stepNumber
+- allow add/edit/delete
+- minimal UI only, no large redesign
+- if routingType is CNC, show CNC-specific fields only when appropriate
+- keep old departmentConfig UI intact for backward compatibility
+
+5. Backward compatibility
+Critical:
+- Do not remove departmentConfig
+- Do not remove departmentSequence
+- Do not change old routing behavior if operations do not exist
+- Legacy routings must still generate travelers exactly as before
+
+6. Verification
+Run or simulate checks to confirm:
+- TypeScript passes for changed files
+- API endpoints compile and mount correctly
+- migration-backed schema works
+- legacy routing still generates travelers the old way
+- a routing with operations generates traveler tasks from operations
+
+7. Output format
+After implementation provide:
+SECTION A — files changed
+SECTION B — storage methods added
+SECTION C — API endpoints added
+SECTION D — traveler generation changes
+SECTION E — UI changes
+SECTION F — backward compatibility confirmation
+SECTION G — recommended next phase
+
+Implementation notes:
+- Be incremental
+- Do not refactor unrelated systems
+- Respect current uuid vs integer types exactly
+- Reuse existing traveler task creation patterns rather than inventing a parallel task model
+- Preserve existing execution pages

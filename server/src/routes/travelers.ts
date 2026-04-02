@@ -1894,4 +1894,202 @@ router.delete('/:travelerId/authorized-notes/:noteId', async (req: Request, res:
   }
 });
 
+// GET /api/travelers/:id/assembly-readiness
+router.get('/:id/assembly-readiness', async (req, res) => {
+  try {
+    const result = await storage.getAssemblyReadinessForTraveler(req.params.id);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate assembly readiness', message: error.message });
+  }
+});
+
+// GET /api/travelers/:id/anodize-jobs
+router.get('/:id/anodize-jobs', async (req, res) => {
+  try {
+    const jobs = await storage.getTravelerAnodizeJobs(req.params.id);
+    res.json(jobs);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get traveler anodize jobs', message: error.message });
+  }
+});
+
+// GET /api/travelers/:id/anodize-blocking/:stepId  (legacy path)
+router.get('/:id/anodize-blocking/:stepId', async (req, res) => {
+  try {
+    const result = await storage.evaluateAnodizeBlockingForTravelerStep(req.params.id, req.params.stepId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate anodize blocking', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/steps/:stepId/anodize-blocking  (canonical path per spec)
+router.get('/:travelerId/steps/:stepId/anodize-blocking', async (req, res) => {
+  try {
+    const result = await storage.evaluateAnodizeBlockingForTravelerStep(req.params.travelerId, req.params.stepId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate anodize blocking', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/dependencies
+// Returns the routing dependency definitions for the traveler's routing
+router.get('/:travelerId/dependencies', async (req, res) => {
+  try {
+    const deps = await storage.getTravelerDependencyRequirements(req.params.travelerId);
+    res.json(deps);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get traveler dependencies', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/dependency-status
+// Full AssemblyReadinessResult for the traveler (all scopes)
+router.get('/:travelerId/dependency-status', async (req, res) => {
+  try {
+    const result = await storage.getTravelerDependencyStatus(req.params.travelerId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get traveler dependency status', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/steps/:stepId/dependency-blocking
+// Step-scoped dependency blocking evaluation (STEP_START + TASK_COMPLETE scopes)
+router.get('/:travelerId/steps/:stepId/dependency-blocking', async (req, res) => {
+  try {
+    const result = await storage.evaluateAssemblyDependencyStatus(req.params.travelerId, req.params.stepId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate dependency blocking', message: error.message });
+  }
+});
+
+// ============================================================================
+// TRAVELER COMPONENT ASSOCIATIONS (scan-to-parent)
+// ============================================================================
+
+// GET /api/travelers/:travelerId/component-associations
+router.get('/:travelerId/component-associations', async (req, res) => {
+  try {
+    const rows = await storage.getTravelerComponentAssociations(req.params.travelerId);
+    res.json(rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get component associations', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/steps/:stepId/component-associations
+router.get('/:travelerId/steps/:stepId/component-associations', async (req, res) => {
+  try {
+    const rows = await storage.getTravelerComponentAssociations(req.params.travelerId, req.params.stepId);
+    res.json(rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get step component associations', message: error.message });
+  }
+});
+
+// POST /api/travelers/:travelerId/component-associations
+router.post('/:travelerId/component-associations', async (req, res) => {
+  try {
+    const payload = { ...req.body, parentTravelerId: req.params.travelerId };
+    const row = await storage.createTravelerComponentAssociation(payload);
+    res.status(201).json(row);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to create component association', message: error.message });
+  }
+});
+
+// PUT /api/travelers/:travelerId/steps/:stepId/component-associations/replace
+router.put('/:travelerId/steps/:stepId/component-associations/replace', async (req, res) => {
+  try {
+    const rows = await storage.replaceTravelerComponentAssociations(
+      req.params.travelerId,
+      req.params.stepId,
+      (req.body as any[]).map((a) => ({ ...a, parentTravelerId: req.params.travelerId }))
+    );
+    res.json(rows);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to replace component associations', message: error.message });
+  }
+});
+
+// POST /api/travelers/:travelerId/component-associations/scan
+router.post('/:travelerId/component-associations/scan', async (req, res) => {
+  try {
+    const { travelerId } = req.params;
+    const { scanValue, notes, quantity, scannedBy } = req.body as {
+      scanValue?: string; notes?: string; quantity?: number; scannedBy?: string;
+    };
+    if (!scanValue?.trim()) {
+      return res.status(400).json({ error: 'scanValue is required' });
+    }
+    const result = await storage.createTravelerComponentAssociationFromScan(
+      travelerId, undefined, scanValue.trim(), { notes, quantity, scannedBy }
+    );
+    const status = result.associationCreated ? 201 : result.candidateFound ? 422 : 404;
+    return res.status(status).json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Scan processing failed', message: error.message });
+  }
+});
+
+// POST /api/travelers/:travelerId/steps/:stepId/component-associations/scan
+router.post('/:travelerId/steps/:stepId/component-associations/scan', async (req, res) => {
+  try {
+    const { travelerId, stepId } = req.params;
+    const { scanValue, notes, quantity, scannedBy } = req.body as {
+      scanValue?: string; notes?: string; quantity?: number; scannedBy?: string;
+    };
+    if (!scanValue?.trim()) {
+      return res.status(400).json({ error: 'scanValue is required' });
+    }
+    const result = await storage.createTravelerComponentAssociationFromScan(
+      travelerId, stepId, scanValue.trim(), { notes, quantity, scannedBy }
+    );
+    const status = result.associationCreated ? 201 : result.candidateFound ? 422 : 404;
+    return res.status(status).json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Scan processing failed', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/scan-association-status
+// Returns dependency-level scan association status (which deps still need scan)
+router.get('/:travelerId/scan-association-status', async (req, res) => {
+  try {
+    const result = await storage.evaluateDependencyScanAssociation(req.params.travelerId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate scan association status', message: error.message });
+  }
+});
+
+// GET /api/travelers/:travelerId/steps/:stepId/scan-association-status
+router.get('/:travelerId/steps/:stepId/scan-association-status', async (req, res) => {
+  try {
+    const result = await storage.evaluateDependencyScanAssociation(req.params.travelerId, req.params.stepId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to evaluate step scan association status', message: error.message });
+  }
+});
+
 export default router;
+
+// DELETE /api/traveler-component-associations/:associationId
+// Exported as a standalone path from the root travelers router
+import express from 'express';
+export const travelerComponentAssociationsRouter = express.Router();
+travelerComponentAssociationsRouter.delete('/:associationId', async (req, res) => {
+  try {
+    const id = parseInt(req.params.associationId, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid association ID' });
+    await storage.deleteTravelerComponentAssociation(id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to delete component association', message: error.message });
+  }
+});

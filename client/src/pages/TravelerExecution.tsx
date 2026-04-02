@@ -69,6 +69,8 @@ import {
   RotateCcw,
   CheckCircle2,
   Search,
+  GitBranch,
+  Plus,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -403,6 +405,104 @@ export default function TravelerExecution() {
   const { data: partRoutings = [] } = useQuery<PartRoutingData[]>({
     queryKey: ['/api/part-routings'],
     enabled: !!traveler?.partNumber || !!traveler?.partRoutingId,
+  });
+
+  const { data: depStatus, refetch: refetchDepStatus } = useQuery<{
+    ready: boolean;
+    totalDependencies: number;
+    satisfiedCount: number;
+    blockingCount: number;
+    completionPct: number;
+    blockingItems: { dependencyId: number; dependencyType: string; requiredPartNumber: string | null; reason: string }[];
+    satisfiedItems: { dependencyId: number; dependencyType: string; requiredPartNumber: string | null; reason: string }[];
+    warnings: string[];
+  }>({
+    queryKey: ['/api/travelers', travelerId, 'dependency-status'],
+    enabled: !!travelerId && !!traveler?.partRoutingId,
+    refetchInterval: 30000,
+  });
+
+  interface ComponentAssociation {
+    id: number;
+    parentTravelerId: string;
+    parentTravelerStepId: number | null;
+    childTravelerId: string | null;
+    childInventoryItemId: number | null;
+    childPartNumber: string | null;
+    childSerialNumber: string | null;
+    childLotNumber: string | null;
+    childInternalControlNumber: string | null;
+    associationType: string;
+    quantity: number;
+    scannedAt: string;
+    scannedBy: string | null;
+    notes: string | null;
+  }
+
+  const { data: componentAssociations = [], refetch: refetchAssociations } = useQuery<ComponentAssociation[]>({
+    queryKey: ['/api/travelers', travelerId, 'component-associations'],
+    enabled: !!travelerId && !!traveler?.partRoutingId,
+  });
+
+  const [newAssoc, setNewAssoc] = useState({
+    childPartNumber: '',
+    childTravelerId: '',
+    childSerialNumber: '',
+    associationType: 'TRAVELER' as string,
+    quantity: 1,
+    scannedBy: '',
+    notes: '',
+  });
+  const [showAssocForm, setShowAssocForm] = useState(false);
+
+  const createAssocMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiRequest(`/api/travelers/${travelerId}/component-associations`, { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'component-associations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'dependency-status'] });
+      setNewAssoc({ childPartNumber: '', childTravelerId: '', childSerialNumber: '', associationType: 'TRAVELER', quantity: 1, scannedBy: '', notes: '' });
+      setShowAssocForm(false);
+    },
+  });
+
+  const deleteAssocMutation = useMutation({
+    mutationFn: (assocId: number) =>
+      apiRequest(`/api/traveler-component-associations/${assocId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'component-associations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'dependency-status'] });
+    },
+  });
+
+  const [scanValue, setScanValue] = useState('');
+  interface ScanResult {
+    candidateFound: boolean;
+    matchedDependency: boolean;
+    associationCreated: boolean;
+    rejectionReason?: string;
+    duplicate?: boolean;
+    candidate?: { matchFound: boolean; displayLabel: string; childPartNumber?: string; matchType: string | null };
+  }
+  const [lastScanResult, setLastScanResult] = useState<ScanResult | null>(null);
+
+  const scanMutation = useMutation({
+    mutationFn: (value: string) =>
+      apiRequest(`/api/travelers/${travelerId}/component-associations/scan`, {
+        method: 'POST',
+        body: JSON.stringify({ scanValue: value }),
+      }),
+    onSuccess: (data: ScanResult) => {
+      setLastScanResult(data);
+      setScanValue('');
+      if (data.associationCreated) {
+        queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'component-associations'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'dependency-status'] });
+      }
+    },
+    onError: () => {
+      setLastScanResult({ candidateFound: false, matchedDependency: false, associationCreated: false, rejectionReason: 'Scan request failed' });
+    },
   });
 
   const currentPartRouting = partRoutings.find(
@@ -909,6 +1009,222 @@ export default function TravelerExecution() {
               </div>
             </CardContent>
           </Card>
+
+          {depStatus && depStatus.totalDependencies > 0 && (
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <GitBranch className="h-4 w-4" />
+                  Assembly Dependencies
+                  {depStatus.ready ? (
+                    <Badge className="ml-auto bg-green-100 text-green-800 text-xs">Ready</Badge>
+                  ) : (
+                    <Badge className="ml-auto bg-red-100 text-red-800 text-xs">Blocked</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs">
+                <p className="text-muted-foreground">
+                  {depStatus.satisfiedCount}/{depStatus.totalDependencies} satisfied ({depStatus.completionPct}%)
+                </p>
+                {depStatus.blockingItems.map((item) => (
+                  <div key={item.dependencyId} className="bg-red-50 text-red-700 rounded px-2 py-1">
+                    <span className="font-medium">[{item.dependencyType.replace(/_/g, ' ')}]</span>{' '}
+                    {item.requiredPartNumber && <span className="font-mono">{item.requiredPartNumber} — </span>}
+                    {item.reason}
+                  </div>
+                ))}
+                {depStatus.satisfiedItems.map((item) => (
+                  <div key={item.dependencyId} className="bg-green-50 text-green-700 rounded px-2 py-1">
+                    <span className="font-medium">[{item.dependencyType.replace(/_/g, ' ')}]</span>{' '}
+                    {item.requiredPartNumber && <span className="font-mono">{item.requiredPartNumber} — </span>}
+                    {item.reason}
+                  </div>
+                ))}
+                {depStatus.warnings.map((w, i) => (
+                  <div key={i} className="bg-amber-50 text-amber-700 rounded px-2 py-1 flex items-start gap-1">
+                    <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                    {w}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {traveler?.partRoutingId && (
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ScanBarcode className="h-4 w-4" />
+                  Component Associations
+                  <Badge variant="secondary" className="ml-auto text-xs">{componentAssociations.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs">
+                {/* Scan input */}
+                <div className="flex gap-1">
+                  <Input
+                    className="h-7 text-xs font-mono flex-1"
+                    placeholder="Scan barcode / traveler / S/N…"
+                    value={scanValue}
+                    onChange={(e) => { setScanValue(e.target.value); setLastScanResult(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && scanValue.trim() && !scanMutation.isPending) {
+                        scanMutation.mutate(scanValue.trim());
+                      }
+                    }}
+                    disabled={scanMutation.isPending}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs px-2"
+                    onClick={() => scanValue.trim() && scanMutation.mutate(scanValue.trim())}
+                    disabled={scanMutation.isPending || !scanValue.trim()}
+                  >
+                    {scanMutation.isPending ? '…' : <ScanBarcode className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+
+                {/* Last scan result feedback */}
+                {lastScanResult && (
+                  <div className={`rounded px-2 py-1.5 text-[11px] ${
+                    lastScanResult.associationCreated
+                      ? 'bg-green-50 text-green-800'
+                      : lastScanResult.duplicate
+                        ? 'bg-amber-50 text-amber-800'
+                        : 'bg-red-50 text-red-700'
+                  }`}>
+                    {lastScanResult.associationCreated ? (
+                      <span>
+                        <span className="font-semibold">Scanned: </span>
+                        {lastScanResult.candidate?.displayLabel}
+                        {lastScanResult.matchedDependency && ' — dependency satisfied'}
+                      </span>
+                    ) : lastScanResult.duplicate ? (
+                      <span><span className="font-semibold">Duplicate:</span> already associated</span>
+                    ) : !lastScanResult.candidateFound ? (
+                      <span><span className="font-semibold">Not found:</span> {lastScanResult.rejectionReason ?? 'No match'}</span>
+                    ) : (
+                      <span><span className="font-semibold">Rejected:</span> {lastScanResult.rejectionReason ?? 'Does not satisfy a dependency'}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Association list */}
+                {componentAssociations.length === 0 && !lastScanResult && (
+                  <p className="text-muted-foreground">No components associated yet.</p>
+                )}
+                {componentAssociations.map((assoc) => (
+                  <div key={assoc.id} className="flex items-start justify-between gap-1 bg-muted/40 rounded px-2 py-1.5">
+                    <div className="min-w-0">
+                      <p className="font-medium font-mono truncate">{assoc.childPartNumber || assoc.childTravelerId || '—'}</p>
+                      <p className="text-muted-foreground">{assoc.associationType.replace(/_/g, ' ')} · qty {assoc.quantity}</p>
+                      {assoc.childSerialNumber && <p className="text-muted-foreground">S/N: {assoc.childSerialNumber}</p>}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 w-5 p-0 text-destructive shrink-0"
+                      onClick={() => deleteAssocMutation.mutate(assoc.id)}
+                      disabled={deleteAssocMutation.isPending}
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+
+                {/* Manual add form */}
+                {showAssocForm ? (
+                  <div className="space-y-2 border rounded p-2 bg-background">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Part Number</p>
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="e.g. PN-001"
+                          value={newAssoc.childPartNumber}
+                          onChange={(e) => setNewAssoc(a => ({ ...a, childPartNumber: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Type</p>
+                        <select
+                          className="h-7 text-xs w-full border rounded px-1 bg-background"
+                          value={newAssoc.associationType}
+                          onChange={(e) => setNewAssoc(a => ({ ...a, associationType: e.target.value }))}
+                        >
+                          <option value="TRAVELER">TRAVELER</option>
+                          <option value="INVENTORY_ITEM">INVENTORY ITEM</option>
+                          <option value="SERIALIZED_COMPONENT">SERIALIZED</option>
+                          <option value="LOT_COMPONENT">LOT COMPONENT</option>
+                        </select>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Serial / Traveler ID</p>
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="Optional"
+                          value={newAssoc.childTravelerId}
+                          onChange={(e) => setNewAssoc(a => ({ ...a, childTravelerId: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Qty</p>
+                        <Input
+                          className="h-7 text-xs"
+                          type="number"
+                          min={1}
+                          value={newAssoc.quantity}
+                          onChange={(e) => setNewAssoc(a => ({ ...a, quantity: parseInt(e.target.value) || 1 }))}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Scanned By</p>
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="Operator name / badge"
+                          value={newAssoc.scannedBy}
+                          onChange={(e) => setNewAssoc(a => ({ ...a, scannedBy: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        className="h-6 text-xs flex-1"
+                        disabled={createAssocMutation.isPending || (!newAssoc.childPartNumber && !newAssoc.childTravelerId)}
+                        onClick={() => {
+                          const payload: Record<string, unknown> = {
+                            associationType: newAssoc.associationType,
+                            quantity: newAssoc.quantity,
+                          };
+                          if (newAssoc.childPartNumber) payload.childPartNumber = newAssoc.childPartNumber;
+                          if (newAssoc.childTravelerId) payload.childTravelerId = newAssoc.childTravelerId;
+                          if (newAssoc.childSerialNumber) payload.childSerialNumber = newAssoc.childSerialNumber;
+                          if (newAssoc.scannedBy) payload.scannedBy = newAssoc.scannedBy;
+                          if (newAssoc.notes) payload.notes = newAssoc.notes;
+                          createAssocMutation.mutate(payload);
+                        }}
+                      >
+                        {createAssocMutation.isPending ? 'Saving…' : 'Save'}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowAssocForm(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-6 text-xs"
+                    onClick={() => setShowAssocForm(true)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Manually
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="py-4">

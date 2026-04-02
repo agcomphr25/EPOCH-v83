@@ -1,0 +1,83 @@
+Assess and refactor the routing access model in EPOCH so routings are available from manufactured inventory items, not only PO items.
+
+Context:
+Right now, routing appears to be available only for items in a PO / P2 flow.
+That is too limiting for the Routing Hub because manufactured parts, kits, cores, subassemblies, and assemblies need routings before a PO exists.
+
+Goal:
+Make manufactured inventory items routable at the item-master level, while keeping PO/P2 routing launch behavior intact.
+
+Requirements:
+
+1. Assess current behavior
+Find exactly where routing availability is restricted to PO items or P2 flow.
+Identify:
+- UI locations where routing can currently be accessed/created
+- backend assumptions that require PO context
+- how routing is currently linked to inventory items vs PO items
+- how traveler generation resolves routing today
+
+2. Desired behavior
+Support this rule:
+Any inventory item marked as manufactured can have a routing, even if it is not currently on a PO.
+
+Manufactured categories include:
+- PACKET
+- KIT
+- MACHINED_PART
+- CORE
+- SUB_ASSEMBLY
+- ASSEMBLY
+- COMPOSITE
+
+Purchased items should remain non-routable unless current logic already supports a valid exception.
+
+3. Inventory UI integration
+Update the inventory item management flow so manufactured items can:
+- view assigned routing
+- create a routing
+- open/edit routing
+- see routingType
+- see routing revision/status if available
+
+Keep UI minimal and aligned with the current design.
+
+4. Backend/API support
+Ensure routing creation/editing can be done directly from inventory item context, without requiring PO context.
+
+If needed, add endpoints such as:
+- GET /api/inventory-items/:id/routing
+- POST /api/inventory-items/:id/routing
+- PUT /api/inventory-items/:id/routing-link
+
+Use existing route/style conventions.
+
+5. Preserve execution model
+Do not break current PO/P2 behavior.
+PO/P2 should still:
+- resolve routing from the inventory item
+- launch traveler/manufacturing execution from demand
+- keep PO as the demand source, not the routing owner
+
+6. Verification
+Confirm:
+- manufactured inventory items can access/create routings without PO context
+- purchased items do not incorrectly expose routing actions
+- existing PO routing launch still works
+- traveler generation still resolves routings correctly
+
+7. Output
+After implementation provide:
+SECTION A — current limitation found
+SECTION B — files changed
+SECTION C — UI changes
+SECTION D — backend/API changes
+SECTION E — how routing now works from inventory items
+SECTION F — backward compatibility confirmation
+SECTION G — recommended next phase
+
+Implementation notes:
+- be incremental
+- do not refactor unrelated systems
+- keep P2 execution behavior intact
+- move routing ownership toward the item master, not the PO

@@ -1,0 +1,140 @@
+Implement the next improvement for inventory-owned routing in EPOCH: add template-based routing creation from the inventory item screen.
+
+Context:
+Manufactured inventory items can now access routing directly from the inventory UI through inventory-based routing endpoints and actions.
+Routing is no longer effectively limited to PO/P2 context.
+Do not break any existing routing, inventory, traveler, dependency, OSP, or P2 behavior.
+
+Goal:
+Allow users to create a routing for a manufactured inventory item directly from the inventory item screen using either:
+- blank routing
+- routing template
+- link existing routing
+
+Requirements:
+
+1. Assess current state first
+Before making changes, inspect the current codebase and determine:
+- whether routing templates already exist
+- what template tables/routes/storage methods already exist, if any
+- how routings are currently linked to inventory items
+- whether multiple routings per inventory item are supported
+- which routing is considered the default routing today
+
+If templates do not exist yet, do not invent a fake template system. Instead, implement the inventory UI in a template-ready way and note clearly that template creation is pending.
+
+2. Inventory UI enhancement
+Update the routing section in `InventoryItemsCard.tsx` for MANUFACTURED items to support:
+- View current routing if linked
+- Create blank routing
+- Create from template
+- Link existing routing
+
+Behavior:
+- Only show this routing section for `itemType === 'MANUFACTURED'`
+- Keep current routing display intact if it already exists
+- Add minimal controls aligned with the current UI style
+- Do not redesign the inventory edit dialog
+
+Suggested UI:
+- Current Routing status row/card
+- Buttons:
+  - View Routing
+  - Create Blank Routing
+  - Create From Template
+  - Link Existing Routing
+- If templates do not yet exist, disable or gracefully placeholder the template option with a clear message, but keep the UI structure ready
+
+3. Template integration
+If routing templates already exist:
+- load active templates
+- allow filtering by routingType
+- allow creating a new routing from a selected template for the current inventory item
+- route the user to the resulting routing after creation if that fits current UX patterns
+
+If routing templates do not yet exist:
+- add the frontend hooks/components so the inventory screen is ready for templates later
+- do not break current blank routing creation or link behavior
+- show a clear, minimal message such as “Routing templates are not yet configured”
+
+4. Backend/API
+Add any needed inventory-context endpoints, but reuse existing routing/template logic where possible.
+
+Potential endpoints:
+- GET /api/inventory-items/:id/routing
+- POST /api/inventory-items/:id/routing
+- PUT /api/inventory-items/:id/routing-link
+- GET /api/inventory-items/:id/available-routings
+- POST /api/inventory-items/:id/routing-from-template
+
+Rules:
+- If generic routing-template endpoints already exist, reuse them rather than duplicating logic
+- If no templates exist, do not add a fake routing-from-template path unless it can fail safely and clearly
+- Keep route style and validation consistent with the repo
+
+5. Linking behavior
+Make linking behavior consistent with the current routing-to-inventory data model.
+
+Specifically:
+- if one inventory item can have multiple routings, allow choosing which routing becomes the default/current routing
+- if the current model assumes one routing per inventory item, then linking should update that single relationship cleanly
+- do not create duplicate/conflicting ownership patterns
+
+6. Blank routing creation
+Ensure blank routing creation from the inventory item screen still works and remains the fallback path even if templates are unavailable.
+
+A blank routing created from inventory should:
+- inherit inventoryItemId
+- inherit partNumber and partName where appropriate from the inventory item
+- choose a sensible default routingType if the item/category can imply one
+- otherwise fall back to existing project behavior
+
+7. Backward compatibility
+Critical:
+- do not break existing inventory edit flow
+- do not break current routing access from inventory
+- do not break PO/P2 routing launch behavior
+- do not force all manufactured items to have routings
+- purchased items should still not expose routing actions unless already intentionally supported
+- do not refactor unrelated systems
+
+8. Verification
+Confirm:
+- manufactured items show routing actions correctly
+- blank routing creation still works
+- template-based routing creation works if templates exist
+- template UI degrades safely if templates do not exist
+- existing routing linking works correctly
+- PO/P2 still resolves routing as before
+- purchased items do not incorrectly show routing actions
+
+9. Output
+After implementation provide:
+
+SECTION A — current state found
+- whether templates already exist
+- how inventory-to-routing ownership works today
+
+SECTION B — files changed
+
+SECTION C — UI changes
+
+SECTION D — backend/API changes
+
+SECTION E — how inventory-driven routing now works
+
+SECTION F — template behavior
+- what works now
+- what is placeholder-ready if templates do not yet exist
+
+SECTION G — backward compatibility confirmation
+
+SECTION H — recommended next phase
+
+Implementation notes:
+- be incremental
+- assess first, then implement
+- do not duplicate business logic
+- keep routing ownership at the inventory item level
+- keep execution ownership in PO/P2
+- prefer minimal, clean UI additions over redesign

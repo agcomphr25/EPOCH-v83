@@ -1,0 +1,65 @@
+client:495 [vite] connecting...
+client:618 [vite] connected.
+chunk-NFC5BX5N.js?v=bd16f33e:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+main.tsx:83 React initialized: Object
+main.tsx:84 React hooks: Object
+syncEngine.ts:98 [EPOCH SYNC] Sync engine starting
+syncEngine.ts:112 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+App.tsx:391 App component is rendering...
+App.tsx:392 Environment: development
+App.tsx:393 Base URL: /
+App.tsx:391 App component is rendering...
+App.tsx:392 Environment: development
+App.tsx:393 Base URL: /
+pwa.ts:30 [EPOCH] Install prompt captured and ready
+0ce1429f-ab65-4d48-bef3-611aab96e0df-00-316wz2g2s5raf-vkood27u.janeway.replit.dev/:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+App.tsx:344 Redirecting admin to /admin-dashboard
+queryClient.ts:59 🌐 API Request to /api/admin/queue-integrity/status (timeout: 120000ms, deployment: false)
+queryClient.ts:112 ✅ API Response from /api/admin/queue-integrity/status: 200
+App.tsx:344 Redirecting admin to /admin-dashboard
+queryClient.ts:59 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+queryClient.ts:59 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+queryClient.ts:59 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+queryClient.ts:112 ✅ API Response from /api/inventory/groups: 200
+queryClient.ts:112 ✅ API Response from /api/enhanced/inventory/items: 200
+queryClient.ts:112 ✅ API Response from /api/inventory/items-groups-map: 200
+queryClient.ts:59 🌐 API Request to /api/inventory/items/2655/routing (timeout: 120000ms, deployment: false)
+queryClient.ts:59 🌐 API Request to /api/inventory/items/T500/cost-history (timeout: 120000ms, deployment: false)
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+/api/inventory/items/2655/routing:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+queryClient.ts:112 ✅ API Response from /api/inventory/items/2655/routing: 404
+queryClient.ts:112 ✅ API Response from /api/inventory/items/T500/cost-history: 200
+main.tsx:51 API error raw body: {"routing":null,"message":"No routing found for this item"}
+console.error @ main.tsx:51
+main.tsx:51 💥 API Request failed for /api/inventory/items/2655/routing: Error: No routing found for this item
+    at apiRequest (queryClient.ts:145:24)
+console.error @ main.tsx:51
+queryClient.ts:59 🌐 API Request to /api/inventory/items/2655/routing (timeout: 120000ms, deployment: false)
+/api/inventory/items/2655/routing:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+queryClient.ts:112 ✅ API Response from /api/inventory/items/2655/routing: 500
+main.tsx:51 API error raw body: {"error":"Failed to create routing for inventory item","message":"invalid input value for enum routing_type: \"FLAT\""}
+console.error @ main.tsx:51
+main.tsx:51 💥 API Request failed for /api/inventory/items/2655/routing: Error: invalid input value for enum routing_type: "FLAT"
+    at apiRequest (queryClient.ts:145:24)
+console.error @ main.tsx:51
+queryClient.ts:59 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+queryClient.ts:59 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+queryClient.ts:59 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+queryClient.ts:112 ✅ API Response from /api/inventory/items-groups-map: 200
+queryClient.ts:112 ✅ API Response from /api/inventory/groups: 200
+queryClient.ts:112 ✅ API Response from /api/enhanced/inventory/items: 200
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342
+chunk-7IHXD56M.js?v=bd16f33e:342 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-7IHXD56M.js?v=bd16f33e:342

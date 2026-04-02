@@ -1,0 +1,154 @@
+🧱 STEP 2 — ADD ROUTING OPERATIONS TABLE
+
+This is the big unlock.
+
+👉 Paste this into schema:
+export const routingOperations = pgTable('routing_operations', {
+  id: serial('id').primaryKey(),
+
+  partRoutingId: integer('part_routing_id')
+    .references(() => partRoutings.id)
+    .notNull(),
+
+  stepNumber: integer('step_number').notNull(),
+  departmentName: text('department_name').notNull(),
+
+  operationName: text('operation_name').notNull(),
+
+  operationType: text('operation_type', {
+    enum: ['SETUP', 'RUN', 'INSPECT', 'OSP', 'MATERIAL', 'QC']
+  }).notNull(),
+
+  workCenter: text('work_center'),
+
+  estimatedMinutes: integer('estimated_minutes'),
+
+  requiresSignature: boolean('requires_signature').default(false),
+  requiresCertification: boolean('requires_certification').default(false),
+
+  isOutsideProcess: boolean('is_outside_process').default(false),
+  vendorId: integer('vendor_id'),
+
+  instructionPack: jsonb('instruction_pack').default('{}'),
+
+  createdAt: timestamp('created_at').defaultNow(),
+});
+🧠 What this changes
+
+Right now:
+
+departmentSequence = ["Layup", "CNC"]
+departmentConfig = { huge JSON blob }
+
+After this:
+
+Layup:
+  - Verify material
+  - Tool prep
+  - Layup skin
+  - Vacuum bag
+
+CNC:
+  - Setup machine
+  - Load program
+  - Run op
+  - Inspect
+
+👉 You now have real operations, not just departments.
+
+🧱 STEP 3 — CNC EXTENSION (critical for you)
+
+You already built a strong CNC system.
+
+Now we connect it to routing.
+
+👉 Paste this:
+export const routingCncOperations = pgTable('routing_cnc_operations', {
+  id: serial('id').primaryKey(),
+
+  routingOperationId: integer('routing_operation_id')
+    .references(() => routingOperations.id)
+    .notNull(),
+
+  machineClass: text('machine_class'),
+  preferredMachineId: integer('preferred_machine_id'),
+
+  programId: integer('program_id')
+    .references(() => cncPrograms.id),
+
+  fixture: text('fixture'),
+
+  estimatedSetupMinutes: integer('estimated_setup_minutes'),
+  estimatedCycleMinutes: integer('estimated_cycle_minutes'),
+
+  proveOutRequired: boolean('prove_out_required').default(false),
+});
+🧠 Why this is huge
+
+Right now:
+
+CNC jobs = smart
+Routing = dumb
+
+After this:
+
+Routing = smart
+CNC jobs = generated from routing
+🧱 STEP 4 — DO NOT BREAK P2
+
+Keep your current logic:
+
+departmentSequence → travelerSteps
+departmentConfig → fallback tasks
+Then ADD this logic:
+if (routingOperations exist) {
+  generate tasks from routingOperations
+} else {
+  fallback to departmentConfig
+}
+🧱 STEP 5 — SIMPLE UI UPGRADE (NOT REBUILD)
+
+Modify:
+
+👉 PartRoutingWizard.tsx
+
+Add:
+
+if (routingType === 'CNC') {
+  showCncPanel()
+}
+
+if (routingType === 'COMPOSITE') {
+  showCompositePanel()
+}
+
+if (routingType === 'ASSEMBLY') {
+  showAssemblyPanel()
+}
+🧱 STEP 6 — FIRST 3 ROUTING TYPES TO BUILD
+
+Don’t overbuild yet.
+
+Start with:
+
+1. CNC Routing
+operations + cnc extension
+machine/program linkage
+2. Composite Routing
+operations (layup, cure, trim)
+material traceability stays
+3. Assembly Routing
+operations + kit verification
+🚀 WHAT YOU WILL SEE IMMEDIATELY
+
+After this:
+
+CNC
+Routing defines program + machine BEFORE job exists
+CNC dashboard becomes execution only
+Composite
+Real step-by-step execution (not just department blobs)
+Assembly
+Can enforce:
+“all child parts must exist”
+“scan components before build”

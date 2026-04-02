@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { pool, db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { createShipment, ShipTo } from '../utils/upsShipping';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
+import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
+import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 
 const router = Router();
 
@@ -201,231 +202,121 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
     const pdfs: Array<{ poNumber: string; pdf: Buffer }> = [];
 
     for (const [poNumber, items] of poGroups.entries()) {
-      const pdfDoc = await PDFDocument.create();
-      let currentPage = pdfDoc.addPage([612, 792]); // US Letter
-      const { width, height } = currentPage.getSize();
-
-      const margin = 50;
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
       // Get customer ID and name from PO (Purchase Order has the customer info)
       const customerId = items[0].po.customerId;
       const customerName = items[0].po.customerName || 'Unknown Customer';
-      
-      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
-      
-      // Generate invoice number
-      const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
 
-      let currentY = height - margin;
+      const customerAddress = customerId
+        ? await storage.getCustomerDefaultAddress(String(customerId))
+        : null;
 
-      // ========== HEADER ==========
-      currentPage.drawText('AG COMPOSITES', {
-        x: margin,
-        y: currentY,
-        size: 18,
-        font: boldFont,
-        color: rgb(0, 0, 0),
-      });
+      // Generate invoice number (used as packing slip number for P1)
+      const invoiceNumber = await storage.getNextInvoiceNumber(
+        String(customerId || '0'),
+        customerName
+      );
 
-      // AG Composites Address (Ship From) - Right aligned
-      const agAddress = [
-        '230 Hamer Rd',
-        'Owens Cross Roads, AL 35763',
-        'Phone: (256) 723-8381'
-      ];
-      let agAddressY = currentY;
-      agAddress.forEach((line) => {
-        const textWidth = font.widthOfTextAtSize(line, 9);
-        currentPage.drawText(line, {
-          x: width - margin - textWidth,
-          y: agAddressY,
-          size: 9,
-          font: font,
-        });
-        agAddressY -= 12;
-      });
-
-      currentY -= 35;
-      currentPage.drawText('PACKING SLIP', {
-        x: margin,
-        y: currentY,
-        size: 14,
-        font: boldFont,
-        color: rgb(0, 0, 0),
-      });
-
-      // ========== INVOICE & DATE INFO ==========
-      currentY -= 30;
-      currentPage.drawText(`Invoice #: ${invoiceNumber}`, {
-        x: margin,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
-        x: width - margin - 150,
-        y: currentY,
-        size: 11,
-        font: font,
-      });
-
-      currentY -= 20;
-      currentPage.drawText(`PO Number: ${poNumber}`, {
-        x: margin,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      // ========== SHIP TO ADDRESS ==========
-      currentY -= 30;
-      currentPage.drawText('SHIP TO:', {
-        x: margin,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentY -= 15;
-      currentPage.drawText(customerName, {
-        x: margin,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-
-      if (customerAddress) {
-        currentY -= 15;
-        currentPage.drawText(customerAddress.street, {
-          x: margin,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-
-        if (customerAddress.street2) {
-          currentY -= 15;
-          currentPage.drawText(customerAddress.street2, {
-            x: margin,
-            y: currentY,
-            size: 10,
-            font: font,
-          });
-        }
-
-        currentY -= 15;
-        currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, {
-          x: margin,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-      }
-
-      // ========== TRACKING NUMBER (placeholder) ==========
-      currentY -= 25;
-      currentPage.drawText('Tracking #: _________________________', {
-        x: margin,
-        y: currentY,
-        size: 10,
-        font: font,
-      });
-
-      // Items table header
-      currentY -= 40;
-      currentPage.drawText('Item', {
-        x: margin,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentPage.drawText('Description', {
-        x: margin + 80,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentPage.drawText('Unit #', {
-        x: margin + 350,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      // Draw line under header
-      currentY -= 5;
-      currentPage.drawLine({
-        start: { x: margin, y: currentY },
-        end: { x: width - margin, y: currentY },
-        thickness: 1,
-        color: rgb(0, 0, 0),
-      });
-
-      // Items
-      currentY -= 20;
-      items.forEach((item, idx) => {
-        // Add new page if needed
-        if (currentY < margin + 50) {
-          currentPage = pdfDoc.addPage([612, 792]);
-          currentY = height - margin;
-        }
-
-        // Use explicit unitNumber from order object if available, otherwise try regex extraction
-        const unitNumber = item.order?.unitNumber || 
+      // Map assembled order data to PackingSlipData
+      const slipItems: PackingSlipItem[] = items.map((item) => {
+        const rawUnitNumber =
+          item.order?.unitNumber ||
           (() => {
             if (!item.order?.orderId) return 1;
             const unitMatch = item.order.orderId.match(/-(\d+)$/);
             return unitMatch ? parseInt(unitMatch[1]) : 1;
           })();
 
-        currentPage.drawText(`${idx + 1}`, {
-          x: margin,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
+        const partNumber =
+          item.poItem.itemName || item.poItem.stockModelName || 'N/A';
 
-        // Use itemName for the product identifier (e.g., AG-CRB-AHV205-ER)
-        const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
-        const truncatedName = itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName;
-        
-        currentPage.drawText(truncatedName, {
-          x: margin + 80,
-          y: currentY,
-          size: 9,
-          font: font,
-        });
-
-        currentPage.drawText(`${unitNumber}`, {
-          x: margin + 350,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-
-        currentY -= 20;
+        return {
+          partNumber,
+          description: partNumber,
+          quantity: 1,
+          unitNumber: `Unit ${rawUnitNumber}`,
+          specifications: item.poItem.specifications || undefined,
+        };
       });
 
-      // Footer on last page
-      const pages = pdfDoc.getPages();
-      const lastPage = pages[pages.length - 1];
-      const footerY = margin + 20;
-      lastPage.drawText(`Total Items: ${items.length}`, {
-        x: margin,
-        y: footerY,
-        size: 11,
-        font: boldFont,
-      });
+      const slipData: PackingSlipData = {
+        packingSlipNumber: invoiceNumber,
+        poNumber,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        customerName,
+        customerAddress: customerAddress
+          ? {
+              street: customerAddress.street,
+              street2: customerAddress.street2 || undefined,
+              city: customerAddress.city,
+              state: customerAddress.state,
+              zip: customerAddress.zipCode,
+            }
+          : undefined,
+        totalQuantity: items.length,
+        items: slipItems,
+      };
 
-      const pdfBytes = await pdfDoc.save();
+      // LEGACY PACKING SLIP RENDERER — REPLACED BY generatePackingSlipPdf
+      // const pdfDoc = await PDFDocument.create();
+      // let currentPage = pdfDoc.addPage([612, 792]);
+      // const { width, height } = currentPage.getSize();
+      // const margin = 50;
+      // const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      // const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      // let currentY = height - margin;
+      // // ── Header ──
+      // currentPage.drawText('AG COMPOSITES', { x: margin, y: currentY, size: 18, font: boldFont, color: rgb(0,0,0) });
+      // const agAddress = ['230 Hamer Rd', 'Owens Cross Roads, AL 35763', 'Phone: (256) 723-8381'];
+      // let agAddressY = currentY;
+      // agAddress.forEach((line) => { const tw = font.widthOfTextAtSize(line, 9); currentPage.drawText(line, { x: width - margin - tw, y: agAddressY, size: 9, font }); agAddressY -= 12; });
+      // currentY -= 35;
+      // currentPage.drawText('PACKING SLIP', { x: margin, y: currentY, size: 14, font: boldFont, color: rgb(0,0,0) });
+      // // ── Invoice & Date ──
+      // currentY -= 30;
+      // currentPage.drawText(`Invoice #: ${invoiceNumber}`, { x: margin, y: currentY, size: 11, font: boldFont });
+      // currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, { x: width - margin - 150, y: currentY, size: 11, font });
+      // currentY -= 20;
+      // currentPage.drawText(`PO Number: ${poNumber}`, { x: margin, y: currentY, size: 11, font: boldFont });
+      // // ── Ship To ──
+      // currentY -= 30;
+      // currentPage.drawText('SHIP TO:', { x: margin, y: currentY, size: 11, font: boldFont });
+      // currentY -= 15;
+      // currentPage.drawText(customerName, { x: margin, y: currentY, size: 10, font });
+      // if (customerAddress) {
+      //   currentY -= 15; currentPage.drawText(customerAddress.street, { x: margin, y: currentY, size: 10, font });
+      //   if (customerAddress.street2) { currentY -= 15; currentPage.drawText(customerAddress.street2, { x: margin, y: currentY, size: 10, font }); }
+      //   currentY -= 15; currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, { x: margin, y: currentY, size: 10, font });
+      // }
+      // currentY -= 25;
+      // currentPage.drawText('Tracking #: _________________________', { x: margin, y: currentY, size: 10, font });
+      // // ── Items table ──
+      // currentY -= 40;
+      // currentPage.drawText('Item', { x: margin, y: currentY, size: 11, font: boldFont });
+      // currentPage.drawText('Description', { x: margin + 80, y: currentY, size: 11, font: boldFont });
+      // currentPage.drawText('Unit #', { x: margin + 350, y: currentY, size: 11, font: boldFont });
+      // currentY -= 5;
+      // currentPage.drawLine({ start: { x: margin, y: currentY }, end: { x: width - margin, y: currentY }, thickness: 1, color: rgb(0,0,0) });
+      // currentY -= 20;
+      // items.forEach((item, idx) => {
+      //   if (currentY < margin + 50) { currentPage = pdfDoc.addPage([612, 792]); currentY = height - margin; }
+      //   const unitNumber = item.order?.unitNumber || (() => { if (!item.order?.orderId) return 1; const m = item.order.orderId.match(/-(\d+)$/); return m ? parseInt(m[1]) : 1; })();
+      //   currentPage.drawText(`${idx + 1}`, { x: margin, y: currentY, size: 10, font });
+      //   const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
+      //   currentPage.drawText(itemName.length > 30 ? itemName.slice(0, 30) + '...' : itemName, { x: margin + 80, y: currentY, size: 9, font });
+      //   currentPage.drawText(`${unitNumber}`, { x: margin + 350, y: currentY, size: 10, font });
+      //   currentY -= 20;
+      // });
+      // // ── Footer ──
+      // const pages = pdfDoc.getPages();
+      // const lastPage = pages[pages.length - 1];
+      // lastPage.drawText(`Total Items: ${items.length}`, { x: margin, y: margin + 20, size: 11, font: boldFont });
+      // const pdfBytes = await pdfDoc.save();
+      // pdfs.push({ poNumber, pdf: Buffer.from(pdfBytes) });
+
+      const pdfBuffer = await generatePackingSlipPdf(slipData);
       pdfs.push({
         poNumber,
-        pdf: Buffer.from(pdfBytes),
+        pdf: pdfBuffer,
       });
     }
 

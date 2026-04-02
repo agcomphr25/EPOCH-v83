@@ -11,9 +11,9 @@ import {
 import { eq, inArray, desc } from 'drizzle-orm';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import {
-  COMPANY_INFO,
-} from '../../utils/pdf/pdfConfig';
+import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
+import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
+import { COMPANY_INFO } from '../../utils/pdf/pdfConfig';
 import multer from 'multer';
 import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
 
@@ -316,233 +316,150 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       .where(eq(p2PackingSlips.id, req.params.id));
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
 
-    const pdfDoc = await PDFDocument.create();
-    let page = pdfDoc.addPage([612, 792]);
-    const { width, height } = page.getSize();
-    const margin = 50;
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    const black = rgb(0, 0, 0);
-    const gray = rgb(0.45, 0.45, 0.45);
-    const lightGray = rgb(0.82, 0.82, 0.82);
-    const darkGray = rgb(0.2, 0.2, 0.2);
-    const tableHeaderBg = rgb(0.88, 0.88, 0.88);
-    const rowBg = rgb(0.96, 0.96, 0.96);
-
-    let y = height - margin;
-    const usableWidth = width - margin * 2;
-
-    // ── Header left ──
-    page.drawText(COMPANY_INFO.NAME, { x: margin, y, size: 13, font: boldFont, color: black });
-    y -= 14;
-    page.drawText(COMPANY_INFO.ADDRESS, { x: margin, y, size: 8.5, font, color: gray });
-    y -= 11;
-    page.drawText(`${COMPANY_INFO.PHONE}  |  ${COMPANY_INFO.EMAIL}`, {
-      x: margin,
-      y,
-      size: 8.5,
-      font,
-      color: gray,
-    });
-    y -= 8;
-    page.drawLine({
-      start: { x: margin, y },
-      end: { x: width - margin, y },
-      thickness: 0.5,
-      color: lightGray,
-    });
-    y -= 22;
-
-    // ── Header right ──
-    const rightX = width - margin - 150;
-    const headerTopY = height - margin;
-    page.drawText('PACKING SLIP', {
-      x: rightX,
-      y: headerTopY,
-      size: 16,
-      font: boldFont,
-      color: black,
-    });
-    page.drawText(slip.packingSlipNumber, {
-      x: rightX,
-      y: headerTopY - 18,
-      size: 10,
-      font,
-      color: gray,
-    });
-    const slipDate = new Date().toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    page.drawText(`Date: ${slipDate}`, {
-      x: rightX,
-      y: headerTopY - 30,
-      size: 8.5,
-      font,
-      color: gray,
-    });
-
-    // ── Ship To ──
-    page.drawText('SHIP TO:', { x: margin, y, size: 8.5, font: boldFont, color: gray });
-    y -= 13;
-    page.drawText(slip.customerName, { x: margin, y, size: 10.5, font: boldFont, color: black });
-    y -= 13;
-    const addressLines = (slip.customerAddress || '').split('\n').filter(
-      (l) => l && l !== slip.customerName
-    );
-    for (const line of addressLines) {
-      page.drawText(line, { x: margin, y, size: 9.5, font, color: darkGray });
-      y -= 12;
-    }
-
-    y -= 4;
-    if (slip.poNumber) {
-      page.drawText(`PO #: ${slip.poNumber}`, { x: margin, y, size: 9.5, font, color: darkGray });
-      y -= 12;
-    }
-    if (slip.lotNumber) {
-      page.drawText(`Lot #: ${slip.lotNumber}`, { x: margin, y, size: 9.5, font, color: darkGray });
-      y -= 12;
-    }
-
-    y -= 10;
-    page.drawLine({
-      start: { x: margin, y },
-      end: { x: width - margin, y },
-      thickness: 0.5,
-      color: lightGray,
-    });
-    y -= 16;
-
-    // ── Table ──
-    const colWidths = [90, 150, 40, 100, usableWidth - 90 - 150 - 40 - 100];
-    const colX: number[] = [margin];
-    for (let i = 0; i < colWidths.length - 1; i++) {
-      colX.push(colX[i] + colWidths[i]);
-    }
-    const hdrHeight = 16;
-    const headers = ['Part Number', 'Part Name', 'Qty', 'Lot Number', 'Serial Numbers'];
-
-    page.drawRectangle({
-      x: margin,
-      y: y - hdrHeight,
-      width: usableWidth,
-      height: hdrHeight,
-      color: tableHeaderBg,
-    });
-    headers.forEach((h, i) => {
-      page.drawText(h, {
-        x: colX[i] + 3,
-        y: y - hdrHeight + 4,
-        size: 8,
-        font: boldFont,
-        color: darkGray,
-      });
-    });
-    y -= hdrHeight;
-
+    // Map slip DB record to PackingSlipData
     const lineItems = (slip.lineItems as any[]) || [];
-    let rowAlt = false;
-    for (const item of lineItems) {
-      const serialsArr: string[] = Array.isArray(item.serialNumbers) ? item.serialNumbers : [];
-      const serialsPerRow = 2;
-      const serialRows = Math.max(1, Math.ceil(serialsArr.length / serialsPerRow));
-      const rowHeight = Math.max(16, serialRows * 11 + 6);
+    const slipItems: PackingSlipItem[] = lineItems.map((item) => ({
+      partNumber: item.partNumber || '',
+      description: item.partName || '',
+      quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
+      serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
+      lotNumber: item.lotNumber || slip.lotNumber || undefined,
+    }));
 
-      if (y - rowHeight < margin + 70) {
-        page = pdfDoc.addPage([612, 792]);
-        y = 792 - margin;
-        rowAlt = false;
+    // Parse the stored customerAddress string into structured fields where possible,
+    // preserving rawLines as a fallback for addresses that don't match a standard pattern.
+    const rawAddress = slip.customerAddress || '';
+    const addrLines = rawAddress.split('\n').filter((l: string) => l && l !== slip.customerName);
+    let structuredAddress: PackingSlipData['customerAddress'];
+    if (addrLines.length > 0) {
+      const lastLine = addrLines[addrLines.length - 1];
+      const cityStateZip = lastLine.match(/^(.+),\s+([A-Z]{2})\s+(\S+)$/);
+      if (cityStateZip) {
+        structuredAddress = {
+          street: addrLines[0] || '',
+          street2: addrLines.length > 2 ? addrLines[1] : undefined,
+          city: cityStateZip[1].trim(),
+          state: cityStateZip[2],
+          zip: cityStateZip[3],
+        };
+      } else {
+        structuredAddress = { rawLines: addrLines };
       }
-
-      if (rowAlt) {
-        page.drawRectangle({ x: margin, y: y - rowHeight, width: usableWidth, height: rowHeight, color: rowBg });
-      }
-      rowAlt = !rowAlt;
-
-      const cellY = y - 11;
-      page.drawText(item.partNumber || '', { x: colX[0] + 3, y: cellY, size: 8, font, color: darkGray });
-      const partNameTrunc = (item.partName || '').slice(0, 26);
-      page.drawText(partNameTrunc, { x: colX[1] + 3, y: cellY, size: 8, font, color: darkGray });
-      page.drawText(String(item.quantity ?? serialsArr.length), {
-        x: colX[2] + 3,
-        y: cellY,
-        size: 8,
-        font,
-        color: darkGray,
-      });
-      page.drawText(item.lotNumber || slip.lotNumber || '', {
-        x: colX[3] + 3,
-        y: cellY,
-        size: 8,
-        font,
-        color: darkGray,
-      });
-
-      let sy = cellY;
-      for (let r = 0; r < serialRows; r++) {
-        const chunk = serialsArr
-          .slice(r * serialsPerRow, (r + 1) * serialsPerRow)
-          .join('   ');
-        page.drawText(chunk, { x: colX[4] + 3, y: sy, size: 7.5, font, color: darkGray });
-        sy -= 11;
-      }
-
-      page.drawLine({
-        start: { x: margin, y: y - rowHeight },
-        end: { x: width - margin, y: y - rowHeight },
-        thickness: 0.25,
-        color: lightGray,
-      });
-      y -= rowHeight;
     }
 
-    // ── Totals ──
-    y -= 10;
-    page.drawText(`Total Quantity: ${slip.totalQuantity}`, {
-      x: width - margin - 130,
-      y,
-      size: 9.5,
-      font: boldFont,
-      color: black,
-    });
+    const slipData: PackingSlipData = {
+      packingSlipNumber: slip.packingSlipNumber,
+      poNumber: slip.poNumber || undefined,
+      lotNumber: slip.lotNumber || undefined,
+      date: slip.createdAt
+        ? new Date(slip.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      customerName: slip.customerName,
+      customerAddress: structuredAddress,
+      trackingNumber: slip.trackingNumber || undefined,
+      totalQuantity: slip.totalQuantity ?? 0,
+      packedBy: slip.packedBy || undefined,
+      verifiedBy: slip.verifiedBy || undefined,
+      items: slipItems,
+    };
 
-    // ── Footer ──
-    const footerY = margin + 40;
-    page.drawLine({
-      start: { x: margin, y: footerY + 20 },
-      end: { x: width - margin, y: footerY + 20 },
-      thickness: 0.5,
-      color: lightGray,
-    });
-    page.drawText('Packed By: _______________________________', {
-      x: margin,
-      y: footerY,
-      size: 8.5,
-      font,
-      color: darkGray,
-    });
-    page.drawText(
-      `Tracking #: ${slip.trackingNumber || '_____________________________'}`,
-      { x: margin + 260, y: footerY, size: 8.5, font, color: darkGray }
-    );
-    page.drawText('Verified By: _______________________________', {
-      x: margin,
-      y: footerY - 16,
-      size: 8.5,
-      font,
-      color: darkGray,
-    });
+    // LEGACY PACKING SLIP RENDERER — REPLACED BY generatePackingSlipPdf
+    // const pdfDoc = await PDFDocument.create();
+    // let page = pdfDoc.addPage([612, 792]);
+    // const { width, height } = page.getSize();
+    // const margin = 50;
+    // const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    // const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    // const black = rgb(0, 0, 0);
+    // const gray = rgb(0.45, 0.45, 0.45);
+    // const lightGray = rgb(0.82, 0.82, 0.82);
+    // const darkGray = rgb(0.2, 0.2, 0.2);
+    // const tableHeaderBg = rgb(0.88, 0.88, 0.88);
+    // const rowBg = rgb(0.96, 0.96, 0.96);
+    // let y = height - margin;
+    // const usableWidth = width - margin * 2;
+    // // ── Header left ──
+    // page.drawText(COMPANY_INFO.NAME, { x: margin, y, size: 13, font: boldFont, color: black });
+    // y -= 14;
+    // page.drawText(COMPANY_INFO.ADDRESS, { x: margin, y, size: 8.5, font, color: gray });
+    // y -= 11;
+    // page.drawText(`${COMPANY_INFO.PHONE}  |  ${COMPANY_INFO.EMAIL}`, { x: margin, y, size: 8.5, font, color: gray });
+    // y -= 8;
+    // page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: lightGray });
+    // y -= 22;
+    // // ── Header right ──
+    // const rightX = width - margin - 150;
+    // const headerTopY = height - margin;
+    // page.drawText('PACKING SLIP', { x: rightX, y: headerTopY, size: 16, font: boldFont, color: black });
+    // page.drawText(slip.packingSlipNumber, { x: rightX, y: headerTopY - 18, size: 10, font, color: gray });
+    // const slipDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // page.drawText(`Date: ${slipDate}`, { x: rightX, y: headerTopY - 30, size: 8.5, font, color: gray });
+    // // ── Ship To ──
+    // page.drawText('SHIP TO:', { x: margin, y, size: 8.5, font: boldFont, color: gray });
+    // y -= 13;
+    // page.drawText(slip.customerName, { x: margin, y, size: 10.5, font: boldFont, color: black });
+    // y -= 13;
+    // const addressLines = (slip.customerAddress || '').split('\n').filter(l => l && l !== slip.customerName);
+    // for (const line of addressLines) { page.drawText(line, { x: margin, y, size: 9.5, font, color: darkGray }); y -= 12; }
+    // y -= 4;
+    // if (slip.poNumber) { page.drawText(`PO #: ${slip.poNumber}`, { x: margin, y, size: 9.5, font, color: darkGray }); y -= 12; }
+    // if (slip.lotNumber) { page.drawText(`Lot #: ${slip.lotNumber}`, { x: margin, y, size: 9.5, font, color: darkGray }); y -= 12; }
+    // y -= 10;
+    // page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.5, color: lightGray });
+    // y -= 16;
+    // // ── Table ──
+    // const colWidths = [90, 150, 40, 100, usableWidth - 90 - 150 - 40 - 100];
+    // const colX: number[] = [margin];
+    // for (let i = 0; i < colWidths.length - 1; i++) { colX.push(colX[i] + colWidths[i]); }
+    // const hdrHeight = 16;
+    // const headers = ['Part Number', 'Part Name', 'Qty', 'Lot Number', 'Serial Numbers'];
+    // page.drawRectangle({ x: margin, y: y - hdrHeight, width: usableWidth, height: hdrHeight, color: tableHeaderBg });
+    // headers.forEach((h, i) => { page.drawText(h, { x: colX[i] + 3, y: y - hdrHeight + 4, size: 8, font: boldFont, color: darkGray }); });
+    // y -= hdrHeight;
+    // const lineItems = (slip.lineItems as any[]) || [];
+    // let rowAlt = false;
+    // for (const item of lineItems) {
+    //   const serialsArr: string[] = Array.isArray(item.serialNumbers) ? item.serialNumbers : [];
+    //   const serialsPerRow = 2;
+    //   const serialRows = Math.max(1, Math.ceil(serialsArr.length / serialsPerRow));
+    //   const rowHeight = Math.max(16, serialRows * 11 + 6);
+    //   if (y - rowHeight < margin + 70) { page = pdfDoc.addPage([612, 792]); y = 792 - margin; rowAlt = false; }
+    //   if (rowAlt) { page.drawRectangle({ x: margin, y: y - rowHeight, width: usableWidth, height: rowHeight, color: rowBg }); }
+    //   rowAlt = !rowAlt;
+    //   const cellY = y - 11;
+    //   page.drawText(item.partNumber || '', { x: colX[0] + 3, y: cellY, size: 8, font, color: darkGray });
+    //   page.drawText((item.partName || '').slice(0, 26), { x: colX[1] + 3, y: cellY, size: 8, font, color: darkGray });
+    //   page.drawText(String(item.quantity ?? serialsArr.length), { x: colX[2] + 3, y: cellY, size: 8, font, color: darkGray });
+    //   page.drawText(item.lotNumber || slip.lotNumber || '', { x: colX[3] + 3, y: cellY, size: 8, font, color: darkGray });
+    //   let sy = cellY;
+    //   for (let r = 0; r < serialRows; r++) {
+    //     const chunk = serialsArr.slice(r * serialsPerRow, (r + 1) * serialsPerRow).join('   ');
+    //     page.drawText(chunk, { x: colX[4] + 3, y: sy, size: 7.5, font, color: darkGray }); sy -= 11;
+    //   }
+    //   page.drawLine({ start: { x: margin, y: y - rowHeight }, end: { x: width - margin, y: y - rowHeight }, thickness: 0.25, color: lightGray });
+    //   y -= rowHeight;
+    // }
+    // // ── Totals ──
+    // y -= 10;
+    // page.drawText(`Total Quantity: ${slip.totalQuantity}`, { x: width - margin - 130, y, size: 9.5, font: boldFont, color: black });
+    // // ── Footer ──
+    // const footerY = margin + 40;
+    // page.drawLine({ start: { x: margin, y: footerY + 20 }, end: { x: width - margin, y: footerY + 20 }, thickness: 0.5, color: lightGray });
+    // page.drawText('Packed By: _______________________________', { x: margin, y: footerY, size: 8.5, font, color: darkGray });
+    // page.drawText(`Tracking #: ${slip.trackingNumber || '_____________________________'}`, { x: margin + 260, y: footerY, size: 8.5, font, color: darkGray });
+    // page.drawText('Verified By: _______________________________', { x: margin, y: footerY - 16, size: 8.5, font, color: darkGray });
+    // const bytes = await pdfDoc.save();
+    // res.set('Content-Type', 'application/pdf');
+    // res.set('Content-Disposition', `inline; filename="packing-slip-${slip.packingSlipNumber}.pdf"`);
+    // return res.send(Buffer.from(bytes));
 
-    const bytes = await pdfDoc.save();
+    const bytes = await generatePackingSlipPdf(slipData);
     res.set('Content-Type', 'application/pdf');
     res.set(
       'Content-Disposition',
       `inline; filename="packing-slip-${slip.packingSlipNumber}.pdf"`
     );
-    return res.send(Buffer.from(bytes));
+    return res.send(bytes);
   } catch (err: any) {
     console.error('Packing slip PDF error:', err);
     return res.status(500).json({ error: 'Failed to generate packing slip PDF' });

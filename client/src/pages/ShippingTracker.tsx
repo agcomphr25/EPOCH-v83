@@ -547,12 +547,6 @@ export default function ShippingTracker() {
                 )?.stocksShipped || 0}
               </div>
             </div>
-            <div className="bg-white rounded-lg p-4 border border-blue-100">
-              <div className="text-sm text-gray-600">Total Weeks Tracked</div>
-              <div className="text-2xl font-bold text-indigo-600">
-                {weeklyStats.length}
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>

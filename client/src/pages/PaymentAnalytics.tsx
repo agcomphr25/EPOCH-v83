@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar, CreditCard, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar, CreditCard, ArrowUpDown, ArrowUp, ArrowDown, Download, Layers } from 'lucide-react';
 
 interface PaymentData {
   id: number;
@@ -20,6 +20,18 @@ interface PaymentData {
   fbOrderNumber: string;
   modelId: string;
   customerName: string;
+}
+
+interface BatchData {
+  batchId: number;
+  date: string;
+  customerId: string;
+  customerName: string;
+  paymentMethod: string;
+  paymentLabel: string;
+  orderCount: number;
+  totalAmount: number;
+  notes: string;
 }
 
 interface PaymentAnalyticsResponse {
@@ -41,6 +53,14 @@ interface PaymentAnalyticsResponse {
   dailyTotals: { date: string; amount: number; count: number }[];
 }
 
+interface BatchAnalyticsResponse {
+  month: number;
+  year: number;
+  startDate: string;
+  endDate: string;
+  batches: BatchData[];
+}
+
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -48,6 +68,7 @@ const MONTHS = [
 
 type SortColumn = 'date' | 'orderId' | 'customerName' | 'paymentLabel' | 'amount';
 type SortDirection = 'asc' | 'desc';
+type BatchSortColumn = 'date' | 'customerName' | 'paymentLabel' | 'orderCount' | 'totalAmount';
 
 export default function PaymentAnalytics() {
   const now = new Date();
@@ -57,6 +78,9 @@ export default function PaymentAnalytics() {
   const [typeFilter, setTypeFilter] = useState<'all' | 'phone' | 'online'>('all');
   const [sortColumn, setSortColumn] = useState<SortColumn>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [groupMode, setGroupMode] = useState<'individual' | 'batch'>('individual');
+  const [batchSortColumn, setBatchSortColumn] = useState<BatchSortColumn>('date');
+  const [batchSortDirection, setBatchSortDirection] = useState<SortDirection>('desc');
 
   const { data, isLoading, error } = useQuery<PaymentAnalyticsResponse>({
     queryKey: ['/api/finance/payment-analytics', month, year, viewMode],
@@ -65,6 +89,18 @@ export default function PaymentAnalytics() {
       if (!res.ok) throw new Error('Failed to fetch payment analytics');
       return res.json();
     },
+  });
+
+  const { data: batchData, isLoading: batchLoading } = useQuery<BatchAnalyticsResponse>({
+    queryKey: ['/api/finance/payment-analytics/batches', month, year, viewMode, typeFilter],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/finance/payment-analytics/batches?month=${month}&year=${year}&mode=${viewMode}&type=${typeFilter}`
+      );
+      if (!res.ok) throw new Error('Failed to fetch batch analytics');
+      return res.json();
+    },
+    enabled: groupMode === 'batch',
   });
 
   const formatCurrency = (amount: number) => {
@@ -90,9 +126,25 @@ export default function PaymentAnalytics() {
     }
   };
 
+  const handleBatchSort = (column: BatchSortColumn) => {
+    if (batchSortColumn === column) {
+      setBatchSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setBatchSortColumn(column);
+      setBatchSortDirection('asc');
+    }
+  };
+
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
     return sortDirection === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
+  const BatchSortIcon = ({ column }: { column: BatchSortColumn }) => {
+    if (batchSortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return batchSortDirection === 'asc'
       ? <ArrowUp className="h-3 w-3 ml-1" />
       : <ArrowDown className="h-3 w-3 ml-1" />;
   };
@@ -121,32 +173,79 @@ export default function PaymentAnalytics() {
     });
   };
 
+  const getSortedBatches = () => {
+    if (!batchData) return [];
+    return [...batchData.batches].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+      switch (batchSortColumn) {
+        case 'date': aVal = a.date; bVal = b.date; break;
+        case 'customerName': aVal = (a.customerName || '').toLowerCase(); bVal = (b.customerName || '').toLowerCase(); break;
+        case 'paymentLabel': aVal = a.paymentLabel; bVal = b.paymentLabel; break;
+        case 'orderCount': aVal = a.orderCount; bVal = b.orderCount; break;
+        case 'totalAmount': aVal = a.totalAmount; bVal = b.totalAmount; break;
+        default: aVal = a.date; bVal = b.date;
+      }
+      if (aVal < bVal) return batchSortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return batchSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
   const handleExportCSV = () => {
-    const payments = getFilteredSortedPayments();
-    const periodLabel = viewMode === 'ytd'
-      ? `YTD-${year}`
-      : `${MONTHS[month - 1]}-${year}`;
-    const filename = `payment-analytics-${periodLabel}.csv`;
-    const header = ['Date', 'Order ID', 'Customer', 'Type', 'Amount'];
-    const rows = payments.map(p => [
-      formatDate(p.date),
-      p.orderId,
-      p.customerName || 'N/A',
-      p.paymentLabel,
-      p.amount.toFixed(2),
-    ]);
-    const csvContent = [header, ...rows]
-      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    if (groupMode === 'batch') {
+      const batches = getSortedBatches();
+      const periodLabel = viewMode === 'ytd'
+        ? `YTD-${year}`
+        : `${MONTHS[month - 1]}-${year}`;
+      const filename = `payment-analytics-batches-${periodLabel}.csv`;
+      const header = ['Date', 'Customer', 'Payment Method', 'Order Count', 'Total Amount'];
+      const rows = batches.map(b => [
+        formatDate(b.date),
+        b.customerName,
+        b.paymentLabel,
+        b.orderCount.toString(),
+        b.totalAmount.toFixed(2),
+      ]);
+      const csvContent = [header, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      const payments = getFilteredSortedPayments();
+      const periodLabel = viewMode === 'ytd'
+        ? `YTD-${year}`
+        : `${MONTHS[month - 1]}-${year}`;
+      const filename = `payment-analytics-${periodLabel}.csv`;
+      const header = ['Date', 'Order ID', 'Customer', 'Type', 'Amount'];
+      const rows = payments.map(p => [
+        formatDate(p.date),
+        p.orderId,
+        p.customerName || 'N/A',
+        p.paymentLabel,
+        p.amount.toFixed(2),
+      ]);
+      const csvContent = [header, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
   };
 
   if (error) {
@@ -287,9 +386,16 @@ export default function PaymentAnalytics() {
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
                       <span className="font-semibold">Transaction Details</span>
-                      <span className="text-sm text-muted-foreground ml-2">
-                        ({getFilteredSortedPayments().length} transactions)
-                      </span>
+                      {groupMode === 'individual' && (
+                        <span className="text-sm text-muted-foreground ml-2">
+                          ({getFilteredSortedPayments().length} transactions)
+                        </span>
+                      )}
+                      {groupMode === 'batch' && batchData && (
+                        <span className="text-sm text-muted-foreground ml-2">
+                          ({getSortedBatches().length} batches)
+                        </span>
+                      )}
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
@@ -318,6 +424,29 @@ export default function PaymentAnalytics() {
                         <Globe className="h-3 w-3 mr-1" />
                         Online
                       </Button>
+
+                      <div className="flex items-center border rounded-md overflow-hidden ml-4">
+                        <Button
+                          variant={groupMode === 'individual' ? 'default' : 'ghost'}
+                          size="sm"
+                          className="rounded-none"
+                          onClick={() => setGroupMode('individual')}
+                          data-testid="toggle-individual"
+                        >
+                          Individual
+                        </Button>
+                        <Button
+                          variant={groupMode === 'batch' ? 'default' : 'ghost'}
+                          size="sm"
+                          className="rounded-none"
+                          onClick={() => setGroupMode('batch')}
+                          data-testid="toggle-by-batch"
+                        >
+                          <Layers className="h-3 w-3 mr-1" />
+                          By Batch
+                        </Button>
+                      </div>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -329,64 +458,123 @@ export default function PaymentAnalytics() {
                         Export CSV
                       </Button>
                     </div>
-                    {data.payments.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-8">No payments found for this period.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('date')}>
-                              <span className="flex items-center">Date<SortIcon column="date" /></span>
-                            </TableHead>
-                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('orderId')}>
-                              <span className="flex items-center">Order ID<SortIcon column="orderId" /></span>
-                            </TableHead>
-                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('customerName')}>
-                              <span className="flex items-center">Customer<SortIcon column="customerName" /></span>
-                            </TableHead>
-                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('paymentLabel')}>
-                              <span className="flex items-center">Type<SortIcon column="paymentLabel" /></span>
-                            </TableHead>
-                            <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')}>
-                              <span className="flex items-center justify-end">Amount<SortIcon column="amount" /></span>
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {getFilteredSortedPayments().map((payment) => (
-                            <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
-                              <TableCell className="text-sm">{formatDate(payment.date)}</TableCell>
-                              <TableCell>
-                                <span className="font-mono">{payment.orderId}</span>
-                                {payment.fbOrderNumber && (
-                                  <span className="text-xs text-muted-foreground ml-2">
-                                    (FB: {payment.fbOrderNumber})
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell>{payment.customerName || 'N/A'}</TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant={payment.paymentLabel === 'Phone' ? 'default' : payment.paymentLabel === 'Live' ? 'outline' : 'secondary'}
-                                  className={payment.paymentLabel === 'Live' ? 'border-purple-500 text-purple-600' : ''}
-                                >
-                                  {payment.paymentLabel === 'Phone' ? (
-                                    <Phone className="h-3 w-3 mr-1" />
-                                  ) : payment.paymentLabel === 'Live' ? (
-                                    <CreditCard className="h-3 w-3 mr-1" />
-                                  ) : (
-                                    <Globe className="h-3 w-3 mr-1" />
-                                  )}
-                                  {payment.paymentLabel}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right font-medium">
-                                {formatCurrency(payment.amount)}
-                              </TableCell>
+
+                    {groupMode === 'individual' ? (
+                      data.payments.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">No payments found for this period.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleSort('date')}>
+                                <span className="flex items-center">Date<SortIcon column="date" /></span>
+                              </TableHead>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleSort('orderId')}>
+                                <span className="flex items-center">Order ID<SortIcon column="orderId" /></span>
+                              </TableHead>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleSort('customerName')}>
+                                <span className="flex items-center">Customer<SortIcon column="customerName" /></span>
+                              </TableHead>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleSort('paymentLabel')}>
+                                <span className="flex items-center">Type<SortIcon column="paymentLabel" /></span>
+                              </TableHead>
+                              <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')}>
+                                <span className="flex items-center justify-end">Amount<SortIcon column="amount" /></span>
+                              </TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {getFilteredSortedPayments().map((payment) => (
+                              <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
+                                <TableCell className="text-sm">{formatDate(payment.date)}</TableCell>
+                                <TableCell>
+                                  <span className="font-mono">{payment.orderId}</span>
+                                  {payment.fbOrderNumber && (
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      (FB: {payment.fbOrderNumber})
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell>{payment.customerName || 'N/A'}</TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={payment.paymentLabel === 'Phone' ? 'default' : payment.paymentLabel === 'Live' ? 'outline' : 'secondary'}
+                                    className={payment.paymentLabel === 'Live' ? 'border-purple-500 text-purple-600' : ''}
+                                  >
+                                    {payment.paymentLabel === 'Phone' ? (
+                                      <Phone className="h-3 w-3 mr-1" />
+                                    ) : payment.paymentLabel === 'Live' ? (
+                                      <CreditCard className="h-3 w-3 mr-1" />
+                                    ) : (
+                                      <Globe className="h-3 w-3 mr-1" />
+                                    )}
+                                    {payment.paymentLabel}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatCurrency(payment.amount)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )
+                    ) : (
+                      batchLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                      ) : !batchData || batchData.batches.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">No batch payments found for this period.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleBatchSort('date')}>
+                                <span className="flex items-center">Date<BatchSortIcon column="date" /></span>
+                              </TableHead>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleBatchSort('customerName')}>
+                                <span className="flex items-center">Customer<BatchSortIcon column="customerName" /></span>
+                              </TableHead>
+                              <TableHead className="cursor-pointer select-none" onClick={() => handleBatchSort('paymentLabel')}>
+                                <span className="flex items-center">Method<BatchSortIcon column="paymentLabel" /></span>
+                              </TableHead>
+                              <TableHead className="text-right cursor-pointer select-none" onClick={() => handleBatchSort('orderCount')}>
+                                <span className="flex items-center justify-end">Orders<BatchSortIcon column="orderCount" /></span>
+                              </TableHead>
+                              <TableHead className="text-right cursor-pointer select-none" onClick={() => handleBatchSort('totalAmount')}>
+                                <span className="flex items-center justify-end">Batch Total<BatchSortIcon column="totalAmount" /></span>
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {getSortedBatches().map((batch) => (
+                              <TableRow key={batch.batchId} data-testid={`row-batch-${batch.batchId}`}>
+                                <TableCell className="text-sm">{formatDate(batch.date)}</TableCell>
+                                <TableCell>{batch.customerName}</TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={batch.paymentLabel === 'Phone' ? 'default' : 'secondary'}
+                                  >
+                                    {batch.paymentLabel === 'Phone' ? (
+                                      <Phone className="h-3 w-3 mr-1" />
+                                    ) : (
+                                      <Globe className="h-3 w-3 mr-1" />
+                                    )}
+                                    {batch.paymentLabel}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {batch.orderCount}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatCurrency(batch.totalAmount)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )
                     )}
                   </AccordionContent>
                 </AccordionItem>

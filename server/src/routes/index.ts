@@ -9511,6 +9511,94 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // Payment Analytics: By Batch view
+  app.get('/api/finance/payment-analytics/batches', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+
+      const now = new Date();
+      const month = parseInt(req.query.month as string) || (now.getMonth() + 1);
+      const year = parseInt(req.query.year as string) || now.getFullYear();
+      const mode = (req.query.mode as string) || 'mtd';
+      const typeFilter = (req.query.type as string) || 'all'; // all | phone | online
+
+      let startDate: Date;
+      let effectiveEndDate: Date;
+
+      if (mode === 'ytd') {
+        startDate = new Date(year, 0, 1);
+        effectiveEndDate = new Date();
+      } else {
+        startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        effectiveEndDate = mode === 'mtd' ? new Date() : endDate;
+      }
+
+      // Build payment method filter for the batch's payment_method column
+      // bulk_payment_batches.payment_method stores the method used for the batch
+      // We apply the same phone/online filter by mapping to payment types
+      let batchMethodFilter = '';
+      if (typeFilter === 'phone') {
+        batchMethodFilter = `AND bpb.payment_method = 'credit_card'`;
+      } else if (typeFilter === 'online') {
+        batchMethodFilter = `AND bpb.payment_method IN ('aaaa', 'agr')`;
+      }
+
+      const batchesQuery = `
+        SELECT
+          bpb.id AS batch_id,
+          bpb.created_at AS batch_date,
+          bpb.customer_id,
+          bpb.total_amount,
+          bpb.payment_method,
+          bpb.notes AS batch_notes,
+          c.name AS customer_name,
+          COUNT(p.id) AS order_count
+        FROM bulk_payment_batches bpb
+        LEFT JOIN customers c ON CASE WHEN bpb.customer_id ~ '^[0-9]+$' THEN bpb.customer_id::integer ELSE NULL END = c.id
+        LEFT JOIN payments p ON p.batch_id = bpb.id
+        WHERE bpb.created_at >= $1 AND bpb.created_at <= $2
+        ${batchMethodFilter}
+        GROUP BY bpb.id, bpb.created_at, bpb.customer_id, bpb.total_amount, bpb.payment_method, bpb.notes, c.name
+        ORDER BY bpb.created_at DESC
+      `;
+
+      const queryResult = await pool.query(batchesQuery, [startDate, effectiveEndDate]);
+      const batches = Array.isArray(queryResult) ? queryResult : (queryResult.rows || []);
+
+      const getPaymentMethodLabel = (method: string) => {
+        if (method === 'credit_card') return 'Phone';
+        if (method === 'aaaa' || method === 'agr') return 'Online';
+        return method;
+      };
+
+      res.json({
+        month,
+        year,
+        startDate: startDate.toISOString(),
+        endDate: effectiveEndDate.toISOString(),
+        batches: batches.map((b: any) => ({
+          batchId: b.batch_id,
+          date: b.batch_date,
+          customerId: b.customer_id,
+          customerName: b.customer_name || 'N/A',
+          paymentMethod: b.payment_method,
+          paymentLabel: getPaymentMethodLabel(b.payment_method),
+          orderCount: parseInt(b.order_count) || 0,
+          totalAmount: parseFloat(b.total_amount) || 0,
+          notes: b.batch_notes,
+        })),
+      });
+    } catch (error) {
+      console.error('💰 Payment Analytics Batches error:', error);
+      res.status(500).json({ error: 'Failed to fetch batch analytics' });
+    }
+  });
+
   // Tandym Dashboard Widgets API - Get summary data for dashboard widgets
   app.get('/api/finance/dashboard-widgets', async (req, res) => {
     try {

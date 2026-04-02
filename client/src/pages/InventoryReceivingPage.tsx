@@ -88,6 +88,7 @@ interface ReceivingItem {
   notes?: string;
   receivedDate?: string;
   receivedBy?: string;
+  notInInventory?: boolean;
 }
 
 interface VendorPO {
@@ -368,13 +369,29 @@ export default function InventoryReceivingPage() {
     enabled: true,
   });
 
-  // Fetch Vendor POs with status "Sent" for Pending Receipts
-  const { data: sentPOsResponse, isLoading: isLoadingPOs } = useQuery<{ data: VendorPO[] }>({
+  // Fetch Vendor POs with status "Sent" and "Partially Received" for Pending Receipts
+  const { data: sentPOsResponse, isLoading: isLoadingSentPOs } = useQuery<{ data: VendorPO[] }>({
     queryKey: ['/api/vendor-pos', 'Sent'],
     queryFn: () => apiRequest('/api/vendor-pos?status=Sent'),
   });
-  
-  const sentPOs = sentPOsResponse?.data || [];
+
+  const { data: partialPOsResponse, isLoading: isLoadingPartialPOs } = useQuery<{ data: VendorPO[] }>({
+    queryKey: ['/api/vendor-pos', 'Partially Received'],
+    queryFn: () => apiRequest('/api/vendor-pos?status=Partially%20Received'),
+  });
+
+  const isLoadingPOs = isLoadingSentPOs || isLoadingPartialPOs;
+
+  const sentPOs = useMemo(() => {
+    const sent = sentPOsResponse?.data || [];
+    const partial = partialPOsResponse?.data || [];
+    const seen = new Set<number>();
+    return [...sent, ...partial].filter(po => {
+      if (seen.has(po.id)) return false;
+      seen.add(po.id);
+      return true;
+    });
+  }, [sentPOsResponse, partialPOsResponse]);
 
   // Fetch line items for all sent POs
   const { data: poItemsMap, isLoading: isLoadingItems } = useQuery<Record<number, VendorPOItem[]>>({
@@ -408,16 +425,13 @@ export default function InventoryReceivingPage() {
     });
   }
 
-  // Transform PO items into receiving items format - only include items with valid inventory part numbers
+  // Transform PO items into receiving items format - include all items, flag those not in inventory
   const pendingReceivingItems: (ReceivingItem & { poNumber: string; vendorName: string })[] = [];
   if (poItemsMap) {
     sentPOs.forEach((po) => {
       const items = poItemsMap[po.id] || [];
       items.forEach((item) => {
-        // Only include items that exist in the inventory
-        if (!item.agPartNumber || !validPartNumbers.has(item.agPartNumber.toLowerCase())) {
-          return; // Skip items not in inventory
-        }
+        const notInInventory = !item.agPartNumber || !validPartNumbers.has(item.agPartNumber.toLowerCase());
 
         const expectedQty = item.quantity || 0;
         const receivedQty = item.receivedQuantity || 0;
@@ -438,6 +452,7 @@ export default function InventoryReceivingPage() {
           notes: `${po.poNumber} from ${po.vendorName}`,
           poNumber: po.poNumber,
           vendorName: po.vendorName,
+          notInInventory,
         });
       });
     });
@@ -1546,11 +1561,20 @@ export default function InventoryReceivingPage() {
                               >
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium">
-                                      #{item.agPartNumber}
+                                    <span className={`font-medium${item.notInInventory ? ' text-muted-foreground' : ''}`}>
+                                      #{item.agPartNumber || '—'}
                                     </span>
                                     <span className="text-muted-foreground">-</span>
                                     <span className="truncate max-w-[300px]">{item.name}</span>
+                                    {item.notInInventory && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="bg-red-100 text-red-800 text-xs"
+                                      >
+                                        <AlertCircle className="w-3 h-3 mr-1" />
+                                        Not in inventory
+                                      </Badge>
+                                    )}
                                     {isP2Product(item) && (
                                       <Badge
                                         variant="secondary"

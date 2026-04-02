@@ -1,0 +1,132 @@
+COPY-PASTE AUDIT PROMPT
+SYSTEM ROLE: SENIOR FORENSIC ENGINEER (READ-ONLY)
+
+GOAL:
+Determine why PO/P2 orders progressed via Finish QC → Paint (badge login)
+are NOT appearing in the /finish-qc-completed-report.
+
+DO NOT MODIFY ANY CODE.
+
+---
+
+STEP 1 — LOCATE REPORT LOGIC
+
+Find all files related to:
+
+/finish-qc-completed-report
+
+Identify:
+- API route or handler
+- SQL queries or ORM queries
+- Data sources used
+
+Extract:
+- Table names queried
+- Filters used (department, status, timestamps)
+- Any joins
+
+---
+
+STEP 2 — IDENTIFY INCLUDED ENTITY TYPES
+
+Determine:
+
+Does the report query:
+- orders?
+- production_orders?
+- vendor_po_items?
+- p2_items?
+- any polymorphic structure?
+
+List EXACT tables included.
+
+---
+
+STEP 3 — TRACE PO PROGRESSION PATH
+
+Find where PO/P2 items are progressed via:
+
+Finish QC → Paint
+
+Search for:
+- "finish qc"
+- "badge"
+- "scan"
+- "complete"
+- "progression"
+
+Identify:
+- API endpoints
+- services
+- database writes
+
+Extract:
+- What table is updated?
+- What fields are changed?
+- Is a history/event row created?
+
+---
+
+STEP 4 — COMPARE DATA MODELS
+
+Compare:
+
+A) Standard order progression
+vs
+B) PO/P2 progression
+
+For BOTH, document:
+
+- source table
+- status field
+- department field
+- completion timestamp
+- audit/event logging
+
+---
+
+STEP 5 — DETERMINE REPORT MISMATCH
+
+Answer:
+
+Why does the report include standard orders but exclude PO/P2?
+
+Check:
+- Missing table in query?
+- Different status values?
+- Different department naming?
+- Missing join condition?
+- Missing event-based logic?
+
+---
+
+STEP 6 — CHECK IF REPORT IS STATE-BASED OR EVENT-BASED
+
+Determine:
+
+Is the report using:
+A) Current state (e.g., currentDepartment)
+or
+B) Historical events (e.g., "completed finish qc")
+
+If A:
+→ PO flow may never set that field
+
+If B:
+→ PO events may not be included
+
+---
+
+STEP 7 — OUTPUT
+
+Provide:
+
+1. Exact reason PO orders are excluded
+2. Tables and fields missing from report
+3. Whether mismatch is:
+   - schema issue
+   - logic issue
+   - event vs state issue
+
+DO NOT SUGGEST FIXES YET
+ONLY DIAGNOSE

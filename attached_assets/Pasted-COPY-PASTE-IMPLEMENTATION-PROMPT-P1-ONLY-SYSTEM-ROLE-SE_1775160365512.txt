@@ -1,0 +1,158 @@
+COPY-PASTE IMPLEMENTATION PROMPT (P1 ONLY)
+SYSTEM ROLE: SENIOR BACKEND ENGINEER
+
+GOAL:
+Update the /api/reports/finish-qc-completed endpoint so that
+P1 production orders (from production_orders table) are included
+alongside standard orders from all_orders.
+
+DO NOT TOUCH:
+- P2 logic
+- badge scan logic
+- progression logic
+- database schema
+
+THIS IS A READ + MERGE FIX ONLY.
+
+---
+
+STEP 1 — LOCATE REPORT HANDLER
+
+Find:
+GET /api/reports/finish-qc-completed
+
+Identify:
+- Query against all_orders
+- In-memory filtering using department_history
+- Technician aggregation logic
+
+---
+
+STEP 2 — DUPLICATE QUERY FOR PRODUCTION ORDERS
+
+Add a second query:
+
+SELECT *
+FROM production_orders
+WHERE department_history IS NOT NULL
+AND jsonb_array_length(department_history) > 0
+
+Place this directly alongside the existing all_orders query.
+
+---
+
+STEP 3 — NORMALIZE DATA STRUCTURE
+
+Ensure production_orders rows match the shape expected by the report.
+
+Create a mapper:
+
+const normalizedProductionOrders = productionOrders.map(po => ({
+  id: po.id,
+  department_history: po.department_history,
+
+  // Map required fields used by UI/report
+  order_number: po.order_number || po.id,
+  customer_name: po.customer_name || 'Production Order',
+
+  // Preserve anything else needed downstream
+  ...po,
+
+  // Optional flag for debugging
+  source: 'production_order'
+}));
+
+IMPORTANT:
+- Do NOT assume identical field names
+- Explicitly map anything used in UI rendering or technician logic
+
+---
+
+STEP 4 — MERGE DATASETS
+
+Combine both sources BEFORE filtering:
+
+const allData = [
+  ...allOrders,
+  ...normalizedProductionOrders
+];
+
+---
+
+STEP 5 — REUSE EXISTING FILTER LOGIC (DO NOT CHANGE)
+
+Keep existing logic EXACTLY as-is:
+
+Filter using department_history:
+
+order.department_history?.some(d =>
+  d.fromDepartment === 'Finish QC'
+  && timestamp is within selected date range
+)
+
+DO NOT modify:
+- department name string
+- date filtering logic
+- event parsing logic
+
+---
+
+STEP 6 — ENSURE NO DUPLICATION
+
+Confirm:
+- production_orders are NOT already present in all_orders
+- no duplicate IDs across datasets
+
+If overlap is possible, dedupe by:
+- id + source combination
+OR
+- enforce unique key before merging
+
+---
+
+STEP 7 — VALIDATE OUTPUT
+
+After implementation, confirm:
+
+1. P1 production orders now appear in report
+2. Total order count increases appropriately
+3. No regression in standard order reporting
+4. No duplicate rows
+5. Report loads without performance issues
+
+---
+
+STEP 8 — CHECK TECHNICIAN ATTRIBUTION (READ-ONLY CHECK)
+
+Inspect department_history entries for production_orders.
+
+Verify whether technician identity is stored as:
+- employeeId
+- userId
+- actor
+- badgeId
+
+If technician counts look incorrect:
+DO NOT FIX YET
+Just document the difference in structure
+
+---
+
+STEP 9 — DO NOT EXPAND SCOPE
+
+Do NOT:
+- Modify progression logic
+- Modify badge logic
+- Add new tables
+- Refactor architecture
+- Touch P2 systems
+
+This is strictly a reporting-layer fix
+
+---
+
+OUTPUT REQUIRED:
+
+1. Summary of changes made
+2. Confirmation that P1 orders now appear
+3. Any discrepancies in technician attribution (if observed)

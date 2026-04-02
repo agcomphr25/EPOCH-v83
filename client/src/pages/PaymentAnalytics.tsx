@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar, CreditCard } from 'lucide-react';
+import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar, CreditCard, ArrowUpDown, ArrowUp, ArrowDown, Download } from 'lucide-react';
 
 interface PaymentData {
   id: number;
@@ -46,12 +46,17 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+type SortColumn = 'date' | 'orderId' | 'customerName' | 'paymentLabel' | 'amount';
+type SortDirection = 'asc' | 'desc';
+
 export default function PaymentAnalytics() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [viewMode, setViewMode] = useState<'mtd' | 'full' | 'ytd'>('mtd');
   const [typeFilter, setTypeFilter] = useState<'all' | 'phone' | 'online'>('all');
+  const [sortColumn, setSortColumn] = useState<SortColumn>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const { data, isLoading, error } = useQuery<PaymentAnalyticsResponse>({
     queryKey: ['/api/finance/payment-analytics', month, year, viewMode],
@@ -74,6 +79,74 @@ export default function PaymentAnalytics() {
       hour: 'numeric',
       minute: '2-digit',
     });
+  };
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDirection === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
+  const getFilteredSortedPayments = () => {
+    if (!data) return [];
+    const filtered = data.payments.filter(p => {
+      if (typeFilter === 'all') return true;
+      if (typeFilter === 'phone') return p.paymentLabel === 'Phone';
+      return p.paymentLabel === 'Live' || p.paymentLabel === 'Online';
+    });
+    return [...filtered].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+      switch (sortColumn) {
+        case 'date': aVal = a.date; bVal = b.date; break;
+        case 'orderId': aVal = a.orderId; bVal = b.orderId; break;
+        case 'customerName': aVal = (a.customerName || '').toLowerCase(); bVal = (b.customerName || '').toLowerCase(); break;
+        case 'paymentLabel': aVal = a.paymentLabel; bVal = b.paymentLabel; break;
+        case 'amount': aVal = a.amount; bVal = b.amount; break;
+        default: aVal = a.date; bVal = b.date;
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const handleExportCSV = () => {
+    const payments = getFilteredSortedPayments();
+    const periodLabel = viewMode === 'ytd'
+      ? `YTD-${year}`
+      : `${MONTHS[month - 1]}-${year}`;
+    const filename = `payment-analytics-${periodLabel}.csv`;
+    const header = ['Date', 'Order ID', 'Customer', 'Type', 'Amount'];
+    const rows = payments.map(p => [
+      formatDate(p.date),
+      p.orderId,
+      p.customerName || 'N/A',
+      p.paymentLabel,
+      p.amount.toFixed(2),
+    ]);
+    const csvContent = [header, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (error) {
@@ -215,12 +288,12 @@ export default function PaymentAnalytics() {
                       <TrendingUp className="h-5 w-5" />
                       <span className="font-semibold">Transaction Details</span>
                       <span className="text-sm text-muted-foreground ml-2">
-                        ({(typeFilter === 'all' ? data.payments : data.payments.filter(p => typeFilter === 'phone' ? p.paymentLabel === 'Phone' : (p.paymentLabel === 'Live' || p.paymentLabel === 'Online'))).length} transactions)
+                        ({getFilteredSortedPayments().length} transactions)
                       </span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2 mb-4 flex-wrap">
                       <span className="text-sm text-muted-foreground mr-1">Filter by type:</span>
                       <Button
                         variant={typeFilter === 'all' ? 'default' : 'outline'}
@@ -245,6 +318,16 @@ export default function PaymentAnalytics() {
                         <Globe className="h-3 w-3 mr-1" />
                         Online
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportCSV}
+                        className="ml-auto"
+                        data-testid="btn-export-csv"
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        Export CSV
+                      </Button>
                     </div>
                     {data.payments.length === 0 ? (
                       <p className="text-center text-muted-foreground py-8">No payments found for this period.</p>
@@ -252,19 +335,25 @@ export default function PaymentAnalytics() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Order ID</TableHead>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
+                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('date')}>
+                              <span className="flex items-center">Date<SortIcon column="date" /></span>
+                            </TableHead>
+                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('orderId')}>
+                              <span className="flex items-center">Order ID<SortIcon column="orderId" /></span>
+                            </TableHead>
+                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('customerName')}>
+                              <span className="flex items-center">Customer<SortIcon column="customerName" /></span>
+                            </TableHead>
+                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('paymentLabel')}>
+                              <span className="flex items-center">Type<SortIcon column="paymentLabel" /></span>
+                            </TableHead>
+                            <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('amount')}>
+                              <span className="flex items-center justify-end">Amount<SortIcon column="amount" /></span>
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.payments.filter(p => {
-                            if (typeFilter === 'all') return true;
-                            if (typeFilter === 'phone') return p.paymentLabel === 'Phone';
-                            return p.paymentLabel === 'Live' || p.paymentLabel === 'Online';
-                          }).map((payment) => (
+                          {getFilteredSortedPayments().map((payment) => (
                             <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
                               <TableCell className="text-sm">{formatDate(payment.date)}</TableCell>
                               <TableCell>

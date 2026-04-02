@@ -197,6 +197,15 @@ export default function OEMShipmentsPage() {
         credentials: 'include',
       });
 
+      if (response.status === 404) {
+        toast({
+          title: 'No label on file',
+          description: 'No label on file — return this shipment to QC to regenerate.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('Failed to download shipping label');
       }
@@ -224,6 +233,15 @@ export default function OEMShipmentsPage() {
       const response = await fetch(`/api/po-orders/oem-shipments/packing-slip/${itemId}`, {
         credentials: 'include',
       });
+
+      if (response.status === 404) {
+        toast({
+          title: 'No packing slip on file',
+          description: 'No packing slip on file — return this shipment to QC to regenerate.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to download packing slip');
@@ -782,16 +800,14 @@ export default function OEMShipmentsPage() {
                                   <Undo2 className="h-4 w-4 mr-1" />
                                   Return to QC
                                 </Button>
-                                {shipment.has_shipping_label && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => downloadShippingLabel(shipment.id, shipment.master_tracking_number)}
-                                  >
-                                    <Printer className="h-4 w-4 mr-2" />
-                                    Reprint Label
-                                  </Button>
-                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => downloadShippingLabel(shipment.id, shipment.master_tracking_number)}
+                                >
+                                  <Printer className="h-4 w-4 mr-2" />
+                                  Reprint Label
+                                </Button>
                                 <CollapsibleTrigger asChild>
                                   <Button size="sm" variant="ghost">
                                     {expandedShipments.has(shipment.id) ? (
@@ -845,16 +861,14 @@ export default function OEMShipmentsPage() {
                                           <Badge variant="outline">{item.quantity}</Badge>
                                         </td>
                                         <td className="p-3 text-center">
-                                          {item.hasPackingSlip && (
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
-                                            >
-                                              <Printer className="h-3 w-3 mr-1" />
-                                              Reprint Packing Slip
-                                            </Button>
-                                          )}
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                          >
+                                            <Printer className="h-3 w-3 mr-1" />
+                                            Reprint Packing Slip
+                                          </Button>
                                         </td>
                                       </tr>
                                     ))}
@@ -1002,26 +1016,22 @@ export default function OEMShipmentsPage() {
                                 </td>
                                 <td className="p-3 text-center">
                                   <div className="flex items-center gap-2 justify-center flex-wrap">
-                                    {item.hasPackingSlip && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
-                                      >
-                                        <Printer className="h-3 w-3 mr-1" />
-                                        Reprint Packing Slip
-                                      </Button>
-                                    )}
-                                    {item.hasLabel && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => downloadShippingLabel(item.shipmentId, item.trackingNumber)}
-                                      >
-                                        <Printer className="h-3 w-3 mr-1" />
-                                        Reprint Label
-                                      </Button>
-                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                    >
+                                      <Printer className="h-3 w-3 mr-1" />
+                                      Reprint Packing Slip
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => downloadShippingLabel(item.shipmentId, item.trackingNumber)}
+                                    >
+                                      <Printer className="h-3 w-3 mr-1" />
+                                      Reprint Label
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -1153,19 +1163,17 @@ export default function OEMShipmentsPage() {
                       </Button>
 
                       {/* Download Label */}
-                      {shipment.has_shipping_label && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            downloadShippingLabel(shipment.id, shipment.master_tracking_number)
-                          }
-                          data-testid={`button-download-label-${shipment.id}`}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Label
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          downloadShippingLabel(shipment.id, shipment.master_tracking_number)
+                        }
+                        data-testid={`button-download-label-${shipment.id}`}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Label
+                      </Button>
 
                       {/* Expand/Collapse */}
                       <CollapsibleTrigger asChild>
@@ -1243,21 +1251,17 @@ export default function OEMShipmentsPage() {
                                 <Badge variant="outline">{item.quantity}</Badge>
                               </td>
                               <td className="p-3 text-center">
-                                {item.hasPackingSlip ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      downloadPackingSlip(item.id, item.poNumber, item.orderId)
-                                    }
-                                    data-testid={`button-download-packing-slip-${item.id}`}
-                                  >
-                                    <FileText className="h-3 w-3 mr-1" />
-                                    Packing Slip
-                                  </Button>
-                                ) : (
-                                  <span className="text-xs text-gray-400">N/A</span>
-                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    downloadPackingSlip(item.id, item.poNumber, item.orderId)
+                                  }
+                                  data-testid={`button-download-packing-slip-${item.id}`}
+                                >
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  Packing Slip
+                                </Button>
                               </td>
                             </tr>
                           ))}

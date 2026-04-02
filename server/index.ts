@@ -309,6 +309,7 @@ async function initializeBackgroundServices() {
           '0021_anodize_cert_inspection.sql',
           '0022_routing_dependency_enhancements.sql',
           '0023_traveler_component_associations.sql',
+          '0024_add_assigned_technician_to_production_orders.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {

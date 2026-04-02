@@ -923,6 +923,77 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       },
     });
 
+    // ── Auto-create CNC job when a CNC department step is started ──────────
+    if (/cnc/i.test(step.departmentName)) {
+      try {
+        const { pool: dbPool } = await import('../../db');
+
+        // Dedup by linkedTravelerStepId — each step creates at most one CNC job
+        const existing = await dbPool.query(
+          `SELECT id FROM cnc_jobs WHERE linked_traveler_step_id = $1 LIMIT 1`,
+          [stepId],
+        );
+        const existingRows = Array.isArray(existing) ? existing : (existing.rows ?? []);
+        if (existingRows.length === 0) {
+          // ── Pull enrichment data from linked order ──────────────────────
+          let dueDate: string | null = null;
+          let customerPo: string | null = null;
+          let preferredMachine: string | null = null;
+
+          if (traveler.salesOrderId) {
+            const orderResult = await dbPool.query(
+              `SELECT due_date, customer_po FROM all_orders WHERE order_id = $1 LIMIT 1`,
+              [traveler.salesOrderId],
+            );
+            const orderRows = Array.isArray(orderResult) ? orderResult : (orderResult.rows ?? []);
+            if (orderRows.length > 0) {
+              dueDate = orderRows[0].due_date
+                ? new Date(orderRows[0].due_date).toISOString().split('T')[0]
+                : null;
+              customerPo = orderRows[0].customer_po ?? null;
+            }
+          }
+
+          // ── T5: Auto machine assignment from part routing ───────────────
+          // Look up preferred machine via part_routings or inventory_items
+          if (traveler.partNumber) {
+            const machineResult = await dbPool.query(
+              `SELECT preferred_machine FROM part_routings
+               WHERE part_number = $1 AND preferred_machine IS NOT NULL LIMIT 1`,
+              [traveler.partNumber],
+            );
+            const machineRows = Array.isArray(machineResult) ? machineResult : (machineResult.rows ?? []);
+            if (machineRows.length > 0) {
+              preferredMachine = machineRows[0].preferred_machine ?? null;
+            }
+          }
+
+          // ── Create CNC job via storage layer (full data) ────────────────
+          const newJob = await storage.createCncJob({
+            workOrder: traveler.workOrderId ?? traveler.salesOrderId ?? 'AUTO',
+            partNumber: traveler.partNumber ?? 'UNKNOWN',
+            partName: traveler.partName ?? 'From Traveler',
+            qty: traveler.quantity ?? 1,
+            dueDate: dueDate ?? undefined,
+            customerPo: customerPo ?? undefined,
+            machine: preferredMachine ?? undefined,
+            priority: 'medium',
+            status: 'queued',
+            linkedTravelerId: travelerId,
+            linkedTravelerStepId: stepId,
+            createdByDisplayName: 'Traveler Auto-Create',
+          });
+          console.log(`[Traveler] Auto-created CNC job ${newJob.id} for traveler ${travelerId}, step ${stepId}`);
+
+          // ── T4: Insert into manufacturing_queue via shared helper ──────
+          const { createManufacturingQueueEntryForCncJob } = await import('../lib/cncMq');
+          await createManufacturingQueueEntryForCncJob(newJob);
+        }
+      } catch (cncErr: any) {
+        console.warn('[Traveler] Failed to auto-create CNC job:', cncErr?.message);
+      }
+    }
+
     res.json(updatedStep);
   } catch (error: any) {
     console.error('Error starting step:', error);

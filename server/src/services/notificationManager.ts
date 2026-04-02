@@ -24,7 +24,23 @@ class NotificationManager {
   private wss: WebSocketServer | null = null;
 
   initialize(server: Server) {
-    this.wss = new WebSocketServer({ server, path: '/ws/notifications' });
+    // Use noServer mode so the ws library does NOT attach its own upgrade
+    // listener to the HTTP server.  When { server, path } is used, the ws
+    // library calls abortHandshake(socket, 400) for every upgrade request
+    // whose path doesn't match — including Vite's HMR WebSocket — which
+    // crashes the Vite dev client and causes the Replit error overlay.
+    // Instead, we listen for the 'upgrade' event ourselves and only hand off
+    // connections that match /ws/notifications; everything else is ignored so
+    // Vite (or any other handler registered first) can handle it.
+    this.wss = new WebSocketServer({ noServer: true });
+
+    server.on('upgrade', (req, socket, head) => {
+      const { pathname } = parseUrl(req.url ?? '');
+      if (pathname !== '/ws/notifications') return; // let Vite HMR handle it
+      this.wss!.handleUpgrade(req, socket as any, head, (ws) => {
+        this.wss!.emit('connection', ws, req);
+      });
+    });
 
     this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
       const user = await this.authenticateConnection(req);

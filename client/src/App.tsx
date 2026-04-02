@@ -187,6 +187,7 @@ import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
 import BarcodeQueuePage from './pages/BarcodeQueuePage';
 import BulkBarcodeReprint from './pages/BulkBarcodeReprint';
 import CNCQueuePage from './pages/CNCQueuePage';
+import CNCDashboardPage from './pages/CNCDashboardPage';
 import FinishQCQueuePage from './pages/FinishQCQueuePage';
 import FinishQueuePage from './pages/FinishQueuePage';
 import FinishQCPage from './pages/FinishQCPage';
@@ -1038,6 +1039,7 @@ function App() {
                     path="/department-queue/cnc"
                     component={CNCQueuePage}
                   />
+                  <Route path="/cnc-dashboard" component={CNCDashboardPage} />
                   <Route
                     path="/department-queue/finish"
                     component={FinishQueuePage}

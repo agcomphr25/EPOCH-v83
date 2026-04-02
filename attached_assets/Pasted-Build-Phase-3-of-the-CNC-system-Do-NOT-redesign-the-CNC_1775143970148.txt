@@ -1,0 +1,163 @@
+Build Phase 3 of the CNC system.
+
+Do NOT redesign the CNC dashboard.
+Extend it and integrate it into EPOCH production flow.
+
+PHASE 3 GOAL
+Connect CNC to the rest of manufacturing:
+- machines
+- travelers
+- next department flow
+- auto job creation
+
+---
+
+TASK 1: Create cnc_machines master table
+
+Goal:
+Standardize machine assignment.
+
+Backend:
+- Create cnc_machines table:
+  id
+  machine_name
+  machine_number
+  work_center
+  capabilities (optional JSON)
+  active (boolean)
+
+- Add CRUD routes:
+  GET /api/cnc/machines
+  POST /api/cnc/machines
+  PATCH /api/cnc/machines/:id
+
+Frontend:
+- Replace free-text machine fields with dropdown
+- Populate from cnc_machines
+
+Acceptance:
+- Operator selects machine from list
+- No free-text machine entry
+
+---
+
+TASK 2: Link CNC jobs to travelers (real FK)
+
+Goal:
+Tie CNC to your existing traveler system.
+
+Backend:
+- Convert cnc_jobs.linkedTravelerId (string) → integer FK
+- Add foreign key to travelers table
+
+Frontend:
+- Show traveler info in job detail
+- Add "Open Traveler" button
+
+Acceptance:
+- CNC job directly linked to traveler record
+
+---
+
+TASK 3: Auto-create CNC jobs from work orders / travelers
+
+Goal:
+Eliminate manual job creation.
+
+Backend:
+- When:
+  - a work order includes CNC operation
+  OR
+  - a traveler step includes CNC
+
+→ auto-create cnc_job
+
+- Include:
+  work_order_id
+  part_number
+  revision
+  quantity
+  traveler_id
+
+Acceptance:
+- CNC jobs appear automatically in queue
+
+---
+
+TASK 4: Downstream completion trigger
+
+Goal:
+Move parts forward in production automatically.
+
+Backend:
+- On CNC job complete:
+  - update traveler step to complete
+  - move to next department queue
+  - optionally notify next department
+
+Frontend:
+- No UI change required (trigger-based)
+
+Acceptance:
+- Completing CNC job pushes part forward
+
+---
+
+TASK 5: Department integration (queue handoff)
+
+Goal:
+CNC feeds into next department.
+
+Backend:
+- Add forwardDestination enum or structured field:
+  (finish, anodize, qc, assembly, etc.)
+
+- On completion:
+  - insert record into next department queue
+
+Acceptance:
+- Next department sees job automatically
+
+---
+
+TASK 6: Machine utilization / load view
+
+Goal:
+Enable capacity planning.
+
+Backend:
+- Aggregate:
+  total jobs per machine
+  total estimated hours per machine
+  active jobs per machine
+
+Frontend:
+- Add "Machines" tab:
+  - machine
+  - jobs assigned
+  - total hours
+  - utilization indicator
+
+Acceptance:
+- See machine load at a glance
+
+---
+
+RULES
+- Do not break existing CNC functionality
+- Use migrations with IF NOT EXISTS
+- Maintain backward compatibility where possible
+- Reuse existing traveler/work order structures
+
+---
+
+OUTPUT FORMAT
+
+After implementation, return:
+
+1. Files changed
+2. Schema changes
+3. Routes added
+4. Integration points (where CNC connects to travelers/work orders)
+5. What is now automated
+6. Any remaining gaps

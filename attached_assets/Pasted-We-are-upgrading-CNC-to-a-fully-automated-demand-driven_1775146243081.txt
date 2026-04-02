@@ -1,0 +1,204 @@
+We are upgrading CNC to a fully automated, demand-driven system.
+
+DO NOT redesign existing CNC dashboard.
+EXTEND the current system.
+
+GOAL:
+CNC jobs must be automatically created and fully populated when a traveler step for CNC begins, with no missing data.
+
+---
+
+PHASE 4 — CNC AUTOMATION + INTEGRATION
+
+---
+
+TASK 1: Fix traveler → CNC job creation (full data mapping)
+
+Current:
+- CNC jobs auto-create on traveler step start
+- But missing key fields (dueDate, customerPo, revision, machine)
+
+Update traveler step start logic:
+
+File: server/src/routes/travelers.ts
+
+Inside:
+POST /api/travelers/:travelerId/steps/:stepId/start
+
+Replace CNC auto-create block with:
+
+1. Pull full traveler + work order + order data:
+- traveler.workOrderId
+- traveler.partNumber
+- traveler.partName
+- traveler.quantity
+- traveler.dueDate (if exists)
+- work_orders.due_date (fallback)
+- orders.customer_po (if available)
+
+2. Create CNC job using storage.createCncJob (NOT raw SQL)
+
+3. Populate:
+- workOrder
+- partNumber
+- partName
+- qty
+- dueDate
+- customerPo
+- priority
+- linkedTravelerId
+- linkedTravelerStepId
+- status = 'queued'
+
+4. REMOVE raw dbPool.query INSERT
+
+Acceptance:
+- CNC job is created automatically with full data when CNC step starts
+- No missing scheduling or PO info
+
+---
+
+TASK 2: Fix downstream completion trigger (CRITICAL)
+
+File: server/src/routes/cncDashboard.ts
+
+Current:
+- Uses WHERE department_name LIKE '%cnc%'
+
+Replace with:
+
+- Use job.linkedTravelerStepId directly
+- Update ONLY that specific traveler step
+
+Flow:
+1. When CNC job status → complete:
+   - UPDATE traveler_steps SET status = 'COMPLETED' WHERE id = linkedTravelerStepId
+
+2. Then:
+   - Find next step by step_number
+   - Set next step to IN_PROGRESS (or READY depending on your system)
+
+3. Log traveler event
+
+Acceptance:
+- Only the correct step is completed
+- No cross-step corruption if multiple CNC steps exist
+
+---
+
+TASK 3: Add proper foreign keys (data integrity)
+
+File: server/schema.ts
+
+Update cnc_jobs:
+
+- linked_traveler_id → FK → travelers.id
+- linked_traveler_step_id → FK → traveler_steps.id
+
+Add constraints safely (IF NOT EXISTS logic)
+
+Acceptance:
+- CNC jobs cannot reference invalid travelers
+- Referential integrity enforced
+
+---
+
+TASK 4: Connect CNC to manufacturing queue
+
+Goal:
+CNC demand becomes visible in production planning
+
+Create:
+
+Table: manufacturing_queue (if not already structured for this)
+
+Add linkage:
+- cnc_jobs.id → manufacturing_queue.source_id
+- source_type = 'cnc_job'
+
+When CNC job is created:
+- Insert row into manufacturing_queue
+
+Fields:
+- partNumber
+- qty
+- department = 'CNC'
+- status = 'pending'
+- dueDate
+- priority
+
+Acceptance:
+- CNC jobs appear in manufacturing queue automatically
+
+---
+
+TASK 5: Add auto machine assignment (optional but powerful)
+
+If routing/machine rules exist:
+
+- Map partNumber → preferred machine
+- Or use operation.machine if defined
+
+Set:
+- cnc_jobs.machineId automatically when possible
+
+Fallback:
+- leave null if unknown
+
+Acceptance:
+- Machine is auto-filled when rules exist
+
+---
+
+TASK 6: Improve sync endpoint (convert to safety net)
+
+File: server/src/routes/cncDashboard.ts
+
+Update:
+POST /api/cnc/sync-from-travelers
+
+- Ensure it:
+  - uses storage.createCncJob
+  - populates full data (same as Task 1)
+  - respects deduplication using linkedTravelerStepId
+
+Add optional:
+- GET /api/cnc/missing-from-travelers
+  → returns traveler steps that SHOULD have CNC jobs but don't
+
+Acceptance:
+- Sync becomes a recovery tool, not primary flow
+
+---
+
+TASK 7: Add scheduler (optional)
+
+If system supports background jobs:
+
+- Run sync-from-travelers every X minutes
+OR
+- Trigger on traveler updates
+
+---
+
+RULES
+
+- Do NOT break existing CNC UI
+- Do NOT remove existing functionality
+- Replace raw SQL inserts with storage layer
+- Ensure all new data is persisted and visible in CNC dashboard
+- Maintain backward compatibility
+
+---
+
+OUTPUT FORMAT
+
+After implementation, return:
+
+1. Files changed
+2. Schema changes
+3. Routes updated
+4. Data mapping summary (before vs after)
+5. What is now automatic
+6. What is still manual
+7. Any risks or limitations

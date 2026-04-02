@@ -1,0 +1,64 @@
+Phase 4 implementation is done. Now verify it and give me a final completion report.
+
+VERIFY THESE ITEMS
+
+1. Traveler → CNC auto-create
+- starting a CNC traveler step creates a cnc_job
+- it uses storage.createCncJob, not raw SQL
+- dueDate is populated when available
+- customerPo is populated when available
+- linkedTravelerId is populated
+- linkedTravelerStepId is populated
+- dedup uses linkedTravelerStepId correctly
+
+2. Downstream completion trigger
+- completing a CNC job updates the exact traveler step by linkedTravelerStepId
+- next traveler step is advanced correctly if applicable
+- manufacturing_queue entry is closed/updated if implemented
+- legacy fallback only applies when linkedTravelerStepId is missing
+
+3. Foreign key integrity
+- FK constraints exist from cnc_jobs to travelers
+- FK constraints exist from cnc_jobs to traveler_steps
+- migration is present and safe for existing rows
+
+4. Manufacturing queue integration
+- source_id and source_type exist
+- CNC auto-created jobs insert manufacturing_queue rows
+- queue rows contain useful values:
+  - department
+  - part number/item
+  - qty
+  - due date
+  - priority
+
+5. Auto machine assignment
+- preferred_machine exists on part_routings
+- auto-create reads preferred_machine
+- machine is populated on CNC job when routing data exists
+
+6. Sync + diagnostics
+- POST /api/cnc/sync-from-travelers uses full data mapping
+- GET /api/cnc/missing-from-travelers works
+- scheduler runs every 30 minutes if implemented
+
+RETURN RESULTS IN THIS EXACT FORMAT
+
+PHASE 4 VERIFICATION REPORT
+
+A. FILES CHANGED
+B. DATABASE / SCHEMA CHANGES
+C. ROUTES ADDED OR UPDATED
+D. FRONTEND IMPACT
+E. BACKEND FEATURES NOW WORKING
+F. AUTOMATION CONFIRMED
+G. WHAT IS STILL MANUAL
+H. ANY REMAINING BUGS OR RISKS
+I. MANUAL TEST STEPS
+J. EXECUTIVE ANSWER
+
+IMPORTANT
+- Be specific
+- Cite exact file names and function names
+- If something is partial, mark it partial
+- Do not assume anything works unless code proves it

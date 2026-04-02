@@ -1,6 +1,22 @@
 // Import React refresh fix FIRST before any other imports
 import './react-refresh-fix';
 
+// Suppress Vite HMR WebSocket errors in the Replit proxied environment.
+// When accessed via HTTPS proxy, `location.port` resolves to empty/undefined,
+// causing Vite's HMR client to attempt `wss://localhost:undefined/` which is
+// an invalid URL. This is a dev-only tooling artifact and does NOT affect app
+// functionality — but the unhandled rejection triggers the Replit error overlay.
+window.addEventListener('unhandledrejection', (event) => {
+  const msg: string = event.reason?.message ?? '';
+  if (
+    msg.includes("Failed to construct 'WebSocket'") ||
+    msg.includes('wss://localhost:undefined') ||
+    msg.includes('ws://localhost:undefined')
+  ) {
+    event.preventDefault();
+  }
+});
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

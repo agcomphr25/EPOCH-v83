@@ -1,0 +1,235 @@
+I need you to audit the CNC Dashboard you already built in this app and tell me exactly what is still incomplete.
+
+Do not give me a general answer. I need a specific codebase audit.
+
+Your task:
+
+1. Inspect the full codebase for all CNC-related files, routes, schema, components, pages, APIs, database tables, and UI flows.
+2. Identify everything already built and working.
+3. Identify everything partially built.
+4. Identify everything missing compared to the required CNC workflow below.
+5. Return the results in a structured gap analysis.
+6. Then give me an implementation plan in the exact order the remaining work should be built.
+
+CNC DASHBOARD REQUIRED WORKFLOW
+
+The CNC dashboard must support this full workflow:
+
+A. Job intake
+- CNC jobs must come from POs, sales orders, internal work orders, subassembly demand, assembly demand, or rework demand
+- Jobs should be tied back to work orders and travelers
+
+B. CNC queue
+Each CNC job should show:
+- work order number
+- PO / SO reference
+- part number
+- part description
+- revision
+- quantity
+- due date
+- priority
+- current status
+- assigned machine
+- assigned programmer
+- assigned operator
+- linked traveler
+- material readiness if available
+
+C. Operation structure
+Each CNC job must support multiple operations, for example:
+- Op 10
+- Op 20
+- Op 30
+Each operation should support:
+- operation number
+- operation name
+- operation description
+- machine
+- sequence
+- estimated setup time
+- estimated cycle/run time
+- standard labor time
+- status
+- notes/tips
+- completion signoff
+
+D. Programming and setup package
+Each operation should support:
+- program name
+- program number
+- program revision/version
+- machine to run on
+- datum/work reference point
+- work offset notes
+- setup notes
+- fixture/workholding instructions
+- prove-out required yes/no
+- setup sheet or document reference if present
+
+E. Tooling
+Each operation should support structured tooling data:
+- tool number
+- tool description
+- holder position
+- tool holder placement
+- size/diameter if used
+- offset/setup notes
+- life or replacement notes if used
+- photo showing correct holder/tool placement
+
+F. Photos and visual instructions
+Each operation should support uploaded or linked photos for:
+- workholding setup
+- datum/reference setup
+- part orientation
+- tool holder placement
+- finished part example
+- critical feature reference
+
+G. Machine assignment
+The system should support:
+- machine name
+- machine number
+- work center if applicable
+- assigned machine per operation or per job depending on design
+
+H. Time tracking
+The system should support:
+- estimated setup time
+- estimated run/cycle time
+- actual setup time
+- actual run time
+- paused/downtime if available
+- operator-entered notes
+
+I. QC checkpoints
+Each operation should support structured in-process QC checkpoints:
+- checkpoint name
+- characteristic/spec
+- nominal
+- tolerance plus/minus if applicable
+- inspection method
+- inspection frequency
+- required yes/no
+- pass/fail entry
+- measured value entry if numeric
+- note entry
+- photo required yes/no
+- signature required yes/no
+
+J. Workflow progression
+The machinist/lead should be able to:
+- claim/start a job
+- complete setup
+- start run
+- pause
+- complete operation
+- put job on QC hold
+- sign off operation
+- move to next operation
+- move to next department or outside process
+
+K. Dashboard usability
+The CNC dashboard should function like a control center, not just a static page.
+It should include:
+- queue/list view
+- job detail view
+- operation detail view
+- setup/program/tooling/QC sections
+- actionable controls
+
+YOUR OUTPUT FORMAT
+
+Return your answer in this exact format:
+
+1. CNC FILE INVENTORY
+List all CNC-related files found in the codebase, grouped by:
+- frontend pages
+- frontend components
+- backend routes
+- backend services/controllers
+- database/schema files
+- types/validators
+- upload/media-related files
+- any related routing/traveler/work-order files
+
+2. WHAT IS FULLY BUILT
+List only features that are actually implemented end-to-end in code.
+For each feature include:
+- feature name
+- files involved
+- whether frontend + backend + database are connected
+- short proof/explanation
+
+3. WHAT IS PARTIALLY BUILT
+List features that exist only in UI, or only in schema, or only in API, or are missing full connection.
+For each include:
+- feature name
+- what exists
+- what is missing
+- files involved
+
+4. WHAT IS MISSING
+List features not built at all.
+Group by:
+- schema/database missing
+- backend/API missing
+- frontend/UI missing
+- workflow missing
+
+5. DATA MODEL GAPS
+Tell me which tables/entities are missing or incomplete.
+Examples to evaluate:
+- cnc_jobs
+- cnc_job_operations
+- cnc_programs
+- cnc_tooling or cnc_tool_lists
+- cnc_setup_photos
+- cnc_qc_checkpoints
+- cnc_qc_results
+- cnc_time_logs
+- machines/work_centers
+- operation signoff/history tables
+
+6. WORKFLOW GAPS
+Tell me exactly where the flow breaks between:
+PO/SO/work order -> traveler -> CNC queue -> operation planning -> programming/setup -> tooling -> execution -> QC -> completion -> next department
+
+7. PRIORITIZED BUILD PLAN
+Give me the exact next steps in build order:
+Phase 1 = must-have to make dashboard operational
+Phase 2 = execution and control
+Phase 3 = standardization and optimization
+
+8. COPY-PASTE BUILD TASKS
+After the audit, write a clean set of implementation tasks I can assign one by one.
+Format each like:
+- Task name
+- Goal
+- Files to create/update
+- Backend changes
+- Frontend changes
+- Schema changes
+- Acceptance criteria
+
+IMPORTANT RULES
+
+- Base your answer only on the actual code in this repo.
+- Do not assume something works unless you can trace it in code.
+- Distinguish clearly between “UI exists”, “API exists”, and “fully working end-to-end”.
+- If a screen is present but not wired to persistence, mark it as partial, not complete.
+- If tables exist but are unused, mark them as partial.
+- If routes exist but are not called by UI, mark them as partial.
+- If a requirement is handled through travelers or routings instead of CNC-specific tables, explain exactly how.
+- Be specific and cite filenames.
+
+At the end, provide a final section called:
+
+9. EXECUTIVE SUMMARY
+This should answer:
+- Is the CNC dashboard truly usable today?
+- What are the top 5 missing pieces?
+- What should be built next first?
+
+Do the full audit now.

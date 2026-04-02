@@ -1,0 +1,171 @@
+Build Phase 2 of the CNC dashboard.
+
+Use the existing CNC dashboard and extend it. Do NOT redesign anything.
+
+PHASE 2 GOAL
+Add execution control, QC enforcement, and standardization so this becomes a true CNC MES system.
+
+---
+
+TASK 1: Add photoRequired and signatureRequired to QC checkpoints
+
+Goal:
+Allow QC checkpoints to require a photo and/or a signature.
+
+Backend:
+- Add columns to cnc_qc_checkpoints:
+  photo_required BOOLEAN DEFAULT false
+  signature_required BOOLEAN DEFAULT false
+
+- Update validation schema and API payloads
+
+Frontend:
+- Add checkboxes in "Add Checkpoint" dialog:
+  [ ] Require Photo
+  [ ] Require Signature
+
+- In QC result submission:
+  - If photoRequired and no photo → block submission
+  - If signatureRequired and no user → block submission
+
+Acceptance:
+- Cannot submit checkpoint without required photo
+- Cannot submit checkpoint without required signature
+
+---
+
+TASK 2: Add operation description and standard labor time
+
+Goal:
+Separate technical instructions from name and track standard time.
+
+Backend:
+- Add columns to cnc_job_operations:
+  op_description TEXT
+  standard_labor_minutes INTEGER
+
+Frontend:
+- Add fields in operation form:
+  - Description (textarea)
+  - Standard Labor Time (minutes)
+
+- Display in operation detail panel
+
+Acceptance:
+- Operation shows both name and description
+- Standard labor time visible and editable
+
+---
+
+TASK 3: Add program approval flow
+
+Goal:
+Programs must be approved before production.
+
+Backend:
+- Use existing fields:
+  approvedByDisplayName
+  approvedAt
+
+Frontend:
+- Add "Approve Program" button per program
+- When clicked:
+  - set approvedByDisplayName = current user
+  - set approvedAt = timestamp
+
+- Visually show:
+  "Approved by [name] on [date]"
+
+Acceptance:
+- Program can be approved
+- Approval persists and displays
+
+---
+
+TASK 4: Add material readiness control
+
+Goal:
+Prevent jobs from running without material ready.
+
+Backend:
+- Use existing cnc_jobs.materialReady field
+
+Frontend:
+- Add toggle in job detail:
+  [ ] Material Ready
+
+- Show indicator in queue:
+  - green = ready
+  - red = not ready
+
+Acceptance:
+- Operator can see if material is ready before starting
+
+---
+
+TASK 5: Add pause/resume time logging (cnc_time_logs table)
+
+Goal:
+Track real production time, not just start/end.
+
+Backend:
+- Create cnc_time_logs table:
+  id
+  operation_id
+  type (setup_start, setup_end, run_start, run_end, pause, resume)
+  timestamp
+  reason (optional)
+  created_by
+
+- Add API:
+  POST /api/cnc/time-log
+
+Frontend:
+- Add buttons:
+  Pause (requires reason)
+  Resume
+
+- Record events in time_logs
+
+Acceptance:
+- Every pause/resume is recorded
+- Time history can be queried later
+
+---
+
+TASK 6: Add prove-out completion tracking
+
+Goal:
+Track first-run validation.
+
+Backend:
+- Add column to cnc_job_operations:
+  proveoutCompleted BOOLEAN DEFAULT false
+
+Frontend:
+- If requires_proveout = true:
+  show "Mark Prove-Out Complete" button
+
+Acceptance:
+- Operation cannot proceed to full production until prove-out complete
+
+---
+
+RULES
+- Keep all existing functionality intact
+- Do not remove or refactor working code
+- Extend schema safely using IF NOT EXISTS migrations
+- Ensure all new fields are wired frontend + backend + DB
+- Do not leave any UI element unconnected
+
+---
+
+OUTPUT FORMAT
+
+After implementation, return:
+
+1. Files changed
+2. Schema changes
+3. Routes added
+4. Features implemented
+5. Anything incomplete

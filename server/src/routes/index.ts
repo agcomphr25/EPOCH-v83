@@ -163,6 +163,7 @@ import controlTowerRoutes from './controlTower';
 import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
 import governanceRoutes from './governance';
+import cncDashboardRoutes from './cncDashboard';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Temporary debug route - raw order data inspector
@@ -710,6 +711,45 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Media Library routes
   app.use('/api/media', mediaRoutes);
+
+  // Generic object-storage upload endpoint (used by CNC dashboard for photos/tool images)
+  {
+    const cncUploadStorage = multer.memoryStorage();
+    const cncUpload = multer({ storage: cncUploadStorage, limits: { fileSize: 20 * 1024 * 1024 } });
+    app.post('/api/object-storage/upload', authenticateToken, cncUpload.single('file'), async (req: any, res: any) => {
+      try {
+        if (!req.file) return res.status(400).json({ error: 'No file received' });
+        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
+        const svc = new ObjectStorageService();
+        // Get a signed GCS PUT URL
+        const uploadURL = await svc.getObjectEntityUploadURL();
+        // Upload the buffer directly to GCS via the signed URL
+        const putRes = await fetch(uploadURL, {
+          method: 'PUT',
+          headers: { 'Content-Type': req.file.mimetype || 'application/octet-stream' },
+          body: req.file.buffer,
+        });
+        if (!putRes.ok) {
+          throw new Error(`GCS PUT failed: ${putRes.status} ${putRes.statusText}`);
+        }
+        // Normalize to /objects/... path
+        const objectPath = svc.normalizeObjectEntityPath(uploadURL);
+        // Make it publicly readable
+        try {
+          await svc.trySetObjectEntityAclPolicy(objectPath, {
+            owner: String(req.user?.id ?? 'system'),
+            visibility: 'public',
+          });
+        } catch (aclErr) {
+          console.warn('[CNC Upload] ACL set failed (non-fatal):', aclErr);
+        }
+        res.json({ url: objectPath, key: objectPath });
+      } catch (err: any) {
+        console.error('[CNC Upload] Error:', err);
+        res.status(500).json({ error: err.message || 'Upload failed' });
+      }
+    });
+  }
 
   // Voice notes routes (uses sessionAwareAuth to preserve real user sessions over bypass)
   app.use('/api/voice-notes', sessionAwareAuth, voiceNotesRoutes);
@@ -10115,6 +10155,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Schema Governance routes - drift detection, audit log, override
   app.use('/api/governance', authenticateToken, governanceRoutes);
+
+  // CNC Dashboard routes - job queue, setup packages, tooling, QC
+  app.use('/api/cnc', authenticateToken, cncDashboardRoutes);
 
   // Return the pre-existing server if one was passed in (early-bind pattern),
   // otherwise create a new one (backward-compatible fallback).

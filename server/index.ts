@@ -3001,7 +3001,313 @@ async function initializeBackgroundServices() {
       } catch (oaeErr: any) {
         console.warn('⚠️ order_activity_events migration skipped:', oaeErr?.message);
       }
+
+      // Ensure CNC Dashboard tables exist
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_jobs (
+            id SERIAL PRIMARY KEY,
+            work_order TEXT NOT NULL,
+            part_number TEXT NOT NULL,
+            part_name TEXT NOT NULL,
+            revision TEXT,
+            qty INTEGER NOT NULL DEFAULT 1,
+            machine TEXT,
+            programmer_user_id INTEGER,
+            programmer_display_name TEXT,
+            assigned_operator_user_id INTEGER,
+            assigned_operator_display_name TEXT,
+            due_date DATE,
+            estimated_hours REAL,
+            priority TEXT NOT NULL DEFAULT 'medium',
+            status TEXT NOT NULL DEFAULT 'queued',
+            linked_traveler_id TEXT,
+            material_ready BOOLEAN NOT NULL DEFAULT FALSE,
+            qc_hold BOOLEAN NOT NULL DEFAULT FALSE,
+            notes TEXT,
+            forward_destination TEXT,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_job_operations (
+            id SERIAL PRIMARY KEY,
+            job_id INTEGER NOT NULL REFERENCES cnc_jobs(id) ON DELETE CASCADE,
+            sequence INTEGER NOT NULL DEFAULT 10,
+            op_name TEXT NOT NULL,
+            machine TEXT,
+            estimated_setup_minutes REAL,
+            estimated_cycle_minutes REAL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            nc_program_ref TEXT,
+            qc_plan TEXT,
+            fixture TEXT,
+            work_ref_point TEXT,
+            raw_stock_orientation TEXT,
+            datum_notes TEXT,
+            warmup_notes TEXT,
+            tribal_knowledge TEXT,
+            actual_setup_start_at TIMESTAMP,
+            actual_setup_end_at TIMESTAMP,
+            actual_run_start_at TIMESTAMP,
+            actual_run_end_at TIMESTAMP,
+            part_count INTEGER NOT NULL DEFAULT 0,
+            scrap_qty INTEGER NOT NULL DEFAULT 0,
+            pause_reason TEXT,
+            claimed_by_user_id INTEGER,
+            claimed_by_display_name TEXT,
+            signed_off_by_user_id INTEGER,
+            signed_off_by_display_name TEXT,
+            operator_notes TEXT,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_programs (
+            id SERIAL PRIMARY KEY,
+            operation_id INTEGER NOT NULL REFERENCES cnc_job_operations(id) ON DELETE CASCADE,
+            program_name TEXT NOT NULL,
+            program_number TEXT,
+            version TEXT,
+            machine TEXT,
+            estimated_cycle_minutes REAL,
+            prove_out_required BOOLEAN NOT NULL DEFAULT FALSE,
+            approved_by_user_id INTEGER,
+            approved_by_display_name TEXT,
+            approved_at TIMESTAMP,
+            notes TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_tool_lists (
+            id SERIAL PRIMARY KEY,
+            operation_id INTEGER NOT NULL REFERENCES cnc_job_operations(id) ON DELETE CASCADE,
+            tool_number TEXT NOT NULL,
+            holder_position TEXT,
+            tool_name TEXT NOT NULL,
+            diameter REAL,
+            offset_notes TEXT,
+            replacement_notes TEXT,
+            image_url TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_setup_photos (
+            id SERIAL PRIMARY KEY,
+            operation_id INTEGER NOT NULL REFERENCES cnc_job_operations(id) ON DELETE CASCADE,
+            category TEXT NOT NULL DEFAULT 'Workholding',
+            url TEXT NOT NULL,
+            storage_key TEXT,
+            caption TEXT,
+            uploaded_by_user_id INTEGER,
+            uploaded_by_display_name TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_qc_checkpoints (
+            id SERIAL PRIMARY KEY,
+            operation_id INTEGER NOT NULL REFERENCES cnc_job_operations(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            characteristic TEXT,
+            nominal TEXT,
+            tolerance TEXT,
+            method TEXT,
+            frequency TEXT,
+            required BOOLEAN NOT NULL DEFAULT TRUE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_qc_results (
+            id SERIAL PRIMARY KEY,
+            checkpoint_id INTEGER NOT NULL REFERENCES cnc_qc_checkpoints(id) ON DELETE CASCADE,
+            operation_id INTEGER NOT NULL REFERENCES cnc_job_operations(id) ON DELETE CASCADE,
+            result TEXT NOT NULL,
+            measured_value TEXT,
+            notes TEXT,
+            recorded_by_user_id INTEGER,
+            recorded_by_display_name TEXT,
+            recorded_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        // Add columns that may be missing from initial table creation
+        await pool.query(`ALTER TABLE cnc_jobs ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER`);
+        await pool.query(`ALTER TABLE cnc_jobs ADD COLUMN IF NOT EXISTS created_by_display_name TEXT`);
+        await pool.query(`ALTER TABLE cnc_jobs ADD COLUMN IF NOT EXISTS customer_po TEXT`);
+        await pool.query(`ALTER TABLE cnc_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE cnc_job_operations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE cnc_programs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE cnc_tool_lists ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE cnc_qc_checkpoints ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE cnc_qc_results ADD COLUMN IF NOT EXISTS photo_url TEXT`);
+        await pool.query(`ALTER TABLE cnc_jobs ADD COLUMN IF NOT EXISTS customer_po TEXT`);
+        // Phase 2 migrations
+        await pool.query(`ALTER TABLE cnc_job_operations ADD COLUMN IF NOT EXISTS op_description TEXT`);
+        await pool.query(`ALTER TABLE cnc_job_operations ADD COLUMN IF NOT EXISTS standard_labor_minutes INTEGER`);
+        await pool.query(`ALTER TABLE cnc_job_operations ADD COLUMN IF NOT EXISTS proveout_completed BOOLEAN NOT NULL DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE cnc_qc_checkpoints ADD COLUMN IF NOT EXISTS photo_required BOOLEAN NOT NULL DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE cnc_qc_checkpoints ADD COLUMN IF NOT EXISTS signature_required BOOLEAN NOT NULL DEFAULT FALSE`);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_time_logs (
+            id SERIAL PRIMARY KEY,
+            operation_id INTEGER NOT NULL REFERENCES cnc_job_operations(id) ON DELETE CASCADE,
+            type TEXT NOT NULL,
+            timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+            reason TEXT,
+            created_by_user_id INTEGER,
+            created_by_display_name TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS cnc_time_logs_op_idx ON cnc_time_logs(operation_id)`);
+        // Phase 3 migrations
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_machines (
+            id SERIAL PRIMARY KEY,
+            machine_name TEXT NOT NULL,
+            machine_number TEXT,
+            work_center TEXT,
+            capabilities JSONB,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        // Seed default machines if table is empty
+        await pool.query(`
+          INSERT INTO cnc_machines (machine_name, machine_number, work_center, active)
+          SELECT t.machine_name, t.machine_number, t.work_center, true
+          FROM (VALUES
+            ('Haas VF-2', 'VF2-001', 'Mill'),
+            ('Haas VF-4', 'VF4-001', 'Mill'),
+            ('Haas ST-20', 'ST20-001', 'Lathe'),
+            ('Haas ST-30', 'ST30-001', 'Lathe'),
+            ('Mazak Integrex', 'INT-001', 'Turn-Mill'),
+            ('Okuma Genos M560', 'GEN-001', 'Mill')
+          ) AS t(machine_name, machine_number, work_center)
+          WHERE NOT EXISTS (SELECT 1 FROM cnc_machines LIMIT 1)
+        `);
+        await pool.query(`ALTER TABLE cnc_jobs ADD COLUMN IF NOT EXISTS linked_traveler_step_id TEXT`);
+
+        // ── T3: FK constraints (NOT VALID = skip validation of existing rows) ──
+        await pool.query(`
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.table_constraints
+              WHERE constraint_name = 'fk_cnc_jobs_traveler'
+                AND table_name = 'cnc_jobs'
+            ) THEN
+              ALTER TABLE cnc_jobs
+                ADD CONSTRAINT fk_cnc_jobs_traveler
+                FOREIGN KEY (linked_traveler_id)
+                REFERENCES travelers(id) ON DELETE SET NULL NOT VALID;
+            END IF;
+          END $$;
+        `);
+        await pool.query(`
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.table_constraints
+              WHERE constraint_name = 'fk_cnc_jobs_traveler_step'
+                AND table_name = 'cnc_jobs'
+            ) THEN
+              ALTER TABLE cnc_jobs
+                ADD CONSTRAINT fk_cnc_jobs_traveler_step
+                FOREIGN KEY (linked_traveler_step_id)
+                REFERENCES traveler_steps(id) ON DELETE SET NULL NOT VALID;
+            END IF;
+          END $$;
+        `);
+
+        // ── T4: Add source linkage columns to manufacturing_queue ──────────
+        await pool.query(`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS source_id TEXT`);
+        await pool.query(`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS source_type TEXT`);
+
+        // ── T4b: UNIQUE constraint so ON CONFLICT (source_type, source_id) works ──
+        await pool.query(`
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.table_constraints
+              WHERE constraint_name = 'uq_manufacturing_queue_source'
+                AND table_name = 'manufacturing_queue'
+            ) THEN
+              ALTER TABLE manufacturing_queue
+                ADD CONSTRAINT uq_manufacturing_queue_source
+                UNIQUE (source_type, source_id);
+            END IF;
+          END $$;
+        `);
+
+        // ── T5: Add preferred_machine column to part_routings ──────────────
+        await pool.query(`ALTER TABLE part_routings ADD COLUMN IF NOT EXISTS preferred_machine TEXT`);
+
+        console.log('✅ Ensured CNC Dashboard tables exist');
+      } catch (cncErr: any) {
+        console.warn('⚠️ CNC Dashboard migration skipped:', cncErr?.message);
+      }
     }
+
+    // ── T7: CNC ↔ Traveler sync — every 30 minutes ────────────────────────────
+    // Recovery net: creates CNC jobs for any IN_PROGRESS CNC steps that missed
+    // the real-time hook (e.g. server was down when step was started).
+    cron.schedule('*/30 * * * *', async () => {
+      try {
+        const result = await pool.query(`
+          SELECT
+            ts.id        AS step_id,
+            ts.traveler_id,
+            t.part_number,
+            t.part_name,
+            t.work_order_id,
+            t.sales_order_id,
+            t.quantity,
+            ao.due_date     AS order_due_date,
+            ao.customer_po  AS order_customer_po
+          FROM traveler_steps ts
+          JOIN travelers t ON t.id = ts.traveler_id
+          LEFT JOIN all_orders ao ON ao.order_id = t.sales_order_id
+          WHERE LOWER(ts.department_name) LIKE '%cnc%'
+            AND ts.status = 'IN_PROGRESS'
+            AND NOT EXISTS (
+              SELECT 1 FROM cnc_jobs j WHERE j.linked_traveler_step_id = ts.id
+            )
+        `);
+        const syncRows = Array.isArray(result) ? result : (result.rows ?? []);
+        if (syncRows.length === 0) return;
+
+        console.log(`[CNC Scheduler] ${syncRows.length} CNC step(s) missing jobs — auto-creating…`);
+        const { storage: cncStorage } = await import('./storage');
+        const { createManufacturingQueueEntryForCncJob } = await import('./src/lib/cncMq');
+        for (const row of syncRows) {
+          const dueDate = row.order_due_date
+            ? new Date(row.order_due_date).toISOString().split('T')[0]
+            : null;
+          const job = await cncStorage.createCncJob({
+            workOrder: row.work_order_id ?? row.sales_order_id ?? 'AUTO',
+            partNumber: row.part_number ?? 'UNKNOWN',
+            partName: row.part_name ?? 'From Traveler',
+            qty: row.quantity ?? 1,
+            dueDate: dueDate ?? undefined,
+            customerPo: row.order_customer_po ?? undefined,
+            priority: 'medium',
+            status: 'queued',
+            linkedTravelerId: row.traveler_id,
+            linkedTravelerStepId: row.step_id,
+            createdByDisplayName: 'CNC Scheduler',
+          });
+          await createManufacturingQueueEntryForCncJob(job);
+          console.log(`[CNC Scheduler] Created job ${job.id} for step ${row.step_id}`);
+        }
+      } catch (err: any) {
+        console.warn('[CNC Scheduler] Sync failed:', err?.message);
+      }
+    });
 
     // Set up quarterly vendor evaluation reset (runs on Jan 1, Apr 1, Jul 1, Oct 1)
     cron.schedule('1 0 1 1,4,7,10 *', async () => {

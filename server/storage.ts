@@ -56,6 +56,16 @@ import {
   p2SerializedItemEvents,
   p2NonconformingDispositions,
   p2Rmas,
+  // CNC Dashboard tables
+  cncJobs,
+  cncMachines,
+  cncJobOperations,
+  cncPrograms,
+  cncToolLists,
+  cncSetupPhotos,
+  cncQcCheckpoints,
+  cncQcResults,
+  cncTimeLogs,
   partRoutings,
   travelers,
   travelerSteps,
@@ -492,6 +502,25 @@ import {
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
   type ManufacturedCategory,
+  // CNC Dashboard types
+  type CncMachine,
+  type InsertCncMachine,
+  type CncJob,
+  type InsertCncJob,
+  type CncJobOperation,
+  type InsertCncJobOperation,
+  type CncProgram,
+  type InsertCncProgram,
+  type CncToolList,
+  type InsertCncToolList,
+  type CncSetupPhoto,
+  type InsertCncSetupPhoto,
+  type CncQcCheckpoint,
+  type InsertCncQcCheckpoint,
+  type CncQcResult,
+  type InsertCncQcResult,
+  type CncTimeLog,
+  type InsertCncTimeLog,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2211,6 +2240,43 @@ export interface IStorage {
   getP2RmasByStatus(status: 'open' | 'shipped' | 'complete'): Promise<P2Rma[]>;
   createP2Rma(data: InsertP2Rma): Promise<P2Rma>;
   updateP2Rma(id: number, data: Partial<InsertP2Rma & { shippedAt: Date | null; completedAt: Date | null }>): Promise<P2Rma | undefined>;
+
+  // CNC Dashboard
+  getCncMachines(): Promise<CncMachine[]>;
+  createCncMachine(data: InsertCncMachine): Promise<CncMachine>;
+  updateCncMachine(id: number, data: Partial<InsertCncMachine>): Promise<CncMachine | undefined>;
+  getCncJobs(): Promise<(CncJob & { totalOps: number; completedOps: number })[]>;
+  getCncJobById(id: number): Promise<CncJob | undefined>;
+  createCncJob(data: InsertCncJob): Promise<CncJob>;
+  updateCncJob(id: number, data: Partial<InsertCncJob>): Promise<CncJob | undefined>;
+  deleteCncJob(id: number): Promise<void>;
+  getCncJobOperations(jobId: number): Promise<CncJobOperation[]>;
+  getCncJobOperationById(id: number): Promise<CncJobOperation | undefined>;
+  createCncJobOperation(data: InsertCncJobOperation): Promise<CncJobOperation>;
+  updateCncJobOperation(id: number, data: Partial<InsertCncJobOperation>): Promise<CncJobOperation | undefined>;
+  deleteCncJobOperation(id: number): Promise<void>;
+  getCncPrograms(operationId: number): Promise<CncProgram[]>;
+  createCncProgram(data: InsertCncProgram): Promise<CncProgram>;
+  updateCncProgram(id: number, data: Partial<InsertCncProgram>): Promise<CncProgram | undefined>;
+  deleteCncProgram(id: number): Promise<void>;
+  getCncToolList(operationId: number): Promise<CncToolList[]>;
+  createCncToolListEntry(data: InsertCncToolList): Promise<CncToolList>;
+  updateCncToolListEntry(id: number, data: Partial<InsertCncToolList>): Promise<CncToolList | undefined>;
+  deleteCncToolListEntry(id: number): Promise<void>;
+  getCncSetupPhotos(operationId: number): Promise<CncSetupPhoto[]>;
+  createCncSetupPhoto(data: InsertCncSetupPhoto): Promise<CncSetupPhoto>;
+  updateCncSetupPhoto(id: number, data: Partial<InsertCncSetupPhoto>): Promise<CncSetupPhoto | undefined>;
+  deleteCncSetupPhoto(id: number): Promise<void>;
+  getCncQcCheckpoints(operationId: number): Promise<CncQcCheckpoint[]>;
+  createCncQcCheckpoint(data: InsertCncQcCheckpoint): Promise<CncQcCheckpoint>;
+  updateCncQcCheckpoint(id: number, data: Partial<InsertCncQcCheckpoint>): Promise<CncQcCheckpoint | undefined>;
+  deleteCncQcCheckpoint(id: number): Promise<void>;
+  getCncQcResults(operationId: number): Promise<CncQcResult[]>;
+  createCncQcResult(data: InsertCncQcResult): Promise<CncQcResult>;
+  updateCncQcResult(id: number, data: Partial<InsertCncQcResult>): Promise<CncQcResult | undefined>;
+  deleteCncQcResult(id: number): Promise<void>;
+  getCncTimeLogs(operationId: number): Promise<CncTimeLog[]>;
+  createCncTimeLog(data: InsertCncTimeLog): Promise<CncTimeLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -19484,6 +19550,180 @@ export class DatabaseStorage implements IStorage {
       .where(eq(p2Rmas.id, id))
       .returning();
     return updated;
+  }
+
+  // ─── CNC Dashboard ──────────────────────────────────────────────────────────
+
+  async getCncJobs(): Promise<(CncJob & { totalOps: number; completedOps: number })[]> {
+    const jobs = await db.select().from(cncJobs).orderBy(asc(cncJobs.dueDate), asc(cncJobs.id));
+    if (jobs.length === 0) return [];
+    // Get operation summary per job
+    const opSummaries = await db.select({
+      jobId: cncJobOperations.jobId,
+      totalOps: count(cncJobOperations.id),
+      completedOps: count(sql<number>`CASE WHEN ${cncJobOperations.status} = 'complete' THEN 1 END`),
+    }).from(cncJobOperations).groupBy(cncJobOperations.jobId);
+    const summaryMap = Object.fromEntries(opSummaries.map(s => [s.jobId, s]));
+    return jobs.map(j => ({
+      ...j,
+      totalOps: summaryMap[j.id]?.totalOps ?? 0,
+      completedOps: summaryMap[j.id]?.completedOps ?? 0,
+    }));
+  }
+
+  async getCncJobById(id: number): Promise<CncJob | undefined> {
+    const [job] = await db.select().from(cncJobs).where(eq(cncJobs.id, id));
+    return job;
+  }
+
+  async createCncJob(data: InsertCncJob): Promise<CncJob> {
+    const [job] = await db.insert(cncJobs).values({ ...data, createdAt: new Date(), updatedAt: new Date() }).returning();
+    return job;
+  }
+
+  async updateCncJob(id: number, data: Partial<InsertCncJob>): Promise<CncJob | undefined> {
+    const [job] = await db.update(cncJobs).set({ ...data, updatedAt: new Date() }).where(eq(cncJobs.id, id)).returning();
+    return job;
+  }
+
+  async deleteCncJob(id: number): Promise<void> {
+    await db.delete(cncJobs).where(eq(cncJobs.id, id));
+  }
+
+  async getCncJobOperations(jobId: number): Promise<CncJobOperation[]> {
+    return db.select().from(cncJobOperations).where(eq(cncJobOperations.jobId, jobId)).orderBy(asc(cncJobOperations.sequence));
+  }
+
+  async getCncJobOperationById(id: number): Promise<CncJobOperation | undefined> {
+    const [op] = await db.select().from(cncJobOperations).where(eq(cncJobOperations.id, id));
+    return op;
+  }
+
+  async createCncJobOperation(data: InsertCncJobOperation): Promise<CncJobOperation> {
+    const [op] = await db.insert(cncJobOperations).values({ ...data, createdAt: new Date(), updatedAt: new Date() }).returning();
+    return op;
+  }
+
+  async updateCncJobOperation(id: number, data: Partial<InsertCncJobOperation>): Promise<CncJobOperation | undefined> {
+    const [op] = await db.update(cncJobOperations).set({ ...data, updatedAt: new Date() }).where(eq(cncJobOperations.id, id)).returning();
+    return op;
+  }
+
+  async deleteCncJobOperation(id: number): Promise<void> {
+    await db.delete(cncJobOperations).where(eq(cncJobOperations.id, id));
+  }
+
+  async getCncPrograms(operationId: number): Promise<CncProgram[]> {
+    return db.select().from(cncPrograms).where(eq(cncPrograms.operationId, operationId));
+  }
+
+  async createCncProgram(data: InsertCncProgram): Promise<CncProgram> {
+    const [p] = await db.insert(cncPrograms).values({ ...data, createdAt: new Date(), updatedAt: new Date() }).returning();
+    return p;
+  }
+
+  async updateCncProgram(id: number, data: Partial<InsertCncProgram>): Promise<CncProgram | undefined> {
+    const [p] = await db.update(cncPrograms).set({ ...data, updatedAt: new Date() }).where(eq(cncPrograms.id, id)).returning();
+    return p;
+  }
+
+  async deleteCncProgram(id: number): Promise<void> {
+    await db.delete(cncPrograms).where(eq(cncPrograms.id, id));
+  }
+
+  async getCncToolList(operationId: number): Promise<CncToolList[]> {
+    return db.select().from(cncToolLists).where(eq(cncToolLists.operationId, operationId)).orderBy(asc(cncToolLists.sortOrder));
+  }
+
+  async createCncToolListEntry(data: InsertCncToolList): Promise<CncToolList> {
+    const [t] = await db.insert(cncToolLists).values({ ...data, createdAt: new Date(), updatedAt: new Date() }).returning();
+    return t;
+  }
+
+  async updateCncToolListEntry(id: number, data: Partial<InsertCncToolList>): Promise<CncToolList | undefined> {
+    const [t] = await db.update(cncToolLists).set({ ...data, updatedAt: new Date() }).where(eq(cncToolLists.id, id)).returning();
+    return t;
+  }
+
+  async deleteCncToolListEntry(id: number): Promise<void> {
+    await db.delete(cncToolLists).where(eq(cncToolLists.id, id));
+  }
+
+  async getCncSetupPhotos(operationId: number): Promise<CncSetupPhoto[]> {
+    return db.select().from(cncSetupPhotos).where(eq(cncSetupPhotos.operationId, operationId)).orderBy(asc(cncSetupPhotos.id));
+  }
+
+  async createCncSetupPhoto(data: InsertCncSetupPhoto): Promise<CncSetupPhoto> {
+    const [ph] = await db.insert(cncSetupPhotos).values({ ...data, createdAt: new Date() }).returning();
+    return ph;
+  }
+
+  async updateCncSetupPhoto(id: number, data: Partial<InsertCncSetupPhoto>): Promise<CncSetupPhoto | undefined> {
+    const [ph] = await db.update(cncSetupPhotos).set(data).where(eq(cncSetupPhotos.id, id)).returning();
+    return ph;
+  }
+
+  async deleteCncSetupPhoto(id: number): Promise<void> {
+    await db.delete(cncSetupPhotos).where(eq(cncSetupPhotos.id, id));
+  }
+
+  async getCncQcCheckpoints(operationId: number): Promise<CncQcCheckpoint[]> {
+    return db.select().from(cncQcCheckpoints).where(eq(cncQcCheckpoints.operationId, operationId)).orderBy(asc(cncQcCheckpoints.sortOrder));
+  }
+
+  async createCncQcCheckpoint(data: InsertCncQcCheckpoint): Promise<CncQcCheckpoint> {
+    const [cp] = await db.insert(cncQcCheckpoints).values({ ...data, createdAt: new Date(), updatedAt: new Date() }).returning();
+    return cp;
+  }
+
+  async updateCncQcCheckpoint(id: number, data: Partial<InsertCncQcCheckpoint>): Promise<CncQcCheckpoint | undefined> {
+    const [cp] = await db.update(cncQcCheckpoints).set({ ...data, updatedAt: new Date() }).where(eq(cncQcCheckpoints.id, id)).returning();
+    return cp;
+  }
+
+  async deleteCncQcCheckpoint(id: number): Promise<void> {
+    await db.delete(cncQcCheckpoints).where(eq(cncQcCheckpoints.id, id));
+  }
+
+  async getCncQcResults(operationId: number): Promise<CncQcResult[]> {
+    return db.select().from(cncQcResults).where(eq(cncQcResults.operationId, operationId));
+  }
+
+  async createCncQcResult(data: InsertCncQcResult): Promise<CncQcResult> {
+    const [r] = await db.insert(cncQcResults).values({ ...data, recordedAt: new Date() }).returning();
+    return r;
+  }
+
+  async updateCncQcResult(id: number, data: Partial<InsertCncQcResult>): Promise<CncQcResult | undefined> {
+    const [r] = await db.update(cncQcResults).set(data).where(eq(cncQcResults.id, id)).returning();
+    return r;
+  }
+
+  async deleteCncQcResult(id: number): Promise<void> {
+    await db.delete(cncQcResults).where(eq(cncQcResults.id, id));
+  }
+
+  async getCncTimeLogs(operationId: number): Promise<CncTimeLog[]> {
+    return db.select().from(cncTimeLogs).where(eq(cncTimeLogs.operationId, operationId)).orderBy(asc(cncTimeLogs.timestamp));
+  }
+
+  async createCncTimeLog(data: InsertCncTimeLog): Promise<CncTimeLog> {
+    const [log] = await db.insert(cncTimeLogs).values({ ...data, createdAt: new Date() }).returning();
+    return log;
+  }
+
+  async getCncMachines(): Promise<CncMachine[]> {
+    return db.select().from(cncMachines).where(eq(cncMachines.active, true)).orderBy(asc(cncMachines.machineName));
+  }
+
+  async createCncMachine(data: InsertCncMachine): Promise<CncMachine> {
+    const [machine] = await db.insert(cncMachines).values({ ...data, createdAt: new Date() }).returning();
+    return machine;
+  }
+
+  async updateCncMachine(id: number, data: Partial<InsertCncMachine>): Promise<CncMachine | undefined> {
+    const [machine] = await db.update(cncMachines).set(data).where(eq(cncMachines.id, id)).returning();
+    return machine;
   }
 }
 

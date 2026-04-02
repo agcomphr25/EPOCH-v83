@@ -13902,3 +13902,234 @@ export const insertOrderActivityEventSchema = createInsertSchema(orderActivityEv
 
 export type OrderActivityEvent = typeof orderActivityEvents.$inferSelect;
 export type InsertOrderActivityEvent = z.infer<typeof insertOrderActivityEventSchema>;
+
+// ─── CNC Dashboard ────────────────────────────────────────────────────────────
+
+export const cncMachines = pgTable('cnc_machines', {
+  id: serial('id').primaryKey(),
+  machineName: text('machine_name').notNull(),
+  machineNumber: text('machine_number'),
+  workCenter: text('work_center'),
+  capabilities: jsonb('capabilities'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertCncMachineSchema = createInsertSchema(cncMachines).omit({ id: true, createdAt: true });
+export type CncMachine = typeof cncMachines.$inferSelect;
+export type InsertCncMachine = z.infer<typeof insertCncMachineSchema>;
+
+export const cncJobs = pgTable('cnc_jobs', {
+  id: serial('id').primaryKey(),
+  workOrder: text('work_order').notNull(),
+  partNumber: text('part_number').notNull(),
+  partName: text('part_name').notNull(),
+  revision: text('revision'),
+  qty: integer('qty').notNull().default(1),
+  machine: text('machine'),
+  programmerUserId: integer('programmer_user_id'),
+  programmerDisplayName: text('programmer_display_name'),
+  assignedOperatorUserId: integer('assigned_operator_user_id'),
+  assignedOperatorDisplayName: text('assigned_operator_display_name'),
+  dueDate: date('due_date'),
+  estimatedHours: real('estimated_hours'),
+  priority: text('priority').notNull().default('medium'),
+  status: text('status').notNull().default('queued'),
+  linkedTravelerId: text('linked_traveler_id'),
+  linkedTravelerStepId: text('linked_traveler_step_id'),
+  customerPo: text('customer_po'),
+  materialReady: boolean('material_ready').default(false),
+  qcHold: boolean('qc_hold').default(false),
+  notes: text('notes'),
+  forwardDestination: text('forward_destination'),
+  completedAt: timestamp('completed_at'),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertCncJobSchema = createInsertSchema(cncJobs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CncJob = typeof cncJobs.$inferSelect;
+export type InsertCncJob = z.infer<typeof insertCncJobSchema>;
+
+export const cncJobOperations = pgTable('cnc_job_operations', {
+  id: serial('id').primaryKey(),
+  jobId: integer('job_id').notNull().references(() => cncJobs.id, { onDelete: 'cascade' }),
+  sequence: integer('sequence').notNull(),
+  opName: text('op_name').notNull(),
+  opDescription: text('op_description'),
+  standardLaborMinutes: integer('standard_labor_minutes'),
+  machine: text('machine'),
+  estimatedSetupMinutes: real('estimated_setup_minutes'),
+  estimatedCycleMinutes: real('estimated_cycle_minutes'),
+  status: text('status').notNull().default('pending'),
+  ncProgramRef: text('nc_program_ref'),
+  qcPlan: text('qc_plan'),
+  fixture: text('fixture'),
+  workRefPoint: text('work_ref_point'),
+  rawStockOrientation: text('raw_stock_orientation'),
+  datumNotes: text('datum_notes'),
+  warmupNotes: text('warmup_notes'),
+  tribalKnowledge: text('tribal_knowledge'),
+  actualSetupStartAt: timestamp('actual_setup_start_at'),
+  actualSetupEndAt: timestamp('actual_setup_end_at'),
+  actualRunStartAt: timestamp('actual_run_start_at'),
+  actualRunEndAt: timestamp('actual_run_end_at'),
+  partCount: integer('part_count').default(0),
+  scrapQty: integer('scrap_qty').default(0),
+  pauseReason: text('pause_reason'),
+  proveoutCompleted: boolean('proveout_completed').default(false),
+  claimedByUserId: integer('claimed_by_user_id'),
+  claimedByDisplayName: text('claimed_by_display_name'),
+  signedOffByUserId: integer('signed_off_by_user_id'),
+  signedOffByDisplayName: text('signed_off_by_display_name'),
+  operatorNotes: text('operator_notes'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertCncJobOperationSchema = createInsertSchema(cncJobOperations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CncJobOperation = typeof cncJobOperations.$inferSelect;
+export type InsertCncJobOperation = z.infer<typeof insertCncJobOperationSchema>;
+
+export const cncPrograms = pgTable('cnc_programs', {
+  id: serial('id').primaryKey(),
+  operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),
+  programName: text('program_name').notNull(),
+  programNumber: text('program_number'),
+  version: text('version'),
+  machine: text('machine'),
+  estimatedCycleMinutes: real('estimated_cycle_minutes'),
+  proveOutRequired: boolean('prove_out_required').default(false),
+  approvedByUserId: integer('approved_by_user_id'),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvedAt: timestamp('approved_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertCncProgramSchema = createInsertSchema(cncPrograms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CncProgram = typeof cncPrograms.$inferSelect;
+export type InsertCncProgram = z.infer<typeof insertCncProgramSchema>;
+
+export const cncToolLists = pgTable('cnc_tool_lists', {
+  id: serial('id').primaryKey(),
+  operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),
+  toolNumber: text('tool_number').notNull(),
+  holderPosition: text('holder_position'),
+  toolName: text('tool_name').notNull(),
+  diameter: real('diameter'),
+  offsetNotes: text('offset_notes'),
+  replacementNotes: text('replacement_notes'),
+  imageUrl: text('image_url'),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertCncToolListSchema = createInsertSchema(cncToolLists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CncToolList = typeof cncToolLists.$inferSelect;
+export type InsertCncToolList = z.infer<typeof insertCncToolListSchema>;
+
+export const cncSetupPhotos = pgTable('cnc_setup_photos', {
+  id: serial('id').primaryKey(),
+  operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),
+  category: text('category').notNull(),
+  url: text('url').notNull(),
+  storageKey: text('storage_key'),
+  caption: text('caption'),
+  uploadedByUserId: integer('uploaded_by_user_id'),
+  uploadedByDisplayName: text('uploaded_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertCncSetupPhotoSchema = createInsertSchema(cncSetupPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+export type CncSetupPhoto = typeof cncSetupPhotos.$inferSelect;
+export type InsertCncSetupPhoto = z.infer<typeof insertCncSetupPhotoSchema>;
+
+export const cncQcCheckpoints = pgTable('cnc_qc_checkpoints', {
+  id: serial('id').primaryKey(),
+  operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  characteristic: text('characteristic'),
+  nominal: text('nominal'),
+  tolerance: text('tolerance'),
+  method: text('method'),
+  frequency: text('frequency'),
+  required: boolean('required').default(true),
+  photoRequired: boolean('photo_required').default(false),
+  signatureRequired: boolean('signature_required').default(false),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertCncQcCheckpointSchema = createInsertSchema(cncQcCheckpoints).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CncQcCheckpoint = typeof cncQcCheckpoints.$inferSelect;
+export type InsertCncQcCheckpoint = z.infer<typeof insertCncQcCheckpointSchema>;
+
+export const cncQcResults = pgTable('cnc_qc_results', {
+  id: serial('id').primaryKey(),
+  checkpointId: integer('checkpoint_id').notNull().references(() => cncQcCheckpoints.id, { onDelete: 'cascade' }),
+  operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),
+  result: text('result').notNull(),
+  measuredValue: text('measured_value'),
+  notes: text('notes'),
+  photoUrl: text('photo_url'),
+  recordedByUserId: integer('recorded_by_user_id'),
+  recordedByDisplayName: text('recorded_by_display_name'),
+  recordedAt: timestamp('recorded_at').defaultNow(),
+});
+
+export const insertCncQcResultSchema = createInsertSchema(cncQcResults).omit({
+  id: true,
+  recordedAt: true,
+});
+export type CncQcResult = typeof cncQcResults.$inferSelect;
+export type InsertCncQcResult = z.infer<typeof insertCncQcResultSchema>;
+
+// ─── CNC Time Logs (pause/resume event ledger) ────────────────────────────────
+
+export const cncTimeLogs = pgTable('cnc_time_logs', {
+  id: serial('id').primaryKey(),
+  operationId: integer('operation_id').notNull().references(() => cncJobOperations.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(), // setup_start | setup_end | run_start | run_end | pause | resume
+  timestamp: timestamp('timestamp').notNull().defaultNow(),
+  reason: text('reason'),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertCncTimeLogSchema = createInsertSchema(cncTimeLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type CncTimeLog = typeof cncTimeLogs.$inferSelect;
+export type InsertCncTimeLog = z.infer<typeof insertCncTimeLogSchema>;

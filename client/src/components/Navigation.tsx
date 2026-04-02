@@ -2307,6 +2307,19 @@ export default function Navigation() {
               </div>
             )}
 
+            {/* CNC Dashboard Direct Link */}
+            <Button
+              variant={location === '/cnc-dashboard' ? 'default' : 'ghost'}
+              className={cn(
+                'flex items-center gap-2 text-sm',
+                location === '/cnc-dashboard' && 'bg-primary text-white'
+              )}
+              onClick={() => { closeAllDropdowns(); setLocation('/cnc-dashboard'); }}
+            >
+              <Settings className="h-4 w-4" />
+              CNC Dashboard
+            </Button>
+
             {/* Verified Modules Dropdown */}
             {filteredVerifiedModulesItems.length > 0 && (
               <div className="relative">

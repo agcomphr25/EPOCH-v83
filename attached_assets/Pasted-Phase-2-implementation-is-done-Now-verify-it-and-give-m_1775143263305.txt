@@ -1,0 +1,115 @@
+Phase 2 implementation is done. Now verify it and give me a final completion report.
+
+I need you to verify every Phase 2 feature end-to-end in code and return a structured report.
+
+VERIFY THESE ITEMS
+
+1. QC checkpoint photoRequired
+- column exists in schema
+- migration exists
+- API accepts it
+- frontend can set it
+- submission is blocked if photo is required and missing
+
+2. QC checkpoint signatureRequired
+- column exists in schema
+- migration exists
+- API accepts it
+- frontend can set it
+- submission is blocked if signature is required and missing
+
+3. Operation description
+- op_description exists in schema
+- migration exists
+- API accepts it
+- frontend form saves it
+- UI displays it
+
+4. Standard labor minutes
+- standard_labor_minutes exists in schema
+- migration exists
+- API accepts it
+- frontend form saves it
+- UI displays it
+
+5. Program approval flow
+- approve route exists or program PATCH flow is wired
+- frontend approve button exists
+- approvedByDisplayName persists
+- approvedAt persists
+- approval displays in UI
+
+6. Material readiness
+- materialReady is usable in job detail
+- toggle exists
+- value persists
+- queue clearly displays ready / not ready
+
+7. CNC time logs
+- cnc_time_logs table exists
+- migration exists
+- storage methods exist
+- API route exists
+- pause creates a log entry
+- resume creates a log entry
+- UI can trigger both
+
+8. Prove-out completion
+- proveoutCompleted exists in schema
+- migration exists
+- frontend button exists when required
+- value persists
+- workflow respects it
+
+RETURN RESULTS IN THIS EXACT FORMAT
+
+PHASE 2 VERIFICATION REPORT
+
+A. FILES CHANGED
+List every file changed for Phase 2
+
+B. DATABASE / SCHEMA CHANGES
+List:
+- new tables
+- new columns
+- migrations added
+- ensure/bootstrap updates
+
+C. ROUTES ADDED OR UPDATED
+List exact route paths and methods touched
+
+D. FRONTEND FEATURES NOW WORKING
+For each feature, say:
+- implemented: yes/no
+- proof: exact component/function names
+
+E. BACKEND FEATURES NOW WORKING
+For each feature, say:
+- implemented: yes/no
+- proof: exact route/storage/schema names
+
+F. VALIDATION / ENFORCEMENT CONFIRMED
+For each enforcement rule, say yes/no:
+- photo required blocks QC submission
+- signature required blocks QC submission
+- prove-out required blocks progression if applicable
+- pause/resume creates time-log entries
+
+G. ANY REMAINING BUGS OR RISKS
+List anything still incomplete, not wired, or risky
+
+H. MANUAL TEST STEPS
+Give me a short click-by-click test plan for a CNC operator / programmer / lead to verify Phase 2 works
+
+I. READY FOR PHASE 3?
+Answer only:
+- Yes, ready for Phase 3
+or
+- No, fix these items first: [list]
+
+IMPORTANT
+- Be specific
+- Cite exact file names
+- Cite exact function names
+- If something exists only in schema or only in UI, mark it partial, not complete
+- Do not give me a general summary only

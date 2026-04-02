@@ -658,7 +658,7 @@ export default function WeeklyShipmentsOverview() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="all">
-                All ({unifiedShipments.length})
+                All ({p1Count + oemCount + adHocCount})
               </TabsTrigger>
               <TabsTrigger value="p1">
                 P1 Orders ({p1Count})

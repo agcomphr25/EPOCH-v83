@@ -10035,61 +10035,137 @@ export class DatabaseStorage implements IStorage {
   }[]> {
     // Use raw SQL query due to Drizzle ORM issues with LEFT JOIN and nullable fields
     // Note: "P1" purchase orders = ALL orders in purchase_orders table (vs P2 which has separate tables)
+    //
+    // Two-path strategy:
+    //   PATH 1 (primary): match production_orders via po_item_id — covers most cases.
+    //   PATH 2 (fallback): for production orders that have po_id but NULL po_item_id,
+    //     attach them to the first PO item of that PO when the order is in Shipping QC or Shipping.
+    //     This prevents stock-model units physically in Shipping QC from disappearing when the
+    //     po_item_id link was never set on the production order (historical data gap).
+    //
+    // Uses UNION ALL (not UNION) — deduplication is enforced by the NOT EXISTS guard in path 2,
+    // which excludes any order_id already covered by path 1. Path 2 anchors orphaned production
+    // orders to the first (lowest id) PO item of the PO, which is a pragmatic approximation:
+    // description/quantity metadata may not perfectly match when a PO has multiple items, but
+    // the primary goal is visibility, not exact attribution.
     const result = await db.execute(sql`
-      SELECT 
-        po.id as "poId",
-        po.po_number as "poNumber",
-        po.customer_id as "customerId",
-        po.customer_name as "customerName",
-        po.po_date as "poDate",
-        po.expected_delivery as "expectedDelivery",
-        poi.id as "poItemId",
-        poi.item_name as "itemName",
-        poi.stock_model_name as "stockModelName",
-        poi.quantity,
-        poi.specifications,
-        poi.stock_model_id as "stockModelId",
-        poi.due_date as "dueDate",
-        poi.item_type as "itemType",
-        CASE 
-          WHEN LOWER(poi.stock_model_name) IN ('cf_adj_alp_hunter', 'cf_alpine_hunter', 'privateer')
-               OR UPPER(poi.item_name) LIKE 'AG-FG-%' OR UPPER(poi.item_name) LIKE 'AG-CRB-%'
-               OR UPPER(poi.item_name) LIKE 'AGFG%' OR UPPER(poi.item_name) LIKE 'AGCRB%'
-               OR UPPER(poi.item_name) LIKE 'AGAH%' OR UPPER(poi.item_name) LIKE 'AGADH%'
-               THEN 'stock_model'
-          WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
-                OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
-               AND (poi.specifications::jsonb->>'flatTop')::boolean = true
-               THEN 'stock_model'
-          WHEN UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
-               OR UPPER(poi.stock_model_name) LIKE '%BM-%' OR UPPER(poi.stock_model_name) LIKE '%-BM-%'
-               OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
-               OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
-               OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
-               OR UPPER(poi.item_name) LIKE 'AGPIC%' OR UPPER(poi.item_name) LIKE 'AGARCA%'
-               OR UPPER(poi.item_name) LIKE 'AGM5%' OR UPPER(poi.item_name) LIKE 'AGBDL%'
-               THEN 'custom_model'
-          WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
-                OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
-               AND ((poi.specifications::jsonb->>'flatTop')::boolean IS NULL 
-                    OR (poi.specifications::jsonb->>'flatTop')::boolean = false)
-               THEN 'custom_model'
-          ELSE 'stock_model'
-        END as "displayItemType",
-        poi.stock_status as "stockStatus",
-        prod.order_id as "orderId",
-        prod.current_department as "currentDepartment",
-        prod.production_status as "productionStatus"
-      FROM purchase_orders po
-      INNER JOIN purchase_order_items poi ON po.id = poi.po_id
-      LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
-      WHERE po.status = 'OPEN'
-         OR (po.status = 'CLOSED' AND EXISTS (
-               SELECT 1 FROM production_orders
-               WHERE po_id = po.id
-                 AND production_status NOT IN ('SHIPPED', 'CANCELLED')
-             ))
-      ORDER BY po.customer_name ASC, po.po_number ASC, poi.id ASC
+      WITH item_type_cte AS (
+        SELECT
+          poi.id as poi_id,
+          CASE 
+            WHEN LOWER(poi.stock_model_name) IN ('cf_adj_alp_hunter', 'cf_alpine_hunter', 'privateer')
+                 OR UPPER(poi.item_name) LIKE 'AG-FG-%' OR UPPER(poi.item_name) LIKE 'AG-CRB-%'
+                 OR UPPER(poi.item_name) LIKE 'AGFG%' OR UPPER(poi.item_name) LIKE 'AGCRB%'
+                 OR UPPER(poi.item_name) LIKE 'AGAH%' OR UPPER(poi.item_name) LIKE 'AGADH%'
+                 THEN 'stock_model'
+            WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
+                  OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
+                 AND (poi.specifications::jsonb->>'flatTop')::boolean = true
+                 THEN 'stock_model'
+            WHEN UPPER(poi.item_name) LIKE '%BM-%' OR UPPER(poi.item_name) LIKE '%-BM-%'
+                 OR UPPER(poi.stock_model_name) LIKE '%BM-%' OR UPPER(poi.stock_model_name) LIKE '%-BM-%'
+                 OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
+                 OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
+                 OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
+                 OR UPPER(poi.item_name) LIKE 'AGPIC%' OR UPPER(poi.item_name) LIKE 'AGARCA%'
+                 OR UPPER(poi.item_name) LIKE 'AGM5%' OR UPPER(poi.item_name) LIKE 'AGBDL%'
+                 THEN 'custom_model'
+            WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
+                  OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
+                 AND ((poi.specifications::jsonb->>'flatTop')::boolean IS NULL 
+                      OR (poi.specifications::jsonb->>'flatTop')::boolean = false)
+                 THEN 'custom_model'
+            ELSE 'stock_model'
+          END as display_item_type
+        FROM purchase_order_items poi
+      ),
+      -- PATH 1: production orders linked via po_item_id (primary/preferred path)
+      path1 AS (
+        SELECT
+          po.id as "poId",
+          po.po_number as "poNumber",
+          po.customer_id as "customerId",
+          po.customer_name as "customerName",
+          po.po_date as "poDate",
+          po.expected_delivery as "expectedDelivery",
+          poi.id as "poItemId",
+          poi.item_name as "itemName",
+          poi.stock_model_name as "stockModelName",
+          poi.quantity,
+          poi.specifications,
+          poi.stock_model_id as "stockModelId",
+          poi.due_date as "dueDate",
+          poi.item_type as "itemType",
+          itc.display_item_type as "displayItemType",
+          poi.stock_status as "stockStatus",
+          prod.order_id as "orderId",
+          prod.current_department as "currentDepartment",
+          prod.production_status as "productionStatus"
+        FROM purchase_orders po
+        INNER JOIN purchase_order_items poi ON po.id = poi.po_id
+        INNER JOIN item_type_cte itc ON itc.poi_id = poi.id
+        LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
+        WHERE po.status = 'OPEN'
+           OR (po.status = 'CLOSED' AND EXISTS (
+                 SELECT 1 FROM production_orders
+                 WHERE po_id = po.id
+                   AND production_status NOT IN ('SHIPPED', 'CANCELLED')
+               ))
+      ),
+      -- PATH 2: production orders that have po_id but NULL po_item_id and are in Shipping QC/Shipping.
+      -- We attach them to the first (lowest id) PO item of that PO so they surface in the queue.
+      -- Only included when not already covered by path 1.
+      path2 AS (
+        SELECT
+          po.id as "poId",
+          po.po_number as "poNumber",
+          po.customer_id as "customerId",
+          po.customer_name as "customerName",
+          po.po_date as "poDate",
+          po.expected_delivery as "expectedDelivery",
+          poi.id as "poItemId",
+          poi.item_name as "itemName",
+          poi.stock_model_name as "stockModelName",
+          poi.quantity,
+          poi.specifications,
+          poi.stock_model_id as "stockModelId",
+          poi.due_date as "dueDate",
+          poi.item_type as "itemType",
+          itc.display_item_type as "displayItemType",
+          poi.stock_status as "stockStatus",
+          prod.order_id as "orderId",
+          prod.current_department as "currentDepartment",
+          prod.production_status as "productionStatus"
+        FROM production_orders prod
+        INNER JOIN purchase_orders po ON prod.po_id = po.id
+        INNER JOIN (
+          -- Pick the first PO item for this PO (by id) to anchor the orphaned production order
+          SELECT DISTINCT ON (po_id) id, po_id, item_name, stock_model_name, quantity,
+                 specifications, stock_model_id, due_date, item_type, stock_status
+          FROM purchase_order_items
+          ORDER BY po_id, id ASC
+        ) poi ON poi.po_id = po.id
+        INNER JOIN item_type_cte itc ON itc.poi_id = poi.id
+        WHERE prod.po_item_id IS NULL
+          AND prod.current_department IN ('Shipping QC', 'Shipping')
+          AND prod.production_status NOT IN ('SHIPPED', 'CANCELLED')
+          AND (po.status = 'OPEN'
+               OR (po.status = 'CLOSED' AND EXISTS (
+                     SELECT 1 FROM production_orders p2
+                     WHERE p2.po_id = po.id
+                       AND p2.production_status NOT IN ('SHIPPED', 'CANCELLED')
+                   )))
+          -- Exclude any order_id already handled by path 1 via po_item_id
+          AND NOT EXISTS (
+            SELECT 1 FROM production_orders p3
+            WHERE p3.order_id = prod.order_id
+              AND p3.po_item_id IS NOT NULL
+          )
+      )
+      SELECT * FROM path1
+      UNION ALL
+      SELECT * FROM path2
+      ORDER BY "customerName" ASC, "poNumber" ASC, "poItemId" ASC
     `);
     
     const rows = result.rows || [];
@@ -10156,7 +10232,11 @@ export class DatabaseStorage implements IStorage {
         const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
 
         // Don't mark as ready to ship if already shipped
-        const isShipped = row.productionStatus === 'SHIPPED' || (row as any).stockStatus === 'SHIPPED';
+        // Use only the production order's own status — do NOT fall back to poi.stock_status.
+        // poi.stock_status can be stale (e.g. marked SHIPPED at the item level while individual
+        // production orders are still LAID_UP in Shipping QC), which would incorrectly hide
+        // those units from the queue (bug: PO002612 / RFPO-002612).
+        const isShipped = row.productionStatus === 'SHIPPED';
         const isInShippingDept = row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping';
 
         poItem.productionOrders.push({

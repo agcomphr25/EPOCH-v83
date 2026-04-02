@@ -1,0 +1,55 @@
+Good. Do not add new features yet.
+
+Now run a focused verification pass for the traveler consumption linkage changes and return only concrete results.
+
+Test checklist
+
+1. Schema / migration verification
+- confirm traveler_material_consumption now has received_unit_id
+- confirm startup ensure block is idempotent
+- confirm no duplicate-column issues
+- confirm no new uuid/varchar join errors were introduced
+
+2. Validate endpoint verification
+- test a valid material lot with a linked received unit
+- verify response includes:
+  - receivedUnit.id
+  - receivedUnit.barcode
+  - receivedUnit.quantity
+  - receivedUnit.disposition
+- verify pending/quarantine/rejected/expired received units fail closed
+- verify near-expiration still returns warning, not hard fail
+
+3. Consume endpoint verification
+- consume from a lot linked to a received unit
+- verify traveler_material_consumption stores received_unit_id
+- verify ISSUE material_lot_transaction is created
+- verify material lot remaining quantity decrements correctly
+- verify received unit quantity decrements correctly
+- verify over-consumption is blocked
+- verify consume fails if linked received unit is unusable
+
+4. Genealogy verification
+- verify unit genealogy now includes direct received_unit_id-based consumption
+- verify receipt genealogy includes downstream traveler/work-order usage
+- verify reverse lookup from received unit to traveler usage works
+- verify no duplicate consumption rows appear
+
+5. Regression verification
+- existing material lot validate flow still works
+- existing receipt genealogy still works
+- existing label routes still work
+- existing disposition/document/expiration gates still work
+- no TypeScript errors
+- no debug logs left behind
+
+Output format
+Return only:
+1. files touched during verification fixes
+2. tests passed
+3. tests failed
+4. exact errors found
+5. exact fixes applied
+6. final remaining risks, if any
+
+Do not re-summarize the project. Be concise.

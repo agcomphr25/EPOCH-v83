@@ -70,3 +70,13 @@ export async function generateBarcodeImages(
 ): Promise<string[]> {
   return Promise.all(values.map((value) => generateBarcodeImage(value, options)));
 }
+
+/**
+ * Generate a receiving unit barcode string.
+ * Format: {receiptNumber}-{unitSequence} → e.g., "RCV-20260401-001-003"
+ * @param receiptNumber - Full receipt number, e.g. "RCV-YYYYMMDD-NNN"
+ * @param unitSequence - Zero-based unit sequence number within the receipt
+ */
+export function generateReceivingUnitBarcodeValue(receiptNumber: string, unitSequence: number): string {
+  return `${receiptNumber}-${String(unitSequence).padStart(3, '0')}`;
+}

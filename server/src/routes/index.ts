@@ -164,6 +164,7 @@ import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
 import governanceRoutes from './governance';
 import cncDashboardRoutes from './cncDashboard';
+import receivingRoutes from './receiving';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Temporary debug route - raw order data inspector
@@ -10158,6 +10159,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // CNC Dashboard routes - job queue, setup packages, tooling, QC
   app.use('/api/cnc', authenticateToken, cncDashboardRoutes);
+
+  // Receiving Control Center routes
+  app.use('/api/receipts', authenticateToken, receivingRoutes);
 
   // Return the pre-existing server if one was passed in (early-bind pattern),
   // otherwise create a new one (backward-compatible fallback).

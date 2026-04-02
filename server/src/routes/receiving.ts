@@ -1,0 +1,1169 @@
+import { Router, Request, Response } from 'express';
+import { db } from '../../db';
+import { sql, eq, desc, and } from 'drizzle-orm';
+import {
+  receipts,
+  receiptLines,
+  receivedUnits,
+  receiptDocuments,
+  receiptAuditLog,
+  insertReceiptSchema,
+  insertReceiptLineSchema,
+  insertReceivedUnitSchema,
+  insertReceiptDocumentSchema,
+  materialLots,
+  materialLotTransactions,
+  mediaLibrary,
+  vendorPOItems,
+  inventoryItems,
+  insertMaterialLotSchema,
+  insertMaterialLotTransactionSchema,
+  insertMediaLibrarySchema,
+  type InsertMaterialLot,
+  type InsertMaterialLotTransaction,
+  type InsertMediaLibrary,
+  type Receipt,
+  type ReceiptLine,
+  type ReceivedUnit,
+} from '../../schema';
+import { z } from 'zod';
+import multer from 'multer';
+import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
+import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../utils/barcodeGenerator';
+import { requireRole } from '../../middleware/auth';
+
+const router = Router();
+const objectStorage = new ObjectStorageService();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
+
+// All authenticated employees (ADMIN, EMPLOYEE, OWNER) may perform receiving operations.
+// Applied to all mutating endpoints at the route level for defence-in-depth beyond global auth.
+const requireReceivingAccess = requireRole('ADMIN', 'EMPLOYEE', 'OWNER');
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Type-safe row extractor for raw SQL results (Drizzle returns { rows: unknown[] } or the rows directly) */
+function sqlRows<T = Record<string, unknown>>(result: unknown): T[] {
+  if (result && typeof result === 'object' && 'rows' in result) {
+    return (result as { rows: T[] }).rows;
+  }
+  return result as T[];
+}
+
+type AuthUser = Express.Request['user'];
+
+async function generateReceiptNumber(): Promise<string> {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const prefix = `RCV-${dateStr}-`;
+  const result = await db.execute(
+    sql`SELECT receipt_number FROM receipts WHERE receipt_number LIKE ${prefix + '%'} ORDER BY receipt_number DESC LIMIT 1`
+  );
+  const rows = sqlRows<{ receipt_number: string }>(result);
+  if (rows.length === 0) return `${prefix}001`;
+  const seq = parseInt(rows[0].receipt_number.slice(-3), 10) + 1;
+  return `${prefix}${String(seq).padStart(3, '0')}`;
+}
+
+// Unit barcode: delegate to shared utility for consistency across barcode generation routes
+const generateUnitBarcode = generateReceivingUnitBarcodeValue;
+
+async function getNextUnitSequence(receiptId: number): Promise<number> {
+  const result = await db.execute(
+    sql`SELECT COALESCE(MAX(unit_sequence), 0) + 1 AS next_seq FROM received_units WHERE receipt_id = ${receiptId}`
+  );
+  const rows = sqlRows<{ next_seq: string }>(result);
+  return parseInt(rows[0]?.next_seq ?? '1', 10) || 1;
+}
+
+function actorName(user: AuthUser): string {
+  if (!user) return 'Unknown';
+  return user.username ?? 'Unknown';
+}
+
+async function logAudit(
+  receiptId: number,
+  action: string,
+  actorUserId: number | null | undefined,
+  actorDisplayName: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  await db.insert(receiptAuditLog).values({
+    receiptId,
+    action,
+    actorUserId: actorUserId ?? undefined,
+    actorDisplayName,
+    metadata: metadata ?? null,
+  });
+}
+
+// Verify a receipt_line belongs to the given receipt (IDOR protection)
+async function assertLineOwnership(receiptId: number, lineId: number): Promise<ReceiptLine | null> {
+  const [line] = await db.select().from(receiptLines).where(
+    and(eq(receiptLines.id, lineId), eq(receiptLines.receiptId, receiptId))
+  );
+  return line ?? null;
+}
+
+// Verify a received_unit belongs to the given receipt (IDOR protection)
+async function assertUnitOwnership(receiptId: number, unitId: number): Promise<ReceivedUnit | null> {
+  const [unit] = await db.select().from(receivedUnits).where(
+    and(eq(receivedUnits.id, unitId), eq(receivedUnits.receiptId, receiptId))
+  );
+  return unit ?? null;
+}
+
+// Auto-import PO lines into the receipt as receipt_lines
+async function importPoLines(receiptId: number, vendorPoId: number): Promise<void> {
+  const poItems = await db.select().from(vendorPOItems).where(eq(vendorPOItems.vendorPoId, vendorPoId));
+  if (!poItems.length) return;
+  for (const item of poItems) {
+    const exists = await db.execute(
+      sql`SELECT id FROM receipt_lines WHERE receipt_id = ${receiptId} AND vendor_po_item_id = ${item.id} LIMIT 1`
+    );
+    const existRows = sqlRows<{ id: number }>(exists);
+    if (existRows.length > 0) continue;
+    await db.insert(receiptLines).values({
+      receiptId,
+      vendorPoItemId: item.id,
+      agPartNumber: item.agPartNumber ?? null,
+      description: item.description ?? null,
+      orderedQty: String(item.quantity ?? item.purchaseQty ?? 0),
+      receivedQty: '0',
+      uom: item.vendorUnit ?? item.purchaseUnit ?? 'EA',
+      isPartial: false,
+      isOver: false,
+    });
+  }
+}
+
+// ── GET /api/receipts/pending-by-po ───────────────────────────────────────────
+// Returns { poId → { count, latestStatus } } for all POs with in-progress receipts
+router.get('/pending-by-po', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT vendor_po_id, COUNT(*) AS cnt, MAX(status) AS latest_status
+          FROM receipts
+          WHERE vendor_po_id IS NOT NULL AND status = 'in_progress'
+          GROUP BY vendor_po_id`
+    );
+    const rows = sqlRows<{ vendor_po_id: number; cnt: string; latest_status: string }>(result);
+    const map: Record<number, { count: number; latestStatus: string }> = {};
+    for (const row of rows) {
+      map[row.vendor_po_id] = { count: Number(row.cnt), latestStatus: row.latest_status };
+    }
+    res.json(map);
+  } catch (err: any) {
+    console.error('GET /api/receipts/pending-by-po:', err);
+    res.status(500).json({ error: 'Failed to fetch pending receipt counts' });
+  }
+});
+
+// ── GET /api/receipts ──────────────────────────────────────────────────────────
+router.get('/', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const { status, vendorId, vendorPoId, from, to } = req.query;
+    const conditions = [];
+    if (status && status !== 'all') conditions.push(eq(receipts.status, status as string));
+    if (vendorId) conditions.push(eq(receipts.vendorId, parseInt(vendorId as string)));
+    if (vendorPoId) conditions.push(eq(receipts.vendorPoId, parseInt(vendorPoId as string)));
+    if (from) conditions.push(sql`receipt_date >= ${from}`);
+    if (to) conditions.push(sql`receipt_date <= ${to}`);
+    const rows = await db.select().from(receipts)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(receipts.receiptDate));
+    res.json(rows);
+  } catch (err: any) {
+    console.error('GET /api/receipts:', err);
+    res.status(500).json({ error: 'Failed to fetch receipts' });
+  }
+});
+
+// ── POST /api/receipts ─────────────────────────────────────────────────────────
+// Supports resume: if vendorPoId provided and in_progress receipt exists, returns it
+router.post('/', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const user = req.user;
+    const { vendorPoId } = req.body;
+
+    // Resume behavior
+    if (vendorPoId) {
+      const existing = await db.execute(
+        sql`SELECT id FROM receipts WHERE vendor_po_id = ${parseInt(vendorPoId)} AND status = 'in_progress' ORDER BY created_at DESC LIMIT 1`
+      );
+      const existRows = sqlRows<{ id: number }>(existing);
+      if (existRows.length > 0) {
+        const existingId = existRows[0].id;
+        const [existingReceipt] = await db.select().from(receipts).where(eq(receipts.id, existingId));
+        const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, existingId));
+        const units = await db.select().from(receivedUnits).where(eq(receivedUnits.receiptId, existingId));
+        const documents = await db.select().from(receiptDocuments).where(eq(receiptDocuments.receiptId, existingId));
+        const auditLogs = await db.select().from(receiptAuditLog)
+          .where(eq(receiptAuditLog.receiptId, existingId)).orderBy(desc(receiptAuditLog.createdAt));
+        await logAudit(existingId, 'receipt_resumed', user?.employeeId, actorName(user), { vendorPoId });
+        return res.json({ ...existingReceipt, lines, units, documents, auditLog: auditLogs, _resumed: true });
+      }
+    }
+
+    const receiptNumber = await generateReceiptNumber();
+    const rawBody = { ...req.body };
+    if (rawBody.receivedAt && typeof rawBody.receivedAt === 'string') {
+      rawBody.receivedAt = new Date(rawBody.receivedAt);
+    }
+    const body = insertReceiptSchema.parse({
+      ...rawBody,
+      receiptNumber,
+      receiverUserId: user?.employeeId ?? null,
+      receiverDisplayName: actorName(user),
+    });
+    const [receipt] = await db.insert(receipts).values(body).returning();
+
+    await logAudit(receipt.id, 'receipt_created', user?.employeeId, body.receiverDisplayName ?? 'Unknown', {
+      receiptNumber, vendorPoId: body.vendorPoId ?? null,
+    });
+
+    if (body.vendorPoId) {
+      await importPoLines(receipt.id, body.vendorPoId);
+      await logAudit(receipt.id, 'po_lines_imported', user?.employeeId, actorName(user), { vendorPoId: body.vendorPoId });
+    }
+
+    const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, receipt.id));
+    res.status(201).json({ ...receipt, lines, units: [], documents: [], auditLog: [] });
+  } catch (err: any) {
+    console.error('POST /api/receipts:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to create receipt' });
+  }
+});
+
+// ── GET /api/receipts/:id ──────────────────────────────────────────────────────
+router.get('/:id', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, id));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+    const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, id));
+    const units = await db.select().from(receivedUnits).where(eq(receivedUnits.receiptId, id));
+    const documents = await db.select().from(receiptDocuments).where(eq(receiptDocuments.receiptId, id));
+    const auditLogs = await db.select().from(receiptAuditLog)
+      .where(eq(receiptAuditLog.receiptId, id)).orderBy(desc(receiptAuditLog.createdAt));
+    res.json({ ...receipt, lines, units, documents, auditLog: auditLogs });
+  } catch (err: any) {
+    console.error('GET /api/receipts/:id:', err);
+    res.status(500).json({ error: 'Failed to fetch receipt' });
+  }
+});
+
+// ── PATCH /api/receipts/:id ────────────────────────────────────────────────────
+router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const user = req.user;
+    const rawPatch = { ...req.body };
+    if (rawPatch.receivedAt && typeof rawPatch.receivedAt === 'string') {
+      rawPatch.receivedAt = new Date(rawPatch.receivedAt);
+    }
+    const updates = insertReceiptSchema.partial().parse(rawPatch);
+    const [updated] = await db.update(receipts).set({ ...updates, updatedAt: new Date() }).where(eq(receipts.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: 'Receipt not found' });
+    await logAudit(id, 'receipt_updated', user?.employeeId, actorName(user), updates as Record<string, unknown>);
+    res.json(updated);
+  } catch (err: any) {
+    console.error('PATCH /api/receipts/:id:', err);
+    res.status(500).json({ error: 'Failed to update receipt' });
+  }
+});
+
+// ── POST /api/receipts/:id/lines ───────────────────────────────────────────────
+router.post('/:id/lines', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const user = req.user;
+    const body = insertReceiptLineSchema.parse({ ...req.body, receiptId });
+    const [line] = await db.insert(receiptLines).values(body).returning();
+    await logAudit(receiptId, 'line_added', user?.employeeId, actorName(user), {
+      lineId: line.id, agPartNumber: line.agPartNumber ?? null, receivedQty: line.receivedQty,
+    });
+    res.status(201).json(line);
+  } catch (err: any) {
+    console.error('POST /api/receipts/:id/lines:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to add receipt line' });
+  }
+});
+
+// ── PATCH /api/receipts/:id/lines/:lineId ─────────────────────────────────────
+router.patch('/:id/lines/:lineId', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const lineId = parseInt(req.params.lineId);
+    const user = req.user;
+    const line = await assertLineOwnership(receiptId, lineId);
+    if (!line) return res.status(404).json({ error: 'Receipt line not found or does not belong to this receipt' });
+    const updates = insertReceiptLineSchema.partial().parse(req.body);
+    const [updated] = await db.update(receiptLines).set({ ...updates, updatedAt: new Date() }).where(eq(receiptLines.id, lineId)).returning();
+    await logAudit(receiptId, 'line_updated', user?.employeeId, actorName(user), { lineId });
+    res.json(updated);
+  } catch (err: any) {
+    console.error('PATCH receipt line:', err);
+    res.status(500).json({ error: 'Failed to update receipt line' });
+  }
+});
+
+// ── POST /api/receipts/:id/lines/:lineId/units ────────────────────────────────
+router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const lineId = parseInt(req.params.lineId);
+    const user = req.user;
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const line = await assertLineOwnership(receiptId, lineId);
+    if (!line) return res.status(404).json({ error: 'Receipt line not found or does not belong to this receipt' });
+
+    const unitSequence = await getNextUnitSequence(receiptId);
+    const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+
+    const body = insertReceivedUnitSchema.parse({
+      ...req.body,
+      receiptId,
+      receiptLineId: lineId,
+      unitSequence,
+      barcode,
+    });
+    const [unit] = await db.insert(receivedUnits).values(body).returning();
+
+    await logAudit(receiptId, 'unit_added', user?.employeeId, actorName(user), {
+      unitId: unit.id, barcode, unitSequence, disposition: unit.disposition,
+    });
+
+    if (body.disposition === 'accepted') {
+      try {
+        await handleAcceptedUnit(unit, receipt, user);
+      } catch (lotErr: any) {
+        // Roll back all disposition metadata so the clerk can retry after fixing catalog data
+        await db.update(receivedUnits).set({
+          disposition: 'pending_inspection',
+          dispositionNotes: null,
+          dispositionByUserId: null,
+          dispositionByDisplayName: null,
+          dispositionAt: null,
+          updatedAt: new Date(),
+        }).where(eq(receivedUnits.id, unit.id));
+        return res.status(422).json({ error: lotErr.message });
+      }
+    }
+
+    res.status(201).json(unit);
+  } catch (err: any) {
+    console.error('POST unit:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to add received unit' });
+  }
+});
+
+// ── PATCH /api/receipts/:id/units/:unitId ─────────────────────────────────────
+router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+    const user = req.user;
+    const unit = await assertUnitOwnership(receiptId, unitId);
+    if (!unit) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
+    const updates = insertReceivedUnitSchema.partial().parse(req.body);
+    const [updated] = await db.update(receivedUnits).set({ ...updates, updatedAt: new Date() }).where(eq(receivedUnits.id, unitId)).returning();
+
+    // Audit traceability-affecting changes (location, freezer, allocation, disposition fields)
+    const auditableKeys: (keyof typeof updates)[] = ['location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber'];
+    const auditableChanges: Record<string, unknown> = {};
+    for (const key of auditableKeys) {
+      if (key in updates) auditableChanges[key] = updates[key];
+    }
+    if (Object.keys(auditableChanges).length > 0) {
+      await logAudit(receiptId, 'unit_updated', user?.employeeId, actorName(user), { unitId, changes: auditableChanges });
+    }
+
+    res.json(updated);
+  } catch (err: any) {
+    console.error('PATCH unit:', err);
+    res.status(500).json({ error: 'Failed to update unit' });
+  }
+});
+
+// ── POST /api/receipts/:id/units/:unitId/disposition ─────────────────────────
+router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+    const user = req.user;
+    const { disposition, notes } = req.body as { disposition: string; notes?: string };
+
+    const allowedDispositions = ['pending_inspection', 'accepted', 'quarantine', 'rejected'];
+    if (!allowedDispositions.includes(disposition)) {
+      return res.status(400).json({ error: 'Invalid disposition value' });
+    }
+
+    // Server-side enforcement: quarantine and rejected dispositions require notes
+    if ((disposition === 'quarantine' || disposition === 'rejected') && !notes?.trim()) {
+      return res.status(422).json({ error: `Notes are required when setting disposition to "${disposition}"` });
+    }
+
+    const unitCheck = await assertUnitOwnership(receiptId, unitId);
+    if (!unitCheck) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
+
+    // Expiration gate: cannot accept or issue expired material
+    if (disposition === 'accepted') {
+      const expStatus = receivedUnitExpirationStatus(unitCheck.expirationDate ?? undefined);
+      if (expStatus === 'expired') {
+        return res.status(422).json({
+          error: 'Cannot accept an expired unit. Update the expiration date or reject/quarantine this unit.',
+          expirationStatus: 'expired',
+          expirationDate: unitCheck.expirationDate,
+        });
+      }
+
+      // Required document enforcement
+      const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+      const [line] = await db.select().from(receiptLines).where(eq(receiptLines.id, unitCheck.receiptLineId));
+      if (line?.agPartNumber) {
+        const missingDocs = await checkRequiredDocs(line.agPartNumber, receiptId);
+        if (missingDocs.length > 0) {
+          return res.status(422).json({
+            error: 'Cannot accept unit — required documents are missing for this part.',
+            missingDocuments: missingDocs,
+          });
+        }
+      }
+    }
+
+    const displayName = actorName(user);
+    const [unit] = await db.update(receivedUnits).set({
+      disposition,
+      dispositionNotes: notes ?? null,
+      dispositionByUserId: user?.employeeId ?? null,
+      dispositionByDisplayName: displayName,
+      dispositionAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(receivedUnits.id, unitId)).returning();
+
+    await logAudit(receiptId, 'disposition_set', user?.employeeId, displayName, {
+      unitId, disposition, barcode: unit.barcode, notes: notes ?? null,
+    });
+
+    if (disposition === 'accepted') {
+      const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+      if (receipt) {
+        try {
+          await handleAcceptedUnit(unit, receipt, user);
+        } catch (lotErr: any) {
+          // Roll back all disposition metadata so the clerk can retry after fixing catalog data
+          await db.update(receivedUnits).set({
+            disposition: 'pending_inspection',
+            dispositionNotes: null,
+            dispositionByUserId: null,
+            dispositionByDisplayName: null,
+            dispositionAt: null,
+            updatedAt: new Date(),
+          }).where(eq(receivedUnits.id, unitId));
+          return res.status(422).json({ error: lotErr.message });
+        }
+      }
+    }
+
+    res.json(unit);
+  } catch (err: any) {
+    console.error('POST disposition:', err);
+    res.status(500).json({ error: 'Failed to set disposition' });
+  }
+});
+
+// ── POST /api/receipts/:id/documents ─────────────────────────────────────────
+// Uploads to object storage, creates media_library record, links in receipt_documents
+router.post('/:id/documents', requireReceivingAccess, upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const user = req.user;
+    const displayName = actorName(user);
+    const { docType, notes, receivedUnitId } = req.body as { docType?: string; notes?: string; receivedUnitId?: string };
+
+    // Validate receivedUnitId ownership if provided
+    if (receivedUnitId) {
+      const unitCheck = await assertUnitOwnership(receiptId, parseInt(receivedUnitId));
+      if (!unitCheck) return res.status(400).json({ error: 'Unit does not belong to this receipt' });
+    }
+
+    let storagePath: string | null = null;
+    let filename: string | null = null;
+    let mimeType: string | null = null;
+    let fileSize: number | null = null;
+    let mediaLibraryId: string | null = null;
+
+    if (req.file) {
+      filename = req.file.originalname;
+      mimeType = req.file.mimetype;
+      fileSize = req.file.size;
+
+      storagePath = await objectStorage.uploadBuffer(req.file.buffer, filename, mimeType);
+
+      // Create media_library record for cross-system traceability
+      const mediaValues: InsertMediaLibrary = {
+        filename,
+        storagePath: storagePath ?? filename,
+        mimeType,
+        fileSize: fileSize ?? undefined,
+        capturedById: user?.employeeId ?? null,
+        capturedByName: displayName,
+        category: docType ?? 'other',
+        tags: ['receiving', `receipt-${receiptId}`],
+        title: `Receipt ${receiptId} — ${docType ?? 'document'}`,
+        notes: notes ?? null,
+      };
+      try {
+        const parsed = insertMediaLibrarySchema.parse(mediaValues);
+        const [mediaRecord] = await db.insert(mediaLibrary).values(parsed).returning();
+        mediaLibraryId = mediaRecord?.id ?? null;
+      } catch (mediaErr: any) {
+        console.warn('media_library insert failed:', mediaErr.message);
+      }
+    }
+
+    const docValues = insertReceiptDocumentSchema.parse({
+      receiptId,
+      receivedUnitId: receivedUnitId ? parseInt(receivedUnitId) : null,
+      mediaId: mediaLibraryId,
+      docType: docType || 'other',
+      filename,
+      storagePath,
+      mimeType,
+      notes: notes || null,
+      uploadedByUserId: user?.employeeId ?? null,
+      uploadedByDisplayName: displayName,
+    });
+    const [doc] = await db.insert(receiptDocuments).values(docValues).returning();
+
+    await logAudit(receiptId, 'document_uploaded', user?.employeeId, displayName, {
+      docId: doc.id, docType: docType ?? null, filename: filename ?? null, mediaLibraryId,
+    });
+
+    res.status(201).json(doc);
+  } catch (err: any) {
+    console.error('POST document:', err);
+    res.status(500).json({ error: 'Failed to upload document' });
+  }
+});
+
+// ── DELETE /api/receipts/:id/documents/:docId ─────────────────────────────────
+router.delete('/:id/documents/:docId', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const docId = parseInt(req.params.docId);
+    const user = req.user;
+
+    // IDOR: validate document belongs to this receipt
+    const [doc] = await db.select().from(receiptDocuments).where(
+      and(eq(receiptDocuments.id, docId), eq(receiptDocuments.receiptId, receiptId))
+    );
+    if (!doc) return res.status(404).json({ error: 'Document not found or does not belong to this receipt' });
+
+    await db.delete(receiptDocuments).where(eq(receiptDocuments.id, docId));
+    await logAudit(receiptId, 'document_deleted', user?.employeeId, actorName(user), { docId });
+    res.status(204).end();
+  } catch (err: any) {
+    console.error('DELETE document:', err);
+    res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
+// ── GET /api/receipts/:id/units/:unitId/label ─────────────────────────────────
+// Returns label data + CODE128 barcode image (via bwip-js)
+router.get('/:id/units/:unitId/label', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const unit = await assertUnitOwnership(receiptId, unitId);
+    if (!unit) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
+
+    const [line] = await db.select().from(receiptLines).where(eq(receiptLines.id, unit.receiptLineId));
+
+    const user = req.user;
+    await logAudit(receiptId, 'label_printed', user?.employeeId, actorName(user), { unitId, barcode: unit.barcode });
+
+    let barcodeImage: string | null = null;
+    try {
+      barcodeImage = await generateBarcodeImage(unit.barcode, { format: 'CODE128', width: 3, height: 12 });
+    } catch (barcodeErr) {
+      console.warn('Barcode image generation failed:', barcodeErr);
+    }
+
+    res.json({
+      barcode: unit.barcode,
+      barcodeImage,
+      agPartNumber: line?.agPartNumber ?? '',
+      description: line?.description ?? '',
+      quantity: unit.quantity,
+      uom: unit.uom,
+      lotNumber: unit.lotNumber,
+      batchNumber: unit.batchNumber,
+      serialNumber: unit.serialNumber,
+      internalControlNumber: unit.internalControlNumber,
+      rollNumber: unit.rollNumber,
+      heatLot: unit.heatLot,
+      certReference: unit.certReference,
+      manufactureDate: unit.manufactureDate,
+      expirationDate: unit.expirationDate,
+      poNumber: receipt.vendorPoNumber,
+      receiptDate: receipt.receiptDate,
+      receiptNumber: receipt.receiptNumber,
+      vendorName: receipt.vendorName,
+      disposition: unit.disposition,
+      location: unit.location,
+    });
+  } catch (err: any) {
+    console.error('GET label:', err);
+    res.status(500).json({ error: 'Failed to fetch label data' });
+  }
+});
+
+// ── POST /api/receipts/:id/labels/batch ──────────────────────────────────────
+// Returns array of label data with barcodeImage for batch PDF printing on the client
+router.post('/:id/labels/batch', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const user = req.user;
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const units = await db.select().from(receivedUnits).where(eq(receivedUnits.receiptId, receiptId));
+    const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, receiptId));
+    const lineMap = new Map(lines.map(l => [l.id, l]));
+
+    await logAudit(receiptId, 'batch_labels_printed', user?.employeeId, actorName(user), { unitCount: units.length });
+
+    const labels = await Promise.all(units.map(async unit => {
+      const line = lineMap.get(unit.receiptLineId);
+      let barcodeImage: string | null = null;
+      try {
+        barcodeImage = await generateBarcodeImage(unit.barcode, { format: 'CODE128', width: 3, height: 12 });
+      } catch (_) {}
+      return {
+        barcode: unit.barcode,
+        barcodeImage,
+        agPartNumber: line?.agPartNumber ?? '',
+        description: line?.description ?? '',
+        quantity: unit.quantity,
+        uom: unit.uom,
+        lotNumber: unit.lotNumber,
+        batchNumber: unit.batchNumber,
+        serialNumber: unit.serialNumber,
+        internalControlNumber: unit.internalControlNumber,
+        rollNumber: unit.rollNumber,
+        heatLot: unit.heatLot,
+        certReference: unit.certReference,
+        manufactureDate: unit.manufactureDate,
+        expirationDate: unit.expirationDate,
+        poNumber: receipt.vendorPoNumber,
+        receiptDate: receipt.receiptDate,
+        receiptNumber: receipt.receiptNumber,
+        vendorName: receipt.vendorName,
+        disposition: unit.disposition,
+        location: unit.location,
+      };
+    }));
+
+    res.json(labels);
+  } catch (err: any) {
+    console.error('POST batch labels:', err);
+    res.status(500).json({ error: 'Failed to fetch batch label data' });
+  }
+});
+
+// ── GET /api/receipts/:id/audit ───────────────────────────────────────────────
+router.get('/:id/audit', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const logs = await db.select().from(receiptAuditLog)
+      .where(eq(receiptAuditLog.receiptId, receiptId))
+      .orderBy(desc(receiptAuditLog.createdAt));
+    res.json(logs);
+  } catch (err: any) {
+    console.error('GET audit log:', err);
+    res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+// ── Helper: required-document checker ────────────────────────────────────────
+// Returns array of missing doc types, or empty array if all required docs present.
+async function checkRequiredDocs(agPartNumber: string, receiptId: number): Promise<string[]> {
+  if (!agPartNumber) return [];
+
+  // Fetch doc requirements for this inventory item
+  const invResult = await db.execute(
+    sql`SELECT requires_sds, requires_tds, requires_coc, requires_test_report, requires_packing_slip_photo
+        FROM inventory_items WHERE ag_part_number = ${agPartNumber} LIMIT 1`
+  );
+  const invRows = sqlRows<{
+    requires_sds: boolean;
+    requires_tds: boolean;
+    requires_coc: boolean;
+    requires_test_report: boolean;
+    requires_packing_slip_photo: boolean;
+  }>(invResult);
+
+  if (!invRows.length) return []; // Item not found — no requirements
+
+  const req = invRows[0];
+  const requiredTypes: Array<{ flag: boolean; docType: string; label: string }> = [
+    { flag: req.requires_sds, docType: 'SDS', label: 'Safety Data Sheet (SDS)' },
+    { flag: req.requires_tds, docType: 'TDS', label: 'Technical Data Sheet (TDS)' },
+    { flag: req.requires_coc, docType: 'CoC', label: 'Certificate of Conformance (CoC)' },
+    { flag: req.requires_test_report, docType: 'test_report', label: 'Test Report' },
+    { flag: req.requires_packing_slip_photo, docType: 'packing_slip', label: 'Packing Slip Photo' },
+  ];
+
+  const needed = requiredTypes.filter(r => r.flag).map(r => r.docType);
+  if (!needed.length) return [];
+
+  // Fetch uploaded docs for this receipt
+  const docResult = await db.execute(
+    sql`SELECT doc_type FROM receipt_documents WHERE receipt_id = ${receiptId}`
+  );
+  const docRows = sqlRows<{ doc_type: string }>(docResult);
+  const uploaded = new Set(docRows.map(d => d.doc_type));
+
+  return needed.filter(dt => !uploaded.has(dt)).map(dt => {
+    const entry = requiredTypes.find(r => r.docType === dt);
+    return entry?.label ?? dt;
+  });
+}
+
+// ── Helper: expiration status for a received unit ────────────────────────────
+function receivedUnitExpirationStatus(expirationDate: string | null | undefined): 'ok' | 'near_expiry' | 'expired' {
+  if (!expirationDate) return 'ok';
+  const exp = new Date(expirationDate);
+  const now = new Date();
+  if (exp < now) return 'expired';
+  const daysUntil = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysUntil <= 30) return 'near_expiry';
+  return 'ok';
+}
+
+// ── Helper: auto-create material_lot for accepted units ───────────────────────
+async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: AuthUser): Promise<void> {
+  try {
+    // Idempotency guard: if this unit already has a material lot, do not create another
+    if (unit.materialLotId) {
+      return;
+    }
+
+    const displayName = actorName(user);
+
+    const [line] = await db.select().from(receiptLines).where(eq(receiptLines.id, unit.receiptLineId));
+    if (!line?.agPartNumber) {
+      throw new Error(`Receipt line ${unit.receiptLineId} has no AG part number — cannot create material lot`);
+    }
+
+    // Generate ICN
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const icnPrefix = `ICN-MAT-${dateStr}-`;
+    const icnResult = await db.execute(
+      sql`SELECT internal_control_number FROM material_lots WHERE internal_control_number LIKE ${icnPrefix + '%'} ORDER BY internal_control_number DESC LIMIT 1`
+    );
+    const icnRows = sqlRows<{ internal_control_number: string }>(icnResult);
+    const lastSeq = icnRows.length > 0
+      ? parseInt((icnRows[0].internal_control_number).split('-').pop() ?? '0', 10)
+      : 0;
+    const icn = `${icnPrefix}${String(lastSeq + 1).padStart(6, '0')}`;
+
+    // Find inventory item — required for material lot linkage; fail-fast if missing
+    const invResult = await db.execute(
+      sql`SELECT id, name FROM inventory_items WHERE ag_part_number = ${line.agPartNumber} LIMIT 1`
+    );
+    const invRows = sqlRows<{ id: number; name: string }>(invResult);
+    if (!invRows.length) {
+      throw new Error(`No inventory_items record found for ag_part_number="${line.agPartNumber}" — create the inventory item before accepting units for this part`);
+    }
+    const invItem = invRows[0];
+
+    // Type-safe material lot insert
+    const lotValues: InsertMaterialLot = insertMaterialLotSchema.parse({
+      inventoryItemId: invItem.id,
+      materialPartNumber: line.agPartNumber,
+      materialName: invItem.name ?? line.description ?? '',
+      internalControlNumber: icn,
+      supplier: receipt.vendorName ?? 'Unknown',
+      supplierLotNumber: unit.lotNumber ?? null,
+      supplierPartNumber: null,
+      purchaseOrderNumber: receipt.vendorPoNumber ?? null,
+      receivingRecordNumber: receipt.receiptNumber,
+      receivedQty: String(unit.quantity),
+      remainingQty: String(unit.quantity),
+      unitOfMeasure: unit.uom ?? 'EA',
+      expirationDate: unit.expirationDate ?? null,
+      manufactureDate: unit.manufactureDate ?? null,
+      storageLocation: unit.location ?? null,
+      status: 'ACCEPTED',
+      receivedBy: displayName,
+      notes: `Auto-created from receipt ${receipt.receiptNumber} unit ${unit.barcode}`,
+    });
+
+    const [lot] = await db.insert(materialLots).values(lotValues).returning();
+    if (!lot?.id) throw new Error('material_lots insert returned no row');
+
+    // Link UUID back to received_unit
+    await db.update(receivedUnits).set({
+      materialLotId: lot.id,
+      updatedAt: new Date(),
+    }).where(eq(receivedUnits.id, unit.id));
+
+    // Type-safe transaction insert — referenceId = received_unit.id, receiptId = receipt.id (explicit FK)
+    const txValues: InsertMaterialLotTransaction = insertMaterialLotTransactionSchema.parse({
+      materialLotId: lot.id,
+      internalControlNumber: icn,
+      transactionType: 'RECEIVE',
+      qtyBefore: '0',
+      qtyChange: String(unit.quantity),
+      qtyAfter: String(unit.quantity),
+      performedBy: displayName,
+      referenceType: 'received_unit',
+      referenceId: String(unit.id),
+      receiptId: receipt.id,
+      notes: `Receipt ${receipt.receiptNumber} · unit barcode ${unit.barcode}`,
+    });
+    await db.insert(materialLotTransactions).values(txValues);
+
+  } catch (err: any) {
+    // Re-throw so callers can return a 422 to the client with the exact reason
+    throw new Error(`handleAcceptedUnit: ${err.message}`);
+  }
+}
+
+// ── POST /api/receipts/:id/lines/:lineId/split ────────────────────────────────
+// Split a receipt line into N equal units. Body: { count: number, templateFields?: Partial<InsertReceivedUnit> }
+router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const lineId = parseInt(req.params.lineId);
+    const user = req.user;
+    const { count, templateFields } = req.body as { count: number; templateFields?: Record<string, unknown> };
+
+    if (!count || count < 2 || count > 200) {
+      return res.status(400).json({ error: 'count must be between 2 and 200' });
+    }
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const line = await assertLineOwnership(receiptId, lineId);
+    if (!line) return res.status(404).json({ error: 'Receipt line not found' });
+
+    // Distribute receivedQty equally across units
+    const totalQty = parseFloat(String(line.receivedQty ?? '0')) || parseFloat(String(line.orderedQty ?? '1'));
+    const qtyPerUnit = totalQty / count;
+    const units: ReceivedUnit[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const unitSequence = await getNextUnitSequence(receiptId);
+      const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+      const body = insertReceivedUnitSchema.parse({
+        ...(templateFields ?? {}),
+        receiptId,
+        receiptLineId: lineId,
+        unitSequence,
+        barcode,
+        quantity: String(qtyPerUnit),
+        uom: line.uom ?? 'EA',
+      });
+      const [unit] = await db.insert(receivedUnits).values(body).returning();
+      units.push(unit);
+    }
+
+    await logAudit(receiptId, 'line_split', user?.employeeId, actorName(user), {
+      lineId, count, qtyPerUnit: String(qtyPerUnit), unitIds: units.map(u => u.id),
+    });
+
+    res.status(201).json(units);
+  } catch (err: any) {
+    console.error('POST split line:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to split line' });
+  }
+});
+
+// ── POST /api/receipts/:id/units/:unitId/clone ────────────────────────────────
+// Clone a unit (same traceability + line, fresh barcode + sequence, disposition reset)
+router.post('/:id/units/:unitId/clone', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+    const user = req.user;
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const source = await assertUnitOwnership(receiptId, unitId);
+    if (!source) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
+
+    const unitSequence = await getNextUnitSequence(receiptId);
+    const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+
+    // Carry forward all traceability fields; reset disposition + material lot link
+    const body = insertReceivedUnitSchema.parse({
+      receiptId,
+      receiptLineId: source.receiptLineId,
+      unitSequence,
+      barcode,
+      unitType: source.unitType,
+      quantity: source.quantity,
+      uom: source.uom,
+      lotNumber: source.lotNumber,
+      batchNumber: source.batchNumber,
+      serialNumber: null, // serial numbers are unique — do not clone
+      internalControlNumber: null,
+      rollNumber: source.rollNumber,
+      heatLot: source.heatLot,
+      manufactureDate: source.manufactureDate,
+      expirationDate: source.expirationDate,
+      shelfLifeDays: source.shelfLifeDays,
+      certReference: source.certReference,
+      location: source.location,
+      freezerNumber: source.freezerNumber,
+      allocatedToType: source.allocatedToType,
+      allocatedToId: source.allocatedToId,
+      disposition: 'pending_inspection',
+    });
+    const [cloned] = await db.insert(receivedUnits).values(body).returning();
+
+    await logAudit(receiptId, 'unit_cloned', user?.employeeId, actorName(user), {
+      sourceUnitId: unitId, clonedUnitId: cloned.id, barcode: cloned.barcode,
+    });
+
+    res.status(201).json(cloned);
+  } catch (err: any) {
+    console.error('POST clone unit:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to clone unit' });
+  }
+});
+
+// ── POST /api/receipts/:id/units/batch-update ─────────────────────────────────
+// Apply the same traceability/location/allocation values to a set of units
+// Body: { unitIds: number[], updates: Partial<InsertReceivedUnit> }
+router.post('/:id/units/batch-update', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const user = req.user;
+    const { unitIds, updates } = req.body as { unitIds: number[]; updates: Record<string, unknown> };
+
+    if (!Array.isArray(unitIds) || unitIds.length === 0) {
+      return res.status(400).json({ error: 'unitIds must be a non-empty array' });
+    }
+    if (!updates || typeof updates !== 'object') {
+      return res.status(400).json({ error: 'updates must be an object' });
+    }
+
+    const safeUpdates = insertReceivedUnitSchema.partial().parse(updates);
+    const results: ReceivedUnit[] = [];
+    for (const uid of unitIds) {
+      const owns = await assertUnitOwnership(receiptId, uid);
+      if (!owns) continue;
+      const [updated] = await db.update(receivedUnits)
+        .set({ ...safeUpdates, updatedAt: new Date() })
+        .where(eq(receivedUnits.id, uid))
+        .returning();
+      if (updated) results.push(updated);
+    }
+
+    await logAudit(receiptId, 'batch_unit_update', user?.employeeId, actorName(user), {
+      unitIds, updatedCount: results.length, changes: safeUpdates,
+    });
+
+    res.json({ updated: results.length, units: results });
+  } catch (err: any) {
+    console.error('POST batch-update units:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to batch-update units' });
+  }
+});
+
+// ── GET /api/receipts/:id/genealogy ───────────────────────────────────────────
+// Receipt-level genealogy: receipt → lines → units → material lots → transactions → traveler usage
+router.get('/:id/genealogy', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, receiptId));
+    const units = await db.select().from(receivedUnits).where(eq(receivedUnits.receiptId, receiptId));
+
+    // For each unit with a materialLotId, pull lot + transactions + traveler usage
+    const unitGenealogy = await Promise.all(units.map(async unit => {
+      const expStatus = receivedUnitExpirationStatus(unit.expirationDate ?? undefined);
+      if (!unit.materialLotId) {
+        return { ...unit, expirationStatus: expStatus, lot: null, transactions: [], travelerUsage: [] };
+      }
+
+      // Coerce to plain JS string so pg sends it as text (not uuid OID),
+      // preventing "operator does not exist: character varying = uuid" errors
+      const matLotIdStr = String(unit.materialLotId);
+
+      const lotResult = await db.execute(
+        sql`SELECT id, internal_control_number, status, remaining_qty, received_qty, unit_of_measure, expiration_date
+            FROM material_lots WHERE id::text = ${matLotIdStr} LIMIT 1`
+      );
+      const lot = sqlRows<Record<string, unknown>>(lotResult)[0] ?? null;
+
+      const txResult = await db.execute(
+        sql`SELECT transaction_type, qty_change, performed_by, reference_type, reference_id, created_at
+            FROM material_lot_transactions WHERE material_lot_id::text = ${matLotIdStr}
+            ORDER BY created_at ASC`
+      );
+      const transactions = sqlRows<Record<string, unknown>>(txResult);
+
+      const travelerResult = await db.execute(
+        sql`SELECT tmc.id, tmc.traveler_id, tmc.traveler_step_id, tmc.qty_used, tmc.unit_of_measure,
+                   tmc.scanned_by, tmc.created_at, tmc.received_unit_id,
+                   t.part_number, t.status AS traveler_status
+            FROM traveler_material_consumption tmc
+            LEFT JOIN travelers t ON t.id = tmc.traveler_id::text
+            WHERE tmc.material_lot_id::text = ${matLotIdStr}
+            ORDER BY tmc.created_at ASC`
+      );
+      const travelerUsage = sqlRows<Record<string, unknown>>(travelerResult);
+
+      return { ...unit, expirationStatus: expStatus, lot, transactions, travelerUsage };
+    }));
+
+    res.json({
+      receipt,
+      lines,
+      units: unitGenealogy,
+      summary: {
+        totalUnits: units.length,
+        accepted: units.filter(u => u.disposition === 'accepted').length,
+        quarantined: units.filter(u => u.disposition === 'quarantine').length,
+        rejected: units.filter(u => u.disposition === 'rejected').length,
+        pendingInspection: units.filter(u => u.disposition === 'pending_inspection').length,
+      },
+    });
+  } catch (err: any) {
+    console.error('GET genealogy:', err);
+    res.status(500).json({ error: 'Failed to fetch genealogy' });
+  }
+});
+
+// ── GET /api/receipts/units/:unitId/genealogy ─────────────────────────────────
+// Unit-level reverse genealogy: unit → lot → all downstream traveler/work-order usage
+router.get('/units/:unitId/genealogy', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const unitId = parseInt(req.params.unitId);
+    const [unit] = await db.select().from(receivedUnits).where(eq(receivedUnits.id, unitId));
+    if (!unit) return res.status(404).json({ error: 'Received unit not found' });
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, unit.receiptId));
+    const [line] = await db.select().from(receiptLines).where(eq(receiptLines.id, unit.receiptLineId));
+    const expStatus = receivedUnitExpirationStatus(unit.expirationDate ?? undefined);
+
+    let lot: Record<string, unknown> | null = null;
+    let transactions: Record<string, unknown>[] = [];
+    let travelerUsage: Record<string, unknown>[] = [];
+    const seenTmcIds = new Set<string>();
+
+    if (unit.materialLotId) {
+      const matLotIdStr = String(unit.materialLotId);
+
+      const lotResult = await db.execute(
+        sql`SELECT * FROM material_lots WHERE id::text = ${matLotIdStr} LIMIT 1`
+      );
+      lot = sqlRows<Record<string, unknown>>(lotResult)[0] ?? null;
+
+      const txResult = await db.execute(
+        sql`SELECT * FROM material_lot_transactions WHERE material_lot_id::text = ${matLotIdStr} ORDER BY created_at ASC`
+      );
+      transactions = sqlRows<Record<string, unknown>>(txResult);
+
+      const travelerResult = await db.execute(
+        sql`SELECT tmc.*, t.part_number, t.status AS traveler_status, t.part_name AS traveler_part_name
+            FROM traveler_material_consumption tmc
+            LEFT JOIN travelers t ON t.id = tmc.traveler_id::text
+            WHERE tmc.material_lot_id::text = ${matLotIdStr}
+            ORDER BY tmc.created_at ASC`
+      );
+      const lotBased = sqlRows<Record<string, unknown>>(travelerResult);
+      for (const row of lotBased) {
+        seenTmcIds.add(String(row.id));
+        travelerUsage.push(row);
+      }
+    }
+
+    // Also query directly by received_unit_id (Phase 2 forward-trace)
+    // This captures consumption records linked directly to this physical unit,
+    // even if the lot linkage is missing or the unit has no material_lot_id.
+    try {
+      const directResult = await db.execute(
+        sql`SELECT tmc.*, t.part_number, t.status AS traveler_status, t.part_name AS traveler_part_name
+            FROM traveler_material_consumption tmc
+            LEFT JOIN travelers t ON t.id = tmc.traveler_id::text
+            WHERE tmc.received_unit_id = ${unitId}
+            ORDER BY tmc.created_at ASC`
+      );
+      const directRows = sqlRows<Record<string, unknown>>(directResult);
+      for (const row of directRows) {
+        if (!seenTmcIds.has(String(row.id))) {
+          seenTmcIds.add(String(row.id));
+          travelerUsage.push(row);
+        }
+      }
+      // Sort merged results by created_at ascending
+      travelerUsage.sort((a, b) =>
+        new Date(String(a.created_at)).getTime() - new Date(String(b.created_at)).getTime()
+      );
+    } catch (_) { /* non-fatal: column may not exist in older deployments */ }
+
+    res.json({
+      unit: { ...unit, expirationStatus: expStatus },
+      receipt: receipt ?? null,
+      line: line ?? null,
+      lot,
+      transactions,
+      travelerUsage,
+    });
+  } catch (err: any) {
+    console.error('GET unit genealogy:', err);
+    res.status(500).json({ error: 'Failed to fetch unit genealogy' });
+  }
+});
+
+// ── GET /api/receipts/:id/required-docs ───────────────────────────────────────
+// Returns missing-doc list for every unit in a receipt (for Step 4 UI warnings)
+router.get('/:id/required-docs', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, receiptId));
+    const result: Record<string, string[]> = {};
+    for (const line of lines) {
+      if (line.agPartNumber) {
+        const missing = await checkRequiredDocs(line.agPartNumber, receiptId);
+        if (missing.length > 0) result[line.agPartNumber] = missing;
+      }
+    }
+    res.json({ receiptId, missingByPartNumber: result, hasMissing: Object.keys(result).length > 0 });
+  } catch (err: any) {
+    console.error('GET required-docs:', err);
+    res.status(500).json({ error: 'Failed to check required documents' });
+  }
+});
+
+export default router;

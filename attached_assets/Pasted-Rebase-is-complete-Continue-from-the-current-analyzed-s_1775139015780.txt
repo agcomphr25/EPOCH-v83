@@ -1,0 +1,93 @@
+Rebase is complete. Continue from the current analyzed state and implement Phase 1 now.
+
+Do not repeat the analysis. Do not summarize again. Go straight into code changes.
+
+Use the current findings as the source of truth:
+- receipts already has carrier, trackingNumber, packingSlipNumber, conditionOnArrival, notes, receiverUserId, receiverDisplayName
+- receipts is still missing explicit receivedAt timestamp
+- received_units already has expirationDate, shelfLifeDays, disposition, materialLotId
+- traveler material-lot validation already enforces ACCEPTED / ISSUED at the material lot level
+- required receiving document flags are still missing on inventory_items
+- acceptance is not yet blocked by missing required documents
+- traveler validation does not yet cross-check received_unit disposition / expiration
+- genealogy endpoints are still missing
+- split-line / clone-unit / batch helpers are still missing
+
+Implement Phase 1 in this order:
+
+1. Shipment-level receipt completion
+Add the missing explicit receivedAt timestamp to receipts if missing.
+Make sure receipt create/update validation and UI forms support:
+- packingSlipNumber
+- carrier
+- trackingNumber
+- shipmentCondition / conditionOnArrival
+- receivedBy
+- receivedAt
+- shipmentNotes / notes
+
+2. Required document enforcement
+Add to inventory_items if missing:
+- requiresSDS
+- requiresTDS
+- requiresCoC
+- requiresTestReport
+- requiresPackingSlipPhoto
+
+Then enforce server-side:
+- when disposition is set to ACCEPTED, validate required receipt documents for that inventory item
+- reject with 422 if missing docs
+- return a clear array of missing document types
+- surface that in the UI
+
+3. Disposition-based usability enforcement
+Server-side:
+- pending inspection cannot be reserved, issued, or used by traveler scan
+- quarantined cannot be reserved, issued, or used by traveler scan
+- rejected cannot be reserved, issued, or used by traveler scan
+- only accepted units can be treated as available
+
+4. Expiration enforcement
+Server-side:
+- expired received units cannot be reserved, issued, or scanned into travelers
+- add near-expiration status helper
+- expose clear status in API responses where useful
+
+5. Traveler traceability gate
+Update traveler material validation so it validates both:
+- material lot status
+- linked received_unit disposition / expiration / availability
+Traveler scan must fail closed if the received unit is not usable.
+
+6. Reservation vs available enforcement
+Make sure quantity logic does not allow over-reservation.
+Availability must only include accepted, non-expired units.
+
+7. Genealogy backend support
+Add minimal backend route/query support for:
+- receipt -> received unit -> allocation/transaction -> traveler/work order usage
+- reverse lookup from unit/lot to usage history
+
+8. Batch receiving helpers
+Implement the easiest/highest-value helpers first:
+- apply same traceability values across selected units
+- split line into X equal units
+- clone unit
+- batch print labels
+- apply same location/freezer/allocation across selected units
+
+Rules
+- preserve canonical table names already in use
+- do not break existing data
+- prefer migrations / startup ensure pattern consistent with current app
+- prefer fail-fast server-side validation
+- do not allow quarantined / rejected / pending / expired material into production use
+- keep barcode flow compatible with current labels
+
+Output format I want from you
+1. List the exact files you will modify
+2. Make the code changes
+3. Show the migration/schema changes
+4. Show the route changes
+5. Show the UI/component changes
+6. End with a short test checklist only

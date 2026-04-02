@@ -31,6 +31,8 @@ import InventoryScannerPage from './pages/InventoryScannerPage';
 import InventoryDashboardPage from './pages/InventoryDashboardPage';
 import InventoryManagerPage from './pages/InventoryManagerPage';
 import InventoryReceivingPage from './pages/InventoryReceivingPage';
+import InventoryReceivingControlCenter from './pages/InventoryReceivingControlCenter';
+import InventoryReceivingPageLegacy from './pages/InventoryReceivingPageLegacy';
 import EnhancedInventoryMRPPage from './pages/EnhancedInventoryMRPPage';
 import MaterialReadinessDashboard from './pages/MaterialReadinessDashboard';
 import MaterialIntelligenceDashboard from './pages/MaterialIntelligenceDashboard';
@@ -605,7 +607,11 @@ function App() {
                   />
                   <Route
                     path="/inventory/receiving"
-                    component={InventoryReceivingPage}
+                    component={InventoryReceivingControlCenter}
+                  />
+                  <Route
+                    path="/inventory/receiving-legacy"
+                    component={InventoryReceivingPageLegacy}
                   />
                   <Route
                     path="/inventory/material-intelligence"

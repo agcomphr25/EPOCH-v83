@@ -299,6 +299,8 @@ async function initializeBackgroundServices() {
           '0011_fix_finalized_orders_in_production_departments.sql',
           '0012_bulk_payment_batches.sql',
           '0013_add_composite_manufactured_category.sql',
+          '0014_receiving_control_center.sql',
+          '0015_receiving_fk_constraints.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {
@@ -2462,6 +2464,192 @@ async function initializeBackgroundServices() {
         console.log('✅ Ensured ar_invoices has lot_id and packing_slip_id traceability columns');
       } catch (arLinkErr: any) {
         console.warn('⚠️ ar_invoices traceability columns warning:', arLinkErr?.message);
+      }
+
+      // Ensure Receiving Control Center tables exist (5 tables + receipt_id column on material_lot_transactions)
+      try {
+        const { sql: sqlRcc } = await import('drizzle-orm');
+        // Canonical table: receipts (matches migrations/0013 + server/schema.ts)
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS receipts (
+            id SERIAL PRIMARY KEY,
+            receipt_number TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'open',
+            vendor_po_id INTEGER,
+            vendor_po_number TEXT,
+            vendor_name TEXT,
+            carrier TEXT,
+            tracking_number TEXT,
+            packing_slip_number TEXT,
+            condition_on_arrival TEXT NOT NULL DEFAULT 'good',
+            notes TEXT,
+            received_by_user_id INTEGER,
+            received_by_display_name TEXT,
+            opened_at TIMESTAMP DEFAULT NOW(),
+            closed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS receipts_status_idx ON receipts(status)`);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS receipts_vendor_po_id_idx ON receipts(vendor_po_id)`);
+
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS receipt_lines (
+            id SERIAL PRIMARY KEY,
+            receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+            vendor_po_item_id INTEGER,
+            ag_part_number TEXT,
+            description TEXT,
+            ordered_qty NUMERIC,
+            received_qty NUMERIC DEFAULT 0,
+            uom TEXT NOT NULL DEFAULT 'EA',
+            unit_price NUMERIC,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS receipt_lines_receipt_id_idx ON receipt_lines(receipt_id)`);
+
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS received_units (
+            id SERIAL PRIMARY KEY,
+            receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+            receipt_line_id INTEGER NOT NULL REFERENCES receipt_lines(id) ON DELETE CASCADE,
+            unit_sequence INTEGER NOT NULL DEFAULT 1,
+            barcode TEXT NOT NULL UNIQUE,
+            unit_type TEXT DEFAULT 'other',
+            quantity NUMERIC NOT NULL DEFAULT 1,
+            uom TEXT DEFAULT 'EA',
+            lot_number TEXT,
+            batch_number TEXT,
+            serial_number TEXT,
+            internal_control_number TEXT,
+            roll_number TEXT,
+            heat_lot TEXT,
+            manufacture_date DATE,
+            expiration_date DATE,
+            shelf_life_days INTEGER,
+            cert_reference TEXT,
+            location TEXT,
+            freezer_number INTEGER,
+            allocated_to_type TEXT,
+            allocated_to_id INTEGER,
+            disposition TEXT NOT NULL DEFAULT 'pending_inspection',
+            disposition_notes TEXT,
+            disposition_by_user_id INTEGER,
+            disposition_by_display_name TEXT,
+            disposition_at TIMESTAMP,
+            material_lot_id UUID,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_receipt_id_idx ON received_units(receipt_id)`);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_disposition_idx ON received_units(disposition)`);
+
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS receipt_documents (
+            id SERIAL PRIMARY KEY,
+            receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+            received_unit_id INTEGER REFERENCES received_units(id) ON DELETE SET NULL,
+            media_id UUID,
+            doc_type TEXT DEFAULT 'other',
+            filename TEXT,
+            storage_path TEXT,
+            mime_type TEXT,
+            notes TEXT,
+            uploaded_by_user_id INTEGER,
+            uploaded_by_display_name TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS receipt_documents_receipt_id_idx ON receipt_documents(receipt_id)`);
+
+        // Canonical audit log table: receipt_audit_log (matches migration + schema)
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS receipt_audit_log (
+            id SERIAL PRIMARY KEY,
+            receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+            action TEXT NOT NULL,
+            actor_user_id INTEGER,
+            actor_display_name TEXT,
+            metadata JSONB,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS receipt_audit_log_receipt_id_idx ON receipt_audit_log(receipt_id)`);
+
+        // Add receipt_id column to material_lot_transactions for explicit traceability FK
+        await db.execute(sqlRcc`ALTER TABLE material_lot_transactions ADD COLUMN IF NOT EXISTS receipt_id INTEGER`);
+
+        console.log('✅ Ensured Receiving Control Center tables exist (receipts, receipt_lines, received_units, receipt_documents, receipt_audit_log + receipt_id FK)');
+      } catch (rccErr: any) {
+        console.warn('⚠️ Receiving Control Center tables migration:', rccErr.message);
+      }
+
+      // ── RCC Phase 1 column additions ──────────────────────────────────────────
+      try {
+        const { sql: sqlRcc1 } = await import('drizzle-orm');
+        // receipts: explicit physical-receipt timestamp
+        await db.execute(sqlRcc1`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS received_at TIMESTAMP`);
+        // inventory_items: required-document enforcement flags
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_sds BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_tds BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_coc BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_test_report BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_packing_slip_photo BOOLEAN NOT NULL DEFAULT FALSE`);
+        console.log('✅ Ensured RCC Phase 1 columns (receipts.received_at + inventory_items doc-requirement flags)');
+      } catch (rcc1Err: any) {
+        console.warn('⚠️ RCC Phase 1 column migration:', rcc1Err.message);
+      }
+
+      // ── RCC Phase 2 column additions ──────────────────────────────────────────
+      try {
+        const { sql: sqlRcc2 } = await import('drizzle-orm');
+        // traveler_material_consumption: link each scan to the physical receiving unit
+        await db.execute(sqlRcc2`
+          ALTER TABLE traveler_material_consumption
+          ADD COLUMN IF NOT EXISTS received_unit_id INTEGER
+          REFERENCES received_units(id) ON DELETE SET NULL
+        `);
+        // Index for genealogy forward-trace queries (unit → traveler)
+        await db.execute(sqlRcc2`
+          CREATE INDEX IF NOT EXISTS traveler_material_consumption_received_unit_idx
+          ON traveler_material_consumption (received_unit_id)
+          WHERE received_unit_id IS NOT NULL
+        `);
+        console.log('✅ Ensured RCC Phase 2 columns (traveler_material_consumption.received_unit_id)');
+      } catch (rcc2Err: any) {
+        console.warn('⚠️ RCC Phase 2 column migration:', rcc2Err.message);
+      }
+
+      // ── RCC Phase 2B: material_lot_reservations table ─────────────────────────
+      try {
+        const { sql: sqlRes } = await import('drizzle-orm');
+        await db.execute(sqlRes`
+          CREATE TABLE IF NOT EXISTS material_lot_reservations (
+            id SERIAL PRIMARY KEY,
+            material_lot_id UUID NOT NULL REFERENCES material_lots(id) ON DELETE CASCADE,
+            received_unit_id INTEGER REFERENCES received_units(id) ON DELETE SET NULL,
+            traveler_id UUID,
+            work_order_id INTEGER,
+            quantity_reserved NUMERIC NOT NULL,
+            unit_of_measure TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            notes TEXT,
+            created_by TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlRes`CREATE INDEX IF NOT EXISTS material_lot_reservations_lot_idx ON material_lot_reservations (material_lot_id)`);
+        await db.execute(sqlRes`CREATE INDEX IF NOT EXISTS material_lot_reservations_status_idx ON material_lot_reservations (status)`);
+        await db.execute(sqlRes`CREATE INDEX IF NOT EXISTS material_lot_reservations_traveler_idx ON material_lot_reservations (traveler_id) WHERE traveler_id IS NOT NULL`);
+        await db.execute(sqlRes`CREATE INDEX IF NOT EXISTS material_lot_reservations_ru_idx ON material_lot_reservations (received_unit_id) WHERE received_unit_id IS NOT NULL`);
+        console.log('✅ Ensured material_lot_reservations table (Phase 2B)');
+      } catch (resErr: any) {
+        console.warn('⚠️ material_lot_reservations migration:', resErr.message);
       }
 
       // Ensure capability-based permission system tables exist

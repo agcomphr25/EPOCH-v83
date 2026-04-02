@@ -5,6 +5,7 @@ import {
   insertMaterialLotSchema,
   insertMaterialLotTransactionSchema,
   insertTravelerMaterialConsumptionSchema,
+  insertMaterialLotReservationSchema,
   type InsertMaterialLotTransaction,
   cuttingBuiltPackets,
   cuttingBuiltPacketFabricSources,
@@ -12,7 +13,7 @@ import {
   manufacturingQueue,
 } from '../../schema';
 import { db } from '../../db';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -240,6 +241,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       });
     }
 
+    type ReceivedUnitSummary = { id: number; quantity: number; barcode: string | null; disposition: string } | null;
     const validationResults: {
       valid: boolean;
       status: string;
@@ -248,6 +250,9 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       errors: string[];
       requiresOverride: boolean;
       lot: typeof lot;
+      receivedUnit: ReceivedUnitSummary;
+      reservedQty: number;
+      availableQty: number;
     } = {
       valid: true,
       status: 'OK',
@@ -256,6 +261,9 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       errors: [],
       requiresOverride: false,
       lot,
+      receivedUnit: null,
+      reservedQty: 0,
+      availableQty: parseFloat(lot.remainingQty),
     };
 
     // Check lot status
@@ -266,6 +274,45 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       validationResults.errors.push(`Lot status is ${lot.status} - only ACCEPTED or ISSUED lots can be consumed`);
       return res.json(validationResults);
     }
+
+    // Cross-check linked received_unit disposition, expiration, and quantity (Receiving Control Center gate)
+    try {
+      const ruRows = await db.execute(
+        sql`SELECT id, quantity, barcode, disposition, expiration_date FROM received_units WHERE material_lot_id::text = ${String(lot.id)} LIMIT 1`
+      ) as { rows?: Array<{ id: number; quantity: number; barcode: string | null; disposition: string; expiration_date: string | null }> } | Array<{ id: number; quantity: number; barcode: string | null; disposition: string; expiration_date: string | null }>;
+      const ruArr: Array<{ id: number; quantity: number; barcode: string | null; disposition: string; expiration_date: string | null }> =
+        (ruRows && typeof ruRows === 'object' && 'rows' in ruRows)
+          ? (ruRows as { rows: Array<{ id: number; quantity: number; barcode: string | null; disposition: string; expiration_date: string | null }> }).rows
+          : (ruRows as Array<{ id: number; quantity: number; barcode: string | null; disposition: string; expiration_date: string | null }>);
+      if (ruArr.length > 0) {
+        const ru = ruArr[0];
+        // Expose receivedUnit summary so the scanner can forward receivedUnitId in the consume payload
+        validationResults.receivedUnit = { id: ru.id, quantity: Number(ru.quantity), barcode: ru.barcode, disposition: ru.disposition };
+        const blockedDispositions = ['pending_inspection', 'quarantine', 'rejected'];
+        if (blockedDispositions.includes(ru.disposition)) {
+          validationResults.valid = false;
+          validationResults.status = 'RECEIVING_DISPOSITION_BLOCKED';
+          validationResults.message = `Receiving unit disposition is "${ru.disposition}". Only ACCEPTED units can be consumed.`;
+          validationResults.errors.push(`Receiving unit is ${ru.disposition} — not cleared for production use`);
+          return res.json(validationResults);
+        }
+        if (ru.expiration_date) {
+          const expDate = new Date(ru.expiration_date);
+          if (expDate < new Date()) {
+            validationResults.valid = false;
+            validationResults.status = 'RECEIVING_UNIT_EXPIRED';
+            validationResults.message = `Receiving unit expired on ${expDate.toLocaleDateString()}. Material cannot be used.`;
+            validationResults.errors.push(`Receiving unit expired on ${expDate.toLocaleDateString()}`);
+            validationResults.requiresOverride = true;
+            return res.json(validationResults);
+          }
+          const daysUntil = Math.floor((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          if (daysUntil <= 30) {
+            validationResults.warnings.push(`Receiving unit expires in ${daysUntil} day(s) — ${expDate.toLocaleDateString()}`);
+          }
+        }
+      }
+    } catch (_) { /* non-fatal: received_units table may not exist in older deployments */ }
 
     // Check expiration date
     if (lot.expirationDate) {
@@ -324,6 +371,18 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         validationResults.warnings.push(`Part number mismatch: Expected ${partNumber}, got ${lot.materialPartNumber}`);
       }
     }
+
+    // Compute reservedQty and availableQty from active reservations
+    try {
+      const reservedQty = await storage.getReservedQtyForLot(lot.id);
+      const remaining = parseFloat(lot.remainingQty);
+      const available = Math.max(0, remaining - reservedQty);
+      validationResults.reservedQty = reservedQty;
+      validationResults.availableQty = available;
+      if (reservedQty > 0) {
+        validationResults.warnings.push(`${reservedQty} ${lot.unitOfMeasure} already reserved — only ${available} ${lot.unitOfMeasure} available`);
+      }
+    } catch (_) { /* non-fatal */ }
 
     res.json(validationResults);
   } catch (error: any) {
@@ -703,7 +762,7 @@ router.get('/:id/transactions', async (req: Request, res: Response) => {
 router.post('/consume', async (req: Request, res: Response) => {
   try {
     const validatedData = insertTravelerMaterialConsumptionSchema.parse(req.body);
-    
+
     // Get the lot and verify it
     const lot = await storage.getMaterialLot(validatedData.materialLotId);
     if (!lot) {
@@ -713,26 +772,111 @@ router.post('/consume', async (req: Request, res: Response) => {
     const remaining = parseFloat(lot.remainingQty);
     const consumed = parseFloat(validatedData.qtyUsed);
 
+    // Enforce available qty (remaining minus active reservations).
+    // The consuming traveler may draw against their own reservation — only
+    // reservations held by OTHER travelers reduce the available quantity.
+    const reservedQty = await storage.getReservedQtyForLot(lot.id).catch(() => 0);
+    const availableQty = Math.max(0, remaining - reservedQty); // for external callers
+
+    let effectiveAvailableQty = availableQty;
+    if (validatedData.travelerId) {
+      // Re-compute excluding this traveler's own reservations
+      let ownReserved = 0;
+      try {
+        const allRes = await storage.getLotReservations(lot.id);
+        ownReserved = allRes
+          .filter(r => r.status === 'active' && r.travelerId === validatedData.travelerId)
+          .reduce((s, r) => s + parseFloat(String(r.quantityReserved)), 0);
+      } catch (_) { /* non-fatal */ }
+      effectiveAvailableQty = Math.max(0, remaining - (reservedQty - ownReserved));
+    }
+
     if (consumed > remaining) {
       return res.status(400).json({
-        error: 'Insufficient quantity',
-        message: `Only ${remaining} ${lot.unitOfMeasure} available`,
+        error: 'INSUFFICIENT_LOT_QTY',
+        message: `Only ${remaining} ${lot.unitOfMeasure} remain on this lot`,
+        remaining,
+        reservedQty,
+        availableQty,
       });
     }
 
+    if (consumed > effectiveAvailableQty) {
+      return res.status(409).json({
+        error: 'OVER_COMMITTED',
+        message: `Lot over-committed — only ${effectiveAvailableQty} ${lot.unitOfMeasure} available (${remaining} remaining, ${reservedQty} reserved by all work orders)`,
+        remaining,
+        reservedQty,
+        availableQty: effectiveAvailableQty,
+        requested: consumed,
+      });
+    }
+
+    // ── Received unit integration (Phase 2) ───────────────────────────────────
+    // Resolve the physical receiving unit linked to this lot.
+    // Priority: (1) caller-supplied receivedUnitId, (2) auto-lookup by material_lot_id.
+    type RuRow = { id: number; quantity: number; barcode: string | null };
+    let resolvedRuId: number | null = validatedData.receivedUnitId ?? null;
+    let resolvedRuQty: number | null = null;
+
+    try {
+      let ruRow: RuRow | null = null;
+
+      if (resolvedRuId !== null) {
+        // Caller supplied the id — verify it and fetch current quantity
+        const rows = await db.execute(
+          sql`SELECT id, quantity, barcode FROM received_units WHERE id = ${resolvedRuId} LIMIT 1`
+        ) as { rows?: RuRow[] } | RuRow[];
+        const arr: RuRow[] = (rows && 'rows' in rows) ? (rows as { rows: RuRow[] }).rows : (rows as RuRow[]);
+        ruRow = arr[0] ?? null;
+      } else {
+        // Auto-discover by material_lot_id FK
+        const rows = await db.execute(
+          sql`SELECT id, quantity, barcode FROM received_units WHERE material_lot_id::text = ${String(lot.id)} LIMIT 1`
+        ) as { rows?: RuRow[] } | RuRow[];
+        const arr: RuRow[] = (rows && 'rows' in rows) ? (rows as { rows: RuRow[] }).rows : (rows as RuRow[]);
+        ruRow = arr[0] ?? null;
+        if (ruRow) resolvedRuId = ruRow.id;
+      }
+
+      if (ruRow) {
+        resolvedRuQty = Number(ruRow.quantity);
+        // Hard gate: physical unit must have enough remaining quantity
+        if (consumed > resolvedRuQty) {
+          return res.status(409).json({
+            error: 'INSUFFICIENT_PHYSICAL_QTY',
+            message: `Physical receiving unit only has ${resolvedRuQty} ${lot.unitOfMeasure} remaining. Cannot consume ${consumed}.`,
+            receivedUnitId: ruRow.id,
+            available: resolvedRuQty,
+            requested: consumed,
+          });
+        }
+      }
+    } catch (ruErr: any) {
+      // Non-fatal: received_units table may not exist in older deployments
+      // Log the error but allow consumption to proceed without unit linkage
+      console.warn('[consume] received_unit lookup failed (non-fatal):', ruErr.message);
+      resolvedRuId = null;
+    }
+
+    // Build insertion data with receivedUnitId linkage
+    const consumptionData = resolvedRuId !== null
+      ? { ...validatedData, receivedUnitId: resolvedRuId }
+      : validatedData;
+
     // Create consumption record
-    const consumption = await storage.createTravelerMaterialConsumption(validatedData);
+    const consumption = await storage.createTravelerMaterialConsumption(consumptionData);
 
     // Update lot quantity
     const newRemaining = (remaining - consumed).toString();
     const newStatus: MaterialLotStatus = parseFloat(newRemaining) <= 0 ? 'CONSUMED' : lot.status as MaterialLotStatus;
-    
+
     await storage.updateMaterialLot(lot.id, {
       remainingQty: newRemaining,
       status: newStatus,
     });
 
-    // Record transaction
+    // Record ISSUE transaction against the lot
     await storage.createMaterialLotTransaction(createTransaction({
       materialLotId: lot.id,
       internalControlNumber: lot.internalControlNumber,
@@ -743,12 +887,42 @@ router.post('/consume', async (req: Request, res: Response) => {
       referenceType: 'TRAVELER',
       referenceId: validatedData.travelerId,
       performedBy: validatedData.scannedBy,
-      notes: `Consumed for traveler step ${validatedData.travelerStepId}`,
+      notes: `Consumed for traveler step ${validatedData.travelerStepId}${resolvedRuId ? ` (received_unit #${resolvedRuId})` : ''}`,
     }));
+
+    // Decrement physical received_unit quantity (best-effort, non-blocking)
+    if (resolvedRuId !== null) {
+      try {
+        await db.execute(
+          sql`UPDATE received_units SET quantity = GREATEST(0, quantity - ${consumed}) WHERE id = ${resolvedRuId}`
+        );
+      } catch (decrErr: any) {
+        console.warn('[consume] received_unit quantity decrement failed (non-fatal):', decrErr.message);
+      }
+    }
+
+    // Auto-fulfill matching active reservation for this traveler (best-effort)
+    let fulfilledReservationId: number | null = null;
+    if (validatedData.travelerId) {
+      try {
+        const reservations = await storage.getLotReservations(lot.id);
+        const match = reservations.find(r =>
+          r.status === 'active' && r.travelerId === validatedData.travelerId
+        );
+        if (match) {
+          await storage.fulfillLotReservation(match.id);
+          fulfilledReservationId = match.id;
+        }
+      } catch (resErr: any) {
+        console.warn('[consume] reservation auto-fulfill failed (non-fatal):', resErr.message);
+      }
+    }
 
     res.status(201).json({
       consumption,
       updatedLot: { ...lot, remainingQty: newRemaining, status: newStatus },
+      receivedUnitId: resolvedRuId,
+      fulfilledReservationId,
     });
   } catch (error: any) {
     console.error('Error recording consumption:', error);
@@ -783,6 +957,99 @@ router.get('/consumption/step/:stepId', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching step consumption:', error);
     res.status(500).json({ error: 'Failed to fetch consumption records', message: error.message });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RESERVATION ENDPOINTS (Phase 2B)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// GET /lots/:lotId/reservations — list all reservations for a lot
+router.get('/:lotId/reservations', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const lot = await storage.getMaterialLot(lotId);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+
+    const reservations = await storage.getLotReservations(lotId);
+    const reservedQty = await storage.getReservedQtyForLot(lotId);
+    const availableQty = Math.max(0, parseFloat(lot.remainingQty) - reservedQty);
+
+    res.json({ reservations, reservedQty, availableQty, remaining: parseFloat(lot.remainingQty) });
+  } catch (error: any) {
+    console.error('Error fetching lot reservations:', error);
+    res.status(500).json({ error: 'Failed to fetch reservations', message: error.message });
+  }
+});
+
+// POST /lots/:lotId/reserve — create a reservation
+router.post('/:lotId/reserve', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const lot = await storage.getMaterialLot(lotId);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+
+    if (lot.status !== 'ACCEPTED' && lot.status !== 'ISSUED') {
+      return res.status(409).json({
+        error: 'LOT_NOT_AVAILABLE',
+        message: `Lot status is ${lot.status} — only ACCEPTED or ISSUED lots can be reserved`,
+      });
+    }
+
+    const body = insertMaterialLotReservationSchema.parse({
+      ...req.body,
+      materialLotId: lotId,
+      unitOfMeasure: req.body.unitOfMeasure ?? lot.unitOfMeasure,
+      quantityReserved: String(req.body.quantityReserved),
+    });
+
+    const quantityRequested = parseFloat(String(body.quantityReserved));
+    const remaining = parseFloat(lot.remainingQty);
+    const reservedQty = await storage.getReservedQtyForLot(lotId);
+    const availableQty = Math.max(0, remaining - reservedQty);
+
+    if (quantityRequested > availableQty) {
+      return res.status(409).json({
+        error: 'OVER_COMMITTED',
+        message: `Cannot reserve ${quantityRequested} ${lot.unitOfMeasure} — only ${availableQty} available (${remaining} remaining, ${reservedQty} already reserved)`,
+        remaining,
+        reservedQty,
+        availableQty,
+        requested: quantityRequested,
+      });
+    }
+
+    const reservation = await storage.createLotReservation(body);
+    res.status(201).json({ reservation, remaining, reservedQty: reservedQty + quantityRequested, availableQty: availableQty - quantityRequested });
+  } catch (error: any) {
+    console.error('Error creating reservation:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to create reservation', message: error.message });
+  }
+});
+
+// DELETE /lots/:lotId/reservations/:reservationId — cancel a reservation
+router.delete('/:lotId/reservations/:reservationId', async (req: Request, res: Response) => {
+  try {
+    const { lotId, reservationId } = req.params;
+    const lot = await storage.getMaterialLot(lotId);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+
+    const id = parseInt(reservationId, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid reservation ID' });
+
+    const reservation = await storage.getLotReservation(id);
+    if (!reservation) return res.status(404).json({ error: 'Reservation not found' });
+    if (reservation.materialLotId !== lotId) return res.status(403).json({ error: 'Reservation does not belong to this lot' });
+    if (reservation.status !== 'active') return res.status(409).json({ error: 'Reservation is already ' + reservation.status });
+
+    const cancelled = await storage.cancelLotReservation(id);
+    res.json({ reservation: cancelled });
+  } catch (error: any) {
+    console.error('Error cancelling reservation:', error);
+    res.status(500).json({ error: 'Failed to cancel reservation', message: error.message });
   }
 });
 

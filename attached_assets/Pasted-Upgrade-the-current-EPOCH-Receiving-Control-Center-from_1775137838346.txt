@@ -1,0 +1,176 @@
+Upgrade the current EPOCH Receiving Control Center from a solid foundation into a fully enforced, production-ready, traveler-integrated receiving system.
+
+Context
+The current receiving work already includes:
+- canonical tables:
+  - receipts
+  - receipt_lines
+  - received_units
+  - receipt_documents
+  - receipt_audit_log
+- receipt_id linkage in material_lot_transactions
+- audit logging
+- disposition handling
+- barcode labels
+- ICN on labels
+- freezerNumber and allocation fields
+- fail-fast receiving behavior
+- receiving access middleware and route hardening
+This work is reflected in the implementation notes already reviewed. :contentReference[oaicite:0]{index=0}
+
+Main objective
+Make receiving the controlled traceability entry point for material in EPOCH.
+
+That means:
+- shipment-level receiving
+- required document enforcement
+- disposition-based usability rules
+- expiration enforcement
+- reservation vs available logic
+- traveler scan traceability enforcement
+- lot genealogy support
+- better batch receiving UX
+
+Tasks
+
+1. Add shipment-level receipt fields
+Update receipts so a receipt clearly represents a physical shipment event.
+
+Add if missing:
+- packingSlipNumber
+- carrier
+- trackingNumber
+- shipmentCondition
+- receivedBy
+- receivedAt
+- shipmentNotes
+
+Update:
+- schema
+- validation
+- routes
+- UI forms
+- receipt detail views
+
+2. Add required receiving document rules
+At the inventory item level, add if missing:
+- requiresSDS
+- requiresTDS
+- requiresCoC
+- requiresTestReport
+- requiresPackingSlipPhoto
+
+Then enforce server-side:
+- if user tries to mark a unit or receipt as Accepted and required docs are missing, reject with 422
+- return a clear missing-doc list
+- show that missing-doc list in the UI
+
+3. Enforce disposition-based usability
+Only ACCEPTED material should be usable.
+
+Server-side rules:
+- pending inspection cannot be reserved or issued
+- quarantined cannot be reserved or issued
+- rejected cannot be reserved or issued
+- only accepted material appears as available for production/travelers
+
+Update inventory availability logic accordingly.
+
+4. Add expiration and shelf-life enforcement
+Use received unit expiration fields and/or linked lot data.
+
+Implement:
+- expired material cannot be reserved, issued, or scanned into a traveler
+- near-expiration warning state
+- clear UI statuses:
+  - active
+  - near expiration
+  - expired
+- endpoint or query support for expiring-soon material
+
+5. Clean up reservation vs available logic
+Support:
+- onHandQuantity
+- reservedQuantity
+- availableQuantity
+
+Do not allow over-reservation.
+Make sure availability calculations use accepted, non-expired material only.
+
+6. Add traveler integration path
+Analyze the existing traveler material traceability scan flow and integrate received_units/material-lot validation into it.
+
+Goal:
+A traveler material scan should only succeed when the unit is:
+- accepted
+- not expired
+- not quarantined
+- not rejected
+- has quantity available if quantity-based
+
+Traveler scan should fail closed otherwise.
+
+7. Add genealogy support
+Support traceability queries for:
+- which receipt a unit came from
+- which PO line it came from
+- which work order/traveler used it
+- which lots/units were used in a completed assembly
+
+At minimum add backend query support and route structure for:
+- receipt -> received unit -> allocation/transaction -> traveler/work order usage
+- reverse lookup from unit/lot to usage
+
+8. Improve batch receiving UX
+Add or improve:
+- apply same traceability values to selected units
+- split line into X equal units helper
+- clone unit helper
+- batch print labels
+- apply same location/freezer/allocation to selected units
+
+9. Keep receipt flow shipment-first
+A single receipt should represent one shipment and support multiple receipt_lines from the same PO shipment.
+Keep canonical table names already in use.
+
+What I want from you
+First:
+- analyze existing receiving routes, UI, inventory availability logic, traveler scan flow, document handling, and barcode handling
+- summarize what already exists
+- identify compatibility risks
+
+Then:
+- propose exact schema changes
+- propose exact route changes
+- propose exact validation rules
+- propose exact UI/component changes
+- provide migration notes
+
+Then implement phase 1 in this order:
+1. shipment-level receipt fields
+2. required document enforcement
+3. disposition-based usability enforcement
+4. expiration enforcement
+5. reservation vs available logic
+6. traveler integration path
+7. genealogy query support
+8. batch UX improvements
+
+Important rules
+- preserve existing canonical receiving table names
+- do not break existing receiving data
+- prefer fail-fast server-side validation
+- do not allow quarantined/rejected/pending/expired material into production use
+- keep design aligned to aerospace/composites traceability
+- keep barcode flow compatible with current label generation
+- follow existing EPOCH patterns and migration style
+
+Deliverables
+Return:
+- current-state summary
+- implementation plan
+- exact schema changes
+- exact route changes
+- exact UI changes
+- migration notes
+- then implement phase 1

@@ -677,6 +677,12 @@ export const inventoryItems = pgTable('inventory_items', {
   manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY
   // Manufactured items only — production level independent of category
   manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
+  // Required receiving documents — enforced on acceptance in Receiving Control Center
+  requiresSds: boolean('requires_sds').notNull().default(false),
+  requiresTds: boolean('requires_tds').notNull().default(false),
+  requiresCoc: boolean('requires_coc').notNull().default(false),       // Certificate of Conformance
+  requiresTestReport: boolean('requires_test_report').notNull().default(false),
+  requiresPackingSlipPhoto: boolean('requires_packing_slip_photo').notNull().default(false),
 });
 
 // Inventory Item Cost History - Tracks price changes over time
@@ -4687,9 +4693,10 @@ export const materialLotTransactions = pgTable('material_lot_transactions', {
   fromLocation: text('from_location'),
   toLocation: text('to_location'),
   
-  // Reference
-  referenceType: text('reference_type'), // TRAVELER | WORK_ORDER | ADJUSTMENT | SCRAP_REPORT
-  referenceId: text('reference_id'),
+  // Reference — for RECEIVE transactions both receipt and unit are linked
+  referenceType: text('reference_type'), // TRAVELER | WORK_ORDER | ADJUSTMENT | SCRAP_REPORT | received_unit
+  referenceId: text('reference_id'),     // ID of the primary reference object (received_unit.id for RECEIVE)
+  receiptId: integer('receipt_id'),      // Explicit FK to receiving_receipts for traceability queries
   
   // Actor
   performedBy: text('performed_by').notNull(),
@@ -4748,7 +4755,11 @@ export const travelerMaterialConsumption = pgTable('traveler_material_consumptio
   wasOverride: boolean('was_override').default(false),
   overrideApprovedBy: text('override_approved_by'),
   overrideReason: text('override_reason'),
-  
+
+  // Physical receiving unit linkage (Phase 2 — traveler consumption integration)
+  // Nullable: pre-Phase-2 records and lots without a linked received_unit will be NULL
+  receivedUnitId: integer('received_unit_id'),
+
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({
@@ -4756,6 +4767,42 @@ export const travelerMaterialConsumption = pgTable('traveler_material_consumptio
   stepIdIdx: index('traveler_material_consumption_step_idx').on(table.travelerStepId),
   lotIdIdx: index('traveler_material_consumption_lot_idx').on(table.materialLotId),
   icnIdx: index('traveler_material_consumption_icn_idx').on(table.internalControlNumber),
+  receivedUnitIdIdx: index('traveler_material_consumption_received_unit_idx').on(table.receivedUnitId),
+}));
+
+// ============================================================================
+// MATERIAL LOT RESERVATIONS - Pre-production quantity reservation
+// ============================================================================
+// A reservation pre-commits a quantity from a lot before physical consumption.
+// This prevents over-commit across concurrent production orders.
+
+export const materialLotReservations = pgTable('material_lot_reservations', {
+  id: serial('id').primaryKey(),
+
+  // Core foreign keys
+  materialLotId: uuid('material_lot_id')
+    .references(() => materialLots.id, { onDelete: 'cascade' })
+    .notNull(),
+  receivedUnitId: integer('received_unit_id'), // nullable — FK to received_units.id
+  travelerId: uuid('traveler_id'),             // nullable — which traveler holds this reservation
+  workOrderId: integer('work_order_id'),        // nullable — link to production work order
+
+  // Quantity
+  quantityReserved: numeric('quantity_reserved').notNull(),
+  unitOfMeasure: text('unit_of_measure').notNull(),
+
+  // Lifecycle: active → fulfilled (on consumption) | cancelled
+  status: text('status').notNull().default('active'), // active | fulfilled | cancelled
+
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  lotIdIdx: index('material_lot_reservations_lot_idx').on(table.materialLotId),
+  statusIdx: index('material_lot_reservations_status_idx').on(table.status),
+  travelerIdIdx: index('material_lot_reservations_traveler_idx').on(table.travelerId),
+  receivedUnitIdIdx: index('material_lot_reservations_ru_idx').on(table.receivedUnitId),
 }));
 
 // ============================================================================
@@ -5891,6 +5938,7 @@ export const insertMaterialLotTransactionSchema = createInsertSchema(materialLot
     toLocation: z.string().optional().nullable(),
     referenceType: z.string().optional().nullable(),
     referenceId: z.string().optional().nullable(),
+    receiptId: z.number().int().optional().nullable(),
     performedBy: z.string().min(1, 'Performed by is required'),
     performedAt: z.coerce.date().optional(),
     reason: z.string().optional().nullable(),
@@ -5925,6 +5973,7 @@ export const insertTravelerMaterialConsumptionSchema = createInsertSchema(travel
     overrideApprovedBy: z.string().optional().nullable(),
     overrideReason: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
+    receivedUnitId: z.number().int().positive().optional().nullable(),
   });
 
 // Material Traceability Types
@@ -5937,6 +5986,24 @@ export type MaterialLotTransaction = typeof materialLotTransactions.$inferSelect
 
 export type InsertTravelerMaterialConsumption = z.infer<typeof insertTravelerMaterialConsumptionSchema>;
 export type TravelerMaterialConsumption = typeof travelerMaterialConsumption.$inferSelect;
+
+// Material Lot Reservation Insert Schema
+export const insertMaterialLotReservationSchema = createInsertSchema(materialLotReservations)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    materialLotId: z.string().uuid('Invalid material lot ID'),
+    receivedUnitId: z.number().int().positive().optional().nullable(),
+    travelerId: z.string().uuid().optional().nullable(),
+    workOrderId: z.number().int().positive().optional().nullable(),
+    quantityReserved: z.string().min(1, 'Quantity required'),
+    unitOfMeasure: z.string().min(1, 'Unit of measure required'),
+    status: z.enum(['active', 'fulfilled', 'cancelled']).optional().default('active'),
+    notes: z.string().optional().nullable(),
+    createdBy: z.string().min(1, 'Created by required'),
+  });
+
+export type InsertMaterialLotReservation = z.infer<typeof insertMaterialLotReservationSchema>;
+export type MaterialLotReservation = typeof materialLotReservations.$inferSelect;
 
 // ============================================================================
 // TRAVELER SYSTEM - Insert Schemas and Types
@@ -13945,6 +14012,31 @@ export const cncJobs = pgTable('cnc_jobs', {
   completedAt: timestamp('completed_at'),
   createdByUserId: integer('created_by_user_id'),
   createdByDisplayName: text('created_by_display_name'),
+});
+
+// ─── Receiving Control Center ─────────────────────────────────────────────────
+// Aerospace-grade receiving traceability: receipts → receipt_lines → received_units
+// Each unit carries its own barcode, disposition, and links to material_lots.
+
+export const receipts = pgTable('receipts', {
+  id: serial('id').primaryKey(),
+  receiptNumber: text('receipt_number').notNull().unique(), // RCV-YYYYMMDD-NNN
+  receiptDate: timestamp('receipt_date').defaultNow().notNull(),
+  vendorId: integer('vendor_id'),
+  vendorName: text('vendor_name'), // Denormalized snapshot
+  vendorPoId: integer('vendor_po_id'), // Link to vendor_pos.id (nullable for manual receipts)
+  vendorPoNumber: text('vendor_po_number'), // Denormalized snapshot
+  carrier: text('carrier'),
+  trackingNumber: text('tracking_number'),
+  packingSlipNumber: text('packing_slip_number'),
+  conditionOnArrival: text('condition_on_arrival').default('good'), // good | damaged | partial | refused
+  status: text('status').default('in_progress').notNull(), // in_progress | complete | cancelled
+  notes: text('notes'),
+  // Receiver (EPOCH identity standard)
+  receiverUserId: integer('receiver_user_id'),
+  receiverDisplayName: text('receiver_display_name'),
+  // Explicit physical-receipt timestamp (separate from DB createdAt — set by receiver during Step 1)
+  receivedAt: timestamp('received_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -13954,6 +14046,13 @@ export const insertCncJobSchema = createInsertSchema(cncJobs).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertReceiptSchema = createInsertSchema(receipts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type CncJob = typeof cncJobs.$inferSelect;
 export type InsertCncJob = z.infer<typeof insertCncJobSchema>;
 
@@ -14014,6 +14113,22 @@ export const cncPrograms = pgTable('cnc_programs', {
   approvedByUserId: integer('approved_by_user_id'),
   approvedByDisplayName: text('approved_by_display_name'),
   approvedAt: timestamp('approved_at'),
+});
+
+export type Receipt = typeof receipts.$inferSelect;
+export type InsertReceipt = z.infer<typeof insertReceiptSchema>;
+
+export const receiptLines = pgTable('receipt_lines', {
+  id: serial('id').primaryKey(),
+  receiptId: integer('receipt_id').notNull().references(() => receipts.id, { onDelete: 'cascade' }),
+  vendorPoItemId: integer('vendor_po_item_id'), // Link to vendor_po_items.id
+  agPartNumber: text('ag_part_number'),
+  description: text('description'),
+  orderedQty: numeric('ordered_qty'),
+  receivedQty: numeric('received_qty').default('0').notNull(),
+  uom: text('uom').default('EA'),
+  isPartial: boolean('is_partial').default(false),
+  isOver: boolean('is_over').default(false), // received > ordered
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -14024,6 +14139,13 @@ export const insertCncProgramSchema = createInsertSchema(cncPrograms).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertReceiptLineSchema = createInsertSchema(receiptLines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type CncProgram = typeof cncPrograms.$inferSelect;
 export type InsertCncProgram = z.infer<typeof insertCncProgramSchema>;
 
@@ -14047,6 +14169,57 @@ export const insertCncToolListSchema = createInsertSchema(cncToolLists).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export type ReceiptLine = typeof receiptLines.$inferSelect;
+export type InsertReceiptLine = z.infer<typeof insertReceiptLineSchema>;
+
+export const receivedUnits = pgTable('received_units', {
+  id: serial('id').primaryKey(),
+  receiptLineId: integer('receipt_line_id').notNull().references(() => receiptLines.id, { onDelete: 'cascade' }),
+  receiptId: integer('receipt_id').notNull().references(() => receipts.id, { onDelete: 'cascade' }),
+  unitSequence: integer('unit_sequence').notNull(), // 1-based within receipt
+  barcode: text('barcode').notNull().unique(), // RCV-{receiptNumber}-{sequence}
+  unitType: text('unit_type').default('other'), // roll | box | bar | tube | serialized_piece | other
+  quantity: numeric('quantity').notNull(),
+  uom: text('uom').default('EA'),
+  // Traceability fields
+  lotNumber: text('lot_number'),
+  batchNumber: text('batch_number'),
+  serialNumber: text('serial_number'),
+  internalControlNumber: text('internal_control_number'),
+  rollNumber: text('roll_number'),
+  heatLot: text('heat_lot'),
+  manufactureDate: date('manufacture_date'),
+  expirationDate: date('expiration_date'),
+  shelfLifeDays: integer('shelf_life_days'),
+  certReference: text('cert_reference'),
+  // Disposition
+  disposition: text('disposition').default('pending_inspection').notNull(), // pending_inspection | accepted | quarantine | rejected
+  dispositionNotes: text('disposition_notes'),
+  dispositionByUserId: integer('disposition_by_user_id'),
+  dispositionByDisplayName: text('disposition_by_display_name'),
+  dispositionAt: timestamp('disposition_at'),
+  // Location / allocation
+  location: text('location'),
+  freezerNumber: integer('freezer_number'),
+  allocatedToType: text('allocated_to_type'), // work_order | po_demand | stock | quarantine
+  allocatedToId: integer('allocated_to_id'),
+  // Link to material_lots when accepted
+  materialLotId: uuid('material_lot_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  receiptLineIdx: index('received_units_receipt_line_idx').on(table.receiptLineId),
+  receiptIdx: index('received_units_receipt_idx').on(table.receiptId),
+  barcodeIdx: uniqueIndex('received_units_barcode_idx').on(table.barcode),
+}));
+
+export const insertReceivedUnitSchema = createInsertSchema(receivedUnits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type CncToolList = typeof cncToolLists.$inferSelect;
 export type InsertCncToolList = z.infer<typeof insertCncToolListSchema>;
 
@@ -14057,6 +14230,24 @@ export const cncSetupPhotos = pgTable('cnc_setup_photos', {
   url: text('url').notNull(),
   storageKey: text('storage_key'),
   caption: text('caption'),
+  uploadedByUserId: integer('uploaded_by_user_id'),
+  uploadedByDisplayName: text('uploaded_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export type ReceivedUnit = typeof receivedUnits.$inferSelect;
+export type InsertReceivedUnit = z.infer<typeof insertReceivedUnitSchema>;
+
+export const receiptDocuments = pgTable('receipt_documents', {
+  id: serial('id').primaryKey(),
+  receiptId: integer('receipt_id').notNull().references(() => receipts.id, { onDelete: 'cascade' }),
+  receivedUnitId: integer('received_unit_id').references(() => receivedUnits.id, { onDelete: 'set null' }),
+  mediaId: uuid('media_id').references(() => mediaLibrary.id, { onDelete: 'cascade' }),
+  docType: text('doc_type').default('other'), // SDS | TDS | CoC | packing_slip | test_report | supplier_label_photo | damage_photo | other
+  filename: text('filename'),
+  storagePath: text('storage_path'),
+  mimeType: text('mime_type'),
+  notes: text('notes'),
   uploadedByUserId: integer('uploaded_by_user_id'),
   uploadedByDisplayName: text('uploaded_by_display_name'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -14133,3 +14324,29 @@ export const insertCncTimeLogSchema = createInsertSchema(cncTimeLogs).omit({
 });
 export type CncTimeLog = typeof cncTimeLogs.$inferSelect;
 export type InsertCncTimeLog = z.infer<typeof insertCncTimeLogSchema>;
+
+export const insertReceiptDocumentSchema = createInsertSchema(receiptDocuments).omit({
+  id: true,
+  createdAt: true,
+});
+export type ReceiptDocument = typeof receiptDocuments.$inferSelect;
+export type InsertReceiptDocument = z.infer<typeof insertReceiptDocumentSchema>;
+
+export const receiptAuditLog = pgTable('receipt_audit_log', {
+  id: serial('id').primaryKey(),
+  receiptId: integer('receipt_id').notNull().references(() => receipts.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(), // receipt_created | unit_added | disposition_set | document_uploaded | label_printed | note_added
+  actorUserId: integer('actor_user_id'),
+  actorDisplayName: text('actor_display_name'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  receiptIdx: index('receipt_audit_log_receipt_idx').on(table.receiptId),
+}));
+
+export const insertReceiptAuditLogSchema = createInsertSchema(receiptAuditLog).omit({
+  id: true,
+  createdAt: true,
+});
+export type ReceiptAuditLog = typeof receiptAuditLog.$inferSelect;
+export type InsertReceiptAuditLog = z.infer<typeof insertReceiptAuditLogSchema>;

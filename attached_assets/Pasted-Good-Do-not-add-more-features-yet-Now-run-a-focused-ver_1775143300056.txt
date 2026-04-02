@@ -1,0 +1,82 @@
+Good. Do not add more features yet.
+
+Now run a focused verification pass on the Receiving Control Center changes and report only concrete results.
+
+Test checklist
+
+1. Schema / migration verification
+- confirm receipts now has received_at / receivedAt
+- confirm inventory_items now has:
+  - requires_sds
+  - requires_tds
+  - requires_coc
+  - requires_test_report
+  - requires_packing_slip_photo
+- confirm startup ensure logic does not conflict with existing canonical tables
+- confirm no migration drift or duplicate-column issues
+
+2. Receipt save / edit verification
+- create a receipt with:
+  - packing slip
+  - carrier
+  - tracking
+  - condition on arrival
+  - received by
+  - received at
+  - notes
+- verify values persist and reload correctly in UI and API
+
+3. Required document enforcement
+- configure an inventory item to require SDS / CoC / test report
+- attempt to accept a received unit without those docs
+- verify server returns 422
+- verify missing document list is returned clearly
+- verify UI shows the missing-doc warning correctly
+- then upload required docs and verify acceptance succeeds
+
+4. Disposition enforcement
+- verify pending inspection cannot be reserved
+- verify quarantined cannot be reserved
+- verify rejected cannot be reserved
+- verify only accepted units are treated as available
+- verify rollback/disposition metadata still behaves correctly on failure
+
+5. Expiration enforcement
+- create or update a received unit with expired date
+- verify expired unit cannot be accepted for use, reserved, or traveler-scanned
+- verify near-expiration badge/warning appears correctly
+- verify active / near expiration / expired states render correctly in UI
+
+6. Traveler validation
+- test material validation against:
+  - accepted + active unit => should pass
+  - quarantined unit => should fail
+  - rejected unit => should fail
+  - pending inspection unit => should fail
+  - expired unit => should fail
+- confirm traveler validation now checks both material lot state and linked received unit usability
+
+7. New receiving helpers
+- test split line into X equal units
+- test clone unit
+- test batch update of location / freezer / allocation
+- test genealogy endpoint
+- confirm batch label print still works
+
+8. Regression check
+- verify existing receipt create flow still works
+- verify existing barcode label rendering still works
+- verify no TypeScript errors
+- verify no broken routes/imports
+- verify no permission regressions on receiving endpoints
+
+Output format
+Return only:
+1. files touched during verification fixes
+2. tests passed
+3. tests failed
+4. exact errors found
+5. exact fixes applied
+6. final remaining risks, if any
+
+Do not do another broad summary. Be specific and concise.

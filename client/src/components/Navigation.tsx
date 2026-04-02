@@ -78,6 +78,14 @@ import {
   Tv,
 } from 'lucide-react';
 
+interface NavItemDef {
+  path: string;
+  label: string;
+  icon: React.ElementType;
+  description?: string;
+  legacyPath?: string;
+}
+
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -465,7 +473,7 @@ export default function Navigation() {
     },
   ];
 
-  const inventoryItems = [
+  const inventoryItems: NavItemDef[] = [
     {
       path: '/inventory/scanner',
       label: 'Inventory Scanner',
@@ -477,6 +485,7 @@ export default function Navigation() {
       label: 'Receiving',
       icon: Receipt,
       description: 'Receive incoming inventory',
+      legacyPath: '/inventory/receiving-legacy',
     },
     {
       path: '/inventory/enhanced-mrp',
@@ -1848,22 +1857,35 @@ export default function Navigation() {
                     {filteredInventoryItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;
+                      const legacyPath = item.legacyPath;
 
                       return (
-                        <button
-                          key={item.path}
-                          className={cn(
-                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
-                            isActive && 'bg-primary text-white hover:bg-primary'
+                        <div key={item.path}>
+                          <button
+                            className={cn(
+                              'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                              isActive && 'bg-primary text-white hover:bg-primary'
+                            )}
+                            onClick={() => {
+                              closeAllDropdowns();
+                              setLocation(item.path);
+                            }}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </button>
+                          {legacyPath && (
+                            <button
+                              className="w-full text-left pl-9 pr-3 pb-1 text-xs text-gray-400 hover:text-gray-600 hover:underline"
+                              onClick={() => {
+                                closeAllDropdowns();
+                                setLocation(legacyPath);
+                              }}
+                            >
+                              ↳ Legacy view
+                            </button>
                           )}
-                          onClick={() => {
-                            closeAllDropdowns();
-                            setLocation(item.path);
-                          }}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>

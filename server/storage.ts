@@ -480,12 +480,15 @@ import {
   materialLots,
   materialLotTransactions,
   travelerMaterialConsumption,
+  materialLotReservations,
   type MaterialLot,
   type InsertMaterialLot,
   type MaterialLotTransaction,
   type InsertMaterialLotTransaction,
   type TravelerMaterialConsumption,
   type InsertTravelerMaterialConsumption,
+  type MaterialLotReservation,
+  type InsertMaterialLotReservation,
   // Field - Calm thinking surface (unstructured, opaque)
   fieldState,
   type FieldState,
@@ -2225,6 +2228,14 @@ export interface IStorage {
   getTravelerStepMaterialConsumption(stepId: string): Promise<TravelerMaterialConsumption[]>;
   createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption>;
   deleteTravelerMaterialConsumption(id: string): Promise<void>;
+
+  // Material Lot Reservations
+  getLotReservations(lotId: string): Promise<MaterialLotReservation[]>;
+  getLotReservation(id: number): Promise<MaterialLotReservation | null>;
+  createLotReservation(data: InsertMaterialLotReservation): Promise<MaterialLotReservation>;
+  cancelLotReservation(id: number): Promise<MaterialLotReservation>;
+  fulfillLotReservation(id: number): Promise<MaterialLotReservation>;
+  getReservedQtyForLot(lotId: string): Promise<number>;
 
   // Sign Order Page Settings
   getSignOrderPageSettings(): Promise<any | undefined>;
@@ -19236,6 +19247,63 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTravelerMaterialConsumption(id: string): Promise<void> {
     await db.delete(travelerMaterialConsumption).where(eq(travelerMaterialConsumption.id, id));
+  }
+
+  // ============================================================
+  // MATERIAL LOT RESERVATIONS
+  // ============================================================
+
+  async getLotReservations(lotId: string): Promise<MaterialLotReservation[]> {
+    return await db
+      .select()
+      .from(materialLotReservations)
+      .where(eq(materialLotReservations.materialLotId, lotId))
+      .orderBy(desc(materialLotReservations.createdAt));
+  }
+
+  async getLotReservation(id: number): Promise<MaterialLotReservation | null> {
+    const [reservation] = await db
+      .select()
+      .from(materialLotReservations)
+      .where(eq(materialLotReservations.id, id))
+      .limit(1);
+    return reservation ?? null;
+  }
+
+  async createLotReservation(data: InsertMaterialLotReservation): Promise<MaterialLotReservation> {
+    const [reservation] = await db.insert(materialLotReservations).values(data).returning();
+    return reservation;
+  }
+
+  async cancelLotReservation(id: number): Promise<MaterialLotReservation> {
+    const [reservation] = await db
+      .update(materialLotReservations)
+      .set({ status: 'cancelled', updatedAt: new Date() })
+      .where(eq(materialLotReservations.id, id))
+      .returning();
+    return reservation;
+  }
+
+  async fulfillLotReservation(id: number): Promise<MaterialLotReservation> {
+    const [reservation] = await db
+      .update(materialLotReservations)
+      .set({ status: 'fulfilled', updatedAt: new Date() })
+      .where(eq(materialLotReservations.id, id))
+      .returning();
+    return reservation;
+  }
+
+  async getReservedQtyForLot(lotId: string): Promise<number> {
+    const [result] = await db
+      .select({ total: sum(materialLotReservations.quantityReserved) })
+      .from(materialLotReservations)
+      .where(
+        and(
+          eq(materialLotReservations.materialLotId, lotId),
+          eq(materialLotReservations.status, 'active')
+        )
+      );
+    return parseFloat(result?.total ?? '0') || 0;
   }
 
   // ============================================================

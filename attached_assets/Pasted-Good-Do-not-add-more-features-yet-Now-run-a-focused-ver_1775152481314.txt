@@ -1,0 +1,66 @@
+Good. Do not add more features yet.
+
+Now run a focused verification pass for Phase 2B reservation and available-quantity enforcement and return only concrete results.
+
+Test checklist
+
+1. Schema / migration verification
+- confirm material_lot_reservations exists
+- confirm startup ensure block is idempotent
+- confirm indexes/constraints exist as expected
+- confirm no duplicate-table or duplicate-column issues
+- confirm no new type mismatch issues were introduced
+
+2. Reservation endpoint verification
+- create a valid reservation
+- verify reservation row is stored correctly
+- verify quantityReserved persists correctly for numeric inputs
+- verify reserve fails when quantity > availableQty
+- verify reserve fails for unusable material:
+  - pending
+  - quarantined
+  - rejected
+  - expired
+- verify cancel endpoint changes status correctly
+- verify cancel restores availableQty correctly
+- verify double-cancel or invalid cancel is handled safely
+
+3. Validate endpoint verification
+- verify validate response now includes:
+  - remainingQty
+  - reservedQty
+  - availableQty
+- verify values are correct before reservation
+- verify values are correct after reservation
+- verify values are correct after cancellation
+
+4. Consume endpoint verification
+- verify consume enforces availableQty, not just remainingQty
+- verify consume cannot bypass reservation logic
+- verify consumption reduces remainingQty correctly
+- verify reservation fulfillment/reduction behaves correctly after consume
+- verify consume still blocks unusable linked received units
+
+5. Genealogy / traceability verification
+- verify reservation history can be queried or traced
+- verify genealogy still works after reservations exist
+- verify no duplicate rows appear in genealogy projections
+
+6. Regression verification
+- existing traveler validation still works
+- existing receipt genealogy still works
+- existing labels still work
+- existing disposition/document/expiration gates still work
+- no TypeScript errors
+- no debug logs left behind
+
+Output format
+Return only:
+1. files touched during verification fixes
+2. tests passed
+3. tests failed
+4. exact errors found
+5. exact fixes applied
+6. final remaining risks, if any
+
+Do not re-summarize the whole project.

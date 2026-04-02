@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { generateMagicLink } from '../../utils/magicLink';
 import { sendCommunication } from '../../communication/send';
+import { db } from '../../db';
+import { sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -28,7 +30,39 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const params = listVendorPOsQuerySchema.parse(req.query);
     const result = await storage.getAllVendorPOs(params);
-    res.json(result);
+
+    // Augment each PO with pendingReceiptCount (in-progress receipts tied to that PO)
+    try {
+      const countRows = await db.execute(
+        sql`SELECT vendor_po_id, COUNT(*)::int AS cnt
+            FROM receipts
+            WHERE vendor_po_id IS NOT NULL AND status = 'in_progress'
+            GROUP BY vendor_po_id`
+      );
+      type CountRow = { vendor_po_id: number; cnt: number };
+      const rows: CountRow[] = (
+        countRows && typeof countRows === 'object' && 'rows' in countRows
+          ? (countRows as { rows: CountRow[] }).rows
+          : countRows
+      ) as CountRow[];
+      const countMap: Record<number, number> = {};
+      for (const row of rows) {
+        countMap[row.vendor_po_id] = Number(row.cnt);
+      }
+      // result is either an array of POs or a paginated { data: PO[], total: number } object
+      const resultObj = result as { data?: { id: number }[] } | { id: number }[];
+      if (Array.isArray(resultObj)) {
+        return res.json(resultObj.map(po => ({ ...po, pendingReceiptCount: countMap[po.id] ?? 0 })));
+      }
+      const paginated = resultObj as { data: { id: number }[]; [key: string]: unknown };
+      if (Array.isArray(paginated.data)) {
+        return res.json({ ...paginated, data: paginated.data.map(po => ({ ...po, pendingReceiptCount: countMap[po.id] ?? 0 })) });
+      }
+      return res.json(result);
+    } catch (_) {
+      // Non-fatal: return result without pendingReceiptCount if count query fails
+      return res.json(result);
+    }
   } catch (error) {
     console.error('Get vendor POs error:', error);
     if (error instanceof z.ZodError) {

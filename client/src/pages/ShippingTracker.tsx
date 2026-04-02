@@ -747,7 +747,7 @@ export default function ShippingTracker() {
       <Accordion
         type="multiple"
         className="space-y-4"
-        defaultValue={['all-weeks', 'shipping-details']}
+        defaultValue={['shipping-details']}
       >
         {/* All Weeks Accordion — shown first */}
         <AccordionItem value="all-weeks" className="border rounded-lg">

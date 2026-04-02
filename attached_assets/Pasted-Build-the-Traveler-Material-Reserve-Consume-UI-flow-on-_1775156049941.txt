@@ -1,0 +1,96 @@
+Build the Traveler Material Reserve + Consume UI flow on top of the existing backend.
+
+Do not change backend logic unless absolutely required.
+
+Goal
+Create a fail-safe operator workflow for material usage:
+Scan → Validate → Show availability → Reserve (optional) → Consume
+
+UI Requirements
+
+1. Material Scan Panel
+- input box or scanner field
+- accepts barcode or ICN
+- triggers validation endpoint
+
+2. Validation Display
+After scan, show:
+- part number
+- description
+- lot number
+- received unit barcode
+- disposition (must be accepted)
+- expiration status (active / near / expired)
+- remainingQty
+- reservedQty
+- availableQty
+
+If invalid:
+- show clear error
+- do not allow continue
+
+3. Reservation Section
+If availableQty > 0:
+- show input for quantity to reserve
+- button: "Reserve"
+- call POST /api/material-lots/:id/reserve
+
+If already reserved by this traveler:
+- show "Reserved: X"
+- allow adjustment or cancel
+
+4. Consume Section
+- input quantity (default = reserved or 1)
+- button: "Consume Material"
+- call consume endpoint
+
+Rules:
+- must not exceed availableQty
+- must respect reservation
+- must fail closed
+
+5. Step Integration
+- tie this UI to traveler step
+- mark step complete only after successful consume
+- show status:
+  - not started
+  - reserved
+  - consumed
+
+6. Visual Safety Indicators
+- RED: invalid / expired / blocked
+- YELLOW: near expiration
+- GREEN: ready to use
+
+7. UX Requirements
+- mobile/tablet friendly
+- large buttons
+- minimal typing
+- clear success/failure feedback
+- auto-focus scan field after each action
+
+8. State Management
+- keep local state for:
+  - scanned material
+  - reservation state
+  - consumption status
+- reset cleanly after each successful consume
+
+9. Error Handling
+- display server errors clearly
+- handle:
+  - OVER_COMMITTED
+  - LOT_NOT_AVAILABLE
+  - RECEIVING_DISPOSITION_BLOCKED
+  - RECEIVING_UNIT_EXPIRED
+
+10. Do NOT:
+- bypass validation
+- allow manual overrides
+- allow consume without passing backend rules
+
+Deliverables
+- updated traveler UI component
+- new MaterialScan component if needed
+- integration with existing traveler steps
+- no backend rewrites unless necessary

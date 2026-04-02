@@ -7,6 +7,7 @@ export const MANUFACTURED_CATEGORY_ORDER: ManufacturedCategory[] = [
   'CORE',
   'SUB_ASSEMBLY',
   'ASSEMBLY',
+  'COMPOSITE',
 ];
 
 export const CATEGORY_DISPLAY_NAMES: Record<ManufacturedCategory, string> = {
@@ -16,6 +17,7 @@ export const CATEGORY_DISPLAY_NAMES: Record<ManufacturedCategory, string> = {
   CORE: 'Core',
   SUB_ASSEMBLY: 'Sub-Assembly',
   ASSEMBLY: 'Assembly',
+  COMPOSITE: 'Composite',
 };
 
 export const DASHBOARD_DISPLAY_NAMES: Record<SupplySourceDashboard, string> = {

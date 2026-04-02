@@ -298,6 +298,7 @@ async function initializeBackgroundServices() {
           '0010_all_orders_unique_order_id.sql',
           '0011_fix_finalized_orders_in_production_departments.sql',
           '0012_bulk_payment_batches.sql',
+          '0013_add_composite_manufactured_category.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {

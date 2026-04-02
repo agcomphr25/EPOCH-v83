@@ -1,4 +1,4 @@
-export type ManufacturedCategory = 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY';
+export type ManufacturedCategory = 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'COMPOSITE';
 export type SupplySourceDashboard = 'CUTTING_TABLE' | 'CNC' | 'CORE' | 'ASSEMBLY';
 
 const CATEGORY_TO_DASHBOARD: Record<ManufacturedCategory, SupplySourceDashboard> = {
@@ -8,6 +8,7 @@ const CATEGORY_TO_DASHBOARD: Record<ManufacturedCategory, SupplySourceDashboard>
   CORE: 'CORE',
   SUB_ASSEMBLY: 'ASSEMBLY',
   ASSEMBLY: 'ASSEMBLY',
+  COMPOSITE: 'ASSEMBLY',
 };
 
 const DASHBOARD_TO_LEGACY_DEPT: Record<SupplySourceDashboard, string> = {
@@ -35,7 +36,7 @@ const DASHBOARD_TO_CATEGORIES: Record<SupplySourceDashboard, ManufacturedCategor
   CUTTING_TABLE: ['PACKET', 'KIT'],
   CNC: ['MACHINED_PART'],
   CORE: ['CORE'],
-  ASSEMBLY: ['ASSEMBLY', 'SUB_ASSEMBLY'],
+  ASSEMBLY: ['ASSEMBLY', 'SUB_ASSEMBLY', 'COMPOSITE'],
 };
 
 export function getDashboardCategories(dashboard: SupplySourceDashboard): ManufacturedCategory[] {

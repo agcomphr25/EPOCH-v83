@@ -595,7 +595,7 @@ export const formSubmissions = pgTable('form_submissions', {
 
 // Inventory Item Type Enums
 export const inventoryItemTypeEnum = pgEnum('inventory_item_type', ['PURCHASED', 'MANUFACTURED']);
-export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']);
+export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE']);
 export const inventoryManufacturingLevelEnum = pgEnum('inventory_manufacturing_level', ['COMPONENT', 'INTERMEDIATE', 'FINAL']);
 
 // Supply source dashboard mapping — re-exported from canonical shared utility
@@ -2196,7 +2196,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     utilizedInServices: z.boolean().default(false),
     isActive: z.boolean().default(true),
     itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
-    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']).optional().nullable(),
+    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
   });
 

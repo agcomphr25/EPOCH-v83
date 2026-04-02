@@ -189,6 +189,30 @@ export async function getOpenTickets(): Promise<number> {
   return rows[0]?.count ?? 0;
 }
 
+export async function getAvgWeeklyOrders(): Promise<number> {
+  const rows = await pool.query(
+    `WITH weeks AS (
+       SELECT generate_series(
+         DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '8 weeks',
+         DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 week',
+         INTERVAL '1 week'
+       )::date AS week_start
+     ),
+     weekly_counts AS (
+       SELECT DATE_TRUNC('week', order_date::date)::date AS week_start,
+              COUNT(*)::int AS order_count
+       FROM all_orders
+       WHERE order_date::date >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '8 weeks'
+         AND order_date::date <  DATE_TRUNC('week', CURRENT_DATE)
+       GROUP BY 1
+     )
+     SELECT COALESCE(ROUND(AVG(COALESCE(wc.order_count, 0))), 0)::int AS avg_count
+     FROM weeks w
+     LEFT JOIN weekly_counts wc ON wc.week_start = w.week_start`,
+  ) as any[];
+  return rows[0]?.avg_count ?? 0;
+}
+
 async function getARTotalOutstanding(): Promise<number> {
   const rows = await pool.query(
     `SELECT COALESCE(SUM(balance), 0) AS total FROM (
@@ -253,7 +277,8 @@ export type MetricSlug =
   | 'open_tickets'
   | 'ar_total_outstanding'
   | 'ar_overdue_count'
-  | 'ar_open_invoice_count';
+  | 'ar_open_invoice_count'
+  | 'avg_weekly_orders';
 
 export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   cnc_queue_size:            getCNCQueueSize,
@@ -278,4 +303,5 @@ export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   ar_total_outstanding:      getARTotalOutstanding,
   ar_overdue_count:          getAROverdueCount,
   ar_open_invoice_count:     getAROpenInvoiceCount,
+  avg_weekly_orders:         getAvgWeeklyOrders,
 };

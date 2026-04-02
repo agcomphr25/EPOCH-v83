@@ -217,6 +217,15 @@ const REGISTRY: Array<{
     defaultVisual: 'stat_card',
     isLive: true,
   },
+  {
+    slug: 'avg_weekly_orders',
+    name: 'Avg Weekly Orders',
+    description: 'Average orders placed per week over the past 8 completed weeks',
+    category: 'Sales',
+    unit: 'orders/week',
+    defaultVisual: 'stat_card',
+    isLive: true,
+  },
 ];
 
 // ─── Startup tasks ─────────────────────────────────────────────────────────────

@@ -4758,7 +4758,7 @@ export const travelerMaterialConsumption = pgTable('traveler_material_consumptio
 
   // Physical receiving unit linkage (Phase 2 — traveler consumption integration)
   // Nullable: pre-Phase-2 records and lots without a linked received_unit will be NULL
-  receivedUnitId: integer('received_unit_id'),
+  receivedUnitId: integer('received_unit_id').references(() => receivedUnits.id, { onDelete: 'set null' }),
 
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),

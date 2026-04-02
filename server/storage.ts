@@ -524,6 +524,8 @@ import {
   type InsertCncQcResult,
   type CncTimeLog,
   type InsertCncTimeLog,
+  orderActivityEvents,
+  type InsertOrderActivityEvent,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -16978,27 +16980,63 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async fulfillOrder(orderId: string): Promise<AllOrder> {
-    // Update the order to be fulfilled and move to shipping management
-    await db
-      .update(allOrders)
-      .set({
-        currentDepartment: 'Shipping Management',
-        status: 'FULFILLED',
-        shippedDate: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(allOrders.orderId, orderId));
+  async fulfillOrder(orderId: string, actor?: { actorId?: number | null; actorDisplayName?: string | null }): Promise<AllOrder> {
+    // Execute update + audit event insert in a single transaction so that if
+    // the event write fails, the status change rolls back — no silent bypass.
+    const order = await db.transaction(async (tx) => {
+      // Capture before state for the audit event
+      const [before] = await tx
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
 
-    const [order] = await db
-      .select()
-      .from(allOrders)
-      .where(eq(allOrders.orderId, orderId))
-      .limit(1);
+      if (!before) {
+        throw new Error(`Order with ID ${orderId} not found`);
+      }
 
-    if (!order) {
-      throw new Error(`Order with ID ${orderId} not found`);
-    }
+      const now = new Date();
+
+      const [after] = await tx
+        .update(allOrders)
+        .set({
+          currentDepartment: 'Shipping Management',
+          status: 'FULFILLED',
+          shippedDate: now,
+          updatedAt: now,
+        })
+        .where(eq(allOrders.orderId, orderId))
+        .returning();
+
+      if (!after) {
+        throw new Error(`Failed to fulfill order ${orderId}`);
+      }
+
+      // Write canonical audit event atomically with the status update
+      await tx.insert(orderActivityEvents).values({
+        orderId,
+        eventType: 'FULFILL_ORDER',
+        eventCategory: 'production',
+        occurredAt: now,
+        actorId: actor?.actorId ?? null,
+        actorType: 'system',
+        actorDisplayName: actor?.actorDisplayName ?? null,
+        source: 'fulfill-route',
+        sourceRoute: '/api/orders/fulfill',
+        statusFrom: before.status ?? null,
+        statusTo: 'FULFILLED',
+        departmentFrom: before.currentDepartment ?? null,
+        departmentTo: 'Shipping Management',
+        beforeSnapshot: before as InsertOrderActivityEvent['beforeSnapshot'],
+        afterSnapshot: after as InsertOrderActivityEvent['afterSnapshot'],
+        fieldDiff: {
+          status: { before: before.status, after: 'FULFILLED', label: 'Order Status' },
+          currentDepartment: { before: before.currentDepartment, after: 'Shipping Management', label: 'Current Department' },
+        } as InsertOrderActivityEvent['fieldDiff'],
+      } satisfies InsertOrderActivityEvent);
+
+      return after;
+    });
 
     console.log(
       `✅ FULFILLED: Order ${orderId} has been marked as fulfilled and moved to shipping management with shipped date: ${new Date().toISOString()}`

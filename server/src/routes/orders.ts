@@ -27,6 +27,7 @@ import {
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
+import { orderActivityEvents } from '../../schema';
 import * as accountingService from '../services/accountingService';
 import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
@@ -1421,8 +1422,14 @@ router.post('/fulfill', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Order ID is required' });
     }
 
-    // Update the order to be fulfilled and move to shipping management
-    const updatedOrder = await storage.fulfillOrder(orderId);
+    // Update the order to be fulfilled and move to shipping management.
+    // fulfillOrder now atomically writes a canonical audit event in the same
+    // DB transaction — no separate audit call is needed.
+    const actor = {
+      actorId: (req as any).user?.id ?? null,
+      actorDisplayName: (req as any).user?.username ?? null,
+    };
+    const updatedOrder = await storage.fulfillOrder(orderId, actor);
 
     res.json({
       success: true,
@@ -2321,93 +2328,100 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       updateData.currentDepartment = targetDepartment;
     }
 
-    // Update the appropriate table
-    let updatedOrder;
-    if (isFinalized && isP2Order) {
-      console.log(
-        `🔄 Updating P2 finalized order ${orderId} in P2 allOrders table`
-      );
-      console.log(`🔄 Update data:`, updateData);
-      try {
-        updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
-        console.log(
-          `✅ Updated P2 finalized order result:`,
-          updatedOrder?.currentDepartment,
-          updatedOrder?.status
-        );
-      } catch (error) {
-        console.error(
-          `❌ P2 update method not available, falling back to P1 update:`,
-          error
-        );
-        updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
-      }
-    } else if (isFinalized) {
-      console.log(
-        `🔄 Updating P1 finalized order ${orderId} in allOrders table`
-      );
-      console.log(`🔄 Update data:`, updateData);
-      updatedOrder = await storage.updateFinalizedOrder(orderId, updateData);
-      console.log(
-        `✅ Updated P1 finalized order result:`,
-        updatedOrder?.currentDepartment,
-        updatedOrder?.status
-      );
-    } else if (isP2Order) {
-      console.log(
-        `🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`
-      );
-      console.log(`🔄 Update data:`, updateData);
-      try {
-        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
-        console.log(
-          `✅ Updated P2 draft order result:`,
-          updatedOrder?.currentDepartment,
-          updatedOrder?.status
-        );
-      } catch (error) {
-        console.error(
-          `❌ P2 update method not available, falling back to P1 update:`,
-          error
-        );
-        updatedOrder = await storage.updateOrderDraft(orderId, updateData);
-      }
-    } else {
-      console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
-      console.log(`🔄 Update data:`, updateData);
-      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
-      console.log(
-        `✅ Updated P1 draft order result:`,
-        updatedOrder?.currentDepartment,
-        updatedOrder?.status
-      );
-    }
-
-    // Reload the order after update to get the complete "after" state
-    const afterOrder = updatedOrder;
-    
     // Build actor from authenticated user
     const actor = {
       id: (req as any).user?.id,
       username: (req as any).user?.username || 'System',
       role: (req as any).user?.role || 'system',
     };
+    const canonicalActorId: number | null = (req as any).user?.id ?? null;
+    const canonicalActorDisplayName: string | null = (req as any).user?.username ?? null;
+
+    // For finalized P1 orders, execute state update + production_orders sync +
+    // canonical audit event in a single DB transaction so all three commits atomically.
+    // Pre-check production_orders existence outside the transaction (read-only lookup).
+    let updatedOrder;
+    if (isFinalized) {
+      console.log(`🔄 Updating finalized order ${orderId} in allOrders table (transactional)`);
+
+      // If we are moving to a new department, check whether a production_orders row
+      // exists so we can sync current_department inside the transaction (same logic
+      // as storage.updateFinalizedOrder to avoid data inconsistency).
+      const productionRecordForSync =
+        updateData.currentDepartment !== undefined
+          ? await storage.getProductionOrderByOrderId(orderId)
+          : undefined;
+
+      updatedOrder = await db.transaction(async (tx) => {
+        const [after] = await tx
+          .update(allOrders)
+          .set({ ...updateData, updatedAt: new Date() })
+          .where(eq(allOrders.orderId, orderId))
+          .returning();
+
+        if (!after) {
+          throw new Error(`Finalized order ${orderId} not found during progress update`);
+        }
+
+        // Sync production_orders.current_department so downstream reads/dedup remain
+        // consistent (mirrors the logic in storage.updateFinalizedOrder).
+        if (updateData.currentDepartment !== undefined && productionRecordForSync) {
+          await tx.execute(
+            sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
+          );
+          console.log(`[/progress] Synced production_orders.current_department for ${orderId} → ${updateData.currentDepartment}`);
+        }
+
+        const eventType = shouldMarkFulfilled ? 'STATUS_TRANSITION' : 'DEPARTMENT_MOVE';
+        const fieldDiff: Record<string, { before: string | null; after: string | null; label: string }> = {};
+
+        if (shouldMarkFulfilled) {
+          fieldDiff['status'] = { before: existingOrder.status ?? null, after: 'FULFILLED', label: 'Order Status' };
+        } else {
+          fieldDiff['currentDepartment'] = {
+            before: existingOrder.currentDepartment ?? null,
+            after: targetDepartment ?? null,
+            label: 'Current Department',
+          };
+        }
+
+        await tx.insert(orderActivityEvents).values({
+          orderId,
+          eventType,
+          eventCategory: 'production',
+          occurredAt: new Date(),
+          actorId: canonicalActorId,
+          actorType: 'user',
+          actorDisplayName: canonicalActorDisplayName,
+          source: 'department-transition',
+          sourceRoute: req.path,
+          statusFrom: existingOrder.status ?? null,
+          statusTo: shouldMarkFulfilled ? 'FULFILLED' : (after.status ?? null),
+          departmentFrom: existingOrder.currentDepartment ?? null,
+          departmentTo: shouldMarkFulfilled ? null : (targetDepartment ?? null),
+          fieldDiff,
+        });
+
+        return after;
+      });
+
+      console.log(`✅ Updated finalized order ${orderId}: dept=${updatedOrder?.currentDepartment}, status=${updatedOrder?.status}`);
+    } else if (isP2Order) {
+      console.log(`🔄 Updating P2 draft order ${orderId} in P2 orderDrafts table`);
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+      console.log(`✅ Updated P2 draft order result: dept=${updatedOrder?.currentDepartment}, status=${updatedOrder?.status}`);
+    } else {
+      console.log(`🔄 Updating P1 draft order ${orderId} in orderDrafts table`);
+      updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+      console.log(`✅ Updated P1 draft order result: dept=${updatedOrder?.currentDepartment}, status=${updatedOrder?.status}`);
+    }
+
+    // Reload the order after update to get the complete "after" state
+    const afterOrder = updatedOrder;
 
     if (shouldMarkFulfilled) {
-      console.log(
-        `✅ Successfully marked order ${orderId} as FULFILLED (status: ${afterOrder?.status})`
-      );
-      
-      // Log field-level audit event using automatic change detection
-      await auditService.logFieldChanges(
-        'p1_order',
-        orderId,
-        existingOrder,
-        afterOrder,
-        actor,
-        { source: 'department-transition', action: 'fulfillment' }
-      );
-      
+      console.log(`✅ Successfully marked order ${orderId} as FULFILLED (status: ${afterOrder?.status})`);
+
       // Close the final department transition (no new department to open)
       await auditService.closeDepartmentTransition(
         orderId,
@@ -2415,33 +2429,28 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         'fulfilled'
       );
     } else {
-      console.log(
-        `✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`
-      );
-      console.log(
-        `✅ Final order department: ${afterOrder?.currentDepartment}`
-      );
+      console.log(`✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`);
+      console.log(`✅ Final order department: ${afterOrder?.currentDepartment}`);
 
       // Verify the update succeeded
-      if (afterOrder?.currentDepartment !== targetDepartment) {
-        console.error(
-          `❌ Update failed: Expected ${targetDepartment}, got ${afterOrder?.currentDepartment}`
-        );
+      if (isFinalized && afterOrder?.currentDepartment !== targetDepartment) {
+        console.error(`❌ Update failed: Expected ${targetDepartment}, got ${afterOrder?.currentDepartment}`);
         return res.status(500).json({ error: `Department update failed` });
       }
-      
-      // Log field-level audit event using automatic change detection
-      // This automatically detects currentDepartment change and logs as DEPARTMENT_CHANGE
-      await auditService.logFieldChanges(
-        'p1_order',
-        orderId,
-        existingOrder,
-        afterOrder,
-        actor,
-        { source: 'department-transition' }
-      );
-      
-      // Also record department transition for timing tracking
+
+      // For non-finalized orders, write legacy audit event since canonical path was not used
+      if (!isFinalized) {
+        await auditService.logFieldChanges(
+          'p1_order',
+          orderId,
+          existingOrder,
+          afterOrder,
+          actor,
+          { source: 'department-transition' }
+        );
+      }
+
+      // Record department transition for timing tracking
       await auditService.recordDepartmentEntry({
         entityType: 'p1_order',
         entityId: orderId,
@@ -4574,8 +4583,12 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
     const { category, actor, source, from, to, limit: limitParam } = req.query;
     const limit = Math.min(parseInt(limitParam as string) || 200, 500);
 
-    const [events, transitions, scrapCycles] = await Promise.all([
+    const [events, activityEvents, transitions, scrapCycles] = await Promise.all([
       auditService.getAuditHistory('p1_order', orderId, limit),
+      db.select().from(orderActivityEvents)
+        .where(eq(orderActivityEvents.orderId, orderId))
+        .orderBy(desc(orderActivityEvents.occurredAt))
+        .limit(limit),
       auditService.getDepartmentTransitions(orderId),
       auditService.getScrapCycles(orderId),
     ]);
@@ -4590,6 +4603,7 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
       | 'production';
 
     const ACTION_CATEGORY_MAP: Record<string, EventCategory> = {
+      // Legacy audit_events types
       DEPARTMENT_CHANGE: 'status_department',
       STATUS_CHANGE: 'status_department',
       DEPARTMENT_ENTRY: 'status_department',
@@ -4619,6 +4633,15 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
       SCRAP_DECLARED: 'ncr_scrap',
       SCRAP_CYCLE: 'ncr_scrap',
       ORDER_RESTARTED: 'production',
+      // Canonical order_activity_events types
+      STATUS_TRANSITION: 'status_department',
+      DEPARTMENT_MOVE: 'status_department',
+      FIELD_PATCH: 'spec_change',
+      SPEC_PATCH: 'spec_change',
+      BADGE_SCAN_TRANSITION: 'status_department',
+      NCR_REPAIR_TRANSITION: 'ncr_scrap',
+      PAYMENT_STATE_TRANSITION: 'payment',
+      FULFILL_ORDER: 'status_department',
     };
 
     function getCategoryForAction(action: string): EventCategory {
@@ -4636,18 +4659,29 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
 
     function humanTitle(action: string, fieldsChanged: any, meta: any): string {
       // Generate rich narrative titles for well-known event types
-      if (action === 'DEPARTMENT_CHANGE' && fieldsChanged) {
+      if ((action === 'DEPARTMENT_CHANGE' || action === 'DEPARTMENT_MOVE') && fieldsChanged) {
         const deptChange = fieldsChanged['department'] || fieldsChanged['currentDepartment'];
         if (deptChange?.before && deptChange?.after) {
           const source = meta?.source;
-          if (source === 'badge_scan' || meta?.badgeScan) {
+          if (source === 'badge_scan' || meta?.badgeScan || action === 'BADGE_SCAN_TRANSITION') {
             return `Badge scan moved order from ${deptChange.before} to ${deptChange.after}`;
           }
           return `Order moved from ${deptChange.before} to ${deptChange.after}`;
         }
       }
 
-      if (action === 'STATUS_CHANGE' && fieldsChanged) {
+      if (action === 'BADGE_SCAN_TRANSITION') {
+        const deptChange = fieldsChanged?.['currentDepartment'];
+        if (deptChange?.before && deptChange?.after) {
+          return `Badge scan moved order from ${deptChange.before} to ${deptChange.after}`;
+        }
+        if (meta?.departmentFrom && meta?.departmentTo) {
+          return `Badge scan moved order from ${meta.departmentFrom} to ${meta.departmentTo}`;
+        }
+        return 'Badge scan — department change';
+      }
+
+      if ((action === 'STATUS_CHANGE' || action === 'STATUS_TRANSITION') && fieldsChanged) {
         const statusChange = fieldsChanged['status'];
         if (statusChange?.before && statusChange?.after) {
           // Detect NCR repair / reopen pattern
@@ -4658,7 +4692,7 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
         }
       }
 
-      if ((action === 'FIELD_CHANGE' || action === 'SPEC_CHANGE' || action === 'ADMIN_OVERRIDE') && fieldsChanged) {
+      if ((action === 'FIELD_CHANGE' || action === 'SPEC_CHANGE' || action === 'ADMIN_OVERRIDE' || action === 'FIELD_PATCH' || action === 'SPEC_PATCH') && fieldsChanged) {
         const keys = Object.keys(fieldsChanged);
         if (keys.length === 1) {
           const key = keys[0];
@@ -4683,6 +4717,7 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
       }
 
       const labels: Record<string, string> = {
+        // Legacy audit_events labels
         DEPARTMENT_CHANGE: 'Department changed',
         STATUS_CHANGE: 'Status updated',
         ORDER_CREATED: 'Order created',
@@ -4709,6 +4744,15 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
         SPEC_CHANGE: 'Specification changed',
         ADMIN_OVERRIDE: 'Admin override',
         ORDER_RESTARTED: 'Order restarted after scrap',
+        // Canonical order_activity_events labels
+        STATUS_TRANSITION: 'Status updated',
+        DEPARTMENT_MOVE: 'Department changed',
+        FIELD_PATCH: 'Field updated',
+        SPEC_PATCH: 'Specification changed',
+        BADGE_SCAN_TRANSITION: 'Badge scan — department change',
+        NCR_REPAIR_TRANSITION: 'NCR repair transition',
+        PAYMENT_STATE_TRANSITION: 'Payment state changed',
+        FULFILL_ORDER: 'Order fulfilled',
       };
       let label = labels[action] || action.replace(/_/g, ' ').toLowerCase();
       if (fieldsChanged && typeof fieldsChanged === 'object') {
@@ -4746,8 +4790,44 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
 
     const items: ActivityEvent[] = [];
 
+    // Build fingerprints from audit_events to deduplicate against canonical events.
+    // Fingerprint format: <epochMinute>|<normalizedType>|<statusFrom>|<statusTo>|<deptFrom>|<deptTo>
+    // "normalizedType" maps both old and new event type names to a shared key.
+    const CANONICAL_TO_LEGACY_TYPE: Record<string, string> = {
+      STATUS_TRANSITION: 'STATUS_CHANGE',
+      DEPARTMENT_MOVE: 'DEPARTMENT_CHANGE',
+      ADMIN_OVERRIDE: 'ADMIN_OVERRIDE',
+      FULFILL_ORDER: 'STATUS_CHANGE',
+      BADGE_SCAN_TRANSITION: 'DEPARTMENT_CHANGE',
+    };
+    function normalizeEventType(t: string): string {
+      return CANONICAL_TO_LEGACY_TYPE[t] ?? t;
+    }
+    function buildFingerprint(ts: string, eventType: string, statusFrom: string | null, statusTo: string | null, deptFrom: string | null, deptTo: string | null): string {
+      const minute = Math.floor(new Date(ts).getTime() / 60000);
+      return `${minute}|${normalizeEventType(eventType)}|${statusFrom ?? ''}|${statusTo ?? ''}|${deptFrom ?? ''}|${deptTo ?? ''}`;
+    }
+
+    const auditEventCorrelationIds = new Set<string>();
+    const auditEventFingerprints = new Set<string>();
+
     for (const event of events) {
       const isLegacy = !!(event.meta?.isBackfill || event.meta?.legacy);
+      if (event.meta?.correlationId) {
+        auditEventCorrelationIds.add(event.meta.correlationId);
+      }
+      const ts = String((event.timestamp || event.createdAt) ?? '');
+      const fc = event.fieldsChanged as Record<string, { before: any; after: any }> | null;
+      const fp = buildFingerprint(
+        ts,
+        event.action,
+        fc?.['status']?.before ?? null,
+        fc?.['status']?.after ?? null,
+        fc?.['currentDepartment']?.before ?? fc?.['department']?.before ?? null,
+        fc?.['currentDepartment']?.after ?? fc?.['department']?.after ?? null,
+      );
+      auditEventFingerprints.add(fp);
+
       items.push({
         id: `audit-${event.id}`,
         eventType: event.action,
@@ -4767,6 +4847,85 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
         fieldsChanged: event.fieldsChanged || null,
         reason: event.reason || null,
         meta: event.meta || null,
+        rawType: 'audit',
+      });
+    }
+
+    // Process canonical order_activity_events — these are from the canonical write service
+    // and cover transitions that the legacy auditService never wrote.
+    // Deduplicate by correlation ID OR by timestamp+type+transition fingerprint to avoid
+    // double entries when both ledgers captured the same event.
+    for (const ae of activityEvents) {
+      // Skip if we already have an audit_events entry with the same correlation ID
+      if (ae.correlationId && auditEventCorrelationIds.has(ae.correlationId)) {
+        continue;
+      }
+      // Skip if a matching fingerprint was already registered from audit_events
+      const aeFp = buildFingerprint(
+        String((ae.occurredAt || ae.createdAt) ?? ''),
+        ae.eventType,
+        ae.statusFrom ?? null,
+        ae.statusTo ?? null,
+        ae.departmentFrom ?? null,
+        ae.departmentTo ?? null,
+      );
+      if (auditEventFingerprints.has(aeFp)) {
+        continue;
+      }
+
+      // Build a fieldsChanged map from fieldDiff (canonical format) for the humanTitle function
+      const fieldDiff = ae.fieldDiff as Record<string, { before: any; after: any; label?: string }> | null;
+      const fieldsChanged: Record<string, { before: any; after: any }> | null = fieldDiff
+        ? Object.fromEntries(Object.entries(fieldDiff).map(([k, v]) => [k, { before: v.before, after: v.after }]))
+        : null;
+
+      // Build a meta object that humanTitle can use for source/badge-scan detection
+      const canonicalMeta: Record<string, any> = {
+        source: ae.source,
+        departmentFrom: ae.departmentFrom,
+        departmentTo: ae.departmentTo,
+        statusFrom: ae.statusFrom,
+        statusTo: ae.statusTo,
+        reasonCode: ae.reasonCode,
+        reasonText: ae.reasonText,
+        ...(ae.metadata as Record<string, any> | null ?? {}),
+      };
+
+      // For STATUS_TRANSITION, inject status into fieldsChanged so humanTitle can generate a narrative
+      let enrichedFieldsChanged = fieldsChanged;
+      if (ae.eventType === 'STATUS_TRANSITION' && ae.statusFrom && ae.statusTo && !fieldsChanged?.['status']) {
+        enrichedFieldsChanged = { ...(fieldsChanged ?? {}), status: { before: ae.statusFrom, after: ae.statusTo } };
+      }
+      // For DEPARTMENT_MOVE / BADGE_SCAN_TRANSITION, inject currentDepartment for narrative
+      if ((ae.eventType === 'DEPARTMENT_MOVE' || ae.eventType === 'BADGE_SCAN_TRANSITION') && ae.departmentFrom && ae.departmentTo && !fieldsChanged?.['currentDepartment']) {
+        enrichedFieldsChanged = { ...(enrichedFieldsChanged ?? {}), currentDepartment: { before: ae.departmentFrom, after: ae.departmentTo } };
+      }
+
+      const beforeAfterSummary =
+        enrichedFieldsChanged && Object.keys(enrichedFieldsChanged).length > 0
+          ? Object.entries(enrichedFieldsChanged)
+              .map(([k, v]) => `${k}: ${v.before} → ${v.after}`)
+              .join(', ')
+          : ae.statusFrom && ae.statusTo
+            ? `status: ${ae.statusFrom} → ${ae.statusTo}`
+            : ae.departmentFrom && ae.departmentTo
+              ? `department: ${ae.departmentFrom} → ${ae.departmentTo}`
+              : null;
+
+      items.push({
+        id: `activity-${ae.id}`,
+        eventType: ae.eventType,
+        eventCategory: getCategoryForAction(ae.eventType),
+        timestamp: (ae.occurredAt || ae.createdAt) as unknown as string,
+        title: humanTitle(ae.eventType, enrichedFieldsChanged, canonicalMeta),
+        actorName: ae.actorDisplayName || null,
+        actorRole: ae.actorType || null,
+        source: ae.source || 'server',
+        isLegacy: false,
+        beforeAfterSummary,
+        fieldsChanged: enrichedFieldsChanged,
+        reason: ae.reasonText || null,
+        meta: canonicalMeta,
         rawType: 'audit',
       });
     }

@@ -101,10 +101,21 @@ interface UnifiedShipment {
   itemCount: number;
 }
 
-interface AdHocEntry {
+type AdHocOrderEntry = {
+  type: 'order';
   orderId: string;
   addedAt: string;
-}
+};
+
+type AdHocBulkEntry = {
+  type: 'bulk';
+  id: string;
+  quantity: number;
+  note?: string;
+  addedAt: string;
+};
+
+type AdHocEntry = AdHocOrderEntry | AdHocBulkEntry;
 
 function getAdHocStorageKey(week: number, year: number): string {
   return `epoch-adhoc-shipments-${year}-W${week}`;
@@ -116,13 +127,31 @@ function loadAdHocEntries(week: number, year: number): AdHocEntry[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (e: unknown) =>
-        typeof e === 'object' &&
-        e !== null &&
-        typeof (e as AdHocEntry).orderId === 'string' &&
-        typeof (e as AdHocEntry).addedAt === 'string'
-    );
+    const result: AdHocEntry[] = [];
+    for (const e of parsed) {
+      if (typeof e !== 'object' || e === null) continue;
+      if (typeof e.addedAt !== 'string') continue;
+      if (e.type === 'bulk') {
+        if (typeof e.id === 'string' && typeof e.quantity === 'number') {
+          result.push({
+            type: 'bulk',
+            id: e.id,
+            quantity: e.quantity,
+            note: typeof e.note === 'string' ? e.note : undefined,
+            addedAt: e.addedAt,
+          });
+        }
+      } else {
+        if (typeof e.orderId === 'string') {
+          result.push({
+            type: 'order',
+            orderId: e.orderId,
+            addedAt: e.addedAt,
+          });
+        }
+      }
+    }
+    return result;
   } catch {
     return [];
   }
@@ -141,7 +170,10 @@ export default function WeeklyShipmentsOverview() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [adHocEntries, setAdHocEntries] = useState<AdHocEntry[]>([]);
+  const [adHocInputMode, setAdHocInputMode] = useState<'order' | 'bulk'>('order');
   const [adHocInput, setAdHocInput] = useState('');
+  const [bulkQuantity, setBulkQuantity] = useState('');
+  const [bulkNote, setBulkNote] = useState('');
 
   useEffect(() => {
     setAdHocEntries(loadAdHocEntries(selectedWeek, selectedYear));
@@ -158,7 +190,9 @@ export default function WeeklyShipmentsOverview() {
 
     if (newIds.length === 0) return;
 
-    const existingSet = new Set(adHocEntries.map((e) => e.orderId));
+    const existingOrderIds = new Set(
+      adHocEntries.filter((e): e is AdHocOrderEntry => e.type === 'order').map((e) => e.orderId)
+    );
     const added: string[] = [];
     const skipped: string[] = [];
 
@@ -166,11 +200,11 @@ export default function WeeklyShipmentsOverview() {
     const updatedEntries = [...adHocEntries];
 
     newIds.forEach((id) => {
-      if (existingSet.has(id)) {
+      if (existingOrderIds.has(id)) {
         skipped.push(id);
       } else {
-        existingSet.add(id);
-        updatedEntries.push({ orderId: id, addedAt: now });
+        existingOrderIds.add(id);
+        updatedEntries.push({ type: 'order', orderId: id, addedAt: now });
         added.push(id);
       }
     });
@@ -192,9 +226,37 @@ export default function WeeklyShipmentsOverview() {
     }
   }, [adHocInput, adHocEntries, selectedWeek, selectedYear, toast]);
 
-  const removeAdHocOrder = useCallback(
-    (orderId: string) => {
-      const updated = adHocEntries.filter((e) => e.orderId !== orderId);
+  const addBulkEntry = useCallback(() => {
+    const qty = parseInt(bulkQuantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: 'Invalid quantity', description: 'Please enter a positive number.' });
+      return;
+    }
+    const now = new Date().toISOString();
+    const newEntry: AdHocBulkEntry = {
+      type: 'bulk',
+      id: `bulk-${Date.now()}`,
+      quantity: qty,
+      note: bulkNote.trim() || undefined,
+      addedAt: now,
+    };
+    const updated = [...adHocEntries, newEntry];
+    setAdHocEntries(updated);
+    saveAdHocEntries(selectedWeek, selectedYear, updated);
+    setBulkQuantity('');
+    setBulkNote('');
+    toast({
+      title: `Added bulk entry`,
+      description: `${qty} unit${qty !== 1 ? 's' : ''}${newEntry.note ? ` — ${newEntry.note}` : ''}`,
+    });
+  }, [bulkQuantity, bulkNote, adHocEntries, selectedWeek, selectedYear, toast]);
+
+  const removeAdHocEntry = useCallback(
+    (entryId: string) => {
+      const updated = adHocEntries.filter((e) => {
+        if (e.type === 'order') return e.orderId !== entryId;
+        return e.id !== entryId;
+      });
       setAdHocEntries(updated);
       saveAdHocEntries(selectedWeek, selectedYear, updated);
     },
@@ -272,17 +334,32 @@ export default function WeeklyShipmentsOverview() {
   }, [customers]);
 
   const adHocShipments: UnifiedShipment[] = useMemo(() => {
-    return adHocEntries.map((entry) => ({
-      id: `adhoc-${entry.orderId}`,
-      type: 'Ad Hoc' as const,
-      orderId: entry.orderId,
-      modelOrDescription: 'Manually added',
-      customerName: '—',
-      trackingNumber: '',
-      carrier: '',
-      shippedDate: new Date(entry.addedAt),
-      itemCount: 1,
-    }));
+    return adHocEntries.map((entry) => {
+      if (entry.type === 'bulk') {
+        return {
+          id: `adhoc-bulk-${entry.id}`,
+          type: 'Ad Hoc' as const,
+          orderId: '',
+          modelOrDescription: entry.note || 'Bulk shipment',
+          customerName: '—',
+          trackingNumber: '',
+          carrier: '',
+          shippedDate: new Date(entry.addedAt),
+          itemCount: entry.quantity,
+        };
+      }
+      return {
+        id: `adhoc-${entry.orderId}`,
+        type: 'Ad Hoc' as const,
+        orderId: entry.orderId,
+        modelOrDescription: 'Manually added',
+        customerName: '—',
+        trackingNumber: '',
+        carrier: '',
+        shippedDate: new Date(entry.addedAt),
+        itemCount: 1,
+      };
+    });
   }, [adHocEntries]);
 
   const unifiedShipments = useMemo(() => {
@@ -364,7 +441,7 @@ export default function WeeklyShipmentsOverview() {
 
   const p1Count = unifiedShipments.filter((s) => s.type === 'P1').length;
   const oemCount = unifiedShipments.filter((s) => s.type === 'OEM').length;
-  const adHocCount = adHocShipments.length;
+  const adHocCount = adHocShipments.reduce((sum, s) => sum + s.itemCount, 0);
   const totalItems = unifiedShipments.reduce((sum, s) => sum + s.itemCount, 0);
 
   const uniqueTrackingNumbers = new Set(
@@ -599,38 +676,89 @@ export default function WeeklyShipmentsOverview() {
                 <div className="flex items-center gap-2 mb-3">
                   <PenLine className="h-4 w-4 text-amber-600" />
                   <span className="text-sm font-medium text-amber-800">
-                    Add orders that should count toward this week but haven't been fully processed
+                    Manually add shipments that should count toward this week
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter order #s separated by commas or spaces (e.g. AG100, AG101, AG102)"
-                    value={adHocInput}
-                    onChange={(e) => setAdHocInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') addAdHocOrders();
-                    }}
-                    className="flex-1 bg-white"
-                  />
-                  <Button onClick={addAdHocOrders} size="sm" className="gap-1">
-                    <Plus className="h-4 w-4" /> Add
-                  </Button>
+                <div className="flex gap-1 mb-3 bg-amber-100 rounded-md p-1 w-fit">
+                  <button
+                    onClick={() => setAdHocInputMode('order')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      adHocInputMode === 'order'
+                        ? 'bg-white text-amber-900 shadow-sm'
+                        : 'text-amber-700 hover:text-amber-900'
+                    }`}
+                  >
+                    By Order #
+                  </button>
+                  <button
+                    onClick={() => setAdHocInputMode('bulk')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      adHocInputMode === 'bulk'
+                        ? 'bg-white text-amber-900 shadow-sm'
+                        : 'text-amber-700 hover:text-amber-900'
+                    }`}
+                  >
+                    By Quantity
+                  </button>
                 </div>
+
+                {adHocInputMode === 'order' ? (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter order #s separated by commas or spaces (e.g. AG100, AG101, AG102)"
+                      value={adHocInput}
+                      onChange={(e) => setAdHocInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addAdHocOrders();
+                      }}
+                      className="flex-1 bg-white"
+                    />
+                    <Button onClick={addAdHocOrders} size="sm" className="gap-1">
+                      <Plus className="h-4 w-4" /> Add
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="Quantity (e.g. 12)"
+                      value={bulkQuantity}
+                      onChange={(e) => setBulkQuantity(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addBulkEntry();
+                      }}
+                      className="w-36 bg-white"
+                    />
+                    <Input
+                      placeholder="Note (optional)"
+                      value={bulkNote}
+                      onChange={(e) => setBulkNote(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addBulkEntry();
+                      }}
+                      className="flex-1 bg-white"
+                    />
+                    <Button onClick={addBulkEntry} size="sm" className="gap-1">
+                      <Plus className="h-4 w-4" /> Add
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {adHocEntries.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <PenLine className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-lg font-medium">No ad hoc orders</p>
+                  <p className="text-lg font-medium">No ad hoc entries</p>
                   <p className="text-sm mt-1">
-                    Enter order numbers above to manually include them in this week's count
+                    Add order numbers or bulk quantities above to manually include them in this week's count
                   </p>
                 </div>
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-gray-600">
-                      {adHocEntries.length} order{adHocEntries.length !== 1 ? 's' : ''} manually added for Week {selectedWeek}
+                      {adHocEntries.length} {adHocEntries.length !== 1 ? 'entries' : 'entry'} manually added for Week {selectedWeek}
                     </span>
                     <Button
                       variant="ghost"
@@ -642,21 +770,46 @@ export default function WeeklyShipmentsOverview() {
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {adHocEntries.map((entry) => (
-                      <Badge
-                        key={entry.orderId}
-                        variant="secondary"
-                        className="bg-amber-100 text-amber-800 hover:bg-amber-200 gap-1 pl-3 pr-1 py-1.5 text-sm"
-                      >
-                        <span className="font-mono font-medium">{entry.orderId}</span>
-                        <button
-                          onClick={() => removeAdHocOrder(entry.orderId)}
-                          className="ml-1 rounded-full hover:bg-amber-300 p-0.5"
+                    {adHocEntries.map((entry) => {
+                      const timeAdded = format(new Date(entry.addedAt), 'MMM d, h:mm a');
+                      if (entry.type === 'bulk') {
+                        return (
+                          <Badge
+                            key={entry.id}
+                            variant="secondary"
+                            className="bg-blue-100 text-blue-800 hover:bg-blue-200 gap-1 pl-3 pr-1 py-1.5 text-sm"
+                          >
+                            <span className="font-medium">Bulk · {entry.quantity} units</span>
+                            {entry.note && (
+                              <span className="text-blue-600 ml-1">— {entry.note}</span>
+                            )}
+                            <span className="text-blue-500 ml-1 text-xs">· {timeAdded}</span>
+                            <button
+                              onClick={() => removeAdHocEntry(entry.id)}
+                              className="ml-1 rounded-full hover:bg-blue-300 p-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      }
+                      return (
+                        <Badge
+                          key={entry.orderId}
+                          variant="secondary"
+                          className="bg-amber-100 text-amber-800 hover:bg-amber-200 gap-1 pl-3 pr-1 py-1.5 text-sm"
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                          <span className="font-mono font-medium">{entry.orderId}</span>
+                          <span className="text-amber-600 ml-1 text-xs">· {timeAdded}</span>
+                          <button
+                            onClick={() => removeAdHocEntry(entry.orderId)}
+                            className="ml-1 rounded-full hover:bg-amber-300 p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
                   </div>
                 </>
               )}

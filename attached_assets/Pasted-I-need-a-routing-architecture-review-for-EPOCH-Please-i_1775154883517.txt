@@ -1,0 +1,110 @@
+I need a routing architecture review for EPOCH.
+
+Please inspect the current codebase and return a structured report of what already exists for routings, travelers, P2 Control Center, CNC dashboard integration, manufactured item classification, and what needs to be added for a future Routing Hub.
+
+Focus on these areas:
+
+1. Database schema
+Find and summarize all tables, types, and relationships related to:
+- part routings
+- routing revisions
+- travelers
+- traveler steps
+- traveler tasks
+- manufacturing queue
+- work orders
+- inventory items / manufactured items
+- departments / work centers
+- machines
+- CNC programs
+- fixtures/tooling
+- documents attached to routings
+- any routing generation rules
+
+2. Frontend files
+Find all UI files related to:
+- P2 Control Center
+- routing creation/editing
+- traveler viewing/execution
+- manufacturing queue
+- CNC dashboard
+- inventory item setup / manufactured part classification
+
+3. Backend/API files
+Find all route files, services, and storage functions related to:
+- creating routings
+- editing routings
+- retrieving routings
+- generating travelers from routings
+- resolving routing by part number
+- creating manufacturing queue records
+- CNC dashboard data loading
+- machine/program setup if it exists
+
+4. Output format
+Return the answer in these sections:
+
+SECTION A — FILE MAP
+List the exact files that appear relevant, grouped by:
+- schema
+- frontend
+- backend
+- services/storage
+- migrations
+
+SECTION B — CURRENT ROUTING MODEL
+Explain how routing works today:
+- where part routing is stored
+- how department sequence is stored
+- how revisions are handled
+- how traveler generation works
+- how tasks are created
+- how routing connects to inventory/manufactured parts
+- how P2 uses the routing
+
+SECTION C — CNC SUPPORT TODAY
+Explain whether the current routing model supports CNC-specific needs such as:
+- machine assignment
+- machine class
+- program linkage
+- setup instructions
+- fixtures/tooling
+- first article inspection
+- run/setup standards
+- operation-level machine details
+
+SECTION D — GAPS
+Identify what is missing if we want routing by manufacturing type, such as:
+- composite part routing
+- CNC routing
+- core routing
+- kit routing
+- subassembly routing
+- final assembly routing
+- outside process routing
+- inspection/test routing
+
+SECTION E — RECOMMENDED ROUTING HUB CHANGES
+Recommend what new modules/tables/pages would need to be added to support a Routing Hub without breaking current P2 Control Center functionality.
+
+SECTION F — EXAMPLES
+If possible, provide 3 real examples from the codebase:
+- one composite-style routing
+- one CNC-related routing or item
+- one subassembly/assembly-related item
+
+For each example, explain:
+- what exists now
+- what data is present
+- what is missing
+
+Important:
+- Do not make assumptions without citing the file and code structure you found.
+- If a feature is not present, say clearly “not found”.
+- Prefer exact file names, function names, table names, and component names.
+- Be specific and technical.
+
+Start by searching the repo for keywords like:
+routing, partRouting, traveler, manufacturingQueue, p2, control-center, cnc, machine, program, inventory, workOrder
+
+Then produce the full report.

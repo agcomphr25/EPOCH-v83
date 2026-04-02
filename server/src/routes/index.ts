@@ -9181,9 +9181,62 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const allOrders = getRows(allOrdersResult);
       
       console.log('📊 Query returned', allOrders.length, 'orders with department history');
-      
+
+      // Query P1 production orders that have department_history (these are not in all_orders)
+      const productionOrdersResult = await pool.query(
+        `SELECT 
+          order_id,
+          po_number,
+          item_name,
+          item_id,
+          current_department,
+          department_history,
+          due_date,
+          order_date
+        FROM production_orders
+        WHERE department_history IS NOT NULL
+          AND jsonb_array_length(department_history) > 0
+        ORDER BY order_id`
+      );
+      const rawProductionOrders = getRows(productionOrdersResult);
+
+      console.log('📊 Query returned', rawProductionOrders.length, 'production orders with department history');
+
+      // Normalize production_orders rows to the same shape as all_orders rows.
+      // NOTE: production_orders has no top-level assigned_technician field; technician identity
+      // lives in department_history[].progressedBy rather than a top-level field. We leave
+      // assigned_technician null/undefined so the existing fallback (|| 'Unassigned') handles grouping.
+      const normalizedProductionOrders = rawProductionOrders.map((po: any) => ({
+        order_id: po.order_id,
+        customer_po: po.po_number,
+        fb_order_number: po.item_name,
+        model_id: po.item_id,
+        assigned_technician: undefined,
+        current_department: po.current_department,
+        department_history: po.department_history,
+        due_date: po.due_date,
+        order_date: po.order_date,
+        source: 'production_order',
+      }));
+
+      // Merge both arrays and deduplicate by order_id, preferring the all_orders version
+      // if the same order_id appears in both (safety net for PO_RELEASE orders that exist in both tables).
+      // Key is normalized to String to guard against numeric vs string type mismatches across sources.
+      const allOrdersById = new Map<string, any>();
+      for (const order of allOrders) {
+        allOrdersById.set(String(order.order_id), order);
+      }
+      for (const order of normalizedProductionOrders) {
+        if (!allOrdersById.has(String(order.order_id))) {
+          allOrdersById.set(String(order.order_id), order);
+        }
+      }
+      const allData = Array.from(allOrdersById.values());
+
+      console.log('📊 Combined dataset has', allData.length, 'orders after deduplication');
+
       // Filter to only include orders that were progressed OUT of Finish QC in the date range
-      const filteredOrders = allOrders.filter((order: any) => {
+      const filteredOrders = allData.filter((order: any) => {
         if (!order.department_history || !Array.isArray(order.department_history)) {
           return false;
         }

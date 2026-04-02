@@ -19,6 +19,7 @@ import {
   BarChart3,
   Layers,
   Wrench,
+  Printer,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -787,8 +788,8 @@ export default function OEMShipmentsPage() {
                                     variant="outline"
                                     onClick={() => downloadShippingLabel(shipment.id, shipment.master_tracking_number)}
                                   >
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Label
+                                    <Printer className="h-4 w-4 mr-2" />
+                                    Reprint Label
                                   </Button>
                                 )}
                                 <CollapsibleTrigger asChild>
@@ -814,6 +815,7 @@ export default function OEMShipmentsPage() {
                                       <th className="text-left p-3 font-semibold">Order ID</th>
                                       <th className="text-left p-3 font-semibold">Description</th>
                                       <th className="text-center p-3 font-semibold">Qty</th>
+                                      <th className="text-center p-3 font-semibold">Actions</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -841,6 +843,18 @@ export default function OEMShipmentsPage() {
                                         </td>
                                         <td className="p-3 text-center">
                                           <Badge variant="outline">{item.quantity}</Badge>
+                                        </td>
+                                        <td className="p-3 text-center">
+                                          {item.hasPackingSlip && (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                            >
+                                              <Printer className="h-3 w-3 mr-1" />
+                                              Reprint Packing Slip
+                                            </Button>
+                                          )}
                                         </td>
                                       </tr>
                                     ))}
@@ -987,15 +1001,15 @@ export default function OEMShipmentsPage() {
                                   )}
                                 </td>
                                 <td className="p-3 text-center">
-                                  <div className="flex items-center gap-1 justify-center">
+                                  <div className="flex items-center gap-2 justify-center flex-wrap">
                                     {item.hasPackingSlip && (
                                       <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
-                                        title="Download Packing Slip"
                                       >
-                                        <FileText className="h-3 w-3" />
+                                        <Printer className="h-3 w-3 mr-1" />
+                                        Reprint Packing Slip
                                       </Button>
                                     )}
                                     {item.hasLabel && (
@@ -1003,9 +1017,9 @@ export default function OEMShipmentsPage() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => downloadShippingLabel(item.shipmentId, item.trackingNumber)}
-                                        title="Download Shipping Label"
                                       >
-                                        <Download className="h-3 w-3" />
+                                        <Printer className="h-3 w-3 mr-1" />
+                                        Reprint Label
                                       </Button>
                                     )}
                                   </div>

@@ -5656,6 +5656,8 @@ export const productionOrders = pgTable('production_orders', {
   p2PoItemId: integer('p2_po_item_id'), // Reference to p2_purchase_order_items.id
   // Canonical item code (UPPER+TRIM normalized, indexed for fast lookup)
   itemCode: text('item_code'),
+  // Technician assigned when the order moves through Finish QC
+  assignedTechnician: text('assigned_technician'),
 });
 
 // Enhanced Form Insert Schemas

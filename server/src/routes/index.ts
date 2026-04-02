@@ -9208,6 +9208,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           po_number,
           item_name,
           item_id,
+          assigned_technician,
           current_department,
           department_history,
           due_date,
@@ -9222,15 +9223,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       console.log('📊 Query returned', rawProductionOrders.length, 'production orders with department history');
 
       // Normalize production_orders rows to the same shape as all_orders rows.
-      // NOTE: production_orders has no top-level assigned_technician field; technician identity
-      // lives in department_history[].progressedBy rather than a top-level field. We leave
-      // assigned_technician null/undefined so the existing fallback (|| 'Unassigned') handles grouping.
       const normalizedProductionOrders = rawProductionOrders.map((po: any) => ({
         order_id: po.order_id,
         customer_po: po.po_number,
         fb_order_number: po.item_name,
         model_id: po.item_id,
-        assigned_technician: undefined,
+        assigned_technician: po.assigned_technician,
         current_department: po.current_department,
         department_history: po.department_history,
         due_date: po.due_date,

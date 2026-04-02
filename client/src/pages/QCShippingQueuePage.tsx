@@ -1672,138 +1672,182 @@ export default function QCShippingQueuePage() {
                                       </CollapsibleTrigger>
                                       <CollapsibleContent>
                                         <div className="px-4 pb-4 space-y-2">
-                                          {[...po.items].sort((a: any, b: any) => {
-                                            const unitA = parseInt(a.unitNumber) || 0;
-                                            const unitB = parseInt(b.unitNumber) || 0;
-                                            if (unitA !== unitB) return unitA - unitB;
-                                            const descA = (a.description || a.stockModel || '').toLowerCase();
-                                            const descB = (b.description || b.stockModel || '').toLowerCase();
-                                            return descA.localeCompare(descB);
-                                          }).map((item: any) => {
-                                            // Create unique key for selection - must use orderId if exists, fallback to poItemId-unitNumber
-                                            const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
-                                            const isSelected = selectedPOItems.has(itemKey);
-                                            // Disable if: not ready to ship, or different customer selected
-                                            const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
-                                            const departmentBadge = getDepartmentBadge(item.currentDepartment);
-                                            const isShipped = item.currentDepartment === 'Shipping';
-                                            
-                                            return (
-                                              <div
-                                                key={item.orderId || `unscheduled-${item.poItemId}-${item.unitNumber}`}
-                                                className={`
-                                                  flex items-center gap-3 p-3 rounded border
-                                                  ${isShipped ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : ''}
-                                                  ${isSelected && !isShipped ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : ''}
-                                                  ${!isSelected && !isShipped ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700' : ''}
-                                                  ${!item.isReadyToShip && !isShipped ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
-                                                  ${isDisabled && item.isReadyToShip ? 'opacity-50 cursor-not-allowed' : ''}
-                                                `}
-                                                data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}
-                                              >
-                                                {item.isReadyToShip && (
-                                                  <Checkbox
-                                                    checked={isSelected}
-                                                    disabled={isDisabled}
-                                                    onCheckedChange={(checked) => {
-                                                      const newSelected = new Set(selectedPOItems);
-                                                      if (checked) {
-                                                        newSelected.add(itemKey);
-                                                        setSelectedCustomer(customer.customerName);
-                                                      } else {
-                                                        newSelected.delete(itemKey);
-                                                        if (newSelected.size === 0) {
-                                                          setSelectedCustomer(null);
-                                                        }
-                                                      }
-                                                      setSelectedPOItems(newSelected);
-                                                    }}
-                                                    data-testid={`checkbox-po-item-${itemKey}`}
-                                                  />
-                                                )}
-                                                {!item.isReadyToShip && <div className="w-6" />}
-                                                
-                                                <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
-                                                  <div className="flex items-center gap-2">
-                                                    {/* Metal Accessory indicator */}
-                                                    {isMetalAccessory(item) && (
-                                                      <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded-full" title="Metal Accessory">
-                                                        <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                                      </span>
-                                                    )}
-                                                    <div>
-                                                      <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                                        {item.orderId || `Unit ${item.unitNumber}`}
-                                                      </span>
-                                                      <span className="text-gray-500 ml-2 text-xs">
-                                                        {item.unitNumber}/{item.totalQuantity}
-                                                      </span>
+                                          {(() => {
+                                            const sortedItems = [...po.items].sort((a: any, b: any) => {
+                                              const unitA = parseInt(a.unitNumber) || 0;
+                                              const unitB = parseInt(b.unitNumber) || 0;
+                                              if (unitA !== unitB) return unitA - unitB;
+                                              const descA = (a.description || a.stockModel || '').toLowerCase();
+                                              const descB = (b.description || b.stockModel || '').toLowerCase();
+                                              return descA.localeCompare(descB);
+                                            });
+
+                                            const deptGroupMap: Record<string, any[]> = {};
+                                            for (const item of sortedItems) {
+                                              const dept = item.currentDepartment || 'Not Scheduled';
+                                              if (!deptGroupMap[dept]) deptGroupMap[dept] = [];
+                                              deptGroupMap[dept].push(item);
+                                            }
+
+                                            const deptOrder = ['Shipping QC', 'Shipping', 'CNC', 'Paint', 'Finish', 'Barcode', 'Gunsmith', 'Not Scheduled'];
+                                            const deptKeys = Object.keys(deptGroupMap).sort((a, b) => {
+                                              const ai = deptOrder.indexOf(a);
+                                              const bi = deptOrder.indexOf(b);
+                                              if (ai === -1 && bi === -1) return a.localeCompare(b);
+                                              if (ai === -1) return 1;
+                                              if (bi === -1) return -1;
+                                              return ai - bi;
+                                            });
+
+                                            return deptKeys.map((dept) => {
+                                              const deptItems = deptGroupMap[dept];
+                                              const deptBadge = getDepartmentBadge(dept === 'Not Scheduled' ? null : dept);
+                                              const isShippingQCGroup = dept === 'Shipping QC';
+
+                                              return (
+                                                <Collapsible key={dept} defaultOpen={isShippingQCGroup}>
+                                                  <CollapsibleTrigger className="w-full">
+                                                    <div className="flex items-center justify-between px-3 py-2 rounded border bg-gray-100 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                                                      <div className="flex items-center gap-2">
+                                                        <Badge variant={deptBadge.variant} className={`${deptBadge.className} text-xs`}>
+                                                          {deptBadge.label}
+                                                        </Badge>
+                                                      </div>
+                                                      <Badge variant="secondary" className="text-xs">
+                                                        {deptItems.length} item{deptItems.length !== 1 ? 's' : ''}
+                                                      </Badge>
                                                     </div>
-                                                  </div>
-                                                  <div className="text-gray-600 dark:text-gray-400">
-                                                    {item.description || 'No description'}
-                                                  </div>
-                                                  <div className="text-gray-600 dark:text-gray-400">
-                                                    {isMetalAccessory(item) ? (
-                                                      <span className="text-amber-600 dark:text-amber-400 font-medium">Metal Accessory</span>
-                                                    ) : (
-                                                      item.stockModel || 'Unknown'
-                                                    )}
-                                                  </div>
-                                                  <div className="text-gray-600 dark:text-gray-400">
-                                                    {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
-                                                  </div>
-                                                  <div className="flex items-center gap-2 justify-end flex-wrap">
-                                                    <Badge variant={departmentBadge.variant} className={departmentBadge.className}>
-                                                      {departmentBadge.label}
-                                                    </Badge>
-                                                    {item.flatTop && (
-                                                      <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300 text-xs">
-                                                        Flat Top
-                                                      </Badge>
-                                                    )}
-                                                    {item.isFulfilled && (
-                                                      <Badge variant="outline" className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs">
-                                                        ✓ Fulfilled
-                                                      </Badge>
-                                                    )}
-                                                    {item.orderId && item.isReadyToShip && (
-                                                      <Button
-                                                        size="sm"
-                                                        variant={item.isFulfilled ? "outline" : "secondary"}
-                                                        onClick={async () => {
-                                                          try {
-                                                            await apiRequest(`/api/po-orders/toggle-fulfilled`, {
-                                                              method: 'POST',
-                                                              body: JSON.stringify({
-                                                                orderId: item.orderId,
-                                                                isFulfilled: !item.isFulfilled,
-                                                              }),
-                                                            });
-                                                            toast({
-                                                              title: item.isFulfilled ? "Unmarked as fulfilled" : "Marked as fulfilled",
-                                                              description: `${item.orderId} ${item.isFulfilled ? 'can now be shipped through the system' : 'has been marked as shipped externally'}`,
-                                                            });
-                                                            queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
-                                                          } catch (error: any) {
-                                                            toast({
-                                                              title: "Error",
-                                                              description: error.message || "Failed to update fulfilled status",
-                                                              variant: "destructive",
-                                                            });
-                                                          }
-                                                        }}
-                                                        className="text-xs h-7"
-                                                        data-testid={`toggle-fulfilled-${item.orderId}`}
-                                                      >
-                                                        {item.isFulfilled ? "Unmark Fulfilled" : "Mark Fulfilled"}
-                                                      </Button>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
+                                                  </CollapsibleTrigger>
+                                                  <CollapsibleContent>
+                                                    <div className="mt-1 space-y-1 pl-2">
+                                                      {deptItems.map((item: any) => {
+                                                        const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
+                                                        const isSelected = selectedPOItems.has(itemKey);
+                                                        const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
+                                                        const departmentBadge = getDepartmentBadge(item.currentDepartment);
+                                                        const isShipped = item.currentDepartment === 'Shipping';
+
+                                                        return (
+                                                          <div
+                                                            key={item.orderId || `unscheduled-${item.poItemId}-${item.unitNumber}`}
+                                                            className={`
+                                                              flex items-center gap-3 p-3 rounded border
+                                                              ${isShipped ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : ''}
+                                                              ${isSelected && !isShipped ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : ''}
+                                                              ${!isSelected && !isShipped ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700' : ''}
+                                                              ${!item.isReadyToShip && !isShipped ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
+                                                              ${isDisabled && item.isReadyToShip ? 'opacity-50 cursor-not-allowed' : ''}
+                                                            `}
+                                                            data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}
+                                                          >
+                                                            {item.isReadyToShip && (
+                                                              <Checkbox
+                                                                checked={isSelected}
+                                                                disabled={isDisabled}
+                                                                onCheckedChange={(checked) => {
+                                                                  const newSelected = new Set(selectedPOItems);
+                                                                  if (checked) {
+                                                                    newSelected.add(itemKey);
+                                                                    setSelectedCustomer(customer.customerName);
+                                                                  } else {
+                                                                    newSelected.delete(itemKey);
+                                                                    if (newSelected.size === 0) {
+                                                                      setSelectedCustomer(null);
+                                                                    }
+                                                                  }
+                                                                  setSelectedPOItems(newSelected);
+                                                                }}
+                                                                data-testid={`checkbox-po-item-${itemKey}`}
+                                                              />
+                                                            )}
+                                                            {!item.isReadyToShip && <div className="w-6" />}
+
+                                                            <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
+                                                              <div className="flex items-center gap-2">
+                                                                {isMetalAccessory(item) && (
+                                                                  <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-100 dark:bg-amber-900/30 rounded-full" title="Metal Accessory">
+                                                                    <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                                                  </span>
+                                                                )}
+                                                                <div>
+                                                                  <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                                    {item.orderId || `Unit ${item.unitNumber}`}
+                                                                  </span>
+                                                                  <span className="text-gray-500 ml-2 text-xs">
+                                                                    {item.unitNumber}/{item.totalQuantity}
+                                                                  </span>
+                                                                </div>
+                                                              </div>
+                                                              <div className="text-gray-600 dark:text-gray-400">
+                                                                {item.description || 'No description'}
+                                                              </div>
+                                                              <div className="text-gray-600 dark:text-gray-400">
+                                                                {isMetalAccessory(item) ? (
+                                                                  <span className="text-amber-600 dark:text-amber-400 font-medium">Metal Accessory</span>
+                                                                ) : (
+                                                                  item.stockModel || 'Unknown'
+                                                                )}
+                                                              </div>
+                                                              <div className="text-gray-600 dark:text-gray-400">
+                                                                {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
+                                                              </div>
+                                                              <div className="flex items-center gap-2 justify-end flex-wrap">
+                                                                <Badge variant={departmentBadge.variant} className={departmentBadge.className}>
+                                                                  {departmentBadge.label}
+                                                                </Badge>
+                                                                {item.flatTop && (
+                                                                  <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300 text-xs">
+                                                                    Flat Top
+                                                                  </Badge>
+                                                                )}
+                                                                {item.isFulfilled && (
+                                                                  <Badge variant="outline" className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs">
+                                                                    ✓ Fulfilled
+                                                                  </Badge>
+                                                                )}
+                                                                {item.orderId && item.isReadyToShip && (
+                                                                  <Button
+                                                                    size="sm"
+                                                                    variant={item.isFulfilled ? "outline" : "secondary"}
+                                                                    onClick={async () => {
+                                                                      try {
+                                                                        await apiRequest(`/api/po-orders/toggle-fulfilled`, {
+                                                                          method: 'POST',
+                                                                          body: JSON.stringify({
+                                                                            orderId: item.orderId,
+                                                                            isFulfilled: !item.isFulfilled,
+                                                                          }),
+                                                                        });
+                                                                        toast({
+                                                                          title: item.isFulfilled ? "Unmarked as fulfilled" : "Marked as fulfilled",
+                                                                          description: `${item.orderId} ${item.isFulfilled ? 'can now be shipped through the system' : 'has been marked as shipped externally'}`,
+                                                                        });
+                                                                        queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+                                                                      } catch (error: any) {
+                                                                        toast({
+                                                                          title: "Error",
+                                                                          description: error.message || "Failed to update fulfilled status",
+                                                                          variant: "destructive",
+                                                                        });
+                                                                      }
+                                                                    }}
+                                                                    className="text-xs h-7"
+                                                                    data-testid={`toggle-fulfilled-${item.orderId}`}
+                                                                  >
+                                                                    {item.isFulfilled ? "Unmark Fulfilled" : "Mark Fulfilled"}
+                                                                  </Button>
+                                                                )}
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </CollapsibleContent>
+                                                </Collapsible>
+                                              );
+                                            });
+                                          })()}
                                         </div>
                                       </CollapsibleContent>
                                     </div>

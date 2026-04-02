@@ -468,7 +468,7 @@ const InventoryForm = ({
             <SelectContent>
               <SelectItem value="none">None</SelectItem>
               {Array.isArray(vendors) &&
-                vendors.map((vendor) => (
+                [...vendors].sort((a, b) => a.name.localeCompare(b.name)).map((vendor) => (
                   <SelectItem key={vendor.id} value={vendor.id.toString()}>
                     {vendor.name}
                   </SelectItem>

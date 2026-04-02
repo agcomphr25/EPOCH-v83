@@ -4591,6 +4591,7 @@ export const partRoutings = pgTable('part_routings', {
   materialsConfig: jsonb('materials_config'), // Materials requiring traceability: [{partId, partNumber, partName, requiresLotNumber, requiresExpiration, entryMethod}]
   qcStandards: jsonb('qc_standards'), // QC standards configuration: [{standardName, specification, tolerance, requirement, measurementType}]
   customFields: jsonb('custom_fields'), // Custom data entry fields: [{fieldName, fieldLabel, fieldType, isRequired, options, defaultValue}]
+  preferredMachine: text('preferred_machine'), // Preferred CNC machine or workstation for this routing
   isActive: boolean('is_active').default(true).notNull(),
   createdBy: text('created_by').notNull(), // Username who created routing
   createdAt: timestamp('created_at').defaultNow(),
@@ -8384,6 +8385,8 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   materialDetails: text('material_details'), // Additional material information (type, supplier, etc.)
   completionNotes: text('completion_notes'), // Operator notes when completing the item
   completedBy: text('completed_by'), // Username of operator who completed the item
+  sourceId: text('source_id'), // Source identifier (e.g. PO number, order ID) that generated this entry
+  sourceType: text('source_type'), // Source type (e.g. 'vendor_po', 'production_order', 'manual')
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

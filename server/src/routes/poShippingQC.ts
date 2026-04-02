@@ -1901,13 +1901,55 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           notificationMetadata: {},
         };
 
-        const shipmentItemsData = orderDetails.map((detail) => ({
-          poItemId: detail.order.poItemId || detail.order.po_item_id,
-          orderId: detail.order.orderId || detail.order.order_id,
-          quantity: detail.quantity,
-          weightLbs: weightPerItemLbs * detail.quantity,
-          description: detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.stock_model_name || detail.poItem?.itemName || detail.poItem?.item_name || '',
-          poNumber: detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '',
+        // Generate a packing slip PDF for each item
+        const shipmentItemsData = await Promise.all(orderDetails.map(async (detail) => {
+          const itemPoNumber = detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '';
+          const itemDescription = detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.stock_model_name || detail.poItem?.itemName || detail.poItem?.item_name || '';
+          const itemOrderId = detail.order.orderId || detail.order.order_id || '';
+
+          let packingSlipBase64: string | null = null;
+          try {
+            const slipData: PackingSlipData = {
+              packingSlipNumber: `PS-${itemOrderId || itemPoNumber}`,
+              poNumber: itemPoNumber,
+              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              customerName: firstCustomer?.name || orderDetails[0].customer?.name || '',
+              customerAddress: primaryAddress
+                ? {
+                    street: primaryAddress.street,
+                    street2: primaryAddress.street2 || undefined,
+                    city: primaryAddress.city,
+                    state: primaryAddress.state,
+                    zip: primaryAddress.zipCode,
+                  }
+                : undefined,
+              trackingNumber: trackingNumber,
+              totalQuantity: detail.quantity,
+              items: [
+                {
+                  partNumber: detail.poItem?.itemName || detail.poItem?.stockModelName || itemDescription || 'N/A',
+                  description: itemDescription || detail.poItem?.itemName || detail.poItem?.stockModelName || 'N/A',
+                  quantity: detail.quantity,
+                  unitNumber: itemOrderId,
+                  specifications: detail.poItem?.specifications || undefined,
+                },
+              ],
+            };
+            const pdfBuffer = await generatePackingSlipPdf(slipData);
+            packingSlipBase64 = pdfBuffer.toString('base64');
+          } catch (slipErr: any) {
+            console.warn(`⚠️ Packing slip generation failed for item ${itemOrderId}: ${slipErr.message}`);
+          }
+
+          return {
+            poItemId: detail.order.poItemId || detail.order.po_item_id,
+            orderId: itemOrderId,
+            quantity: detail.quantity,
+            weightLbs: weightPerItemLbs * detail.quantity,
+            description: itemDescription,
+            poNumber: itemPoNumber,
+            packingSlipBase64: packingSlipBase64 || undefined,
+          };
         }));
 
         await storage.createShipment({

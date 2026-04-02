@@ -7210,6 +7210,7 @@ export const shipmentRecords = pgTable('shipment_records', {
   shipToSnapshot: jsonb('ship_to_snapshot').notNull(), // Customer shipping address
   notificationMetadata: jsonb('notification_metadata').default({}), // { emailSentAt, smsSentAt, retries, channels }
   documents: jsonb('documents').notNull().default([]), // Array of { type, fileName, mime, storagePath, bytes }
+  shippingLabelBase64: text('shipping_label_base64'), // Base64-encoded UPS shipping label (GIF)
   createdBy: text('created_by').notNull(), // Username who created the shipment
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -7255,6 +7256,9 @@ export const shipmentItems = pgTable('shipment_items', {
   quantity: integer('quantity').notNull().default(1),
   weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
   notes: text('notes'),
+  description: text('description'), // Item description for display
+  poNumber: text('po_number'), // PO number for this item
+  packingSlipBase64: text('packing_slip_base64'), // Base64-encoded packing slip PDF
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -7270,6 +7274,9 @@ export const insertShipmentItemSchema = createInsertSchema(shipmentItems)
     quantity: z.number().min(1).default(1),
     weightLbs: z.number().min(0).optional(),
     notes: z.string().optional(),
+    description: z.string().optional(),
+    poNumber: z.string().optional(),
+    packingSlipBase64: z.string().optional(),
   });
 
 export type InsertShipmentItem = z.infer<typeof insertShipmentItemSchema>;

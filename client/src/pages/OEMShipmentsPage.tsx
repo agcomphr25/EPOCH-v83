@@ -33,6 +33,12 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -808,6 +814,37 @@ export default function OEMShipmentsPage() {
                                   <Printer className="h-4 w-4 mr-2" />
                                   Reprint Label
                                 </Button>
+                                {shipment.items.length === 1 ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => downloadPackingSlip(shipment.items[0].id, shipment.items[0].poNumber, shipment.items[0].orderId)}
+                                  >
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    Reprint Packing Slip
+                                  </Button>
+                                ) : shipment.items.length > 1 ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="sm" variant="outline">
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Reprint Packing Slip
+                                        <ChevronDown className="h-3 w-3 ml-1" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      {shipment.items.map((item) => (
+                                        <DropdownMenuItem
+                                          key={item.id}
+                                          onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                        >
+                                          <Printer className="h-3 w-3 mr-2" />
+                                          {item.orderId}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : null}
                                 <CollapsibleTrigger asChild>
                                   <Button size="sm" variant="ghost">
                                     {expandedShipments.has(shipment.id) ? (
@@ -831,7 +868,6 @@ export default function OEMShipmentsPage() {
                                       <th className="text-left p-3 font-semibold">Order ID</th>
                                       <th className="text-left p-3 font-semibold">Description</th>
                                       <th className="text-center p-3 font-semibold">Qty</th>
-                                      <th className="text-center p-3 font-semibold">Actions</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -859,16 +895,6 @@ export default function OEMShipmentsPage() {
                                         </td>
                                         <td className="p-3 text-center">
                                           <Badge variant="outline">{item.quantity}</Badge>
-                                        </td>
-                                        <td className="p-3 text-center">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
-                                          >
-                                            <Printer className="h-3 w-3 mr-1" />
-                                            Reprint Packing Slip
-                                          </Button>
                                         </td>
                                       </tr>
                                     ))}

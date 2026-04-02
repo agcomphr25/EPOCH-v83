@@ -782,6 +782,18 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Traveler authorized notes migration skipped:', authNotesErr.message);
       }
 
+      // Ensure shipment_records and shipment_items have required columns for label/packing slip storage
+      try {
+        const { sql: sqlShip } = await import('drizzle-orm');
+        await db.execute(sqlShip`ALTER TABLE shipment_records ADD COLUMN IF NOT EXISTS shipping_label_base64 TEXT`);
+        await db.execute(sqlShip`ALTER TABLE shipment_items ADD COLUMN IF NOT EXISTS description TEXT`);
+        await db.execute(sqlShip`ALTER TABLE shipment_items ADD COLUMN IF NOT EXISTS po_number TEXT`);
+        await db.execute(sqlShip`ALTER TABLE shipment_items ADD COLUMN IF NOT EXISTS packing_slip_base64 TEXT`);
+        console.log('✅ Ensured shipment_records.shipping_label_base64 and shipment_items packing slip columns exist');
+      } catch (shipErr: any) {
+        console.warn('⚠️ Shipment label/packing slip migration skipped:', shipErr.message);
+      }
+
       // Ensure cutting table packet BOM tables exist (needed for scan-start endpoint)
       try {
         const { sql: sqlCut } = await import('drizzle-orm');

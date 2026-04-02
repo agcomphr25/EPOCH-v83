@@ -1723,7 +1723,7 @@ export interface IStorage {
   // Shipment Records CRUD
   createShipment(data: {
     shipment: InsertShipmentRecord;
-    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string; packingSlipBase64?: string }[];
   }): Promise<ShipmentRecord>;
   getShipment(id: string): Promise<ShipmentRecord | undefined>;
   getAllShipments(filters?: {
@@ -16818,7 +16818,7 @@ export class DatabaseStorage implements IStorage {
   // Shipment Records CRUD
   async createShipment(data: {
     shipment: InsertShipmentRecord;
-    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string }[];
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null; description?: string; poNumber?: string; packingSlipBase64?: string }[];
   }): Promise<ShipmentRecord> {
     // Create the shipment record first
     const [shipment] = await db
@@ -16836,6 +16836,7 @@ export class DatabaseStorage implements IStorage {
         weightLbs: item.weightLbs,
         description: item.description || null,
         poNumber: item.poNumber || null,
+        packingSlipBase64: item.packingSlipBase64 || null,
       }));
 
       await db.insert(shipmentItems).values(shipmentItemsData);

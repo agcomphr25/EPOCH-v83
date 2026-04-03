@@ -1,6 +1,7 @@
 import { db } from '../../db';
-import { inventoryBalances, inventoryTransactions } from '../../schema';
+import { inventoryBalances, inventoryTransactions, allocationRequirements } from '../../schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { evaluateQueueReadiness } from './queueReadinessService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,10 @@ interface AllocationParams {
   performedBy?: string;
   notes?: string;
   allowPartial?: boolean;
+  // Optional: link this allocation back to an allocationRequirements row
+  requirementId?: string;
+  // Optional: re-evaluate readiness for this queue item after allocation
+  queueId?: number;
 }
 
 interface AllocationResult {
@@ -55,6 +60,8 @@ export async function allocateInventory(
     performedBy = 'system',
     notes,
     allowPartial = false,
+    requirementId,
+    queueId,
   } = params;
 
   if (quantity <= 0) {
@@ -143,7 +150,62 @@ export async function allocateInventory(
   };
 
   // If the caller supplied a transaction, participate in it; otherwise open one.
-  return tx ? run(tx) : db.transaction(run);
+  const result = await (tx ? run(tx) : db.transaction(run));
+
+  // ── Allocation requirements hook ──────────────────────────────────────────
+  // After a successful allocation, increment allocatedQty on the matching
+  // allocationRequirements row (if requirementId or queueId was provided).
+  // This is best-effort and non-blocking — never throw from here.
+  if (result.allocated > 0 && (requirementId || queueId)) {
+    try {
+      let targetQueueId: number | null = queueId ?? null;
+
+      if (requirementId) {
+        // Update the specific requirement row and get its queueId
+        await db
+          .update(allocationRequirements)
+          .set({
+            allocatedQty: sql`COALESCE(${allocationRequirements.allocatedQty}, 0) + ${result.allocated}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(allocationRequirements.id, requirementId));
+
+        if (!targetQueueId) {
+          const [req] = await db
+            .select({ manufacturingQueueId: allocationRequirements.manufacturingQueueId })
+            .from(allocationRequirements)
+            .where(eq(allocationRequirements.id, requirementId));
+          targetQueueId = req?.manufacturingQueueId ?? null;
+        }
+      } else if (queueId) {
+        // queueId only — find matching requirement by agPartNumber and update its allocatedQty
+        const matchingReqs = await db
+          .select()
+          .from(allocationRequirements)
+          .where(eq(allocationRequirements.manufacturingQueueId, queueId));
+
+        // Match by part number (agPartNumber matches requiredPartNumber)
+        const match = matchingReqs.find(r => r.requiredPartNumber === agPartNumber);
+        if (match) {
+          await db
+            .update(allocationRequirements)
+            .set({
+              allocatedQty: sql`COALESCE(${allocationRequirements.allocatedQty}, 0) + ${result.allocated}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(allocationRequirements.id, match.id));
+        }
+      }
+
+      if (targetQueueId) {
+        await evaluateQueueReadiness(targetQueueId);
+      }
+    } catch (hookErr: any) {
+      console.warn('[allocateInventory] allocation requirements hook failed (non-fatal):', hookErr.message);
+    }
+  }
+
+  return result;
 }
 
 // ── deallocateInventory ───────────────────────────────────────────────────────

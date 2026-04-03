@@ -11,9 +11,11 @@ import {
   cuttingBuiltPacketFabricSources,
   cuttingFabricInventory,
   manufacturingQueue,
+  allocationRequirements,
 } from '../../schema';
 import { db } from '../../db';
 import { eq, sql } from 'drizzle-orm';
+import { evaluateQueueReadiness } from '../services/queueReadinessService';
 
 const router = Router();
 
@@ -1020,6 +1022,50 @@ router.post('/:lotId/reserve', async (req: Request, res: Response) => {
     }
 
     const reservation = await storage.createLotReservation(body);
+
+    // ── Allocation requirements staging hook ──────────────────────────────────
+    // After inserting a materialLotReservation, increment stagedQty on the
+    // best-matching allocationRequirements row when a queueId is provided.
+    // Matching priority: explicit requirementId > part number match > first OPEN row.
+    // Best-effort, non-blocking.
+    const reqQueueId = req.body.queueId ? parseInt(String(req.body.queueId), 10) : null;
+    const reqRequirementId: string | null = req.body.requirementId ?? null;
+    if (reqQueueId && !isNaN(reqQueueId)) {
+      try {
+        // Fetch all requirements for this queue item
+        const reqs = await db
+          .select()
+          .from(allocationRequirements)
+          .where(eq(allocationRequirements.manufacturingQueueId, reqQueueId));
+
+        let targetReq = reqs.find(r => reqRequirementId && r.id === reqRequirementId);
+        if (!targetReq) {
+          // Match by part number — lot.materialPartNumber against requirement.requiredPartNumber
+          targetReq = reqs.find(r => r.requiredPartNumber === lot.materialPartNumber);
+        }
+        if (!targetReq) {
+          // Fallback: first OPEN requirement
+          targetReq = reqs.find(r => r.allocationStatus === 'OPEN');
+        }
+
+        if (targetReq) {
+          await db
+            .update(allocationRequirements)
+            .set({
+              stagedQty: sql`COALESCE(${allocationRequirements.stagedQty}, 0) + ${quantityRequested}`,
+              materialLotId: lotId,
+              materialLotReservationId: reservation.id,
+              updatedAt: new Date(),
+            })
+            .where(eq(allocationRequirements.id, targetReq.id));
+        }
+
+        await evaluateQueueReadiness(reqQueueId);
+      } catch (hookErr: any) {
+        console.warn('[reserve] allocation requirements staging hook failed (non-fatal):', hookErr.message);
+      }
+    }
+
     res.status(201).json({ reservation, remaining, reservedQty: reservedQty + quantityRequested, availableQty: availableQty - quantityRequested });
   } catch (error: any) {
     console.error('Error creating reservation:', error);

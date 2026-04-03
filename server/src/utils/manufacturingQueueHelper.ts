@@ -12,6 +12,7 @@ import {
   type ManufacturingQueue,
 } from '../../schema';
 import { eq, and, or, desc } from 'drizzle-orm';
+import { generateRequirementsFromRouting } from '../services/requirementGeneratorService';
 
 /**
  * Auto-populates manufacturing queue when a PO item is created for a manufactured part
@@ -130,6 +131,11 @@ export async function autoPopulateManufacturingQueue(
     const poType = params.vendorPoId ? 'Vendor' : 'P2';
     const poId = params.vendorPoId || params.p2PoId;
     console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id}, ${poType} PO #${poId})`);
+
+    // Auto-generate allocation requirements from routing (best-effort, non-blocking)
+    generateRequirementsFromRouting(newQueueItem.id).catch(err =>
+      console.warn(`[autoPopulateManufacturingQueue] requirement generation failed for queue ${newQueueItem.id}:`, err.message)
+    );
 
     return newQueueItem;
   } catch (error) {
@@ -295,6 +301,11 @@ export async function explodeBOMForManufacturing(params: {
         createdQueueItems.push(newQueueItem);
 
         console.log(`✅ BOM explosion: Created queue entry for ${component.childPartNumber} in ${inventoryItem.manufacturingDepartment} (Qty: ${requiredQty}, Queue ID: ${newQueueItem.id})`);
+
+        // Auto-generate allocation requirements from routing (best-effort, non-blocking)
+        generateRequirementsFromRouting(newQueueItem.id).catch(err =>
+          console.warn(`[explodeBOMForManufacturing] requirement generation failed for queue ${newQueueItem.id}:`, err.message)
+        );
       }
     }
 
@@ -442,6 +453,11 @@ export async function explodeBomDemand(
 
       created.push(newItem);
       console.log(`✅ BOM demand: ${line.childPartNumber} → ${department} (qty ${Math.ceil(requiredQty)}, order ${productionOrderId})`);
+
+      // Auto-generate allocation requirements from routing (best-effort, non-blocking)
+      generateRequirementsFromRouting(newItem.id).catch(err =>
+        console.warn(`[explodeBomDemand] requirement generation failed for queue ${newItem.id}:`, err.message)
+      );
 
       if (category === 'ASSEMBLY' || category === 'SUB_ASSEMBLY') {
         const childCreated = await explodeBomDemand(

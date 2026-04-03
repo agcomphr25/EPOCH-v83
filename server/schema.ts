@@ -8765,6 +8765,11 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   completedBy: text('completed_by'), // Username of operator who completed the item
   sourceId: text('source_id'), // Source identifier (e.g. PO number, order ID) that generated this entry
   sourceType: text('source_type'), // Source type (e.g. 'vendor_po', 'production_order', 'manual')
+  // Readiness tracking fields (added for queue readiness engine)
+  queueType: text('queue_type'), // LAYUP | CORE | SUB_ASSEMBLY | ASSEMBLY | KIT
+  readinessStatus: text('readiness_status').default('NOT_READY'), // NOT_READY | PARTIAL | READY | BLOCKED
+  percentReady: numeric('percent_ready').default('0'),
+  blockedReason: text('blocked_reason'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
@@ -8970,6 +8975,83 @@ export type InsertCuttingBuiltPacketFabricSource = z.infer<typeof insertCuttingB
 
 export type ManufacturingQueue = typeof manufacturingQueue.$inferSelect;
 export type InsertManufacturingQueue = z.infer<typeof insertManufacturingQueueSchema>;
+
+// ============================================================================
+// ALLOCATION REQUIREMENTS - Per-queue-item material allocation tracking
+// ============================================================================
+export const allocationRequirements = pgTable('allocation_requirements', {
+  id: uuid('id').defaultRandom().primaryKey(),
+
+  manufacturingQueueId: integer('manufacturing_queue_id')
+    .notNull()
+    .references(() => manufacturingQueue.id, { onDelete: 'cascade' }),
+
+  requiredItemId: integer('required_item_id')
+    .references(() => inventoryItems.id, { onDelete: 'set null' }),
+
+  requiredPartNumber: text('required_part_number').notNull(),
+  requiredPartName: text('required_part_name'),
+
+  requirementType: text('requirement_type').notNull(),
+  // MATERIAL | COMPONENT | KIT_ITEM | SUBASSEMBLY | CONSUMABLE
+
+  unitOfMeasure: text('unit_of_measure').notNull().default('EA'),
+
+  requiredQty: numeric('required_qty').notNull(),
+  allocatedQty: numeric('allocated_qty').default('0'),
+  stagedQty: numeric('staged_qty').default('0'),
+  consumedQty: numeric('consumed_qty').default('0'),
+
+  allocationStatus: text('allocation_status').default('OPEN'),
+  // OPEN | PARTIAL | ALLOCATED | STAGED | CONSUMED | CANCELLED
+
+  isCritical: boolean('is_critical').default(true),
+
+  materialLotId: uuid('material_lot_id')
+    .references(() => materialLots.id, { onDelete: 'set null' }),
+  materialLotReservationId: integer('material_lot_reservation_id')
+    .references(() => materialLotReservations.id, { onDelete: 'set null' }),
+  internalControlNumber: text('internal_control_number'),
+
+  routingDependencyId: integer('routing_dependency_id')
+    .references(() => routingDependencies.id, { onDelete: 'set null' }),
+  sourceType: text('source_type').default('manual'),
+  // 'routing_dependency' | 'bom_explosion' | 'manual'
+
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  queueIdIdx: index('allocation_requirements_queue_id_idx').on(table.manufacturingQueueId),
+  statusIdx: index('allocation_requirements_status_idx').on(table.allocationStatus),
+  lotIdIdx: index('allocation_requirements_lot_id_idx').on(table.materialLotId),
+}));
+
+export const insertAllocationRequirementSchema = createInsertSchema(allocationRequirements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AllocationRequirement = typeof allocationRequirements.$inferSelect;
+export type InsertAllocationRequirement = z.infer<typeof insertAllocationRequirementSchema>;
+
+// mapQueueType — maps manufacturedCategory to { queueType, department } pairs
+export type QueueType = 'LAYUP' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'KIT';
+
+export function mapQueueType(category: import('../shared/utils/supplySourceDashboard').ManufacturedCategory | null): { queueType: QueueType; department: string } | null {
+  if (!category) return null;
+  const mapping: Record<string, { queueType: QueueType; department: string }> = {
+    PACKET: { queueType: 'LAYUP', department: 'Cutting Table' },
+    KIT: { queueType: 'KIT', department: 'Kitting' },
+    MACHINED_PART: { queueType: 'ASSEMBLY', department: 'CNC' },
+    CORE: { queueType: 'CORE', department: 'Cores' },
+    SUB_ASSEMBLY: { queueType: 'SUB_ASSEMBLY', department: 'Assembly' },
+    ASSEMBLY: { queueType: 'ASSEMBLY', department: 'Assembly' },
+    COMPOSITE: { queueType: 'LAYUP', department: 'Cutting Table' },
+  };
+  return mapping[category] ?? null;
+}
 
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {

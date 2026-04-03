@@ -1569,6 +1569,52 @@ async function initializeBackgroundServices() {
       }
 
       try {
+        const { sql: sqlMfgReadiness } = await import('drizzle-orm');
+        await db.execute(sqlMfgReadiness`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS queue_type TEXT`);
+        await db.execute(sqlMfgReadiness`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS readiness_status TEXT DEFAULT 'NOT_READY'`);
+        await db.execute(sqlMfgReadiness`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS percent_ready NUMERIC DEFAULT 0`);
+        await db.execute(sqlMfgReadiness`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS blocked_reason TEXT`);
+        console.log('✅ Ensured manufacturing_queue has readiness tracking columns');
+      } catch (mfgReadinessErr: any) {
+        console.warn('⚠️ manufacturing_queue readiness columns migration:', mfgReadinessErr.message);
+      }
+
+      try {
+        const { sql: sqlAllocReq } = await import('drizzle-orm');
+        await db.execute(sqlAllocReq`
+          CREATE TABLE IF NOT EXISTS allocation_requirements (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            manufacturing_queue_id INTEGER NOT NULL REFERENCES manufacturing_queue(id) ON DELETE CASCADE,
+            required_item_id INTEGER REFERENCES inventory_items(id) ON DELETE SET NULL,
+            required_part_number TEXT NOT NULL,
+            required_part_name TEXT,
+            requirement_type TEXT NOT NULL,
+            unit_of_measure TEXT NOT NULL DEFAULT 'EA',
+            required_qty NUMERIC NOT NULL,
+            allocated_qty NUMERIC DEFAULT 0,
+            staged_qty NUMERIC DEFAULT 0,
+            consumed_qty NUMERIC DEFAULT 0,
+            allocation_status TEXT DEFAULT 'OPEN',
+            is_critical BOOLEAN DEFAULT true,
+            material_lot_id UUID REFERENCES material_lots(id) ON DELETE SET NULL,
+            material_lot_reservation_id INTEGER REFERENCES material_lot_reservations(id) ON DELETE SET NULL,
+            internal_control_number TEXT,
+            routing_dependency_id INTEGER REFERENCES routing_dependencies(id) ON DELETE SET NULL,
+            source_type TEXT DEFAULT 'manual',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAllocReq`CREATE INDEX IF NOT EXISTS allocation_requirements_queue_id_idx ON allocation_requirements(manufacturing_queue_id)`);
+        await db.execute(sqlAllocReq`CREATE INDEX IF NOT EXISTS allocation_requirements_status_idx ON allocation_requirements(allocation_status)`);
+        await db.execute(sqlAllocReq`CREATE INDEX IF NOT EXISTS allocation_requirements_lot_id_idx ON allocation_requirements(material_lot_id)`);
+        console.log('✅ Ensured allocation_requirements table exists');
+      } catch (allocReqErr: any) {
+        console.warn('⚠️ allocation_requirements table migration:', allocReqErr.message);
+      }
+
+      try {
         const { sql: sqlFkFix } = await import('drizzle-orm');
         // Drop the wrong FK (points to "departments" table which is empty/unused)
         await db.execute(sqlFkFix`

@@ -4,6 +4,8 @@ import { manufacturingQueue, inventoryItems, supplySourceDashboardToLegacyDept, 
 import type { SupplySourceDashboard } from '../../schema';
 import { eq, and, or, desc, inArray } from 'drizzle-orm';
 import { insertManufacturingQueueSchema } from '../../schema';
+import { evaluateQueueReadiness } from '../services/queueReadinessService';
+import { generateRequirementsFromRouting } from '../services/requirementGeneratorService';
 
 const router = Router();
 
@@ -224,7 +226,13 @@ router.post('/', async (req, res) => {
       .insert(manufacturingQueue)
       .values(validatedData)
       .returning();
-    
+
+    // Auto-generate allocation requirements from routing (best-effort, non-blocking)
+    const routingId: string | undefined = req.body.partRoutingId ?? undefined;
+    generateRequirementsFromRouting(newItem.id, routingId).catch(err =>
+      console.warn(`[manufacturingQueue] auto-generate requirements failed for queue ${newItem.id}:`, err.message)
+    );
+
     res.status(201).json(newItem);
   } catch (error) {
     console.error('Error creating manufacturing queue item:', error);
@@ -300,6 +308,63 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting manufacturing queue item:', error);
     res.status(500).json({ error: 'Failed to delete manufacturing queue item' });
+  }
+});
+
+// POST /api/manufacturing-queue/:id/generate-requirements
+// Manually triggers requirement generation from routing for a queue item.
+// Optional body: { routingId: "uuid" } to pin a specific part routing.
+// Idempotent — skips requirements that already exist for this queue item.
+router.post('/:id/generate-requirements', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid queue item ID' });
+    }
+
+    const [queueItem] = await db
+      .select({ id: manufacturingQueue.id })
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.id, id))
+      .limit(1);
+
+    if (!queueItem) {
+      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+    }
+
+    const routingId: string | undefined = req.body?.routingId ?? undefined;
+    const result = await generateRequirementsFromRouting(id, routingId);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error generating requirements from routing:', error);
+    res.status(500).json({ error: 'Failed to generate requirements', message: error.message });
+  }
+});
+
+// POST /api/manufacturing-queue/:id/evaluate-readiness
+// Triggers readiness evaluation for a queue item and returns the result.
+router.post('/:id/evaluate-readiness', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid queue item ID' });
+    }
+
+    const [queueItem] = await db
+      .select({ id: manufacturingQueue.id })
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.id, id))
+      .limit(1);
+
+    if (!queueItem) {
+      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+    }
+
+    const result = await evaluateQueueReadiness(id);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error evaluating queue readiness:', error);
+    res.status(500).json({ error: 'Failed to evaluate readiness', message: error.message });
   }
 });
 

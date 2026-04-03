@@ -3,6 +3,7 @@ import { pool, db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { createShipment, ShipTo } from '../utils/upsShipping';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
+import { auditService } from '../services/auditService';
 import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 
@@ -377,6 +378,13 @@ router.post('/progress-to-shipping', async (req, res) => {
         // Update to Shipping department
         await storage.updateProductionOrder(order.id, {
           currentDepartment: 'Shipping',
+        });
+
+        await auditService.closeDepartmentTransition(orderId, undefined, 'completed');
+        await auditService.recordDepartmentEntry({
+          entityType: 'p1_order',
+          entityId: orderId,
+          department: 'Shipping',
         });
 
         results.success.push(orderId);

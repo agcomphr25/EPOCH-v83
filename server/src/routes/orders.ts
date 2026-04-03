@@ -5012,7 +5012,16 @@ router.get('/:orderId/activity', async (req: Request, res: Response) => {
       }
     }
 
-    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    items.sort((a, b) => {
+      const timeDiff = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      const typePriority = (eventType: string): number => {
+        if (eventType === 'DEPARTMENT_ENTRY') return 0;
+        if (eventType === 'DEPARTMENT_EXIT') return 1;
+        return 2;
+      };
+      return typePriority(b.eventType) - typePriority(a.eventType);
+    });
 
     let filtered = items;
 

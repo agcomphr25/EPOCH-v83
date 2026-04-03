@@ -14,8 +14,8 @@
  */
 
 import { db } from '../../db';
-import { allOrders, orderActivityEvents, InsertOrderActivityEvent } from '../../schema';
-import { eq } from 'drizzle-orm';
+import { allOrders, orderActivityEvents, orderDepartmentTransitions, InsertOrderActivityEvent } from '../../schema';
+import { eq, and, isNull } from 'drizzle-orm';
 import { computeFieldDiff } from '../../../shared/auditedOrderFields';
 import {
   validateStatusTransition,
@@ -577,6 +577,38 @@ export async function recordNcrRepairTransition(
         }
       )
     );
+
+    const openTransition = await tx.select()
+      .from(orderDepartmentTransitions)
+      .where(and(
+        eq(orderDepartmentTransitions.entityId, orderId),
+        isNull(orderDepartmentTransitions.exitedAt)
+      ))
+      .limit(1);
+
+    if (openTransition.length > 0) {
+      const exitedAt = new Date();
+      const durationMinutes = Math.round(
+        (exitedAt.getTime() - new Date(openTransition[0].enteredAt).getTime()) / (1000 * 60)
+      );
+      await tx.update(orderDepartmentTransitions)
+        .set({
+          exitedAt,
+          durationMinutes,
+          exitedByUserId: actor.actorId ?? null,
+          exitReason: 'ncr_repair',
+        })
+        .where(eq(orderDepartmentTransitions.id, openTransition[0].id));
+    }
+
+    await tx.insert(orderDepartmentTransitions).values({
+      entityType: 'p1_order',
+      entityId: orderId,
+      department: repairDepartment,
+      cycleNumber: openTransition[0]?.cycleNumber ?? 1,
+      enteredAt: new Date(),
+      enteredByUserId: actor.actorId ?? null,
+    });
   });
 }
 

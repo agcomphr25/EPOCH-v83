@@ -13606,6 +13606,9 @@ export const checklistAssignments = pgTable('checklist_assignments', {
 }, (table) => ({
   templateIdIdx: index('checklist_assignments_template_id_idx').on(table.templateId),
   employeeIdIdx: index('checklist_assignments_employee_id_idx').on(table.employeeId),
+  uniqueEmployee: uniqueIndex('checklist_assignments_unique_employee').on(table.templateId, table.employeeId).where(sql`assignment_type = 'employee' AND employee_id IS NOT NULL`),
+  uniqueDepartment: uniqueIndex('checklist_assignments_unique_department').on(table.templateId, table.departmentName).where(sql`assignment_type = 'department' AND department_name IS NOT NULL`),
+  uniqueRole: uniqueIndex('checklist_assignments_unique_role').on(table.templateId, table.roleKey).where(sql`assignment_type = 'role' AND role_key IS NOT NULL`),
 }));
 
 export const checklistResponses = pgTable('checklist_responses', {

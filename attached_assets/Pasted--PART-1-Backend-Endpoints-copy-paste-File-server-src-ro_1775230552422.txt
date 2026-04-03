@@ -1,0 +1,234 @@
+🚀 PART 1 — Backend Endpoints (copy/paste)
+📍 File: server/src/routes/allocationControl.ts
+import { Router } from "express";
+import { db } from "../db";
+import {
+  allocationRequirements,
+  materialLots
+} from "../../schema";
+import { eq } from "drizzle-orm";
+import { allocateInventory } from "../services/inventoryAllocationService";
+import { evaluateQueueReadiness } from "../services/queueReadinessService";
+
+const router = Router();
+
+/**
+ * GET REQUIREMENTS FOR QUEUE
+ */
+router.get("/queue/:queueId", async (req, res) => {
+  try {
+    const queueId = Number(req.params.queueId);
+
+    const requirements = await db
+      .select()
+      .from(allocationRequirements)
+      .where(eq(allocationRequirements.manufacturingQueueId, queueId));
+
+    res.json(requirements);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * GET AVAILABLE LOTS FOR PART
+ */
+router.get("/lots/:partNumber", async (req, res) => {
+  try {
+    const partNumber = req.params.partNumber;
+
+    const lots = await db
+      .select()
+      .from(materialLots)
+      .where(eq(materialLots.materialPartNumber, partNumber));
+
+    res.json(lots);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * ALLOCATE FROM INVENTORY (BALANCE LEVEL)
+ */
+router.post("/allocate", async (req, res) => {
+  try {
+    const { requirementId, partNumber, quantity, queueId } = req.body;
+
+    await allocateInventory({
+      partNumber,
+      quantity,
+      locationId: "WAREHOUSE-01",
+      performedBy: req.user?.displayName || "system",
+      queueId,
+      requirementId
+    });
+
+    await evaluateQueueReadiness(queueId);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
+ * RESERVE LOT (ICN LEVEL)
+ */
+router.post("/reserve-lot", async (req, res) => {
+  try {
+    const { requirementId, lotId, quantity, queueId } = req.body;
+
+    await db.insert("material_lot_reservations").values({
+      materialLotId: lotId,
+      quantityReserved: quantity,
+      status: "active"
+    });
+
+    await evaluateQueueReadiness(queueId);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+export default router;
+📍 Register route
+import allocationControlRoutes from "./routes/allocationControl";
+
+app.use("/api/allocation-control", allocationControlRoutes);
+🎯 PART 2 — Requirement Drawer UI
+📍 File: client/src/components/RequirementDrawer.tsx
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { apiRequest } from "@/lib/apiRequest";
+
+export default function RequirementDrawer({ queue, onClose, refresh }: any) {
+  const { data } = useQuery({
+    queryKey: ["requirements", queue.id],
+    queryFn: () => apiRequest(`/api/allocation-control/queue/${queue.id}`)
+  });
+
+  return (
+    <div className="fixed right-0 top-0 w-96 h-full bg-white shadow-lg p-4 overflow-auto">
+      <h2 className="text-xl font-bold mb-4">Requirements</h2>
+
+      {data?.map((req: any) => (
+        <RequirementRow key={req.id} req={req} queue={queue} refresh={refresh} />
+      ))}
+
+      <button onClick={onClose} className="mt-4 bg-gray-200 px-3 py-1">
+        Close
+      </button>
+    </div>
+  );
+}
+🎯 PART 3 — Requirement Row (core logic)
+function RequirementRow({ req, queue, refresh }: any) {
+  const [qty, setQty] = useState("");
+
+  const shortage =
+    Number(req.requiredQty) -
+    Math.max(Number(req.allocatedQty || 0), Number(req.stagedQty || 0));
+
+  const allocate = async () => {
+    await apiRequest("/api/allocation-control/allocate", {
+      method: "POST",
+      body: JSON.stringify({
+        requirementId: req.id,
+        partNumber: req.requiredPartNumber,
+        quantity: Number(qty),
+        queueId: queue.id
+      })
+    });
+
+    refresh();
+  };
+
+  return (
+    <div className="border p-3 mb-3">
+      <div className="font-semibold">{req.requiredPartNumber}</div>
+
+      <div className="text-sm">
+        Required: {req.requiredQty}
+      </div>
+      <div className="text-sm">
+        Allocated: {req.allocatedQty || 0}
+      </div>
+      <div className="text-sm">
+        Staged: {req.stagedQty || 0}
+      </div>
+
+      <div className={`text-sm mt-1 ${shortage > 0 ? "text-red-500" : "text-green-600"}`}>
+        Shortage: {shortage > 0 ? shortage : 0}
+      </div>
+
+      <div className="mt-2 flex gap-2">
+        <input
+          placeholder="Qty"
+          value={qty}
+          onChange={(e) => setQty(e.target.value)}
+          className="border px-1 w-16"
+        />
+
+        <button onClick={allocate} className="bg-blue-500 text-white px-2">
+          Allocate
+        </button>
+
+        <LotSelector req={req} queue={queue} refresh={refresh} />
+      </div>
+    </div>
+  );
+}
+🎯 PART 4 — Lot Selector (ICN reservation)
+function LotSelector({ req, queue, refresh }: any) {
+  const { data } = useQuery({
+    queryKey: ["lots", req.requiredPartNumber],
+    queryFn: () => apiRequest(`/api/allocation-control/lots/${req.requiredPartNumber}`)
+  });
+
+  const reserve = async (lotId: string) => {
+    await apiRequest("/api/allocation-control/reserve-lot", {
+      method: "POST",
+      body: JSON.stringify({
+        requirementId: req.id,
+        lotId,
+        quantity: 1,
+        queueId: queue.id
+      })
+    });
+
+    refresh();
+  };
+
+  return (
+    <select onChange={(e) => reserve(e.target.value)} className="border">
+      <option>Select Lot</option>
+      {data?.map((lot: any) => (
+        <option key={lot.id} value={lot.id}>
+          {lot.internalControlNumber} ({lot.remainingQty})
+        </option>
+      ))}
+    </select>
+  );
+}
+🎯 PART 5 — Connect to Kits Queue Page
+
+In your Kits queue:
+
+const [selected, setSelected] = useState(null);
+
+Add:
+
+{selected && (
+  <RequirementDrawer
+    queue={selected}
+    onClose={() => setSelected(null)}
+    refresh={refetch}
+  />
+)}
+
+And row click:
+
+onClick={() => setSelected(row)}

@@ -14756,7 +14756,7 @@ export const checklistInstances = pgTable('checklist_instances', {
   templateIdIdx: index('checklist_instances_template_id_idx').on(table.templateId),
   employeeIdIdx: index('checklist_instances_employee_id_idx').on(table.employeeId),
   contextDateIdx: index('checklist_instances_context_date_idx').on(table.contextDate),
-  uniqueInstanceIdx: unique('checklist_instances_unique_idx').on(table.templateId, table.employeeId, table.contextType, table.contextDate),
+  uniqueInstanceIdx: unique('checklist_instances_template_id_employee_id_context_type_co_key').on(table.templateId, table.employeeId, table.contextType, table.contextDate),
 }));
 
 export const checklistInstanceItems = pgTable('checklist_instance_items', {

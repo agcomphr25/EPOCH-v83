@@ -14,6 +14,10 @@ import type { PackingSlipData } from './types';
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
 
+// RULE: All packing slips MUST be persisted to DB immediately after generation.
+// Never call this function and discard the result — the returned Buffer must be
+// saved as base64 to the relevant DB record (shipment_items.packing_slip_base64
+// for P1, or a p2_packing_slips record for P2) before sending any response.
 export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);

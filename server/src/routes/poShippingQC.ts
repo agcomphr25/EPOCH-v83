@@ -95,6 +95,10 @@ router.get('/all-p1-with-status', authenticateToken, async (req, res) => {
 
 // POST /api/po-orders/packing-slips
 // Generate packing slips for selected PO items (one PDF per PO)
+// RULE: All packing slips MUST be persisted to DB immediately after generation.
+// The PDF buffer is converted to base64 and written to shipment_items.packing_slip_base64
+// before the response is sent. Do not add any branch that skips the DB write.
+// TODO: unify P1 + P2 packing slip storage into single document system
 router.post('/packing-slips', authenticateToken, async (req, res) => {
   try {
     const { orderIds } = req.body;
@@ -341,6 +345,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       }
 
       // Persist packing slip to each matched shipment_item exactly once
+      if (matchedItemIds.size === 0) {
+        console.error(`WARNING: Packing slip generated without persistence — no matching shipment_items found for PO ${poNumber}`);
+      }
       for (const itemId of matchedItemIds) {
         await pool.query(
           `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,

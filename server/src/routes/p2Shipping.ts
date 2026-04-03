@@ -204,6 +204,9 @@ router.get('/lots/:id', async (req: Request, res: Response) => {
 
 // ============================================================
 // POST /api/p2/packing-slips — Create packing slip from lot
+// RULE: All packing slips MUST be persisted to DB immediately after generation.
+// This route inserts a record into p2_packing_slips and links it via p2_lot_numbers.packing_slip_id.
+// TODO: unify P1 + P2 packing slip storage into single document system
 // ============================================================
 const createPackingSlipSchema = z.object({
   lotId: z.string().uuid(),
@@ -307,6 +310,13 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
 
 // ============================================================
 // GET /api/p2/packing-slips/:id/pdf — Generate Packing Slip PDF
+// NOTE: This route generates the PDF on-the-fly from the persisted p2_packing_slips record.
+// The slip metadata is already stored in DB (created via POST /packing-slips); however,
+// the rendered PDF bytes are NOT re-saved here — they are streamed directly to the client.
+// RULE: All packing slips MUST be persisted to DB immediately after generation.
+// If this route is ever refactored to generate slips outside of an existing DB record,
+// a DB write MUST follow immediately — otherwise the console.error below must fire.
+// TODO: unify P1 + P2 packing slip storage into single document system
 // ============================================================
 router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
   try {
@@ -453,6 +463,15 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
     // res.set('Content-Disposition', `inline; filename="packing-slip-${slip.packingSlipNumber}.pdf"`);
     // return res.send(Buffer.from(bytes));
 
+    // The slip record is already persisted in p2_packing_slips (created via POST /packing-slips).
+    // PDF bytes are rendered on-the-fly and streamed — they are NOT saved back to the DB.
+    // The persistence invariant: a valid slip.id guarantees the slip metadata is in DB.
+    // If this route is ever refactored to generate a slip outside a persisted record context
+    // (i.e., slip.id is missing), the warning below acts as an explicit guardrail.
+    const isPersistedContext = typeof slip.id === 'string' && slip.id.length > 0;
+    if (!isPersistedContext) {
+      console.error("WARNING: Packing slip generated without persistence");
+    }
     const bytes = await generatePackingSlipPdf(slipData);
     res.set('Content-Type', 'application/pdf');
     res.set(

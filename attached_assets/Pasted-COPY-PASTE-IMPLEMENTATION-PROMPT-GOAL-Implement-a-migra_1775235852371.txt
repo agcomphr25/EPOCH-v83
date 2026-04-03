@@ -1,0 +1,192 @@
+COPY-PASTE IMPLEMENTATION PROMPT
+GOAL:
+Implement a migration safety system that PREVENTS destructive database changes (column/table deletion) and forces explicit review before applying migrations.
+
+This system must protect production data in EPOCH.
+
+-----------------------------------
+STEP 1 — CREATE MIGRATION SAFETY CHECK
+-----------------------------------
+
+Create a new file:
+
+server/utils/migrationSafetyCheck.ts
+
+Requirements:
+
+- Parse generated SQL migration files before execution
+- Detect any of the following statements:
+
+  DROP COLUMN
+  DROP TABLE
+  ALTER TABLE ... DROP
+  TRUNCATE
+  DELETE FROM (without WHERE)
+
+- If any of the above are found:
+
+  → THROW ERROR
+  → STOP DEPLOYMENT
+  → PRINT CLEAR WARNING MESSAGE
+
+Example output:
+
+🚨 MIGRATION BLOCKED — DESTRUCTIVE CHANGE DETECTED
+
+The following operations are not allowed:
+- DROP COLUMN readiness_status
+- DROP COLUMN percent_ready
+
+Resolution required:
+- Rename column to *_deprecated
+- Or create a forward migration instead
+
+-----------------------------------
+STEP 2 — WRAP EXISTING MIGRATION SCRIPT
+-----------------------------------
+
+Locate:
+
+server/pre-deploy-migrate.ts
+
+Modify flow to:
+
+1. Generate migrations (existing behavior)
+2. BEFORE applying them:
+   → Run migrationSafetyCheck
+3. ONLY proceed if safe
+
+Pseudo:
+
+import { runMigrationSafetyCheck } from "./utils/migrationSafetyCheck";
+
+const sql = loadGeneratedMigrationSQL();
+
+runMigrationSafetyCheck(sql);
+
+await applyMigrations();
+
+-----------------------------------
+STEP 3 — ADD SAFE MODE ENV FLAG
+-----------------------------------
+
+Add environment variable:
+
+MIGRATION_SAFE_MODE=true
+
+Behavior:
+
+IF true:
+  - Block ALL destructive changes
+
+IF false:
+  - Allow but REQUIRE explicit console confirmation log
+
+-----------------------------------
+STEP 4 — ADD DEPRECATION STRATEGY HELPER
+-----------------------------------
+
+Create helper:
+
+server/utils/schemaEvolution.ts
+
+Function:
+
+export function markColumnDeprecated(table, column) {
+  // instead of deleting column
+  // rename to column_deprecated or log warning
+}
+
+Also log:
+
+⚠️ Column marked deprecated instead of deleted
+
+-----------------------------------
+STEP 5 — UPDATE AGENT RULES (CRITICAL)
+-----------------------------------
+
+Create or update:
+
+/AGENT_RULES.md
+
+Add:
+
+-----------------------------------
+
+MIGRATION SAFETY RULES:
+
+1. NEVER generate migrations that:
+   - DROP columns
+   - DROP tables
+   - DELETE data
+
+2. If a column is no longer needed:
+   - Rename to *_deprecated
+   - Do NOT remove it
+
+3. Always assume:
+   - Database is source of truth
+   - Data must be preserved
+
+4. Any destructive change:
+   - MUST be approved by human
+   - MUST be explicitly documented
+
+-----------------------------------
+
+-----------------------------------
+STEP 6 — ADD MIGRATION DIFF LOGGING
+-----------------------------------
+
+Before running migrations, log:
+
+SCHEMA DIFF:
+
+- Adding column: ✅
+- Modifying column: ⚠️
+- Removing column: ❌ BLOCKED
+
+-----------------------------------
+STEP 7 — UPDATE PACKAGE.JSON (IMPORTANT)
+-----------------------------------
+
+Modify scripts:
+
+REMOVE automatic migration execution from install:
+
+"install": "npm run build"
+
+CREATE:
+
+"migrate:safe": "tsx server/pre-deploy-migrate.ts"
+
+Deployment should NOT auto-run migrations anymore.
+
+-----------------------------------
+STEP 8 — TEST CASE
+-----------------------------------
+
+Simulate a migration that drops a column.
+
+Expected result:
+
+❌ Deployment FAILS
+❌ Migration NOT applied
+✅ Clear error message printed
+
+-----------------------------------
+
+SUCCESS CRITERIA:
+
+- No migration can delete columns or tables without being blocked
+- Deployments no longer silently modify schema
+- Agent is forced into safe evolution patterns
+- Data loss risk is eliminated
+
+-----------------------------------
+IMPORTANT:
+
+Do NOT remove any existing columns during this implementation.
+Focus only on adding safety and control layers.
+
+-----------------------------------

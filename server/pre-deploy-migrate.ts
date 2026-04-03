@@ -20,6 +20,7 @@ import { detectSchemaDrift, DriftRecord } from './governance/schemaDrift';
 import { checkMigration, GuardViolation } from './governance/migrationGuard';
 import { evaluate } from './governance/schemaPolicy';
 import { logMutation, logMigrationBatch } from './governance/mutationLogger';
+import { runMigrationSafetyCheck } from './utils/migrationSafetyCheck';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -201,7 +202,32 @@ async function main() {
   }
 
   // ------------------------------------------------------------------
-  // STEP 1: Run governance gate BEFORE any migrations (pending only)
+  // STEP 1a: Fast standalone migration safety check (no DB required)
+  //          Scans all migration SQL for destructive statements and
+  //          logs a human-readable schema diff before any DB contact.
+  //          MIGRATION_SAFE_MODE=true (default) → throws on violations.
+  //          MIGRATION_SAFE_MODE=false           → warns and continues.
+  // ------------------------------------------------------------------
+  if (migrationFiles.length > 0) {
+    const allMigrationSql = migrationFiles
+      .map(f => {
+        const filePath = path.join(migrationsDir, f);
+        return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+      })
+      .join('\n');
+
+    try {
+      runMigrationSafetyCheck(allMigrationSql, migrationFiles.join(', '));
+    } catch (safetyErr: unknown) {
+      const message = safetyErr instanceof Error ? safetyErr.message : String(safetyErr);
+      console.error(`\n❌ Pre-deploy blocked by migration safety check: ${message}`);
+      await pool.end();
+      process.exit(1);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 1b: Run governance gate BEFORE any migrations (pending only)
   // ------------------------------------------------------------------
   await runGovernanceGate(migrationsDir, migrationFiles);
 

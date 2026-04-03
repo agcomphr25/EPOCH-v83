@@ -35,11 +35,14 @@ router.get('/templates/:id', ...adminOnly, async (req: Request, res: Response) =
       `SELECT * FROM checklist_template_items WHERE template_id = $1 ORDER BY sort_order`, [id]
     );
     const assignments = await pool.query(
-      `SELECT ca.*, e.name as employee_name, e.department as employee_department
+      `SELECT ca.*,
+              e.name as employee_name,
+              e.department as employee_department,
+              COALESCE(ca.assignment_type, 'employee') as assignment_type
        FROM checklist_assignments ca
-       JOIN employees e ON e.id = ca.employee_id
+       LEFT JOIN employees e ON e.id = ca.employee_id
        WHERE ca.template_id = $1
-       ORDER BY e.name`, [id]
+       ORDER BY ca.assignment_type, e.name NULLS LAST, ca.department_name, ca.role_key`, [id]
     );
     res.json({ ...templates[0], items: items || [], assignments: assignments || [] });
   } catch (error: any) {
@@ -167,11 +170,14 @@ router.get('/templates/:id/assignments', ...adminOnly, async (req: Request, res:
   try {
     const { id } = req.params;
     const assignments = await pool.query(
-      `SELECT ca.*, e.name as employee_name, e.department as employee_department
+      `SELECT ca.*,
+              e.name as employee_name,
+              e.department as employee_department,
+              COALESCE(ca.assignment_type, 'employee') as assignment_type
        FROM checklist_assignments ca
-       JOIN employees e ON e.id = ca.employee_id
+       LEFT JOIN employees e ON e.id = ca.employee_id
        WHERE ca.template_id = $1
-       ORDER BY e.name`, [id]
+       ORDER BY ca.assignment_type, e.name NULLS LAST, ca.department_name, ca.role_key`, [id]
     );
     res.json(assignments || []);
   } catch (error: any) {
@@ -181,17 +187,39 @@ router.get('/templates/:id/assignments', ...adminOnly, async (req: Request, res:
 
 router.post('/assignments', ...adminOnly, async (req: Request, res: Response) => {
   try {
-    const { templateId, employeeId, isActive, startDate, endDate } = req.body;
-    if (!templateId || !employeeId) return res.status(400).json({ error: 'templateId and employeeId are required' });
+    const { templateId, employeeId, isActive, startDate, endDate, assignmentType = 'employee', departmentName, roleKey } = req.body;
+    if (!templateId) return res.status(400).json({ error: 'templateId is required' });
+
+    if (assignmentType === 'department' && departmentName) {
+      const result = await pool.query(
+        `INSERT INTO checklist_assignments (template_id, assignment_type, department_name, is_active, start_date, end_date)
+         VALUES ($1, 'department', $2, $3, $4, $5)
+         RETURNING *`,
+        [templateId, departmentName, isActive !== false, startDate || null, endDate || null]
+      );
+      return res.status(201).json(result[0]);
+    }
+
+    if (assignmentType === 'role' && roleKey) {
+      const result = await pool.query(
+        `INSERT INTO checklist_assignments (template_id, assignment_type, role_key, is_active, start_date, end_date)
+         VALUES ($1, 'role', $2, $3, $4, $5)
+         RETURNING *`,
+        [templateId, roleKey, isActive !== false, startDate || null, endDate || null]
+      );
+      return res.status(201).json(result[0]);
+    }
+
+    if (!employeeId) return res.status(400).json({ error: 'employeeId is required for employee-type assignments' });
 
     const result = await pool.query(
-      `INSERT INTO checklist_assignments (template_id, employee_id, is_active, start_date, end_date)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (template_id, employee_id) DO UPDATE SET is_active = $3, start_date = $4, end_date = $5
+      `INSERT INTO checklist_assignments (template_id, employee_id, assignment_type, is_active, start_date, end_date)
+       VALUES ($1, $2, 'employee', $3, $4, $5)
+       ON CONFLICT DO NOTHING
        RETURNING *`,
       [templateId, employeeId, isActive !== false, startDate || null, endDate || null]
     );
-    res.status(201).json(result[0]);
+    res.status(201).json(result[0] || {});
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -207,13 +235,13 @@ router.post('/assignments/bulk', ...adminOnly, async (req: Request, res: Respons
     const results = [];
     for (const employeeId of employeeIds) {
       const result = await pool.query(
-        `INSERT INTO checklist_assignments (template_id, employee_id, is_active)
-         VALUES ($1, $2, true)
-         ON CONFLICT (template_id, employee_id) DO UPDATE SET is_active = true
+        `INSERT INTO checklist_assignments (template_id, employee_id, assignment_type, is_active)
+         VALUES ($1, $2, 'employee', true)
+         ON CONFLICT DO NOTHING
          RETURNING *`,
         [templateId, employeeId]
       );
-      results.push(result[0]);
+      if (result && result.length > 0) results.push(result[0]);
     }
     res.status(201).json(results);
   } catch (error: any) {
@@ -242,7 +270,15 @@ router.get('/active', ...authRequired, async (req: Request, res: Response) => {
       `SELECT DISTINCT ct.*
        FROM checklist_templates ct
        JOIN checklist_assignments ca ON ca.template_id = ct.id
-       WHERE ca.employee_id = $1
+       WHERE (
+         (ca.assignment_type = 'employee' AND ca.employee_id = $1)
+         OR (ca.assignment_type = 'department' AND ca.department_name = (
+             SELECT department FROM employees WHERE id = $1 LIMIT 1
+           ))
+         OR (ca.assignment_type = 'role' AND ca.role_key = (
+             SELECT role FROM employees WHERE id = $1 LIMIT 1
+           ))
+       )
          AND ca.is_active = true
          AND ct.is_active = true
          AND (ca.start_date IS NULL OR ca.start_date <= $2)
@@ -340,11 +376,28 @@ router.get('/enforcement-status', ...authRequired, async (req: Request, res: Res
     const today = new Date().toISOString().split('T')[0];
     const dailyPeriodDate = getPeriodDate('DAILY', today);
 
-    const enforced = await pool.query(
-      `SELECT ct.id, ct.name
+    const incomplete: Array<{ id: number; name: string; incompleteItems: string[] }> = [];
+
+    // Check instance-based enforcement first
+    // NOTE: ci is always joined on the requesting employee ($1), not ca.employee_id,
+    // to correctly handle department/role-level assignments where ca.employee_id is null.
+    const instanceEnforced = await pool.query(
+      `SELECT ct.id, ct.name, ci.id as instance_id
        FROM checklist_templates ct
        JOIN checklist_assignments ca ON ca.template_id = ct.id
-       WHERE ca.employee_id = $1
+       LEFT JOIN checklist_instances ci ON ci.template_id = ct.id
+                                       AND ci.employee_id = $1::integer
+                                       AND ci.context_date = $2
+                                       AND ci.context_type = 'daily'
+       WHERE (
+         (ca.assignment_type = 'employee' AND ca.employee_id = $1::integer)
+         OR (ca.assignment_type = 'department' AND ca.department_name = (
+             SELECT department FROM employees WHERE id = $1::integer LIMIT 1
+           ))
+         OR (ca.assignment_type = 'role' AND ca.role_key = (
+             SELECT role FROM employees WHERE id = $1::integer LIMIT 1
+           ))
+       )
          AND ca.is_active = true
          AND ct.is_active = true
          AND ct.enforce_clock_out = true
@@ -353,25 +406,48 @@ router.get('/enforcement-status', ...authRequired, async (req: Request, res: Res
       [employeeId, today]
     );
 
-    const incomplete = [];
-    for (const template of (enforced || [])) {
-      const requiredItems = await pool.query(
-        `SELECT id, frequency FROM checklist_template_items 
-         WHERE template_id = $1 AND required = true`,
-        [template.id]
-      );
+    const checkedTemplateIds = new Set<number>();
 
-      const dueRequiredItems = (requiredItems || []).filter((item: any) => isItemDueToday(item.frequency, today));
-      if (dueRequiredItems.length === 0) continue;
+    for (const row of (instanceEnforced || [])) {
+      if (checkedTemplateIds.has(row.id)) continue;
+      checkedTemplateIds.add(row.id);
 
-      const responses = await pool.query(
-        `SELECT cr.id FROM checklist_responses cr
-         WHERE cr.template_id = $1 AND cr.employee_id = $2 AND cr.period_date = $3 AND cr.completed_at IS NOT NULL`,
-        [template.id, employeeId, dailyPeriodDate]
-      );
+      if (row.instance_id) {
+        const incompleteItems = await pool.query(
+          `SELECT label FROM checklist_instance_items
+           WHERE instance_id = $1 AND required = true AND completed = false`,
+          [row.instance_id]
+        );
+        if (incompleteItems && incompleteItems.length > 0) {
+          incomplete.push({
+            id: row.id,
+            name: row.name,
+            incompleteItems: incompleteItems.map((i: any) => i.label),
+          });
+        }
+      } else {
+        const requiredItems = await pool.query(
+          `SELECT id, label, frequency FROM checklist_template_items
+           WHERE template_id = $1 AND required = true`,
+          [row.id]
+        );
 
-      if (!responses || responses.length === 0) {
-        incomplete.push({ id: template.id, name: template.name });
+        const dueRequiredItems = (requiredItems || []).filter((item: any) => isItemDueToday(item.frequency, today));
+        if (dueRequiredItems.length === 0) continue;
+
+        const responses = await pool.query(
+          `SELECT cr.id FROM checklist_responses cr
+           WHERE cr.template_id = $1 AND cr.employee_id = $2 AND cr.period_date = $3 AND cr.completed_at IS NOT NULL`,
+          [row.id, employeeId, dailyPeriodDate]
+        );
+
+        if (!responses || responses.length === 0) {
+          incomplete.push({
+            id: row.id,
+            name: row.name,
+            incompleteItems: dueRequiredItems.map((i: any) => i.label),
+          });
+        }
       }
     }
 
@@ -386,7 +462,7 @@ router.get('/enforcement-status', ...authRequired, async (req: Request, res: Res
 
 router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
   try {
-    const { employeeId, from, to, templateId } = req.query;
+    const { employeeId, from, to, templateId, limit = '50', offset = '0' } = req.query;
     
     let query = `
       SELECT cr.*, ct.name as template_name, e.name as employee_name,
@@ -426,7 +502,13 @@ router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
       params.push(to);
     }
 
-    query += ` ORDER BY cr.period_date DESC, cr.created_at DESC LIMIT 200`;
+    paramCount++;
+    query += ` ORDER BY cr.period_date DESC, cr.created_at DESC LIMIT $${paramCount}`;
+    params.push(Number(limit));
+
+    paramCount++;
+    query += ` OFFSET $${paramCount}`;
+    params.push(Number(offset));
 
     const results = await pool.query(query, params);
     res.json(results || []);
@@ -455,10 +537,14 @@ function isItemDueToday(frequency: string, today: string): boolean {
   switch (frequency) {
     case 'DAILY':
       return true;
-    case 'WEEKLY':
-      return true;
-    case 'MONTHLY':
-      return true;
+    case 'WEEKLY': {
+      const d = new Date(today + 'T00:00:00');
+      return d.getDay() === 1;
+    }
+    case 'MONTHLY': {
+      const d = new Date(today + 'T00:00:00');
+      return d.getDate() === 1;
+    }
     default:
       return true;
   }

@@ -1763,6 +1763,97 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Checklist management tables migration:', clErr.message);
       }
 
+      // KENTRO-pattern checklist instance engine tables
+      try {
+        const { sql: sqlCI } = await import('drizzle-orm');
+        // Extend checklist_assignments for department/role assignment
+        await db.execute(sqlCI`ALTER TABLE checklist_assignments ADD COLUMN IF NOT EXISTS assignment_type TEXT NOT NULL DEFAULT 'employee'`);
+        await db.execute(sqlCI`ALTER TABLE checklist_assignments ADD COLUMN IF NOT EXISTS department_name TEXT`);
+        await db.execute(sqlCI`ALTER TABLE checklist_assignments ADD COLUMN IF NOT EXISTS role_key TEXT`);
+        // Make employee_id nullable for department/role assignments
+        await db.execute(sqlCI`ALTER TABLE checklist_assignments ALTER COLUMN employee_id DROP NOT NULL`);
+        // Drop old unique constraint if it still references only (template_id, employee_id)
+        await db.execute(sqlCI`ALTER TABLE checklist_assignments DROP CONSTRAINT IF EXISTS checklist_assignments_unique_idx`);
+
+        await db.execute(sqlCI`
+          CREATE TABLE IF NOT EXISTS checklist_instances (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL REFERENCES checklist_templates(id),
+            employee_id INTEGER NOT NULL REFERENCES employees(id),
+            context_type TEXT NOT NULL DEFAULT 'daily',
+            context_date DATE NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            completed_at TIMESTAMP,
+            reviewed_at TIMESTAMP,
+            reviewed_by_user_id INTEGER,
+            reviewed_by_display_name TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(template_id, employee_id, context_type, context_date)
+          )
+        `);
+        await db.execute(sqlCI`CREATE INDEX IF NOT EXISTS checklist_instances_template_id_idx ON checklist_instances(template_id)`);
+        await db.execute(sqlCI`CREATE INDEX IF NOT EXISTS checklist_instances_employee_id_idx ON checklist_instances(employee_id)`);
+        await db.execute(sqlCI`CREATE INDEX IF NOT EXISTS checklist_instances_context_date_idx ON checklist_instances(context_date)`);
+
+        await db.execute(sqlCI`
+          CREATE TABLE IF NOT EXISTS checklist_instance_items (
+            id SERIAL PRIMARY KEY,
+            instance_id INTEGER NOT NULL REFERENCES checklist_instances(id) ON DELETE CASCADE,
+            template_item_id INTEGER NOT NULL REFERENCES checklist_template_items(id),
+            label TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'checkbox',
+            options JSONB,
+            required BOOLEAN NOT NULL DEFAULT false,
+            frequency TEXT NOT NULL DEFAULT 'DAILY',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            value TEXT,
+            completed BOOLEAN NOT NULL DEFAULT false,
+            completed_at TIMESTAMP,
+            completed_by_user_id INTEGER,
+            completed_by_display_name TEXT
+          )
+        `);
+        await db.execute(sqlCI`CREATE INDEX IF NOT EXISTS checklist_instance_items_instance_id_idx ON checklist_instance_items(instance_id)`);
+
+        await db.execute(sqlCI`
+          CREATE TABLE IF NOT EXISTS checklist_instance_events (
+            id SERIAL PRIMARY KEY,
+            instance_id INTEGER NOT NULL REFERENCES checklist_instances(id) ON DELETE CASCADE,
+            instance_item_id INTEGER REFERENCES checklist_instance_items(id),
+            event_type TEXT NOT NULL,
+            actor_user_id INTEGER,
+            actor_display_name TEXT,
+            previous_value TEXT,
+            new_value TEXT,
+            metadata JSONB,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlCI`CREATE INDEX IF NOT EXISTS checklist_instance_events_instance_id_idx ON checklist_instance_events(instance_id)`);
+
+        // Partial unique indexes to prevent duplicate assignments per type
+        await db.execute(sqlCI`
+          CREATE UNIQUE INDEX IF NOT EXISTS checklist_assignments_unique_employee
+          ON checklist_assignments(template_id, employee_id)
+          WHERE assignment_type = 'employee' AND employee_id IS NOT NULL
+        `);
+        await db.execute(sqlCI`
+          CREATE UNIQUE INDEX IF NOT EXISTS checklist_assignments_unique_department
+          ON checklist_assignments(template_id, department_name)
+          WHERE assignment_type = 'department' AND department_name IS NOT NULL
+        `);
+        await db.execute(sqlCI`
+          CREATE UNIQUE INDEX IF NOT EXISTS checklist_assignments_unique_role
+          ON checklist_assignments(template_id, role_key)
+          WHERE assignment_type = 'role' AND role_key IS NOT NULL
+        `);
+
+        console.log('✅ Ensured checklist instance engine tables exist');
+      } catch (ciErr: any) {
+        console.warn('⚠️ Checklist instance engine migration:', ciErr.message);
+      }
+
       // Ensure project_steps and project_activity_log have display name columns
       try {
         const { sql: sqlProjCols } = await import('drizzle-orm');

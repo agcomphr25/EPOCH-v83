@@ -114,6 +114,7 @@ import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import p2ShippingRoutes from './p2Shipping';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import checklistManagementRoutes from './checklistManagement';
+import checklistInstancesRoutes from './checklistInstances';
 import forecastRoutes from './forecast';
 import healthChecksRoutes from './healthChecks';
 import monitoredLinksRoutes from './monitoredLinks';
@@ -915,6 +916,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Checklist Management routes (admin + employee-facing)
   app.use('/api/checklist-management', checklistManagementRoutes);
+
+  // Checklist Instance routes (KENTRO-pattern engine)
+  app.use('/api/checklist-instances', checklistInstancesRoutes);
 
   // Production Forecast Engine routes (read-only)
   app.use('/api/forecast', forecastRoutes);

@@ -13595,7 +13595,10 @@ export const checklistTemplateItems = pgTable('checklist_template_items', {
 export const checklistAssignments = pgTable('checklist_assignments', {
   id: serial('id').primaryKey(),
   templateId: integer('template_id').notNull().references(() => checklistTemplates.id, { onDelete: 'cascade' }),
-  employeeId: integer('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  employeeId: integer('employee_id').references(() => employees.id, { onDelete: 'cascade' }),
+  assignmentType: text('assignment_type').notNull().default('employee'),
+  departmentName: text('department_name'),
+  roleKey: text('role_key'),
   isActive: boolean('is_active').notNull().default(true),
   startDate: date('start_date'),
   endDate: date('end_date'),
@@ -13603,7 +13606,6 @@ export const checklistAssignments = pgTable('checklist_assignments', {
 }, (table) => ({
   templateIdIdx: index('checklist_assignments_template_id_idx').on(table.templateId),
   employeeIdIdx: index('checklist_assignments_employee_id_idx').on(table.employeeId),
-  uniqueIdx: unique('checklist_assignments_unique_idx').on(table.templateId, table.employeeId),
 }));
 
 export const checklistResponses = pgTable('checklist_responses', {
@@ -14731,3 +14733,71 @@ export const insertReceiptAuditLogSchema = createInsertSchema(receiptAuditLog).o
 });
 export type ReceiptAuditLog = typeof receiptAuditLog.$inferSelect;
 export type InsertReceiptAuditLog = z.infer<typeof insertReceiptAuditLogSchema>;
+
+// ─── KENTRO-pattern checklist instance engine ──────────────────────────────────
+
+export const checklistInstances = pgTable('checklist_instances', {
+  id: serial('id').primaryKey(),
+  templateId: integer('template_id').notNull().references(() => checklistTemplates.id),
+  employeeId: integer('employee_id').notNull().references(() => employees.id),
+  contextType: text('context_type').notNull().default('daily'),
+  contextDate: date('context_date').notNull(),
+  status: text('status').notNull().default('pending'),
+  completedAt: timestamp('completed_at'),
+  reviewedAt: timestamp('reviewed_at'),
+  reviewedByUserId: integer('reviewed_by_user_id'),
+  reviewedByDisplayName: text('reviewed_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  templateIdIdx: index('checklist_instances_template_id_idx').on(table.templateId),
+  employeeIdIdx: index('checklist_instances_employee_id_idx').on(table.employeeId),
+  contextDateIdx: index('checklist_instances_context_date_idx').on(table.contextDate),
+  uniqueInstanceIdx: unique('checklist_instances_unique_idx').on(table.templateId, table.employeeId, table.contextType, table.contextDate),
+}));
+
+export const checklistInstanceItems = pgTable('checklist_instance_items', {
+  id: serial('id').primaryKey(),
+  instanceId: integer('instance_id').notNull().references(() => checklistInstances.id, { onDelete: 'cascade' }),
+  templateItemId: integer('template_item_id').notNull().references(() => checklistTemplateItems.id),
+  label: text('label').notNull(),
+  type: text('type').notNull().default('checkbox'),
+  options: jsonb('options').$type<string[]>(),
+  required: boolean('required').notNull().default(false),
+  frequency: text('frequency').notNull().default('DAILY'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  value: text('value'),
+  completed: boolean('completed').notNull().default(false),
+  completedAt: timestamp('completed_at'),
+  completedByUserId: integer('completed_by_user_id'),
+  completedByDisplayName: text('completed_by_display_name'),
+}, (table) => ({
+  instanceIdIdx: index('checklist_instance_items_instance_id_idx').on(table.instanceId),
+}));
+
+export const checklistInstanceEvents = pgTable('checklist_instance_events', {
+  id: serial('id').primaryKey(),
+  instanceId: integer('instance_id').notNull().references(() => checklistInstances.id, { onDelete: 'cascade' }),
+  instanceItemId: integer('instance_item_id').references(() => checklistInstanceItems.id),
+  eventType: text('event_type').notNull(),
+  actorUserId: integer('actor_user_id'),
+  actorDisplayName: text('actor_display_name'),
+  previousValue: text('previous_value'),
+  newValue: text('new_value'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  instanceIdIdx: index('checklist_instance_events_instance_id_idx').on(table.instanceId),
+}));
+
+export const insertChecklistInstanceSchema = createInsertSchema(checklistInstances).omit({ id: true, createdAt: true, updatedAt: true });
+export type ChecklistInstance = typeof checklistInstances.$inferSelect;
+export type InsertChecklistInstance = z.infer<typeof insertChecklistInstanceSchema>;
+
+export const insertChecklistInstanceItemSchema = createInsertSchema(checklistInstanceItems).omit({ id: true });
+export type ChecklistInstanceItem = typeof checklistInstanceItems.$inferSelect;
+export type InsertChecklistInstanceItem = z.infer<typeof insertChecklistInstanceItemSchema>;
+
+export const insertChecklistInstanceEventSchema = createInsertSchema(checklistInstanceEvents).omit({ id: true, createdAt: true });
+export type ChecklistInstanceEvent = typeof checklistInstanceEvents.$inferSelect;
+export type InsertChecklistInstanceEvent = z.infer<typeof insertChecklistInstanceEventSchema>;

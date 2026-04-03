@@ -129,11 +129,21 @@ export default function TimeClock({
     try {
       const result = await checkChecklistCompletion();
       if (!result.complete) {
-        const names = result.checklists?.map((c: any) => c.name).join(', ');
+        const checklists = result.checklists || [];
+        let description = '';
+        if (checklists.length > 0) {
+          description = checklists.map((c: any) => {
+            const items = c.incompleteItems && c.incompleteItems.length > 0
+              ? ` (${c.incompleteItems.join(', ')})`
+              : '';
+            return `${c.name}${items}`;
+          }).join(' | ');
+        }
         toast({
-          title: names
-            ? `Cannot clock out. Incomplete checklists: ${names}`
+          title: checklists.length > 0
+            ? `Cannot clock out — incomplete checklists: ${checklists.map((c: any) => c.name).join(', ')}`
             : 'Cannot clock out until the Daily Checklist has been completed',
+          description: description || undefined,
           variant: 'destructive',
         });
         return;

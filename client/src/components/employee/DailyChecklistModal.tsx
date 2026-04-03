@@ -1,10 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,10 +30,38 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckSquare, AlertCircle, CheckCircle, X, Clock } from 'lucide-react';
+import { CheckSquare, AlertCircle, CheckCircle, X, Clock, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+
+interface InstanceItem {
+  id: number;
+  templateItemId: number;
+  label: string;
+  type: string;
+  options?: string[] | null;
+  required: boolean;
+  frequency: string;
+  sortOrder: number;
+  value: string | null;
+  completed: boolean;
+  completedAt: string | null;
+  completedByDisplayName: string | null;
+}
+
+interface ActiveInstance {
+  instanceId: number;
+  templateId: number;
+  templateName: string;
+  status: string;
+  contextDate: string;
+  items: InstanceItem[];
+  completedAt: string | null;
+  reviewedAt: string | null;
+  isLegacy: false;
+}
 
 interface TemplateItemData {
   id: number;
@@ -70,6 +108,13 @@ interface DailyChecklistModalProps {
   onClose: () => void;
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-700',
+  in_progress: 'bg-blue-100 text-blue-800',
+  completed: 'bg-green-100 text-green-800',
+  reviewed: 'bg-purple-100 text-purple-800',
+};
+
 export default function DailyChecklistModal({
   employeeId,
   department,
@@ -77,12 +122,34 @@ export default function DailyChecklistModal({
   onClose,
 }: DailyChecklistModalProps) {
   const [templateStates, setTemplateStates] = useState<Record<number, ItemState[]>>({});
+  const [dirtyTemplates, setDirtyTemplates] = useState<Set<number>>(new Set());
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [legacyItems, setLegacyItems] = useState<any[]>([]);
   const { toast } = useToast();
+  const pendingCloseRef = useRef(false);
+
+  const {
+    data: activeInstances = [],
+    isLoading: instancesLoading,
+    refetch: refetchInstances,
+  } = useQuery<ActiveInstance[]>({
+    queryKey: ['/api/checklist-instances/active', employeeId],
+    queryFn: async () => {
+      const response = await fetch(`/api/checklist-instances/active?employeeId=${employeeId}`);
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 500) return [];
+        throw new Error('Failed to fetch checklist instances');
+      }
+      return response.json();
+    },
+    enabled: isOpen && employeeId > 0,
+  });
 
   const {
     data: activeTemplates = [],
-    isLoading,
-    refetch,
+    isLoading: templatesLoading,
+    refetch: refetchTemplates,
   } = useQuery<ActiveTemplate[]>({
     queryKey: ['/api/checklist-management/active', employeeId],
     queryFn: async () => {
@@ -96,7 +163,12 @@ export default function DailyChecklistModal({
     enabled: isOpen && employeeId > 0,
   });
 
-  const useLegacy = activeTemplates.length === 0 && !isLoading;
+  const isLoading = instancesLoading || templatesLoading;
+  const hasInstances = activeInstances.length > 0;
+  const hasTemplates = activeTemplates.length > 0;
+  const useLegacy = !hasInstances && !hasTemplates && !isLoading;
+  const useInstanceMode = hasInstances;
+  const useLegacyTemplateMode = !hasInstances && hasTemplates;
 
   const {
     data: legacyChecklist = [],
@@ -126,8 +198,6 @@ export default function DailyChecklistModal({
     enabled: isOpen && useLegacy,
   });
 
-  const [legacyItems, setLegacyItems] = useState<any[]>([]);
-
   useEffect(() => {
     if (useLegacy && legacyChecklist.length > 0) {
       setLegacyItems(legacyChecklist);
@@ -135,7 +205,7 @@ export default function DailyChecklistModal({
   }, [legacyChecklist, useLegacy]);
 
   useEffect(() => {
-    if (activeTemplates.length > 0) {
+    if (useLegacyTemplateMode && activeTemplates.length > 0) {
       const states: Record<number, ItemState[]> = {};
       for (const tmpl of activeTemplates) {
         const items = tmpl.items || [];
@@ -156,7 +226,44 @@ export default function DailyChecklistModal({
       }
       setTemplateStates(states);
     }
-  }, [activeTemplates]);
+  }, [activeTemplates, useLegacyTemplateMode]);
+
+  const toggleInstanceItemMutation = useMutation({
+    mutationFn: async (itemId: number) => {
+      const response = await fetch(`/api/checklist-instances/items/${itemId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to toggle item');
+      return response.json();
+    },
+    onSuccess: () => {
+      setLastSaved(new Date());
+      refetchInstances();
+    },
+    onError: () => {
+      toast({ title: 'Failed to save item', variant: 'destructive' });
+    },
+  });
+
+  const updateInstanceItemMutation = useMutation({
+    mutationFn: async ({ itemId, value }: { itemId: number; value: string }) => {
+      const response = await fetch(`/api/checklist-instances/items/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value, completed: Boolean(value) }),
+      });
+      if (!response.ok) throw new Error('Failed to update item');
+      return response.json();
+    },
+    onSuccess: () => {
+      setLastSaved(new Date());
+      refetchInstances();
+    },
+    onError: () => {
+      toast({ title: 'Failed to save item', variant: 'destructive' });
+    },
+  });
 
   const submitMutation = useMutation({
     mutationFn: async ({ templateId, periodDate, items }: { templateId: number; periodDate: string; items: any[] }) => {
@@ -168,8 +275,14 @@ export default function DailyChecklistModal({
       if (!response.ok) throw new Error('Failed to submit');
       return response.json();
     },
-    onSuccess: () => {
-      refetch();
+    onSuccess: (_data, variables) => {
+      refetchTemplates();
+      setDirtyTemplates(prev => {
+        const next = new Set(prev);
+        next.delete(variables.templateId);
+        return next;
+      });
+      setLastSaved(new Date());
       toast({ title: 'Checklist saved successfully!' });
     },
     onError: () => {
@@ -189,12 +302,21 @@ export default function DailyChecklistModal({
       return response.json();
     },
     onSuccess: () => {
+      setLastSaved(new Date());
       toast({ title: 'Checklist updated successfully!' });
     },
     onError: () => {
       toast({ title: 'Failed to update checklist', variant: 'destructive' });
     },
   });
+
+  const handleInstanceItemChange = (item: InstanceItem, value: string | boolean) => {
+    if (item.type === 'checkbox') {
+      toggleInstanceItemMutation.mutate(item.id);
+    } else {
+      updateInstanceItemMutation.mutate({ itemId: item.id, value: String(value) });
+    }
+  };
 
   const handleItemUpdate = (templateId: number, templateItemId: number, value: string | boolean) => {
     setTemplateStates(prev => ({
@@ -205,6 +327,7 @@ export default function DailyChecklistModal({
           : item
       ),
     }));
+    setDirtyTemplates(prev => new Set(prev).add(templateId));
   };
 
   const handleSaveTemplate = (template: ActiveTemplate) => {
@@ -227,14 +350,37 @@ export default function DailyChecklistModal({
         item.id === itemId ? { ...item, value, completed: Boolean(value) } : item
       )
     );
+    setDirtyTemplates(prev => new Set(prev).add(-1));
   };
 
   const handleLegacySave = () => {
     const updates = legacyItems.map(item => ({ itemId: item.id, value: item.value || false }));
     legacySubmitMutation.mutate(updates);
+    setDirtyTemplates(new Set());
+  };
+
+  const handleClose = () => {
+    if (dirtyTemplates.size > 0 && !useInstanceMode) {
+      setShowUnsavedWarning(true);
+      pendingCloseRef.current = true;
+    } else {
+      onClose();
+    }
   };
 
   const getOverallStats = () => {
+    if (useInstanceMode) {
+      let total = 0, completed = 0, required = 0, requiredCompleted = 0;
+      for (const instance of activeInstances) {
+        for (const item of instance.items) {
+          total++;
+          if (item.completed) completed++;
+          if (item.required) required++;
+          if (item.required && item.completed) requiredCompleted++;
+        }
+      }
+      return { total, completed, required, requiredCompleted };
+    }
     if (useLegacy) {
       const items = legacyItems;
       return {
@@ -303,15 +449,6 @@ export default function DailyChecklistModal({
     return departmentSpecificItems[department] || departmentSpecificItems['General'];
   };
 
-  const frequencyLabel = (f: string) => {
-    switch (f) {
-      case 'DAILY': return 'Daily';
-      case 'WEEKLY': return 'Weekly';
-      case 'MONTHLY': return 'Monthly';
-      default: return f;
-    }
-  };
-
   const renderInputForItem = (
     item: { type: string; options?: string[] | null; value: string | boolean; completed: boolean },
     onUpdate: (value: string | boolean) => void
@@ -366,7 +503,7 @@ export default function DailyChecklistModal({
 
   if (isLoading || (useLegacy && legacyLoading)) {
     return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
@@ -383,154 +520,267 @@ export default function DailyChecklistModal({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <CheckSquare className="w-5 h-5" />
-              <span>Checklists - {department}</span>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
-            </Button>
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
+                <CheckSquare className="w-5 h-5" />
+                <span>Checklists - {department}</span>
+                {useLegacy && (
+                  <Badge variant="outline" className="border-orange-400 text-orange-700 text-xs">
+                    Legacy mode — no templates assigned
+                  </Badge>
+                )}
+                {useLegacyTemplateMode && (
+                  <Badge variant="outline" className="border-yellow-500 text-yellow-700 text-xs">
+                    Legacy mode
+                  </Badge>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleClose}>
+                <X className="w-4 h-4" />
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="bg-blue-50">
-              <CardContent className="pt-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{stats.completed}/{stats.total}</div>
-                  <div className="text-sm text-blue-700">Total Completed</div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-green-50">
-              <CardContent className="pt-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{stats.requiredCompleted}/{stats.required}</div>
-                  <div className="text-sm text-green-700">Required Completed</div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-yellow-50">
-              <CardContent className="pt-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{completionPercentage}%</div>
-                  <div className="text-sm text-yellow-700">Progress</div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <div className="space-y-6">
+            {lastSaved && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                Last saved: {format(lastSaved, 'h:mm:ss a')}
+              </div>
+            )}
 
-          {allRequiredComplete ? (
-            <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="text-green-800 font-medium">All required tasks completed!</span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-yellow-600" />
-              <span className="text-yellow-800">
-                Complete all required tasks before clocking out ({stats.required - stats.requiredCompleted} remaining)
-              </span>
-            </div>
-          )}
-
-          {useLegacy ? (
-            <div className="space-y-3">
-              <h3 className="font-semibold flex items-center space-x-2">
-                <Clock className="w-4 h-4" />
-                <span>Today's Tasks</span>
-              </h3>
-              {legacyItems.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <CheckSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No checklist items found for {department}</p>
-                </div>
-              ) : (
-                <>
-                  {legacyItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        {item.required && <span className="text-red-500 text-sm">*</span>}
-                        <Label className="font-medium">{item.item}</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {renderInputForItem(
-                          { type: item.inputType, options: item.options, value: item.value, completed: item.completed },
-                          (value) => handleLegacyItemUpdate(item.id, value)
-                        )}
-                        {item.completed && <CheckCircle className="w-4 h-4 text-green-500" />}
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex justify-end pt-4 border-t">
-                    <Button onClick={handleLegacySave} disabled={legacySubmitMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
-                      {legacySubmitMutation.isPending ? 'Saving...' : 'Save Progress'}
-                    </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-blue-50">
+                <CardContent className="pt-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{stats.completed}/{stats.total}</div>
+                    <div className="text-sm text-blue-700">Total Completed</div>
                   </div>
-                </>
-              )}
+                </CardContent>
+              </Card>
+              <Card className="bg-green-50">
+                <CardContent className="pt-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{stats.requiredCompleted}/{stats.required}</div>
+                    <div className="text-sm text-green-700">Required Completed</div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-yellow-50">
+                <CardContent className="pt-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-600">{completionPercentage}%</div>
+                    <div className="text-sm text-yellow-700">Progress</div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {activeTemplates.map((template) => {
-                const items = templateStates[template.id] || [];
-                const templateCompleted = items.filter(i => i.completed).length;
-                const templateTotal = items.length;
 
-                return (
-                  <div key={template.id} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        {template.name}
-                      </h3>
-                      <span className="text-sm text-muted-foreground">
-                        {templateCompleted}/{templateTotal}
-                      </span>
+            {allRequiredComplete ? (
+              <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-green-800 font-medium">All required tasks completed!</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <span className="text-yellow-800">
+                  Complete all required tasks before clocking out ({stats.required - stats.requiredCompleted} remaining)
+                </span>
+              </div>
+            )}
+
+            {useInstanceMode ? (
+              <div className="space-y-6">
+                {activeInstances.map((instance) => {
+                  const instanceCompleted = instance.items.filter(i => i.completed).length;
+                  const instanceTotal = instance.items.length;
+
+                  return (
+                    <div key={instance.instanceId} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          {instance.templateName}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {instanceCompleted}/{instanceTotal}
+                          </span>
+                          <Badge className={`text-xs ${STATUS_COLORS[instance.status] || 'bg-gray-100 text-gray-700'}`}>
+                            {instance.status.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                      {instance.completedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Completed at {format(new Date(instance.completedAt), 'h:mm a')}
+                        </p>
+                      )}
+
+                      {instance.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              {item.required && <span className="text-red-500 text-sm">*</span>}
+                              <Label className="font-medium truncate">{item.label}</Label>
+                            </div>
+                            {item.completedAt && item.completedByDisplayName && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                By {item.completedByDisplayName} at {format(new Date(item.completedAt), 'h:mm a')}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2 ml-2 shrink-0">
+                            {renderInputForItem(
+                              { type: item.type, options: item.options, value: item.type === 'checkbox' ? item.completed : (item.value || ''), completed: item.completed },
+                              (value) => handleInstanceItemChange(item, value)
+                            )}
+                            {item.completed && <CheckCircle className="w-4 h-4 text-green-500" />}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-
-                    {items.map((item) => (
-                      <div key={item.templateItemId} className="flex items-center justify-between p-3 border rounded-lg">
+                  );
+                })}
+              </div>
+            ) : useLegacy ? (
+              <div className="space-y-3">
+                <h3 className="font-semibold flex items-center space-x-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Today's Tasks</span>
+                </h3>
+                {legacyItems.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <CheckSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No checklist items found for {department}</p>
+                  </div>
+                ) : (
+                  <>
+                    {legacyItems.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center space-x-2">
                           {item.required && <span className="text-red-500 text-sm">*</span>}
-                          <Label className="font-medium">{item.label}</Label>
+                          <Label className="font-medium">{item.item}</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                           {renderInputForItem(
-                            item,
-                            (value) => handleItemUpdate(template.id, item.templateItemId, value)
+                            { type: item.inputType, options: item.options, value: item.value, completed: item.completed },
+                            (value) => handleLegacyItemUpdate(item.id, value)
                           )}
                           {item.completed && <CheckCircle className="w-4 h-4 text-green-500" />}
                         </div>
                       </div>
                     ))}
-
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        onClick={() => handleSaveTemplate(template)}
-                        disabled={submitMutation.isPending}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {submitMutation.isPending ? 'Saving...' : 'Save Progress'}
+                    <div className="flex justify-end pt-4 border-t">
+                      <Button onClick={handleLegacySave} disabled={legacySubmitMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+                        {legacySubmitMutation.isPending ? 'Saving...' : 'Save Progress'}
                       </Button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {activeTemplates.map((template) => {
+                  const items = templateStates[template.id] || [];
+                  const templateCompleted = items.filter(i => i.completed).length;
+                  const templateTotal = items.length;
+                  const isDirty = dirtyTemplates.has(template.id);
 
-          <div className="flex justify-end pt-4 border-t">
-            <Button variant="outline" onClick={onClose}>Close</Button>
+                  return (
+                    <div key={template.id} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          {template.name}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {templateCompleted}/{templateTotal}
+                          </span>
+                          {isDirty && (
+                            <Badge variant="outline" className="text-xs border-orange-400 text-orange-600">
+                              Unsaved
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {items.map((item) => (
+                        <div key={item.templateItemId} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            {item.required && <span className="text-red-500 text-sm">*</span>}
+                            <Label className="font-medium">{item.label}</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {renderInputForItem(
+                              item,
+                              (value) => handleItemUpdate(template.id, item.templateItemId, value)
+                            )}
+                            {item.completed && <CheckCircle className="w-4 h-4 text-green-500" />}
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveTemplate(template)}
+                          disabled={submitMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {submitMutation.isPending ? 'Saving...' : 'Save Progress'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4 border-t">
+              <Button variant="outline" onClick={handleClose}>Close</Button>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showUnsavedWarning} onOpenChange={setShowUnsavedWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              Unsaved Changes
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved checklist changes. If you close now, your progress will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowUnsavedWarning(false);
+              pendingCloseRef.current = false;
+            }}>
+              Stay & Save
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                setShowUnsavedWarning(false);
+                setDirtyTemplates(new Set());
+                onClose();
+              }}
+            >
+              Discard & Close
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

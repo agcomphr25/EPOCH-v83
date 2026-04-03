@@ -28,6 +28,12 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -806,45 +812,112 @@ export default function OEMShipmentsPage() {
                                   <Undo2 className="h-4 w-4 mr-1" />
                                   Return to QC
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => downloadShippingLabel(shipment.id, shipment.master_tracking_number)}
-                                >
-                                  <Printer className="h-4 w-4 mr-2" />
-                                  Reprint Label
-                                </Button>
-                                {shipment.items.length === 1 ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => downloadPackingSlip(shipment.items[0].id, shipment.items[0].poNumber, shipment.items[0].orderId)}
-                                  >
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    Reprint Packing Slip
-                                  </Button>
-                                ) : shipment.items.length > 1 ? (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button size="sm" variant="outline">
-                                        <FileText className="h-4 w-4 mr-2" />
-                                        Reprint Packing Slip
-                                        <ChevronDown className="h-3 w-3 ml-1" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      {shipment.items.map((item) => (
-                                        <DropdownMenuItem
-                                          key={item.id}
-                                          onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => downloadShippingLabel(shipment.id, shipment.master_tracking_number)}
+                                          disabled={!shipment.has_shipping_label}
+                                          className={!shipment.has_shipping_label ? 'pointer-events-none opacity-50' : ''}
                                         >
-                                          <Printer className="h-3 w-3 mr-2" />
-                                          {item.orderId}
-                                        </DropdownMenuItem>
-                                      ))}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : null}
+                                          <Printer className="h-4 w-4 mr-2" />
+                                          Reprint Label
+                                        </Button>
+                                      </span>
+                                    </TooltipTrigger>
+                                    {!shipment.has_shipping_label && (
+                                      <TooltipContent>
+                                        <p>No shipping label on file</p>
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {(() => {
+                                  const poGroups = Object.entries(
+                                    shipment.items.reduce<Record<string, ShipmentItem[]>>((acc, item) => {
+                                      if (!acc[item.poNumber]) acc[item.poNumber] = [];
+                                      acc[item.poNumber].push(item);
+                                      return acc;
+                                    }, {})
+                                  );
+                                  if (poGroups.length === 0) return null;
+                                  if (poGroups.length === 1) {
+                                    const [poNumber, items] = poGroups[0];
+                                    const hasSlip = items.some(i => i.hasPackingSlip);
+                                    return (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => downloadPackingSlip(items[0].id, poNumber, items[0].orderId)}
+                                                disabled={!hasSlip}
+                                                className={!hasSlip ? 'pointer-events-none opacity-50' : ''}
+                                              >
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                Reprint Packing Slip
+                                              </Button>
+                                            </span>
+                                          </TooltipTrigger>
+                                          {!hasSlip && (
+                                            <TooltipContent>
+                                              <p>No packing slip on file</p>
+                                            </TooltipContent>
+                                          )}
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    );
+                                  }
+                                  return (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="sm" variant="outline">
+                                          <FileText className="h-4 w-4 mr-2" />
+                                          Reprint Packing Slip
+                                          <ChevronDown className="h-3 w-3 ml-1" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        {poGroups.map(([poNumber, items]) => {
+                                          const hasSlip = items.some(i => i.hasPackingSlip);
+                                          return (
+                                            <TooltipProvider key={poNumber}>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <div>
+                                                    <DropdownMenuItem
+                                                      onClick={() => hasSlip && downloadPackingSlip(items[0].id, poNumber, items[0].orderId)}
+                                                      disabled={!hasSlip}
+                                                      className={!hasSlip ? 'opacity-50 cursor-not-allowed' : ''}
+                                                    >
+                                                      <Printer className="h-3 w-3 mr-2 flex-shrink-0" />
+                                                      <div className="flex flex-col">
+                                                        <span>PO {poNumber}</span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                          {items.map(i => i.orderId).join(', ')}
+                                                        </span>
+                                                      </div>
+                                                    </DropdownMenuItem>
+                                                  </div>
+                                                </TooltipTrigger>
+                                                {!hasSlip && (
+                                                  <TooltipContent>
+                                                    <p>No packing slip on file</p>
+                                                  </TooltipContent>
+                                                )}
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          );
+                                        })}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  );
+                                })()}
                                 <CollapsibleTrigger asChild>
                                   <Button size="sm" variant="ghost">
                                     {expandedShipments.has(shipment.id) ? (

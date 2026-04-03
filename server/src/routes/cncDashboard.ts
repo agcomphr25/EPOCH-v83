@@ -665,6 +665,16 @@ router.patch('/machines/:id', async (req, res) => {
   }
 });
 
+router.delete('/machines/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await storage.deleteCncMachine(id);
+    res.status(204).end();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Machine Utilization ───────────────────────────────────────────────────────
 // Returns per-machine stats: jobs assigned, total estimated hours, active jobs
 

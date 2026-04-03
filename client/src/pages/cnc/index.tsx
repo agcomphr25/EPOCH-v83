@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -238,6 +238,23 @@ export default function CNCDashboardPage() {
   // ── Left panel tab ─────────────────────────────────────────────────────────
   const [leftTab, setLeftTab] = useState<'queue' | 'machines'>('queue');
 
+  // ── Machine CRUD dialog state ──────────────────────────────────────────────
+  const [machineDialogOpen, setMachineDialogOpen] = useState(false);
+  const [machineDialogMachine, setMachineDialogMachine] = useState<CncMachine | null>(null);
+  const [machineDeleteConfirm, setMachineDeleteConfirm] = useState<CncMachine | null>(null);
+  const [machineForm, setMachineForm] = useState({ machineName: '', machineNumber: '', workCenter: '', active: true });
+
+  useEffect(() => {
+    if (machineDialogOpen) {
+      setMachineForm({
+        machineName: machineDialogMachine?.machineName ?? '',
+        machineNumber: machineDialogMachine?.machineNumber ?? '',
+        workCenter: machineDialogMachine?.workCenter ?? '',
+        active: machineDialogMachine?.active ?? true,
+      });
+    }
+  }, [machineDialogOpen, machineDialogMachine]);
+
   // ── Inline op field editing ────────────────────────────────────────────────
   const [editingOpField, setEditingOpField] = useState<{ opId: number; field: string; value: string } | null>(null);
 
@@ -288,6 +305,8 @@ export default function CNCDashboardPage() {
   const { data: machines = [] } = useQuery<CncMachine[]>({
     queryKey: ['/api/cnc/machines'],
   });
+
+  const activeMachines = useMemo(() => machines.filter(m => m.active), [machines]);
 
   const { data: machineUtilization = [] } = useQuery<MachineUtilization[]>({
     queryKey: ['/api/cnc/machine-utilization'],
@@ -345,6 +364,28 @@ export default function CNCDashboardPage() {
   function invalidateQcResults() { queryClient.invalidateQueries({ queryKey: ['/api/cnc/operations', selectedOpId, 'qc-results'] }); }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const saveMachine = useMutation<CncMachine, unknown, { id?: number; data: { machineName: string; machineNumber?: string | null; workCenter?: string | null; active: boolean } }>({
+    mutationFn: ({ id, data }) => id
+      ? apiRequest(`/api/cnc/machines/${id}`, { method: 'PATCH', body: data })
+      : apiRequest('/api/cnc/machines', { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cnc/machines'] });
+      setMachineDialogOpen(false);
+      toast({ title: machineDialogMachine ? 'Machine updated' : 'Machine added' });
+    },
+    onError: showErr,
+  });
+
+  const deleteMachine = useMutation<void, unknown, number>({
+    mutationFn: (id) => apiRequest(`/api/cnc/machines/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cnc/machines'] });
+      setMachineDeleteConfirm(null);
+      toast({ title: 'Machine deleted' });
+    },
+    onError: showErr,
+  });
 
   const createJob = useMutation<CncJob, unknown, CreateJobPayload>({
     mutationFn: (payload) => apiRequest('/api/cnc/jobs', { method: 'POST', body: payload }),
@@ -803,7 +844,12 @@ export default function CNCDashboardPage() {
               </div>
               <Separator />
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-gray-600">Machine Registry</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-600">Machine Registry</p>
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 gap-1" onClick={() => { setMachineDialogMachine(null); setMachineDialogOpen(true); }}>
+                    <Plus className="w-3 h-3" />Add Machine
+                  </Button>
+                </div>
                 {machines.map(m => (
                   <div key={m.id} className="flex items-center justify-between bg-white border rounded px-2 py-1.5 text-xs">
                     <div>
@@ -811,7 +857,11 @@ export default function CNCDashboardPage() {
                       {m.machineNumber && <span className="text-gray-400 ml-1">#{m.machineNumber}</span>}
                       {m.workCenter && <span className="text-blue-500 ml-1.5 text-[10px] bg-blue-50 px-1 rounded">{m.workCenter}</span>}
                     </div>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{m.active ? 'Active' : 'Inactive'}</span>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{m.active ? 'Active' : 'Inactive'}</span>
+                      <button className="p-0.5 text-gray-400 hover:text-blue-600" onClick={() => { setMachineDialogMachine(m); setMachineDialogOpen(true); }}><Edit2 className="w-3 h-3" /></button>
+                      <button className="p-0.5 text-gray-400 hover:text-red-600" onClick={() => setMachineDeleteConfirm(m)}><Trash2 className="w-3 h-3" /></button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1539,7 +1589,7 @@ export default function CNCDashboardPage() {
             <div><Label className="text-xs">Machine</Label>
               <Select value={newJobForm.machine || '__none__'} onValueChange={v => setNewJobForm(p => ({ ...p, machine: v === '__none__' ? '' : v }))}>
                 <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="Select machine..." /></SelectTrigger>
-                <SelectContent>{machines.map(m => <SelectItem key={m.id} value={m.machineName}>{m.machineName}{m.machineNumber ? ` — ${m.machineNumber}` : ''}</SelectItem>)}</SelectContent>
+                <SelectContent>{activeMachines.map(m => <SelectItem key={m.id} value={m.machineName}>{m.machineName}{m.machineNumber ? ` — ${m.machineNumber}` : ''}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">Programmer</Label><Input value={newJobForm.programmerDisplayName} onChange={e => setNewJobForm(p => ({ ...p, programmerDisplayName: e.target.value }))} className="h-8 text-sm mt-1" /></div>
@@ -1616,7 +1666,7 @@ export default function CNCDashboardPage() {
             <div><Label className="text-xs">Machine</Label>
               <Select value={newOpForm.machine || '__none__'} onValueChange={v => setNewOpForm(p => ({ ...p, machine: v === '__none__' ? '' : v }))}>
                 <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="Select machine..." /></SelectTrigger>
-                <SelectContent>{machines.map(m => <SelectItem key={m.id} value={m.machineName}>{m.machineName}{m.machineNumber ? ` — ${m.machineNumber}` : ''}</SelectItem>)}</SelectContent>
+                <SelectContent>{activeMachines.map(m => <SelectItem key={m.id} value={m.machineName}>{m.machineName}{m.machineNumber ? ` — ${m.machineNumber}` : ''}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">Fixture</Label><Input value={newOpForm.fixture} onChange={e => setNewOpForm(p => ({ ...p, fixture: e.target.value }))} className="h-8 text-sm mt-1" /></div>
@@ -1682,7 +1732,7 @@ export default function CNCDashboardPage() {
             <div><Label className="text-xs">Machine</Label>
               <Select value={newProgramForm.machine || '__none__'} onValueChange={v => setNewProgramForm(p => ({ ...p, machine: v === '__none__' ? '' : v }))}>
                 <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="Select machine..." /></SelectTrigger>
-                <SelectContent>{machines.map(m => <SelectItem key={m.id} value={m.machineName}>{m.machineName}{m.machineNumber ? ` — ${m.machineNumber}` : ''}</SelectItem>)}</SelectContent>
+                <SelectContent>{activeMachines.map(m => <SelectItem key={m.id} value={m.machineName}>{m.machineName}{m.machineNumber ? ` — ${m.machineNumber}` : ''}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label className="text-xs">Est. Cycle Time (min)</Label><Input type="number" value={newProgramForm.estimatedCycleMinutes} onChange={e => setNewProgramForm(p => ({ ...p, estimatedCycleMinutes: e.target.value }))} className="h-8 text-sm mt-1" /></div>
@@ -1834,6 +1884,86 @@ export default function CNCDashboardPage() {
             <Button variant="outline" onClick={() => setCompleteJobOpen(false)}>Cancel</Button>
             <Button disabled={!forwardDestination} className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCompleteJob}>
               <CheckCircle className="w-4 h-4 mr-1" />Mark Complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Machine Add/Edit Dialog ─────────────────────────────────────── */}
+      <Dialog open={machineDialogOpen} onOpenChange={open => { setMachineDialogOpen(open); if (!open) setMachineDialogMachine(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{machineDialogMachine ? 'Edit Machine' : 'Add Machine'}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs">Machine Name *</Label>
+              <Input
+                className="h-8 text-sm mt-1"
+                value={machineForm.machineName}
+                onChange={e => setMachineForm(p => ({ ...p, machineName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Machine Number</Label>
+              <Input
+                className="h-8 text-sm mt-1"
+                value={machineForm.machineNumber}
+                onChange={e => setMachineForm(p => ({ ...p, machineNumber: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Work Center</Label>
+              <Input
+                className="h-8 text-sm mt-1"
+                value={machineForm.workCenter}
+                onChange={e => setMachineForm(p => ({ ...p, workCenter: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="machine-active"
+                checked={machineForm.active}
+                onChange={e => setMachineForm(p => ({ ...p, active: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              <Label htmlFor="machine-active" className="text-xs cursor-pointer">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMachineDialogOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!machineForm.machineName.trim() || saveMachine.isPending}
+              onClick={() => saveMachine.mutate({
+                id: machineDialogMachine?.id,
+                data: {
+                  machineName: machineForm.machineName.trim(),
+                  machineNumber: machineForm.machineNumber.trim() || null,
+                  workCenter: machineForm.workCenter.trim() || null,
+                  active: machineForm.active,
+                },
+              })}
+            >
+              {saveMachine.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Machine Delete Confirmation ─────────────────────────────────── */}
+      <Dialog open={!!machineDeleteConfirm} onOpenChange={open => { if (!open) setMachineDeleteConfirm(null); }}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader><DialogTitle>Delete Machine</DialogTitle></DialogHeader>
+          <p className="text-sm text-gray-600 py-2">
+            Delete <span className="font-semibold">{machineDeleteConfirm?.machineName}</span>? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMachineDeleteConfirm(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMachine.isPending}
+              onClick={() => machineDeleteConfirm && deleteMachine.mutate(machineDeleteConfirm.id)}
+            >
+              {deleteMachine.isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

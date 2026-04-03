@@ -2467,6 +2467,7 @@ export interface IStorage {
   getCncMachines(): Promise<CncMachine[]>;
   createCncMachine(data: InsertCncMachine): Promise<CncMachine>;
   updateCncMachine(id: number, data: Partial<InsertCncMachine>): Promise<CncMachine | undefined>;
+  deleteCncMachine(id: number): Promise<void>;
   getCncJobs(): Promise<(CncJob & { totalOps: number; completedOps: number })[]>;
   getCncJobById(id: number): Promise<CncJob | undefined>;
   createCncJob(data: InsertCncJob): Promise<CncJob>;
@@ -21210,7 +21211,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCncMachines(): Promise<CncMachine[]> {
-    return db.select().from(cncMachines).where(eq(cncMachines.active, true)).orderBy(asc(cncMachines.machineName));
+    return db.select().from(cncMachines).orderBy(asc(cncMachines.machineName));
   }
 
   async createCncMachine(data: InsertCncMachine): Promise<CncMachine> {
@@ -21221,6 +21222,10 @@ export class DatabaseStorage implements IStorage {
   async updateCncMachine(id: number, data: Partial<InsertCncMachine>): Promise<CncMachine | undefined> {
     const [machine] = await db.update(cncMachines).set(data).where(eq(cncMachines.id, id)).returning();
     return machine;
+  }
+
+  async deleteCncMachine(id: number): Promise<void> {
+    await db.delete(cncMachines).where(eq(cncMachines.id, id));
   }
 }
 

@@ -315,6 +315,40 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       // pdfs.push({ poNumber, pdf: Buffer.from(pdfBytes) });
 
       const pdfBuffer = await generatePackingSlipPdf(slipData);
+      const pdfBase64 = pdfBuffer.toString('base64');
+
+      // Collect all matching shipment_items by po_number or order_id, deduplicated
+      const matchedItemIds = new Set<string>();
+
+      const poNumberMatches = await pool.query<{ id: string }>(
+        `SELECT id FROM shipment_items WHERE po_number = $1`,
+        [poNumber]
+      );
+      for (const row of poNumberMatches.rows) {
+        matchedItemIds.add(row.id);
+      }
+
+      for (const item of items) {
+        const itemOrderId = item.order?.orderId || item.order?.order_id;
+        if (!itemOrderId) continue;
+        const orderMatches = await pool.query<{ id: string }>(
+          `SELECT id FROM shipment_items WHERE order_id = $1`,
+          [itemOrderId]
+        );
+        for (const row of orderMatches.rows) {
+          matchedItemIds.add(row.id);
+        }
+      }
+
+      // Persist packing slip to each matched shipment_item exactly once
+      for (const itemId of matchedItemIds) {
+        await pool.query(
+          `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
+          [pdfBase64, itemId]
+        );
+        console.log(`✅ Packing slip persisted to shipment_item id=${itemId} (poNumber=${poNumber})`);
+      }
+
       pdfs.push({
         poNumber,
         pdf: pdfBuffer,
@@ -2010,16 +2044,27 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           };
         }));
 
-        await storage.createShipment({
+        const createdShipment = await storage.createShipment({
           shipment: shipmentRecord,
           items: shipmentItemsData,
         });
 
         console.log(`✅ Shipment persisted to database: ${shipmentId}`);
+
+        // Verify packing slips were persisted for all items
+        const verifyResult = await pool.query<{ id: string; packing_slip_base64: string | null }>(
+          `SELECT id, packing_slip_base64 FROM shipment_items WHERE shipment_id = $1`,
+          [createdShipment.id]
+        );
+        const missingSlips = verifyResult.rows.filter(r => !r.packing_slip_base64);
+        if (missingSlips.length > 0) {
+          const missingIds = missingSlips.map(r => r.id).join(', ');
+          throw new Error(`Packing slip missing on shipment_items after persist: ids=[${missingIds}]`);
+        }
+        console.log(`✅ Verified packing_slip_base64 present on all ${verifyResult.rows.length} shipment_item(s)`);
       } catch (dbError: any) {
-        // Log the error but continue - the UPS label was created successfully
-        console.error(`⚠️ Shipment persistence failed (continuing anyway): ${dbError.message}`);
-        // Don't return error - continue to update order statuses and return success
+        console.error(`❌ Shipment persistence failed: ${dbError.message}`);
+        throw new Error(`Shipment persistence failed: ${dbError.message}`);
       }
     }
 

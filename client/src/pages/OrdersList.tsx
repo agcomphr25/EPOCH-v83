@@ -229,6 +229,10 @@ export default function OrdersList() {
   const urlDepartmentFilter = searchParams.get('department') || 'all';
   const urlStatusFilter = searchParams.get('status') || 'all';
   const urlCustomerId = searchParams.get('customerId') || '';
+  const rawDepartmentMode = searchParams.get('departmentMode');
+  const urlDepartmentMode: 'include' | 'exclude' = rawDepartmentMode === 'exclude' ? 'exclude' : 'include';
+  const rawStatusMode = searchParams.get('statusMode');
+  const urlStatusMode: 'include' | 'exclude' = rawStatusMode === 'exclude' ? 'exclude' : 'include';
 
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{
     orderId: string;
@@ -240,6 +244,8 @@ export default function OrdersList() {
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>(urlDepartmentFilter);
   const [statusFilter, setStatusFilter] = useState<string>(urlStatusFilter);
+  const [departmentFilterMode, setDepartmentFilterMode] = useState<'include' | 'exclude'>(urlDepartmentMode);
+  const [statusFilterMode, setStatusFilterMode] = useState<'include' | 'exclude'>(urlStatusMode);
   const [customerIdFilter, setCustomerIdFilter] = useState<string>(urlCustomerId);
   const [sortBy, setSortBy] = useState<string>('orderDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -269,6 +275,12 @@ export default function OrdersList() {
     if (urlCustomerId !== customerIdFilter) {
       setCustomerIdFilter(urlCustomerId);
     }
+    if (urlDepartmentMode !== departmentFilterMode) {
+      setDepartmentFilterMode(urlDepartmentMode);
+    }
+    if (urlStatusMode !== statusFilterMode) {
+      setStatusFilterMode(urlStatusMode);
+    }
     // After syncing from URL, mark as not user-initiated
     isUserInitiatedRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -284,8 +296,14 @@ export default function OrdersList() {
     const timer = setTimeout(() => {
       const params = new URLSearchParams();
       if (searchTerm) params.set('search', searchTerm);
-      if (departmentFilter && departmentFilter !== 'all') params.set('department', departmentFilter);
-      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      if (departmentFilter && departmentFilter !== 'all') {
+        params.set('department', departmentFilter);
+        if (departmentFilterMode === 'exclude') params.set('departmentMode', 'exclude');
+      }
+      if (statusFilter && statusFilter !== 'all') {
+        params.set('status', statusFilter);
+        if (statusFilterMode === 'exclude') params.set('statusMode', 'exclude');
+      }
       if (customerIdFilter) params.set('customerId', customerIdFilter);
       
       const queryString = params.toString();
@@ -298,7 +316,7 @@ export default function OrdersList() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, departmentFilter, statusFilter, customerIdFilter]);
+  }, [searchTerm, departmentFilter, statusFilter, customerIdFilter, departmentFilterMode, statusFilterMode]);
   
   // Wrapper functions that mark changes as user-initiated
   const handleSearchChange = useCallback((value: string) => {
@@ -316,11 +334,23 @@ export default function OrdersList() {
     setStatusFilter(value);
   }, []);
   
+  const handleDepartmentModeToggle = useCallback(() => {
+    isUserInitiatedRef.current = true;
+    setDepartmentFilterMode((prev) => (prev === 'include' ? 'exclude' : 'include'));
+  }, []);
+
+  const handleStatusModeToggle = useCallback(() => {
+    isUserInitiatedRef.current = true;
+    setStatusFilterMode((prev) => (prev === 'include' ? 'exclude' : 'include'));
+  }, []);
+
   const handleResetAll = useCallback(() => {
     isUserInitiatedRef.current = true;
     setSearchTerm('');
     setDepartmentFilter('all');
     setStatusFilter('all');
+    setDepartmentFilterMode('include');
+    setStatusFilterMode('include');
     setCustomerIdFilter('');
     setSortBy('orderDate');
     setSortOrder('desc');
@@ -943,14 +973,16 @@ export default function OrdersList() {
       if (departmentFilter !== 'all') {
         filtered = filtered.filter((order) => {
           const dept = order.currentDepartment || 'Not Set';
-          return dept === departmentFilter;
+          const matches = dept === departmentFilter;
+          return departmentFilterMode === 'include' ? matches : !matches;
         });
       }
 
       // Apply status filter
       if (statusFilter !== 'all') {
         filtered = filtered.filter((order) => {
-          return order.status === statusFilter;
+          const matches = order.status === statusFilter;
+          return statusFilterMode === 'include' ? matches : !matches;
         });
       }
 
@@ -1002,14 +1034,17 @@ export default function OrdersList() {
       searchTerm,
       departmentFilter,
       statusFilter,
+      departmentFilterMode,
+      statusFilterMode,
       sortBy,
       sortOrder,
+      customerIdFilter,
     ]);
 
     // Reset to page 1 when filters change
     React.useEffect(() => {
       setCurrentPage(1);
-    }, [searchTerm, departmentFilter, statusFilter, sortBy, sortOrder, customerIdFilter]);
+    }, [searchTerm, departmentFilter, statusFilter, departmentFilterMode, statusFilterMode, sortBy, sortOrder, customerIdFilter]);
 
     // Calculate pagination - MEMOIZED to prevent re-renders
     const paginationData = React.useMemo(() => {
@@ -1274,6 +1309,20 @@ export default function OrdersList() {
                     ))}
                   </SelectContent>
                 </Select>
+                {departmentFilter !== 'all' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDepartmentModeToggle}
+                    className={cn(
+                      "h-8 w-8 p-0 font-mono text-sm",
+                      departmentFilterMode === 'exclude' && "border-red-400 text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-950"
+                    )}
+                    title={departmentFilterMode === 'include' ? 'Include mode: showing only this department. Click to switch to exclude mode.' : 'Exclude mode: hiding this department. Click to switch to include mode.'}
+                  >
+                    {departmentFilterMode === 'include' ? '=' : '≠'}
+                  </Button>
+                )}
               </div>
 
               {/* Status Filter */}
@@ -1297,6 +1346,20 @@ export default function OrdersList() {
                     ))}
                   </SelectContent>
                 </Select>
+                {statusFilter !== 'all' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStatusModeToggle}
+                    className={cn(
+                      "h-8 w-8 p-0 font-mono text-sm",
+                      statusFilterMode === 'exclude' && "border-red-400 text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-950"
+                    )}
+                    title={statusFilterMode === 'include' ? 'Include mode: showing only this status. Click to switch to exclude mode.' : 'Exclude mode: hiding this status. Click to switch to include mode.'}
+                  >
+                    {statusFilterMode === 'include' ? '=' : '≠'}
+                  </Button>
+                )}
               </div>
 
               {/* Sort By */}

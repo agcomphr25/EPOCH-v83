@@ -5,6 +5,7 @@ export type WidgetTypeId =
   | 'metric_stat'
   | 'metric_stat_group'
   | 'hero_metric'
+  | 'stocks_shipped'
   | 'department_status'
   | 'shipment_trend'
   | 'bubble_chart'
@@ -117,6 +118,25 @@ registerWidget({
   component: HeroMetricWidget as ComponentType<Record<string, unknown>>,
   requiredProps: ['metricSlug'],
   defaultProps: {},
+});
+
+registerWidget({
+  id: 'stocks_shipped',
+  displayName: 'Stocks Shipped',
+  description: 'Hero KPI card showing stocks shipped for the current operational week (Wed–Tue) with a weekly goal of 70.',
+  category: 'metric',
+  component: HeroMetricWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {
+    metricSlug: 'orders_completed_today',
+    title: 'Stocks Shipped',
+    subtitle: 'Operational week (Wed–Tue)',
+    accentColor: 'hsl(221, 83%, 53%)',
+    target: 70,
+    trend: 'up',
+    trendLabel: 'Tracking ahead of last week',
+    enableFlip: true,
+  },
 });
 
 registerWidget({

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 
 interface FlippableCardProps {
@@ -9,27 +9,13 @@ interface FlippableCardProps {
 
 export default function FlippableCard({ front, back, className }: FlippableCardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isFlipped) return;
-
-    function handleClickOutside(e: MouseEvent) {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        setIsFlipped(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isFlipped]);
 
   return (
     <div
-      ref={cardRef}
       className={className}
       style={{ perspective: 1200 }}
-      onClick={() => setIsFlipped((f) => !f)}
+      onMouseEnter={() => setIsFlipped(true)}
+      onMouseLeave={() => setIsFlipped(false)}
     >
       <motion.div
         animate={{ rotateY: isFlipped ? 180 : 0 }}

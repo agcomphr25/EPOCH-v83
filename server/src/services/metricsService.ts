@@ -43,12 +43,15 @@ export async function getOrdersInProduction(): Promise<number> {
   return rows[0]?.count ?? 0;
 }
 
-export async function getOrdersCompletedToday(): Promise<number> {
+export async function getOrdersCompletedThisOperationalWeek(): Promise<number> {
   const rows = await pool.query(
     `SELECT COUNT(*)::int AS count
      FROM all_orders
      WHERE status = 'FULFILLED'
-       AND DATE(updated_at) = CURRENT_DATE`,
+       AND updated_at >= (
+         CURRENT_DATE - ((EXTRACT(DOW FROM CURRENT_DATE)::int + 4) % 7) * INTERVAL '1 day'
+       )
+       AND updated_at <= NOW()`,
   ) as any[];
   return rows[0]?.count ?? 0;
 }
@@ -285,7 +288,7 @@ export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   gunsmith_queue_size:       getGunsmithQueueSize,
   finish_queue_size:         getFinishQueueSize,
   orders_in_production:      getOrdersInProduction,
-  orders_completed_today:    getOrdersCompletedToday,
+  orders_completed_today:    getOrdersCompletedThisOperationalWeek,
   p1_queue_size:             getP1QueueSize,
   layup_queue_size:          getLayupQueueSize,
   barcode_queue_size:        getBarcodeQueueSize,

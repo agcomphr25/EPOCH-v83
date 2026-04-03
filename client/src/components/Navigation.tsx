@@ -1106,6 +1106,13 @@ export default function Navigation() {
         'View and manage manufactured parts queue by department (Cutting Table, CNC, Cores)',
     },
     {
+      path: '/kits-queue',
+      label: 'Kits Queue',
+      icon: Layers,
+      description:
+        'Readiness gating for kit manufacturing queue items — see which kits are ready, partial, or blocked',
+    },
+    {
       path: '/po-products',
       label: 'PO Product Items',
       icon: Package,

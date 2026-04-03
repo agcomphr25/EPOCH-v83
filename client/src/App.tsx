@@ -107,6 +107,7 @@ import PurchaseOrders from './pages/PurchaseOrders';
 import P2ControlCenter from './pages/P2ControlCenter';
 import P2Forms from './pages/P2Forms';
 import ManufacturingQueue from './pages/ManufacturingQueue';
+import KitsQueue from './pages/KitsQueue';
 import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
@@ -899,6 +900,7 @@ function App() {
                   <Route path="/p2-production-queue">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route path="/cutting-table-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
+                  <Route path="/kits-queue" component={KitsQueue} />
                   <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/part-routing-management">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   

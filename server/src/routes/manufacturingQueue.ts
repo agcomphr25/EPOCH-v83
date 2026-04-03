@@ -19,7 +19,7 @@ const router = Router();
 // The same OR logic applies when a `?dashboard=` (SupplySourceDashboard) param is used.
 router.get('/', async (req, res) => {
   try {
-    const { department, status, dashboard } = req.query;
+    const { department, status, dashboard, queueType } = req.query;
 
     // Resolve routing signal — additive OR of dept and category matches
     let routingSignal: ReturnType<typeof eq> | ReturnType<typeof or> | undefined;
@@ -53,9 +53,13 @@ router.get('/', async (req, res) => {
       ? eq(manufacturingQueue.status, status)
       : undefined;
 
-    const whereClause = routingSignal && statusFilter
-      ? and(routingSignal, statusFilter)
-      : routingSignal ?? statusFilter;
+    const queueTypeFilter = (queueType && typeof queueType === 'string')
+      ? eq(manufacturingQueue.queueType, queueType)
+      : undefined;
+
+    const filters = [routingSignal, statusFilter, queueTypeFilter].filter(Boolean);
+    const whereClause = filters.length > 1 ? and(...(filters as [ReturnType<typeof eq>, ...ReturnType<typeof eq>[]]))
+      : filters[0];
 
     const baseQuery = db
       .select({
@@ -75,6 +79,10 @@ router.get('/', async (req, res) => {
         completedAt: manufacturingQueue.completedAt,
         createdAt: manufacturingQueue.createdAt,
         updatedAt: manufacturingQueue.updatedAt,
+        queueType: manufacturingQueue.queueType,
+        readinessStatus: manufacturingQueue.readinessStatus,
+        percentReady: manufacturingQueue.percentReady,
+        blockedReason: manufacturingQueue.blockedReason,
         inventoryItem: {
           id: inventoryItems.id,
           agPartNumber: inventoryItems.agPartNumber,

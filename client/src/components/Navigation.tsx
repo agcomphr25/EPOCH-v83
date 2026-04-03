@@ -904,6 +904,12 @@ export default function Navigation() {
       description: 'Audit log of all bulk payment batches',
     },
     {
+      path: '/finance/payment-reconciliation',
+      label: 'Payment Reconciliation',
+      icon: CreditCard,
+      description: 'Reconcile payments against processor records by date range',
+    },
+    {
       path: '/refund-request',
       label: 'Refund Request',
       icon: TrendingDown,

@@ -10,7 +10,7 @@ import {
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
-import { eq, desc, inArray, count, sql, isNull } from 'drizzle-orm';
+import { eq, desc, inArray, count, sql, isNull, and, gte, lte } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 import { auditService } from '../services/auditService';
 import * as accountingService from '../services/accountingService';
@@ -338,6 +338,68 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching payments:', error);
     res.status(500).json({ error: 'Failed to fetch payments' });
+  }
+});
+
+// Payment reconciliation endpoint
+// GET /api/payments/reconciliation?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+router.get('/reconciliation', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate are required' });
+    }
+
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+    // Include the full end date by setting time to end of day
+    end.setHours(23, 59, 59, 999);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+
+    if (start > end) {
+      return res.status(400).json({ error: 'startDate must be on or before endDate' });
+    }
+
+    const rows = await db
+      .select({
+        paymentId: payments.id,
+        orderId: payments.orderId,
+        paymentType: payments.paymentType,
+        paymentAmount: payments.paymentAmount,
+        paymentDate: payments.paymentDate,
+        paymentNotes: payments.notes,
+        orderDate: allOrders.orderDate,
+        customerId: allOrders.customerId,
+        cctId: creditCardTransactions.id,
+        lastFourDigits: creditCardTransactions.lastFourDigits,
+        cardType: creditCardTransactions.cardType,
+        transactionId: creditCardTransactions.transactionId,
+        gateway: sql<string>`'Accept.Blue'`,
+        cctStatus: creditCardTransactions.status,
+      })
+      .from(payments)
+      .leftJoin(allOrders, eq(payments.orderId, allOrders.orderId))
+      .leftJoin(creditCardTransactions, eq(payments.id, creditCardTransactions.paymentId))
+      .where(and(gte(payments.paymentDate, start), lte(payments.paymentDate, end)))
+      .orderBy(desc(payments.paymentDate))
+      .limit(500);
+
+    const totalAmount = rows.reduce((sum, r) => sum + (r.paymentAmount || 0), 0);
+
+    res.json({
+      rows,
+      summary: {
+        count: rows.length,
+        totalAmount,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching reconciliation data:', error);
+    res.status(500).json({ error: 'Failed to fetch reconciliation data' });
   }
 });
 

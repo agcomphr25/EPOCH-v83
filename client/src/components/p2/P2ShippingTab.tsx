@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import {
   Package,
   CheckCircle,
@@ -616,140 +617,178 @@ export default function P2ShippingTab({ initialPO, selectedPOIds = [] }: { initi
                             />
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleFinalize(group.poNumber)}
-                          disabled={(finalizeMutation.isPending && finalizingPO === group.poNumber) || finalizeSelectedCount === 0}
-                          className="bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50"
-                        >
-                          {finalizeMutation.isPending && finalizingPO === group.poNumber ? (
-                            <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Finalizing...</>
-                          ) : (
-                            <><CheckCircle className="w-3 h-3 mr-1" />
-                              {finalizeSelectedCount > 0
-                                ? `Finalize ${finalizeSelectedCount} Unit(s)`
-                                : 'Select units below to finalize'}
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleFinalize(group.poNumber)}
+                            disabled={(finalizeMutation.isPending && finalizingPO === group.poNumber) || finalizeSelectedCount === 0}
+                            className="bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50"
+                          >
+                            {finalizeMutation.isPending && finalizingPO === group.poNumber ? (
+                              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Finalizing...</>
+                            ) : (
+                              <><CheckCircle className="w-3 h-3 mr-1" />
+                                {finalizeSelectedCount > 0
+                                  ? `Finalize ${finalizeSelectedCount} Unit(s)`
+                                  : 'Select units below to finalize'}
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={finalizeSelectedCount === 0}
+                            className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20 disabled:opacity-50"
+                            onClick={() => setFinalizationSelections((prev) => ({ ...prev, [group.poNumber]: new Set<string>() }))}
+                          >
+                            Uncheck All
+                          </Button>
+                        </div>
                       </div>
                     )}
 
-                    {/* ── Unit table ── */}
-                    <div className="border rounded-lg overflow-hidden">
-                      <div className="overflow-y-auto max-h-[560px]">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50 sticky top-0 z-10">
-                          <tr>
-                            {showCheckboxCol && (
-                              <th className="px-3 py-2 w-10 text-center">
-                                {/* Header checkbox selects all finalized for shipment */}
-                                {finalizedIds.length > 0 ? (
-                                  <Checkbox
-                                    checked={finalizedIds.length > 0 && finalizedIds.every((id) => shipSelForPO.has(id))}
-                                    onCheckedChange={() => toggleSelectAllFinalized(group.poNumber, finalizedIds)}
-                                    aria-label="Select all finalized for shipment"
-                                    title="Select all finalized (for shipment)"
-                                  />
-                                ) : (
-                                  <span className="w-4 h-4 inline-block" />
-                                )}
-                              </th>
-                            )}
-                            <th className="px-3 py-2 text-left font-medium text-xs">Serial / Barcode</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">Part</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">Dept</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">SKU</th>
-                            <th className="px-3 py-2 text-left font-medium text-xs">Drawing</th>
-                            <th className="px-3 py-2 text-center font-medium text-xs w-20">Finalized</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {group.units.map((unit) => {
-                            const isFinalized = !!(unit.finalizedAt && unit.sku && unit.drawingName);
-                            const isCompleted = !!unit.completedAt;
-                            const isNeedingFinalization = isCompleted && !isFinalized;
+                    {/* ── Unit table grouped by status ── */}
+                    {(() => {
+                      const inProductionUnits = group.units.filter((u) => !u.completedAt);
+                      const needsFinalizationUnits = group.units.filter(
+                        (u) => u.completedAt && !(u.finalizedAt && u.sku && u.drawingName)
+                      );
 
-                            // Which set controls this row
-                            const isSelectedForFinalize = finSelForPO.has(unit.id);
-                            const isSelectedForShip = shipSelForPO.has(unit.id);
+                      // Build status sections — only render non-empty ones
+                      const sections: { label: string; units: SerializedUnit[]; key: string }[] = [];
+                      if (inProductionUnits.length > 0) sections.push({ label: 'In Production', units: inProductionUnits, key: 'in-production' });
+                      if (needsFinalizationUnits.length > 0) sections.push({ label: 'Needs Finalization', units: needsFinalizationUnits, key: 'needs-finalization' });
+                      if (!shipment && finalizedUnits.length > 0) sections.push({ label: 'Ready to Ship', units: finalizedUnits, key: 'ready-to-ship' });
+                      if (shipment && finalizedUnits.length > 0) sections.push({ label: 'Shipment Created', units: finalizedUnits, key: 'shipment-created' });
 
-                            const rowBg = isSelectedForShip
-                              ? 'bg-blue-50/60 dark:bg-blue-900/20'
-                              : isSelectedForFinalize
-                              ? 'bg-amber-50/80 dark:bg-amber-900/20'
-                              : isFinalized
-                              ? 'bg-green-50/50 dark:bg-green-900/10'
-                              : isCompleted
-                              ? 'bg-amber-50/30 dark:bg-amber-900/5'
-                              : '';
-
-                            return (
-                              <tr key={unit.id} className={rowBg}>
-                                {showCheckboxCol && (
-                                  <td className="px-3 py-2 text-center">
-                                    {isFinalized ? (
-                                      // Blue checkbox — select for shipment
-                                      <Checkbox
-                                        checked={isSelectedForShip}
-                                        onCheckedChange={() => toggleShipSerial(group.poNumber, unit.id)}
-                                        aria-label={`Select ${unit.serialNumber} for shipment`}
-                                        className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                      />
-                                    ) : isNeedingFinalization ? (
-                                      // Amber checkbox — select for finalization
-                                      <Checkbox
-                                        checked={isSelectedForFinalize}
-                                        onCheckedChange={() => toggleFinalizationSerial(group.poNumber, unit.id)}
-                                        aria-label={`Select ${unit.serialNumber} for finalization`}
-                                        className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
-                                      />
-                                    ) : (
-                                      <span className="w-4 h-4 inline-block" />
-                                    )}
-                                  </td>
-                                )}
-                                <td className="px-3 py-2">
-                                  <div className="font-mono text-xs">{unit.barcode}</div>
-                                  <div className="text-[10px] text-muted-foreground">{unit.serialNumber}</div>
-                                </td>
-                                <td className="px-3 py-2 text-xs">
-                                  <div>{unit.partNumber}</div>
-                                  <div className="text-muted-foreground text-[10px]">{unit.partName}</div>
-                                </td>
-                                <td className="px-3 py-2 text-xs">{unit.currentDepartment}</td>
-                                <td className="px-3 py-2">
-                                  <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                    isCompleted
-                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                      : unit.status === 'HOLD'
-                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                  }`}>
-                                    {isCompleted ? 'COMPLETED' : unit.status}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2 text-xs">
-                                  {unit.sku || <span className="text-muted-foreground italic">—</span>}
-                                </td>
-                                <td className="px-3 py-2 text-xs">
-                                  {unit.drawingName || <span className="text-muted-foreground italic">—</span>}
-                                </td>
+                      const renderTableRows = (units: SerializedUnit[]) =>
+                        units.map((unit) => {
+                          const isFinalized = !!(unit.finalizedAt && unit.sku && unit.drawingName);
+                          const isCompleted = !!unit.completedAt;
+                          const isNeedingFinalization = isCompleted && !isFinalized;
+                          const isSelectedForFinalize = finSelForPO.has(unit.id);
+                          const isSelectedForShip = shipSelForPO.has(unit.id);
+                          const rowBg = isSelectedForShip
+                            ? 'bg-blue-50/60 dark:bg-blue-900/20'
+                            : isSelectedForFinalize
+                            ? 'bg-amber-50/80 dark:bg-amber-900/20'
+                            : isFinalized
+                            ? 'bg-green-50/50 dark:bg-green-900/10'
+                            : isCompleted
+                            ? 'bg-amber-50/30 dark:bg-amber-900/5'
+                            : '';
+                          return (
+                            <tr key={unit.id} className={rowBg}>
+                              {showCheckboxCol && (
                                 <td className="px-3 py-2 text-center">
-                                  {isFinalized
-                                    ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
-                                    : isCompleted
-                                    ? <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />
-                                    : <span className="text-[10px] text-muted-foreground">—</span>}
+                                  {isFinalized ? (
+                                    <Checkbox
+                                      checked={isSelectedForShip}
+                                      onCheckedChange={() => toggleShipSerial(group.poNumber, unit.id)}
+                                      aria-label={`Select ${unit.serialNumber} for shipment`}
+                                      className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                    />
+                                  ) : isNeedingFinalization ? (
+                                    <Checkbox
+                                      checked={isSelectedForFinalize}
+                                      onCheckedChange={() => toggleFinalizationSerial(group.poNumber, unit.id)}
+                                      aria-label={`Select ${unit.serialNumber} for finalization`}
+                                      className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                                    />
+                                  ) : (
+                                    <span className="w-4 h-4 inline-block" />
+                                  )}
                                 </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                      </div>
-                    </div>
+                              )}
+                              <td className="px-3 py-2">
+                                <div className="font-mono text-xs">{unit.barcode}</div>
+                                <div className="text-[10px] text-muted-foreground">{unit.serialNumber}</div>
+                              </td>
+                              <td className="px-3 py-2 text-xs">
+                                <div>{unit.partNumber}</div>
+                                <div className="text-muted-foreground text-[10px]">{unit.partName}</div>
+                              </td>
+                              <td className="px-3 py-2 text-xs">{unit.currentDepartment}</td>
+                              <td className="px-3 py-2">
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                  isCompleted
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                    : unit.status === 'HOLD'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                }`}>
+                                  {isCompleted ? 'COMPLETED' : unit.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-xs">
+                                {unit.sku || <span className="text-muted-foreground italic">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-xs">
+                                {unit.drawingName || <span className="text-muted-foreground italic">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {isFinalized
+                                  ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+                                  : isCompleted
+                                  ? <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />
+                                  : <span className="text-[10px] text-muted-foreground">—</span>}
+                              </td>
+                            </tr>
+                          );
+                        });
+
+                      return (
+                        <div className="border rounded-lg">
+                          <Accordion type="multiple" defaultValue={[]}>
+                            {sections.map((section, sIdx) => (
+                              <AccordionItem
+                                key={section.key}
+                                value={section.key}
+                                className={sIdx === sections.length - 1 ? 'border-b-0' : ''}
+                              >
+                                <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline hover:bg-muted/40">
+                                  <span>{section.label} <span className="text-muted-foreground font-normal">({section.units.length})</span></span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pb-0">
+                                  <div className="overflow-y-auto overflow-x-auto max-h-[400px]">
+                                    <table className="w-full text-sm">
+                                      <thead className="bg-muted/50 sticky top-0 z-10">
+                                        <tr>
+                                          {showCheckboxCol && (
+                                            <th className="px-3 py-2 w-10 text-center">
+                                              {section.key === 'ready-to-ship' && finalizedIds.length > 0 ? (
+                                                <Checkbox
+                                                  checked={finalizedIds.length > 0 && finalizedIds.every((id) => shipSelForPO.has(id))}
+                                                  onCheckedChange={() => toggleSelectAllFinalized(group.poNumber, finalizedIds)}
+                                                  aria-label="Select all finalized for shipment"
+                                                  title="Select all finalized (for shipment)"
+                                                />
+                                              ) : (
+                                                <span className="w-4 h-4 inline-block" />
+                                              )}
+                                            </th>
+                                          )}
+                                          <th className="px-3 py-2 text-left font-medium text-xs">Serial / Barcode</th>
+                                          <th className="px-3 py-2 text-left font-medium text-xs">Part</th>
+                                          <th className="px-3 py-2 text-left font-medium text-xs">Dept</th>
+                                          <th className="px-3 py-2 text-left font-medium text-xs">Status</th>
+                                          <th className="px-3 py-2 text-left font-medium text-xs">SKU</th>
+                                          <th className="px-3 py-2 text-left font-medium text-xs">Drawing</th>
+                                          <th className="px-3 py-2 text-center font-medium text-xs w-20">Finalized</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y">
+                                        {renderTableRows(section.units)}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
+                        </div>
+                      );
+                    })()}
 
                     {/* Column legend */}
                     {showCheckboxCol && (unfinalizedIds.length > 0 || finalizedIds.length > 0) && (

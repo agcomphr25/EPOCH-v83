@@ -1,9 +1,16 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMetric } from '@/hooks/useMetric';
-import { Loader2, AlertCircle, TrendingUp, TrendingDown, Minus, RotateCcw } from 'lucide-react';
+import { Loader2, AlertCircle, TrendingUp, TrendingDown, Minus, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDashboardFilters } from '@/contexts/DashboardFilterContext';
 import FlippableCard from './FlippableCard';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface HeroMetricWidgetProps {
   metricSlug: string;
@@ -18,6 +25,7 @@ interface HeroMetricWidgetProps {
   trendLabel?: string;
   onClick?: () => void;
   enableFlip?: boolean;
+  enableModal?: boolean;
 }
 
 interface HeroBacksideData {
@@ -58,6 +66,7 @@ function HeroFront({
   isLoading,
   isError,
   enableFlip,
+  enableModal,
 }: {
   displayTitle: string;
   subtitle?: string;
@@ -71,6 +80,7 @@ function HeroFront({
   isLoading: boolean;
   isError: boolean;
   enableFlip?: boolean;
+  enableModal?: boolean;
 }) {
   const progressPct = target && target > 0 ? Math.min(100, Math.round((value / target) * 100)) : null;
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
@@ -84,8 +94,8 @@ function HeroFront({
           {displayTitle}
         </span>
         <div className="flex items-center gap-1.5">
-          {enableFlip && (
-            <RotateCcw className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
+          {(enableModal || enableFlip) && (
+            <BarChart2 className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
           )}
           {icon ? (
             <span className="text-gray-400 dark:text-gray-500">{icon}</span>
@@ -186,7 +196,7 @@ function HeroBack({ accentColor, backsideData, isLoading }: { accentColor: strin
         <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
           Shipping Insights
         </span>
-        <RotateCcw className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
+        <BarChart2 className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
       </div>
 
       {isLoading ? (
@@ -211,6 +221,58 @@ function HeroBack({ accentColor, backsideData, isLoading }: { accentColor: strin
   );
 }
 
+function ShippingInsightsModal({
+  open,
+  onClose,
+  accentColor,
+  backsideData,
+  isLoading,
+}: {
+  open: boolean;
+  onClose: () => void;
+  accentColor: string;
+  backsideData?: HeroBacksideData;
+  isLoading: boolean;
+}) {
+  const stats = [
+    { label: 'YTD Shipments', value: backsideData?.ytdShipments ?? 0 },
+    { label: 'Last Month Same Week', value: backsideData?.lastMonthSameWeek ?? 0 },
+    { label: '4-Week Average', value: backsideData?.fourWeekAvg ?? 0 },
+    { label: 'Avg Revenue / Stock', value: backsideData?.avgRevenuePerStock ?? 0, isCurrency: true },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="w-full h-1 rounded-t absolute top-0 left-0 right-0" style={{ backgroundColor: accentColor }} />
+          <DialogTitle className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest pt-1">
+            Shipping Insights
+          </DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-300 dark:text-gray-600" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-6 py-2">
+            {stats.map((s) => (
+              <div key={s.label} className="flex flex-col gap-1">
+                <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                  {s.label}
+                </span>
+                <span className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
+                  {s.isCurrency ? `$${s.value.toLocaleString()}` : s.value.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function HeroMetricWidget({
   metricSlug,
   title,
@@ -224,7 +286,9 @@ export default function HeroMetricWidget({
   trendLabel,
   onClick,
   enableFlip = false,
+  enableModal = false,
 }: HeroMetricWidgetProps) {
+  const [modalOpen, setModalOpen] = useState(false);
   const { businessContext } = useDashboardFilters();
   const { data, isLoading, isError } = useMetric(metricSlug);
 
@@ -236,7 +300,7 @@ export default function HeroMetricWidget({
       if (!res.ok) throw new Error('Failed to fetch hero backside');
       return res.json();
     },
-    enabled: enableFlip,
+    enabled: enableFlip || (enableModal && modalOpen),
   });
 
   const displayTitle = title ?? data?.name ?? metricSlug;
@@ -257,8 +321,29 @@ export default function HeroMetricWidget({
       isLoading={isLoading}
       isError={isError}
       enableFlip={enableFlip}
+      enableModal={enableModal}
     />
   );
+
+  if (enableModal) {
+    return (
+      <>
+        <div
+          className={cn('cursor-pointer', className)}
+          onClick={() => setModalOpen(true)}
+        >
+          {frontContent}
+        </div>
+        <ShippingInsightsModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          accentColor={accentColor}
+          backsideData={backsideData}
+          isLoading={backsideLoading}
+        />
+      </>
+    );
+  }
 
   if (!enableFlip) {
     return (

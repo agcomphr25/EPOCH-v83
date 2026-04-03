@@ -80,11 +80,14 @@ router.post('/templates', ...adminOnly, async (req: Request, res: Response) => {
 });
 
 router.patch('/templates/:id', ...adminOnly, async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { name, description, department, isActive, enforceClockOut } = req.body;
+    const { name, description, department, isActive, enforceClockOut, items } = req.body;
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `UPDATE checklist_templates 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description),
@@ -95,12 +98,33 @@ router.patch('/templates/:id', ...adminOnly, async (req: Request, res: Response)
        WHERE id = $6 RETURNING *`,
       [name, description, department, isActive, enforceClockOut, id]
     );
-    if (!result || result.length === 0) {
+    if (!result.rows || result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Template not found' });
     }
-    res.json(result[0]);
+
+    if (items !== undefined && Array.isArray(items)) {
+      await client.query(
+        `DELETE FROM checklist_template_items WHERE template_id = $1`,
+        [id]
+      );
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        await client.query(
+          `INSERT INTO checklist_template_items (template_id, label, type, options, required, frequency, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, item.label, item.type || 'checkbox', item.options ? JSON.stringify(item.options) : null, item.required || false, item.frequency || 'DAILY', item.sortOrder ?? item.sort_order ?? i]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
   } catch (error: any) {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 

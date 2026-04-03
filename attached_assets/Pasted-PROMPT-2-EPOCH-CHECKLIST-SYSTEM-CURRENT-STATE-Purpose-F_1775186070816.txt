@@ -1,0 +1,152 @@
+PROMPT 2 — EPOCH CHECKLIST SYSTEM (CURRENT STATE)
+
+👉 Purpose:
+Figure out why you don’t like it + what’s structurally wrong
+
+READ-ONLY AUDIT — EPOCH CHECKLIST SYSTEM (FULL TRACE)
+
+You are performing a READ-ONLY forensic audit of the EPOCH codebase.
+
+DO NOT modify any files.
+DO NOT suggest fixes yet.
+ONLY map the system.
+
+--------------------------------------------------
+OBJECTIVE
+--------------------------------------------------
+
+I want to fully understand how the DAILY CHECKLIST system currently works in EPOCH and why it feels limited compared to KENTRO.
+
+Focus on:
+- Architecture
+- Data rigidity
+- UX limitations
+- Missing flexibility
+
+--------------------------------------------------
+STEP 1 — LOCATE CHECKLIST CODE
+--------------------------------------------------
+
+Search for:
+- "checklist"
+- "daily checklist"
+- "task"
+- "operator checklist"
+- "production checklist"
+
+Return:
+- All relevant files
+- File paths
+- What each file does
+
+--------------------------------------------------
+STEP 2 — DATA MODEL
+--------------------------------------------------
+
+Identify:
+
+1. Where checklist data is stored
+2. Whether templates exist or not
+3. Whether checklists are:
+   - Hardcoded
+   - Per-user
+   - Per-department
+   - Per-order
+
+4. Checklist item structure:
+   - Fields (text, required, completed, etc.)
+
+5. Whether audit fields exist:
+   - completed_by
+   - completed_at
+   - reason
+
+Return actual schema.
+
+--------------------------------------------------
+STEP 3 — HOW CHECKLISTS ARE GENERATED
+--------------------------------------------------
+
+Determine:
+
+- Are they:
+  - Static (same every day)?
+  - Generated dynamically?
+  - Tied to departments?
+
+- When they are created:
+  - Daily reset?
+  - On page load?
+  - Stored persistently?
+
+--------------------------------------------------
+STEP 4 — FRONTEND UX
+--------------------------------------------------
+
+Map:
+
+- Where checklist appears
+- How users interact with it
+- Whether it:
+  - Saves automatically
+  - Requires submission
+  - Supports partial completion
+
+Identify pain points:
+- Rigid UI?
+- Reload issues?
+- Poor state tracking?
+
+--------------------------------------------------
+STEP 5 — BACKEND + API
+--------------------------------------------------
+
+Identify:
+
+- Endpoints used
+- How updates are saved
+- Whether:
+  - Each click writes to DB
+  - Or batch submission
+
+--------------------------------------------------
+STEP 6 — LIMITATIONS / CONSTRAINTS
+--------------------------------------------------
+
+Explicitly identify:
+
+- Hardcoded logic
+- Lack of templates
+- Lack of reuse
+- Lack of assignment flexibility
+- Lack of audit trail
+- Lack of role control
+
+--------------------------------------------------
+STEP 7 — DIFFERENCE VS MODERN PATTERN
+--------------------------------------------------
+
+Based on architecture, determine:
+
+Is this system:
+- Form-based (static)
+- vs
+- Instance-based (dynamic like KENTRO)
+
+Explain clearly.
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+
+Return:
+
+1. SYSTEM OVERVIEW
+2. DATA MODEL
+3. GENERATION LOGIC
+4. FRONTEND FLOW
+5. API STRUCTURE
+6. LIMITATIONS (VERY IMPORTANT)
+7. ARCHITECTURE TYPE (Static vs Dynamic)
+
+DO NOT suggest fixes yet.

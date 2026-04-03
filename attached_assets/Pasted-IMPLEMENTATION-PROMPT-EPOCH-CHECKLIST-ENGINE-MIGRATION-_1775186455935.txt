@@ -1,0 +1,327 @@
+IMPLEMENTATION PROMPT — EPOCH CHECKLIST ENGINE MIGRATION (BASED ON KENTRO PATTERN)
+
+You are implementing a checklist architecture upgrade in EPOCH.
+
+IMPORTANT:
+- Make changes carefully and coherently.
+- Preserve existing behavior where possible during transition.
+- Prefer additive migration over destructive rewrite.
+- Do not remove old functionality until the new path is wired and verified.
+- We are using KENTRO’s checklist architecture as the conceptual model:
+  template → instance → instance items → execution lifecycle
+
+==================================================
+OBJECTIVE
+==================================================
+
+EPOCH’s current checklist system is too form-based and rigid.
+
+Current issues identified:
+- legacy fallback checklist path is hardcoded in the frontend
+- frequency logic is broken
+- saves are batch overwrite rather than incremental/per-item
+- no real instance lifecycle
+- weak per-item auditability
+- no role/department/group assignment model
+- no manufacturing-aware triggers
+- modal UX can lose data
+
+We want to move EPOCH toward a KENTRO-style checklist engine adapted for manufacturing.
+
+==================================================
+TARGET ARCHITECTURE
+==================================================
+
+Create/extend EPOCH so checklists work like this:
+
+1. TEMPLATE
+Reusable definition of a checklist
+Examples:
+- Opening checklist
+- Paint booth startup checklist
+- Finish QC closeout checklist
+- Shipping verification checklist
+- Lot/batch finalization checklist
+
+2. INSTANCE
+A generated working copy of a template for a real operational context
+
+Examples of instance context:
+- employee + date
+- employee + shift
+- department + date
+- order + stage
+- lot/batch + shipping event
+- machine + inspection event
+
+3. INSTANCE ITEMS
+Each template item copied into an execution row with its own state and audit fields
+
+4. LIFECYCLE
+Instance status should support at minimum:
+- pending
+- in_progress
+- completed
+- reviewed
+- rejected (optional but preferred)
+
+==================================================
+STEP 1 — AUDIT AND MAP EXISTING EPOCH CHECKLIST CODE
+==================================================
+
+Before coding, identify and document:
+- existing checklist tables
+- current API routes
+- DailyChecklistModal usage
+- where enforcement-status is used
+- where clock-out blocking is used
+- where legacy fallback is triggered
+- all history/reporting code touching checklist_responses or checklist_response_items
+
+Return a concise internal implementation map before changing behavior.
+
+==================================================
+STEP 2 — FIX THE IMMEDIATE BUGS FIRST
+==================================================
+
+Repair the current system enough to stabilize it while migration is underway.
+
+A. Fix frequency logic
+- Repair isItemDueToday() so DAILY/WEEKLY/MONTHLY behave correctly
+- Add tests if test structure exists
+
+B. Remove silent data loss
+- If modal is closed with unsaved changes, warn the user
+- Prefer lightweight autosave or draft persistence if low risk
+- At minimum, do not silently discard changes
+
+C. Reduce legacy fallback risk
+- Identify hardcoded getDepartmentItems() style fallback
+- Gate it clearly as legacy
+- Add admin-visible indicator when user is on legacy checklist path
+- Do not let this remain invisible
+
+D. Expose save metadata
+- Show last saved timestamp on checklist UI
+- If possible show completed timestamp and current completion state
+
+==================================================
+STEP 3 — ADD NEW INSTANCE-BASED TABLES
+==================================================
+
+Create additive schema for the new engine.
+
+Suggested model:
+
+checklist_templates
+- keep or extend existing table if viable
+
+checklist_template_items
+- keep or extend existing table if viable
+
+checklist_template_assignments
+- add or extend to support:
+  - employee assignment
+  - department assignment
+  - role/group assignment
+  - active date range
+  - trigger type
+
+NEW: checklist_instances
+- id
+- templateId
+- employeeId nullable
+- departmentId / departmentName nullable
+- orderId nullable
+- lotId / batchId nullable
+- contextType (daily, shift, order_stage, lot_shipping, machine_check, etc.)
+- contextRef nullable
+- scheduledDate nullable
+- shiftKey nullable
+- status
+- assignedBy nullable
+- createdBy nullable
+- startedAt nullable
+- completedAt nullable
+- reviewedAt nullable
+- reviewedBy nullable
+- rejectionReason nullable
+- createdAt
+- updatedAt
+
+NEW: checklist_instance_items
+- id
+- instanceId
+- templateItemId
+- label
+- type
+- options
+- required
+- sortOrder
+- value
+- completed boolean
+- completedAt nullable
+- completedBy nullable
+- reason nullable
+- notes nullable
+- createdAt
+- updatedAt
+
+NEW: checklist_instance_events (preferred)
+- id
+- instanceId
+- instanceItemId nullable
+- eventType
+- actorUserId nullable
+- actorEmployeeId nullable
+- fromValue jsonb nullable
+- toValue jsonb nullable
+- reason nullable
+- metadata jsonb nullable
+- createdAt
+
+This should become the audit backbone.
+
+==================================================
+STEP 4 — CREATE INSTANCE GENERATION LOGIC
+==================================================
+
+Implement a service layer that can generate checklist instances from templates.
+
+Support at minimum:
+- daily employee checklist generation
+- department checklist generation
+- shift/day generation
+- manual admin generation
+
+Design this so future triggers can easily be added for:
+- clock-in
+- department progression
+- order status change
+- shipping/lot finalization
+- QC event
+
+Use lazy generation if helpful, but ensure uniqueness rules prevent duplicate instances for the same context.
+
+==================================================
+STEP 5 — ADD PER-ITEM SAVE / TOGGLE ENDPOINTS
+==================================================
+
+Do NOT rely only on batch full-replace submit.
+
+Add endpoints such as:
+- GET /api/checklist-instances/active
+- GET /api/checklist-instances/:id
+- GET /api/checklist-instances/:id/items
+- POST /api/checklist-instances
+- PATCH /api/checklist-instances/:id/status
+- PATCH /api/checklist-instance-items/:id
+- POST /api/checklist-instance-items/:id/toggle
+- POST /api/checklist-instances/:id/review
+- GET /api/checklist-instances/history
+
+Requirements:
+- per-item updates should persist incrementally
+- audit event rows should be written for each meaningful change
+- support reason/note capture where required
+- preserve enforcement capability for required items
+
+==================================================
+STEP 6 — UPDATE THE UI
+==================================================
+
+Refactor DailyChecklistModal or replace it safely with an instance-based UI.
+
+Requirements:
+- load active checklist instances, not just template responses
+- support per-item save/toggle
+- show progress clearly
+- show last updated / completed timestamps
+- show instance status
+- distinguish pending vs completed vs reviewed
+- prevent silent loss of entered data
+- gracefully support checkbox, text, number, select
+- keep UI operational for employees using time clock / employee portal
+
+If useful, keep the old template-response UI temporarily behind a legacy flag.
+
+==================================================
+STEP 7 — ENFORCEMENT AND CLOCK-OUT
+==================================================
+
+Preserve and improve enforceClockOut behavior.
+
+Target behavior:
+- if a required checklist instance for the user/context is incomplete, enforcement-status should reflect that
+- enforcement should work against instance items, not only template responses
+- response should be explainable: which checklist, which items, why blocked
+
+==================================================
+STEP 8 — ADMIN MANAGEMENT
+==================================================
+
+Add or update admin screens so management can:
+- create/edit templates
+- assign templates by employee, department, or role/group
+- view active instances
+- review completed instances
+- inspect item-level audit history
+- see which users are still incomplete
+- manually create an instance
+- retire legacy templates/fallbacks over time
+
+==================================================
+STEP 9 — HISTORY / REPORTING
+==================================================
+
+Upgrade reporting so reports run against instances and item events.
+
+Needed output:
+- who completed what
+- when each item changed
+- what values changed
+- who reviewed/signed off
+- incomplete items by department/date/shift
+- blocked clock-out reasons
+- historical trend by checklist template
+
+Avoid hard-coded LIMIT 200 without pagination.
+
+==================================================
+STEP 10 — LEGACY TRANSITION PLAN
+==================================================
+
+Do not rip out the old system immediately.
+
+Implement:
+- clear legacy/new path separation
+- migration compatibility layer if needed
+- feature flag or guarded rollout
+- admin warning when a user is still on legacy fallback
+- comments/TODOs only where truly necessary
+
+At the end, provide:
+
+1. WHAT CHANGED
+2. NEW/UPDATED TABLES
+3. NEW/UPDATED ROUTES
+4. UI FILES UPDATED
+5. LEGACY PATHS STILL PRESENT
+6. FOLLOW-UP WORK STILL NEEDED
+
+==================================================
+IMPORTANT DESIGN INTENT
+==================================================
+
+We are NOT just making prettier daily forms.
+
+We are building a reusable checklist engine for manufacturing operations in EPOCH, inspired by the stronger KENTRO architecture.
+
+The system should be able to support:
+- daily employee checklists
+- startup/shutdown procedures
+- QC checklists
+- shipping/finalization checklists
+- order/stage-specific checklists
+- supervisor review/signoff
+- audit-grade traceability

@@ -7,6 +7,7 @@ export type WidgetTypeId =
   | 'hero_metric'
   | 'stocks_shipped'
   | 'department_status'
+  | 'department_exits'
   | 'shipment_trend'
   | 'bubble_chart'
   | 'kit_progress'
@@ -82,6 +83,7 @@ import SignalCardWidget from '@/components/widgets/SignalCardWidget';
 import SwimLanePreviewWidget from '@/components/widgets/SwimLanePreviewWidget';
 import CapabilityRadarWidget from '@/components/widgets/CapabilityRadarWidget';
 import DepartmentStatusWidget from '@/components/widgets/DepartmentStatusWidget';
+import DepartmentExitsWidget from '@/components/widgets/DepartmentExitsWidget';
 import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
 import OTDWidget from '@/components/widgets/OTDWidget';
 import PaymentAnalyticsWidget from '@/components/widgets/PaymentAnalyticsWidget';
@@ -205,6 +207,16 @@ registerWidget({
   description: 'Consolidated table of all department queues with sparkline trends.',
   category: 'table',
   component: DepartmentStatusWidget as ComponentType<Record<string, unknown>>,
+  requiredProps: [],
+  defaultProps: {},
+});
+
+registerWidget({
+  id: 'department_exits',
+  displayName: 'Department Exits',
+  description: 'Orders that exited each department within a selected timeframe (day, week, or month).',
+  category: 'table',
+  component: DepartmentExitsWidget as ComponentType<Record<string, unknown>>,
   requiredProps: [],
   defaultProps: {},
 });

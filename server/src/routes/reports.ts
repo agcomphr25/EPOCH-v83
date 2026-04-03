@@ -859,4 +859,56 @@ router.get('/due-date-capacity', async (req, res) => {
   }
 });
 
+// Department Exits Report
+// GET /api/reports/department-exits?timeframe=day|week|month
+router.get('/department-exits', async (req, res) => {
+  type ValidTimeframe = 'day' | 'week' | 'month';
+  type CountRow = { count: number };
+  type DeptExitRow = { department: string; count: number };
+
+  const VALID_TIMEFRAMES: ValidTimeframe[] = ['day', 'week', 'month'];
+  const rawTimeframe = req.query.timeframe as string;
+  const timeframe: ValidTimeframe = VALID_TIMEFRAMES.includes(rawTimeframe as ValidTimeframe)
+    ? (rawTimeframe as ValidTimeframe)
+    : 'day';
+
+  const INTERVAL_DAYS: Record<ValidTimeframe, number> = { day: 1, week: 7, month: 30 };
+  const intervalDays = INTERVAL_DAYS[timeframe];
+
+  const departments: Array<{ name: string; column: string }> = [
+    { name: 'Layup',    column: 'layup_completed_at' },
+    { name: 'Plugging', column: 'plugging_completed_at' },
+    { name: 'CNC',      column: 'cnc_completed_at' },
+    { name: 'Finish',   column: 'finish_completed_at' },
+    { name: 'Gunsmith', column: 'gunsmith_completed_at' },
+    { name: 'Paint',    column: 'paint_completed_at' },
+    { name: 'QC',       column: 'qc_completed_at' },
+    { name: 'Shipping', column: 'shipping_completed_at' },
+    { name: 'P1 Queue', column: 'p1_production_queue_completed_at' },
+    { name: 'Barcode',  column: 'barcode_completed_at' },
+  ];
+
+  const DEPT_ORDER = ['Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping', 'P1 Queue', 'Barcode'];
+
+  try {
+    const { pool } = await import('../../db');
+
+    const counts: DeptExitRow[] = await Promise.all(
+      departments.map(async (d) => {
+        const rows: CountRow[] = await pool.query(
+          `SELECT COUNT(*)::int AS count FROM all_orders WHERE ${d.column} >= NOW() - INTERVAL '${intervalDays} days'`,
+        );
+        return { department: d.name, count: rows[0]?.count ?? 0 };
+      }),
+    );
+
+    counts.sort((a, b) => DEPT_ORDER.indexOf(a.department) - DEPT_ORDER.indexOf(b.department));
+
+    res.json({ timeframe, data: counts });
+  } catch (error) {
+    console.error('Error fetching department exits:', error);
+    res.status(500).json({ error: 'Failed to fetch department exits', details: (error as Error).message });
+  }
+});
+
 export default router;

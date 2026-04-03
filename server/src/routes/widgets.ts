@@ -170,6 +170,15 @@ const WIDGET_TYPES = [
     defaultProps: {},
     propSchema: [],
   },
+  {
+    id: 'department_exits',
+    displayName: 'Department Exits',
+    description: 'Orders that exited each department within a selected timeframe (day, week, or month).',
+    category: 'table',
+    requiredProps: [],
+    defaultProps: {},
+    propSchema: [],
+  },
 ];
 
 // ─── Dashboard Catalogue ───────────────────────────────────────────────────────
@@ -215,6 +224,14 @@ const STATIC_DASHBOARDS = [
         columns: 2,
         widgets: [
           { id: 'w-inventory-shortages', type: 'metric_stat', colSpan: 'col-span-1', props: { metricSlug: 'open_inventory_shortages', title: 'Open Shortages' } },
+        ],
+      },
+      {
+        id: 'dept-exits',
+        title: 'Department Exits',
+        columns: 2,
+        widgets: [
+          { id: 'w-department-exits', type: 'department_exits', colSpan: 'col-span-2', props: {} },
         ],
       },
     ],

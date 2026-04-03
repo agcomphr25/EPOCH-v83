@@ -2763,11 +2763,11 @@ router.get('/hero-backside', async (req: Request, res: Response) => {
     const currentOpYear = getOperationalYear(now);
 
     const ytdStart = getOperationalWeekStart(1, currentOpYear);
-    const ytdConditions = [
-      gte(allOrders.shippedDate, ytdStart),
-      lte(allOrders.shippedDate, now),
-    ];
     const bizFilter = buildBusinessContextFilter(businessContext);
+    const ytdConditions = [
+      sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) >= ${ytdStart}`,
+      sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) <= ${now}`,
+    ];
     if (bizFilter) {
       ytdConditions.push(bizFilter);
     }
@@ -2794,8 +2794,8 @@ router.get('/hero-backside', async (req: Request, res: Response) => {
     const lmEnd = getOperationalWeekEnd(lmWeek, lmYear);
 
     const lmConditions = [
-      gte(allOrders.shippedDate, lmStart),
-      lte(allOrders.shippedDate, lmEnd),
+      sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) >= ${lmStart}`,
+      sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) <= ${lmEnd}`,
     ];
     if (bizFilter) lmConditions.push(bizFilter);
 
@@ -2819,8 +2819,8 @@ router.get('/hero-backside', async (req: Request, res: Response) => {
       const wStart = getOperationalWeekStart(tempWeek, tempYear);
       const wEnd = getOperationalWeekEnd(tempWeek, tempYear);
       const wConditions = [
-        gte(allOrders.shippedDate, wStart),
-        lte(allOrders.shippedDate, wEnd),
+        sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) >= ${wStart}`,
+        sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) <= ${wEnd}`,
       ];
       if (bizFilter) wConditions.push(bizFilter);
       const wRows = await db
@@ -2901,8 +2901,8 @@ router.get('/weekly-history', async (req: Request, res: Response) => {
     const latestEnd = weekSlots[weekSlots.length - 1].end;
 
     const conditions = [
-      gte(allOrders.shippedDate, earliestStart),
-      lte(allOrders.shippedDate, latestEnd),
+      sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) >= ${earliestStart}`,
+      sql`COALESCE(${allOrders.shippingCompletedAt}, ${allOrders.shippedDate}) <= ${latestEnd}`,
     ];
     const bizFilter = buildBusinessContextFilter(businessContext);
     if (bizFilter) conditions.push(bizFilter);
@@ -2910,14 +2910,16 @@ router.get('/weekly-history', async (req: Request, res: Response) => {
     const shippedOrders = await db
       .select({
         shippedDate: allOrders.shippedDate,
+        shippingCompletedAt: allOrders.shippingCompletedAt,
       })
       .from(allOrders)
       .where(and(...conditions));
 
     for (const slot of weekSlots) {
       const count = shippedOrders.filter((o) => {
-        if (!o.shippedDate) return false;
-        const d = new Date(o.shippedDate);
+        const effectiveDate = o.shippingCompletedAt ?? o.shippedDate;
+        if (!effectiveDate) return false;
+        const d = new Date(effectiveDate);
         return d >= slot.start && d <= slot.end;
       }).length;
 

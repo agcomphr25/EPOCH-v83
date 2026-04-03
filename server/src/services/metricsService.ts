@@ -48,10 +48,10 @@ export async function getOrdersCompletedThisOperationalWeek(): Promise<number> {
     `SELECT COUNT(*)::int AS count
      FROM all_orders
      WHERE status = 'FULFILLED'
-       AND updated_at >= (
+       AND COALESCE(shipping_completed_at, shipped_date) >= (
          CURRENT_DATE - ((EXTRACT(DOW FROM CURRENT_DATE)::int + 4) % 7) * INTERVAL '1 day'
        )
-       AND updated_at <= NOW()`,
+       AND COALESCE(shipping_completed_at, shipped_date) <= NOW()`,
   ) as any[];
   return rows[0]?.count ?? 0;
 }

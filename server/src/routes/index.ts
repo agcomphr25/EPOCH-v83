@@ -92,6 +92,7 @@ import employeeBadgesRoutes from './employeeBadges';
 import manufacturingQueueRoutes from './manufacturingQueue';
 import cuttingTableManufacturingQueueRoutes from './cuttingTableManufacturingQueue';
 import allocationRequirementsRoutes from './allocationRequirements';
+import allocationControlRoutes from './allocationControl';
 
 import watchRulesRoutes from './watchRules';
 import creditMemosRoutes from './creditMemos';
@@ -980,6 +981,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Allocation Requirements routes
   app.use('/api/allocation-requirements', allocationRequirementsRoutes);
+
+  // Allocation Control routes (allocate from balance, reserve lot)
+  app.use('/api/allocation-control', allocationControlRoutes);
   
   // Cutting Table Manufacturing Queue routes
   app.use('/api/cutting-table-mfg-queue', cuttingTableManufacturingQueueRoutes);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { RequirementDrawer } from '@/components/RequirementDrawer';
 import {
   Card,
   CardContent,
@@ -331,6 +332,8 @@ export default function KitsQueue() {
   const [selectedReadiness, setSelectedReadiness] = useState<string>('ALL');
   const [detailItem, setDetailItem] = useState<KitQueueItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [drawerKit, setDrawerKit] = useState<KitQueueItem | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: rawItems = [], isLoading } = useQuery<KitQueueItem[]>({
     queryKey: ['/api/manufacturing-queue', 'KIT', selectedStatus],
@@ -392,6 +395,15 @@ export default function KitsQueue() {
 
   const closeDetail = () => {
     setDetailOpen(false);
+  };
+
+  const openDrawer = (item: KitQueueItem) => {
+    setDrawerKit(item);
+    setDrawerOpen(true);
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
   };
 
   return (
@@ -467,7 +479,11 @@ export default function KitsQueue() {
                   </TableHeader>
                   <TableBody>
                     {filteredItems.map((item) => (
-                      <TableRow key={item.id} className="dark:border-gray-800">
+                      <TableRow
+                        key={item.id}
+                        className="dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                        onClick={() => openDrawer(item)}
+                      >
                         <TableCell className={getPriorityColor(item.priority ?? 50)}>
                           {item.priority ?? 50}
                         </TableCell>
@@ -505,7 +521,7 @@ export default function KitsQueue() {
                           {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}
                         </TableCell>
                         <TableCell className="dark:text-gray-300">{item.assignedTo ?? '-'}</TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm">
@@ -554,6 +570,15 @@ export default function KitsQueue() {
           open={detailOpen}
           onClose={closeDetail}
           onReEvaluate={(id) => reEvaluateMutation.mutate(id)}
+        />
+
+        <RequirementDrawer
+          kit={drawerKit}
+          open={drawerOpen}
+          onClose={closeDrawer}
+          onQueueRefetch={() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/manufacturing-queue'] });
+          }}
         />
       </div>
     </TooltipProvider>

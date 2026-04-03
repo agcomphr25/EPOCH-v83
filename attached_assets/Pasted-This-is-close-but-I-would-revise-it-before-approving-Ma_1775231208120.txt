@@ -1,0 +1,74 @@
+This is close, but I would revise it before approving.
+
+Main issue
+
+The task says:
+
+if it doesn't exist, the reserve-lot endpoint logs the action but does not persist a new table; use the existing allocationRequirements.materialLotId field to record the reservation
+
+That should be changed.
+
+Based on your current system, the right direction is to use the existing lot reservation path, not a fake shortcut on the requirement row. A requirement can also need more than one lot over time, so a single materialLotId field on the requirement is not a strong long-term shape.
+
+What I would change
+Change the reserve-lot behavior
+
+Instead of:
+
+update allocationRequirements.materialLotId
+log-only fallback
+
+Use:
+
+existing material_lot_reservations flow where possible
+then update the matching requirement’s staged or allocated quantities
+then re-evaluate readiness
+
+That keeps traceability clean and matches the architecture you already built.
+
+Recommended revised wording
+Done looks like
+
+Change this line:
+
+Operators can select a specific material lot (ICN) from a dropdown to reserve that lot against the requirement
+
+To:
+
+Operators can select a specific material lot (ICN) from a dropdown to reserve that lot against the requirement using the existing lot reservation flow, and the requirement quantities/readiness update immediately afterward.
+
+Out of scope
+
+Replace this:
+
+Lot-level reservation tracking table (material_lot_reservations) — if it doesn't exist, the reserve-lot endpoint logs the action but does not persist a new table; use the existing allocationRequirements.materialLotId field to record the reservation
+
+With:
+
+New reservation schema changes. Use the existing lot reservation structure and existing material lot routes/services; do not introduce a new reservation table for this task.
+
+Backend task
+
+Replace this:
+
+POST /reserve-lot (update the requirement's materialLotId and allocated qty, then re-evaluate readiness)
+
+With:
+
+POST /reserve-lot (reserve the selected material lot through the existing lot reservation path, update the matching requirement’s staged/allocated quantities as appropriate, then re-evaluate readiness)
+
+One more improvement
+
+Add one explicit requirement for drawer detail fields:
+
+requirement type
+critical flag
+blocked/shortfall amount
+
+That will make the drawer more useful right away.
+
+My verdict
+
+Approve with edits.
+
+The task is the right next step, but I would not approve the materialLotId shortcut approach as written. Use the existing reservation path so you do not create a second, weaker traceability model.

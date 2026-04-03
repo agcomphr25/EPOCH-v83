@@ -17154,6 +17154,1181 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.checklist_templates": {
+      "name": "checklist_templates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frequency": {
+          "name": "frequency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DAILY'::text"
+        },
+        "department": {
+          "name": "department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "true"
+        },
+        "enforce_clock_out": {
+          "name": "enforce_clock_out",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "true"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "checklist_templates_created_by_fkey": {
+          "name": "checklist_templates_created_by_fkey",
+          "tableFrom": "checklist_templates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_template_items": {
+      "name": "checklist_template_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'checkbox'::text"
+        },
+        "options": {
+          "name": "options",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "required": {
+          "name": "required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "false"
+        },
+        "frequency": {
+          "name": "frequency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DAILY'::text"
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {
+        "checklist_template_items_template_id_idx": {
+          "name": "checklist_template_items_template_id_idx",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checklist_template_items_template_id_fkey": {
+          "name": "checklist_template_items_template_id_fkey",
+          "tableFrom": "checklist_template_items",
+          "tableTo": "checklist_templates",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_assignments": {
+      "name": "checklist_assignments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "true"
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "assignment_type": {
+          "name": "assignment_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'employee'::text"
+        },
+        "department_name": {
+          "name": "department_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role_key": {
+          "name": "role_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "checklist_assignments_template_id_idx": {
+          "name": "checklist_assignments_template_id_idx",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_assignments_employee_id_idx": {
+          "name": "checklist_assignments_employee_id_idx",
+          "columns": [
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_assignments_unique_employee": {
+          "name": "checklist_assignments_unique_employee",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": "(assignment_type = 'employee'::text) AND (employee_id IS NOT NULL)"
+        },
+        "checklist_assignments_unique_department": {
+          "name": "checklist_assignments_unique_department",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "department_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": "(assignment_type = 'department'::text) AND (department_name IS NOT NULL)"
+        },
+        "checklist_assignments_unique_role": {
+          "name": "checklist_assignments_unique_role",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "role_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": "(assignment_type = 'role'::text) AND (role_key IS NOT NULL)"
+        }
+      },
+      "foreignKeys": {
+        "checklist_assignments_template_id_fkey": {
+          "name": "checklist_assignments_template_id_fkey",
+          "tableFrom": "checklist_assignments",
+          "tableTo": "checklist_templates",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "checklist_assignments_employee_id_fkey": {
+          "name": "checklist_assignments_employee_id_fkey",
+          "tableFrom": "checklist_assignments",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "checklist_assignments_template_id_employee_id_key": {
+          "name": "checklist_assignments_template_id_employee_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "template_id",
+            "employee_id"
+          ]
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_responses": {
+      "name": "checklist_responses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_date": {
+          "name": "period_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "checklist_responses_template_id_idx": {
+          "name": "checklist_responses_template_id_idx",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_responses_employee_id_idx": {
+          "name": "checklist_responses_employee_id_idx",
+          "columns": [
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_responses_period_idx": {
+          "name": "checklist_responses_period_idx",
+          "columns": [
+            {
+              "expression": "period_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checklist_responses_template_id_fkey": {
+          "name": "checklist_responses_template_id_fkey",
+          "tableFrom": "checklist_responses",
+          "tableTo": "checklist_templates",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "checklist_responses_employee_id_fkey": {
+          "name": "checklist_responses_employee_id_fkey",
+          "tableFrom": "checklist_responses",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_response_items": {
+      "name": "checklist_response_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "response_id": {
+          "name": "response_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "template_item_id": {
+          "name": "template_item_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed": {
+          "name": "completed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "false"
+        }
+      },
+      "indexes": {
+        "checklist_response_items_response_id_idx": {
+          "name": "checklist_response_items_response_id_idx",
+          "columns": [
+            {
+              "expression": "response_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_response_items_template_item_id_idx": {
+          "name": "checklist_response_items_template_item_id_idx",
+          "columns": [
+            {
+              "expression": "template_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checklist_response_items_response_id_fkey": {
+          "name": "checklist_response_items_response_id_fkey",
+          "tableFrom": "checklist_response_items",
+          "tableTo": "checklist_responses",
+          "columnsFrom": [
+            "response_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "checklist_response_items_template_item_id_fkey": {
+          "name": "checklist_response_items_template_item_id_fkey",
+          "tableFrom": "checklist_response_items",
+          "tableTo": "checklist_template_items",
+          "columnsFrom": [
+            "template_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_metadata": {
+      "name": "checklist_metadata",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frequency": {
+          "name": "frequency",
+          "type": "frequency_type",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DAILY'::frequency_type"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "true"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "report_recipients": {
+          "name": "report_recipients",
+          "type": "integer[]",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "checklist_metadata_user_id_fkey": {
+          "name": "checklist_metadata_user_id_fkey",
+          "tableFrom": "checklist_metadata",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_instances": {
+      "name": "checklist_instances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "context_type": {
+          "name": "context_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'daily'::text"
+        },
+        "context_date": {
+          "name": "context_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'::text"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by_user_id": {
+          "name": "reviewed_by_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by_display_name": {
+          "name": "reviewed_by_display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "checklist_instances_template_id_idx": {
+          "name": "checklist_instances_template_id_idx",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_instances_employee_id_idx": {
+          "name": "checklist_instances_employee_id_idx",
+          "columns": [
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_instances_context_date_idx": {
+          "name": "checklist_instances_context_date_idx",
+          "columns": [
+            {
+              "expression": "context_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_instances_template_id_employee_id_context_type_co_key": {
+          "name": "checklist_instances_template_id_employee_id_context_type_co_key",
+          "columns": [
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "context_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "context_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checklist_instances_template_id_fkey": {
+          "name": "checklist_instances_template_id_fkey",
+          "tableFrom": "checklist_instances",
+          "tableTo": "checklist_templates",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "checklist_instances_employee_id_fkey": {
+          "name": "checklist_instances_employee_id_fkey",
+          "tableFrom": "checklist_instances",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "checklist_instances_template_id_employee_id_context_type_co_key": {
+          "name": "checklist_instances_template_id_employee_id_context_type_co_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "template_id",
+            "employee_id",
+            "context_type",
+            "context_date"
+          ]
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_instance_items": {
+      "name": "checklist_instance_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "template_item_id": {
+          "name": "template_item_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'checkbox'::text"
+        },
+        "options": {
+          "name": "options",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "required": {
+          "name": "required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "false"
+        },
+        "frequency": {
+          "name": "frequency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DAILY'::text"
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed": {
+          "name": "completed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "false"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_by_user_id": {
+          "name": "completed_by_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_by_display_name": {
+          "name": "completed_by_display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "checklist_instance_items_instance_id_idx": {
+          "name": "checklist_instance_items_instance_id_idx",
+          "columns": [
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checklist_instance_items_instance_id_fkey": {
+          "name": "checklist_instance_items_instance_id_fkey",
+          "tableFrom": "checklist_instance_items",
+          "tableTo": "checklist_instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "checklist_instance_items_template_item_id_fkey": {
+          "name": "checklist_instance_items_template_item_id_fkey",
+          "tableFrom": "checklist_instance_items",
+          "tableTo": "checklist_template_items",
+          "columnsFrom": [
+            "template_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.checklist_instance_events": {
+      "name": "checklist_instance_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instance_item_id": {
+          "name": "instance_item_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_display_name": {
+          "name": "actor_display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_value": {
+          "name": "previous_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_value": {
+          "name": "new_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "checklist_instance_events_instance_id_idx": {
+          "name": "checklist_instance_events_instance_id_idx",
+          "columns": [
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "checklist_instance_events_instance_id_fkey": {
+          "name": "checklist_instance_events_instance_id_fkey",
+          "tableFrom": "checklist_instance_events",
+          "tableTo": "checklist_instances",
+          "columnsFrom": [
+            "instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "checklist_instance_events_instance_item_id_fkey": {
+          "name": "checklist_instance_events_instance_item_id_fkey",
+          "tableFrom": "checklist_instance_events",
+          "tableTo": "checklist_instance_items",
+          "columnsFrom": [
+            "instance_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -17166,6 +18341,16 @@
         "FINALIZED",
         "CANCELLED",
         "RESERVED"
+      ]
+    },
+    "public.frequency_type": {
+      "name": "frequency_type",
+      "schema": "public",
+      "values": [
+        "DAILY",
+        "WEEKLY",
+        "MONTHLY",
+        "ONGOING"
       ]
     }
   },

@@ -73,6 +73,39 @@ function formatCurrency(amount: string | number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
 }
 
+type StatusGroup = {
+  status: string;
+  invoices: Invoice[];
+  total: number;
+};
+
+const STATUS_ORDER = ['OVERDUE', 'OPEN', 'PAID', 'VOID'];
+
+function groupByStatus(invoices: Invoice[]): StatusGroup[] {
+  const map = new Map<string, StatusGroup>();
+  for (const inv of invoices) {
+    const key = inv.status;
+    if (!map.has(key)) {
+      map.set(key, { status: key, invoices: [], total: 0 });
+    }
+    const group = map.get(key)!;
+    group.invoices.push(inv);
+    group.total += parseFloat(inv.totalAmount) || 0;
+  }
+  for (const group of map.values()) {
+    group.invoices.sort((a, b) => {
+      const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : 0;
+      const db = b.invoiceDate ? new Date(b.invoiceDate).getTime() : 0;
+      return da - db;
+    });
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const ia = STATUS_ORDER.indexOf(a.status);
+    const ib = STATUS_ORDER.indexOf(b.status);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+}
+
 function groupByCustomer(invoices: Invoice[]): CustomerGroup[] {
   const map = new Map<string, CustomerGroup>();
   for (const inv of invoices) {
@@ -221,47 +254,70 @@ export default function InvoicesPage() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Invoice #</TableHead>
-                          <TableHead>Invoice Date</TableHead>
-                          <TableHead>Due Date</TableHead>
-                          <TableHead className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <DollarSign className="h-4 w-4" />
-                              Amount
+                    <Accordion type="multiple" defaultValue={[]} className="divide-y border-t">
+                      {groupByStatus(group.invoices).map((statusGroup) => (
+                        <AccordionItem
+                          key={statusGroup.status}
+                          value={statusGroup.status}
+                          className="border-0"
+                        >
+                          <AccordionTrigger className="px-6 py-3 hover:no-underline hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <div className="flex items-center gap-4 text-left">
+                              {getStatusBadge(statusGroup.status)}
+                              <span className="text-sm text-muted-foreground">
+                                {statusGroup.invoices.length} invoice{statusGroup.invoices.length !== 1 ? 's' : ''}
+                              </span>
+                              <span className="text-sm font-medium text-muted-foreground">
+                                {formatCurrency(statusGroup.total)}
+                              </span>
                             </div>
-                          </TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.invoices.map((invoice) => (
-                          <TableRow
-                            key={invoice.id}
-                            className="cursor-pointer hover:bg-gray-50"
-                            onClick={() => setLocation(`/finance/invoices/${invoice.id}`)}
-                          >
-                            <TableCell>{invoice.invoiceNumber}</TableCell>
-                            <TableCell>
-                              {invoice.invoiceDate
-                                ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')
-                                : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {invoice.dueDate
-                                ? format(new Date(invoice.dueDate), 'MM/dd/yyyy')
-                                : '—'}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatCurrency(invoice.totalAmount)}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-0">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Invoice #</TableHead>
+                                  <TableHead>Invoice Date</TableHead>
+                                  <TableHead>Due Date</TableHead>
+                                  <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <DollarSign className="h-4 w-4" />
+                                      Amount
+                                    </div>
+                                  </TableHead>
+                                  <TableHead>Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {statusGroup.invoices.map((invoice) => (
+                                  <TableRow
+                                    key={invoice.id}
+                                    className="cursor-pointer hover:bg-gray-50"
+                                    onClick={() => setLocation(`/finance/invoices/${invoice.id}`)}
+                                  >
+                                    <TableCell>{invoice.invoiceNumber}</TableCell>
+                                    <TableCell>
+                                      {invoice.invoiceDate
+                                        ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {invoice.dueDate
+                                        ? format(new Date(invoice.dueDate), 'MM/dd/yyyy')
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right font-medium">
+                                      {formatCurrency(invoice.totalAmount)}
+                                    </TableCell>
+                                    <TableCell>{getStatusBadge(invoice.status)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
                   </AccordionContent>
                 </AccordionItem>
               ))}

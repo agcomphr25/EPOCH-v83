@@ -1,0 +1,94 @@
+PROMPT 1 — UNBLOCK + SELF-HEAL (RUN THIS FIRST)
+
+👉 This gives you immediate working behavior without risk
+
+IMPLEMENTATION MODE — SAFE UI + BACKEND SELF-HEAL
+
+DO NOT BREAK EXISTING FUNCTIONALITY
+DO NOT MODIFY DATA STRUCTURES
+DO NOT REMOVE ANY ROUTES
+
+GOAL:
+Allow "Reprint Packing Slip" to work even when no packing slip is stored,
+by enabling the button and letting the backend regenerate and persist it.
+
+--------------------------------------------------
+STEP 1 — ENABLE BUTTON IN UI
+--------------------------------------------------
+
+File:
+client/src/pages/OEMShipmentsPage.tsx
+
+FIND:
+disabled={!hasSlip}
+
+REPLACE WITH:
+REMOVE the disabled condition entirely
+
+OR:
+disabled={false}
+
+--------------------------------------------------
+STEP 2 — UPDATE TOOLTIP / UX TEXT
+--------------------------------------------------
+
+FIND:
+"No packing slip on file"
+
+REPLACE WITH:
+"Packing slip will be generated if not available"
+
+(Do NOT block the action)
+
+--------------------------------------------------
+STEP 3 — VERIFY CLICK HANDLER
+--------------------------------------------------
+
+Ensure button still calls:
+
+GET /api/po-orders/oem-shipments/packing-slip/:itemId
+
+DO NOT CHANGE endpoint
+
+--------------------------------------------------
+STEP 4 — HARDEN BACKEND REPRINT ROUTE
+--------------------------------------------------
+
+File:
+server/src/routes/poShippingQC.ts
+
+FIND route:
+GET /api/po-orders/oem-shipments/packing-slip/:itemId
+
+VERIFY LOGIC:
+
+IF packing_slip_base64 exists:
+  → return it
+
+IF missing:
+  → regenerate packing slip
+  → SAVE it to shipment_items.packing_slip_base64
+  → return it
+
+--------------------------------------------------
+STEP 5 — ADD LOGGING (IMPORTANT)
+--------------------------------------------------
+
+Inside regeneration block:
+
+ADD:
+
+console.log("Packing slip missing — regenerating for item:", itemId)
+
+After save:
+
+console.log("Packing slip regenerated and persisted:", itemId)
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+- Button is always clickable
+- Clicking generates PDF even if none stored
+- After first click, subsequent clicks use stored version
+- No UI blocking

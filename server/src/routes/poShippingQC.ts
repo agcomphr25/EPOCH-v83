@@ -932,7 +932,7 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
     let packingSlipBase64: string = item.packing_slip_base64;
 
     if (!packingSlipBase64) {
-      console.log(`⚙️ Packing slip missing for item ${itemId} — regenerating on the fly...`);
+      console.log(`⚙️ Packing slip missing — regenerating for item: ${itemId}`);
       try {
         const slipData: PackingSlipData = {
           packingSlipNumber: `PS-${item.order_id || item.po_number}`,
@@ -966,7 +966,7 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
           `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
           [packingSlipBase64, itemId]
         );
-        console.log(`✅ Packing slip regenerated and persisted for item ${itemId}`);
+        console.log(`✅ Packing slip regenerated and persisted: ${itemId}`);
       } catch (regenErr: any) {
         console.error(`❌ Packing slip regeneration failed for item ${itemId}:`, regenErr.message);
         return res.status(404).json({ _error: 'Packing slip not available and could not be regenerated' });

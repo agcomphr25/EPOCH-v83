@@ -856,8 +856,6 @@ export default function OEMShipmentsPage() {
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); }}
-                                                disabled={!hasSlip}
-                                                className={!hasSlip ? 'pointer-events-none opacity-50' : ''}
                                               >
                                                 <FileText className="h-4 w-4 mr-2" />
                                                 Reprint Packing Slip
@@ -866,7 +864,7 @@ export default function OEMShipmentsPage() {
                                           </TooltipTrigger>
                                           {!hasSlip && (
                                             <TooltipContent>
-                                              <p>No packing slip on file</p>
+                                              <p>Packing slip will be generated if not available</p>
                                             </TooltipContent>
                                           )}
                                         </Tooltip>
@@ -891,9 +889,7 @@ export default function OEMShipmentsPage() {
                                                 <TooltipTrigger asChild>
                                                   <div>
                                                     <DropdownMenuItem
-                                                      onClick={() => { if (hasSlip) { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); } }}
-                                                      disabled={!hasSlip}
-                                                      className={!hasSlip ? 'opacity-50 cursor-not-allowed' : ''}
+                                                      onClick={() => { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); }}
                                                     >
                                                       <Printer className="h-3 w-3 mr-2 flex-shrink-0" />
                                                       <div className="flex flex-col">
@@ -907,7 +903,7 @@ export default function OEMShipmentsPage() {
                                                 </TooltipTrigger>
                                                 {!hasSlip && (
                                                   <TooltipContent>
-                                                    <p>No packing slip on file</p>
+                                                    <p>Packing slip will be generated if not available</p>
                                                   </TooltipContent>
                                                 )}
                                               </Tooltip>

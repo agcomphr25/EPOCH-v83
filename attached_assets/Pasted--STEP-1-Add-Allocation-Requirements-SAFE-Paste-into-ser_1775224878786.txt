@@ -1,0 +1,192 @@
+🔧 STEP 1 — Add Allocation Requirements (SAFE)
+📍 Paste into server/schema.ts
+
+Place near materialLotReservations
+
+export const allocationRequirements = pgTable("allocation_requirements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  manufacturingQueueId: integer("manufacturing_queue_id")
+    .notNull()
+    .references(() => manufacturingQueue.id, { onDelete: "cascade" }),
+
+  requiredItemId: integer("required_item_id"),
+  requiredPartNumber: text("required_part_number").notNull(),
+  requiredPartName: text("required_part_name"),
+
+  requirementType: text("requirement_type").notNull(),
+  // MATERIAL | COMPONENT | KIT_ITEM | SUBASSEMBLY | CONSUMABLE
+
+  requiredQty: numeric("required_qty").notNull(),
+
+  allocatedQty: numeric("allocated_qty").default("0"),
+  stagedQty: numeric("staged_qty").default("0"),
+  consumedQty: numeric("consumed_qty").default("0"),
+
+  allocationStatus: text("allocation_status").default("OPEN"),
+
+  isCritical: boolean("is_critical").default(true),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+🔧 STEP 2 — Extend manufacturing_queue (DO NOT REPLACE)
+📍 Modify existing table
+
+Add these fields:
+
+queueType: text("queue_type"), 
+// LAYUP | CORE | SUB_ASSEMBLY | ASSEMBLY | KIT
+
+readinessStatus: text("readiness_status"), 
+// NOT_READY | PARTIAL | READY | BLOCKED
+
+percentReady: numeric("percent_ready"),
+
+blockedReason: text("blocked_reason"),
+🔧 STEP 3 — Readiness Engine (NEW)
+📍 Create file:
+
+server/src/services/queueReadinessService.ts
+
+import { db } from "../db";
+import { manufacturingQueue, allocationRequirements } from "../../schema";
+import { eq } from "drizzle-orm";
+
+export async function evaluateQueueReadiness(queueId: number) {
+  const requirements = await db
+    .select()
+    .from(allocationRequirements)
+    .where(eq(allocationRequirements.manufacturingQueueId, queueId));
+
+  let total = 0;
+  let ready = 0;
+
+  const blocking: string[] = [];
+
+  for (const req of requirements) {
+    if (!req.isCritical) continue;
+
+    total++;
+
+    const required = Number(req.requiredQty || 0);
+    const allocated = Number(req.allocatedQty || 0);
+
+    if (allocated >= required) {
+      ready++;
+    } else {
+      blocking.push(
+        `${req.requiredPartNumber} short (${allocated}/${required})`
+      );
+    }
+  }
+
+  let readiness = "READY";
+  let status = "PENDING";
+
+  if (blocking.length > 0) {
+    status = "BLOCKED";
+    readiness = ready === 0 ? "NOT_READY" : "PARTIAL";
+  }
+
+  const percent = total === 0 ? 100 : Math.round((ready / total) * 100);
+
+  await db
+    .update(manufacturingQueue)
+    .set({
+      readinessStatus: readiness,
+      status,
+      percentReady: percent.toString(),
+      blockedReason: blocking.join(", "),
+      updatedAt: new Date(),
+    })
+    .where(eq(manufacturingQueue.id, queueId));
+
+  return { status, readiness, percent, blocking };
+}
+🔧 STEP 4 — Hook into EXISTING allocation (CRITICAL)
+
+You already have:
+
+inventoryAllocationService
+materialLotReservations
+
+👉 We extend them — not replace.
+
+After allocation happens
+
+Wherever you call:
+
+allocateInventory(...)
+
+👉 ADD:
+
+await db.update(allocationRequirements)
+  .set({
+    allocatedQty: sql`${allocationRequirements.allocatedQty} + ${qty}`
+  })
+  .where(eq(allocationRequirements.manufacturingQueueId, queueId));
+When reserving material lots
+
+Hook into:
+materialLotReservations
+
+👉 ALSO update:
+
+await db.update(allocationRequirements)
+  .set({
+    stagedQty: sql`${allocationRequirements.stagedQty} + ${qty}`
+  })
+  .where(eq(allocationRequirements.manufacturingQueueId, queueId));
+🔧 STEP 5 — Queue Type Mapping (fits your system)
+
+You already have:
+
+inventoryItems.manufacturedCategory
+
+Add helper:
+export function mapQueueType(category: string) {
+  switch (category) {
+    case "PACKET":
+      return { queueType: "LAYUP", department: "Cutting Table" };
+
+    case "CORE":
+      return { queueType: "CORE", department: "Cores" };
+
+    case "KIT":
+      return { queueType: "KIT", department: "Kitting" };
+
+    case "SUB_ASSEMBLY":
+      return { queueType: "SUB_ASSEMBLY", department: "Assembly" };
+
+    case "ASSEMBLY":
+      return { queueType: "ASSEMBLY", department: "Assembly" };
+
+    default:
+      return { queueType: "LAYUP", department: "Cutting Table" };
+  }
+}
+🔥 STEP 6 — KIT Queue (FIRST REAL IMPLEMENTATION)
+
+This is where everything clicks.
+
+Create requirements when queue is created
+
+Example:
+
+await db.insert(allocationRequirements).values([
+  {
+    manufacturingQueueId: queue.id,
+    requiredPartNumber: "BOLT-001",
+    requiredQty: "10",
+    requirementType: "KIT_ITEM",
+  },
+  {
+    manufacturingQueueId: queue.id,
+    requiredPartNumber: "WASHER-001",
+    requiredQty: "10",
+    requirementType: "KIT_ITEM",
+  }
+]);
+Then run:
+await evaluateQueueReadiness(queue.id);

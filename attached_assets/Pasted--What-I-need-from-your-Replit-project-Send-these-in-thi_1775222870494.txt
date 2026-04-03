@@ -1,0 +1,196 @@
+🔍 What I need from your Replit project
+
+Send these in this order (this matters):
+
+1. shared/schema.ts (FULL FILE)
+
+👉 This is the most important file
+
+I need to see:
+
+existing tables (especially anything related to)
+travelers
+part_routings
+manufacturing_queue (if it exists)
+inventory
+receipts / lots
+existing enums
+how IDs are typed (uuid vs serial — you’ve hit this issue already)
+
+Why:
+I will merge the new queue + allocation system into your existing schema instead of duplicating tables.
+
+2. Current manufacturing queue implementation (if any)
+
+Search for anything like:
+
+manufacturing_queue
+queue
+production_queue
+cnc_queue
+layup_queue
+
+Send:
+
+schema (if exists)
+related services
+related routes
+
+Why:
+You may already have something we should extend instead of replace
+
+3. Traveler generation logic
+
+Specifically:
+
+generateTravelerFromRouting
+or whatever function creates travelers
+
+Also:
+
+traveler schema
+traveler steps/tasks
+
+Why:
+We must NOT break:
+
+your traceability
+your timers
+your process flow
+
+The queue system should wrap around this, not replace it.
+
+4. Inventory + lot / traceability structure
+
+I need:
+
+inventory table
+any lot/batch/internal control number tables
+receiving/consume logic
+
+You mentioned:
+
+ICN
+lots
+freezer tracking
+fabric inventory
+
+Why:
+Allocation sources must plug directly into this system.
+
+5. Any existing allocation logic
+
+Search for:
+
+allocation
+reserve
+consume
+inventory reservation
+
+Send:
+
+schema
+service functions
+endpoints
+
+Why:
+You already started this — I want to upgrade it, not rebuild it.
+
+6. Work order (if exists) OR manufacturing source structure
+
+If you already have:
+
+work orders
+production orders
+manufacturing queue sources
+
+Send that.
+
+If not, I’ll align with what you do have.
+
+7. One existing dashboard (example: CNC or cutting table)
+
+Send:
+
+route file
+frontend page (if possible)
+
+Why:
+I’ll match:
+
+your API patterns
+your UI structure
+your naming conventions
+
+So the new queues feel native.
+
+🧠 What I will do with this
+
+Once you send that, I will:
+
+1. Map your current architecture
+what is already solid
+what should not be touched
+what needs to be extended
+2. Decide integration strategy
+
+One of these:
+
+Option A (best case)
+
+Extend your existing manufacturing_queue
+
+Option B
+
+Refactor lightly and keep compatibility
+
+Option C (worst case)
+
+Create new tables and bridge them cleanly
+
+3. Rewrite the plan specifically for YOUR app
+
+You will get:
+
+exact schema modifications (not generic)
+exact file edits (line-by-line if needed)
+no duplicate systems
+no breaking changes
+4. Ensure these systems align
+
+Everything will connect cleanly:
+
+Inventory → Routing → Traveler → Queue → Allocation → Execution
+⚠️ What I specifically want to avoid
+
+Without seeing your code, the biggest risks are:
+
+duplicating manufacturing queue logic
+breaking traveler generation
+mismatching UUID vs integer keys (you’ve already hit this)
+creating a second allocation system instead of fixing yours
+bypassing your existing dashboards
+💥 The goal
+
+Not just to “add queues”
+
+But to make your system behave like:
+
+a real manufacturing control system
+
+Where:
+
+queues are actionable
+allocation drives readiness
+travelers enforce execution
+everything is connected
+✅ What to send first
+
+Start with:
+
+👉 1. shared/schema.ts
+👉 2. any existing manufacturing queue schema/service
+
+Paste it here and I’ll take it from there.
+
+Then I’ll give you a surgically accurate implementation plan for your exact codebase (not generic like before).

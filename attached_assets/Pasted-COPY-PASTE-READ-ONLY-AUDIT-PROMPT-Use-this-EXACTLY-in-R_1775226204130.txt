@@ -1,0 +1,260 @@
+COPY-PASTE READ-ONLY AUDIT PROMPT
+
+Use this EXACTLY in Replit:
+
+READ-ONLY AUDIT ONLY.
+DO NOT MODIFY ANY FILES.
+DO NOT WRITE CODE.
+DO NOT APPLY PATCHES.
+DO NOT CREATE COMMITS.
+
+GOAL:
+Determine why the "Reprint Packing Slip" UI says "No packing slip on file"
+even though packing slips have previously been generated.
+
+This is a forensic trace problem.
+
+--------------------------------------------------
+CONTEXT
+--------------------------------------------------
+
+UI: OEM Shipments page
+Buttons exist:
+- Reprint Label
+- Reprint Packing Slip
+
+The dropdown shows:
+"No packing slip on file"
+
+But packing slips HAVE been generated previously.
+
+We need to determine:
+1) Where packing slips are stored (if at all)
+2) How the UI determines availability
+3) Why the UI thinks none exist
+
+--------------------------------------------------
+STEP 1 — TRACE UI LOGIC
+--------------------------------------------------
+
+Find the exact component rendering:
+
+- "Reprint Packing Slip"
+- dropdown showing available packing slips
+
+Search:
+"Reprint Packing Slip"
+"packing slip on file"
+"reprintPackingSlip"
+"packingSlipOptions"
+
+For the component:
+
+1. Identify:
+   - file path
+   - component name
+
+2. Find:
+   - where packing slip options are loaded
+   - what API endpoint is called
+   - what data structure is expected
+
+3. Show:
+   - the condition that results in:
+     "No packing slip on file"
+
+--------------------------------------------------
+STEP 2 — TRACE API CALL FROM UI
+--------------------------------------------------
+
+From the UI component:
+
+1. Identify API call:
+   - endpoint URL
+   - HTTP method
+
+2. Find corresponding server route
+
+3. Show:
+   - route file path
+   - handler function
+
+--------------------------------------------------
+STEP 3 — TRACE DATA SOURCE (CRITICAL)
+--------------------------------------------------
+
+For the API route:
+
+1. Identify:
+   - which table(s) are queried
+   - what filters are used
+
+2. Determine:
+   - what key is used:
+     - shipmentId?
+     - poNumber?
+     - orderId?
+     - customerId?
+
+3. Show:
+   - full query logic
+
+--------------------------------------------------
+STEP 4 — TRACE WHERE PACKING SLIPS ARE CREATED
+--------------------------------------------------
+
+We MUST answer:
+
+"Where are packing slips saved?"
+
+Search:
+
+- packing_slips
+- p2_packing_slips
+- insert into packing slips
+- createPackingSlip
+- generatePackingSlip
+
+Then:
+
+A) P1 (PO flow)
+   - server/src/routes/poShippingQC.ts
+
+Check:
+- Is ANY packing slip record inserted into DB?
+- Or is PDF just generated and returned?
+
+B) P2 (serialized flow)
+   - server/src/routes/p2Shipping.ts
+
+Check:
+- Is p2_packing_slips table used?
+- When is record created?
+
+--------------------------------------------------
+STEP 5 — IDENTIFY MISMATCH
+--------------------------------------------------
+
+Compare:
+
+UI expects → (table + key)
+Actual data → (table + key)
+
+Determine:
+
+1. Are P1 packing slips stored at all?
+2. Are they stored in a different table than UI checks?
+3. Is UI only checking:
+   - p2_packing_slips?
+   - but P1 uses no storage?
+
+4. Is the lookup key mismatched:
+   - UI uses shipmentId
+   - DB stores by poNumber
+   - etc.
+
+--------------------------------------------------
+STEP 6 — TRACE REPRINT FLOW
+--------------------------------------------------
+
+Find what happens when user selects a packing slip:
+
+1. What endpoint is called to reprint?
+2. Does it:
+   - regenerate PDF?
+   - or fetch stored PDF?
+
+3. What identifier is passed?
+
+--------------------------------------------------
+STEP 7 — REQUIRED OUTPUT
+--------------------------------------------------
+
+# 1. ROOT CAUSE (MOST IMPORTANT)
+Explain clearly:
+
+Why UI says:
+"No packing slip on file"
+
+Even though packing slips exist.
+
+Be specific:
+- table mismatch
+- missing persistence
+- wrong key
+- wrong endpoint
+- wrong environment
+- etc.
+
+--------------------------------------------------
+
+# 2. UI EXPECTATION
+What the UI expects to exist:
+- table name
+- fields
+- key used
+
+--------------------------------------------------
+
+# 3. ACTUAL SYSTEM BEHAVIOR
+
+P1:
+- stored? yes/no
+- where?
+- how retrieved?
+
+P2:
+- stored? yes/no
+- where?
+- how retrieved?
+
+--------------------------------------------------
+
+# 4. GAP ANALYSIS
+
+Explain the exact disconnect:
+
+UI → expects X
+System → provides Y
+
+--------------------------------------------------
+
+# 5. REPRINT FLOW ANALYSIS
+
+Explain:
+- how reprint is supposed to work
+- why it currently fails
+
+--------------------------------------------------
+
+# 6. QUICK FIX OPTIONS (NO CODE)
+
+List 2–3 possible fixes:
+
+Option A — minimal fix
+Option B — correct long-term fix
+Option C — hybrid
+
+--------------------------------------------------
+
+# 7. FILES TO REVIEW
+
+List the exact files responsible for:
+- UI dropdown
+- API route
+- DB storage
+- packing slip generation
+
+--------------------------------------------------
+
+IMPORTANT RULES
+
+- DO NOT assume packing slips are stored — verify it
+- DO NOT assume P1 and P2 behave the same — verify separately
+- FOLLOW the full chain:
+  UI → API → DB → generation
+- If something is NOT stored, say it explicitly
+- If something is stored but not linked, explain the key mismatch
+
+READ-ONLY ONLY.
+NO CODE CHANGES.

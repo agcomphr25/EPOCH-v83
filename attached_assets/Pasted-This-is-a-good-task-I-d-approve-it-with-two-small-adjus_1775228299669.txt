@@ -1,0 +1,64 @@
+This is a good task. I’d approve it with two small adjustments so it works better with what you already built.
+
+What I would change
+
+First, change the blocking details source.
+
+Right now the task says the detail view should pull from POST /:id/evaluate-readiness. That endpoint is good for recalculating and returning summary blocking info, but the detail UI should ideally read from the queue detail/requirements data source so it can show stable per-requirement fields like:
+
+part number
+required qty
+allocated qty
+staged qty
+consumed qty
+shortfall
+requirement type
+critical flag
+
+Use evaluate-readiness for recalculation, then refresh the row and details query.
+
+Second, tighten the blocked-reason wording in the UI requirement.
+
+Instead of:
+
+show blockedReason when status is NOT_READY or BLOCKED
+
+make it:
+
+show blockedReason when readinessStatus is NOT_READY, PARTIAL, or BLOCKED
+
+That matches the actual readiness model better.
+
+Recommended final wording changes
+Done looks like
+
+Replace this item:
+
+A blocking detail popover or inline expand on each row lists the specific parts that are short (part number, required qty, allocated qty, shortfall) pulled from the POST /:id/evaluate-readiness response
+
+With:
+
+A blocking detail drawer, expandable row, or dialog shows requirement-level shortage details for the selected kit, including part number, required qty, allocated qty, staged qty, consumed qty, shortfall, requirement type, and critical flag. Re-evaluate refreshes this data after POST /api/manufacturing-queue/:id/evaluate-readiness.
+
+Replace this item:
+
+The blockedReason field is shown as a tooltip or sub-line when the status is NOT_READY or BLOCKED
+
+With:
+
+The blockedReason field is shown as a tooltip or sub-line when readinessStatus is PARTIAL, NOT_READY, or BLOCKED.
+
+One optional improvement
+
+Add default sorting so the page is immediately useful:
+
+blocked first
+then partial
+then ready
+then by due date
+
+That will help operators see what needs attention first.
+
+My verdict
+
+Approve it with those edits. The task is scoped well, stays out of existing pages, and is the right next step after the readiness backend.

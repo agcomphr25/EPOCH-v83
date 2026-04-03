@@ -1,0 +1,105 @@
+PROMPT 2 — FIX PERSISTENCE (CRITICAL)
+
+👉 This fixes the root problem permanently
+
+IMPLEMENTATION MODE — ENFORCE PACKING SLIP PERSISTENCE
+
+DO NOT CHANGE BUSINESS LOGIC
+DO NOT CHANGE RESPONSE STRUCTURES
+DO NOT REMOVE EXISTING ROUTES
+
+GOAL:
+Ensure ALL packing slips are persisted to shipment_items.packing_slip_base64
+
+--------------------------------------------------
+STEP 1 — FIX QC PACKING SLIP ROUTE
+--------------------------------------------------
+
+File:
+server/src/routes/poShippingQC.ts
+
+FIND:
+POST /api/po-orders/packing-slips
+
+CURRENT BEHAVIOR:
+- Generates PDF
+- Returns it to client
+- DOES NOT SAVE
+
+--------------------------------------------------
+ADD:
+
+After generating each PDF:
+
+1. Identify related shipment_items rows:
+   - by orderId
+   - OR poNumber
+   - OR existing shipment linkage
+
+2. UPDATE:
+
+shipment_items.packing_slip_base64 = generated PDF
+
+--------------------------------------------------
+IMPORTANT:
+
+- Do NOT change response format
+- Do NOT break existing behavior
+- Only ADD persistence
+
+--------------------------------------------------
+STEP 2 — FIX SILENT FAILURE
+--------------------------------------------------
+
+FIND:
+
+try {
+  createShipment(...)
+} catch (e) {
+  log error
+  continue
+}
+
+--------------------------------------------------
+REPLACE WITH:
+
+try {
+  createShipment(...)
+} catch (e) {
+  console.error("CRITICAL: Shipment persistence failed", e)
+
+  THROW new Error("Shipment failed: packing slip not saved")
+}
+
+--------------------------------------------------
+RULE:
+
+A shipment is NOT valid unless:
+packing_slip_base64 is successfully saved
+
+--------------------------------------------------
+STEP 3 — ADD VALIDATION CHECK
+--------------------------------------------------
+
+After createShipment:
+
+VERIFY:
+
+if (!packing_slip_base64) {
+  throw new Error("Packing slip missing after shipment creation")
+}
+
+--------------------------------------------------
+STEP 4 — ADD DEBUG LOGGING
+--------------------------------------------------
+
+console.log("Packing slip saved for shipment item:", itemId)
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+- All newly generated packing slips are stored
+- No silent failures
+- Shipment fails if packing slip not saved
+- OEM Shipments page shows hasPackingSlip = true

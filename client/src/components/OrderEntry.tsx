@@ -4811,10 +4811,17 @@ export default function OrderEntry() {
                             selectedModel?.name
                               ?.toLowerCase()
                               .includes('chalk');
+                          const isPrivateerModel =
+                            selectedModel?.displayName
+                              ?.toLowerCase()
+                              .includes('privateer') ||
+                            selectedModel?.name
+                              ?.toLowerCase()
+                              .includes('privateer');
                           return (
-                            isChalkModel && (
+                            (isChalkModel || isPrivateerModel) && (
                               <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                Chalk Model - Limited Options
+                                Limited Options
                               </span>
                             )
                           );
@@ -4852,7 +4859,7 @@ export default function OrderEntry() {
                               return null;
                             }
 
-                            // Check if selected model contains "Chalk" in the name
+                            // Check if selected model contains "Chalk" or "Privateer" in the name
                             const selectedModel = modelOptions.find(
                               (m) => m.id === modelId
                             );
@@ -4863,8 +4870,15 @@ export default function OrderEntry() {
                               selectedModel?.name
                                 ?.toLowerCase()
                                 .includes('chalk');
+                            const isPrivateerModel =
+                              selectedModel?.displayName
+                                ?.toLowerCase()
+                                .includes('privateer') ||
+                              selectedModel?.name
+                                ?.toLowerCase()
+                                .includes('privateer');
 
-                            // Define limited QD options for Chalk models (based on actual database values)
+                            // Define limited QD options for Chalk/Privateer models (based on actual database values)
                             const chalkQDOptions = [
                               'no_qds',
                               'qd_1_right_butt',
@@ -4878,9 +4892,9 @@ export default function OrderEntry() {
                                 option.value && option.value.trim() !== ''
                             );
 
-                            if (isChalkModel) {
+                            if (isChalkModel || isPrivateerModel) {
                               console.log(
-                                '🎯 Chalk model detected for QDs:',
+                                '🎯 Chalk/Privateer model detected for QDs:',
                                 selectedModel?.displayName
                               );
                               console.log(
@@ -4894,7 +4908,7 @@ export default function OrderEntry() {
                               );
 
                               console.log(
-                                '🎯 Filtered QD options for Chalk:',
+                                '🎯 Filtered QD options for Chalk/Privateer:',
                                 availableOptions.map((o) => o.label)
                               );
                             }

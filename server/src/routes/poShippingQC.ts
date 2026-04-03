@@ -905,11 +905,21 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
 
     const query = `
       SELECT 
-        packing_slip_base64,
-        po_number,
-        order_id
-      FROM shipment_items
-      WHERE id = $1
+        si.id,
+        si.packing_slip_base64,
+        si.po_number,
+        si.order_id,
+        si.quantity,
+        si.description,
+        sr.master_tracking_number AS tracking_number,
+        COALESCE(NULLIF(sr.customer_name, ''), '') AS customer_name,
+        sr.customer_address AS ship_street,
+        sr.customer_city AS ship_city,
+        sr.customer_state AS ship_state,
+        sr.customer_zip AS ship_zip
+      FROM shipment_items si
+      JOIN shipment_records sr ON sr.id = si.shipment_id
+      WHERE si.id = $1
     `;
 
     const result = await pool.query(query, [itemId]);
@@ -919,12 +929,52 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
       return res.status(404).json({ _error: 'Shipment item not found' });
     }
 
-    if (!item.packing_slip_base64) {
-      return res.status(404).json({ _error: 'Packing slip not available' });
+    let packingSlipBase64: string = item.packing_slip_base64;
+
+    if (!packingSlipBase64) {
+      console.log(`⚙️ Packing slip missing for item ${itemId} — regenerating on the fly...`);
+      try {
+        const slipData: PackingSlipData = {
+          packingSlipNumber: `PS-${item.order_id || item.po_number}`,
+          poNumber: item.po_number || '',
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          customerName: item.customer_name || '',
+          customerAddress: (item.ship_street || item.ship_city)
+            ? {
+                street: item.ship_street || '',
+                city: item.ship_city || '',
+                state: item.ship_state || '',
+                zip: item.ship_zip || '',
+              }
+            : undefined,
+          trackingNumber: item.tracking_number || '',
+          totalQuantity: item.quantity || 1,
+          items: [
+            {
+              partNumber: item.description || 'N/A',
+              description: item.description || 'N/A',
+              quantity: item.quantity || 1,
+              unitNumber: item.order_id || '',
+            },
+          ],
+        };
+        const pdfBuffer = await generatePackingSlipPdf(slipData);
+        packingSlipBase64 = pdfBuffer.toString('base64');
+
+        // Persist so future fetches don't need to regenerate
+        await pool.query(
+          `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
+          [packingSlipBase64, itemId]
+        );
+        console.log(`✅ Packing slip regenerated and persisted for item ${itemId}`);
+      } catch (regenErr: any) {
+        console.error(`❌ Packing slip regeneration failed for item ${itemId}:`, regenErr.message);
+        return res.status(404).json({ _error: 'Packing slip not available and could not be regenerated' });
+      }
     }
 
     // Decode base64 and send as PDF
-    const slipBuffer = Buffer.from(item.packing_slip_base64, 'base64');
+    const slipBuffer = Buffer.from(packingSlipBase64, 'base64');
     const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');

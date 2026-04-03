@@ -248,8 +248,8 @@ export default function OEMShipmentsPage() {
 
       if (response.status === 404) {
         toast({
-          title: 'No packing slip on file',
-          description: 'No packing slip on file — return this shipment to QC to regenerate.',
+          title: 'No packing slip available',
+          description: 'No packing slip could be found or regenerated for this shipment.',
           variant: 'destructive',
         });
         return;
@@ -855,7 +855,7 @@ export default function OEMShipmentsPage() {
                                               <Button
                                                 size="sm"
                                                 variant="outline"
-                                                onClick={() => downloadPackingSlip(items[0].id, poNumber, items[0].orderId)}
+                                                onClick={() => { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); }}
                                                 disabled={!hasSlip}
                                                 className={!hasSlip ? 'pointer-events-none opacity-50' : ''}
                                               >
@@ -891,7 +891,7 @@ export default function OEMShipmentsPage() {
                                                 <TooltipTrigger asChild>
                                                   <div>
                                                     <DropdownMenuItem
-                                                      onClick={() => hasSlip && downloadPackingSlip(items[0].id, poNumber, items[0].orderId)}
+                                                      onClick={() => { if (hasSlip) { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); } }}
                                                       disabled={!hasSlip}
                                                       className={!hasSlip ? 'opacity-50 cursor-not-allowed' : ''}
                                                     >

@@ -1,0 +1,222 @@
+Good. Start with the backend first so the UI has something real to call.
+
+Step 1 — schema change
+
+In server/schema.ts, add releasedAt to the existing manufacturingQueue table.
+
+releasedAt: timestamp('released_at'),
+
+And update the status comment to reflect:
+
+// PENDING | RELEASED | IN_PROGRESS | COMPLETED | CANCELLED
+
+If you already have inline migration logic in server/index.ts, add a safe migration like this:
+
+await db.execute(sql`
+  ALTER TABLE manufacturing_queue
+  ADD COLUMN IF NOT EXISTS released_at timestamp;
+`);
+Step 2 — release endpoint
+
+In server/src/routes/manufacturingQueue.ts, add this route before export default router.
+
+router.post("/:id/release", async (req, res) => {
+  try {
+    const queueId = Number(req.params.id);
+
+    const [queue] = await db
+      .select()
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.id, queueId));
+
+    if (!queue) {
+      return res.status(404).json({ message: "Queue item not found" });
+    }
+
+    if (queue.queueType !== "KIT") {
+      return res.status(400).json({
+        message: "Only KIT queue items can be released from this endpoint",
+      });
+    }
+
+    if (queue.readinessStatus !== "READY") {
+      return res.status(400).json({
+        message: "Kit is not ready — only READY kits can be released",
+      });
+    }
+
+    if (
+      ["IN_PROGRESS", "COMPLETED", "RELEASED", "CANCELLED"].includes(
+        queue.status || ""
+      )
+    ) {
+      return res.status(400).json({
+        message: `Cannot release queue item in status ${queue.status}`,
+      });
+    }
+
+    const [updated] = await db
+      .update(manufacturingQueue)
+      .set({
+        status: "RELEASED",
+        releasedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(manufacturingQueue.id, queueId))
+      .returning();
+
+    return res.json(updated);
+  } catch (error: any) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+Step 3 — protect readiness re-evaluation from wiping out RELEASED
+
+In server/src/services/queueReadinessService.ts, update the logic so re-evaluation does not overwrite status = RELEASED.
+
+Use this pattern in the final update section:
+
+const [existingQueue] = await db
+  .select()
+  .from(manufacturingQueue)
+  .where(eq(manufacturingQueue.id, queueId));
+
+if (!existingQueue) {
+  throw new Error("Queue not found");
+}
+
+let nextStatus = existingQueue.status;
+
+if (existingQueue.status !== "RELEASED") {
+  if (blocking.length > 0) {
+    nextStatus = "BLOCKED";
+  } else if (
+    existingQueue.status !== "IN_PROGRESS" &&
+    existingQueue.status !== "COMPLETED" &&
+    existingQueue.status !== "CANCELLED"
+  ) {
+    nextStatus = "PENDING";
+  }
+}
+
+await db
+  .update(manufacturingQueue)
+  .set({
+    readinessStatus: readiness,
+    status: nextStatus,
+    percentReady: percent.toString(),
+    blockedReason: blocking.join(", "),
+    updatedAt: new Date(),
+  })
+  .where(eq(manufacturingQueue.id, queueId));
+
+That keeps readiness fresh without silently un-releasing the job.
+
+Step 4 — traveler start gate
+
+In server/src/routes/travelers.ts, inside POST /api/travelers/:id/start, add a check before the traveler is allowed to start.
+
+Use the strongest link you have first. Since your current system may not have a direct queue FK on traveler, start with a constrained lookup by:
+
+same inventoryItemId
+queueType = KIT
+active statuses only
+
+Add something like this before the start action:
+
+const [traveler] = await db
+  .select()
+  .from(travelers)
+  .where(eq(travelers.id, req.params.id));
+
+if (!traveler) {
+  return res.status(404).json({ message: "Traveler not found" });
+}
+
+let linkedKitQueue: any = null;
+
+if (traveler.inventoryItemId) {
+  const possibleQueues = await db
+    .select()
+    .from(manufacturingQueue)
+    .where(
+      and(
+        eq(manufacturingQueue.inventoryItemId, Number(traveler.inventoryItemId)),
+        eq(manufacturingQueue.queueType, "KIT")
+      )
+    );
+
+  linkedKitQueue =
+    possibleQueues.find((q) => ["RELEASED", "PENDING", "BLOCKED"].includes(q.status || "")) ||
+    possibleQueues[0] ||
+    null;
+}
+
+if (linkedKitQueue && linkedKitQueue.status !== "RELEASED") {
+  return res.status(400).json({
+    message:
+      "Kit not released — release the linked kit queue item before starting this traveler",
+  });
+}
+
+Later, when you have a stronger explicit link, replace this fallback with direct queue linkage.
+
+Step 5 — Kits Queue UI button
+
+In client/src/pages/KitsQueue.tsx, add a row action:
+
+const releaseMutation = useMutation({
+  mutationFn: async (queueId: number) => {
+    return apiRequest(`/api/manufacturing-queue/${queueId}/release`, {
+      method: "POST",
+    });
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["kits-queue"] });
+  },
+});
+
+Add a button in the actions column:
+
+<button
+  onClick={(e) => {
+    e.stopPropagation();
+    releaseMutation.mutate(row.id);
+  }}
+  disabled={row.readinessStatus !== "READY" || row.status === "RELEASED"}
+  className="px-2 py-1 border rounded disabled:opacity-50"
+>
+  Release
+</button>
+Step 6 — RELEASED badge
+
+Where you render queue status badges, add:
+
+if (status === "RELEASED") {
+  return <Badge variant="secondary">RELEASED</Badge>;
+}
+
+If you use custom colors, make RELEASED visually different from READY.
+
+Step 7 — optional Released filter
+
+Add "RELEASED" to the status filter options in KitsQueue.tsx.
+
+Build order for today
+
+Do it in this exact order:
+
+schema.ts add releasedAt
+migration in server/index.ts
+release endpoint in manufacturingQueue.ts
+protect queueReadinessService.ts
+traveler start gate in travelers.ts
+Release button in KitsQueue.tsx
+RELEASED badge/filter
+
+After you paste those in, test these 4 cases:
+
+not-ready kit → release should fail
+ready kit → release should succeed
+released kit → re-evaluate should keep status RELEASED
+unreleased linked kit traveler → start should fail

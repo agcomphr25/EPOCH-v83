@@ -79,6 +79,31 @@ interface POItemsManagerProps {
   onAddItem: () => void;
 }
 
+// Derives the canonical material from a stock model ID (mirrors server-side logic)
+function deriveCanonicalMaterial(stockModelId: string): string {
+  if (!stockModelId) return '';
+  const lower = stockModelId.toLowerCase();
+  if (/^agm5/i.test(stockModelId)) return 'Metal Accessory';
+  if (/^agbdl/i.test(stockModelId)) return 'Metal Accessory';
+  if (/^agbm/i.test(stockModelId)) return 'Metal Accessory';
+  if (/^agpic/i.test(stockModelId)) return 'Metal Accessory';
+  if (/^agarca/i.test(stockModelId)) return 'Metal Accessory';
+  if (lower.startsWith('cf_')) return 'Carbon Fiber';
+  if (lower.startsWith('fg_')) return 'Fiberglass';
+  if (lower === 'm1a_carbon') return 'Carbon Fiber';
+  if (lower === 'm1a_fiberglass') return 'Fiberglass';
+  if (lower.startsWith('m1a_')) return 'M1A';
+  if (lower.startsWith('apr_')) return 'APR';
+  if (lower.includes('carbon')) return 'Carbon Fiber';
+  if (lower.includes('fiberglass') || lower.includes('_fg')) return 'Fiberglass';
+  if (lower.startsWith('mesa_')) return 'Fiberglass';
+  if (lower.includes('tikka') && !lower.startsWith('mesa_')) return 'Carbon Fiber';
+  if (lower.includes('-fg-') || lower.startsWith('ag-fg')) return 'Fiberglass';
+  if (lower.includes('-crb-') || lower.startsWith('ag-crb')) return 'Carbon Fiber';
+  if (lower.includes('-cf-') || lower.startsWith('ag-cf')) return 'Carbon Fiber';
+  return '';
+}
+
 // Helper to format specification labels
 const specificationLabels: Record<string, string> = {
   stockModel: 'Stock Model',
@@ -525,16 +550,24 @@ export default function POItemsManager({
                     <div className="mt-2 grid grid-cols-2 gap-3">
                       {Object.entries(selectedItem.specifications)
                         .filter(([_, value]) => value !== null && value !== undefined && value !== '')
-                        .map(([key, value]) => (
-                          <div key={key} className="bg-gray-50 rounded-lg p-3 border">
-                            <div className="text-xs text-gray-500 uppercase tracking-wide">
-                              {specificationLabels[key] || key.replace(/([A-Z])/g, ' $1').trim()}
+                        .map(([key, value]) => {
+                          let displayValue = value;
+                          if (key === 'material') {
+                            const stockModelId = selectedItem.specifications?.stockModel || selectedItem.specifications?.stockModelId || '';
+                            const canonical = deriveCanonicalMaterial(String(stockModelId));
+                            if (canonical) displayValue = canonical;
+                          }
+                          return (
+                            <div key={key} className="bg-gray-50 rounded-lg p-3 border">
+                              <div className="text-xs text-gray-500 uppercase tracking-wide">
+                                {specificationLabels[key] || key.replace(/([A-Z])/g, ' $1').trim()}
+                              </div>
+                              <div className="text-sm font-medium text-gray-900 mt-1">
+                                {formatSpecValue(key, displayValue)}
+                              </div>
                             </div>
-                            <div className="text-sm font-medium text-gray-900 mt-1">
-                              {formatSpecValue(key, value)}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </div>
                 )}

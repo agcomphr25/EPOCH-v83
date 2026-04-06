@@ -1119,6 +1119,13 @@ export default function Navigation() {
         'Readiness gating for kit manufacturing queue items — see which kits are ready, partial, or blocked',
     },
     {
+      path: '/layup-queue',
+      label: 'Layup Queue',
+      icon: Layers,
+      description:
+        'Readiness gating for layup jobs — verify prepreg fabric, resin, and consumables with lot compliance checks',
+    },
+    {
       path: '/po-products',
       label: 'PO Product Items',
       icon: Package,

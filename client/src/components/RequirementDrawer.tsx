@@ -37,6 +37,23 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+function formatLayupRequirementType(type: string): string {
+  switch (type) {
+    case 'MATERIAL':
+      return 'Prepreg / Material';
+    case 'CONSUMABLE':
+      return 'Consumable';
+    case 'COMPONENT':
+      return 'Component / Packet';
+    case 'KIT_ITEM':
+      return 'Kit Item';
+    case 'SUBASSEMBLY':
+      return 'Subassembly';
+    default:
+      return type;
+  }
+}
+
 type AllocationRequirement = {
   id: string;
   manufacturingQueueId: number;
@@ -65,6 +82,9 @@ type MaterialLot = {
   unitOfMeasure: string;
   status: string;
   storageLocation: string | null;
+  expirationDate: string | null;
+  totalOutTimeMinutes: number | null;
+  maxOutTimeMinutes: number | null;
 };
 
 type KitQueueItem = {
@@ -106,13 +126,53 @@ function ShortfallBadge({
   );
 }
 
+function LotComplianceBadges({ lot }: { lot: MaterialLot }) {
+  const now = new Date();
+  const isExpired = lot.expirationDate ? new Date(lot.expirationDate) < now : false;
+  const outTimeExceeded =
+    lot.maxOutTimeMinutes != null &&
+    lot.totalOutTimeMinutes != null &&
+    lot.totalOutTimeMinutes >= lot.maxOutTimeMinutes;
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {lot.internalControlNumber && (
+        <span className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 font-mono">
+          ICN: {lot.internalControlNumber}
+        </span>
+      )}
+      <span className="inline-flex items-center text-xs text-muted-foreground dark:text-gray-400">
+        Rem: {parseFloat(lot.remainingQty)} {lot.unitOfMeasure}
+      </span>
+      {lot.expirationDate && (
+        <Badge
+          className={`text-xs ${isExpired ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}
+        >
+          {isExpired ? <XCircle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+          {isExpired ? 'EXPIRED' : 'Exp OK'}: {new Date(lot.expirationDate).toLocaleDateString()}
+        </Badge>
+      )}
+      {lot.maxOutTimeMinutes != null && (
+        <Badge
+          className={`text-xs ${outTimeExceeded ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}
+        >
+          {outTimeExceeded ? <XCircle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+          Out-time: {lot.totalOutTimeMinutes ?? 0}/{lot.maxOutTimeMinutes} min
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function RequirementRow({
   req,
   queueId,
+  isLayup,
   onActionComplete,
 }: {
   req: AllocationRequirement;
   queueId: number;
+  isLayup?: boolean;
   onActionComplete: () => void;
 }) {
   const { toast } = useToast();
@@ -136,6 +196,13 @@ function RequirementRow({
           (lot.status === 'ACCEPTED' || lot.status === 'ISSUED') &&
           parseFloat(lot.remainingQty) > 0
       ),
+  });
+
+  const { data: reservedLotData } = useQuery<MaterialLot | null>({
+    queryKey: ['/api/material-lots/single', req.materialLotId],
+    queryFn: (): Promise<MaterialLot | null> =>
+      apiRequest(`/api/material-lots/${req.materialLotId}`) as Promise<MaterialLot | null>,
+    enabled: isLayup === true && req.materialLotId != null,
   });
 
   const allocateMutation = useMutation({
@@ -212,7 +279,9 @@ function RequirementRow({
             <span className="font-mono text-sm font-semibold dark:text-white">
               {req.requiredPartNumber}
             </span>
-            <Badge variant="outline" className="text-xs">{req.requirementType}</Badge>
+            <Badge variant="outline" className="text-xs">
+              {isLayup ? formatLayupRequirementType(req.requirementType) : req.requirementType}
+            </Badge>
             {req.isCritical && (
               <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs">
                 <AlertCircle className="w-3 h-3 mr-1" />
@@ -225,10 +294,16 @@ function RequirementRow({
               {req.requiredPartName}
             </p>
           )}
-          {req.internalControlNumber && (
+          {req.internalControlNumber && !isLayup && (
             <p className="text-xs text-blue-600 dark:text-blue-400">
               ICN: {req.internalControlNumber}
             </p>
+          )}
+          {isLayup && req.materialLotId && reservedLotData && (
+            <LotComplianceBadges lot={reservedLotData} />
+          )}
+          {isLayup && !req.materialLotId && (
+            <p className="text-xs text-muted-foreground dark:text-gray-500 italic">No lot reserved — quantity-only check applies</p>
           )}
         </div>
         <div className="shrink-0 mt-0.5">
@@ -350,11 +425,13 @@ export function RequirementDrawer({
   open,
   onClose,
   onQueueRefetch,
+  isLayup,
 }: {
   kit: KitQueueItem | null;
   open: boolean;
   onClose: () => void;
   onQueueRefetch: () => void;
+  isLayup?: boolean;
 }) {
   const {
     data: requirements = [],
@@ -387,14 +464,14 @@ export function RequirementDrawer({
       >
         <SheetHeader className="pb-4 border-b border-gray-200 dark:border-gray-700">
           <SheetTitle className="dark:text-white">
-            Allocation Control
+            {isLayup ? 'Layup Allocation Control' : 'Allocation Control'}
           </SheetTitle>
           <SheetDescription className="dark:text-gray-400 space-y-0.5">
             <span className="font-mono font-semibold text-foreground dark:text-white">
               {kit?.inventoryItem?.agPartNumber ?? `Queue #${kit?.id}`}
             </span>
             {' — '}
-            {kit?.inventoryItem?.name ?? 'Kit Item'}
+            {kit?.inventoryItem?.name ?? (isLayup ? 'Layup Item' : 'Kit Item')}
             <br />
             Readiness:{' '}
             <span className={`font-semibold ${readinessColor}`}>
@@ -424,6 +501,7 @@ export function RequirementDrawer({
                 key={req.id}
                 req={req}
                 queueId={kit!.id}
+                isLayup={isLayup}
                 onActionComplete={handleActionComplete}
               />
             ))

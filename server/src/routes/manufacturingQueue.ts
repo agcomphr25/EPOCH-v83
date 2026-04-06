@@ -374,14 +374,14 @@ router.post('/:id/release', async (req, res) => {
     if (!item) {
       return res.status(404).json({ error: 'Manufacturing queue item not found' });
     }
-    if (item.queueType !== 'KIT') {
-      return res.status(400).json({ error: 'Only KIT queue items can be released' });
+    if (item.queueType !== 'KIT' && item.queueType !== 'LAYUP') {
+      return res.status(400).json({ error: 'Only KIT or LAYUP queue items can be released' });
     }
     if (item.readinessStatus !== 'READY') {
-      return res.status(400).json({ error: 'Kit must be READY before it can be released' });
+      return res.status(400).json({ error: `${item.queueType} must be READY before it can be released` });
     }
     if (['IN_PROGRESS', 'COMPLETED', 'RELEASED', 'CANCELLED'].includes(item.status)) {
-      return res.status(400).json({ error: `Kit is already ${item.status} and cannot be released` });
+      return res.status(400).json({ error: `Item is already ${item.status} and cannot be released` });
     }
 
     const [updated] = await db

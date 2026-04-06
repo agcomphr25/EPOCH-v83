@@ -1,0 +1,90 @@
+What I would adjust
+1. Do not promise lot-based expiry/out-time checks unless the requirement-to-lot link is really present
+
+This line is the main thing I would tighten:
+
+flag requirements whose linked material lot has an expired expirationDate; flag prepreg fabric lots where totalOutTimeMinutes >= maxOutTimeMinutes
+
+That is correct in principle, but only if the readiness service can reliably determine which lot is actually tied to the requirement. In your current flow, that may come from:
+
+an existing lot reservation
+staged quantity / reserved lot relationship
+not just any lot for that part number
+
+So I would revise it to:
+
+for LAYUP requirements with a reserved/linked material lot, validate expiration and out-time on that reserved lot
+do not block based on unrelated lots for the same part number
+
+That avoids false blocking.
+
+2. Keep RequirementDrawer reusable, but allow LAYUP-specific labels and fields
+
+“Reuse RequirementDrawer as-is” is slightly too rigid.
+
+Better:
+
+reuse the same drawer component shell
+allow LAYUP-specific display labels and extra lot status fields
+
+For layup, the drawer should ideally show:
+
+ICN
+remaining qty
+expiration status
+out-time status
+totalOutTimeMinutes / maxOutTimeMinutes when applicable
+
+So I would not require “as-is.” I would require “reused and extended.”
+
+3. Release gate should only expand queue type support, not change the rest of the logic
+
+That part is good. I would just state explicitly:
+
+add LAYUP to the allowed release types
+do not alter KIT behavior
+4. Clarify blocked-reason behavior
+
+Instead of only saying blocked reasons should “surface” expiration/out-time issues, specify that:
+
+these issues should appear in both blockedReason summary and detailed readiness output
+quantity coverage of 100% does not override material compliance failure
+
+That is an important rule for layup.
+
+Recommended wording changes
+Done looks like
+
+Change:
+
+Blocked reasons surface expiration, out-time violations, and quantity shortfalls alongside standard allocation shortfalls
+
+To:
+
+Blocked reasons surface quantity shortfalls and, for requirements with reserved/linked material lots, expiration and out-time violations. Material compliance failures block release even when quantity coverage is 100%.
+
+Change:
+
+Clicking a row opens the RequirementDrawer ... Reuse RequirementDrawer as-is.
+
+To:
+
+Clicking a row opens the shared RequirementDrawer component, extended as needed to show layup-relevant lot status fields such as ICN, expiration status, and out-time status.
+
+LAYUP-aware readiness checks
+
+Change to:
+
+Extend evaluateQueueReadiness so that for queueType = LAYUP, any requirement with a reserved/linked material lot is additionally checked for:
+
+expired expirationDate
+totalOutTimeMinutes >= maxOutTimeMinutes where applicable
+These violations should contribute to blocking output and cause the queue item to remain BLOCKED even if quantity coverage is otherwise satisfied.
+One thing I would add
+
+Add a quick note for empty-state behavior:
+
+if a layup requirement has no reserved lot yet, readiness should fall back to quantity/allocation logic only
+it should not show a fake expiration/out-time failure with no lot selected
+
+That will keep the page honest.

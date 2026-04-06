@@ -160,11 +160,35 @@ router.get('/pipeline', async (req, res) => {
       p => p.status === 'active' || p.status === 'won'
     );
 
+    // Batch aggregate serial counts for all relevant PO ids in one query
+    const poIds = pipelineProjects.map(p => p.poId).filter((id): id is number => id != null);
+    const serialCountsByPoId: Record<number, { total: number; completed: number }> = {};
+    if (poIds.length > 0) {
+      const serialRows = await pool.query(
+        `SELECT po_id::text,
+                COUNT(*)::text AS total,
+                COUNT(*) FILTER (WHERE status = 'COMPLETED')::text AS completed
+         FROM p2_serialized_items
+         WHERE po_id = ANY($1::int[])
+         GROUP BY po_id`,
+        [poIds]
+      ) as any[];
+      for (const row of serialRows) {
+        serialCountsByPoId[parseInt(row.po_id, 10)] = {
+          total: parseInt(row.total, 10) || 0,
+          completed: parseInt(row.completed, 10) || 0,
+        };
+      }
+    }
+
     const results = await Promise.all(
       pipelineProjects.map(async (project) => {
         const customer = project.customerId
           ? await storage.getP2CustomerByCustomerId(project.customerId)
           : null;
+
+        const serialCounts = project.poId ? (serialCountsByPoId[project.poId] ?? { total: 0, completed: 0 }) : { total: 0, completed: 0 };
+
         return {
           projectId: project.id,
           projectCode: project.projectCode,
@@ -175,6 +199,8 @@ router.get('/pipeline', async (req, res) => {
           targetShipDate: project.targetShipDate,
           stageUpdatedAt: project.stageUpdatedAt,
           poId: project.poId,
+          completedSerials: serialCounts.completed,
+          totalSerials: serialCounts.total,
         };
       })
     );

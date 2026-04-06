@@ -38,6 +38,8 @@ interface PipelineProject {
   targetShipDate: string | null;
   stageUpdatedAt: string | null;
   poId: number | null;
+  completedSerials: number;
+  totalSerials: number;
 }
 
 const PIPELINE_STAGES = [
@@ -150,6 +152,20 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="truncate">{project.customerName}</span>
           </div>
+          {project.totalSerials > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{project.completedSerials} / {project.totalSerials}</span>
+                <span className="font-medium">{Math.round((project.completedSerials / project.totalSerials) * 100)}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all"
+                  style={{ width: `${Math.round((project.completedSerials / project.totalSerials) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between text-xs">
             {project.targetShipDate && (
               <div className="flex items-center gap-1 text-muted-foreground">

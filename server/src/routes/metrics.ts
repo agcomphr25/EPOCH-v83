@@ -226,6 +226,15 @@ const REGISTRY: Array<{
     defaultVisual: 'stat_card',
     isLive: true,
   },
+  {
+    slug: 'p2_po_completion_rate',
+    name: 'P2 PO Completion Rate',
+    description: 'Average serial completion percentage across all active P2 purchase orders',
+    category: 'pipeline',
+    unit: '%',
+    defaultVisual: 'stat_card',
+    isLive: true,
+  },
 ];
 
 // ─── Startup tasks ─────────────────────────────────────────────────────────────

@@ -258,6 +258,24 @@ async function getAROpenInvoiceCount(): Promise<number> {
   return rows[0]?.count ?? 0;
 }
 
+export async function getP2POCompletionRate(): Promise<number> {
+  const rows = await pool.query(
+    `SELECT COALESCE(AVG(
+       COALESCE(completed::float / NULLIF(total, 0) * 100, 0)
+     ), 0)::numeric(5,1) AS avg_rate
+     FROM (
+       SELECT po.id,
+              COUNT(si.id) AS total,
+              COUNT(si.id) FILTER (WHERE si.status = 'COMPLETED') AS completed
+       FROM p2_purchase_orders po
+       LEFT JOIN p2_serialized_items si ON si.po_id = po.id
+       WHERE po.status NOT IN ('COMPLETED', 'CANCELED')
+       GROUP BY po.id
+     ) sub`,
+  ) as any[];
+  return parseFloat(rows[0]?.avg_rate ?? '0');
+}
+
 export type MetricSlug =
   | 'cnc_queue_size'
   | 'gunsmith_queue_size'
@@ -281,7 +299,8 @@ export type MetricSlug =
   | 'ar_total_outstanding'
   | 'ar_overdue_count'
   | 'ar_open_invoice_count'
-  | 'avg_weekly_orders';
+  | 'avg_weekly_orders'
+  | 'p2_po_completion_rate';
 
 export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   cnc_queue_size:            getCNCQueueSize,
@@ -307,4 +326,5 @@ export const METRIC_FUNCTIONS: Record<MetricSlug, () => Promise<number>> = {
   ar_overdue_count:          getAROverdueCount,
   ar_open_invoice_count:     getAROpenInvoiceCount,
   avg_weekly_orders:         getAvgWeeklyOrders,
+  p2_po_completion_rate:     getP2POCompletionRate,
 };

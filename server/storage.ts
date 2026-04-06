@@ -10389,11 +10389,25 @@ export class DatabaseStorage implements IStorage {
           poi.stock_status as "stockStatus",
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
-          prod.production_status as "productionStatus"
+          prod.production_status as "productionStatus",
+          pp.customer_product_number as "customerProductNumber"
         FROM purchase_orders po
         INNER JOIN purchase_order_items poi ON po.id = poi.po_id
         INNER JOIN item_type_cte itc ON itc.poi_id = poi.id
         LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
+        LEFT JOIN LATERAL (
+          SELECT pp.customer_product_number
+          FROM po_products pp
+          WHERE (
+            LOWER(TRIM(poi.item_name)) = LOWER(TRIM(pp.product_name))
+            OR LOWER(TRIM(poi.stock_model_name)) = LOWER(TRIM(pp.product_name))
+          )
+            AND LOWER(TRIM(pp.customer_name)) = LOWER(TRIM(po.customer_name))
+            AND pp.customer_product_number IS NOT NULL
+            AND TRIM(pp.customer_product_number) <> ''
+          ORDER BY pp.id ASC
+          LIMIT 1
+        ) pp ON true
         WHERE po.status = 'OPEN'
            OR (po.status = 'CLOSED' AND EXISTS (
                  SELECT 1 FROM production_orders
@@ -10424,7 +10438,8 @@ export class DatabaseStorage implements IStorage {
           poi.stock_status as "stockStatus",
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
-          prod.production_status as "productionStatus"
+          prod.production_status as "productionStatus",
+          pp.customer_product_number as "customerProductNumber"
         FROM production_orders prod
         INNER JOIN purchase_orders po ON prod.po_id = po.id
         INNER JOIN (
@@ -10435,6 +10450,19 @@ export class DatabaseStorage implements IStorage {
           ORDER BY po_id, id ASC
         ) poi ON poi.po_id = po.id
         INNER JOIN item_type_cte itc ON itc.poi_id = poi.id
+        LEFT JOIN LATERAL (
+          SELECT pp.customer_product_number
+          FROM po_products pp
+          WHERE (
+            LOWER(TRIM(poi.item_name)) = LOWER(TRIM(pp.product_name))
+            OR LOWER(TRIM(poi.stock_model_name)) = LOWER(TRIM(pp.product_name))
+          )
+            AND LOWER(TRIM(pp.customer_name)) = LOWER(TRIM(po.customer_name))
+            AND pp.customer_product_number IS NOT NULL
+            AND TRIM(pp.customer_product_number) <> ''
+          ORDER BY pp.id ASC
+          LIMIT 1
+        ) pp ON true
         WHERE prod.po_item_id IS NULL
           AND prod.current_department IN ('Shipping QC', 'Shipping')
           AND prod.production_status NOT IN ('SHIPPED', 'CANCELLED')
@@ -10457,7 +10485,29 @@ export class DatabaseStorage implements IStorage {
       ORDER BY "customerName" ASC, "poNumber" ASC, "poItemId" ASC
     `);
     
-    const rows = result.rows || [];
+    type P1PORow = {
+      poId: number;
+      poNumber: string;
+      customerId: string | null;
+      customerName: string;
+      poDate: Date | null;
+      expectedDelivery: Date | null;
+      poItemId: number;
+      itemName: string | null;
+      stockModelName: string | null;
+      quantity: number;
+      specifications: Record<string, unknown> | null;
+      stockModelId: string | null;
+      dueDate: Date | null;
+      itemType: string | null;
+      displayItemType: string | null;
+      stockStatus: string | null;
+      orderId: string | null;
+      currentDepartment: string | null;
+      productionStatus: string | null;
+      customerProductNumber: string | null;
+    };
+    const rows = (result.rows || []) as P1PORow[];
 
     // Group results in memory
     const customerMap = new Map<string, any>();
@@ -10497,18 +10547,18 @@ export class DatabaseStorage implements IStorage {
         
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
+          description: row.customerProductNumber || row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
           quantity: row.quantity,
           actionLength: specs.actionLength || null,
           material: specs.material || null,
           finishType: specs.finishType || null,
           stockModel: row.stockModelId,
-          itemType: (row as any).itemType || null,
-          displayItemType: (row as any).displayItemType || 'stock_model',
+          itemType: row.itemType || null,
+          displayItemType: row.displayItemType || 'stock_model',
           caliber: specs.caliber || null,
           flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
-          stockStatus: (row as any).stockStatus || null,
+          stockStatus: row.stockStatus || null,
           productionOrders: [],
         });
       }

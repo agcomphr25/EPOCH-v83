@@ -352,7 +352,7 @@ router.post('/:id/generate-requirements', async (req, res) => {
 
 // POST /api/manufacturing-queue/:id/release
 // Formally releases a KIT, LAYUP, or CORE queue item, setting status = RELEASED and recording releasedAt.
-// Requires: queueType = KIT | LAYUP | CORE, readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED.
+// Requires: queueType = KIT | LAYUP | CORE, readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED/CANCELLED.
 router.post('/:id/release', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);

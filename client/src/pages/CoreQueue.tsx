@@ -27,13 +27,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -100,42 +93,6 @@ type EvaluateReadinessResponse = {
   percentReady: string | number | null;
   blockedReason: string | null;
 };
-
-type AllocationRequirement = {
-  id: string;
-  manufacturingQueueId: number;
-  requiredItemId: number | null;
-  requiredPartNumber: string;
-  requiredPartName: string | null;
-  requirementType: string;
-  unitOfMeasure: string;
-  requiredQty: string;
-  allocatedQty: string | null;
-  stagedQty: string | null;
-  consumedQty: string | null;
-  allocationStatus: string | null;
-  isCritical: boolean | null;
-  notes: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
-};
-
-function formatCoreRequirementType(type: string): string {
-  switch (type) {
-    case 'MATERIAL':
-      return 'Core Stock / Sheet';
-    case 'CONSUMABLE':
-      return 'Consumable';
-    case 'COMPONENT':
-      return 'Component';
-    case 'KIT_ITEM':
-      return 'Kit Item';
-    case 'SUBASSEMBLY':
-      return 'Subassembly';
-    default:
-      return type;
-  }
-}
 
 const READINESS_ORDER: Record<string, number> = {
   BLOCKED: 0,
@@ -233,130 +190,10 @@ function getPriorityColor(priority: number) {
   return 'text-gray-600 dark:text-gray-400';
 }
 
-function RequirementsDialog({
-  item,
-  open,
-  onClose,
-  onReEvaluate,
-}: {
-  item: CoreQueueItem | null;
-  open: boolean;
-  onClose: () => void;
-  onReEvaluate: (id: number) => void;
-}) {
-  const { data: requirements = [], isLoading } = useQuery<AllocationRequirement[]>({
-    queryKey: ['/api/allocation-requirements/by-queue', item?.id],
-    queryFn: () => apiRequest(`/api/allocation-requirements/by-queue/${item!.id}`),
-    enabled: open && item != null,
-  });
-
-  if (!item) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto dark:bg-gray-900 dark:border-gray-800">
-        <DialogHeader>
-          <DialogTitle className="dark:text-white">
-            Requirement Details — {item.inventoryItem?.agPartNumber ?? `Queue #${item.id}`}
-          </DialogTitle>
-          <DialogDescription className="dark:text-gray-400">
-            {item.inventoryItem?.name ?? 'Core Item'} · Readiness:{' '}
-            <ReadinessBadge status={item.readinessStatus} percent={item.percentReady} />
-          </DialogDescription>
-        </DialogHeader>
-
-        {item.blockedReason && (item.readinessStatus === 'BLOCKED' || item.readinessStatus === 'PARTIAL' || item.readinessStatus === 'NOT_READY') && (
-          <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-            <span>{item.blockedReason}</span>
-          </div>
-        )}
-
-        <div className="mt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onReEvaluate(item.id)}
-            className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-          >
-            <RefreshCw className="w-3 h-3 mr-2" />
-            Re-evaluate Readiness
-          </Button>
-        </div>
-
-        {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground dark:text-gray-400">Loading requirements...</div>
-        ) : requirements.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground dark:text-gray-400">
-            No allocation requirements found for this core item.
-          </div>
-        ) : (
-          <div className="overflow-x-auto mt-2">
-            <Table>
-              <TableHeader>
-                <TableRow className="dark:border-gray-800">
-                  <TableHead className="dark:text-gray-300">Part Number</TableHead>
-                  <TableHead className="dark:text-gray-300">Part Name</TableHead>
-                  <TableHead className="dark:text-gray-300">Type</TableHead>
-                  <TableHead className="dark:text-gray-300 text-right">Required</TableHead>
-                  <TableHead className="dark:text-gray-300 text-right">Allocated</TableHead>
-                  <TableHead className="dark:text-gray-300 text-right">Staged</TableHead>
-                  <TableHead className="dark:text-gray-300 text-right">Consumed</TableHead>
-                  <TableHead className="dark:text-gray-300 text-right">Shortfall</TableHead>
-                  <TableHead className="dark:text-gray-300">Critical</TableHead>
-                  <TableHead className="dark:text-gray-300">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {requirements.map((req) => {
-                  const required = parseFloat(req.requiredQty ?? '0');
-                  const allocated = parseFloat(req.allocatedQty ?? '0');
-                  const staged = parseFloat(req.stagedQty ?? '0');
-                  const consumed = parseFloat(req.consumedQty ?? '0');
-                  const covered = Math.max(allocated, staged, consumed);
-                  const shortfall = Math.max(0, required - covered);
-                  return (
-                    <TableRow key={req.id} className="dark:border-gray-800">
-                      <TableCell className="font-mono text-sm dark:text-gray-300">{req.requiredPartNumber}</TableCell>
-                      <TableCell className="dark:text-gray-300">{req.requiredPartName ?? '-'}</TableCell>
-                      <TableCell className="dark:text-gray-300">
-                        <Badge variant="outline" className="text-xs">{formatCoreRequirementType(req.requirementType)}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right dark:text-gray-300">{required}</TableCell>
-                      <TableCell className="text-right dark:text-gray-300">{allocated}</TableCell>
-                      <TableCell className="text-right dark:text-gray-300">{staged}</TableCell>
-                      <TableCell className="text-right dark:text-gray-300">{consumed}</TableCell>
-                      <TableCell className={`text-right font-semibold ${shortfall > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                        {shortfall > 0 ? `-${shortfall}` : '0'}
-                      </TableCell>
-                      <TableCell>
-                        {req.isCritical ? (
-                          <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs">Critical</Badge>
-                        ) : (
-                          <span className="text-gray-400 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">{req.allocationStatus ?? 'OPEN'}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function CoreQueue() {
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedReadiness, setSelectedReadiness] = useState<string>('ALL');
-  const [detailItem, setDetailItem] = useState<CoreQueueItem | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [drawerItem, setDrawerItem] = useState<CoreQueueItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -381,17 +218,9 @@ export default function CoreQueue() {
     mutationFn: async (id: number) => {
       return apiRequest(`/api/manufacturing-queue/${id}/evaluate-readiness`, { method: 'POST' });
     },
-    onSuccess: (data, id) => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['/api/manufacturing-queue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/allocation-requirements/by-queue', id] });
-      if (detailItem && detailItem.id === id) {
-        setDetailItem((prev) => prev ? {
-          ...prev,
-          readinessStatus: data.readinessStatus ?? prev.readinessStatus,
-          percentReady: data.percentReady != null ? String(data.percentReady) : prev.percentReady,
-          blockedReason: 'blockedReason' in data ? data.blockedReason : prev.blockedReason,
-        } : prev);
-      }
       toast({ title: 'Readiness evaluated', description: 'Readiness status has been updated.' });
     },
     onError: () => {
@@ -426,15 +255,6 @@ export default function CoreQueue() {
       toast({ title: 'Release failed', description: message, variant: 'destructive' });
     },
   });
-
-  const openDetail = (item: CoreQueueItem) => {
-    setDetailItem(item);
-    setDetailOpen(true);
-  };
-
-  const closeDetail = () => {
-    setDetailOpen(false);
-  };
 
   const openDrawer = (item: CoreQueueItem) => {
     setDrawerItem(item);
@@ -570,14 +390,6 @@ export default function CoreQueue() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="dark:bg-gray-800 dark:border-gray-700">
                               <DropdownMenuItem
-                                onClick={() => openDetail(item)}
-                                className="dark:text-gray-200 dark:focus:bg-gray-700"
-                              >
-                                <Info className="w-4 h-4 mr-2" />
-                                View Requirements
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator className="dark:border-gray-700" />
-                              <DropdownMenuItem
                                 onClick={() => releaseMutation.mutate(item.id)}
                                 disabled={item.readinessStatus !== 'READY' || item.status === 'RELEASED' || releaseMutation.isPending}
                                 className="dark:text-gray-200 dark:focus:bg-gray-700"
@@ -613,13 +425,6 @@ export default function CoreQueue() {
             )}
           </CardContent>
         </Card>
-
-        <RequirementsDialog
-          item={detailItem}
-          open={detailOpen}
-          onClose={closeDetail}
-          onReEvaluate={(id) => reEvaluateMutation.mutate(id)}
-        />
 
         <RequirementDrawer
           kit={drawerItem}

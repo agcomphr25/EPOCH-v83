@@ -43,6 +43,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Accordion,
   AccordionContent,
@@ -111,10 +112,17 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <Package className="w-4 h-4 text-blue-600" />
-      <span className="font-medium text-blue-600">{totalQuantity} items</span>
-    </div>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1 cursor-default">
+            <Package className="w-4 h-4 text-blue-600" />
+            <span className="font-medium text-blue-600">{totalQuantity} units</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>Total ordered quantity across all line items</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -729,9 +737,18 @@ function POCard({
             <CardDescription className="mt-1">
               {po.customerName} ({po.customerId})
             </CardDescription>
-            <div className="mt-2 flex items-center gap-1">
-              <Package className="w-4 h-4 text-blue-600" />
-              <span className="font-medium text-blue-600">{totalPoQuantity} items</span>
+            <div className="mt-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1 cursor-default">
+                      <Package className="w-4 h-4 text-blue-600" />
+                      <span className="font-medium text-blue-600">{totalPoQuantity} units</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>Total ordered quantity across all line items</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">

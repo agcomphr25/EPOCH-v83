@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Package, Plus, Trash2, Edit2, Eye, Barcode, Save, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -340,9 +341,16 @@ export default function POItemsManager({
           <h2 className="text-xl font-semibold">Purchase Order Items</h2>
         </div>
         <div className="flex items-center gap-4">
-          <Badge variant="outline">
-            {poItems.length} Item{poItems.length !== 1 ? 's' : ''}
-          </Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="cursor-default">
+                  {poItems.length} Line Item{poItems.length !== 1 ? 's' : ''}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Number of distinct product entries in this order</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Badge variant="secondary">
             Total: {formatPrice(getTotalValue())}
           </Badge>

@@ -58,6 +58,7 @@ import {
   RefreshCw,
   Settings2,
   Info,
+  Unlock,
 } from 'lucide-react';
 
 type KitQueueItem = {
@@ -75,6 +76,7 @@ type KitQueueItem = {
   notes: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  releasedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   queueType: string | null;
@@ -194,6 +196,12 @@ function getStatusBadge(status: string) {
       return (
         <Badge variant="outline" className="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
           <XCircle className="w-3 h-3 mr-1" />Cancelled
+        </Badge>
+      );
+    case 'RELEASED':
+      return (
+        <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+          <Unlock className="w-3 h-3 mr-1" />Released
         </Badge>
       );
     default:
@@ -388,6 +396,20 @@ export default function KitsQueue() {
     },
   });
 
+  const releaseMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/manufacturing-queue/${id}/release`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/manufacturing-queue'] });
+      toast({ title: 'Kit released', description: 'The kit has been released to the floor.' });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to release kit.';
+      toast({ title: 'Release failed', description: message, variant: 'destructive' });
+    },
+  });
+
   const openDetail = (item: KitQueueItem) => {
     setDetailItem(item);
     setDetailOpen(true);
@@ -448,6 +470,7 @@ export default function KitsQueue() {
                     <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                     <SelectItem value="COMPLETED">Completed</SelectItem>
                     <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                    <SelectItem value="RELEASED">Released</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -535,6 +558,15 @@ export default function KitsQueue() {
                               >
                                 <Info className="w-4 h-4 mr-2" />
                                 View Requirements
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="dark:border-gray-700" />
+                              <DropdownMenuItem
+                                onClick={() => releaseMutation.mutate(item.id)}
+                                disabled={item.readinessStatus !== 'READY' || item.status === 'RELEASED' || releaseMutation.isPending}
+                                className="dark:text-gray-200 dark:focus:bg-gray-700"
+                              >
+                                <Unlock className="w-4 h-4 mr-2" />
+                                Release Kit
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="dark:border-gray-700" />
                               <DropdownMenuItem

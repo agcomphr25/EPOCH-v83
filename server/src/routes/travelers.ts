@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, and, asc, ilike } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, notInArray } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { db } from '../../db';
 import {
@@ -18,6 +18,7 @@ import {
   travelerAuthorizedNotes,
   partRoutings,
   inventoryItems,
+  manufacturingQueue,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
 } from '../../schema';
@@ -555,6 +556,63 @@ router.post('/:id/start', async (req: Request, res: Response) => {
         error: 'Traveler must be in DRAFT status to start',
         currentStatus: traveler.status,
       });
+    }
+
+    // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
+    // Linkage strategy (most-to-least specific):
+    //   1. inventoryItemId + parentProductionOrderId (workOrderId on traveler)
+    //   2. inventoryItemId only — pick most recently created KIT row (desc createdAt)
+    if (traveler.inventoryItemId) {
+      const numericItemId = parseInt(traveler.inventoryItemId, 10);
+      if (!isNaN(numericItemId)) {
+        // Build base conditions
+        const baseConditions = and(
+          eq(manufacturingQueue.inventoryItemId, numericItemId),
+          eq(manufacturingQueue.queueType, 'KIT')
+        );
+
+        // Try narrow match first: also match parentProductionOrderId when workOrderId is set
+        let linkedKitItem: { id: number; status: string } | undefined;
+        if (traveler.workOrderId) {
+          const [narrowRow] = await db
+            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+            .from(manufacturingQueue)
+            .where(
+              and(
+                baseConditions,
+                eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
+              )
+            )
+            .orderBy(desc(manufacturingQueue.createdAt))
+            .limit(1);
+          linkedKitItem = narrowRow;
+        }
+
+        // Fall back to inventory-item-only match — constrained to open/relevant statuses
+        // (PENDING or RELEASED only; skip CANCELLED and COMPLETED rows to avoid false blocks)
+        if (!linkedKitItem) {
+          const [broadRow] = await db
+            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+            .from(manufacturingQueue)
+            .where(
+              and(
+                baseConditions,
+                notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
+              )
+            )
+            .orderBy(desc(manufacturingQueue.createdAt))
+            .limit(1);
+          linkedKitItem = broadRow;
+        }
+
+        if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
+          return res.status(400).json({
+            error: 'Kit not released — release the linked kit queue item before starting this traveler',
+            kitQueueItemId: linkedKitItem.id,
+            kitStatus: linkedKitItem.status,
+          });
+        }
+      }
     }
 
     const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });

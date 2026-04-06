@@ -1,0 +1,72 @@
+What I would adjust
+1. Keep RELEASED explicit in backend status handling
+
+The task mentions updating the inline status comment. I’d make that stronger:
+
+update any status validation/enums/helpers that assume only PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+make sure queue queries and badges do not treat RELEASED like an unknown state
+
+So this is not just a comment change.
+
+2. Make the traveler gate link by queue record, not loose inventory matching if possible
+
+This line needs tightening:
+
+resolve whether this traveler is linked to a KIT queue item (via inventoryItemId or any existing FK)
+
+inventoryItemId alone can be too loose if multiple queue rows exist for the same item. Better order of precedence:
+
+direct queue linkage if it exists
+source/work-order linkage if it exists
+only then a constrained fallback match on inventory item plus open/relevant queue status
+
+Otherwise you may block the wrong traveler against the wrong kit queue row.
+
+3. Add one more validation to release
+
+On release, also validate that the queue item is not already CANCELLED.
+
+So the release API should reject:
+
+IN_PROGRESS
+COMPLETED
+RELEASED
+CANCELLED
+4. Clarify what happens to status when readiness later changes
+
+This task does not need un-release, which is fine. But the implementation should avoid silently changing a RELEASED row back to BLOCKED or PENDING just because readiness gets re-evaluated.
+
+That means:
+
+readiness can still become worse
+but queue status should remain RELEASED unless a later task explicitly defines another rule
+
+That separation matters.
+
+5. UI wording
+
+For the operator-facing error, use something like:
+
+Kit not released — release the linked kit queue item before starting this traveler.
+
+That is clearer than just “kit not released.”
+
+Recommended wording changes
+Done looks like
+
+Add:
+
+Re-evaluating readiness after release does not automatically remove RELEASED status.
+Traveler start gate
+
+Change to:
+
+In POST /api/travelers/:id/start, resolve the most specific linked KIT queue item available using an existing direct or source linkage first; only use inventory-item fallback if no stronger link exists.
+Release API endpoint
+
+Add:
+
+reject release when current status is CANCELLED
+My verdict
+
+Approve with those edits.

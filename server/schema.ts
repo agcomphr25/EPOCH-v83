@@ -8749,7 +8749,8 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   quantityRequested: integer('quantity_requested').notNull().default(1),
   quantityCompleted: integer('quantity_completed').default(0),
   priority: integer('priority').default(50), // 1-100, lower = higher priority
-  status: text('status').notNull().default('PENDING'), // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  status: text('status').notNull().default('PENDING'), // PENDING, IN_PROGRESS, COMPLETED, CANCELLED, RELEASED
+  releasedAt: timestamp('released_at'),
   dueDate: timestamp('due_date'),
   requestedBy: text('requested_by'),
   assignedTo: text('assigned_to'),

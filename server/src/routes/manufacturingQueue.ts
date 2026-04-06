@@ -77,6 +77,7 @@ router.get('/', async (req, res) => {
         notes: manufacturingQueue.notes,
         startedAt: manufacturingQueue.startedAt,
         completedAt: manufacturingQueue.completedAt,
+        releasedAt: manufacturingQueue.releasedAt,
         createdAt: manufacturingQueue.createdAt,
         updatedAt: manufacturingQueue.updatedAt,
         queueType: manufacturingQueue.queueType,
@@ -349,8 +350,57 @@ router.post('/:id/generate-requirements', async (req, res) => {
   }
 });
 
+// POST /api/manufacturing-queue/:id/release
+// Formally releases a KIT queue item, setting status = RELEASED and recording releasedAt.
+// Requires: queueType = KIT, readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED.
+router.post('/:id/release', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid queue item ID' });
+    }
+
+    const [item] = await db
+      .select({
+        id: manufacturingQueue.id,
+        queueType: manufacturingQueue.queueType,
+        readinessStatus: manufacturingQueue.readinessStatus,
+        status: manufacturingQueue.status,
+      })
+      .from(manufacturingQueue)
+      .where(eq(manufacturingQueue.id, id))
+      .limit(1);
+
+    if (!item) {
+      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+    }
+    if (item.queueType !== 'KIT') {
+      return res.status(400).json({ error: 'Only KIT queue items can be released' });
+    }
+    if (item.readinessStatus !== 'READY') {
+      return res.status(400).json({ error: 'Kit must be READY before it can be released' });
+    }
+    if (['IN_PROGRESS', 'COMPLETED', 'RELEASED', 'CANCELLED'].includes(item.status)) {
+      return res.status(400).json({ error: `Kit is already ${item.status} and cannot be released` });
+    }
+
+    const [updated] = await db
+      .update(manufacturingQueue)
+      .set({ status: 'RELEASED', releasedAt: new Date(), updatedAt: new Date() })
+      .where(eq(manufacturingQueue.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error releasing queue item:', error);
+    res.status(500).json({ error: 'Failed to release queue item', message: error.message });
+  }
+});
+
 // POST /api/manufacturing-queue/:id/evaluate-readiness
 // Triggers readiness evaluation for a queue item and returns the result.
+// NOTE: readiness evaluation only writes readinessStatus, percentReady, and blockedReason —
+// it NEVER modifies queue status. A RELEASED item remains RELEASED even if readiness worsens.
 router.post('/:id/evaluate-readiness', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);

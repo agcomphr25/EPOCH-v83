@@ -6768,6 +6768,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   const isMetalAccessorySku = (value: string): boolean =>
     !!value && METAL_ACCESSORY_PREFIX_PATTERNS.some(p => p.test(value.trim()));
 
+  // Returns a human-readable display name for known metal accessory SKU patterns.
+  // Keeps the raw SKU in parentheses so operators can still identify the exact part.
+  function deriveMetalAccessoryDisplayName(sku: string): string {
+    const u = sku.toUpperCase();
+    if (/^AGARCA/.test(u)) return `ARCA Rail Chassis (${sku})`;
+    if (/^AGM5SA/.test(u)) return `M5 Bottom Metal – Short Action (${sku})`;
+    if (/^AGM5LA/.test(u)) return `M5 Bottom Metal – Long Action (${sku})`;
+    if (/^AGM5/.test(u))   return `M5 Bottom Metal (${sku})`;
+    if (/^AGBDLSA/.test(u)) return `Detachable BDL Bottom Metal – Short Action (${sku})`;
+    if (/^AGBDLLA/.test(u)) return `Detachable BDL Bottom Metal – Long Action (${sku})`;
+    if (/^AGBDL/.test(u))  return `Detachable BDL Bottom Metal (${sku})`;
+    if (/^AGBM/.test(u))   return `Bottom Metal (${sku})`;
+    if (/^AGPIC/.test(u))  return `Picatinny Rail (${sku})`;
+    return sku;
+  }
+
   const isPOItemNonStock = (item: any): boolean => {
     // Check metal accessory SKU prefixes per-field so ^ anchors work correctly
     const fieldsToCheck = [
@@ -6891,18 +6907,23 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
       
-      // Include items that have a valid stock model ID (not 'no_stock' or empty)
-      // AND are not non-stock parts (bottom metals, rails, etc.)
-      // Uses shared isPOItemEligibleForProduction helper (same logic as preview endpoint)
+      // Include items that have a valid product identifier.
+      // Metal accessories (AGM5, AGARCA, AGBDL, etc.) are included — they route directly
+      // to Shipping QC rather than the manufacturing P1 flow.
+      // Truly non-stock items (no_stock, None, no identifier) are skipped.
       const stockModelItems = poItems.filter((item) => {
+        const productId = getPOItemProductId(item);
+        if (!productId) {
+          console.log(`🚫 Skipping item ${item.id}: no valid product identifier`);
+          return false;
+        }
+        // Metal accessories are eligible — just get a different initial department
+        if (isMetalAccessorySku(productId)) {
+          console.log(`🔩 Including metal accessory item ${item.id}: ${productId} (will route to Shipping QC)`);
+          return true;
+        }
         if (!isPOItemEligibleForProduction(item)) {
-          const stockModelId = item.stockModelId || '';
-          const hasValidStockModel = stockModelId && stockModelId.trim() && stockModelId !== 'no_stock';
-          if (!hasValidStockModel) {
-            console.log(`🚫 Skipping item ${item.id}: no valid stock model (${stockModelId})`);
-          } else {
-            console.log(`🚫 Skipping non-stock item ${item.id}: ${item.itemName || item.stockModelName} (parts only, no manufacturing)`);
-          }
+          console.log(`🚫 Skipping non-stock item ${item.id}: ${item.itemName || item.stockModelName} (parts only, no manufacturing)`);
           return false;
         }
         return true;
@@ -6932,13 +6953,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           const orderId = await storage.generateNextOrderId();
 
           const materialCanonical = deriveCanonicalMaterial(stockModelForOrder);
+          const isMetal = isMetalAccessorySku(stockModelForOrder);
+
+          // Metal accessories skip manufacturing and ship directly; all others enter P1 queue.
+          const initialDepartment = isMetal ? 'Shipping QC' : 'P1 Production Queue';
+
+          // Use a descriptive display name for metal accessories when no stock model name is available.
+          const resolvedItemName =
+            item.stockModelName ||
+            (isMetal ? deriveMetalAccessoryDisplayName(stockModelForOrder) : null) ||
+            item.itemName ||
+            stockModelForOrder;
 
           const sourceSnapshot = {
             po_id: poId,
             po_item_id: item.id,
             po_number: purchaseOrder.poNumber,
             sku: stockModelForOrder,
-            stock_model_name: item.stockModelName || item.itemName || stockModelForOrder,
+            stock_model_name: resolvedItemName,
             material: materialCanonical,
             options: item.customOptions ?? null,
             unit_price: item.unitPrice ?? null,
@@ -6952,7 +6984,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             poNumber: purchaseOrder.poNumber,
             itemType: 'stock_model' as const,
             itemId: stockModelForOrder,
-            itemName: item.stockModelName || item.itemName || stockModelForOrder,
+            itemName: resolvedItemName,
             orderDate: new Date(),
             dueDate: (() => {
               const expectedDue = purchaseOrder.expectedDelivery
@@ -6962,7 +6994,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               return expectedDue > today ? expectedDue : today;
             })(),
             productionStatus: 'PENDING' as const,
-            currentDepartment: 'P1 Production Queue',
+            currentDepartment: initialDepartment,
             poId: poId,
             poItemId: item.id,
             specifications: {
@@ -7010,8 +7042,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // One-time remediation: cancel existing PENDING production orders for metal accessory SKUs
-  // that were incorrectly created. Safe to call multiple times (idempotent).
+  // Remediation: route existing PENDING metal accessory production orders to Shipping QC
+  // and correct their material_canonical to 'Metal Accessory'. Also updates item_name to a
+  // human-readable display name when it is currently just the raw SKU.
+  // Safe to call multiple times (idempotent).
   app.post('/api/production-orders/remediate-metal-accessories', async (req, res) => {
     try {
       const { db } = await import('../../db');
@@ -7024,36 +7058,43 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       ).join(' OR ');
 
       const selectQuery = sql.raw(
-        `SELECT id, order_id, item_id, item_name, production_status, material_canonical
+        `SELECT id, order_id, item_id, item_name, production_status, material_canonical, current_department
          FROM production_orders
          WHERE (${likeConditions})
-           AND production_status = 'PENDING'`
+           AND production_status != 'CANCELLED'`
       );
 
       const affected = await db.execute(selectQuery);
-      const rows = affected.rows as Array<{ id: number; order_id: string; item_id: string; item_name: string; production_status: string; material_canonical: string }>;
+      const rows = affected.rows as Array<{ id: number; order_id: string; item_id: string; item_name: string; production_status: string; material_canonical: string; current_department: string }>;
 
       if (rows.length === 0) {
-        console.log('[remediate-metal-accessories] No PENDING metal accessory production orders found.');
-        return res.json({ cancelled: 0, orderIds: [] });
+        console.log('[remediate-metal-accessories] No active metal accessory production orders found.');
+        return res.json({ fixed: 0, orderIds: [] });
       }
 
       const orderIds = rows.map((r) => r.order_id);
-      console.log(`[remediate-metal-accessories] Cancelling ${rows.length} PENDING metal accessory production order(s): ${orderIds.join(', ')}`);
+      console.log(`[remediate-metal-accessories] Fixing ${rows.length} metal accessory production order(s): ${orderIds.join(', ')}`);
 
-      const idList = rows.map((r) => r.id).join(', ');
-      const cancelQuery = sql.raw(
-        `UPDATE production_orders
-         SET production_status = 'CANCELLED',
-             material_canonical = 'Metal Accessory',
-             updated_at = NOW()
-         WHERE id IN (${idList})`
-      );
+      // Fix each order individually so we can derive display names per SKU
+      for (const row of rows) {
+        const sku = row.item_id || row.item_name || '';
+        const displayName = deriveMetalAccessoryDisplayName(sku) !== sku
+          ? deriveMetalAccessoryDisplayName(sku)
+          : row.item_name; // keep existing name if no mapping
+        const idVal = row.id;
+        const updateQuery = sql.raw(
+          `UPDATE production_orders
+           SET material_canonical = 'Metal Accessory',
+               current_department = 'Shipping QC',
+               item_name = '${displayName.replace(/'/g, "''")}',
+               updated_at = NOW()
+           WHERE id = ${idVal}`
+        );
+        await db.execute(updateQuery);
+      }
 
-      await db.execute(cancelQuery);
-
-      console.log(`[remediate-metal-accessories] Done. Cancelled orders: ${orderIds.join(', ')}`);
-      return res.json({ cancelled: rows.length, orderIds });
+      console.log(`[remediate-metal-accessories] Done. Fixed orders: ${orderIds.join(', ')}`);
+      return res.json({ fixed: rows.length, orderIds });
     } catch (_error) {
       console.error('[remediate-metal-accessories] Error:', _error);
       return res.status(500).json({ _error: 'Remediation failed', details: String(_error) });

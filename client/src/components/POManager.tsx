@@ -264,6 +264,30 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     },
   });
 
+  const METAL_ACCESSORY_PREFIXES = ['AGM5', 'AGBDL', 'AGBM', 'AGPIC', 'AGARCA'];
+  const hasMetalAccessoryOrders = (productionOrders as any[]).some((o: any) => {
+    const id = (o.itemId || o.itemName || '').toUpperCase();
+    return METAL_ACCESSORY_PREFIXES.some(p => id.startsWith(p));
+  });
+
+  const fixMetalAccessoriesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/production-orders/remediate-metal-accessories', { method: 'POST' });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      const count = data?.fixed ?? 0;
+      if (count > 0) {
+        toast.success(`Fixed ${count} metal accessory order${count !== 1 ? 's' : ''} — routed to Shipping QC with correct material.`);
+      } else {
+        toast.success('No metal accessory orders needed fixing.');
+      }
+    },
+    onError: (error: any) => {
+      toast.error('Fix failed: ' + (error.message || 'Unknown error'));
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PENDING':
@@ -310,15 +334,29 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          Production Orders ({productionOrders.length})
-          {duplicateCount > 0 && (
-            <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold ml-1">
-              ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''} detected
-            </Badge>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Production Orders ({productionOrders.length})
+            {duplicateCount > 0 && (
+              <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold ml-1">
+                ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''} detected
+              </Badge>
+            )}
+          </CardTitle>
+          {hasMetalAccessoryOrders && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-amber-700 border-amber-300 hover:bg-amber-50 h-7 px-2 text-xs shrink-0"
+              disabled={fixMetalAccessoriesMutation.isPending}
+              onClick={() => fixMetalAccessoriesMutation.mutate()}
+              title="Move metal accessory orders to Shipping QC and correct their material"
+            >
+              {fixMetalAccessoriesMutation.isPending ? 'Fixing...' : 'Fix Metal Accessories'}
+            </Button>
           )}
-        </CardTitle>
+        </div>
         {duplicateCount > 0 && (
           <p className="text-xs text-orange-700 mt-1">
             Rows highlighted in orange were generated beyond the PO item quantity. Cancel them to clean up.

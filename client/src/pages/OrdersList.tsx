@@ -1541,7 +1541,7 @@ export default function OrdersList() {
                           </OrderSummaryTooltip>
                           {order.status && (
                             <div className="relative group/status">
-                              {(order.status?.toUpperCase() === 'FULFILLED' || order.status?.toUpperCase() === 'SHIPPED') && (order.shippedDate || order.shippingCompletedAt) ? (
+                              {(order.status?.toUpperCase() === 'FULFILLED' || order.status?.toUpperCase() === 'SHIPPED') ? (
                                 <RadixTooltip.Provider delayDuration={200}>
                                   <RadixTooltip.Root>
                                     <RadixTooltip.Trigger asChild>
@@ -1559,7 +1559,9 @@ export default function OrdersList() {
                                         sideOffset={5}
                                         className="z-[9999] rounded bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md select-none"
                                       >
-                                        Shipped: {new Date(order.shippedDate || order.shippingCompletedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        {(order.shippedDate || order.shippingCompletedAt)
+                                          ? `Shipped: ${new Date(order.shippedDate || order.shippingCompletedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                                          : 'Shipped (date not recorded)'}
                                         <RadixTooltip.Arrow className="fill-gray-900" />
                                       </RadixTooltip.Content>
                                     </RadixTooltip.Portal>

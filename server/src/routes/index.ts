@@ -6755,7 +6755,29 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     /part.?only/i,
   ];
 
+  // Metal accessory prefixes tested per-field (with ^ anchor) to avoid false positives
+  // when the prefix appears in the middle of a concatenated string.
+  const METAL_ACCESSORY_PREFIX_PATTERNS = [
+    /^AGM5/i,
+    /^AGBDL/i,
+    /^AGBM/i,
+    /^AGPIC/i,
+    /^AGARCA/i,
+  ];
+
+  const isMetalAccessorySku = (value: string): boolean =>
+    !!value && METAL_ACCESSORY_PREFIX_PATTERNS.some(p => p.test(value.trim()));
+
   const isPOItemNonStock = (item: any): boolean => {
+    // Check metal accessory SKU prefixes per-field so ^ anchors work correctly
+    const fieldsToCheck = [
+      item.itemName,
+      item.stockModelName,
+      item.stockModelId,
+      item.itemId,
+    ];
+    if (fieldsToCheck.some(f => isMetalAccessorySku(f || ''))) return true;
+
     const allIdentifiers = `${item.itemName || item.stockModelName || ''} ${item.stockModelId || ''} ${item.itemId || ''}`;
     return PO_NON_STOCK_PATTERNS.some(pattern => pattern.test(allIdentifiers));
   };
@@ -6985,6 +7007,56 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     } catch (_error) {
       console.error('🏭 Generate production orders _error:', _error);
       res.status(500).json({ _error: 'Failed to generate production orders' });
+    }
+  });
+
+  // One-time remediation: cancel existing PENDING production orders for metal accessory SKUs
+  // that were incorrectly created. Safe to call multiple times (idempotent).
+  app.post('/api/production-orders/remediate-metal-accessories', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { sql } = await import('drizzle-orm');
+
+      const METAL_ACCESSORY_PATTERNS = ['AGM5%', 'AGBDL%', 'AGBM%', 'AGPIC%', 'AGARCA%'];
+
+      const likeConditions = METAL_ACCESSORY_PATTERNS.map(
+        (p) => `UPPER(item_id) LIKE '${p}' OR UPPER(item_name) LIKE '${p}'`
+      ).join(' OR ');
+
+      const selectQuery = sql.raw(
+        `SELECT id, order_id, item_id, item_name, production_status, material_canonical
+         FROM production_orders
+         WHERE (${likeConditions})
+           AND production_status = 'PENDING'`
+      );
+
+      const affected = await db.execute(selectQuery);
+      const rows = affected.rows as Array<{ id: number; order_id: string; item_id: string; item_name: string; production_status: string; material_canonical: string }>;
+
+      if (rows.length === 0) {
+        console.log('[remediate-metal-accessories] No PENDING metal accessory production orders found.');
+        return res.json({ cancelled: 0, orderIds: [] });
+      }
+
+      const orderIds = rows.map((r) => r.order_id);
+      console.log(`[remediate-metal-accessories] Cancelling ${rows.length} PENDING metal accessory production order(s): ${orderIds.join(', ')}`);
+
+      const idList = rows.map((r) => r.id).join(', ');
+      const cancelQuery = sql.raw(
+        `UPDATE production_orders
+         SET production_status = 'CANCELLED',
+             material_canonical = 'Metal Accessory',
+             updated_at = NOW()
+         WHERE id IN (${idList})`
+      );
+
+      await db.execute(cancelQuery);
+
+      console.log(`[remediate-metal-accessories] Done. Cancelled orders: ${orderIds.join(', ')}`);
+      return res.json({ cancelled: rows.length, orderIds });
+    } catch (_error) {
+      console.error('[remediate-metal-accessories] Error:', _error);
+      return res.status(500).json({ _error: 'Remediation failed', details: String(_error) });
     }
   });
 

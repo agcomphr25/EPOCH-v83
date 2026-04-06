@@ -161,6 +161,7 @@ interface Order {
   isManualUrgency?: boolean;
   createdAt: string;
   updatedAt: string;
+  shippedDate?: string;
   layupCompletedAt?: string;
   pluggingCompletedAt?: string;
   cncCompletedAt?: string;
@@ -1540,12 +1541,38 @@ export default function OrdersList() {
                           </OrderSummaryTooltip>
                           {order.status && (
                             <div className="relative group/status">
-                              <Badge
-                                className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
-                                title={`Order Status: ${order.status}`}
-                              >
-                                {order.status}
-                              </Badge>
+                              {(order.status?.toUpperCase() === 'FULFILLED' || order.status?.toUpperCase() === 'SHIPPED') && (order.shippedDate || order.shippingCompletedAt) ? (
+                                <RadixTooltip.Provider delayDuration={200}>
+                                  <RadixTooltip.Root>
+                                    <RadixTooltip.Trigger asChild>
+                                      <span>
+                                        <Badge
+                                          className={`${getStatusColor(order.status)} text-xs px-1 py-0 cursor-default`}
+                                        >
+                                          {order.status}
+                                        </Badge>
+                                      </span>
+                                    </RadixTooltip.Trigger>
+                                    <RadixTooltip.Portal>
+                                      <RadixTooltip.Content
+                                        side="top"
+                                        sideOffset={5}
+                                        className="z-[9999] rounded bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md select-none"
+                                      >
+                                        Shipped: {new Date(order.shippedDate || order.shippingCompletedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        <RadixTooltip.Arrow className="fill-gray-900" />
+                                      </RadixTooltip.Content>
+                                    </RadixTooltip.Portal>
+                                  </RadixTooltip.Root>
+                                </RadixTooltip.Provider>
+                              ) : (
+                                <Badge
+                                  className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
+                                  title={`Order Status: ${order.status}`}
+                                >
+                                  {order.status}
+                                </Badge>
+                              )}
                               {/* Resend Email Button - Show on hover for PENDING_SIGNATURE (any user) or FINALIZED (admin only) */}
                               {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
                                 (order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN')) && (

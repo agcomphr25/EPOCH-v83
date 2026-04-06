@@ -18,6 +18,7 @@ interface Order {
   isVerified?: boolean;
   updatedAt?: string;
   createdAt?: string;
+  shippedDate?: string;
   layupCompletedAt?: string;
   pluggingCompletedAt?: string;
   cncCompletedAt?: string;
@@ -87,7 +88,19 @@ import {
   MessageSquare,
   Link2,
   MoreVertical,
+  XCircle,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { apiRequest } from '@/lib/queryClient';
 import ScrapOrderModal from './ScrapOrderModal';
 import OrderSummaryModal from './OrderSummaryModal';
@@ -131,6 +144,9 @@ export default function AllOrdersList() {
   const [, setLocation] = useLocation();
   const [linkOrdersDialogOpen, setLinkOrdersDialogOpen] = useState(false);
   const [selectedLinkOrderId, setSelectedLinkOrderId] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string>('');
+  const [cancelReason, setCancelReason] = useState('');
 
   // Fetch current user for link orders functionality
   const { data: currentUser } = useQuery({
@@ -533,6 +549,21 @@ export default function AllOrdersList() {
     }
   };
 
+  const handleCancelOrder = (orderId: string) => {
+    setOrderToCancel(orderId);
+    setCancelReason('');
+    setCancelDialogOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (orderToCancel && cancelReason.trim()) {
+      cancelOrderMutation.mutate({ orderId: orderToCancel, reason: cancelReason });
+      setCancelDialogOpen(false);
+      setCancelReason('');
+      setOrderToCancel('');
+    }
+  };
+
   const getDepartmentBadgeColor = (department: string) => {
     const colors: { [key: string]: string } = {
       'P1 Production Queue': 'bg-slate-600',
@@ -860,9 +891,33 @@ export default function AllOrdersList() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Badge variant={isScrapped ? 'destructive' : 'default'}>
-                          {order.status || 'ACTIVE'}
-                        </Badge>
+                        {(order.status?.toUpperCase() === 'FULFILLED' || order.status?.toUpperCase() === 'SHIPPED') && (order.shippedDate || order.shippingCompletedAt) ? (
+                          <RadixTooltip.Provider delayDuration={200}>
+                            <RadixTooltip.Root>
+                              <RadixTooltip.Trigger asChild>
+                                <span>
+                                  <Badge variant="default" className="cursor-default">
+                                    {order.status || 'ACTIVE'}
+                                  </Badge>
+                                </span>
+                              </RadixTooltip.Trigger>
+                              <RadixTooltip.Portal>
+                                <RadixTooltip.Content
+                                  side="top"
+                                  sideOffset={5}
+                                  className="z-[9999] rounded bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-md select-none"
+                                >
+                                  Shipped: {new Date(order.shippedDate || order.shippingCompletedAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  <RadixTooltip.Arrow className="fill-gray-900" />
+                                </RadixTooltip.Content>
+                              </RadixTooltip.Portal>
+                            </RadixTooltip.Root>
+                          </RadixTooltip.Provider>
+                        ) : (
+                          <Badge variant={isScrapped ? 'destructive' : 'default'}>
+                            {order.status || 'ACTIVE'}
+                          </Badge>
+                        )}
                         {hasKickbacks(order.orderId) && (
                           <Badge
                             variant="destructive"
@@ -985,6 +1040,19 @@ export default function AllOrdersList() {
                             Replace
                           </Button>
                         )}
+
+                        {!isScrapped && !isFulfilled && order.status !== 'CANCELLED' && order.status !== 'SHIPPED' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => handleCancelOrder(order.orderId)}
+                            disabled={cancelOrderMutation.isPending}
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1029,6 +1097,36 @@ export default function AllOrdersList() {
           currentUser={(currentUser as any)?.username || (currentUser as any)?.name || 'System'}
         />
       )}
+
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel order {orderToCancel}? Please provide a reason for cancellation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Enter reason for cancellation..."
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            className="mt-2"
+            rows={3}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setCancelReason(''); setOrderToCancel(''); }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancel}
+              disabled={!cancelReason.trim() || cancelOrderMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {cancelOrderMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -692,6 +692,7 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
       // CENTRALIZED: Use atomic order ID generator instead of inline pattern
       const orderId = await storage.generateNextOrderId();
 
+      const poMaterial = poItem.specifications?.material || poItem.product?.material || poItem.material || null;
       const orderResult = await pool.query(orderQuery, [
         orderId,
         new Date().toISOString(),
@@ -705,6 +706,7 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
           po_item_id: poItem.id,
           po_number: poItem.poNumber,
           unit_number: i,
+          ...(poMaterial ? { material: poMaterial } : {}),
         }),
       ]);
 
@@ -856,6 +858,7 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
         // CENTRALIZED: Use atomic order ID generator instead of inline pattern
         const orderId = await storage.generateNextOrderId();
 
+        const weekPoMaterial = poItem.specifications?.material || poItem.product?.material || poItem.material || null;
         const orderResult = await pool.query(orderQuery, [
           orderId,
           new Date().toISOString(),
@@ -871,6 +874,7 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
             week_number: weekNumber,
             unit_number: orderIndex,
             week_due_date: weekDueDate.toISOString(),
+            ...(weekPoMaterial ? { material: weekPoMaterial } : {}),
           }),
         ]);
 
@@ -1065,11 +1069,13 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
               priority_score,
               created_at,
               po_reference,
-              po_item_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+              po_item_id,
+              features
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING *
           `;
 
+          const selectedItemMaterial = item.specifications?.material || item.product?.material || item.material || null;
           const orderResult = await pool.query(orderQuery, [
             orderId,
             new Date().toISOString(),
@@ -1085,6 +1091,11 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
             new Date().toISOString(),
             item.ponumber,
             item.id,
+            JSON.stringify({
+              po_item_id: item.id,
+              po_number: item.ponumber,
+              ...(selectedItemMaterial ? { material: selectedItemMaterial } : {}),
+            }),
           ]);
 
           const createdOrder = orderResult.rows[0];

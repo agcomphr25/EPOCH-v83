@@ -797,7 +797,8 @@ export default function PipelineVisualization() {
   const expectedCounts = useMemo(() => {
     if (!pipelineDetails) return {} as Record<string, number>;
     const counts: Record<string, number> = {};
-    for (const orders of Object.values(pipelineDetails)) {
+    for (const [dept, orders] of Object.entries(pipelineDetails)) {
+      if (!PIPELINE_DEPARTMENTS.includes(dept as PipelineDepartment)) continue;
       for (const o of orders) {
         if (o.expectedDepartment) {
           counts[o.expectedDepartment] = (counts[o.expectedDepartment] || 0) + 1;
@@ -818,7 +819,7 @@ export default function PipelineVisualization() {
     );
   }
 
-  const totalOrders = Object.values(pipelineCounts || {}).reduce((sum, c) => sum + c, 0);
+  const totalOrders = PIPELINE_DEPARTMENTS.reduce((sum, dept) => sum + (pipelineCounts?.[dept] ?? 0), 0);
   const deptCounts = PIPELINE_DEPARTMENTS.map((name) => pipelineCounts?.[name] ?? 0);
 
   // Build print-friendly HTML for dept view

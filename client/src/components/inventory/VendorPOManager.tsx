@@ -771,7 +771,9 @@ function VendorPOForm({
   const { data: vendorsResponse } = useQuery<{ data: any[]; meta: any }>({
     queryKey: ['/api/vendors'],
   });
-  const vendors = vendorsResponse?.data || [];
+  const vendors = (vendorsResponse?.data || []).slice().sort((a: any, b: any) =>
+    a.name.localeCompare(b.name)
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

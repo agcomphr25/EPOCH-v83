@@ -604,6 +604,11 @@ export default function PipelineVisualization() {
     refetchInterval: 30000,
   });
 
+  const { data: ytdShipped } = useQuery<{ count: number; year: number }>({
+    queryKey: ['/api/orders/ytd-shipped-count'],
+    refetchInterval: 60000,
+  });
+
   const { data: stockModels = [] } = useQuery({ queryKey: ['/api/stock-models'] });
 
   const getModelDisplayName = (modelId: string) => {
@@ -968,6 +973,11 @@ export default function PipelineVisualization() {
             <Badge variant="outline" className="text-sm">
               {totalOrders} Active Orders
             </Badge>
+            {ytdShipped !== undefined && (
+              <Badge variant="outline" className="text-sm bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200">
+                {ytdShipped.count} YTD Shipped ({ytdShipped.year})
+              </Badge>
+            )}
           </div>
         </CardTitle>
       </CardHeader>

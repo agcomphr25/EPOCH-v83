@@ -11846,7 +11846,9 @@ export class DatabaseStorage implements IStorage {
           and(
             ne(allOrders.status, 'SCRAPPED'), // Only count active orders
             ne(allOrders.status, 'CANCELLED'), // Exclude cancelled orders
-            isNull(allOrders.scrapDate) // Exclude scrapped orders
+            isNull(allOrders.scrapDate), // Exclude scrapped orders
+            ne(allOrders.currentDepartment, 'Fulfilled'), // Exclude fulfilled/shipped orders
+            ne(allOrders.currentDepartment, 'Shipped') // Exclude shipped orders
           )
         )
         .groupBy(allOrders.currentDepartment);
@@ -11906,7 +11908,9 @@ export class DatabaseStorage implements IStorage {
           and(
             ne(allOrders.status, 'SCRAPPED'),
             ne(allOrders.status, 'CANCELLED'),
-            isNull(allOrders.scrapDate)
+            isNull(allOrders.scrapDate),
+            ne(allOrders.currentDepartment, 'Fulfilled'),
+            ne(allOrders.currentDepartment, 'Shipped')
           )
         );
 

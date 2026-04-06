@@ -396,6 +396,26 @@ router.get('/pipeline-details', async (req: Request, res: Response) => {
   }
 });
 
+// YTD shipped count (must be before :orderId route)
+router.get('/ytd-shipped-count', async (req: Request, res: Response) => {
+  try {
+    const year = new Date().getFullYear();
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year + 1, 0, 1);
+    const result = await db
+      .select({ count: sql<number>`count(*)::integer` })
+      .from(allOrders)
+      .where(
+        sql`COALESCE(${allOrders.shippedDate}, ${allOrders.shippingCompletedAt}) >= ${startOfYear}
+          AND COALESCE(${allOrders.shippedDate}, ${allOrders.shippingCompletedAt}) < ${endOfYear}`
+      );
+    res.json({ count: result[0]?.count ?? 0, year });
+  } catch (error) {
+    console.error('YTD shipped count fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch YTD shipped count' });
+  }
+});
+
 // Outstanding Orders route (must be before :orderId route)
 router.get('/outstanding', async (req: Request, res: Response) => {
   try {

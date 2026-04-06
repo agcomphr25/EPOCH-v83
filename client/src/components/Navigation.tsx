@@ -1126,6 +1126,13 @@ export default function Navigation() {
         'Readiness gating for layup jobs — verify prepreg fabric, resin, and consumables with lot compliance checks',
     },
     {
+      path: '/core-queue',
+      label: 'Core Queue',
+      icon: Layers,
+      description:
+        'Readiness gating for core prep jobs — confirm honeycomb/foam core stock, adhesive film, and consumables before release',
+    },
+    {
       path: '/po-products',
       label: 'PO Product Items',
       icon: Package,

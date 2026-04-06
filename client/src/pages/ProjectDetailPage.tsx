@@ -163,6 +163,11 @@ interface TraceabilityData {
     ship_date: string | null; carrier: string | null; tracking_number: string | null;
     total_quantity: number; created_at: string;
   } | null;
+  packingSlips: {
+    id: string; packing_slip_number: string; status: string;
+    ship_date: string | null; carrier: string | null; tracking_number: string | null;
+    total_quantity: number; created_at: string;
+  }[];
   certificate: {
     id: string; certificate_number: string; status: string;
     approved_at: string | null; issued_at: string | null; created_at: string;
@@ -1493,31 +1498,33 @@ export default function ProjectDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {traceability.packingSlip ? (
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg border">
-                        <div className="flex items-center gap-3">
-                          <Tag className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm font-medium">Packing Slip</p>
-                            <p className="text-xs text-muted-foreground font-mono">{traceability.packingSlip.packing_slip_number}</p>
+                    {traceability.packingSlips && traceability.packingSlips.length > 0 ? (
+                      traceability.packingSlips.map((slip) => (
+                        <div key={slip.id} className="flex items-center justify-between py-2 px-3 rounded-lg border">
+                          <div className="flex items-center gap-3">
+                            <Tag className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm font-medium">Packing Slip</p>
+                              <p className="text-xs text-muted-foreground font-mono">{slip.packing_slip_number}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={slip.status === 'SHIPPED' ? 'default' : 'secondary'} className="text-xs">
+                              {slip.status}
+                            </Badge>
+                            <Button size="sm" variant="ghost" title="Preview PDF" asChild>
+                              <a href={`/api/p2/packing-slips/${slip.id}/pdf`} target="_blank" rel="noreferrer">
+                                <Eye className="h-3.5 w-3.5" />
+                              </a>
+                            </Button>
+                            <Button size="sm" variant="ghost" title="Download PDF" asChild>
+                              <a href={`/api/p2/packing-slips/${slip.id}/pdf`} download>
+                                <Download className="h-3.5 w-3.5" />
+                              </a>
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={traceability.packingSlip.status === 'SHIPPED' ? 'default' : 'secondary'} className="text-xs">
-                            {traceability.packingSlip.status}
-                          </Badge>
-                          <Button size="sm" variant="ghost" title="Preview PDF" asChild>
-                            <a href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`} target="_blank" rel="noreferrer">
-                              <Eye className="h-3.5 w-3.5" />
-                            </a>
-                          </Button>
-                          <Button size="sm" variant="ghost" title="Download PDF" asChild>
-                            <a href={`/api/p2/packing-slips/${traceability.packingSlip.id}/pdf`} download>
-                              <Download className="h-3.5 w-3.5" />
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
+                      ))
                     ) : (
                       <div className="flex items-center gap-3 py-2 px-3 rounded-lg border text-muted-foreground">
                         <Tag className="h-4 w-4" />

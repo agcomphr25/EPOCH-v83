@@ -813,11 +813,12 @@ router.get('/:id/traceability', async (req, res) => {
     const lot = lots[0] ?? null;
 
     let packingSlip: any = null;
+    let packingSlips: any[] = [];
     let certificate: any = null;
     let invoice: any = null;
 
     if (lot) {
-      // Packing slip
+      // Packing slip — most recent for Shipment Summary
       const slips = await pool.query<{
         id: string; packing_slip_number: string; status: string;
         ship_date: string | null; carrier: string | null; tracking_number: string | null;
@@ -827,6 +828,7 @@ router.get('/:id/traceability', async (req, res) => {
                 total_quantity, created_at
          FROM p2_packing_slips
          WHERE lot_number_id = $1
+         ORDER BY created_at DESC
          LIMIT 1`,
         [lot.id]
       );
@@ -865,6 +867,22 @@ router.get('/:id/traceability', async (req, res) => {
       invoice = invoices[0] ?? null;
     }
 
+    // All packing slips across all lots for this PO (for Documents section)
+    const allSlipsResult = await pool.query<{
+      id: string; packing_slip_number: string; status: string;
+      ship_date: string | null; carrier: string | null; tracking_number: string | null;
+      total_quantity: number; created_at: string;
+    }>(
+      `SELECT ps.id, ps.packing_slip_number, ps.status, ps.ship_date, ps.carrier,
+              ps.tracking_number, ps.total_quantity, ps.created_at
+       FROM p2_packing_slips ps
+       JOIN p2_lot_numbers ln ON ln.id = ps.lot_number_id
+       WHERE ln.po_id = $1
+       ORDER BY ps.created_at ASC`,
+      [project.poId]
+    );
+    packingSlips = allSlipsResult;
+
     // Serialized items for this PO
     const serials = await pool.query<{
       id: string; serial_number: string; barcode: string; part_number: string;
@@ -885,6 +903,7 @@ router.get('/:id/traceability', async (req, res) => {
       po,
       lot,
       packingSlip,
+      packingSlips,
       certificate,
       invoice,
       serials,

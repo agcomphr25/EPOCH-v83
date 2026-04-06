@@ -482,15 +482,15 @@ const DepartmentView = ({
                 <span className="font-bold text-white text-sm">{dept}</span>
               </div>
               <span className="bg-white/20 text-white text-xs font-bold rounded-full px-2.5 py-0.5">
-                {orders.length} order{orders.length !== 1 ? 's' : ''}
+                {orders.length - aheadOfSchedule.length} order{orders.length - aheadOfSchedule.length !== 1 ? 's' : ''}
               </span>
             </div>
 
             {!isCollapsed && (
             <div className="p-3 space-y-3 bg-white dark:bg-gray-900">
               {(showOffTrackOnly
-                ? shouldProgress.length === 0 && aheadOfSchedule.length === 0
-                : orders.length === 0
+                ? shouldProgress.length === 0
+                : orders.length - aheadOfSchedule.length === 0
               ) && (
                 <div className="text-xs text-gray-400 italic text-center py-3">
                   {showOffTrackOnly ? 'All on track' : 'Empty'}
@@ -515,17 +515,6 @@ const DepartmentView = ({
                     Should be further ahead ({shouldProgress.length})
                   </div>
                   <OrderTable orders={shouldProgress} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-orange-50 dark:bg-orange-950/20" showExpected />
-                </div>
-              )}
-
-              {/* Ahead of expected */}
-              {aheadOfSchedule.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
-                    Ahead of forecast ({aheadOfSchedule.length})
-                  </div>
-                  <OrderTable orders={aheadOfSchedule} getModelDisplayName={getModelDisplayName} onOrderClick={onOrderClick} rowBg="bg-blue-50 dark:bg-blue-950/20" showExpected />
                 </div>
               )}
 

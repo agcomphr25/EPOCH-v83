@@ -106,6 +106,7 @@ export default function P2ControlCenter() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;
+  const unitsFromUrl = urlParams.get('units') || undefined;
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
 
   useEffect(() => {
@@ -686,7 +687,7 @@ export default function P2ControlCenter() {
               Ready to Ship Dashboard
             </Link>
           </div>
-          <P2ShippingTab initialPO={poFromUrl} selectedPOIds={selectedPOIds} />
+          <P2ShippingTab initialPO={poFromUrl} initialUnits={unitsFromUrl} selectedPOIds={selectedPOIds} />
         </TabsContent>
 
         <TabsContent value="travelers">

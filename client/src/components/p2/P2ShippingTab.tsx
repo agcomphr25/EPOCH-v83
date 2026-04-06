@@ -73,7 +73,7 @@ type CreatedShipment = {
   certNumber?: string;
 };
 
-export default function P2ShippingTab({ initialPO, selectedPOIds = [] }: { initialPO?: string; selectedPOIds?: number[] } = {}) {
+export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds = [] }: { initialPO?: string; initialUnits?: string; selectedPOIds?: number[] } = {}) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedPO, setExpandedPO] = useState<string | null>(null);
@@ -229,10 +229,22 @@ export default function P2ShippingTab({ initialPO, selectedPOIds = [] }: { initi
     if (readyForPO.length === 0) return;
     autoTriggered.current = true;
     setExpandedPO(initialPO);
-    setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(readyForPO.map((u) => u.id)) }));
-    setSummaryModalSerials(readyForPO);
+
+    // If specific unit IDs were passed via ?units=, pre-select only those; otherwise select all ready units
+    const preselectedIds = initialUnits ? new Set(initialUnits.split(',').map((s) => s.trim()).filter(Boolean)) : null;
+    const unitsToShip = preselectedIds
+      ? readyForPO.filter((u) => preselectedIds.has(u.id))
+      : readyForPO;
+
+    if (unitsToShip.length === 0) {
+      // Fallback: if none of the specified IDs match, open the PO expanded but don't auto-open modal
+      return;
+    }
+
+    setSelectedSerials((prev) => ({ ...prev, [initialPO]: new Set(unitsToShip.map((u) => u.id)) }));
+    setSummaryModalSerials(unitsToShip);
     setSummaryModalPO(initialPO);
-  }, [initialPO, shippingUnits]);
+  }, [initialPO, initialUnits, shippingUnits]);
 
   const finalizeMutation = useMutation({
     mutationFn: async (data: {

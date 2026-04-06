@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -26,6 +27,8 @@ import {
   Users,
   RefreshCw,
   Loader2,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 type SerializedUnit = {
@@ -68,6 +71,8 @@ type CustomerSummary = {
 export default function P2ReadyToShipDashboard() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState('');
+  const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
+  const [selectedUnits, setSelectedUnits] = useState<Record<string, Set<string>>>({});
 
   const { data: units = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
     queryKey: ['/api/p2/serialized-items/shipping-queue'],
@@ -139,6 +144,41 @@ export default function P2ReadyToShipDashboard() {
   const handleShipAll = (po: POSummary) => {
     if (po.readyUnits.length === 0) return;
     setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`);
+  };
+
+  const handleShipSelected = (po: POSummary) => {
+    const sel = selectedUnits[po.poNumber];
+    if (!sel || sel.size === 0) return;
+    const ids = Array.from(sel).join(',');
+    setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}&units=${encodeURIComponent(ids)}`);
+  };
+
+  const toggleUnit = (poNumber: string, unitId: string) => {
+    setSelectedUnits((prev) => {
+      const current = new Set(prev[poNumber] ?? []);
+      if (current.has(unitId)) current.delete(unitId);
+      else current.add(unitId);
+      return { ...prev, [poNumber]: current };
+    });
+  };
+
+  const toggleSelectAll = (po: POSummary) => {
+    const sel = selectedUnits[po.poNumber] ?? new Set<string>();
+    const allIds = po.readyUnits.map((u) => u.id);
+    const allSelected = allIds.every((id) => sel.has(id));
+    setSelectedUnits((prev) => ({
+      ...prev,
+      [po.poNumber]: new Set(allSelected ? [] : allIds),
+    }));
+  };
+
+  const toggleExpandPO = (poNumber: string) => {
+    setExpandedPOs((prev) => {
+      const next = new Set(prev);
+      if (next.has(poNumber)) next.delete(poNumber);
+      else next.add(poNumber);
+      return next;
+    });
   };
 
   return (
@@ -228,6 +268,7 @@ export default function P2ReadyToShipDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8"></TableHead>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead className="text-center">
@@ -242,65 +283,197 @@ export default function P2ReadyToShipDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPOs.map((po) => (
-                <TableRow key={po.poNumber} className={po.readyCount > 0 ? 'bg-green-50/30 dark:bg-green-900/5' : ''}>
-                  <TableCell className="font-mono font-medium text-sm">{po.poNumber}</TableCell>
-                  <TableCell className="text-sm">{po.customerName}</TableCell>
-                  <TableCell className="text-center">
-                    {po.readyCount > 0 ? (
-                      <Badge className="bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400">
-                        {po.readyCount}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {po.needsFinalizationCount > 0 ? (
-                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
-                        {po.needsFinalizationCount}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">
-                    {po.inProductionCount > 0 ? po.inProductionCount : '—'}
-                  </TableCell>
-                  <TableCell className="text-center text-sm font-medium">{po.totalUnits}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={() => setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`)}
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      {po.needsFinalizationCount > 0 && po.readyCount === 0 && (
+              {filteredPOs.map((po) => {
+                const isExpanded = expandedPOs.has(po.poNumber);
+                const sel = selectedUnits[po.poNumber] ?? new Set<string>();
+                const allReadyIds = po.readyUnits.map((u) => u.id);
+                const selCount = allReadyIds.filter((id) => sel.has(id)).length;
+                const allSelected = allReadyIds.length > 0 && allReadyIds.every((id) => sel.has(id));
+                const hasPartialSelection = selCount > 0 && selCount < po.readyUnits.length;
+
+                const mainRow = (
+                  <TableRow
+                    key={po.poNumber}
+                    className={`${po.readyCount > 0 ? 'bg-green-50/30 dark:bg-green-900/5' : ''} ${isExpanded ? 'border-b-0' : ''}`}
+                  >
+                    <TableCell className="py-2 pl-3 pr-0 w-8">
+                      {po.readyCount > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => toggleExpandPO(po.poNumber)}
+                          aria-label={isExpanded ? 'Collapse unit list' : 'Expand unit list'}
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </Button>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono font-medium text-sm">{po.poNumber}</TableCell>
+                    <TableCell className="text-sm">{po.customerName}</TableCell>
+                    <TableCell className="text-center">
+                      {po.readyCount > 0 ? (
+                        <Badge className="bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400">
+                          {po.readyCount}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {po.needsFinalizationCount > 0 ? (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+                          {po.needsFinalizationCount}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center text-sm text-muted-foreground">
+                      {po.inProductionCount > 0 ? po.inProductionCount : '—'}
+                    </TableCell>
+                    <TableCell className="text-center text-sm font-medium">{po.totalUnits}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                          className="h-7 text-xs"
                           onClick={() => setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`)}
                         >
-                          <AlertTriangle className="h-3 w-3 mr-1" />Finalize {po.needsFinalizationCount}
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View
                         </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        disabled={po.readyCount === 0}
-                        className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-                        onClick={() => handleShipAll(po)}
-                      >
-                        <Zap className="h-3 w-3 mr-1" />Ship All Ready
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                        {po.needsFinalizationCount > 0 && po.readyCount === 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                            onClick={() => setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}`)}
+                          >
+                            <AlertTriangle className="h-3 w-3 mr-1" />Finalize {po.needsFinalizationCount}
+                          </Button>
+                        )}
+                        {hasPartialSelection ? (
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={() => handleShipSelected(po)}
+                          >
+                            <Truck className="h-3 w-3 mr-1" />Ship Selected ({selCount})
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={po.readyCount === 0}
+                            className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                            onClick={() => handleShipAll(po)}
+                          >
+                            <Zap className="h-3 w-3 mr-1" />Ship All Ready
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+
+                const expandedRow = isExpanded && po.readyUnits.length > 0 ? (
+                  <TableRow key={`${po.poNumber}-expanded`} className="bg-green-50/20 dark:bg-green-900/5 hover:bg-green-50/30">
+                    <TableCell colSpan={8} className="py-0 pb-3 px-4">
+                      <div className="border border-green-200 dark:border-green-800 rounded-md overflow-hidden mt-1">
+                        {/* Select All row */}
+                        <div className="flex items-center gap-3 px-3 py-2 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
+                          <Checkbox
+                            checked={allSelected}
+                            onCheckedChange={() => toggleSelectAll(po)}
+                            aria-label="Select all ready units"
+                            className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                          />
+                          <span className="text-xs font-medium text-green-800 dark:text-green-300">
+                            {allSelected ? 'Deselect All' : 'Select All'}
+                          </span>
+                          {selCount > 0 && (
+                            <Badge className="ml-auto bg-blue-100 text-blue-700 border-blue-300 text-xs">
+                              {selCount} of {po.readyUnits.length} selected
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Unit rows */}
+                        <table className="w-full text-xs">
+                          <thead className="bg-muted/30">
+                            <tr>
+                              <th className="px-3 py-1.5 w-8 text-center"></th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Barcode</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Serial #</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Part Number</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Part Name</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {po.readyUnits.map((unit) => {
+                              const isChecked = sel.has(unit.id);
+                              return (
+                                <tr
+                                  key={unit.id}
+                                  className={`cursor-pointer transition-colors ${isChecked ? 'bg-blue-50/60 dark:bg-blue-900/20' : 'hover:bg-muted/20'}`}
+                                  onClick={() => toggleUnit(po.poNumber, unit.id)}
+                                >
+                                  <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                    <Checkbox
+                                      checked={isChecked}
+                                      onCheckedChange={() => toggleUnit(po.poNumber, unit.id)}
+                                      aria-label={`Select unit ${unit.serialNumber}`}
+                                      className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2 font-mono">{unit.barcode}</td>
+                                  <td className="px-3 py-2 font-mono">{unit.serialNumber}</td>
+                                  <td className="px-3 py-2">{unit.partNumber}</td>
+                                  <td className="px-3 py-2 text-muted-foreground">{unit.partName}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+
+                        {/* Action bar at the bottom of expanded section */}
+                        {selCount > 0 && (
+                          <div className="flex items-center justify-between px-3 py-2 bg-blue-50/50 dark:bg-blue-900/10 border-t border-blue-200 dark:border-blue-800">
+                            <span className="text-xs text-blue-700 dark:text-blue-400">
+                              {selCount} unit{selCount !== 1 ? 's' : ''} selected
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {hasPartialSelection && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleShipSelected(po)}
+                                >
+                                  <Truck className="h-3 w-3 mr-1" />Ship Selected ({selCount})
+                                </Button>
+                              )}
+                              {allSelected && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => handleShipAll(po)}
+                                >
+                                  <Zap className="h-3 w-3 mr-1" />Ship All Ready ({po.readyCount})
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : null;
+
+                return [mainRow, expandedRow];
+              })}
             </TableBody>
           </Table>
         )}

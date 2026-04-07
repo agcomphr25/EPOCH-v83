@@ -12,6 +12,9 @@ export function deriveCanonicalMaterial(stockModelId: string): string {
   const lower = stockModelId.toLowerCase();
 
   // Metal accessory SKU prefixes — always return Metal Accessory
+  if (/^ag[-_]m5/i.test(stockModelId))  return 'Metal Accessory';
+  if (/^ag[-_]bdl/i.test(stockModelId)) return 'Metal Accessory';
+  if (/^ag[-_]bm/i.test(stockModelId))  return 'Metal Accessory';
   if (/^agm5/i.test(stockModelId)) return 'Metal Accessory';
   if (/^agbdl/i.test(stockModelId)) return 'Metal Accessory';
   if (/^agbm/i.test(stockModelId)) return 'Metal Accessory';

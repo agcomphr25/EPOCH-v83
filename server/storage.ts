@@ -10968,9 +10968,45 @@ export class DatabaseStorage implements IStorage {
           itemSchedule.weeklyDueDates[weekIndex] ||
           new Date(po.expectedDelivery);
 
-        const stockModelForOrder = item.stockModelId || item.itemId || '';
-        const materialCanonical = deriveCanonicalMaterial(stockModelForOrder);
+        const resolvedItemCode = (item.itemName || item.itemId || '').trim().toUpperCase() || null;
+        const normalizedItemCode = (resolvedItemCode || '').trim().toUpperCase();
 
+        const { inventoryItems: ivItems } = await import('./schema');
+        const { eq: eqOp } = await import('drizzle-orm');
+        const inventoryMatch = normalizedItemCode
+          ? await db
+              .select({
+                itemType: ivItems.itemType,
+                manufacturedCategory: ivItems.manufacturedCategory,
+              })
+              .from(ivItems)
+              .where(eqOp(ivItems.agPartNumber, normalizedItemCode))
+              .limit(1)
+          : [];
+        const inv = inventoryMatch[0];
+
+        let materialCanonical = '';
+        if (inv?.itemType === 'PURCHASED') {
+          materialCanonical = 'Metal Accessory';
+        } else {
+          const stockModelForOrder = item.itemId || item.stockModelId || '';
+          materialCanonical = deriveCanonicalMaterial(stockModelForOrder);
+        }
+
+        let currentDepartment = 'P1 Production Queue';
+        if (inv?.itemType === 'PURCHASED') {
+          currentDepartment = 'Shipping QC';
+        }
+
+        const normalizedItemType = (item.itemType || '').trim().toLowerCase().replace(/[\s\-]+/g, '_');
+        if (!inv && normalizedItemType && normalizedItemType !== 'stock_model') {
+          currentDepartment = 'Shipping QC';
+          if (!materialCanonical) {
+            materialCanonical = 'Metal Accessory';
+          }
+        }
+
+        const stockModelForOrder = item.itemId || item.stockModelId || '';
         const sourceSnapshot = {
           po_id: po.id,
           po_item_id: item.id,
@@ -10982,8 +11018,6 @@ export class DatabaseStorage implements IStorage {
           unit_price: item.unitPrice ?? null,
           created_at: new Date().toISOString(),
         };
-
-        const resolvedItemCode = (item.itemName || item.itemId || '').trim().toUpperCase() || null;
 
         const orderData: InsertProductionOrder = {
           orderId,
@@ -10999,7 +11033,7 @@ export class DatabaseStorage implements IStorage {
           orderDate: new Date(),
           dueDate: itemDueDate,
           productionStatus: 'PENDING',
-          currentDepartment: 'P1 Production Queue',
+          currentDepartment,
           status: 'IN_PROGRESS',
           materialCanonical,
           sourceSnapshot,

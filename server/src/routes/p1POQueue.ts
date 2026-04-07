@@ -248,6 +248,8 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     }
 
     const scheduledOrders: string[] = [];
+    const metalDemandOrderIds: string[] = [];
+    const metalDemandSkus: string[] = [];
     const warnings: Array<{ poProductId: number; warning: string }> = [];
     const errors: Array<{ poProductId: number; error: string }> = [];
 
@@ -271,6 +273,79 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
         }
 
         const item = poItem[0];
+
+        // Route custom_model (machined metal) items to bottom_metal_demands instead of production queue
+        if (item.item_type === 'custom_model') {
+          const orderId = `PO-${item.po_number}-${poItemId}`;
+          const bottomMetalSku = item.item_name || '';
+
+          const metalClient = await pool.connect();
+          try {
+            await metalClient.query('BEGIN');
+
+            // Atomic upsert into bottom_metal_demands keyed on order_id.
+            // If status is 'cancelled', re-open the record.
+            await metalClient.query(
+              `INSERT INTO bottom_metal_demands (order_id, bottom_metal_sku, quantity, status, created_at, updated_at)
+               VALUES ($1, $2, $3, 'open', NOW(), NOW())
+               ON CONFLICT (order_id) DO UPDATE
+               SET bottom_metal_sku = EXCLUDED.bottom_metal_sku,
+                   quantity = EXCLUDED.quantity,
+                   status = 'open',
+                   updated_at = NOW()`,
+              [orderId, bottomMetalSku, quantity]
+            );
+
+            // Audit log entry for metal demand routing
+            await metalClient.query(
+              `INSERT INTO admin_audit_log
+                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+              [
+                orderId,
+                'METAL_DEMAND_CREATED',
+                'Metal Demand Created',
+                JSON.stringify(null),
+                JSON.stringify({
+                  order_id: orderId,
+                  bottom_metal_sku: bottomMetalSku,
+                  quantity,
+                  source_po_id: item.po_id,
+                  source_po_item_id: poItemId,
+                  po_number: item.po_number,
+                }),
+                (req as any).user?.username || 'SYSTEM',
+                (req as any).user?.role || 'SYSTEM',
+                'METAL_DEMAND_CREATED',
+                `Metal demand created from PO release: PO #${item.po_number}`,
+                req.ip ?? null,
+                req.headers['user-agent'] ?? null,
+              ]
+            );
+
+            // Atomically increment order_count so the item no longer appears as unscheduled
+            await metalClient.query(
+              `UPDATE purchase_order_items
+               SET order_count = $1, updated_at = NOW()
+               WHERE id = $2`,
+              [quantity, poItemId]
+            );
+
+            await metalClient.query('COMMIT');
+
+            metalDemandOrderIds.push(orderId);
+            if (!metalDemandSkus.includes(bottomMetalSku)) {
+              metalDemandSkus.push(bottomMetalSku);
+            }
+          } catch (metalTxError) {
+            await metalClient.query('ROLLBACK');
+            throw metalTxError;
+          } finally {
+            metalClient.release();
+          }
+
+          continue;
+        }
 
         // Pre-release guard: use real-time count from production_orders (not cached order_count)
         // to avoid duplicates even when order_count has drifted due to partial failures.
@@ -489,6 +564,9 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     }
 
     console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`);
+    if (metalDemandOrderIds.length > 0) {
+      console.log(`🔩 P1 PO Schedule: Routed ${metalDemandOrderIds.length} custom_model item(s) to metal tracker (SKUs: ${metalDemandSkus.join(', ')})`);
+    }
 
     const responseBody = {
       success: true,
@@ -496,21 +574,27 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
       targetWeek: targetWeek || 'Current Week',
       selectionCount: selections.length,
       scheduledCount: scheduledOrders.length,
+      metalDemandCount: metalDemandOrderIds.length,
+      metalDemandSkus: metalDemandSkus.length > 0 ? metalDemandSkus : undefined,
+      metalDemandOrderIds: metalDemandOrderIds.length > 0 ? metalDemandOrderIds : undefined,
       targetDepartment: 'P1 Production Queue',
       orderSource: 'PO_RELEASE',
       orderIds: scheduledOrders,
       warnings: warnings.length > 0 ? warnings : undefined,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`,
+      message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue${metalDemandOrderIds.length > 0 ? ` and routed ${metalDemandOrderIds.length} item(s) to metal tracker` : ''}`,
     };
 
-    // Record idempotency for successful request (if idempotency key was provided)
-    if (req.idempotency?.idempotencyKey && scheduledOrders.length > 0) {
+    // Record idempotency for successful request (if idempotency key was provided).
+    // Cover both production-queue releases and metal-only releases.
+    const anyItemsProcessed = scheduledOrders.length > 0 || metalDemandOrderIds.length > 0;
+    if (req.idempotency?.idempotencyKey && anyItemsProcessed) {
       const { storeIdempotencyKey } = await import('../../middleware/idempotency');
+      const representativeId = scheduledOrders[0] ?? metalDemandOrderIds[0];
       await storeIdempotencyKey(
         req.idempotency.idempotencyKey,
         '/api/p1-po-queue/schedule',
-        scheduledOrders[0],
+        representativeId,
         200,
         responseBody
       );

@@ -87,7 +87,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   // Checkboxes for selecting which finalized units to include in a shipment
   const [selectedSerials, setSelectedSerials] = useState<Record<string, Set<string>>>({});
 
-  const [createdShipments, setCreatedShipments] = useState<Record<string, CreatedShipment>>({});
+  const [createdShipments, setCreatedShipments] = useState<Record<string, CreatedShipment[]>>({});
   const [creatingShipmentFor, setCreatingShipmentFor] = useState<string | null>(null);
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
@@ -127,22 +127,37 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     return map;
   }, [shippingUnits]);
 
-  // Pre-populate createdShipments from server data so packing slip links survive navigation
+  // Pre-populate createdShipments from server data so packing slip links survive navigation.
+  // Merges server rows into existing local state: adds missing lots but preserves locally-enriched
+  // fields (e.g. certId/certNumber set by handleGenerateCoC before the next server refetch).
   useEffect(() => {
     if (!existingShipmentRows.length || !Object.keys(poIdToNumber).length) return;
     setCreatedShipments((prev) => {
-      const next = { ...prev };
+      const next: Record<string, CreatedShipment[]> = { ...prev };
       for (const row of existingShipmentRows) {
         const poNumber = poIdToNumber[row.po_id];
-        if (poNumber && !next[poNumber]) {
-          next[poNumber] = {
-            lotId: row.lot_id,
-            lotNumber: row.lot_number,
-            slipId: row.slip_id,
-            slipNumber: row.slip_number,
-            certId: row.cert_id ?? undefined,
-            certNumber: row.cert_number ?? undefined,
+        if (!poNumber) continue;
+        if (!next[poNumber]) next[poNumber] = [];
+        const existingIdx = next[poNumber].findIndex((s) => s.lotId === row.lot_id);
+        const serverEntry: CreatedShipment = {
+          lotId: row.lot_id,
+          lotNumber: row.lot_number,
+          slipId: row.slip_id,
+          slipNumber: row.slip_number,
+          certId: row.cert_id ?? undefined,
+          certNumber: row.cert_number ?? undefined,
+        };
+        if (existingIdx === -1) {
+          next[poNumber] = [...next[poNumber], serverEntry];
+        } else {
+          const local = next[poNumber][existingIdx];
+          // Prefer local cert fields if server hasn't caught up yet
+          const merged: CreatedShipment = {
+            ...serverEntry,
+            certId: local.certId ?? serverEntry.certId,
+            certNumber: local.certNumber ?? serverEntry.certNumber,
           };
+          next[poNumber] = next[poNumber].map((s, i) => (i === existingIdx ? merged : s));
         }
       }
       return next;
@@ -351,10 +366,11 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
         method: 'POST',
         body: JSON.stringify({ lotId: lot.id, createdBy: 'shipping' }),
       });
-      setCreatedShipments((prev) => ({
-        ...prev,
-        [poNumber]: { lotId: lot.id, lotNumber: lot.lotNumber, slipId: slip.id, slipNumber: slip.packingSlipNumber },
-      }));
+      setCreatedShipments((prev) => {
+        const existing = prev[poNumber] ?? [];
+        const newEntry: CreatedShipment = { lotId: lot.id, lotNumber: lot.lotNumber, slipId: slip.id, slipNumber: slip.packingSlipNumber };
+        return { ...prev, [poNumber]: [...existing, newEntry] };
+      });
       setSelectedSerials((prev) => ({ ...prev, [poNumber]: new Set() }));
       setExpandedPO((prev) => (prev === poNumber ? null : prev));
       queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
@@ -369,19 +385,22 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     }
   };
 
-  const handleGenerateCoC = async (poNumber: string) => {
-    const shipment = createdShipments[poNumber];
-    if (!shipment) return;
-    setGeneratingCertFor(poNumber);
+  const handleGenerateCoC = async (poNumber: string, lotId: string) => {
+    setGeneratingCertFor(lotId);
     try {
       const cert = await apiRequest('/api/p2/certificates', {
         method: 'POST',
-        body: JSON.stringify({ lotId: shipment.lotId, createdBy: 'shipping' }),
+        body: JSON.stringify({ lotId, createdBy: 'shipping' }),
       });
-      setCreatedShipments((prev) => ({
-        ...prev,
-        [poNumber]: { ...prev[poNumber], certId: cert.id, certNumber: cert.certificateNumber },
-      }));
+      setCreatedShipments((prev) => {
+        const list = prev[poNumber] ?? [];
+        return {
+          ...prev,
+          [poNumber]: list.map((s) =>
+            s.lotId === lotId ? { ...s, certId: cert.id, certNumber: cert.certificateNumber } : s
+          ),
+        };
+      });
       toast({ title: 'CoC Generated', description: `Certificate ${cert.certificateNumber} created.` });
     } catch (err: any) {
       toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
@@ -487,7 +506,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
             const shipSelForPO = selectedSerials[group.poNumber] ?? new Set<string>();
             const finalizeSelectedCount = finSelForPO.size;
             const shipSelectedCount = shipSelForPO.size;
-            const shipment = createdShipments[group.poNumber];
+            const shipments = createdShipments[group.poNumber] ?? [];
 
             // Show checkbox column whenever there are any actionable rows
             const showCheckboxCol = unfinalizedIds.length > 0 || finalizedIds.length > 0;
@@ -522,7 +541,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Ship All Ready — batch action */}
-                    {!shipment && (
+                    {finalizedUnits.length > 0 && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -542,23 +561,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                         Ship All Ready ({finalizedUnits.length})
                       </Button>
                     )}
-                    {shipment ? (
+                    {shipments.length > 0 ? (
                       <>
                         <Badge className="bg-green-600 text-white text-xs gap-1">
                           <CheckCircle className="w-3 h-3" />
-                          Shipment Created
+                          {shipments.length === 1 ? 'Shipment Created' : `${shipments.length} Shipments`}
                         </Badge>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" asChild>
-                          <Link to={`/p2/shipments/${shipment.lotId}`}>
-                            <ExternalLink className="w-3 h-3 mr-1" />
-                            View Shipment
-                          </Link>
-                        </Button>
-                        <Link to={`/p2/shipments/${shipment.lotId}`}>
-                          <Badge variant="outline" className="text-xs font-mono text-muted-foreground hover:underline cursor-pointer">
-                            {shipment.lotNumber}
-                          </Badge>
-                        </Link>
                       </>
                     ) : allCompletedFinalized ? (
                       <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
@@ -573,7 +581,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                         <Loader2 className="w-3 h-3 mr-1" />In Production
                       </Badge>
                     )}
-                    {!shipment && (
+                    {shipments.length === 0 && (
                       <Badge variant="secondary" className="text-xs">
                         {group.finalizedCount}/{group.totalUnits} finalized
                       </Badge>
@@ -670,8 +678,8 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                       const sections: { label: string; units: SerializedUnit[]; key: string }[] = [];
                       if (inProductionUnits.length > 0) sections.push({ label: 'In Production', units: inProductionUnits, key: 'in-production' });
                       if (needsFinalizationUnits.length > 0) sections.push({ label: 'Needs Finalization', units: needsFinalizationUnits, key: 'needs-finalization' });
-                      if (!shipment && finalizedUnits.length > 0) sections.push({ label: 'Ready to Ship', units: finalizedUnits, key: 'ready-to-ship' });
-                      if (shipment && finalizedUnits.length > 0) sections.push({ label: 'Shipment Created', units: finalizedUnits, key: 'shipment-created' });
+                      if (shipments.length === 0 && finalizedUnits.length > 0) sections.push({ label: 'Ready to Ship', units: finalizedUnits, key: 'ready-to-ship' });
+                      if (shipments.length > 0 && finalizedUnits.length > 0) sections.push({ label: 'Shipment Created', units: finalizedUnits, key: 'shipment-created' });
 
                       const renderTableRows = (units: SerializedUnit[]) =>
                         units.map((unit) => {
@@ -768,7 +776,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                                         <tr>
                                           {showCheckboxCol && (
                                             <th className="px-3 py-2 w-10 text-center">
-                                              {section.key === 'ready-to-ship' && finalizedIds.length > 0 ? (
+                                              {(section.key === 'ready-to-ship' || section.key === 'shipment-created') && finalizedIds.length > 0 ? (
                                                 <Checkbox
                                                   checked={finalizedIds.length > 0 && finalizedIds.every((id) => shipSelForPO.has(id))}
                                                   onCheckedChange={() => toggleSelectAllFinalized(group.poNumber, finalizedIds)}
@@ -821,7 +829,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     )}
 
                     {/* ── Create Shipment bar ── */}
-                    {finalizedIds.length > 0 && !shipment && (
+                    {finalizedIds.length > 0 && (
                       <div className="flex items-center justify-between p-3 bg-muted/30 border rounded-lg">
                         <div className="text-sm text-muted-foreground">
                           {shipSelectedCount > 0
@@ -848,8 +856,8 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     )}
 
                     {/* ── Created shipment documents ── */}
-                    {shipment && (
-                      <div className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+                    {shipments.map((shipment) => (
+                      <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
                           <CheckCircle className="w-4 h-4" />
                           Shipment Created
@@ -898,10 +906,10 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             <Button
                               size="sm" variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                              disabled={generatingCertFor === group.poNumber}
-                              onClick={() => handleGenerateCoC(group.poNumber)}
+                              disabled={generatingCertFor === shipment.lotId}
+                              onClick={() => handleGenerateCoC(group.poNumber, shipment.lotId)}
                             >
-                              {generatingCertFor === group.poNumber ? (
+                              {generatingCertFor === shipment.lotId ? (
                                 <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
                               ) : (
                                 <><ClipboardCheck className="w-3 h-3 mr-1" />Generate CoC</>
@@ -910,9 +918,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           )}
                         </div>
                       </div>
-                    )}
+                    ))}
 
-                    {allCompletedFinalized && !shipment && (
+                    {allCompletedFinalized && shipments.length === 0 && (
                       <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm">
                           <Truck className="w-4 h-4" />

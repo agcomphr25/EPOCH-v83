@@ -953,13 +953,14 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
         si.quantity,
         si.description,
         sr.master_tracking_number AS tracking_number,
-        COALESCE(NULLIF(sr.customer_name, ''), '') AS customer_name,
-        sr.customer_address AS ship_street,
-        sr.customer_city AS ship_city,
-        sr.customer_state AS ship_state,
-        sr.customer_zip AS ship_zip
+        sr.ship_to_snapshot,
+        poi.item_id AS poi_item_id,
+        poi.item_name AS poi_item_name,
+        poi.stock_model_name AS poi_stock_model_name,
+        to_jsonb(si) -> 'serial_numbers' AS serial_numbers
       FROM shipment_items si
       JOIN shipment_records sr ON sr.id = si.shipment_id
+      LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
       WHERE si.id = $1
     `;
 
@@ -975,29 +976,61 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
     if (!packingSlipBase64) {
       console.log(`⚙️ Packing slip missing — regenerating for item: ${itemId}`);
       try {
+        const shipTo = item.ship_to_snapshot || {};
+        const customerName = (shipTo.name as string) || 'N/A';
+        const customerAddress = {
+          street: (shipTo.street as string) || 'N/A',
+          street2: (shipTo.street2 as string) || undefined,
+          city: (shipTo.city as string) || 'N/A',
+          state: (shipTo.state as string) || 'N/A',
+          zip: (shipTo.postalCode as string) || 'N/A',
+        };
+
+        const partNumber = (item.poi_item_id as string) || undefined;
+        const description =
+          (item.poi_item_name as string) ||
+          (item.poi_stock_model_name as string) ||
+          (item.description as string) ||
+          'N/A';
+
+        // Normalize serial_numbers from JSONB (array) if present
+        const rawSerials = item.serial_numbers;
+        const serialNumbers: string[] | undefined =
+          Array.isArray(rawSerials) && rawSerials.length > 0
+            ? (rawSerials as unknown[]).map(String)
+            : undefined;
+
+        const lineItem = {
+          partNumber: partNumber || 'N/A',
+          description,
+          quantity: item.quantity || 1,
+          unitNumber: item.order_id || '',
+          ...(serialNumbers ? { serialNumbers } : {}),
+        };
+
+        const lineItems = [lineItem];
+
+        console.log(
+          `📋 Packing slip data — customerName: "${customerName}", address:`,
+          customerAddress,
+          `items: ${lineItems.length}, partNumber: "${lineItem.partNumber}", description: "${lineItem.description}"`
+        );
+        if (!customerName || customerName === 'N/A') {
+          console.warn(`⚠️ Packing slip regeneration: customerName is empty for itemId=${itemId}`);
+        }
+        if (lineItems.length === 0) {
+          console.warn(`⚠️ Packing slip regeneration: no items resolved for itemId=${itemId}`);
+        }
+
         const slipData: PackingSlipData = {
           packingSlipNumber: `PS-${item.order_id || item.po_number}`,
           poNumber: item.po_number || '',
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          customerName: item.customer_name || '',
-          customerAddress: (item.ship_street || item.ship_city)
-            ? {
-                street: item.ship_street || '',
-                city: item.ship_city || '',
-                state: item.ship_state || '',
-                zip: item.ship_zip || '',
-              }
-            : undefined,
+          customerName,
+          customerAddress,
           trackingNumber: item.tracking_number || '',
           totalQuantity: item.quantity || 1,
-          items: [
-            {
-              partNumber: item.description || 'N/A',
-              description: item.description || 'N/A',
-              quantity: item.quantity || 1,
-              unitNumber: item.order_id || '',
-            },
-          ],
+          items: lineItems,
         };
         const pdfBuffer = await generatePackingSlipPdf(slipData);
         packingSlipBase64 = pdfBuffer.toString('base64');

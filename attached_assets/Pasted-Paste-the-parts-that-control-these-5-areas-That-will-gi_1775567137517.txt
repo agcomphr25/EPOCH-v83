@@ -1,0 +1,270 @@
+Paste the parts that control these 5 areas. That will give me the best picture fast.
+
+1. Order finalization / order save flow
+
+I need the backend route or service that runs when a sales order is created, finalized, or released.
+
+Paste files or sections like:
+
+server/src/routes/orders...
+server/src/services/order...
+anything named:
+finalizeOrder
+createOrder
+submitOrder
+releaseOrder
+saveOrder
+
+What I need to see:
+
+where line items are processed
+where inventory is checked
+where travelers/work orders are created
+where order status changes
+2. Order line item structure
+
+Paste the schema/types for order items.
+
+Examples:
+
+Drizzle schema for:
+orders
+order_items
+sales_orders
+sales_order_items
+Zod schemas
+shared TS types
+
+What I need to see:
+
+item id
+inventory item id
+qty
+part number
+item type
+whether there is already a field for manufactured vs purchased
+whether parent/child bundle relationships exist
+3. Inventory item schema
+
+Paste the inventory item table/schema and any related type definitions.
+
+Examples:
+
+inventoryItems
+inventory_items
+inventory item insert/select schemas
+item category/type enums
+
+What I need to see:
+
+manufactured vs purchased fields
+product category
+subcategory
+on hand / allocated / available fields
+whether routings can already link to inventory items
+whether bottom metal / rails are separate SKUs
+4. Work order / traveler generation logic
+
+Paste the current code that creates travelers or manufacturing queue entries.
+
+Examples:
+
+traveler generation routes
+work order creation services
+manufacturing queue creation
+routing resolution logic
+
+Likely files:
+
+server/src/routes/travelers.ts
+server/src/routes/manufacturingQueue.ts
+server/src/storage/...
+server/src/services/...
+
+What I need to see:
+
+how stock orders currently generate production records
+whether CNC can already receive queue entries
+what object links back to the sales order
+5. Shipping QC queue logic
+
+Paste whatever currently sends items to QC/shipping.
+
+Examples:
+
+shipping queue routes
+QC queue routes
+fulfillment-ready logic
+completed traveler → shipping logic
+
+What I need to see:
+
+how ready-to-ship items are represented
+whether non-manufactured items can already appear there
+whether inventory reservation exists before shipping
+Best single-file extras
+
+If you have them, these help a lot too:
+
+shared/schema.ts
+server/src/routes/orders.ts
+server/src/routes/travelers.ts
+server/src/routes/manufacturingQueue.ts
+server/src/routes/inventory...
+server/src/storage.ts or wherever order/workflow logic lives
+Best way to paste it
+
+Do this in chunks:
+
+Chunk 1
+
+Order finalization route/service
+
+Chunk 2
+
+Order item + inventory schemas
+
+Chunk 3
+
+Traveler/work order generation code
+
+Chunk 4
+
+Shipping/QC logic
+
+If you want fastest path
+
+Start with just these 4:
+
+order finalization backend route
+order item schema
+inventory item schema
+current traveler/work order creation code
+
+That is enough for me to design the routing change cleanly.
+
+When you paste it, I’ll map exactly:
+
+where to insert the routing engine
+where to check on-hand accessories
+where to auto-create CNC work orders
+where to send in-stock metal accessories directly to Shipping QC
+there are two places for stock all orders list and p1 pos
+
+Yes — that matters.
+
+If stocks can enter the system from two different entry points:
+
+All Orders list
+P1 POs
+
+then I need to see both flows, because the routing logic has to be added at the true creation/release points, not just one screen.
+
+What to copy from Replit now:
+
+First priority
+
+Paste the backend code for both of these:
+
+1. All Orders stock flow
+
+Anything that:
+
+creates the stock order
+finalizes the order
+generates production/travelers
+reserves inventory
+pushes to production or QC
+
+Likely files:
+
+server/src/routes/orders.ts
+server/src/routes/allOrders.ts
+server/src/routes/stock...
+related services used by those routes
+2. P1 PO flow
+
+Anything that:
+
+creates the P1 PO
+converts PO items into production demand
+generates travelers or queue records
+handles stock-specific workflow
+
+Likely files:
+
+server/src/routes/p1...
+server/src/routes/production...
+server/src/routes/purchaseOrders...
+server/src/routes/controlCenter...
+related service/storage methods
+Also paste these supporting pieces
+3. Shared schema/types for:
+orders
+order items
+P1 PO tables
+P1 PO item tables
+inventory items
+4. Current generation logic
+
+Where stock jobs are actually created:
+
+traveler creation
+manufacturing queue creation
+work order creation
+shipping/QC readiness
+What I need to determine
+
+I need to answer these exact questions from your code:
+
+Does All Orders create stock demand directly?
+Does P1 PO create stock demand separately?
+Do both eventually call the same backend service, or are they totally separate?
+Which one should own the routing decision for rails/bottom metal?
+Where should the split happen:
+at order entry
+at PO creation
+at production release
+or at traveler/work order generation
+Best thing to paste first
+
+Paste these in this order:
+
+Chunk 1
+
+All Orders backend route/service for stock
+
+Chunk 2
+
+P1 PO backend route/service for stock
+
+Chunk 3
+
+Schema for:
+
+orders/order items
+p1 po / p1 po items
+inventory items
+Chunk 4
+
+Traveler / manufacturing queue generation logic
+
+Very important
+
+If both flows exist, I do not want just the UI page.
+
+I need the backend route or service that actually saves and releases the record.
+
+Because the UI may show two entry points, but they may:
+
+call the same backend logic, which is good
+or call two separate logic paths, which means we need to unify them
+
+That difference changes the whole design.
+
+Paste both backend flows and I’ll tell you:
+
+which one should become the routing source of truth
+where to insert the CNC/accessory logic
+how to avoid duplicate work orders
+how to send in-stock metal accessories straight to Shipping QC

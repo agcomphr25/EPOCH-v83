@@ -1,0 +1,82 @@
+What I would tighten
+1. Set material in the manual-entry fallback too
+
+Right now the fallback sends non-stock_model items to Shipping QC, but it does not explicitly set materialCanonical.
+
+Add:
+
+if (!inv && item.itemType && item.itemType !== 'stock_model') {
+  currentDepartment = 'Shipping QC';
+  if (!materialCanonical) {
+    materialCanonical = 'Metal Accessory';
+  }
+}
+
+Otherwise you may get:
+
+correct department
+blank or inconsistent material
+2. Normalize item.itemType in the fallback
+
+This is safer:
+
+if (!inv && (item.itemType || '').trim().toLowerCase() !== 'stock_model') {
+
+Because free-text fields often vary:
+
+stock_model
+Stock_Model
+stock model
+
+Your own notes already show purchaseOrderItems.itemType is loose text.
+
+3. Guard resolvedItemCode before lookup
+
+This is minor, but cleaner:
+
+const normalizedItemCode = (resolvedItemCode || '').trim().toUpperCase();
+
+Then use normalizedItemCode in:
+
+inventory lookup
+downstream comparisons
+
+That avoids edge cases from whitespace or null handling.
+
+4. Make the regex patch a fallback, not the primary solution
+
+The regex additions are good, but the task should explicitly say:
+
+SKU regex remains fallback-only; routing priority is inventory lookup first.
+
+That prevents future drift back into string-guessing logic.
+
+5. Clarify one business rule
+
+This sentence is good, but I would make it more explicit:
+
+“PO line items that are PURCHASED inventory items generate production orders…”
+
+If they are going to Shipping QC, these are almost acting like fulfillment records rather than real production work. That is okay for now, but I would note:
+
+This task preserves the existing production-order creation pattern and only corrects classification/routing.
+
+That keeps people from assuming this task is redesigning the whole flow.
+
+My recommended final additions to the task
+
+Add this under Tasks:
+
+const normalizedItemType = (item.itemType || '').trim().toLowerCase();
+if (!inv && normalizedItemType && normalizedItemType !== 'stock_model') {
+  currentDepartment = 'Shipping QC';
+  if (!materialCanonical) {
+    materialCanonical = 'Metal Accessory';
+  }
+}
+
+And add this sentence under What & Why:
+
+Inventory lookup is the primary routing source of truth; SKU-pattern matching remains fallback-only.
+
+Approval call

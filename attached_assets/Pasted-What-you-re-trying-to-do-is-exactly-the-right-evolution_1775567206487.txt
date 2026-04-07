@@ -1,0 +1,393 @@
+What you’re trying to do is exactly the right evolution: move from “stock-only flow” → “intelligent routing + conditional work order generation + auto-fulfillment.”
+
+Right now your system is probably:
+
+Order → Traveler → Production (stocks)
+Accessories just tagged onto order
+
+You need to turn it into a split-flow routing engine based on item type + availability.
+
+🔧 Core Concept: “Multi-Path Fulfillment Routing”
+
+Each line item on the order should decide:
+
+Do I need to be manufactured?
+If yes → which department? (CNC, Layup, etc.)
+If no → can I ship immediately?
+If partially available → split fulfill
+🧠 What You Need to Add (High Level)
+1. Add “Fulfillment Type” to Inventory Items
+
+You already have:
+
+Manufactured
+Purchased
+
+Now extend it:
+
+fulfillmentType:
+  - MAKE_TO_ORDER   // stocks, cores, machined parts
+  - MAKE_TO_STOCK   // packets, kits
+  - BUY_TO_STOCK    // accessories
+  - STOCK_ITEM      // ready-to-ship items
+
+AND add:
+
+routingCategory:
+  - STOCK
+  - CNC
+  - CORE
+  - KIT
+  - ASSEMBLY
+  - NONE
+2. Add “Routing Rules Engine” (THIS IS THE KEY)
+
+When a Sales Order is finalized:
+
+POST /api/orders/:id/route
+
+Loop through each line item:
+
+for (item of order.items) {
+
+  if (item.routingCategory === "CNC") {
+    createWorkOrder({
+      type: "PART",
+      department: "CNC",
+      source: "ORDER",
+      itemId: item.id
+    })
+  }
+
+  if (item.routingCategory === "STOCK_ITEM") {
+    if (inventory.onHand >= item.qty) {
+      sendToShippingQueue(item)
+    } else {
+      createBackorderOrWO(item)
+    }
+  }
+
+}
+🎯 YOUR SPECIFIC CASE (Stocks + Bottom Metal / Rails)
+Scenario:
+
+Order contains:
+
+Stock (composite)
+Bottom metal (machined)
+Rail (machined or purchased)
+🔁 What Should Happen
+1. STOCK
+Goes to:
+Cutting Table → Layup → CNC → Finish → QC
+
+✅ Already working
+
+2. BOTTOM METAL / RAIL (CNC Required)
+
+If NOT on hand:
+
+👉 Create CNC Work Order
+
+createWorkOrder({
+  type: "PART",
+  department: "CNC",
+  partNumber: item.partNumber,
+  linkedSalesOrder: order.id,
+  quantity: item.qty
+})
+
+👉 Push to:
+
+CNC Queue
+3. BOTTOM METAL / RAIL (ON HAND)
+
+If inventory exists:
+
+👉 Skip CNC entirely
+
+👉 Send directly to:
+
+sendToShippingQC({
+  itemId: item.id,
+  source: "INVENTORY",
+  linkedOrder: order.id
+})
+🧱 New Queues You Need
+
+You already have:
+
+CNC Queue
+Layup Queue
+
+Now add:
+
+✅ Shipping QC Queue (CRITICAL)
+
+This becomes your final staging point for ALL shippable items
+
+shipping_queue:
+- id
+- sourceType: "ORDER" | "INVENTORY" | "WORK_ORDER"
+- itemId
+- qty
+- status: "READY" | "WAITING" | "HOLD"
+- linkedOrderId
+- readyAt
+🔄 Split Fulfillment (IMPORTANT)
+
+Example:
+
+Item	Qty	On Hand	Action
+Rail	5	3	Ship 3, CNC 2
+
+Your logic:
+
+if (onHand >= qty) {
+  shipAll()
+} else if (onHand > 0) {
+  shipPartial(onHand)
+  createWO(qty - onHand)
+} else {
+  createWO(qty)
+}
+🔗 How This Connects to Travelers
+Work Order → Traveler
+
+Each CNC work order:
+
+POST /api/travelers/from-routing/:partRoutingId
+
+Now you get:
+
+CNC traveler
+Tracks machining
+Completes → sends to Shipping QC
+🔁 End-to-End Flow (Clean Version)
+ORDER CREATED
+
+↓
+
+ROUTING ENGINE RUNS
+
+↓
+
+SPLITS INTO:
+STOCK PATH
+Cutting → Layup → CNC → Finish → QC
+CNC PART PATH
+CNC Queue → Traveler → QC
+INVENTORY PATH
+Direct → Shipping QC
+
+↓
+
+SHIPPING QC QUEUE
+
+↓
+
+SHIP COMPLETE ORDER
+🧠 What You’re Really Building
+
+This is essentially:
+
+👉 ATP (Available to Promise) + MRP-lite + Routing Engine
+
+You’re turning EPOCH into:
+
+Demand-driven system
+Not just traveler-driven
+🔥 What I Recommend You Build Next (In Order)
+1. Routing Engine Service
+/services/orderRouting.ts
+2. Shipping QC Queue
+UI + API
+3. Inventory Availability Check (ATP)
+real-time onHand vs allocated
+4. Work Order Generator
+standardize CNC / CORE / KIT
+5. Order Fulfillment Status Tracker
+order.fulfillmentStatus:
+  - NOT_STARTED
+  - PARTIAL_READY
+  - READY_TO_SHIP
+  - SHIPPED
+💡 Naming Suggestions (Fits Your System)
+
+Instead of generic terms:
+
+“Route Order”
+“Generate Fulfillment Plan”
+“Explode Order”
+
+👉 I recommend:
+
+"Build Production Plan"
+
+🚀 If You Want, Next Step
+
+I can give you:
+
+✅ Copy/paste-ready:
+
+orderRouting.ts
+DB schema for shipping queue
+UI layout for Shipping QC dashboard
+CNC auto-work-order generator
+
+Just say:
+👉 “build routing engine phase 1”
+
+what do i need to copy, and paste from replit to get best results
+
+Paste the parts that control these 5 areas. That will give me the best picture fast.
+
+1. Order finalization / order save flow
+
+I need the backend route or service that runs when a sales order is created, finalized, or released.
+
+Paste files or sections like:
+
+server/src/routes/orders...
+server/src/services/order...
+anything named:
+finalizeOrder
+createOrder
+submitOrder
+releaseOrder
+saveOrder
+
+What I need to see:
+
+where line items are processed
+where inventory is checked
+where travelers/work orders are created
+where order status changes
+2. Order line item structure
+
+Paste the schema/types for order items.
+
+Examples:
+
+Drizzle schema for:
+orders
+order_items
+sales_orders
+sales_order_items
+Zod schemas
+shared TS types
+
+What I need to see:
+
+item id
+inventory item id
+qty
+part number
+item type
+whether there is already a field for manufactured vs purchased
+whether parent/child bundle relationships exist
+3. Inventory item schema
+
+Paste the inventory item table/schema and any related type definitions.
+
+Examples:
+
+inventoryItems
+inventory_items
+inventory item insert/select schemas
+item category/type enums
+
+What I need to see:
+
+manufactured vs purchased fields
+product category
+subcategory
+on hand / allocated / available fields
+whether routings can already link to inventory items
+whether bottom metal / rails are separate SKUs
+4. Work order / traveler generation logic
+
+Paste the current code that creates travelers or manufacturing queue entries.
+
+Examples:
+
+traveler generation routes
+work order creation services
+manufacturing queue creation
+routing resolution logic
+
+Likely files:
+
+server/src/routes/travelers.ts
+server/src/routes/manufacturingQueue.ts
+server/src/storage/...
+server/src/services/...
+
+What I need to see:
+
+how stock orders currently generate production records
+whether CNC can already receive queue entries
+what object links back to the sales order
+5. Shipping QC queue logic
+
+Paste whatever currently sends items to QC/shipping.
+
+Examples:
+
+shipping queue routes
+QC queue routes
+fulfillment-ready logic
+completed traveler → shipping logic
+
+What I need to see:
+
+how ready-to-ship items are represented
+whether non-manufactured items can already appear there
+whether inventory reservation exists before shipping
+Best single-file extras
+
+If you have them, these help a lot too:
+
+shared/schema.ts
+server/src/routes/orders.ts
+server/src/routes/travelers.ts
+server/src/routes/manufacturingQueue.ts
+server/src/routes/inventory...
+server/src/storage.ts or wherever order/workflow logic lives
+Best way to paste it
+
+Do this in chunks:
+
+Chunk 1
+
+Order finalization route/service
+
+Chunk 2
+
+Order item + inventory schemas
+
+Chunk 3
+
+Traveler/work order generation code
+
+Chunk 4
+
+Shipping/QC logic
+
+If you want fastest path
+
+Start with just these 4:
+
+order finalization backend route
+order item schema
+inventory item schema
+current traveler/work order creation code
+
+That is enough for me to design the routing change cleanly.
+
+When you paste it, I’ll map exactly:
+
+where to insert the routing engine
+where to check on-hand accessories
+where to auto-create CNC work orders
+where to send in-stock metal accessories directly to Shipping QC

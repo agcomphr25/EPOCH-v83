@@ -1,0 +1,178 @@
+PROMPT — OEM INVOICE + PDF SYSTEM AUDIT
+READ ONLY AUDIT — OEM SHIPMENTS, INVOICES, AND PDF GENERATION
+
+You are performing a full system audit. DO NOT modify any code.
+
+GOAL:
+Understand how OEM shipments, packing slips, invoices, and PDF generation currently work, and identify why:
+1) Packing slips are blank or missing data
+2) Invoice records are not being created
+3) Invoice numbers are not reliably tracked
+4) There is no linkage between shipments and invoices
+
+----------------------------------
+STEP 1 — DATABASE STRUCTURE
+----------------------------------
+
+Find and document:
+
+1. ar_invoices table
+   - full schema
+   - required fields
+   - how invoice_number is generated or stored
+
+2. Any related tables:
+   - invoice_line_items
+   - oem_shipments
+   - oem_shipment_items (if exists)
+   - sales_orders or po_orders
+
+3. Determine:
+   - Is there ANY foreign key or reference between:
+     oem_shipments → ar_invoices ?
+
+----------------------------------
+STEP 2 — INVOICE CREATION LOGIC
+----------------------------------
+
+Search for:
+- "createInvoice"
+- "generateInvoice"
+- "ar_invoices insert"
+- "invoice_number"
+
+Answer:
+
+1. Is there ANY backend logic that creates an invoice from a shipment?
+2. If yes:
+   - where is it triggered?
+   - what data is passed?
+3. If no:
+   - confirm that invoices are NEVER auto-created
+
+----------------------------------
+STEP 3 — INVOICE NUMBER SYSTEM
+----------------------------------
+
+Find:
+
+1. Where invoice numbers are generated
+2. Whether there is:
+   - a config table
+   - a sequence generator
+   - string-based naming
+
+Answer:
+
+- Can duplicates occur?
+- Is numbering shared across P1 and P2?
+
+----------------------------------
+STEP 4 — OEM SHIPMENT FLOW
+----------------------------------
+
+Trace:
+
+1. /oem-shipments page
+2. Reprint Packing Slip button
+
+Find:
+
+- frontend handler
+- API route it calls
+- backend controller
+
+Answer:
+
+- What ID is passed?
+- What data is fetched?
+- Is shipment data correctly loaded?
+
+----------------------------------
+STEP 5 — PDF GENERATION SYSTEM
+----------------------------------
+
+Search for:
+
+- pdf
+- generatePDF
+- packingSlip
+- invoicePdf
+- puppeteer / pdf-lib / html-to-pdf
+
+Document:
+
+1. ALL PDF-related files
+2. Whether there is:
+   - a centralized PDF service
+   - or multiple scattered implementations
+
+For packing slip specifically:
+
+- what function generates it?
+- what data is passed into template?
+- what template is used?
+
+----------------------------------
+STEP 6 — ROOT CAUSE OF BLANK PDF
+----------------------------------
+
+For packing slip generation:
+
+Trace full flow:
+
+Button click →
+API →
+Backend →
+Data fetch →
+Template render
+
+Identify:
+
+- where data becomes empty
+- missing joins
+- undefined variables
+- async failures
+
+----------------------------------
+STEP 7 — P1 vs P2 DIFFERENCES
+----------------------------------
+
+Identify:
+
+- what distinguishes P1 vs P2 in database
+- whether they use:
+  - different tables
+  - different invoice logic
+  - shared or separate systems
+
+----------------------------------
+STEP 8 — EMAIL SYSTEM
+----------------------------------
+
+Search for:
+
+- sendEmail
+- emailService
+- invoice email
+
+Answer:
+
+- Is there an existing system to send PDFs via email?
+- Is there an email log table?
+
+----------------------------------
+STEP 9 — SUMMARY (CRITICAL)
+----------------------------------
+
+Provide a structured summary:
+
+1. Is there a true invoice system? (yes/no)
+2. Is ar_invoices actually used as source of truth?
+3. Why packing slip prints blank
+4. Whether PDF system is centralized or fragmented
+5. What is missing to support:
+   OEM Shipment → Invoice → PDF → Email
+
+DO NOT SUGGEST FIXES.
+ONLY REPORT CURRENT STATE.

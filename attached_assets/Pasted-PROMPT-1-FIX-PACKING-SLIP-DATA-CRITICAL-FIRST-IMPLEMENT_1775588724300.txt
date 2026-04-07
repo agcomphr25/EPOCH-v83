@@ -1,0 +1,99 @@
+PROMPT 1 — FIX PACKING SLIP DATA (CRITICAL FIRST)
+IMPLEMENTATION — FIX OEM PACKING SLIP DATA SOURCE
+
+DO NOT CHANGE UI. DO NOT CHANGE PDF LAYOUT.
+
+GOAL:
+Fix blank/missing data in OEM packing slip PDF generation.
+
+----------------------------------
+STEP 1 — FIX ADDRESS EXTRACTION
+----------------------------------
+
+File:
+server/src/routes/poShippingQC.ts
+
+Problem:
+shipment_records stores address in ship_to_snapshot JSONB,
+but query is selecting non-existent columns:
+- customer_name
+- customer_address
+- customer_city
+- customer_state
+- customer_zip
+
+Action:
+
+1. Replace those fields with extraction from ship_to_snapshot JSON:
+   Example structure (inspect actual JSON):
+
+   ship_to_snapshot = {
+     name,
+     street,
+     city,
+     state,
+     zip
+   }
+
+2. Build:
+   customerName
+   customerAddress string:
+     `${street}, ${city}, ${state} ${zip}`
+
+3. Ensure null-safe fallback:
+   if missing → show "N/A" instead of blank
+
+----------------------------------
+STEP 2 — FIX LINE ITEMS
+----------------------------------
+
+Problem:
+Currently only using shipment_items.description
+
+Action:
+
+1. Join shipment_items → purchase_order_items
+2. Pull:
+   - part number
+   - description
+   - quantity
+   - serials (if available)
+
+3. Build proper items array:
+   items: [
+     {
+       partNumber,
+       description,
+       quantity,
+       serialNumbers
+     }
+   ]
+
+----------------------------------
+STEP 3 — VALIDATE DATA BEFORE PDF
+----------------------------------
+
+Before calling generatePackingSlipPdf:
+
+Add console log or debug output:
+- customerName
+- customerAddress
+- items.length
+
+If empty → log warning
+
+----------------------------------
+STEP 4 — DO NOT MODIFY PDF GENERATOR
+----------------------------------
+
+Leave generatePackingSlipPdf untouched.
+Only fix the data passed into it.
+
+----------------------------------
+SUCCESS CRITERIA
+----------------------------------
+
+Reprint Packing Slip should:
+- show customer name + full address
+- show correct line items
+- never render blank fields

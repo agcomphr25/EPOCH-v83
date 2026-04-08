@@ -1,0 +1,106 @@
+Worked for 2 minutes
+
+Good catch — this is the kind of issue that quietly breaks everything downstream.
+
+🔴 Priority: Fix the missing route file first
+
+server/src/routes/metalAccessories.ts is imported but missing → all tracker APIs are dead
+
+That means:
+
+demand views may be stale or empty
+thresholds aren’t actionable
+CNC lead is flying blind
+👉 This is your next task (before anything else)
+#190 — Restore Metal Accessories API routes
+Done looks like
+/api/metal-accessories endpoints all respond successfully
+Metal tracker UI loads:
+inventory list
+demand summaries
+bottom metal demand tab
+no 404 / network errors in browser
+What to do (copy/paste plan)
+1. Recreate route file
+
+Create:
+
+server/src/routes/metalAccessories.ts
+2. Wire it exactly like your other route files
+
+Basic structure:
+
+import { Router } from 'express';
+import { storage } from '../storage';
+
+const router = Router();
+
+// Get all accessories
+router.get('/', async (req, res) => {
+  const data = await storage.getAllMetalAccessories();
+  res.json(data);
+});
+
+// Get demand summary
+router.get('/demands', async (req, res) => {
+  const data = await storage.getMetalAccessoriesDemands();
+  res.json(data);
+});
+
+// Bottom metal demand summary
+router.get('/bottom-metal-demands', async (req, res) => {
+  const data = await storage.getBottomMetalDemandsSummary();
+  res.json(data);
+});
+
+// Bottom metal demand full list
+router.get('/bottom-metal-demands/all', async (req, res) => {
+  const data = await storage.getBottomMetalDemands();
+  res.json(data);
+});
+
+// CRUD
+router.post('/', async (req, res) => {
+  const created = await storage.createMetalAccessory(req.body);
+  res.json(created);
+});
+
+router.put('/:id', async (req, res) => {
+  const updated = await storage.updateMetalAccessory(
+    Number(req.params.id),
+    req.body
+  );
+  res.json(updated);
+});
+
+router.delete('/:id', async (req, res) => {
+  await storage.deleteMetalAccessory(Number(req.params.id));
+  res.json({ success: true });
+});
+
+export default router;
+3. Verify it's registered
+
+In server/index.ts:
+
+import metalAccessoriesRoutes from './routes/metalAccessories';
+
+app.use('/api/metal-accessories', metalAccessoriesRoutes);
+🟡 After that (next priority)
+
+Once the API is live again:
+
+#191 — Add threshold alerts (HIGH VALUE, LOW EFFORT)
+
+Right now you already calculate:
+
+productionNeeded = max(0, totalNeeded - (inventory + machined + atAnodizer))
+
+👉 Surface it visually:
+
+Add in UI:
+🔴 if below threshold
+🟡 if approaching threshold
+🟢 if healthy
+
+This gives CNC lead instant signal.

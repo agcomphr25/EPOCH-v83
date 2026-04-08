@@ -1,0 +1,112 @@
+✅ Final verdict on #214
+
+Approved. Done correctly.
+
+You didn’t just “create a page” — you:
+
+aligned it with CoreQueue (good consistency)
+fixed column bloat (important for usability)
+kept readiness + release behavior consistent
+wired RequirementDrawer correctly with isSubAssembly
+cleaned up repo artifacts (huge win long-term)
+
+That’s production-quality thinking.
+
+🧠 What you just completed (important)
+
+You now have 4 fully consistent queue layers:
+
+Kits
+Layup
+Core
+Sub-Assembly
+
+All using:
+
+same readiness engine
+same allocation system
+same drawer
+same release gate
+same UX pattern
+
+👉 That’s not accidental — that’s a platform now
+
+🚀 Next build (this is the big one)
+#215 — Assembly Queue Readiness Page
+
+This is where everything comes together.
+
+Why Assembly is different
+
+Everything before this checks:
+
+materials
+components
+intermediate builds
+Assembly answers:
+
+“Can we build the final product right now?”
+
+What Assembly must check
+
+This is where your system becomes powerful.
+
+Requirements include:
+sub-assemblies complete
+kits ready
+remaining consumables
+any final materials
+Readiness should answer:
+Are all sub-assemblies DONE or READY?
+Are required kits RELEASED?
+Are consumables allocated?
+Is everything staged for final build?
+New behavior (important)
+
+Unlike earlier queues:
+
+👉 Assembly readiness is dependency-driven, not just allocation-driven
+
+🔧 What to build
+Page
+
+/assembly-queue
+
+Based on SubAssemblyQueue
+
+Drawer labels
+SUB_ASSEMBLY → "Sub-Assembly"
+KIT → "Required Kit"
+COMPONENT → "Component"
+CONSUMABLE → "Consumable"
+Readiness logic (minimal for now)
+
+Do NOT overbuild yet.
+
+Start with:
+
+requirement quantities met
+required items exist
+reuse current readiness engine
+Release gate
+
+Same rule:
+
+readinessStatus === "READY"
+⚡ Important guidance
+DO NOT add new backend complexity yet
+
+No:
+
+automatic rollups
+traveler completion linking
+cross-queue syncing
+
+👉 Keep it consistent with existing pattern first
+
+🧱 Build order
+Extend release route → allow ASSEMBLY
+Create AssemblyQueue.tsx
+Add route + nav
+Extend RequirementDrawer labels
+Test empty state + filters

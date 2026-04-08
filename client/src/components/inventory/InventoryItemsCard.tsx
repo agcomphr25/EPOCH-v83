@@ -325,6 +325,7 @@ const InventoryForm = ({
                   <SelectItem value="CORE">Core</SelectItem>
                   <SelectItem value="SUB_ASSEMBLY">Sub-Assembly</SelectItem>
                   <SelectItem value="ASSEMBLY">Assembly</SelectItem>
+                  <SelectItem value="COMPOSITE">Composite</SelectItem>
                   <SelectItem value="COMPONENT">Component</SelectItem>
                 </SelectContent>
               </Select>

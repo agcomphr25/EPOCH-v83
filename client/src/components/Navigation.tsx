@@ -330,7 +330,7 @@ export default function Navigation() {
     // },
     {
       path: '/robust-bom-administration',
-      label: 'P2 Robust BOM',
+      label: 'Robust BOM',
       icon: Factory,
       description:
         'Advanced BOM management with lifecycle tracking and cost analysis',

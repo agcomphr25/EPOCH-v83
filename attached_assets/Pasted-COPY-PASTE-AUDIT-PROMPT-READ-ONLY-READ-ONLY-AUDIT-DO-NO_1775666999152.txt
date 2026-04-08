@@ -1,0 +1,144 @@
+COPY-PASTE AUDIT PROMPT (READ ONLY)
+READ-ONLY AUDIT — DO NOT MODIFY ANY FILES
+
+Goal:
+Identify why employees receive "Access Denied" when clicking "Start Training" from their dashboard in the Training Control Center system.
+
+We need a full end-to-end trace of the request path and permission checks.
+
+---
+
+STEP 1 — FIND ENTRY POINT (UI)
+Locate the "Start Training" button/component.
+
+Return:
+- File path(s)
+- Component name(s)
+- OnClick handler or function triggered
+- Any route/navigation (URL or router push)
+- Any parameters passed (trainingId, employeeId, etc.)
+
+---
+
+STEP 2 — TRACE ROUTE / PAGE
+Follow the route triggered by "Start Training".
+
+Return:
+- Page/component that loads after click
+- Any guards or wrappers (ProtectedRoute, RequireAuth, etc.)
+- Any role/capability checks at the page level
+
+---
+
+STEP 3 — IDENTIFY API CALLS
+Find all API calls triggered when starting training.
+
+Return:
+- Endpoint(s) called (e.g. /api/training/start or similar)
+- HTTP method
+- Payload sent
+- Where auth token/session is attached
+
+---
+
+STEP 4 — BACKEND ROUTE HANDLER
+Locate the backend handler for the endpoint.
+
+Return:
+- File path
+- Function name
+- Middleware applied (auth, RBAC, etc.)
+
+---
+
+STEP 5 — AUTH & PERMISSION CHECKS (CRITICAL)
+Inspect ALL permission logic.
+
+Return:
+- Exact logic that triggers "Access Denied"
+- Required roles/capabilities (e.g. admin, manager, training_access)
+- Comparison against actual user role structure
+- Any mismatch between:
+    - role names
+    - capability flags
+    - user group assignments
+
+Explicitly answer:
+→ What condition must be TRUE for access to be granted?
+→ Which condition is currently failing?
+
+---
+
+STEP 6 — USER CONTEXT
+Trace how the logged-in user is identified.
+
+Return:
+- Source of user (session, JWT, database lookup)
+- Fields available (role, permissions, groups, etc.)
+- Example of actual employee user object (sanitized)
+
+---
+
+STEP 7 — TRAINING ACCESS MODEL
+Inspect how training permissions are structured.
+
+Return:
+- Tables/collections related to:
+    - training modules
+    - employee certifications
+    - assignments
+- Any join logic determining access
+
+Answer:
+→ Is access based on role, assignment, or both?
+
+---
+
+STEP 8 — DASHBOARD CARD VS BACKEND MISMATCH
+Compare:
+
+A) Conditions used to SHOW the "Start Training" button
+vs
+B) Conditions required to ACCESS the training
+
+Return:
+- Logic for showing the card
+- Logic for backend access
+
+Explicitly identify:
+→ Where these two are inconsistent
+
+---
+
+STEP 9 — ERROR SOURCE
+Locate where "Access Denied" message is generated.
+
+Return:
+- File and line
+- Exact conditional statement triggering it
+
+---
+
+STEP 10 — ROOT CAUSE SUMMARY
+Provide a clear diagnosis:
+
+- Exact failure point (UI, route guard, API, backend RBAC, DB logic)
+- Why employees can see the button but cannot access training
+- Whether issue is:
+    [ ] Missing role
+    [ ] Missing capability
+    [ ] Incorrect assignment
+    [ ] Broken auth middleware
+    [ ] Mismatched logic between UI and backend
+
+---
+
+STEP 11 — NO FIXES
+DO NOT propose or implement fixes.
+
+Only return:
+- Findings
+- Root cause
+- Supporting code references
+
+END AUDIT

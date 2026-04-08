@@ -5536,6 +5536,7 @@ export const p2PackingSlips = pgTable('p2_packing_slips', {
   verifiedBySignature: text('verified_by_signature'),
   status: text('status').notNull().default('DRAFT'), // DRAFT, FINALIZED, SHIPPED
   notes: text('notes'),
+  externalPdfUrl: text('external_pdf_url'),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

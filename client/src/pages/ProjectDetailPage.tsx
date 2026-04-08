@@ -47,7 +47,8 @@ import {
   Receipt,
   Layers,
   CheckSquare,
-  Tag
+  Tag,
+  X
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -166,7 +167,7 @@ interface TraceabilityData {
   packingSlips: {
     id: string; packing_slip_number: string; status: string;
     ship_date: string | null; carrier: string | null; tracking_number: string | null;
-    total_quantity: number; created_at: string;
+    total_quantity: number; created_at: string; external_pdf_url: string | null;
   }[];
   certificate: {
     id: string; certificate_number: string; status: string;
@@ -333,6 +334,7 @@ export default function ProjectDetailPage() {
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewTitle, setPdfPreviewTitle] = useState<string>('');
+  const [uploadingExternalPdfSlipId, setUploadingExternalPdfSlipId] = useState<string | null>(null);
 
   const { data: projectDocs = [] } = useQuery<ProjectDoc[]>({
     queryKey: ['/api/projects', id, 'documents'],
@@ -399,6 +401,50 @@ export default function ProjectDetailPage() {
     },
     onError: (err: any) => toast({ title: 'Remove failed', description: err.message, variant: 'destructive' }),
   });
+
+  const attachExternalPdfMutation = useMutation({
+    mutationFn: async ({ slipId, file }: { slipId: string; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/p2/packing-slips/${slipId}/attach-pdf`, { method: 'POST', body: form, credentials: 'include' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
+      setUploadingExternalPdfSlipId(null);
+      toast({ title: 'External PDF attached' });
+    },
+    onError: (err: any) => {
+      setUploadingExternalPdfSlipId(null);
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const removeExternalPdfMutation = useMutation({
+    mutationFn: async (slipId: string) => {
+      const res = await fetch(`/api/p2/packing-slips/${slipId}/attach-pdf`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
+      toast({ title: 'External PDF removed' });
+    },
+    onError: (err: any) => toast({ title: 'Remove failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const handleExternalPdfFileChange = (slipId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      toast({ title: 'Invalid file type', description: 'Please select a PDF file.', variant: 'destructive' });
+      return;
+    }
+    setUploadingExternalPdfSlipId(slipId);
+    attachExternalPdfMutation.mutate({ slipId, file });
+    e.target.value = '';
+  };
 
   const getAttachmentsForStep = (stepId: string) => {
     return allStepAttachments.filter(a => a.stepId === stepId);
@@ -1512,15 +1558,62 @@ export default function ProjectDetailPage() {
                             <Badge variant={slip.status === 'SHIPPED' ? 'default' : 'secondary'} className="text-xs">
                               {slip.status}
                             </Badge>
-                            <Button size="sm" variant="ghost" title="Preview PDF" asChild>
+                            <Button size="sm" variant="ghost" title="Preview generated PDF" asChild>
                               <a href={`/api/p2/packing-slips/${slip.id}/pdf`} target="_blank" rel="noreferrer">
                                 <Eye className="h-3.5 w-3.5" />
                               </a>
                             </Button>
-                            <Button size="sm" variant="ghost" title="Download PDF" asChild>
+                            <Button size="sm" variant="ghost" title="Download generated PDF" asChild>
                               <a href={`/api/p2/packing-slips/${slip.id}/pdf`} download>
                                 <Download className="h-3.5 w-3.5" />
                               </a>
+                            </Button>
+                            {slip.external_pdf_url && (
+                              <>
+                                <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700 px-1.5 py-0">
+                                  Ext. PDF
+                                </Badge>
+                                <Button size="sm" variant="ghost" title="Preview external PDF" className="text-blue-600 dark:text-blue-400" asChild>
+                                  <a href={slip.external_pdf_url} target="_blank" rel="noreferrer">
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </a>
+                                </Button>
+                                <Button size="sm" variant="ghost" title="Download external PDF" className="text-blue-600 dark:text-blue-400" asChild>
+                                  <a href={slip.external_pdf_url} download>
+                                    <Download className="h-3.5 w-3.5" />
+                                  </a>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  title="Remove external PDF"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  disabled={removeExternalPdfMutation.isPending}
+                                  onClick={() => removeExternalPdfMutation.mutate(slip.id)}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              className="hidden"
+                              id={`ext-pdf-input-${slip.id}`}
+                              onChange={(e) => handleExternalPdfFileChange(slip.id, e)}
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title={slip.external_pdf_url ? 'Replace external PDF' : 'Attach external PDF'}
+                              disabled={uploadingExternalPdfSlipId === slip.id}
+                              onClick={() => document.getElementById(`ext-pdf-input-${slip.id}`)?.click()}
+                            >
+                              {uploadingExternalPdfSlipId === slip.id ? (
+                                <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                              ) : (
+                                <Paperclip className="h-3.5 w-3.5" />
+                              )}
                             </Button>
                           </div>
                         </div>

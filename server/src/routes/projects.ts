@@ -897,10 +897,10 @@ router.get('/:id/traceability', async (req, res) => {
     const allSlipsResult = await pool.query<{
       id: string; packing_slip_number: string; status: string;
       ship_date: string | null; carrier: string | null; tracking_number: string | null;
-      total_quantity: number; created_at: string;
+      total_quantity: number; created_at: string; external_pdf_url: string | null;
     }>(
       `SELECT ps.id, ps.packing_slip_number, ps.status, ps.ship_date, ps.carrier,
-              ps.tracking_number, ps.total_quantity, ps.created_at
+              ps.tracking_number, ps.total_quantity, ps.created_at, ps.external_pdf_url
        FROM p2_packing_slips ps
        JOIN p2_lot_numbers ln ON ln.id = ps.lot_number_id
        WHERE ln.po_id = $1

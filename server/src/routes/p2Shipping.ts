@@ -486,6 +486,67 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 });
 
 // ============================================================
+// POST /api/p2/packing-slips/:id/attach-pdf — Upload external PDF
+// Accepts a multipart/form-data file field named "file" (PDF only).
+// Stores the file in object storage and saves the path to external_pdf_url.
+// ============================================================
+router.post('/packing-slips/:id/attach-pdf', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const [slip] = await db
+      .select()
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.id, req.params.id));
+    if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
+
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    if (req.file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'Only PDF files are accepted' });
+    }
+
+    const storagePath = await objectStorageService.uploadBuffer(
+      req.file.buffer,
+      `packing-slip-${slip.packingSlipNumber}-external.pdf`,
+      'application/pdf'
+    );
+
+    const [updated] = await db
+      .update(p2PackingSlips)
+      .set({ externalPdfUrl: storagePath, updatedAt: new Date() })
+      .where(eq(p2PackingSlips.id, req.params.id))
+      .returning();
+
+    return res.json(updated);
+  } catch (err: any) {
+    console.error('Attach external PDF error:', err);
+    return res.status(500).json({ error: 'Failed to attach external PDF' });
+  }
+});
+
+// ============================================================
+// DELETE /api/p2/packing-slips/:id/attach-pdf — Remove external PDF
+// ============================================================
+router.delete('/packing-slips/:id/attach-pdf', async (req: Request, res: Response) => {
+  try {
+    const [slip] = await db
+      .select()
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.id, req.params.id));
+    if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
+
+    const [updated] = await db
+      .update(p2PackingSlips)
+      .set({ externalPdfUrl: null, updatedAt: new Date() })
+      .where(eq(p2PackingSlips.id, req.params.id))
+      .returning();
+
+    return res.json(updated);
+  } catch (err: any) {
+    console.error('Remove external PDF error:', err);
+    return res.status(500).json({ error: 'Failed to remove external PDF' });
+  }
+});
+
+// ============================================================
 // POST /api/p2/certificates — Create CoC from lot
 // ============================================================
 const createCertificateSchema = z.object({

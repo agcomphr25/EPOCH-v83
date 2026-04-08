@@ -795,6 +795,15 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Shipment label/packing slip migration skipped:', shipErr.message);
       }
 
+      // Ensure p2_packing_slips has external_pdf_url column for per-slip external PDF attachments
+      try {
+        const { sql: sqlExtPdf } = await import('drizzle-orm');
+        await db.execute(sqlExtPdf`ALTER TABLE p2_packing_slips ADD COLUMN IF NOT EXISTS external_pdf_url TEXT`);
+        console.log('✅ Ensured p2_packing_slips has external_pdf_url column');
+      } catch (extPdfErr: any) {
+        console.warn('⚠️ p2_packing_slips external_pdf_url migration skipped:', extPdfErr.message);
+      }
+
       // Ensure cutting table packet BOM tables exist (needed for scan-start endpoint)
       try {
         const { sql: sqlCut } = await import('drizzle-orm');

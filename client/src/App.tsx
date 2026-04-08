@@ -1,6 +1,6 @@
 import React from 'react';
 import { Switch, Route, Router, Link, useLocation } from 'wouter';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { Toaster } from '@/components/ui/toaster';
 // import { CSVProvider } from "./contexts/CSVContext"; // Temporarily disabled
@@ -320,62 +320,62 @@ function ConditionalNavigation() {
 // Root redirect component that intercepts "/" and redirects to personalized dashboards or login
 function RootRedirect() {
   const [, setLocation] = useLocation();
-  const [isRedirecting, setIsRedirecting] = React.useState(true);
+
+  const { data: currentUser, isLoading } = useQuery<{ id: number; username: string; role: string } | null>({
+    queryKey: ['currentUser'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   React.useEffect(() => {
-    // Fetch session using credentials to work with cookie-based auth
-    fetch('/api/auth/session', {
-      credentials: 'include',
-      headers: {
-        // Also check for localStorage token as fallback
-        Authorization: `Bearer ${
-          localStorage.getItem('sessionToken') ||
-          localStorage.getItem('jwtToken') ||
-          ''
-        }`,
-      },
-    })
-      .then((res) => {
-        if (res.ok) {
-          return res.json();
-        }
-        throw new Error('Not authenticated');
-      })
-      .then((userData) => {
-        if (userData?.username) {
-          const personalizedRoute = getDashboardRoute(userData.username);
-          // If user has a personalized dashboard, redirect immediately
-          if (personalizedRoute !== '/') {
-            console.log(
-              `Redirecting ${userData.username} to ${personalizedRoute}`
-            );
-            setLocation(personalizedRoute);
-            return;
-          }
-        }
-        // If no personalized dashboard, show generic dashboard
-        setIsRedirecting(false);
-      })
-      .catch((error) => {
-        console.error('Failed to fetch session for redirect:', error);
-        // User is not authenticated - redirect to login page
-        setLocation('/login');
-      });
-  }, [setLocation]);
+    if (isLoading) return;
 
-  // Show loading state while checking for redirect
-  if (isRedirecting) {
+    if (!currentUser) {
+      setLocation('/login');
+      return;
+    }
+
+    if (currentUser.username) {
+      const personalizedRoute = getDashboardRoute(currentUser.username);
+      if (personalizedRoute !== '/') {
+        console.log(`Redirecting ${currentUser.username} to ${personalizedRoute}`);
+        setLocation(personalizedRoute);
+      }
+    }
+  }, [isLoading, currentUser, setLocation]);
+
+  // While auth resolves, show a lightweight skeleton shell instead of blocking spinner
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+      <div className="p-6 space-y-4 max-w-7xl mx-auto">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+              <div className="h-5 w-32 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+              <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+            </div>
+          ))}
         </div>
       </div>
     );
   }
 
-  // If we get here, user is authenticated but has no personalized dashboard - render the generic one
+  // Unauthenticated: return null while useEffect handles the /login redirect
+  if (!currentUser) {
+    return null;
+  }
+
+  // Authenticated with a personalized dashboard: return null while useEffect redirects
+  if (currentUser.username) {
+    const personalizedRoute = getDashboardRoute(currentUser.username);
+    if (personalizedRoute !== '/') {
+      return null;
+    }
+  }
+
+  // Authenticated with no personalized dashboard: render the generic one
   return <Dashboard />;
 }
 

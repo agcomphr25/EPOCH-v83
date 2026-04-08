@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { hasRouteAccess, hasFullAccess } from '@/config/userPermissions';
@@ -79,10 +79,22 @@ function isOwnPersonalDashboard(username: string, route: string): boolean {
   return lowerRoute === `/${lowerUsername}-dashboard`;
 }
 
+function computeAccess(currentUser: UserData | null | undefined, location: string): boolean {
+  if (isPublicRoute(location)) return true;
+
+  if (!currentUser) return false;
+
+  const username = currentUser.username?.toLowerCase() || '';
+  const userRole = currentUser.role || '';
+
+  if (isOwnPersonalDashboard(username, location)) return true;
+  if (hasFullAccess(username)) return true;
+
+  return hasRouteAccess(username, location, userRole);
+}
+
 export default function RouteGuard({ children }: RouteGuardProps) {
-  const [location] = useLocation();
-  const [accessChecked, setAccessChecked] = useState(false);
-  const [hasAccess, setHasAccess] = useState(true);
+  const [location, setLocation] = useLocation();
 
   const { data: currentUser, isLoading } = useQuery<UserData | null>({
     queryKey: ['currentUser'],
@@ -142,81 +154,35 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     retry: false,
   });
 
+  // Redirect unauthenticated users to /login after auth query settles.
+  // Using useEffect to keep the redirect as a side effect rather than
+  // performing navigation during render, which avoids React strict-mode warnings.
   useEffect(() => {
-    if (isLoading) {
-      return;
+    if (!isLoading && !isPublicRoute(location) && currentUser === null) {
+      setLocation('/login');
     }
+  }, [isLoading, currentUser, location, setLocation]);
 
-    if (isPublicRoute(location)) {
-      setHasAccess(true);
-      setAccessChecked(true);
-      return;
-    }
-
-    if (!currentUser) {
-      setHasAccess(false);
-      setAccessChecked(true);
-      return;
-    }
-
-    const username = currentUser.username?.toLowerCase() || '';
-    const userRole = currentUser.role || '';
-
-    // Always allow users to access their own personal dashboard
-    if (isOwnPersonalDashboard(username, location)) {
-      setHasAccess(true);
-      setAccessChecked(true);
-      return;
-    }
-
-    if (hasFullAccess(username)) {
-      setHasAccess(true);
-      setAccessChecked(true);
-      return;
-    }
-
-    const canAccess = hasRouteAccess(username, location, userRole);
-    setHasAccess(canAccess);
-    setAccessChecked(true);
-  }, [location, currentUser, isLoading]);
-
-  // Show loading spinner ONLY while query is in progress
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Always allow public routes immediately - no auth check needed
+  // Public routes: render immediately, no auth check needed
   if (isPublicRoute(location)) {
     return <>{children}</>;
   }
 
-  // After loading completes, if accessChecked hasn't been set yet by useEffect,
-  // compute access synchronously to avoid white screen on auth failure
-  if (!accessChecked) {
-    // No user after auth check = auth failure, show Access Denied
-    if (!currentUser) {
-      return <AccessDenied />;
-    }
-    // User exists but access not yet computed - will be handled by useEffect on next render
-    // For now, show loading briefly while effect runs
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking permissions...</p>
-        </div>
-      </div>
-    );
+  // Render children optimistically while auth resolves to avoid a full-page
+  // blocking spinner. Once the query settles the checks below apply.
+  if (isLoading) {
+    return <>{children}</>;
   }
 
-  if (!hasAccess) {
+  // Auth resolved — unauthenticated: render nothing while the useEffect redirects
+  if (!currentUser) {
+    return null;
+  }
+
+  // Authenticated — check route-level permissions
+  const access = computeAccess(currentUser, location);
+
+  if (!access) {
     return <AccessDenied />;
   }
 

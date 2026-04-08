@@ -63,17 +63,17 @@ export default function GLENNTestDashboard() {
 
   useScrollDepth();
 
-  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+  const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
 
-  const { data: orderStats } = useQuery<{ pending: number; inProduction: number; completed: number }>({
+  const { data: orderStats, isLoading: isStatsLoading } = useQuery<{ pending: number; inProduction: number; completed: number }>({
     queryKey: ['/api/orders/stats'],
     enabled: isPremiumMode,
   });
 
   if (!isPremiumMode) {
-    return <LightModeDashboard currentUser={currentUser} onToggleMode={() => setIsPremiumMode(true)} />;
+    return <LightModeDashboard currentUser={currentUser} isUserLoading={isUserLoading} onToggleMode={() => setIsPremiumMode(true)} />;
   }
 
   return (
@@ -129,7 +129,11 @@ export default function GLENNTestDashboard() {
               </div>
               <span className="depth-card-title">Orders Today</span>
             </div>
-            <div className="kpi-value">{orderStats?.pending || 12}</div>
+            {isStatsLoading ? (
+              <div className="h-10 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="kpi-value">{orderStats?.pending ?? 12}</div>
+            )}
             <div className="kpi-trend positive">
               <TrendingUp className="w-4 h-4" />
               <span>+8% from yesterday</span>
@@ -143,7 +147,11 @@ export default function GLENNTestDashboard() {
               </div>
               <span className="depth-card-title">In Production</span>
             </div>
-            <div className="kpi-value">{orderStats?.inProduction || 47}</div>
+            {isStatsLoading ? (
+              <div className="h-10 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="kpi-value">{orderStats?.inProduction ?? 47}</div>
+            )}
             <div className="kpi-label">Active work orders</div>
           </div>
 
@@ -154,7 +162,11 @@ export default function GLENNTestDashboard() {
               </div>
               <span className="depth-card-title">Completed This Week</span>
             </div>
-            <div className="kpi-value">{orderStats?.completed || 156}</div>
+            {isStatsLoading ? (
+              <div className="h-10 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="kpi-value">{orderStats?.completed ?? 156}</div>
+            )}
             <div className="kpi-trend positive">
               <TrendingUp className="w-4 h-4" />
               <span>On target</span>
@@ -469,7 +481,16 @@ export default function GLENNTestDashboard() {
         </div>
 
         {/* My Tasks Control Center */}
-        {currentUser?.employeeId && (
+        {isUserLoading ? (
+          <div className="mt-8">
+            <div className="depth-card space-y-3">
+              <div className="h-6 w-48 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-full bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-5/6 bg-white/10 rounded animate-pulse" />
+            </div>
+          </div>
+        ) : currentUser?.employeeId ? (
           <div className="mt-8">
             <div className="depth-card">
               <MyTasksControlCenter
@@ -479,7 +500,7 @@ export default function GLENNTestDashboard() {
               />
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Footer */}
         <div className="section-divider"></div>
@@ -493,9 +514,11 @@ export default function GLENNTestDashboard() {
 
 function LightModeDashboard({ 
   currentUser, 
+  isUserLoading,
   onToggleMode 
 }: { 
   currentUser?: { id: number; username: string; role: string; employeeId?: number }; 
+  isUserLoading?: boolean;
   onToggleMode: () => void;
 }) {
   const isStaciw = currentUser?.username === 'staciw';
@@ -659,13 +682,20 @@ function LightModeDashboard({
       )}
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {isUserLoading ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-5/6 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ) : currentUser?.employeeId ? (
         <MyTasksControlCenter
           employeeId={currentUser.employeeId}
           userName={currentUser.username}
           compact={false}
         />
-      )}
+      ) : null}
 
       {/* Additional Navigation Items */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

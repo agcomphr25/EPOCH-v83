@@ -20,7 +20,7 @@ const ROWS = 7;
 const LABELS_PER_PAGE = COLUMNS * ROWS;            // 14
 
 const LEFT_MARGIN = (156 / 1000) * POINTS_PER_INCH;  // 0.156" = 11.232pt exactly
-const TOP_MARGIN = 0.5 * POINTS_PER_INCH;         // 36pt exactly
+const TOP_MARGIN = 0.83 * POINTS_PER_INCH;        // 59.76pt exactly
 const H_GAP = 0.1875 * POINTS_PER_INCH;           // 13.5pt exactly
 const V_GAP = 0;
 

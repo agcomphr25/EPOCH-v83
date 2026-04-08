@@ -2415,6 +2415,7 @@ export interface IStorage {
   createProjectStep(data: InsertProjectStep): Promise<ProjectStep>;
   updateProjectStep(id: string, data: Partial<InsertProjectStep>): Promise<ProjectStep>;
   deleteProjectStep(id: string): Promise<void>;
+  getLinkedSubmissionIds(stepType: string): Promise<(string | number | null)[]>;
 
   // Project Step Attachments CRUD
   getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]>;
@@ -20604,6 +20605,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectStep(id: string): Promise<void> {
     await db.delete(projectSteps).where(eq(projectSteps.id, id));
+  }
+
+  async getLinkedSubmissionIds(stepType: string): Promise<(string | number | null)[]> {
+    type StepTypeKey = 'rfq_risk_assessment' | 'quote' | 'purchase_review_checklist' | 'preproduction_checklist' | 'p2_order';
+    const columnMap: Record<StepTypeKey, keyof typeof projectSteps.$inferSelect> = {
+      rfq_risk_assessment: 'linkedRfqId',
+      quote: 'linkedQuoteId',
+      purchase_review_checklist: 'linkedPurchaseReviewId',
+      preproduction_checklist: 'linkedPreproductionChecklistId',
+      p2_order: 'linkedP2OrderId',
+    };
+    const validKeys = Object.keys(columnMap) as StepTypeKey[];
+    const typedStepType = validKeys.find(k => k === stepType);
+    if (!typedStepType) return [];
+    const columnName = columnMap[typedStepType];
+    const rows = await db
+      .select({ linkedId: projectSteps[columnName] })
+      .from(projectSteps)
+      .where(
+        and(
+          eq(projectSteps.stepType, typedStepType),
+          isNotNull(projectSteps[columnName])
+        )
+      );
+    return rows.map(r => r.linkedId as string | number | null);
   }
 
   // Project Step Attachments CRUD

@@ -1,0 +1,136 @@
+COPY-PASTE PROMPT (USE IN REPLIT TASK)
+TASK: Remove blocking render on Admin Dashboard and implement progressive rendering
+
+CONTEXT:
+The Admin Dashboard currently has a slow First Contentful Paint (~11 seconds).
+Network requests are fast, so the issue is NOT backend performance.
+The issue is that the UI is being blocked from rendering until data is fully loaded.
+
+OBJECTIVE:
+Refactor the Admin Dashboard so that:
+- The UI renders immediately (no blank screen)
+- Data loads progressively per component
+- No existing functionality is broken
+
+--------------------------------------------------
+
+STEP 1 — FIND BLOCKING PATTERNS
+
+Search for the Admin Dashboard page/component (likely named something like):
+- AdminDashboard.tsx / .jsx
+- admin-dashboard route
+
+Identify ANY of the following patterns:
+
+1. Top-level async/await:
+   const data = await fetch(...)
+
+2. Conditional render blocking UI:
+   if (!data) return null;
+   if (isLoading) return null;
+
+3. Global loading gate:
+   if (!user || !session || !data) return null;
+
+4. useEffect that blocks rendering until complete
+
+--------------------------------------------------
+
+STEP 2 — REMOVE GLOBAL RENDER BLOCKING
+
+Refactor so that the main layout ALWAYS renders.
+
+Replace patterns like:
+   if (!data) return null;
+
+WITH:
+
+   return (
+     <DashboardLayout>
+       <SummarySection />
+       <OrdersSection />
+       <PaymentsSection />
+     </DashboardLayout>
+   );
+
+IMPORTANT:
+- Do NOT wait for all data before rendering
+- The layout must render immediately
+
+--------------------------------------------------
+
+STEP 3 — MOVE DATA FETCHING INTO COMPONENTS
+
+Each section should handle its own data.
+
+Example:
+
+SummarySection:
+- fetch summary data
+- show skeleton while loading
+
+OrdersSection:
+- fetch orders independently
+
+PaymentsSection:
+- fetch payment status independently
+
+--------------------------------------------------
+
+STEP 4 — ADD LOADING STATES (REQUIRED)
+
+Each component must render immediately with a loading state.
+
+Example:
+
+if (isLoading) {
+  return <div className="p-4">Loading...</div>;
+}
+
+OR preferred:
+- Add simple skeleton UI blocks (gray placeholders)
+
+DO NOT return null
+
+--------------------------------------------------
+
+STEP 5 — PRESERVE EXISTING LOGIC
+
+- Do NOT change API endpoints
+- Do NOT change business logic
+- Do NOT remove any functionality
+- Only change WHEN things render
+
+--------------------------------------------------
+
+STEP 6 — VERIFY
+
+After refactor:
+- Page should render immediately (even if data is empty)
+- Data should "fill in" after load
+- No blank screen at any point
+
+--------------------------------------------------
+
+STEP 7 — OPTIONAL IMPROVEMENT (IF EASY)
+
+Lazy load heavy sections:
+
+const PaymentsSection = React.lazy(() => import('./PaymentsSection'));
+
+--------------------------------------------------
+
+SUCCESS CRITERIA:
+
+- No blank screen during load
+- UI appears instantly
+- Data loads progressively
+- No regression in functionality
+
+--------------------------------------------------
+
+OUTPUT:
+
+1. Show BEFORE vs AFTER code for the main dashboard component
+2. Show at least one refactored section component
+3. Explain what was blocking rendering and how it was fixed

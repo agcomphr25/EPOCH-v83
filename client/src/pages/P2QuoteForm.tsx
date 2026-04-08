@@ -85,6 +85,8 @@ export default function P2QuoteForm() {
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string>('');
 
   // Modal state for inventory item selection
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -315,15 +317,6 @@ export default function P2QuoteForm() {
         return;
       }
 
-      if (lineItems.length === 0) {
-        toast({
-          title: 'Validation Error',
-          description: 'Please add at least one line item.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       const quoteData = {
         id: savedQuoteId,
         rfqNumber: quoteNumber,
@@ -403,16 +396,6 @@ export default function P2QuoteForm() {
           toast({
             title: 'Missing Information',
             description: 'Please enter customer information first before uploading files.',
-            variant: 'destructive',
-          });
-          setIsUploadingFile(false);
-          return;
-        }
-
-        if (lineItems.length === 0) {
-          toast({
-            title: 'Missing Information',
-            description: 'Please add at least one line item before uploading files.',
             variant: 'destructive',
           });
           setIsUploadingFile(false);
@@ -534,15 +517,6 @@ export default function P2QuoteForm() {
             toast({
               title: 'Validation Error',
               description: 'Please enter customer information.',
-              variant: 'destructive',
-            });
-            return;
-          }
-
-          if (lineItems.length === 0) {
-            toast({
-              title: 'Validation Error',
-              description: 'Please add at least one line item.',
               variant: 'destructive',
             });
             return;
@@ -1016,16 +990,31 @@ export default function P2QuoteForm() {
                             {fileName}
                           </a>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteAttachment(fileName)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          data-testid={`button-delete-attachment-${index}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPreviewUrl(`/api/quotes/${savedQuoteId}/attachments/${fileName}`);
+                              setPreviewFileName(fileName);
+                            }}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            data-testid={`button-preview-attachment-${index}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteAttachment(fileName)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            data-testid={`button-delete-attachment-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1211,6 +1200,41 @@ export default function P2QuoteForm() {
               data-testid="button-confirm-add-item"
             >
               Add to Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Preview Modal */}
+      <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) setPreviewUrl(null); }}>
+        <DialogContent className="max-w-4xl w-full" style={{ height: '90vh', display: 'flex', flexDirection: 'column' }}>
+          <DialogHeader>
+            <DialogTitle>Preview: {previewFileName}</DialogTitle>
+            <DialogDescription>
+              PDF preview — use the link below to open in a new tab.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            {previewUrl && (
+              <iframe
+                src={previewUrl}
+                title={previewFileName}
+                className="w-full h-full rounded border"
+                style={{ minHeight: '60vh' }}
+              />
+            )}
+          </div>
+          <DialogFooter className="mt-2">
+            <a
+              href={previewUrl || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Open in new tab
+            </a>
+            <Button variant="outline" onClick={() => setPreviewUrl(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -74,6 +74,87 @@ const metalAccessorySchema = z.object({
 
 type MetalAccessory = z.infer<typeof metalAccessorySchema> & { id: number };
 
+const STATUS_COLORS: Record<string, string> = {
+  open: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  fulfilled: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+};
+
+function RailDemandsTab({ railDemands, railDemandsLoading }: { railDemands: any[]; railDemandsLoading: boolean }) {
+  const [statusFilter, setStatusFilter] = useState<string>('open');
+
+  const filtered = statusFilter === 'all'
+    ? railDemands
+    : railDemands.filter((d) => d.status === statusFilter);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>Rail Demand Tracking</CardTitle>
+            <CardDescription>
+              One row per order per rail SKU — tracks open, fulfilled, and cancelled demand
+            </CardDescription>
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Filter status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="fulfilled">Fulfilled</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {railDemandsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground mb-2">
+              No {statusFilter === 'all' ? '' : statusFilter + ' '}rail demands recorded yet.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Demands are created automatically when orders are finalized with rail selections (excluding no_rail and alamo_rail_spacing).
+            </p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order ID</TableHead>
+                <TableHead>Rail SKU</TableHead>
+                <TableHead className="text-center">Quantity</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((demand: any) => (
+                <TableRow key={demand.id}>
+                  <TableCell className="font-medium">{demand.orderId}</TableCell>
+                  <TableCell>{demand.railSku}</TableCell>
+                  <TableCell className="text-center">{demand.quantity}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${STATUS_COLORS[demand.status] ?? ''}`}>
+                      {demand.status}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function MetalAccessoriesTracker() {
   const [editingItem, setEditingItem] = useState<MetalAccessory | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -104,6 +185,11 @@ export default function MetalAccessoriesTracker() {
   // Query for explicit bottom metal demands from tracking table
   const { data: bottomMetalDemands = [], isLoading: bottomMetalDemandsLoading } = useQuery<any[]>({
     queryKey: ['/api/metal-accessories/bottom-metal-demands'],
+  });
+
+  // Query for rail demands from tracking table (all rows for row-level status visibility)
+  const { data: railDemands = [], isLoading: railDemandsLoading } = useQuery<any[]>({
+    queryKey: ['/api/metal-accessories/rail-demands/all'],
   });
 
   const form = useForm({
@@ -255,7 +341,7 @@ export default function MetalAccessoriesTracker() {
 
       <Tabs defaultValue="inventory" className="w-full">
         <TabsList
-          className="grid w-full max-w-lg grid-cols-3"
+          className="grid w-full max-w-2xl grid-cols-4"
           data-testid="tabs-list"
         >
           <TabsTrigger value="inventory" data-testid="tab-inventory">
@@ -263,6 +349,9 @@ export default function MetalAccessoriesTracker() {
           </TabsTrigger>
           <TabsTrigger value="bottom-metal-demands" data-testid="tab-bottom-metal-demands">
             Bottom Metal Demands
+          </TabsTrigger>
+          <TabsTrigger value="rail-demands" data-testid="tab-rail-demands">
+            Rails Demands
           </TabsTrigger>
           <TabsTrigger value="add-new" data-testid="tab-add-new">
             Add New Item
@@ -794,6 +883,10 @@ export default function MetalAccessoriesTracker() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="rail-demands" className="space-y-6">
+          <RailDemandsTab railDemands={railDemands} railDemandsLoading={railDemandsLoading} />
         </TabsContent>
 
         <TabsContent value="add-new">

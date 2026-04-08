@@ -53,6 +53,54 @@ function computeBottomMetalSource(features: Record<string, any> | null | undefin
  * @param updateOrderSource If true, also updates the order's bottomMetalSource field
  * @returns Updated bottomMetalSource value
  */
+async function reconcileRailDemand(order: any): Promise<void> {
+  if (!order?.orderId) return;
+
+  const orderId = order.orderId;
+  const features = (order.features as Record<string, any>) || {};
+  const railAccessory = features.rail_accessory;
+
+  // Normalize to array
+  const railValues: string[] = Array.isArray(railAccessory)
+    ? railAccessory
+    : railAccessory
+    ? [railAccessory]
+    : [];
+
+  // Filter out non-physical rails: no_rail and alamo_rail_spacing
+  const EXCLUDED_RAILS = new Set(['no_rail', 'alamo_rail_spacing']);
+  const physicalRails = railValues.filter((r) => !EXCLUDED_RAILS.has(r));
+
+  // Normalize SKUs: uppercase, underscores -> dashes
+  const activeSkus = new Set(physicalRails.map((r) => r.toUpperCase().replace(/_/g, '-')));
+
+  // Get existing demand rows for this order
+  const existingDemands = await storage.getRailDemandsByOrderId(orderId);
+  const existingBySkus = new Map(existingDemands.map((d) => [d.railSku, d]));
+
+  // Upsert demand rows for active SKUs
+  for (const sku of activeSkus) {
+    const existing = existingBySkus.get(sku);
+    if (existing) {
+      if (existing.status !== 'open') {
+        await storage.updateRailDemand(existing.id, { status: 'open' });
+        console.log(`🔩 Re-opened rail demand for order ${orderId}: ${sku}`);
+      }
+    } else {
+      await storage.createRailDemand({ orderId, railSku: sku, quantity: 1, status: 'open' });
+      console.log(`🔩 Created rail demand for order ${orderId}: ${sku}`);
+    }
+  }
+
+  // Cancel demand rows for SKUs no longer on the order
+  for (const [sku, demand] of existingBySkus) {
+    if (!activeSkus.has(sku) && demand.status !== 'cancelled') {
+      await storage.updateRailDemand(demand.id, { status: 'cancelled' });
+      console.log(`🔩 Cancelled rail demand for order ${orderId}: ${sku}`);
+    }
+  }
+}
+
 async function reconcileBottomMetalDemand(order: any, updateOrderSource: boolean = true): Promise<string | null> {
   if (!order?.orderId) return null;
   
@@ -563,6 +611,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
     
     // Use idempotent helper to create demand record (skip order update since already set)
     await reconcileBottomMetalDemand(order, false);
+    await reconcileRailDemand(order);
     
     if (hasStock) {
       console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
@@ -1200,6 +1249,7 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     // Idempotently reconcile bottom metal demand from the effective post-update order state
     // This handles all cases: feature changes, partial updates, drift correction, and updates bottomMetalSource
     await reconcileBottomMetalDemand(updatedOrder);
+    await reconcileRailDemand(updatedOrder);
 
     return res.json(updatedOrder);
   } catch (error) {
@@ -2643,6 +2693,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
     // This validates demand state against order features instead of unconditionally re-opening
     try {
       await reconcileBottomMetalDemand(updatedOrder);
+      await reconcileRailDemand(updatedOrder);
     } catch (demandError) {
       console.log('🔄 Bottom metal demand reconciliation failed on undo-cancel:', demandError);
     }

@@ -43,6 +43,25 @@ router.get('/bottom-metal-demands/all', async (req, res) => {
   }
 });
 
+// Rail demand endpoints
+router.get('/rail-demands', async (req, res) => {
+  try {
+    const demands = await storage.getRailDemandsSummary();
+    res.json(demands);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/rail-demands/all', async (req, res) => {
+  try {
+    const demands = await storage.getRailDemandsAll();
+    res.json(demands);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);

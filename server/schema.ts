@@ -2850,6 +2850,27 @@ export const insertBottomMetalDemandSchema = createInsertSchema(bottomMetalDeman
 export type InsertBottomMetalDemand = z.infer<typeof insertBottomMetalDemandSchema>;
 export type BottomMetalDemand = typeof bottomMetalDemands.$inferSelect;
 
+export const railDemands = pgTable('rail_demands', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  railSku: text('rail_sku').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  status: text('status').notNull().default('open'), // 'open', 'cancelled', 'fulfilled'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  orderRailUnique: uniqueIndex('rail_demands_order_rail_unique').on(table.orderId, table.railSku),
+}));
+
+export const insertRailDemandSchema = createInsertSchema(railDemands).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertRailDemand = z.infer<typeof insertRailDemandSchema>;
+export type RailDemand = typeof railDemands.$inferSelect;
+
 // Backward compatibility aliases (order_drafts table removed, now using all_orders with PENDING_SIGNATURE status)
 export type InsertOrderDraft = InsertAllOrder;
 export type OrderDraft = AllOrder;

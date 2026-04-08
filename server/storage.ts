@@ -381,6 +381,10 @@ import {
   bottomMetalDemands,
   type BottomMetalDemand,
   type InsertBottomMetalDemand,
+  // Rail demands types
+  railDemands,
+  type RailDemand,
+  type InsertRailDemand,
   // Vendor types
   type Vendor,
   type InsertVendor,
@@ -2143,6 +2147,13 @@ export interface IStorage {
   updateBottomMetalDemand(id: number, data: Partial<InsertBottomMetalDemand>): Promise<BottomMetalDemand>;
   cancelBottomMetalDemandByOrderId(orderId: string): Promise<void>;
   getBottomMetalDemandsSummary(): Promise<any[]>;
+
+  // Rail Demands CRUD
+  getRailDemandsAll(): Promise<RailDemand[]>;
+  getRailDemandsByOrderId(orderId: string): Promise<RailDemand[]>;
+  createRailDemand(data: InsertRailDemand): Promise<RailDemand>;
+  updateRailDemand(id: number, data: Partial<InsertRailDemand>): Promise<RailDemand>;
+  getRailDemandsSummary(): Promise<any[]>;
 
   // Magic Link Token Methods
   createMagicLinkToken(data: InsertMagicLinkToken): Promise<MagicLinkToken>;
@@ -19393,6 +19404,56 @@ export class DatabaseStorage implements IStorage {
       skuMap[demand.bottomMetalSku].totalQuantity += demand.quantity;
       skuMap[demand.bottomMetalSku].orderCount += 1;
       skuMap[demand.bottomMetalSku].orders.push(demand.orderId);
+    });
+
+    return Object.values(skuMap).sort((a, b) => b.totalQuantity - a.totalQuantity);
+  }
+
+  async getRailDemandsAll(): Promise<RailDemand[]> {
+    return await db.select().from(railDemands).orderBy(desc(railDemands.createdAt));
+  }
+
+  async getRailDemandsByOrderId(orderId: string): Promise<RailDemand[]> {
+    return await db
+      .select()
+      .from(railDemands)
+      .where(eq(railDemands.orderId, orderId));
+  }
+
+  async createRailDemand(data: InsertRailDemand): Promise<RailDemand> {
+    const [demand] = await db.insert(railDemands).values(data).returning();
+    return demand;
+  }
+
+  async updateRailDemand(id: number, data: Partial<InsertRailDemand>): Promise<RailDemand> {
+    const [demand] = await db
+      .update(railDemands)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(railDemands.id, id))
+      .returning();
+    return demand;
+  }
+
+  async getRailDemandsSummary(): Promise<any[]> {
+    const demands = await db
+      .select()
+      .from(railDemands)
+      .where(eq(railDemands.status, 'open'));
+
+    const skuMap: Record<string, { sku: string; totalQuantity: number; orderCount: number; orders: string[] }> = {};
+
+    demands.forEach((demand) => {
+      if (!skuMap[demand.railSku]) {
+        skuMap[demand.railSku] = {
+          sku: demand.railSku,
+          totalQuantity: 0,
+          orderCount: 0,
+          orders: [],
+        };
+      }
+      skuMap[demand.railSku].totalQuantity += demand.quantity;
+      skuMap[demand.railSku].orderCount += 1;
+      skuMap[demand.railSku].orders.push(demand.orderId);
     });
 
     return Object.values(skuMap).sort((a, b) => b.totalQuantity - a.totalQuantity);

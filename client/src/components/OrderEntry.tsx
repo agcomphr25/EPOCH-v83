@@ -2720,8 +2720,23 @@ export default function OrderEntry() {
         }, 1000);
       }
 
-      // Reset form only if not editing
-      if (!isEditMode) {
+      // Reset form only if not editing and not saving as draft
+      // When saving a new order as draft, transition into edit mode instead of resetting
+      if (!isEditMode && saveAsDraft) {
+        // Transition into edit mode for the newly created draft
+        const savedResponse = response as { orderId?: string; id?: string } | null;
+        const newOrderId = savedResponse?.orderId ?? savedResponse?.id;
+        if (newOrderId) {
+          setIsEditMode(true);
+          setEditingOrderId(newOrderId);
+          // Update URL to reflect the new draft without triggering a full reload
+          const newUrl = `${window.location.pathname}?draft=${newOrderId}`;
+          window.history.replaceState(null, '', newUrl);
+        } else {
+          console.warn('[Draft save] Response did not include orderId — falling back to form reset:', savedResponse);
+          resetForm();
+        }
+      } else if (!isEditMode) {
         resetForm();
       }
     } catch (error: any) {
@@ -4075,6 +4090,7 @@ export default function OrderEntry() {
                         })()}
                       </Label>
                       <Select
+                        key={`barrel-inlet-${renderKey}-${features.barrel_inlet || 'empty'}`}
                         value={features.barrel_inlet || undefined}
                         onValueChange={(value) => {
                           const normalizedValue = value === '__NONE__' ? undefined : value;

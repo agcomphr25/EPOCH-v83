@@ -54,7 +54,7 @@ import {
   Unlock,
 } from 'lucide-react';
 
-type SubAssemblyQueueItem = {
+type AssemblyQueueItem = {
   id: number;
   inventoryItemId: number | null;
   department: string;
@@ -101,7 +101,7 @@ const READINESS_ORDER: Record<string, number> = {
   READY: 3,
 };
 
-function sortByReadiness(items: SubAssemblyQueueItem[]): SubAssemblyQueueItem[] {
+function sortByReadiness(items: AssemblyQueueItem[]): AssemblyQueueItem[] {
   return [...items].sort((a, b) => {
     const aOrder = READINESS_ORDER[a.readinessStatus ?? 'NOT_READY'] ?? 2;
     const bOrder = READINESS_ORDER[b.readinessStatus ?? 'NOT_READY'] ?? 2;
@@ -190,17 +190,17 @@ function getPriorityColor(priority: number) {
   return 'text-gray-600 dark:text-gray-400';
 }
 
-export default function SubAssemblyQueue() {
+export default function AssemblyQueue() {
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedReadiness, setSelectedReadiness] = useState<string>('ALL');
-  const [drawerItem, setDrawerItem] = useState<SubAssemblyQueueItem | null>(null);
+  const [drawerItem, setDrawerItem] = useState<AssemblyQueueItem | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: rawItems = [], isLoading } = useQuery<SubAssemblyQueueItem[]>({
-    queryKey: ['/api/manufacturing-queue', 'SUB_ASSEMBLY', selectedStatus],
+  const { data: rawItems = [], isLoading } = useQuery<AssemblyQueueItem[]>({
+    queryKey: ['/api/manufacturing-queue', 'ASSEMBLY', selectedStatus],
     queryFn: () => {
-      const params = new URLSearchParams({ queueType: 'SUB_ASSEMBLY' });
+      const params = new URLSearchParams({ queueType: 'ASSEMBLY' });
       if (selectedStatus && selectedStatus !== 'ALL') params.append('status', selectedStatus);
       return apiRequest(`/api/manufacturing-queue?${params.toString()}`);
     },
@@ -248,15 +248,15 @@ export default function SubAssemblyQueue() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/manufacturing-queue'] });
-      toast({ title: 'Sub-assembly released', description: 'The sub-assembly job has been released to the floor.' });
+      toast({ title: 'Assembly released', description: 'The assembly job has been released to the floor.' });
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'Failed to release sub-assembly job.';
+      const message = error instanceof Error ? error.message : 'Failed to release assembly job.';
       toast({ title: 'Release failed', description: message, variant: 'destructive' });
     },
   });
 
-  const openDrawer = (item: SubAssemblyQueueItem) => {
+  const openDrawer = (item: AssemblyQueueItem) => {
     setDrawerItem(item);
     setDrawerOpen(true);
   };
@@ -269,9 +269,9 @@ export default function SubAssemblyQueue() {
     <TooltipProvider>
       <div className="container mx-auto py-6 px-4 dark:bg-gray-950 dark:text-white">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2 dark:text-white">Sub-Assembly Queue</h1>
+          <h1 className="text-3xl font-bold mb-2 dark:text-white">Assembly Queue</h1>
           <p className="text-muted-foreground dark:text-gray-400">
-            Readiness gating for child build-up jobs — confirm child components, required kits, and consumables are allocated before release.
+            Dependency-driven readiness gating for final assembly jobs — confirm sub-assemblies are complete, kits are released, and consumables are staged before build-up begins.
           </p>
         </div>
 
@@ -279,7 +279,7 @@ export default function SubAssemblyQueue() {
           <CardHeader>
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
               <div>
-                <CardTitle className="dark:text-white">Sub-Assembly Queue Items</CardTitle>
+                <CardTitle className="dark:text-white">Assembly Queue Items</CardTitle>
                 <CardDescription className="dark:text-gray-400">
                   Sorted by urgency: Blocked → Partial → Not Ready → Ready, then by due date
                 </CardDescription>
@@ -315,14 +315,14 @@ export default function SubAssemblyQueue() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground dark:text-gray-400">Loading sub-assembly queue...</div>
+              <div className="text-center py-8 text-muted-foreground dark:text-gray-400">Loading assembly queue...</div>
             ) : filteredItems.length === 0 && selectedStatus === 'ALL' && selectedReadiness === 'ALL' ? (
               <div className="text-center py-8 text-muted-foreground dark:text-gray-400">
-                No sub-assembly jobs in the queue.
+                No assembly jobs in the queue.
               </div>
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground dark:text-gray-400">
-                No sub-assembly items found for the selected filters.
+                No assembly items found for the selected filters.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -399,7 +399,7 @@ export default function SubAssemblyQueue() {
                                 className="dark:text-gray-200 dark:focus:bg-gray-700"
                               >
                                 <Unlock className="w-4 h-4 mr-2" />
-                                Release Sub-Assembly Job
+                                Release Assembly Job
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="dark:border-gray-700" />
                               <DropdownMenuItem
@@ -437,7 +437,7 @@ export default function SubAssemblyQueue() {
           onQueueRefetch={() => {
             queryClient.invalidateQueries({ queryKey: ['/api/manufacturing-queue'] });
           }}
-          isSubAssembly={true}
+          isAssembly={true}
         />
       </div>
     </TooltipProvider>

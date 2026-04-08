@@ -1140,6 +1140,13 @@ export default function Navigation() {
         'Readiness gating for sub-assembly jobs — confirm child parts, kits, and consumables are allocated before controlled build-up begins',
     },
     {
+      path: '/assembly-queue',
+      label: 'Assembly Queue',
+      icon: Layers,
+      description:
+        'Dependency-driven readiness gating for final assembly — confirm sub-assemblies are complete, kits released, and consumables staged before build-up begins',
+    },
+    {
       path: '/po-products',
       label: 'PO Product Items',
       icon: Package,

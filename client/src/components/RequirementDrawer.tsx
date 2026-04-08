@@ -73,6 +73,25 @@ function formatSubAssemblyRequirementType(type: string): string {
   }
 }
 
+function formatAssemblyRequirementType(type: string): string {
+  switch (type) {
+    case 'SUB_ASSEMBLY':
+    case 'SUBASSEMBLY':
+      return 'Sub-Assembly';
+    case 'KIT_ITEM':
+    case 'KIT':
+      return 'Required Kit';
+    case 'COMPONENT':
+      return 'Component';
+    case 'CONSUMABLE':
+      return 'Consumable';
+    case 'MATERIAL':
+      return 'Material';
+    default:
+      return type;
+  }
+}
+
 type AllocationRequirement = {
   id: string;
   manufacturingQueueId: number;
@@ -188,12 +207,14 @@ function RequirementRow({
   queueId,
   isLayup,
   isSubAssembly,
+  isAssembly,
   onActionComplete,
 }: {
   req: AllocationRequirement;
   queueId: number;
   isLayup?: boolean;
   isSubAssembly?: boolean;
+  isAssembly?: boolean;
   onActionComplete: () => void;
 }) {
   const { toast } = useToast();
@@ -301,7 +322,9 @@ function RequirementRow({
               {req.requiredPartNumber}
             </span>
             <Badge variant="outline" className="text-xs">
-              {isSubAssembly
+              {isAssembly
+                ? formatAssemblyRequirementType(req.requirementType)
+                : isSubAssembly
                 ? formatSubAssemblyRequirementType(req.requirementType)
                 : isLayup
                 ? formatLayupRequirementType(req.requirementType)
@@ -452,6 +475,7 @@ export function RequirementDrawer({
   onQueueRefetch,
   isLayup,
   isSubAssembly,
+  isAssembly,
 }: {
   kit: KitQueueItem | null;
   open: boolean;
@@ -459,6 +483,7 @@ export function RequirementDrawer({
   onQueueRefetch: () => void;
   isLayup?: boolean;
   isSubAssembly?: boolean;
+  isAssembly?: boolean;
 }) {
   const {
     data: requirements = [],
@@ -491,7 +516,9 @@ export function RequirementDrawer({
       >
         <SheetHeader className="pb-4 border-b border-gray-200 dark:border-gray-700">
           <SheetTitle className="dark:text-white">
-            {isSubAssembly
+            {isAssembly
+              ? 'Assembly Allocation Control'
+              : isSubAssembly
               ? 'Sub-Assembly Allocation Control'
               : isLayup
               ? 'Layup Allocation Control'
@@ -502,7 +529,7 @@ export function RequirementDrawer({
               {kit?.inventoryItem?.agPartNumber ?? `Queue #${kit?.id}`}
             </span>
             {' — '}
-            {kit?.inventoryItem?.name ?? (isSubAssembly ? 'Sub-Assembly Item' : isLayup ? 'Layup Item' : 'Kit Item')}
+            {kit?.inventoryItem?.name ?? (isAssembly ? 'Assembly Item' : isSubAssembly ? 'Sub-Assembly Item' : isLayup ? 'Layup Item' : 'Kit Item')}
             <br />
             Readiness:{' '}
             <span className={`font-semibold ${readinessColor}`}>
@@ -534,6 +561,7 @@ export function RequirementDrawer({
                 queueId={kit!.id}
                 isLayup={isLayup}
                 isSubAssembly={isSubAssembly}
+                isAssembly={isAssembly}
                 onActionComplete={handleActionComplete}
               />
             ))

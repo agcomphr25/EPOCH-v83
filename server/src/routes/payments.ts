@@ -7,6 +7,7 @@ import {
   creditCardTransactions,
   allOrders,
   bulkPaymentBatches,
+  customers,
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
@@ -953,14 +954,16 @@ router.get('/batches', async (req, res) => {
         createdAt: bulkPaymentBatches.createdAt,
         createdBy: bulkPaymentBatches.createdBy,
         customerId: bulkPaymentBatches.customerId,
+        customerName: customers.name,
         totalAmount: bulkPaymentBatches.totalAmount,
         paymentMethod: bulkPaymentBatches.paymentMethod,
         notes: bulkPaymentBatches.notes,
         orderCount: count(payments.id),
       })
       .from(bulkPaymentBatches)
+      .leftJoin(customers, eq(sql`${customers.id}::text`, bulkPaymentBatches.customerId))
       .leftJoin(payments, eq(payments.batchId, bulkPaymentBatches.id))
-      .groupBy(bulkPaymentBatches.id)
+      .groupBy(bulkPaymentBatches.id, customers.name)
       .orderBy(desc(bulkPaymentBatches.createdAt));
 
     res.json({ batches });

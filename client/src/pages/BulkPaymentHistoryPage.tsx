@@ -11,6 +11,7 @@ interface BatchSummary {
   createdAt: string;
   createdBy: string;
   customerId: string;
+  customerName: string | null;
   totalAmount: number;
   paymentMethod: string;
   notes: string | null;
@@ -102,7 +103,7 @@ function BatchRow({ batch }: { batch: BatchSummary }) {
           {formatDate(batch.createdAt)}
         </td>
         <td className="px-4 py-3 text-sm font-medium">
-          {batch.customerId}
+          {batch.customerName ?? batch.customerId}
         </td>
         <td className="px-4 py-3">
           <Badge variant={methodVariant(batch.paymentMethod)}>

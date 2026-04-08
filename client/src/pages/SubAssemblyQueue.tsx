@@ -316,9 +316,13 @@ export default function SubAssemblyQueue() {
           <CardContent>
             {isLoading ? (
               <div className="text-center py-8 text-muted-foreground dark:text-gray-400">Loading sub-assembly queue...</div>
+            ) : filteredItems.length === 0 && selectedStatus === 'ALL' && selectedReadiness === 'ALL' ? (
+              <div className="text-center py-8 text-muted-foreground dark:text-gray-400">
+                No sub-assembly jobs in queue
+              </div>
             ) : filteredItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground dark:text-gray-400">
-                No sub-assembly items found for the selected filters.
+                No sub-assembly items found for the selected filters
               </div>
             ) : (
               <div className="overflow-x-auto">

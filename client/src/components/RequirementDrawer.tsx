@@ -63,6 +63,7 @@ function formatSubAssemblyRequirementType(type: string): string {
       return 'Required Kit';
     case 'CONSUMABLE':
       return 'Consumable';
+    case 'SUB_ASSEMBLY':
     case 'SUBASSEMBLY':
       return 'Child Sub-Assembly';
     case 'MATERIAL':

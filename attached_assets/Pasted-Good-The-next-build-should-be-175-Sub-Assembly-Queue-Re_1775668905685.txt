@@ -1,0 +1,100 @@
+Good. The next build should be:
+
+#175 — Sub-Assembly Queue Readiness Page
+
+This is where the system starts coordinating parts together instead of just checking raw materials.
+
+What & Why
+
+Add a /sub-assembly-queue page that mirrors Kits/Layup/Core but targets queueType=SUB_ASSEMBLY items.
+
+Sub-Assembly is where completed components, kits, and consumables must all be ready before controlled build-up can begin. This page gives planners and operators a single place to see whether a sub-assembly can actually start, what is missing, and whether it is ready to release.
+
+Done looks like
+Navigating to /sub-assembly-queue shows a filterable table of all SUB_ASSEMBLY queue items
+Each row displays:
+readiness badge (NOT_READY / PARTIAL / READY / BLOCKED)
+percent-ready
+blocked reason summary
+Clicking a row opens the shared RequirementDrawer
+The drawer shows requirement lines for:
+child components
+required kits
+consumables
+other dependency types already generated into allocation_requirements
+A SUB_ASSEMBLY item can be released only when readinessStatus = READY
+The page is registered in App.tsx and reachable from the sidebar/nav alongside Core Queue
+Out of scope
+New demand generation rules for sub-assemblies
+Traveler execution UI changes
+New dependency schema changes
+Automatic completion rollups from child travelers
+Tasks
+1. Sub-Assembly Queue page
+
+Create client/src/pages/SubAssemblyQueue.tsx by adapting CoreQueue.tsx or LayupQueue.tsx to filter on:
+
+queueType=SUB_ASSEMBLY
+
+Show:
+
+part number / name
+quantity requested / completed
+status
+readiness badge
+percent-ready
+blocked reason
+due date
+actions
+
+Include:
+
+readiness filter
+status filter
+default sort: BLOCKED → PARTIAL → NOT_READY → READY, then due date
+2. Requirement display labels
+
+Reuse RequirementDrawer, but add sub-assembly-friendly labels for requirement types, for example:
+
+COMPONENT → Child Component
+KIT_ITEM or KIT → Required Kit
+CONSUMABLE → Consumable
+SUBASSEMBLY → Child Sub-Assembly
+MATERIAL → Material
+
+Do not change drawer behavior for other queue types.
+
+3. Release gate — SUB_ASSEMBLY support
+
+Update POST /api/manufacturing-queue/:id/release in server/src/routes/manufacturingQueue.ts to allow:
+
+KIT
+LAYUP
+CORE
+SUB_ASSEMBLY
+
+All other release conditions stay the same:
+
+must exist
+must be allowed queue type
+readinessStatus = READY
+must not already be RELEASED / IN_PROGRESS / COMPLETED / CANCELLED
+4. Navigation and routing
+
+Add:
+
+route in client/src/App.tsx
+nav entry in client/src/components/Navigation.tsx
+
+Recommended placement:
+
+Kits Queue
+Layup Queue
+Core Queue
+Sub-Assembly Queue
+Relevant files
+client/src/pages/CoreQueue.tsx
+client/src/components/RequirementDrawer.tsx
+server/src/routes/manufacturingQueue.ts
+client/src/App.tsx
+client/src/components/Navigation.tsx

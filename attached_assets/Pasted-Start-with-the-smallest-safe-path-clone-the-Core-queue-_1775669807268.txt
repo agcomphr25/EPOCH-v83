@@ -1,0 +1,360 @@
+Start with the smallest safe path: clone the Core queue pattern and only change what Sub-Assembly needs.
+
+Step 1 — create the page
+
+Create:
+
+client/src/pages/SubAssemblyQueue.tsx
+
+Use CoreQueue.tsx as the base and change the queue type filter to:
+
+queueType=SUB_ASSEMBLY
+
+Use this page shell:
+
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import RequirementDrawer from "@/components/RequirementDrawer";
+
+type ReadinessFilter = "ALL" | "READY" | "PARTIAL" | "NOT_READY" | "BLOCKED";
+type StatusFilter =
+  | "ALL"
+  | "PENDING"
+  | "RELEASED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
+
+function readinessRank(value?: string | null) {
+  switch (value) {
+    case "BLOCKED":
+      return 0;
+    case "PARTIAL":
+      return 1;
+    case "NOT_READY":
+      return 2;
+    case "READY":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function formatSubAssemblyRequirementType(type?: string | null) {
+  switch (type) {
+    case "COMPONENT":
+      return "Child Component";
+    case "KIT":
+    case "KIT_ITEM":
+      return "Required Kit";
+    case "CONSUMABLE":
+      return "Consumable";
+    case "SUBASSEMBLY":
+    case "SUB_ASSEMBLY":
+      return "Child Sub-Assembly";
+    case "MATERIAL":
+      return "Material";
+    default:
+      return type || "Requirement";
+  }
+}
+
+export default function SubAssemblyQueue() {
+  const queryClient = useQueryClient();
+  const [selectedRow, setSelectedRow] = useState<any | null>(null);
+  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+
+  const { data = [], isLoading, refetch } = useQuery({
+    queryKey: ["manufacturing-queue", "sub-assembly"],
+    queryFn: async () => {
+      const res = await fetch("/api/manufacturing-queue?queueType=SUB_ASSEMBLY", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load sub-assembly queue");
+      return res.json();
+    },
+  });
+
+  const releaseMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/manufacturing-queue/${id}/release`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || "Failed to release queue item");
+      return body;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["manufacturing-queue", "sub-assembly"] });
+      if (selectedRow) {
+        await queryClient.invalidateQueries({
+          queryKey: ["allocation-requirements", selectedRow.id],
+        });
+      }
+    },
+  });
+
+  const evaluateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/manufacturing-queue/${id}/evaluate-readiness`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || "Failed to evaluate readiness");
+      return body;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["manufacturing-queue", "sub-assembly"] });
+    },
+  });
+
+  const generateRequirementsMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/manufacturing-queue/${id}/generate-requirements`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || "Failed to generate requirements");
+      return body;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["manufacturing-queue", "sub-assembly"] });
+      if (selectedRow) {
+        await queryClient.invalidateQueries({
+          queryKey: ["allocation-requirements", selectedRow.id],
+        });
+      }
+    },
+  });
+
+  const rows = useMemo(() => {
+    const filtered = data
+      .filter((row: any) =>
+        readinessFilter === "ALL" ? true : row.readinessStatus === readinessFilter
+      )
+      .filter((row: any) => (statusFilter === "ALL" ? true : row.status === statusFilter));
+
+    return filtered.sort((a: any, b: any) => {
+      const readinessDiff = readinessRank(a.readinessStatus) - readinessRank(b.readinessStatus);
+      if (readinessDiff !== 0) return readinessDiff;
+
+      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+      return aDue - bDue;
+    });
+  }, [data, readinessFilter, statusFilter]);
+
+  return (
+    <div className="p-6">
+      <div className="mb-5">
+        <h1 className="text-2xl font-semibold">Sub-Assembly Queue</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Readiness and release control for child build-up jobs.
+        </p>
+      </div>
+
+      <div className="flex gap-3 mb-4">
+        <select
+          value={readinessFilter}
+          onChange={(e) => setReadinessFilter(e.target.value as ReadinessFilter)}
+          className="border rounded px-3 py-2"
+        >
+          <option value="ALL">All Readiness</option>
+          <option value="READY">Ready</option>
+          <option value="PARTIAL">Partial</option>
+          <option value="NOT_READY">Not Ready</option>
+          <option value="BLOCKED">Blocked</option>
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          className="border rounded px-3 py-2"
+        >
+          <option value="ALL">All Statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="RELEASED">Released</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Loading sub-assembly queue...</div>
+      ) : rows.length === 0 ? (
+        <div className="border rounded-lg p-8 text-sm text-muted-foreground">
+          No sub-assembly jobs in queue.
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left p-3">Part</th>
+                <th className="text-left p-3">Qty</th>
+                <th className="text-left p-3">Status</th>
+                <th className="text-left p-3">Readiness</th>
+                <th className="text-left p-3">Blocked Reason</th>
+                <th className="text-left p-3">Due Date</th>
+                <th className="text-left p-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row: any) => (
+                <tr
+                  key={row.id}
+                  className="border-t hover:bg-muted/30 cursor-pointer"
+                  onClick={() => setSelectedRow(row)}
+                >
+                  <td className="p-3">
+                    <div className="font-medium">{row.partNumber || "—"}</div>
+                    <div className="text-muted-foreground">{row.partName || ""}</div>
+                  </td>
+                  <td className="p-3">
+                    {row.quantityRequested || 0} / {row.quantityCompleted || 0}
+                  </td>
+                  <td className="p-3">{row.status || "PENDING"}</td>
+                  <td className="p-3">
+                    <div className="font-medium">{row.readinessStatus || "NOT_READY"}</div>
+                    <div className="text-muted-foreground">{row.percentReady || 0}%</div>
+                  </td>
+                  <td className="p-3 max-w-[280px] truncate" title={row.blockedReason || ""}>
+                    {row.blockedReason || "—"}
+                  </td>
+                  <td className="p-3">
+                    {row.dueDate ? new Date(row.dueDate).toLocaleDateString() : "—"}
+                  </td>
+                  <td
+                    className="p-3"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    <div className="flex gap-2">
+                      <button
+                        className="border rounded px-2 py-1"
+                        onClick={() => evaluateMutation.mutate(row.id)}
+                      >
+                        Re-evaluate
+                      </button>
+                      <button
+                        className="border rounded px-2 py-1"
+                        onClick={() => generateRequirementsMutation.mutate(row.id)}
+                      >
+                        Generate Requirements
+                      </button>
+                      <button
+                        className="border rounded px-2 py-1 disabled:opacity-50"
+                        disabled={row.readinessStatus !== "READY"}
+                        onClick={() => releaseMutation.mutate(row.id)}
+                      >
+                        Release
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selectedRow && (
+        <RequirementDrawer
+          queue={selectedRow}
+          onClose={() => setSelectedRow(null)}
+          refresh={refetch}
+          requirementTypeFormatter={formatSubAssemblyRequirementType}
+        />
+      )}
+    </div>
+  );
+}
+Step 2 — extend the release endpoint
+
+In server/src/routes/manufacturingQueue.ts, update the allowed queue types in POST /:id/release.
+
+Find the allowed list and change it to:
+
+const allowedQueueTypes = ["KIT", "LAYUP", "CORE", "SUB_ASSEMBLY"];
+
+Then validate with:
+
+if (!allowedQueueTypes.includes(item.queueType || "")) {
+  return res.status(400).json({
+    message: "Only KIT, LAYUP, CORE, and SUB_ASSEMBLY queue items can be released",
+  });
+}
+Step 3 — extend RequirementDrawer without breaking others
+
+In client/src/components/RequirementDrawer.tsx, add an optional prop:
+
+requirementTypeFormatter?: (type?: string | null) => string;
+
+Update the component signature:
+
+export default function RequirementDrawer({
+  queue,
+  onClose,
+  refresh,
+  mode,
+  requirementTypeFormatter,
+}: any) {
+
+Then where you display requirement type, use:
+
+const displayRequirementType = requirementTypeFormatter
+  ? requirementTypeFormatter(req.requirementType)
+  : req.requirementType || "Requirement";
+
+Render that label in each requirement row.
+
+That keeps Kits, Layup, and Core unchanged, and lets Sub-Assembly relabel only its own drawer.
+
+Step 4 — add route in App.tsx
+
+Import:
+
+import SubAssemblyQueue from "@/pages/SubAssemblyQueue";
+
+Add route:
+
+<Route path="/sub-assembly-queue" element={<SubAssemblyQueue />} />
+Step 5 — add nav entry
+
+In client/src/components/Navigation.tsx, add:
+
+<Link to="/sub-assembly-queue">Sub-Assembly Queue</Link>
+
+Place it right after Core Queue.
+
+Step 6 — test order
+
+After pasting, test these:
+
+/sub-assembly-queue loads
+empty state shows if no rows exist
+Re-evaluate works
+Generate Requirements works
+Release is disabled unless readinessStatus === READY
+READY sub-assembly can be released
+drawer shows renamed labels:
+COMPONENT → Child Component
+KIT/KIT_ITEM → Required Kit
+CONSUMABLE → Consumable
+SUBASSEMBLY/SUB_ASSEMBLY → Child Sub-Assembly
+MATERIAL → Material
+Recommendation
+
+Do not add special new backend readiness rules yet.
+Let Sub-Assembly prove out on the current requirement generator first.
+
+After this, the next build is Assembly Queue.
+
+I prefer this response

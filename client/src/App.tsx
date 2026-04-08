@@ -261,6 +261,7 @@ import VisualFieldEditor from './pages/VisualFieldEditor';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
 import MetricsSandbox from './pages/MetricsSandbox';
+import MetricDirectory from './pages/MetricDirectory';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
@@ -1046,6 +1047,7 @@ function App() {
                   <Route path="/awaiting-signature" component={AwaitingSignaturePage} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
+                  <Route path="/metric-directory" component={MetricDirectory} />
                   <Route path="/past-due-report" component={PastDueReport} />
                   <Route path="/what-if-forecast" component={WhatIfForecast} />
 

@@ -1237,6 +1237,12 @@ export default function Navigation() {
       icon: Mic,
       description: 'Voice-activated notes for production issues and tracking',
     },
+    {
+      path: '/metric-directory',
+      label: 'Metric Directory',
+      icon: Database,
+      description: 'Browse all registered system metrics grouped by category',
+    },
   ];
 
   const productionSchedulingItems = [

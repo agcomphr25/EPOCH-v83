@@ -265,6 +265,26 @@ async function main() {
   }
 
   // ------------------------------------------------------------------
+  // STEP 3b: Idempotent table guards — ensure tables exist that may
+  //          have been missed by formal migrations.
+  // ------------------------------------------------------------------
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS rail_demands (
+      id SERIAL PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      rail_sku TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `, 'Ensure rail_demands table');
+  await runSql(`
+    CREATE UNIQUE INDEX IF NOT EXISTS rail_demands_order_rail_unique
+    ON rail_demands (order_id, rail_sku)
+  `, 'Ensure rail_demands unique index');
+
+  // ------------------------------------------------------------------
   // STEP 4: Quick verification — report remaining integer→uuid mismatches
   // ------------------------------------------------------------------
   try {

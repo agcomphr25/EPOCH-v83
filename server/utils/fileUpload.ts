@@ -7,6 +7,7 @@ import multer from 'multer';
 // Ensure uploads directory exists
 const uploadsDir = path.join(process.cwd(), 'uploads');
 const employeeDocsDir = path.join(uploadsDir, 'employee-documents');
+export const quoteAttachmentsDir = path.join(uploadsDir, 'quote-attachments');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -14,6 +15,10 @@ if (!fs.existsSync(uploadsDir)) {
 
 if (!fs.existsSync(employeeDocsDir)) {
   fs.mkdirSync(employeeDocsDir, { recursive: true });
+}
+
+if (!fs.existsSync(quoteAttachmentsDir)) {
+  fs.mkdirSync(quoteAttachmentsDir, { recursive: true });
 }
 
 // Configure multer for employee document uploads
@@ -66,6 +71,44 @@ const fileFilter = (
 export const uploadMiddleware = multer({
   storage,
   fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 5, // Maximum 5 files per upload
+  },
+});
+
+// PDF-only file filter for quote attachments
+const pdfFileFilter = (
+  req: any,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  if (file.mimetype === 'application/pdf') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PDF files are allowed for quote attachments.'));
+  }
+};
+
+// Dedicated multer config for quote PDF attachments
+const quoteAttachmentsStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, quoteAttachmentsDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const hash = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    const name = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9]/g, '_');
+    cb(null, `${timestamp}_${hash}_${name}${ext}`);
+  },
+});
+
+export const quoteAttachmentUpload = multer({
+  storage: quoteAttachmentsStorage,
+  fileFilter: pdfFileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
     files: 5, // Maximum 5 files per upload

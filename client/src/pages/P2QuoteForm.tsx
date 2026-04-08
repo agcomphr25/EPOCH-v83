@@ -457,7 +457,14 @@ export default function P2QuoteForm() {
         body: uploadFormData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        let errorMessage = 'Upload failed';
+        try {
+          const errorData = await response.json();
+          if (errorData?.error) errorMessage = errorData.error;
+        } catch (_) {}
+        throw new Error(errorMessage);
+      }
 
       const result = await response.json();
       setAttachments(result.attachments || []);

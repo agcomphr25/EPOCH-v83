@@ -9,6 +9,7 @@ import { db } from '../../db';
 import {
   customerSatisfactionSurveys,
   customerSatisfactionResponses,
+  customerSatisfactionAuditLog,
   insertCustomerSatisfactionSurveySchema,
   insertCustomerSatisfactionResponseSchema,
   customers,
@@ -285,12 +286,32 @@ router.post('/responses', async (req, res) => {
       userAgent: req.get('User-Agent'),
     };
 
-    const newResponse = await db
-      .insert(customerSatisfactionResponses)
-      .values(dataToInsert)
-      .returning();
+    // Fetch lookup data for audit log before starting transaction
+    const [customerRow, surveyRow] = await Promise.all([
+      db.select({ name: customers.name }).from(customers).where(eq(customers.id, validatedData.customerId)).limit(1),
+      db.select({ title: customerSatisfactionSurveys.title }).from(customerSatisfactionSurveys).where(eq(customerSatisfactionSurveys.id, validatedData.surveyId)).limit(1),
+    ]);
 
-    res.status(201).json(newResponse[0]);
+    const newResponse = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(customerSatisfactionResponses)
+        .values(dataToInsert)
+        .returning();
+
+      await tx.insert(customerSatisfactionAuditLog).values({
+        action: 'created',
+        responseId: inserted.id,
+        customerName: customerRow[0]?.name ?? null,
+        surveyTitle: surveyRow[0]?.title ?? null,
+        performedBy: validatedData.csrName ?? null,
+        reason: null,
+        metadata: {},
+      });
+
+      return inserted;
+    });
+
+    res.status(201).json(newResponse);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -328,17 +349,41 @@ router.put('/responses/:id', async (req, res) => {
       updatedAt: new Date(),
     };
 
-    const updatedResponse = await db
-      .update(customerSatisfactionResponses)
-      .set(dataToUpdate)
-      .where(eq(customerSatisfactionResponses.id, responseId))
-      .returning();
+    // Fetch lookup data for audit log before starting transaction
+    const [customerRow, surveyRow] = await Promise.all([
+      db.select({ name: customers.name }).from(customers).where(eq(customers.id, validatedData.customerId)).limit(1),
+      db.select({ title: customerSatisfactionSurveys.title }).from(customerSatisfactionSurveys).where(eq(customerSatisfactionSurveys.id, validatedData.surveyId)).limit(1),
+    ]);
 
-    if (updatedResponse.length === 0) {
+    const updatedResponse = await db.transaction(async (tx) => {
+      const rows = await tx
+        .update(customerSatisfactionResponses)
+        .set(dataToUpdate)
+        .where(eq(customerSatisfactionResponses.id, responseId))
+        .returning();
+
+      if (rows.length === 0) {
+        return null;
+      }
+
+      await tx.insert(customerSatisfactionAuditLog).values({
+        action: 'updated',
+        responseId,
+        customerName: customerRow[0]?.name ?? null,
+        surveyTitle: surveyRow[0]?.title ?? null,
+        performedBy: validatedData.csrName ?? null,
+        reason: null,
+        metadata: {},
+      });
+
+      return rows[0];
+    });
+
+    if (!updatedResponse) {
       return res.status(404).json({ error: 'Response not found' });
     }
 
-    res.json(updatedResponse[0]);
+    res.json(updatedResponse);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -361,14 +406,50 @@ router.delete('/responses/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid response ID' });
     }
 
-    const deletedResponse = await db
-      .delete(customerSatisfactionResponses)
-      .where(eq(customerSatisfactionResponses.id, responseId))
-      .returning();
+    const { reason, performedBy } = req.body as { reason?: string; performedBy?: string };
 
-    if (deletedResponse.length === 0) {
+    if (!reason || reason.trim() === '') {
+      return res.status(400).json({ error: 'A reason for deletion is required' });
+    }
+
+    // Fetch the response details (including joined customer/survey) before the transaction
+    const existing = await db
+      .select({
+        id: customerSatisfactionResponses.id,
+        surveyId: customerSatisfactionResponses.surveyId,
+        customerId: customerSatisfactionResponses.customerId,
+        csrName: customerSatisfactionResponses.csrName,
+        customerName: customers.name,
+        surveyTitle: customerSatisfactionSurveys.title,
+      })
+      .from(customerSatisfactionResponses)
+      .leftJoin(customers, eq(customerSatisfactionResponses.customerId, customers.id))
+      .leftJoin(customerSatisfactionSurveys, eq(customerSatisfactionResponses.surveyId, customerSatisfactionSurveys.id))
+      .where(eq(customerSatisfactionResponses.id, responseId))
+      .limit(1);
+
+    if (existing.length === 0) {
       return res.status(404).json({ error: 'Response not found' });
     }
+
+    const responseInfo = existing[0];
+
+    // Atomically: insert audit record first, then delete the response
+    await db.transaction(async (tx) => {
+      await tx.insert(customerSatisfactionAuditLog).values({
+        action: 'deleted',
+        responseId,
+        customerName: responseInfo.customerName ?? null,
+        surveyTitle: responseInfo.surveyTitle ?? null,
+        performedBy: performedBy ?? responseInfo.csrName ?? null,
+        reason: reason.trim(),
+        metadata: {},
+      });
+
+      await tx
+        .delete(customerSatisfactionResponses)
+        .where(eq(customerSatisfactionResponses.id, responseId));
+    });
 
     res.json({ message: 'Response deleted successfully' });
   } catch (error) {
@@ -779,6 +860,20 @@ router.post('/responses/:id/upload-pdf', pdfUpload.single('pdf'), async (req, re
   } catch (error) {
     console.error('Error uploading PDF:', error);
     res.status(500).json({ error: 'Failed to upload PDF' });
+  }
+});
+
+// Get audit log for customer satisfaction responses
+router.get('/audit-log', async (req, res) => {
+  try {
+    const log = await db
+      .select()
+      .from(customerSatisfactionAuditLog)
+      .orderBy(desc(customerSatisfactionAuditLog.createdAt));
+    res.json(log);
+  } catch (error) {
+    console.error('Error fetching audit log:', error);
+    res.status(500).json({ error: 'Failed to fetch audit log' });
   }
 });
 

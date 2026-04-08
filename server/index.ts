@@ -3145,6 +3145,26 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ admin_audit_log reason column migration:', auditReasonErr?.message);
       }
 
+      // Ensure customer_satisfaction_audit_log table exists (response action audit trail)
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS customer_satisfaction_audit_log (
+            id           SERIAL PRIMARY KEY,
+            action       TEXT NOT NULL,
+            response_id  INTEGER NOT NULL,
+            customer_name TEXT,
+            survey_title TEXT,
+            performed_by TEXT,
+            reason       TEXT,
+            metadata     JSONB DEFAULT '{}',
+            created_at   TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        console.log('✅ Ensured customer_satisfaction_audit_log table exists');
+      } catch (csAuditErr: any) {
+        console.warn('⚠️ customer_satisfaction_audit_log migration skipped:', csAuditErr?.message);
+      }
+
       // Ensure punch_events has approved column (pay period approval system)
       try {
         await pool.query(`ALTER TABLE punch_events ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false`);

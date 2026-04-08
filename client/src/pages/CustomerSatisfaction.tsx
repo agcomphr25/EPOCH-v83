@@ -13,7 +13,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -39,6 +39,7 @@ import {
   Eye,
   X,
   AlertCircle as AlertCircleIcon,
+  ClipboardList,
 } from 'lucide-react';
 
 const CustomerSatisfactionSurvey = lazy(() => import('@/components/CustomerSatisfactionSurvey'));
@@ -116,6 +117,18 @@ interface SurveyResponse {
   updatedAt?: string;
 }
 
+interface AuditLogEntry {
+  id: number;
+  action: string;
+  responseId: number;
+  customerName: string | null;
+  surveyTitle: string | null;
+  performedBy: string | null;
+  reason: string | null;
+  metadata: Record<string, any>;
+  createdAt: string;
+}
+
 interface Analytics {
   totalResponses: number;
   completedResponses: number;
@@ -153,6 +166,9 @@ export default function CustomerSatisfaction() {
   const [editingResponse, setEditingResponse] = useState<SurveyResponse | null>(
     null
   );
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingResponse, setDeletingResponse] = useState<SurveyResponse | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
 
   const exportResponseToPDF = async (response: SurveyResponse) => {
     try {
@@ -203,22 +219,35 @@ export default function CustomerSatisfaction() {
     queryFn: () => apiRequest('/api/customers'),
   });
 
+  // Fetch audit log
+  const { data: auditLog = [], isLoading: auditLogLoading } = useQuery<AuditLogEntry[]>({
+    queryKey: ['/api/customer-satisfaction/audit-log'],
+    queryFn: () => apiRequest('/api/customer-satisfaction/audit-log'),
+  });
+
   // Delete response mutation using generic survey engine
   const deleteResponse = useMutation({
-    mutationFn: (responseId: string) =>
+    mutationFn: ({ responseId, reason }: { responseId: string; reason: string }) =>
       apiRequest(`/api/customer-satisfaction/responses/${responseId}`, {
         method: 'DELETE',
+        body: { reason },
       }),
     onSuccess: () => {
       toast({
         title: 'Response Deleted',
         description: 'Survey response has been deleted successfully.',
       });
+      setIsDeleteDialogOpen(false);
+      setDeletingResponse(null);
+      setDeleteReason('');
       queryClient.invalidateQueries({
         queryKey: ['/api/customer-satisfaction/responses'],
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/customer-satisfaction/analytics'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customer-satisfaction/audit-log'],
       });
     },
     onError: (error: any) => {
@@ -577,13 +606,9 @@ export default function CustomerSatisfaction() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              if (
-                                window.confirm(
-                                  'Are you sure you want to delete this response? This action cannot be undone.'
-                                )
-                              ) {
-                                deleteResponse.mutate(String(response.id));
-                              }
+                              setDeletingResponse(response);
+                              setDeleteReason('');
+                              setIsDeleteDialogOpen(true);
                             }}
                             className="text-red-600 hover:text-red-900"
                             title="Delete Response"
@@ -786,6 +811,80 @@ export default function CustomerSatisfaction() {
     </div>
   );
 
+  const actionBadgeVariant = (action: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    if (action === 'created') return 'default';
+    if (action === 'deleted') return 'destructive';
+    return 'secondary';
+  };
+
+  const renderAuditLog = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">Audit Log</h2>
+      {auditLogLoading ? (
+        <div className="text-center py-8 text-gray-500">Loading...</div>
+      ) : auditLog.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <ClipboardList className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Activity Yet</h3>
+            <p className="text-gray-600">
+              Actions on survey responses will be recorded here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Survey</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performed By</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {auditLog.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant={actionBadgeVariant(entry.action)}>
+                          {entry.action.charAt(0).toUpperCase() + entry.action.slice(1)}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {entry.customerName ?? <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                        {entry.surveyTitle ?? <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {entry.performedBy ?? <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700 max-w-xs">
+                        {entry.reason ? (
+                          <span className="italic">{entry.reason}</span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(entry.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -800,15 +899,17 @@ export default function CustomerSatisfaction() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="responses">Responses</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="audit-log">Audit Log</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">{renderOverview()}</TabsContent>
         <TabsContent value="responses">{renderResponses()}</TabsContent>
         <TabsContent value="analytics">{renderAnalytics()}</TabsContent>
+        <TabsContent value="audit-log">{renderAuditLog()}</TabsContent>
       </Tabs>
 
       <input
@@ -818,6 +919,68 @@ export default function CustomerSatisfaction() {
         className="hidden"
         onChange={handlePdfFileChange}
       />
+
+      {/* Delete Response Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsDeleteDialogOpen(false);
+          setDeletingResponse(null);
+          setDeleteReason('');
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Survey Response</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {deletingResponse && (
+              <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded">
+                <strong>Customer:</strong> {deletingResponse.customerName}<br />
+                <strong>Survey:</strong> {deletingResponse.surveyTitle}
+              </div>
+            )}
+            <p className="text-sm text-gray-700">
+              This action cannot be undone. Please provide a reason for deleting this response.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="delete-reason">Reason for deletion <span className="text-red-500">*</span></Label>
+              <Textarea
+                id="delete-reason"
+                placeholder="Enter the reason for deleting this response..."
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeletingResponse(null);
+                setDeleteReason('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!deleteReason.trim() || deleteResponse.isPending}
+              onClick={() => {
+                if (deletingResponse && deleteReason.trim()) {
+                  deleteResponse.mutate({
+                    responseId: String(deletingResponse.id),
+                    reason: deleteReason.trim(),
+                  });
+                }
+              }}
+            >
+              {deleteResponse.isPending ? 'Deleting...' : 'Delete Response'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Take Survey Dialog */}
       <Dialog open={isTakeSurveyOpen} onOpenChange={(open) => {
@@ -874,6 +1037,9 @@ export default function CustomerSatisfaction() {
                       queryClient.invalidateQueries({
                         queryKey: ['/api/customer-satisfaction/analytics'],
                       });
+                      queryClient.invalidateQueries({
+                        queryKey: ['/api/customer-satisfaction/audit-log'],
+                      });
                     }}
                   />
                 </Suspense>
@@ -922,6 +1088,9 @@ export default function CustomerSatisfaction() {
                     });
                     queryClient.invalidateQueries({
                       queryKey: ['/api/customer-satisfaction/analytics'],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ['/api/customer-satisfaction/audit-log'],
                     });
                     toast({
                       title: 'Response Updated',

@@ -7861,6 +7861,35 @@ export type InsertCustomerSatisfactionResponse = z.infer<
 export type CustomerSatisfactionResponse =
   typeof customerSatisfactionResponses.$inferSelect;
 
+// Audit Log for Customer Satisfaction Response Actions
+export const customerSatisfactionAuditLog = pgTable(
+  'customer_satisfaction_audit_log',
+  {
+    id: serial('id').primaryKey(),
+    action: text('action').notNull(), // 'created' | 'updated' | 'deleted'
+    responseId: integer('response_id').notNull(),
+    customerName: text('customer_name'),
+    surveyTitle: text('survey_title'),
+    performedBy: text('performed_by'),
+    reason: text('reason'),
+    metadata: jsonb('metadata').default('{}'),
+    createdAt: timestamp('created_at').defaultNow(),
+  }
+);
+
+export const insertCustomerSatisfactionAuditLogSchema = createInsertSchema(
+  customerSatisfactionAuditLog
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCustomerSatisfactionAuditLog = z.infer<
+  typeof insertCustomerSatisfactionAuditLogSchema
+>;
+export type CustomerSatisfactionAuditLog =
+  typeof customerSatisfactionAuditLog.$inferSelect;
+
 // ============================================================================
 // SURVEY ENGINE - Generic reusable survey system
 // ============================================================================

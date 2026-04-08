@@ -399,21 +399,24 @@ export default function MetalAccessoriesTracker() {
                               demand.atAnodizer;
                             const required =
                               demand.totalDemandNext4 + demand.minimumThreshold;
-                            const covered = totalAvailable >= required;
+                            const isRed = demand.productionNeeded > 0;
+                            const isYellow = !isRed && totalAvailable >= required && totalAvailable < required * 1.25;
+                            const colorClass = isRed
+                              ? 'text-red-600'
+                              : isYellow
+                                ? 'text-yellow-500'
+                                : 'text-green-600';
+                            const label = isRed
+                              ? `⚠️ Produce: ${demand.productionNeeded}`
+                              : isYellow
+                                ? `⚠️ Approaching Threshold`
+                                : `✓ Sufficient Stock`;
                             return (
                               <span
-                                className={`font-bold ${
-                                  demand.productionNeeded > 0 || !covered
-                                    ? 'text-red-600'
-                                    : 'text-green-600'
-                                }`}
+                                className={`font-bold ${colorClass}`}
                                 data-testid={`text-production-needed-${demand.itemId}`}
                               >
-                                {demand.productionNeeded > 0
-                                  ? `⚠️ Produce: ${demand.productionNeeded}`
-                                  : covered
-                                    ? `✓ Sufficient Stock`
-                                    : `⚠️ Below Threshold Coverage`}
+                                {label}
                               </span>
                             );
                           })()}

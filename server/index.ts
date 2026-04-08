@@ -3599,6 +3599,28 @@ async function initializeBackgroundServices() {
       } catch (cncErr: any) {
         console.warn('⚠️ CNC Dashboard migration skipped:', cncErr?.message);
       }
+
+      // ── Metal Accessory Audit Log ──────────────────────────────────────────
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS metal_accessory_audit_log (
+            id          SERIAL PRIMARY KEY,
+            accessory_id INTEGER NOT NULL,
+            change_type  TEXT NOT NULL,
+            old_value    INTEGER NOT NULL,
+            new_value    INTEGER NOT NULL,
+            user_id      TEXT NOT NULL DEFAULT 'system',
+            timestamp    TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS metal_accessory_audit_log_accessory_id_idx
+          ON metal_accessory_audit_log (accessory_id)
+        `);
+        console.log('✅ Ensured metal_accessory_audit_log table exists');
+      } catch (auditErr: any) {
+        console.warn('⚠️ metal_accessory_audit_log migration skipped:', auditErr?.message);
+      }
     }
 
     // ── T7: CNC ↔ Traveler sync — every 30 minutes ────────────────────────────

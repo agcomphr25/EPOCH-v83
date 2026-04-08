@@ -98,8 +98,44 @@ router.put('/:id', async (req, res) => {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
   }
   try {
+    const existing = await storage.getMetalAccessory(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
     const item = await storage.updateMetalAccessory(id, parsed.data);
+    const userId = (req.user as any)?.username || (req.user as any)?.id?.toString() || 'system';
+    const trackedFields = [
+      { key: 'inventory', changeType: 'inventory' },
+      { key: 'machined', changeType: 'machined' },
+      { key: 'atAnodizer', changeType: 'anodizer' },
+    ] as const;
+    for (const { key, changeType } of trackedFields) {
+      const oldValue = (existing as any)[key] ?? 0;
+      const newValue = (item as any)[key] ?? 0;
+      if (oldValue !== newValue) {
+        await storage.createMetalAccessoryAuditLog({
+          accessoryId: id,
+          changeType,
+          oldValue,
+          newValue,
+          userId,
+        });
+      }
+    }
     res.json(item);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/:id/audit-log', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
+  try {
+    const logs = await storage.getMetalAccessoryAuditLogs(id);
+    res.json(logs);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

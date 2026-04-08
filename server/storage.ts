@@ -385,6 +385,10 @@ import {
   railDemands,
   type RailDemand,
   type InsertRailDemand,
+  // Metal accessory audit log types
+  metalAccessoryAuditLog,
+  type MetalAccessoryAuditLog,
+  type InsertMetalAccessoryAuditLog,
   // Vendor types
   type Vendor,
   type InsertVendor,
@@ -2139,6 +2143,8 @@ export interface IStorage {
   ): Promise<MetalAccessory>;
   deleteMetalAccessory(id: number): Promise<void>;
   getMetalAccessoriesDemands(): Promise<any[]>;
+  createMetalAccessoryAuditLog(data: InsertMetalAccessoryAuditLog): Promise<MetalAccessoryAuditLog>;
+  getMetalAccessoryAuditLogs(accessoryId: number): Promise<MetalAccessoryAuditLog[]>;
 
   // Bottom Metal Demands CRUD
   getBottomMetalDemands(): Promise<BottomMetalDemand[]>;
@@ -19130,6 +19136,21 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMetalAccessory(id: number): Promise<void> {
     await db.delete(metalAccessories).where(eq(metalAccessories.id, id));
+  }
+
+  async createMetalAccessoryAuditLog(
+    data: InsertMetalAccessoryAuditLog
+  ): Promise<MetalAccessoryAuditLog> {
+    const [row] = await db.insert(metalAccessoryAuditLog).values(data).returning();
+    return row;
+  }
+
+  async getMetalAccessoryAuditLogs(accessoryId: number): Promise<MetalAccessoryAuditLog[]> {
+    return db
+      .select()
+      .from(metalAccessoryAuditLog)
+      .where(eq(metalAccessoryAuditLog.accessoryId, accessoryId))
+      .orderBy(desc(metalAccessoryAuditLog.timestamp));
   }
 
   async getMetalAccessoriesDemands(): Promise<any[]> {

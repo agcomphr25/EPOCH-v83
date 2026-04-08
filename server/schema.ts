@@ -2871,6 +2871,25 @@ export const insertRailDemandSchema = createInsertSchema(railDemands).omit({
 export type InsertRailDemand = z.infer<typeof insertRailDemandSchema>;
 export type RailDemand = typeof railDemands.$inferSelect;
 
+// Metal Accessory Audit Log
+export const metalAccessoryAuditLog = pgTable('metal_accessory_audit_log', {
+  id: serial('id').primaryKey(),
+  accessoryId: integer('accessory_id').notNull(),
+  changeType: text('change_type').notNull(), // 'inventory', 'machined', 'anodizer'
+  oldValue: integer('old_value').notNull(),
+  newValue: integer('new_value').notNull(),
+  userId: text('user_id').notNull().default('system'),
+  timestamp: timestamp('timestamp').defaultNow(),
+});
+
+export const insertMetalAccessoryAuditLogSchema = createInsertSchema(metalAccessoryAuditLog).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertMetalAccessoryAuditLog = z.infer<typeof insertMetalAccessoryAuditLogSchema>;
+export type MetalAccessoryAuditLog = typeof metalAccessoryAuditLog.$inferSelect;
+
 // Backward compatibility aliases (order_drafts table removed, now using all_orders with PENDING_SIGNATURE status)
 export type InsertOrderDraft = InsertAllOrder;
 export type OrderDraft = AllOrder;

@@ -76,7 +76,7 @@ export default function LoginPage() {
           description: 'Login successful!',
         });
         
-        queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+        queryClient.setQueryData(['currentUser'], data.user);
 
         const dashboardRoute = getDashboardRoute(username);
         setLocation(dashboardRoute);
@@ -163,7 +163,7 @@ export default function LoginPage() {
         description: `Logged in as ${data.employee?.name || badgeCode}`,
       });
       
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      queryClient.setQueryData(['currentUser'], sessionData);
 
       const redirectUrl = data.redirectUrl || getDashboardRoute(sessionData.username);
       setLocation(redirectUrl);

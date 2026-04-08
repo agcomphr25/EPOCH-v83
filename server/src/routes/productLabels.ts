@@ -162,24 +162,23 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
 
         // Avery 8162: 288pt wide x ~96pt tall
         // Layout (from top): code text → barcode image → description
-        // All offsets are proportional to LABEL_HEIGHT to avoid hardcoded pixel misalignment
         const padding = 8;
         const labelInnerWidth = LABEL_WIDTH - padding * 2;  // ~272pt usable width
         const centerX = x + LABEL_WIDTH / 2;
 
-        // Vertical zones (proportional within LABEL_HEIGHT ~96pt):
-        //   Code text baseline: top 15% of label height from top edge
-        //   Barcode: 20%–65% of label height (centered in upper-middle band)
-        //   Description: bottom 20% of label height
+        // Vertical zones within LABEL_HEIGHT ~96pt (from top):
+        //   Code text: 4pt padding from top, 11pt font → baseline at 4pt, bottom at ~15pt
+        //   Barcode: starts at 18pt from top, 42pt tall → bottom at ~60pt
+        //   Description: starts at 64pt from top, up to 2 lines of 9pt text
 
-        const codeTopOffset = LABEL_HEIGHT * 0.15;      // ~14.4pt from top of label
-        const barcodeTopOffset = LABEL_HEIGHT * 0.20;   // ~19.2pt from top
-        const barcodeHeight = LABEL_HEIGHT * 0.40;      // ~38.4pt tall
-        const descTopOffset = LABEL_HEIGHT * 0.72;      // ~69.1pt from top (leaves ~27pt for desc)
+        const codeTopOffset = 4;       // 4pt padding from top of label
+        const barcodeTopOffset = 18;   // barcode starts 18pt from top
+        const barcodeHeight = 42;      // 42pt tall barcode (bottom at 60pt)
+        const descTopOffset = 64;      // description starts 64pt from top
 
-        // Code value text at top (size 12 bold)
+        // Code value text at top (size 11 bold)
         const codeText = item.barcodeValue;
-        const codeFontSize = 12;
+        const codeFontSize = 11;
         const codeWidth = boldFont.widthOfTextAtSize(codeText, codeFontSize);
         // y is the bottom-left of the label cell; pdf-lib draws text from baseline up
         page.drawText(codeText, {

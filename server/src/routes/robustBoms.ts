@@ -35,10 +35,11 @@ router.get('/parts', async (req, res) => {
   try {
     const search = (req.query.search as string) ?? '';
     const page = Number(req.query.page ?? 1);
-    const pageSize = Math.min(Number(req.query.pageSize ?? 50), 10000);
+    const pageSize = Math.min(Number(req.query.pageSize ?? 5000), 50000);
     const offset = (page - 1) * pageSize;
     
-    const where = search 
+    const activeFilter = eq(inventoryItems.isActive, true);
+    const searchFilter = search 
       ? or(
           ilike(inventoryItems.agPartNumber, `%${search}%`),
           ilike(inventoryItems.sku, `%${search}%`),
@@ -46,16 +47,18 @@ router.get('/parts', async (req, res) => {
         )
       : undefined;
 
+    const where = searchFilter ? and(activeFilter, searchFilter) : activeFilter;
+
     const [rows, total] = await Promise.all([
       db.select()
         .from(inventoryItems)
-        .where(where as any)
+        .where(where)
         .orderBy(desc(inventoryItems.updatedAt))
         .limit(pageSize)
         .offset(offset),
       db.select({ c: count() })
         .from(inventoryItems)
-        .where(where as any),
+        .where(where),
     ]);
 
     res.json({ 

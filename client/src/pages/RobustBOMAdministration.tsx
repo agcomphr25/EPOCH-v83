@@ -130,6 +130,38 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
     queryKey: ['/api/robust-boms/parts?pageSize=1000'],
   });
 
+  // Debounced search for child part picker (wizard Step 3)
+  const [debouncedLinePartSearch, setDebouncedLinePartSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedLinePartSearch(linePartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [linePartSearch]);
+
+  const linePartsQueryUrl = `/api/robust-boms/parts?${debouncedLinePartSearch ? `search=${encodeURIComponent(debouncedLinePartSearch)}&` : ''}pageSize=50000`;
+  const { data: linePartsData, isFetching: isLinePartsFetching } = useQuery({
+    queryKey: [linePartsQueryUrl],
+    enabled: isLinePartPopoverOpen,
+  });
+  const linePartsResults = (linePartsData as any)?.data || [];
+
+  // Debounced search for inline-edit child part picker (BOM revision edit table)
+  // Track active row index to avoid cross-row coupling and only fetch when a popover is open
+  const [activeEditRowIndex, setActiveEditRowIndex] = useState<number | null>(null);
+  const [debouncedEditLineSearch, setDebouncedEditLineSearch] = useState('');
+  const activeEditRowSearch = activeEditRowIndex !== null ? (editLinePartSearch[activeEditRowIndex] || '') : '';
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedEditLineSearch(activeEditRowSearch), 300);
+    return () => clearTimeout(timer);
+  }, [activeEditRowSearch]);
+
+  const isAnyEditPopoverOpen = Object.values(editLinePopoverOpen).some(Boolean);
+  const editLinePartsQueryUrl = `/api/robust-boms/parts?${debouncedEditLineSearch ? `search=${encodeURIComponent(debouncedEditLineSearch)}&` : ''}pageSize=50000`;
+  const { data: editLinePartsData, isFetching: isEditLinePartsFetching } = useQuery({
+    queryKey: [editLinePartsQueryUrl],
+    enabled: isAnyEditPopoverOpen,
+  });
+  const editLinePartsResults = (editLinePartsData as any)?.data || [];
+
   const createBOMMutation = useMutation({
     mutationFn: (data: any) => apiRequest('/api/robust-boms/boms', { method: 'POST', body: data }),
     onSuccess: () => {
@@ -522,18 +554,6 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
         );
       });
 
-  // Filter parts based on search (for Step 3 child parts — all parts are valid children)
-  const filteredLineParts = linePartSearch.trim() === '' 
-    ? parts 
-    : parts.filter((part: any) => {
-        const search = linePartSearch.toLowerCase();
-        return (
-          part.agPartNumber?.toLowerCase().includes(search) ||
-          part.name?.toLowerCase().includes(search) ||
-          part.sku?.toLowerCase().includes(search)
-        );
-      });
-
   return (
     <>
     <Card>
@@ -782,23 +802,32 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                                           data-testid="button-select-child-part"
                                         >
                                           {field.value
-                                            ? parts.find((p: any) => p.agPartNumber === field.value)?.agPartNumber + ' - ' + parts.find((p: any) => p.agPartNumber === field.value)?.name
+                                            ? (() => {
+                                                const found = linePartsResults.find((p: any) => p.agPartNumber === field.value) || parts.find((p: any) => p.agPartNumber === field.value);
+                                                return found ? `${found.agPartNumber} - ${found.name}` : field.value;
+                                              })()
                                             : "Select child part"}
                                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                       </FormControl>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[400px] p-0">
-                                      <Command>
+                                      <Command shouldFilter={false}>
                                         <CommandInput 
                                           placeholder="Search parts..." 
                                           value={linePartSearch}
                                           onValueChange={setLinePartSearch}
                                         />
                                         <CommandList>
-                                          <CommandEmpty>No parts found.</CommandEmpty>
+                                          {isLinePartsFetching && (
+                                            <div className="flex items-center justify-center py-2 text-sm text-muted-foreground">
+                                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                              Loading...
+                                            </div>
+                                          )}
+                                          {!isLinePartsFetching && <CommandEmpty>No parts found.</CommandEmpty>}
                                           <CommandGroup>
-                                            {filteredLineParts.slice(0, 50).map((part: any) => (
+                                            {linePartsResults.map((part: any) => (
                                               <CommandItem
                                                 key={part.agPartNumber}
                                                 value={part.agPartNumber}
@@ -1257,16 +1286,6 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                                         <TableBody>
                                           {editingLines.map((line, index) => {
                                             const lineSearch = editLinePartSearch[index] || '';
-                                            const filteredParts = lineSearch.trim() === '' 
-                                              ? parts 
-                                              : parts.filter((part: any) => {
-                                                  const search = lineSearch.toLowerCase();
-                                                  return (
-                                                    part.agPartNumber?.toLowerCase().includes(search) ||
-                                                    part.name?.toLowerCase().includes(search) ||
-                                                    part.sku?.toLowerCase().includes(search)
-                                                  );
-                                                });
                                             
                                             return (
                                             <TableRow key={index}>
@@ -1275,6 +1294,12 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                                                   open={editLinePopoverOpen[index] || false} 
                                                   onOpenChange={(open) => {
                                                     setEditLinePopoverOpen({...editLinePopoverOpen, [index]: open});
+                                                    if (open) {
+                                                      setActiveEditRowIndex(index);
+                                                    } else {
+                                                      setEditLinePartSearch({...editLinePartSearch, [index]: ''});
+                                                      setActiveEditRowIndex(null);
+                                                    }
                                                   }}
                                                 >
                                                   <PopoverTrigger asChild>
@@ -1288,24 +1313,34 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                                                       data-testid={`button-select-child-part-${index}`}
                                                     >
                                                       {line.childPartAgNumber
-                                                        ? `${line.childPartAgNumber} - ${parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.name || ''}`
+                                                        ? (() => {
+                                                            const found = editLinePartsResults.find((p: any) => p.agPartNumber === line.childPartAgNumber) || parts.find((p: any) => p.agPartNumber === line.childPartAgNumber);
+                                                            return found ? `${found.agPartNumber} - ${found.name}` : line.childPartAgNumber;
+                                                          })()
                                                         : "Select part..."}
                                                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                     </Button>
                                                   </PopoverTrigger>
                                                   <PopoverContent className="w-[400px] p-0">
-                                                    <Command>
+                                                    <Command shouldFilter={false}>
                                                       <CommandInput 
                                                         placeholder="Search parts..." 
                                                         value={lineSearch}
                                                         onValueChange={(value) => {
                                                           setEditLinePartSearch({...editLinePartSearch, [index]: value});
+                                                          setActiveEditRowIndex(index);
                                                         }}
                                                       />
                                                       <CommandList>
-                                                        <CommandEmpty>No parts found.</CommandEmpty>
+                                                        {isEditLinePartsFetching && (
+                                                          <div className="flex items-center justify-center py-2 text-sm text-muted-foreground">
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            Loading...
+                                                          </div>
+                                                        )}
+                                                        {!isEditLinePartsFetching && <CommandEmpty>No parts found.</CommandEmpty>}
                                                         <CommandGroup>
-                                                          {filteredParts.slice(0, 50).map((part: any) => (
+                                                          {editLinePartsResults.map((part: any) => (
                                                             <CommandItem
                                                               key={part.agPartNumber}
                                                               value={part.agPartNumber}
@@ -1315,6 +1350,7 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                                                                 setEditingLines(newLines);
                                                                 setEditLinePopoverOpen({...editLinePopoverOpen, [index]: false});
                                                                 setEditLinePartSearch({...editLinePartSearch, [index]: ''});
+                                                                setActiveEditRowIndex(null);
                                                               }}
                                                             >
                                                               <Check

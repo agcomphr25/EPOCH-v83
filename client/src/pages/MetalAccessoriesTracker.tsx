@@ -303,18 +303,31 @@ export default function MetalAccessoriesTracker() {
                           >
                             {demand.name}
                           </span>
-                          <span
-                            className={`font-bold ${
-                              demand.productionNeeded > 0
-                                ? 'text-red-600'
-                                : 'text-green-600'
-                            }`}
-                            data-testid={`text-production-needed-${demand.itemId}`}
-                          >
-                            {demand.productionNeeded > 0
-                              ? `⚠️ Produce: ${demand.productionNeeded}`
-                              : `✓ Sufficient Stock`}
-                          </span>
+                          {(() => {
+                            const totalAvailable =
+                              demand.inventory +
+                              demand.machined +
+                              demand.atAnodizer;
+                            const required =
+                              demand.totalDemandNext4 + demand.minimumThreshold;
+                            const covered = totalAvailable >= required;
+                            return (
+                              <span
+                                className={`font-bold ${
+                                  demand.productionNeeded > 0 || !covered
+                                    ? 'text-red-600'
+                                    : 'text-green-600'
+                                }`}
+                                data-testid={`text-production-needed-${demand.itemId}`}
+                              >
+                                {demand.productionNeeded > 0
+                                  ? `⚠️ Produce: ${demand.productionNeeded}`
+                                  : covered
+                                    ? `✓ Sufficient Stock`
+                                    : `⚠️ Below Threshold Coverage`}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
@@ -629,6 +642,7 @@ export default function MetalAccessoriesTracker() {
                       <TableHead>Min. Threshold</TableHead>
                       <TableHead>Quantity Machined</TableHead>
                       <TableHead>Quantity at Anodizer</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -658,6 +672,31 @@ export default function MetalAccessoriesTracker() {
                         </TableCell>
                         <TableCell data-testid={`text-anodizer-${item.id}`}>
                           {item.atAnodizer}
+                        </TableCell>
+                        <TableCell data-testid={`text-status-${item.id}`}>
+                          {(() => {
+                            const inv = item.inventory;
+                            const min = item.minimumThreshold;
+                            if (inv < min) {
+                              return (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                                  Below Threshold
+                                </span>
+                              );
+                            } else if (inv <= min * 1.2) {
+                              return (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                                  Approaching
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                                  Healthy
+                                </span>
+                              );
+                            }
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">

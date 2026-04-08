@@ -166,16 +166,17 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
         const labelInnerWidth = LABEL_WIDTH - padding * 2;  // 272pt usable width
         const centerX = x + LABEL_WIDTH / 2;
 
-        // Vertical zones proportional to LABEL_HEIGHT (96pt):
-        //   Code text:   ~4.2% from top  → ~4pt   (occupies 4–15pt)
-        //   Barcode:     ~18.8% from top → ~18pt  (occupies 18–60pt, 43.75% tall)
-        //   Description: ~66.7% from top → ~64pt  (occupies 64–82pt)
-        //   Bottom margin: ~14pt (~14.6%)
+        // Vertical layout centered within LABEL_HEIGHT (96pt):
+        //   Content block: code(11pt) + gap(3pt) + barcode(42pt) + gap(4pt) + desc(20pt) = 80pt
+        //   Equal top/bottom padding: (96 - 80) / 2 = 8pt
+        //   Code text:   8pt from top   (occupies 8–19pt)
+        //   Barcode:     22pt from top  (occupies 22–64pt)
+        //   Description: 68pt from top  (occupies 68–88pt, leaves 8pt bottom margin)
 
-        const codeTopOffset = Math.round(LABEL_HEIGHT * 0.0417);    // ~4pt
-        const barcodeTopOffset = Math.round(LABEL_HEIGHT * 0.1875); // ~18pt
-        const barcodeHeight = Math.round(LABEL_HEIGHT * 0.4375);    // ~42pt (ends at 60pt)
-        const descTopOffset = Math.round(LABEL_HEIGHT * 0.6667);    // ~64pt
+        const codeTopOffset = 8;    // 8pt from top
+        const barcodeTopOffset = 22; // 22pt from top (8 + 11 + 3)
+        const barcodeHeight = 42;    // 42pt tall (ends at 64pt)
+        const descTopOffset = 68;    // 68pt from top (22 + 42 + 4)
 
         // Code value text at top (size 11 bold)
         const codeText = item.barcodeValue;

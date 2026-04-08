@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import {
@@ -29,6 +29,7 @@ import {
   Scale,
   PackageX,
   Power,
+  Loader2,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -3502,6 +3503,28 @@ export default function TrainingModule() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [lang, setLang] = useState<'en' | 'es'>(() => (localStorage.getItem('trainingLang') as 'en' | 'es') || 'en');
+  const [translatedContentHtml, setTranslatedContentHtml] = useState<string | null>(null);
+  const [translatedQuestions, setTranslatedQuestions] = useState<any[] | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // --- Translation cache (localStorage, 7-day TTL) ---
+  const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  function getCachedTranslation(id: string | number): { html: string | null; quiz: any[] | null } | null {
+    try {
+      const raw = localStorage.getItem(`epoch_tr_${id}`);
+      if (!raw) return null;
+      const { html, quiz, ts } = JSON.parse(raw);
+      if (Date.now() - ts > CACHE_TTL_MS) { localStorage.removeItem(`epoch_tr_${id}`); return null; }
+      return { html: html ?? null, quiz: quiz ?? null };
+    } catch { return null; }
+  }
+  function setCachedTranslation(id: string | number, html: string | null, quiz: any[] | null) {
+    try {
+      localStorage.setItem(`epoch_tr_${id}`, JSON.stringify({ html, quiz, ts: Date.now() }));
+    } catch {}
+  }
 
   // Fetch current user session
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
@@ -3550,6 +3573,103 @@ export default function TrainingModule() {
       });
     },
   });
+
+  const toggleLang = () => {
+    const next: 'en' | 'es' = lang === 'en' ? 'es' : 'en';
+    setLang(next);
+    localStorage.setItem('trainingLang', next);
+    if (next === 'en') {
+      setTranslatedContentHtml(null);
+      setTranslatedQuestions(null);
+    }
+  };
+
+  useEffect(() => {
+    if (lang !== 'es' || !module) return;
+    const moduleData = module as any;
+
+    // Check cache first — instant if already translated
+    const cached = getCachedTranslation(moduleId!);
+    if (cached) {
+      setTranslatedContentHtml(cached.html);
+      setTranslatedQuestions(cached.quiz);
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslatedContentHtml(null);
+    setTranslatedQuestions(null);
+
+    const translateAll = async (capturedHtml: string | null) => {
+      let finalHtml: string | null = null;
+      let finalQuiz: any[] | null = null;
+      try {
+        const htmlToTranslate = moduleData.contentHtml || capturedHtml || '';
+        const questions: any[] = moduleData.questions || [];
+
+        const htmlPromise = htmlToTranslate
+          ? fetch('/api/training/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: htmlToTranslate, type: 'html' }),
+            }).then(r => r.json())
+          : Promise.resolve(null);
+
+        const questionsPayload = questions.map((q: any) => ({
+          id: q.id,
+          questionText: q.questionText,
+          options: q.options?.map((o: any) => ({ id: o.id, optionText: o.optionText })),
+        }));
+
+        const quizPromise = questions.length > 0
+          ? fetch('/api/training/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: JSON.stringify(questionsPayload), type: 'json' }),
+            }).then(r => r.json())
+          : Promise.resolve(null);
+
+        const [htmlResult, quizResult] = await Promise.all([htmlPromise, quizPromise]);
+
+        if (htmlResult?.translated) {
+          finalHtml = htmlResult.translated;
+          setTranslatedContentHtml(finalHtml);
+        }
+
+        if (quizResult?.translated) {
+          try {
+            let cleaned = quizResult.translated.trim();
+            if (cleaned.startsWith('```')) {
+              cleaned = cleaned.replace(/^```[a-z]*\n?/, '').replace(/```$/, '').trim();
+            }
+            const parsed = JSON.parse(cleaned);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              finalQuiz = parsed;
+              setTranslatedQuestions(finalQuiz);
+            }
+          } catch {
+            console.error('Quiz translation parse failed:', quizResult.translated);
+          }
+        }
+
+        // Save to cache so future visits / toggles are instant
+        setCachedTranslation(moduleId!, finalHtml, finalQuiz);
+      } catch (err) {
+        console.error('Translation error:', err);
+      } finally {
+        setIsTranslating(false);
+      }
+    };
+
+    // Capture built-in static component HTML synchronously before the div hides
+    if (!moduleData.contentHtml && contentRef.current) {
+      translateAll(contentRef.current.innerHTML);
+    } else {
+      translateAll(null);
+    }
+
+    return () => {};
+  }, [lang, moduleId, isLoading]);
 
   const handleSubmit = () => {
     if (!currentUser) {
@@ -3607,15 +3727,25 @@ export default function TrainingModule() {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
-      <Button
-        variant="ghost"
-        onClick={() => setLocation('/training')}
-        className="mb-4"
-        data-testid="button-back"
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Training
-      </Button>
+      <div className="flex items-center justify-between mb-4">
+        <Button
+          variant="ghost"
+          onClick={() => setLocation('/training')}
+          data-testid="button-back"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          {lang === 'es' ? 'Volver a Capacitación' : 'Back to Training'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleLang}
+          className="font-semibold"
+          aria-label="Toggle language"
+        >
+          {lang === 'en' ? 'ES' : 'EN'}
+        </Button>
+      </div>
 
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2" data-testid="text-module-title">
@@ -3628,41 +3758,59 @@ export default function TrainingModule() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-blue-900 text-2xl">
             <FileText className="h-7 w-7 text-blue-600" />
-            📖 Step 1: Review Training Material
+            {lang === 'es' ? '📖 Paso 1: Revisar el Material de Capacitación' : '📖 Step 1: Review Training Material'}
           </CardTitle>
           <CardDescription className="text-blue-800 text-base">
-            Please read through all the information below before taking the quiz
+            {lang === 'es'
+              ? 'Por favor, lea toda la información a continuación antes de tomar el examen'
+              : 'Please read through all the information below before taking the quiz'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Dynamic content based on module */}
-          {moduleData.title.includes('Preservation') && (
-            <PreservationFODContent />
-          )}
-          {moduleData.title.includes('Chemical Handling') && (
-            <ChemicalHandlingContent />
-          )}
-          {moduleData.title.includes('Fire Safety') && <FireSafetyContent />}
-          {moduleData.title.includes('ITAR') && <ITARContent />}
-          {moduleData.title.includes('AS9100') && <AS9100Content />}
-          {moduleData.title.includes('Counterfeit') && (
-            <CounterfeitPreventionContent />
-          )}
-          {moduleData.title.includes('Ethics') && <EthicsContent />}
-          {moduleData.title.includes('Nonconforming') && (
-            <NonconformingItemsContent />
-          )}
-          {moduleData.title.includes('Shut Down') && (
-            <ShutDownProceduresContent />
+          {/* Translating indicator */}
+          {isTranslating && (
+            <div className="flex items-center gap-2 text-blue-600 py-4 justify-center">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="font-medium">Traduciendo al español...</span>
+            </div>
           )}
 
-          {/* Custom/AI-generated content */}
-          {moduleData.contentHtml && (
-            <div 
+          {/* Translated content (ES) */}
+          {lang === 'es' && translatedContentHtml && !isTranslating && (
+            <div
               className="prose prose-blue max-w-none bg-white rounded-lg p-6"
-              dangerouslySetInnerHTML={{ __html: moduleData.contentHtml }}
+              dangerouslySetInnerHTML={{ __html: translatedContentHtml }}
             />
           )}
+
+          {/* Original content (EN or while waiting for translation) */}
+          <div ref={contentRef} className={lang === 'es' && (translatedContentHtml || isTranslating) ? 'hidden' : ''}>
+            {moduleData.title.includes('Preservation') && (
+              <PreservationFODContent />
+            )}
+            {moduleData.title.includes('Chemical Handling') && (
+              <ChemicalHandlingContent />
+            )}
+            {moduleData.title.includes('Fire Safety') && <FireSafetyContent />}
+            {moduleData.title.includes('ITAR') && <ITARContent />}
+            {moduleData.title.includes('AS9100') && <AS9100Content />}
+            {moduleData.title.includes('Counterfeit') && (
+              <CounterfeitPreventionContent />
+            )}
+            {moduleData.title.includes('Ethics') && <EthicsContent />}
+            {moduleData.title.includes('Nonconforming') && (
+              <NonconformingItemsContent />
+            )}
+            {moduleData.title.includes('Shut Down') && (
+              <ShutDownProceduresContent />
+            )}
+            {moduleData.contentHtml && (
+              <div
+                className="prose prose-blue max-w-none bg-white rounded-lg p-6"
+                dangerouslySetInnerHTML={{ __html: moduleData.contentHtml }}
+              />
+            )}
+          </div>
 
           {/* Download PDF Option */}
           {moduleData.pdfUrl && (
@@ -3690,12 +3838,12 @@ export default function TrainingModule() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">
-              ✍️ Step 2: Complete the Certification Quiz
+              {lang === 'es' ? '✍️ Paso 2: Completar el Examen de Certificación' : '✍️ Step 2: Complete the Certification Quiz'}
             </CardTitle>
             <CardDescription className="text-base">
-              Answer all questions below. You need at least{' '}
-              {moduleData.passingScore || 80}% to pass and earn your
-              certification.
+              {lang === 'es'
+                ? `Responda todas las preguntas a continuación. Necesita al menos ${moduleData.passingScore || 80}% para aprobar y obtener su certificación.`
+                : `Answer all questions below. You need at least ${moduleData.passingScore || 80}% to pass and earn your certification.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -3703,48 +3851,61 @@ export default function TrainingModule() {
             {currentUser && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-800">
-                  <span className="font-semibold">Completing as:</span> {currentUser.username}
+                  <span className="font-semibold">{lang === 'es' ? 'Completando como:' : 'Completing as:'}</span> {currentUser.username}
                 </p>
               </div>
             )}
 
-            {/* Questions */}
-            {moduleData.questions?.map((question: any, index: number) => (
-              <div
-                key={question.id}
-                className="space-y-3 p-4 border rounded-md"
-                data-testid={`question-${question.id}`}
-              >
-                <Label className="text-base font-semibold">
-                  {index + 1}. {question.questionText}
-                </Label>
-                <RadioGroup
-                  value={answers[question.id] || ''}
-                  onValueChange={(value) =>
-                    setAnswers({ ...answers, [question.id]: value })
-                  }
-                >
-                  {question.options?.map((option: any) => (
-                    <div
-                      key={option.id}
-                      className="flex items-center space-x-2"
-                    >
-                      <RadioGroupItem
-                        value={option.optionText}
-                        id={`option-${option.id}`}
-                        data-testid={`radio-option-${option.id}`}
-                      />
-                      <Label
-                        htmlFor={`option-${option.id}`}
-                        className="cursor-pointer"
-                      >
-                        {option.optionText}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
+            {/* Questions — show spinner while translating, translated when available */}
+            {lang === 'es' && isTranslating && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                {lang === 'es' ? 'Traduciendo preguntas...' : 'Translating questions...'}
               </div>
-            ))}
+            )}
+            {(lang === 'es' && translatedQuestions ? translatedQuestions : moduleData.questions)?.map((question: any, index: number) => {
+              const originalQuestion = moduleData.questions?.[index];
+              return (
+                <div
+                  key={question.id}
+                  className="space-y-3 p-4 border rounded-md"
+                  data-testid={`question-${question.id}`}
+                >
+                  <Label className="text-base font-semibold">
+                    {index + 1}. {question.questionText}
+                  </Label>
+                  <RadioGroup
+                    value={answers[originalQuestion?.id ?? question.id] || ''}
+                    onValueChange={(value) =>
+                      setAnswers({ ...answers, [originalQuestion?.id ?? question.id]: value })
+                    }
+                  >
+                    {question.options?.map((option: any, optIdx: number) => {
+                      const originalOption = originalQuestion?.options?.[optIdx];
+                      const answerValue = originalOption?.optionText ?? option.optionText;
+                      return (
+                        <div
+                          key={option.id}
+                          className="flex items-center space-x-2"
+                        >
+                          <RadioGroupItem
+                            value={answerValue}
+                            id={`option-${option.id}`}
+                            data-testid={`radio-option-${option.id}`}
+                          />
+                          <Label
+                            htmlFor={`option-${option.id}`}
+                            className="cursor-pointer"
+                          >
+                            {option.optionText}
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                </div>
+              );
+            })}
 
             <Button
               onClick={handleSubmit}
@@ -3753,7 +3914,9 @@ export default function TrainingModule() {
               size="lg"
               data-testid="button-submit-quiz"
             >
-              {submitMutation.isPending ? 'Submitting...' : 'Submit Quiz'}
+              {submitMutation.isPending
+                ? (lang === 'es' ? 'Enviando...' : 'Submitting...')
+                : (lang === 'es' ? 'Enviar Examen' : 'Submit Quiz')}
             </Button>
           </CardContent>
         </Card>

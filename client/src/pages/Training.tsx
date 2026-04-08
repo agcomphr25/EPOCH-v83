@@ -118,8 +118,90 @@ const CATEGORIES = [
   { value: 'GENERAL', label: 'General' },
 ];
 
-export default function Training() {
+const trainingTranslations = {
+  en: {
+    pageTitle: 'Training Program Builder',
+    pageSubtitle: 'Build and manage training programs',
+    loadingText: 'Loading training data...',
+    trainingPrograms: 'Training Programs',
+    createModule: 'Create Module',
+    estimatedTime: 'Estimated Time',
+    minutes: 'minutes',
+    passingScore: 'Passing Score',
+    transforming: 'Transforming...',
+    aiTransform: 'AI Transform',
+    startTraining: 'Start Training',
+    noModulesTitle: 'No Training Modules Yet',
+    noModulesDesc: 'Create training modules for employee certification programs',
+    createFirstModule: 'Create Your First Module',
+    dialogTitle: 'Create Training Module',
+    dialogDesc: 'Create a complete training module with content and quiz questions',
+    tabBasic: 'Basic Info',
+    tabContent: 'Content',
+    tabQuiz: 'Quiz',
+    labelTitle: 'Module Title',
+    labelDescription: 'Description',
+    labelCategory: 'Category',
+    labelDuration: 'Estimated Duration (minutes)',
+    labelPassingScore: 'Passing Score (%)',
+    labelContent: 'Training Content',
+    contentHint: 'Enter the training material that employees will read and study',
+    addQuizQuestion: 'Add Quiz Question',
+    labelQuestion: 'Question',
+    labelAnswerOptions: 'Answer Options (mark correct answer)',
+    addQuestion: 'Add Question',
+    addedQuestions: 'Added Questions',
+    noQuestionsTitle: 'No quiz questions added yet',
+    noQuestionsHint: 'Add questions above to create a quiz for this module',
+    cancel: 'Cancel',
+    creating: 'Creating...',
+  },
+  es: {
+    pageTitle: 'Constructor de Programas de Capacitación',
+    pageSubtitle: 'Construya y administre programas de capacitación',
+    loadingText: 'Cargando datos de capacitación...',
+    trainingPrograms: 'Programas de Capacitación',
+    createModule: 'Crear Módulo',
+    estimatedTime: 'Tiempo Estimado',
+    minutes: 'minutos',
+    passingScore: 'Puntuación Aprobatoria',
+    transforming: 'Transformando...',
+    aiTransform: 'Transformar con IA',
+    startTraining: 'Iniciar Capacitación',
+    noModulesTitle: 'Aún No Hay Módulos de Capacitación',
+    noModulesDesc: 'Cree módulos de capacitación para programas de certificación de empleados',
+    createFirstModule: 'Crear su Primer Módulo',
+    dialogTitle: 'Crear Módulo de Capacitación',
+    dialogDesc: 'Cree un módulo de capacitación completo con contenido y preguntas de examen',
+    tabBasic: 'Información Básica',
+    tabContent: 'Contenido',
+    tabQuiz: 'Examen',
+    labelTitle: 'Título del Módulo',
+    labelDescription: 'Descripción',
+    labelCategory: 'Categoría',
+    labelDuration: 'Duración Estimada (minutos)',
+    labelPassingScore: 'Puntuación Aprobatoria (%)',
+    labelContent: 'Contenido de Capacitación',
+    contentHint: 'Ingrese el material de capacitación que los empleados leerán y estudiarán',
+    addQuizQuestion: 'Agregar Pregunta de Examen',
+    labelQuestion: 'Pregunta',
+    labelAnswerOptions: 'Opciones de Respuesta (marque la respuesta correcta)',
+    addQuestion: 'Agregar Pregunta',
+    addedQuestions: 'Preguntas Agregadas',
+    noQuestionsTitle: 'Aún no se han agregado preguntas de examen',
+    noQuestionsHint: 'Agregue preguntas arriba para crear un examen para este módulo',
+    cancel: 'Cancelar',
+    creating: 'Creando...',
+  },
+};
+
+interface TrainingProps {
+  lang?: 'en' | 'es';
+}
+
+export default function Training({ lang = 'en' }: TrainingProps) {
   const { toast } = useToast();
+  const t = trainingTranslations[lang];
   const [createOpen, setCreateOpen] = useState(false);
   const [createTab, setCreateTab] = useState('basic');
   const [newModule, setNewModule] = useState({
@@ -234,13 +316,13 @@ export default function Training() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold">Training Program Builder</h2>
-            <p className="text-muted-foreground">Build and manage training programs</p>
+            <h2 className="text-2xl font-bold">{t.pageTitle}</h2>
+            <p className="text-muted-foreground">{t.pageSubtitle}</p>
           </div>
         </div>
         <div className="text-center py-12">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">Loading training data...</p>
+          <p className="text-muted-foreground">{t.loadingText}</p>
         </div>
       </div>
     );
@@ -252,9 +334,9 @@ export default function Training() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <GraduationCap className="h-6 w-6 text-primary" />
-            Training Program Builder
+            {t.pageTitle}
           </h2>
-          <p className="text-muted-foreground">Build and manage training programs</p>
+          <p className="text-muted-foreground">{t.pageSubtitle}</p>
         </div>
       </div>
 
@@ -262,13 +344,13 @@ export default function Training() {
         <Link href="/training/programs">
           <Button variant="outline">
             <ClipboardList className="h-4 w-4 mr-2" />
-            Training Programs
+            {t.trainingPrograms}
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </Link>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Create Module
+          {t.createModule}
         </Button>
       </div>
 
@@ -297,12 +379,12 @@ export default function Training() {
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span>
-                      Estimated Time: {module.estimatedMinutes || 30} minutes
+                      {t.estimatedTime}: {module.estimatedMinutes || 30} {t.minutes}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Award className="h-4 w-4" />
-                    <span>Passing Score: {module.passingScore || 80}%</span>
+                    <span>{t.passingScore}: {module.passingScore || 80}%</span>
                   </div>
 
                   <div className="flex gap-2">
@@ -316,12 +398,12 @@ export default function Training() {
                       {transformingModuleId === module.id ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          Transforming...
+                          {t.transforming}
                         </>
                       ) : (
                         <>
                           <Sparkles className="h-4 w-4 mr-1" />
-                          AI Transform
+                          {t.aiTransform}
                         </>
                       )}
                     </Button>
@@ -330,7 +412,7 @@ export default function Training() {
                         className="w-full"
                         data-testid={`button-start-training-${module.id}`}
                       >
-                        Start Training
+                        {t.startTraining}
                       </Button>
                     </Link>
                   </div>
@@ -344,13 +426,13 @@ export default function Training() {
             <Card>
               <CardContent className="py-12 text-center">
                 <GraduationCap className="h-16 w-16 text-muted-foreground opacity-50 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Training Modules Yet</h3>
+                <h3 className="text-lg font-semibold mb-2">{t.noModulesTitle}</h3>
                 <p className="text-muted-foreground mb-4">
-                  Create training modules for employee certification programs
+                  {t.noModulesDesc}
                 </p>
                 <Button onClick={() => setCreateOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Your First Module
+                  {t.createFirstModule}
                 </Button>
               </CardContent>
             </Card>
@@ -359,9 +441,9 @@ export default function Training() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Training Module</DialogTitle>
+            <DialogTitle>{t.dialogTitle}</DialogTitle>
             <DialogDescription>
-              Create a complete training module with content and quiz questions
+              {t.dialogDesc}
             </DialogDescription>
           </DialogHeader>
           
@@ -369,21 +451,21 @@ export default function Training() {
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="basic" className="flex items-center gap-1">
                 <FileText className="h-4 w-4" />
-                Basic Info
+                {t.tabBasic}
               </TabsTrigger>
               <TabsTrigger value="content" className="flex items-center gap-1">
                 <BookOpen className="h-4 w-4" />
-                Content
+                {t.tabContent}
               </TabsTrigger>
               <TabsTrigger value="quiz" className="flex items-center gap-1">
                 <HelpCircle className="h-4 w-4" />
-                Quiz ({quizQuestions.length})
+                {t.tabQuiz} ({quizQuestions.length})
               </TabsTrigger>
             </TabsList>
             
             <TabsContent value="basic" className="space-y-4 mt-4">
               <div>
-                <Label>Module Title <span className="text-destructive">*</span></Label>
+                <Label>{t.labelTitle} <span className="text-destructive">*</span></Label>
                 <Input
                   placeholder="e.g., Workplace Safety Fundamentals"
                   value={newModule.title}
@@ -392,7 +474,7 @@ export default function Training() {
               </div>
 
               <div>
-                <Label>Description</Label>
+                <Label>{t.labelDescription}</Label>
                 <Textarea
                   placeholder="Brief description of what this training covers..."
                   value={newModule.description}
@@ -402,7 +484,7 @@ export default function Training() {
               </div>
               
               <div>
-                <Label>Category</Label>
+                <Label>{t.labelCategory}</Label>
                 <Select
                   value={newModule.category}
                   onValueChange={(v) => setNewModule({ ...newModule, category: v })}
@@ -420,7 +502,7 @@ export default function Training() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Estimated Duration (minutes)</Label>
+                  <Label>{t.labelDuration}</Label>
                   <Input
                     type="number"
                     value={newModule.estimatedMinutes}
@@ -428,7 +510,7 @@ export default function Training() {
                   />
                 </div>
                 <div>
-                  <Label>Passing Score (%)</Label>
+                  <Label>{t.labelPassingScore}</Label>
                   <Input
                     type="number"
                     min={0}
@@ -442,9 +524,9 @@ export default function Training() {
             
             <TabsContent value="content" className="space-y-4 mt-4">
               <div>
-                <Label>Training Content</Label>
+                <Label>{t.labelContent}</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Enter the training material that employees will read and study
+                  {t.contentHint}
                 </p>
                 <Textarea
                   placeholder="Enter the full training content here. Use clear headings and bullet points for better readability.
@@ -471,9 +553,9 @@ SECTION 3: PROCEDURES
             
             <TabsContent value="quiz" className="space-y-4 mt-4">
               <div className="border rounded-lg p-4 space-y-4">
-                <h4 className="font-medium">Add Quiz Question</h4>
+                <h4 className="font-medium">{t.addQuizQuestion}</h4>
                 <div>
-                  <Label>Question</Label>
+                  <Label>{t.labelQuestion}</Label>
                   <Textarea
                     placeholder="Enter the quiz question..."
                     value={newQuestion.question}
@@ -482,7 +564,7 @@ SECTION 3: PROCEDURES
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Answer Options (mark correct answer)</Label>
+                  <Label>{t.labelAnswerOptions}</Label>
                   {newQuestion.options.map((opt, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
@@ -506,13 +588,13 @@ SECTION 3: PROCEDURES
                 </div>
                 <Button type="button" onClick={addQuestion} size="sm">
                   <Plus className="h-4 w-4 mr-1" />
-                  Add Question
+                  {t.addQuestion}
                 </Button>
               </div>
               
               {quizQuestions.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="font-medium">Added Questions ({quizQuestions.length})</h4>
+                  <h4 className="font-medium">{t.addedQuestions} ({quizQuestions.length})</h4>
                   <ScrollArea className="h-[200px]">
                     <div className="space-y-3 pr-4">
                       {quizQuestions.map((q, idx) => (
@@ -552,20 +634,20 @@ SECTION 3: PROCEDURES
               {quizQuestions.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
                   <HelpCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No quiz questions added yet</p>
-                  <p className="text-sm">Add questions above to create a quiz for this module</p>
+                  <p>{t.noQuestionsTitle}</p>
+                  <p className="text-sm">{t.noQuestionsHint}</p>
                 </div>
               )}
             </TabsContent>
           </Tabs>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t.cancel}</Button>
             <Button
               onClick={() => createMutation.mutate()}
               disabled={!newModule.title || createMutation.isPending}
             >
-              {createMutation.isPending ? 'Creating...' : 'Create Module'}
+              {createMutation.isPending ? t.creating : t.createModule}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -583,6 +583,67 @@ CRITICAL: If the original content does not mention AS9100 basics, quality policy
   }
 });
 
+// Translate training content to Spanish
+router.post('/translate', async (req, res) => {
+  try {
+    const { content, type = 'html' } = req.body;
+    if (!content) return res.status(400).json({ error: 'content is required' });
+
+    const OpenAI = (await import('openai')).default;
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'OpenAI API key not configured' });
+    const openai = new OpenAI({ apiKey, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined });
+
+    if (type === 'html') {
+      const systemPrompt = `You are a professional translator. Translate the following HTML content from English to Spanish.
+RULES:
+- Preserve ALL HTML tags, attributes, classes, and structure exactly as-is
+- Only translate the visible text content inside HTML tags
+- Do NOT translate CSS class names, HTML attributes, or inline styles
+- Do NOT add or remove any HTML elements
+- Return ONLY the translated HTML, nothing else`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content }
+        ],
+        temperature: 0.2,
+      });
+
+      const translated = response.choices[0]?.message?.content?.trim() || content;
+      return res.json({ translated });
+    }
+
+    // type === 'json': quiz translation — use json_object response_format for reliable parsing
+    const systemPromptJson = `You are a professional translator. Translate training quiz questions from English to Spanish.
+The input is a JSON object with a "questions" array. Each question has "questionText" and "options" (each with "optionText").
+Translate only the "questionText" and "optionText" string values. Keep all other fields (id, etc.) exactly as-is.
+Return a valid JSON object with the same "questions" array structure, with translated text.`;
+
+    const wrapped = JSON.stringify({ questions: JSON.parse(content) });
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPromptJson },
+        { role: 'user', content: wrapped }
+      ],
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+    });
+
+    const rawJson = response.choices[0]?.message?.content?.trim() || '{}';
+    const parsed = JSON.parse(rawJson);
+    const translatedArray = parsed.questions ?? [];
+    res.json({ translated: JSON.stringify(translatedArray) });
+  } catch (error: any) {
+    console.error('Error translating content:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generate AI quiz questions for a training module
 router.post('/modules/:id/generate-quiz', async (req, res) => {
   try {

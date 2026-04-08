@@ -10,7 +10,6 @@ import {
   Settings, 
   Users,
   CheckCircle,
-  Clock,
   AlertCircle,
   UserCheck,
   BookOpen,
@@ -32,8 +31,60 @@ interface TrainingStats {
   overdueCount: number;
 }
 
+type Language = 'en' | 'es';
+
+const translations = {
+  en: {
+    pageTitle: 'Training Control Center',
+    pageSubtitle: 'Unified training management: modules, matrix, and assignments',
+    programBuilder: 'Program Builder',
+    statModules: 'Modules',
+    statModulesDesc: 'available',
+    statEmployees: 'Employees',
+    statEmployeesDesc: 'active',
+    statCompleted: 'Completed',
+    statCompletedDesc: 'this month',
+    statOverdue: 'Overdue',
+    statOverdueDesc: 'items',
+    tabModules: 'Modules',
+    tabLibrary: 'Content Library',
+    tabMatrix: 'Matrix',
+    tabAssignments: 'Assignments',
+    tabTrainer: 'Train-the-Trainer',
+    tabManagement: 'Management',
+  },
+  es: {
+    pageTitle: 'Centro de Control de Capacitación',
+    pageSubtitle: 'Gestión unificada de capacitación: módulos, matriz y asignaciones',
+    programBuilder: 'Constructor de Programas',
+    statModules: 'Módulos',
+    statModulesDesc: 'disponibles',
+    statEmployees: 'Empleados',
+    statEmployeesDesc: 'activos',
+    statCompleted: 'Completados',
+    statCompletedDesc: 'este mes',
+    statOverdue: 'Atrasados',
+    statOverdueDesc: 'elementos',
+    tabModules: 'Módulos',
+    tabLibrary: 'Biblioteca de Contenido',
+    tabMatrix: 'Matriz',
+    tabAssignments: 'Asignaciones',
+    tabTrainer: 'Entrenador de Entrenadores',
+    tabManagement: 'Gestión',
+  },
+};
+
 export default function TrainingControlCenter() {
   const [activeTab, setActiveTab] = useState('modules');
+  const [lang, setLang] = useState<Language>(() => (localStorage.getItem('trainingLang') as Language) || 'en');
+
+  const toggleLang = () => {
+    const next: Language = lang === 'en' ? 'es' : 'en';
+    setLang(next);
+    localStorage.setItem('trainingLang', next);
+  };
+
+  const t = translations[lang];
 
   const { data: stats } = useQuery<TrainingStats>({
     queryKey: ['/api/training/stats'],
@@ -46,16 +97,16 @@ export default function TrainingControlCenter() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2" data-testid="text-page-title">
             <GraduationCap className="h-8 w-8 text-primary" />
-            Training Control Center
+            {t.pageTitle}
           </h1>
           <p className="text-muted-foreground">
-            Unified training management: modules, matrix, and assignments
+            {t.pageSubtitle}
           </p>
         </div>
         <Link href="/training/programs">
           <Button>
             <Wrench className="h-4 w-4 mr-2" />
-            Program Builder
+            {t.programBuilder}
           </Button>
         </Link>
       </div>
@@ -69,8 +120,8 @@ export default function TrainingControlCenter() {
                   <GraduationCap className="h-4 w-4" />
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium">Modules</div>
-                  <div className="text-xs text-muted-foreground">{stats?.totalModules || 0} available</div>
+                  <div className="font-medium">{t.statModules}</div>
+                  <div className="text-xs text-muted-foreground">{stats?.totalModules || 0} {t.statModulesDesc}</div>
                 </div>
               </div>
               
@@ -81,8 +132,8 @@ export default function TrainingControlCenter() {
                   <Users className="h-4 w-4" />
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium">Employees</div>
-                  <div className="text-xs text-muted-foreground">{stats?.activeEmployees || 0} active</div>
+                  <div className="font-medium">{t.statEmployees}</div>
+                  <div className="text-xs text-muted-foreground">{stats?.activeEmployees || 0} {t.statEmployeesDesc}</div>
                 </div>
               </div>
               
@@ -93,8 +144,8 @@ export default function TrainingControlCenter() {
                   <CheckCircle className="h-4 w-4" />
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium">Completed</div>
-                  <div className="text-xs text-muted-foreground">{stats?.completedThisMonth || 0} this month</div>
+                  <div className="font-medium">{t.statCompleted}</div>
+                  <div className="text-xs text-muted-foreground">{stats?.completedThisMonth || 0} {t.statCompletedDesc}</div>
                 </div>
               </div>
               
@@ -105,8 +156,8 @@ export default function TrainingControlCenter() {
                   <AlertCircle className="h-4 w-4" />
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium">Overdue</div>
-                  <div className="text-xs text-muted-foreground">{stats?.overdueCount || 0} items</div>
+                  <div className="font-medium">{t.statOverdue}</div>
+                  <div className="text-xs text-muted-foreground">{stats?.overdueCount || 0} {t.statOverdueDesc}</div>
                 </div>
               </div>
             </div>
@@ -115,38 +166,48 @@ export default function TrainingControlCenter() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-7">
+        <div className="flex items-center gap-2">
+          <TabsList className="grid flex-1 grid-cols-6">
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <GraduationCap className="h-4 w-4" />
-            Modules
+            {t.tabModules}
           </TabsTrigger>
-                    <TabsTrigger value="library" className="flex items-center gap-2" data-testid="tab-library">
+          <TabsTrigger value="library" className="flex items-center gap-2" data-testid="tab-library">
             <BookOpen className="h-4 w-4" />
-            Content Library
+            {t.tabLibrary}
           </TabsTrigger>
           <TabsTrigger value="matrix" className="flex items-center gap-2" data-testid="tab-matrix">
             <LayoutGrid className="h-4 w-4" />
-            Matrix
+            {t.tabMatrix}
           </TabsTrigger>
           <TabsTrigger value="assignments" className="flex items-center gap-2" data-testid="tab-assignments">
             <Users className="h-4 w-4" />
-            Assignments
+            {t.tabAssignments}
           </TabsTrigger>
           <TabsTrigger value="trainer" className="flex items-center gap-2" data-testid="tab-trainer">
             <UserCheck className="h-4 w-4" />
-            Train-the-Trainer
+            {t.tabTrainer}
           </TabsTrigger>
           <TabsTrigger value="management" className="flex items-center gap-2" data-testid="tab-management">
             <Settings className="h-4 w-4" />
-            Management
+            {t.tabManagement}
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleLang}
+            aria-label="Toggle language"
+            className="font-semibold shrink-0"
+          >
+            {lang === 'en' ? 'ES' : 'EN'}
+          </Button>
+        </div>
 
         <TabsContent value="modules" className="space-y-4">
-          <Training />
+          <Training lang={lang} />
         </TabsContent>
 
-        
         <TabsContent value="library" className="space-y-4">
           <TrainingContentLibrary />
         </TabsContent>
@@ -158,7 +219,6 @@ export default function TrainingControlCenter() {
         <TabsContent value="assignments" className="space-y-4">
           <TrainingMatrixManage />
         </TabsContent>
-
 
         <TabsContent value="trainer" className="space-y-4">
           <TrainTheTrainer />

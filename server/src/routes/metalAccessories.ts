@@ -1,10 +1,7 @@
 import { Router } from 'express';
-import { z } from 'zod';
 
 import { storage } from '../../storage';
 import { insertMetalAccessorySchema } from '../../schema';
-
-const validCategories = ['Bottom Metals', 'Rails', 'Other'] as const;
 
 const router = Router();
 
@@ -60,23 +57,32 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
+  const parsed = insertMetalAccessorySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+  }
   try {
-    const data = insertMetalAccessorySchema.parse(req.body);
-    const item = await storage.createMetalAccessory(data);
+    const item = await storage.createMetalAccessory(parsed.data);
     res.json(item);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
 router.put('/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
+  const parsed = insertMetalAccessorySchema.partial().safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+  }
   try {
-    const id = parseInt(req.params.id);
-    const data = insertMetalAccessorySchema.partial().parse(req.body);
-    const item = await storage.updateMetalAccessory(id, data);
+    const item = await storage.updateMetalAccessory(id, parsed.data);
     res.json(item);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 

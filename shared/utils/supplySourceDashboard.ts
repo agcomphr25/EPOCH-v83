@@ -1,7 +1,7 @@
-export type ManufacturedCategory = 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'COMPOSITE';
+export type ManufacturedCategory = 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'COMPOSITE' | 'COMPONENT';
 export type SupplySourceDashboard = 'CUTTING_TABLE' | 'CNC' | 'CORE' | 'ASSEMBLY';
 
-const CATEGORY_TO_DASHBOARD: Record<ManufacturedCategory, SupplySourceDashboard> = {
+const CATEGORY_TO_DASHBOARD: Partial<Record<ManufacturedCategory, SupplySourceDashboard>> = {
   PACKET: 'CUTTING_TABLE',
   KIT: 'CUTTING_TABLE',
   MACHINED_PART: 'CNC',
@@ -9,6 +9,7 @@ const CATEGORY_TO_DASHBOARD: Record<ManufacturedCategory, SupplySourceDashboard>
   SUB_ASSEMBLY: 'ASSEMBLY',
   ASSEMBLY: 'ASSEMBLY',
   COMPOSITE: 'ASSEMBLY',
+  // COMPONENT has no supply source dashboard mapping
 };
 
 const DASHBOARD_TO_LEGACY_DEPT: Record<SupplySourceDashboard, string> = {

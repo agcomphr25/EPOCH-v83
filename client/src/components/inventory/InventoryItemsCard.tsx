@@ -325,6 +325,7 @@ const InventoryForm = ({
                   <SelectItem value="CORE">Core</SelectItem>
                   <SelectItem value="SUB_ASSEMBLY">Sub-Assembly</SelectItem>
                   <SelectItem value="ASSEMBLY">Assembly</SelectItem>
+                  <SelectItem value="COMPONENT">Component</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -348,11 +349,17 @@ const InventoryForm = ({
               <div className="md:col-span-2">
                 <Label>Supply Source Dashboard</Label>
                 <div className="mt-1">
-                  <Badge variant="secondary" className="text-sm">
-                    {supplySourceDashboardToLegacyDept(
-                      getSupplySourceDashboard(formData.manufacturedCategory as ManufacturedCategory)
-                    ) ?? 'Unknown'}
-                  </Badge>
+                  {supplySourceDashboardToLegacyDept(
+                    getSupplySourceDashboard(formData.manufacturedCategory as ManufacturedCategory)
+                  ) ? (
+                    <Badge variant="secondary" className="text-sm">
+                      {supplySourceDashboardToLegacyDept(
+                        getSupplySourceDashboard(formData.manufacturedCategory as ManufacturedCategory)
+                      )}
+                    </Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">None</span>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">Derived automatically from category</p>
                 </div>
               </div>
@@ -1010,7 +1017,7 @@ const inventoryFormSchema = z.object({
   agPartNumber: z.string().min(1, 'AG Part# is required'),
   name: z.string().min(1, 'Name is required'),
   itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
-  manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY']).optional().nullable(),
+  manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
 }).refine(
   (data) => {
     if (data.itemType === 'MANUFACTURED') return !!data.manufacturedCategory;
@@ -1809,7 +1816,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         type: formData.type || 'Purchased',
         itemType: (formData.itemType || (formData.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED')) as 'PURCHASED' | 'MANUFACTURED',
         manufacturedCategory: (formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && formData.manufacturedCategory
-          ? formData.manufacturedCategory as 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY'
+          ? formData.manufacturedCategory as 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'COMPOSITE' | 'COMPONENT'
           : null,
         manufacturingLevel: (formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && formData.manufacturingLevel
           ? formData.manufacturingLevel as 'COMPONENT' | 'INTERMEDIATE' | 'FINAL'

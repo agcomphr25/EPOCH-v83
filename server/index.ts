@@ -311,6 +311,7 @@ async function initializeBackgroundServices() {
           '0023_traveler_component_associations.sql',
           '0024_add_assigned_technician_to_production_orders.sql',
           '0026_manufacturing_queue_released_at.sql',
+          '0029_add_component_manufactured_category.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {

@@ -148,6 +148,10 @@ import WatchRulesPage from './pages/WatchRulesPage';
 import BRADWTestDashboard from './pages/BRADWTestDashboard';
 import CHASEWTestDashboard from './pages/CHASEWTestDashboard';
 import FALEESHAHTestDashboard from './pages/FALEESHAHTestDashboard';
+import BLAKETDashboard from './pages/BLAKETDashboard';
+import JESSICAPDashboard from './pages/JESSICAPDashboard';
+import BRIANDashboard from './pages/BRIANDashboard';
+import TOMASMDashboard from './pages/TOMASMDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
 import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
 import OrderDepartmentTransfer from './pages/OrderDepartmentTransfer';
@@ -738,6 +742,10 @@ function App() {
                     path="/faleeshah-dashboard"
                     component={FALEESHAHTestDashboard}
                   />
+                  <Route path="/blaket-dashboard" component={BLAKETDashboard} />
+                  <Route path="/jessicap-dashboard" component={JESSICAPDashboard} />
+                  <Route path="/brian-dashboard" component={BRIANDashboard} />
+                  <Route path="/tomasm-dashboard" component={TOMASMDashboard} />
                   <Route
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}

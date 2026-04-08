@@ -257,6 +257,9 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   blaket: {
     routes: [
+      '/blaket-dashboard',
+      '/employee-portal',
+      '/training-control-center',
       '/department-queue/layup-plugging',
       '/department-queue/production-queue',
       '/inventory/enhanced-mrp',
@@ -264,6 +267,30 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/parts-request',
       '/orders-list',
       '/orders-management',
+    ],
+  },
+
+  jessicap: {
+    routes: [
+      '/jessicap-dashboard',
+      '/employee-portal',
+      '/training-control-center',
+    ],
+  },
+
+  brian: {
+    routes: [
+      '/brian-dashboard',
+      '/employee-portal',
+      '/training-control-center',
+    ],
+  },
+
+  tomasm: {
+    routes: [
+      '/tomasm-dashboard',
+      '/employee-portal',
+      '/training-control-center',
     ],
   },
 

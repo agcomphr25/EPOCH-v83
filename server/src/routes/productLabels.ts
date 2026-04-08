@@ -11,17 +11,17 @@ const POINTS_PER_INCH = 72;
 const PAGE_WIDTH = 8.5 * POINTS_PER_INCH;    // 612pt
 const PAGE_HEIGHT = 11 * POINTS_PER_INCH;    // 792pt
 
-// Avery 8162: 4" x 1.333", 2 columns x 7 rows = 14 per sheet
-const LABEL_WIDTH = 4.0 * POINTS_PER_INCH;        // 288pt
-const LABEL_HEIGHT = 1.333 * POINTS_PER_INCH;     // ~96pt
+// Avery 8162: 4" x 1-1/3", 2 columns x 7 rows = 14 per sheet
+const LABEL_WIDTH = 4 * POINTS_PER_INCH;          // 288pt exactly
+const LABEL_HEIGHT = (4 / 3) * POINTS_PER_INCH;  // 96pt exactly (not 1.333 * 72 = 95.976pt)
 
 const COLUMNS = 2;
 const ROWS = 7;
 const LABELS_PER_PAGE = COLUMNS * ROWS;            // 14
 
-const LEFT_MARGIN = 0.156 * POINTS_PER_INCH;      // ~11.2pt
-const TOP_MARGIN = 0.5 * POINTS_PER_INCH;         // 36pt (Avery 8162 spec)
-const H_GAP = 0.1875 * POINTS_PER_INCH;           // 13.5pt
+const LEFT_MARGIN = (156 / 1000) * POINTS_PER_INCH;  // 0.156" = 11.232pt exactly
+const TOP_MARGIN = 0.5 * POINTS_PER_INCH;         // 36pt exactly
+const H_GAP = 0.1875 * POINTS_PER_INCH;           // 13.5pt exactly
 const V_GAP = 0;
 
 function getLabelPosition(index: number): { x: number; y: number } {
@@ -160,21 +160,22 @@ router.post('/generate', authenticateToken, async (req: Request, res: Response) 
         const { x, y } = getLabelPosition(labelIndex);
         const item = labelItems[i];
 
-        // Avery 8162: 288pt wide x ~96pt tall
+        // Avery 8162: 288pt wide x 96pt tall (exact)
         // Layout (from top): code text → barcode image → description
         const padding = 8;
-        const labelInnerWidth = LABEL_WIDTH - padding * 2;  // ~272pt usable width
+        const labelInnerWidth = LABEL_WIDTH - padding * 2;  // 272pt usable width
         const centerX = x + LABEL_WIDTH / 2;
 
-        // Vertical zones within LABEL_HEIGHT ~96pt (from top):
-        //   Code text: 4pt padding from top, 11pt font → baseline at 4pt, bottom at ~15pt
-        //   Barcode: starts at 18pt from top, 42pt tall → bottom at ~60pt
-        //   Description: starts at 64pt from top, up to 2 lines of 9pt text
+        // Vertical zones proportional to LABEL_HEIGHT (96pt):
+        //   Code text:   ~4.2% from top  → ~4pt   (occupies 4–15pt)
+        //   Barcode:     ~18.8% from top → ~18pt  (occupies 18–60pt, 43.75% tall)
+        //   Description: ~66.7% from top → ~64pt  (occupies 64–82pt)
+        //   Bottom margin: ~14pt (~14.6%)
 
-        const codeTopOffset = 4;       // 4pt padding from top of label
-        const barcodeTopOffset = 18;   // barcode starts 18pt from top
-        const barcodeHeight = 42;      // 42pt tall barcode (bottom at 60pt)
-        const descTopOffset = 64;      // description starts 64pt from top
+        const codeTopOffset = Math.round(LABEL_HEIGHT * 0.0417);    // ~4pt
+        const barcodeTopOffset = Math.round(LABEL_HEIGHT * 0.1875); // ~18pt
+        const barcodeHeight = Math.round(LABEL_HEIGHT * 0.4375);    // ~42pt (ends at 60pt)
+        const descTopOffset = Math.round(LABEL_HEIGHT * 0.6667);    // ~64pt
 
         // Code value text at top (size 11 bold)
         const codeText = item.barcodeValue;

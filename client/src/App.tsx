@@ -111,6 +111,7 @@ import ManufacturingQueue from './pages/ManufacturingQueue';
 import KitsQueue from './pages/KitsQueue';
 import LayupQueue from './pages/LayupQueue';
 import CoreQueue from './pages/CoreQueue';
+import SubAssemblyQueue from './pages/SubAssemblyQueue';
 import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
@@ -919,6 +920,7 @@ function App() {
                   <Route path="/kits-queue" component={KitsQueue} />
                   <Route path="/layup-queue" component={LayupQueue} />
                   <Route path="/core-queue" component={CoreQueue} />
+                  <Route path="/sub-assembly-queue" component={SubAssemblyQueue} />
                   <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/part-routing-management">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   

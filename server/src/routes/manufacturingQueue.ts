@@ -351,8 +351,8 @@ router.post('/:id/generate-requirements', async (req, res) => {
 });
 
 // POST /api/manufacturing-queue/:id/release
-// Formally releases a KIT, LAYUP, or CORE queue item, setting status = RELEASED and recording releasedAt.
-// Requires: queueType = KIT | LAYUP | CORE, readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED/CANCELLED.
+// Formally releases a KIT, LAYUP, CORE, or SUB_ASSEMBLY queue item, setting status = RELEASED and recording releasedAt.
+// Requires: queueType = KIT | LAYUP | CORE | SUB_ASSEMBLY, readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED/CANCELLED.
 router.post('/:id/release', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -374,8 +374,8 @@ router.post('/:id/release', async (req, res) => {
     if (!item) {
       return res.status(404).json({ error: 'Manufacturing queue item not found' });
     }
-    if (item.queueType !== 'KIT' && item.queueType !== 'LAYUP' && item.queueType !== 'CORE') {
-      return res.status(400).json({ error: 'Only KIT, LAYUP, or CORE queue items can be released' });
+    if (item.queueType !== 'KIT' && item.queueType !== 'LAYUP' && item.queueType !== 'CORE' && item.queueType !== 'SUB_ASSEMBLY') {
+      return res.status(400).json({ error: 'Only KIT, LAYUP, CORE, or SUB_ASSEMBLY queue items can be released' });
     }
     if (item.readinessStatus !== 'READY') {
       return res.status(400).json({ error: `${item.queueType} must be READY before it can be released` });

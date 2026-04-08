@@ -54,6 +54,24 @@ function formatLayupRequirementType(type: string): string {
   }
 }
 
+function formatSubAssemblyRequirementType(type: string): string {
+  switch (type) {
+    case 'COMPONENT':
+      return 'Child Component';
+    case 'KIT_ITEM':
+    case 'KIT':
+      return 'Required Kit';
+    case 'CONSUMABLE':
+      return 'Consumable';
+    case 'SUBASSEMBLY':
+      return 'Child Sub-Assembly';
+    case 'MATERIAL':
+      return 'Material';
+    default:
+      return type;
+  }
+}
+
 type AllocationRequirement = {
   id: string;
   manufacturingQueueId: number;
@@ -168,11 +186,13 @@ function RequirementRow({
   req,
   queueId,
   isLayup,
+  isSubAssembly,
   onActionComplete,
 }: {
   req: AllocationRequirement;
   queueId: number;
   isLayup?: boolean;
+  isSubAssembly?: boolean;
   onActionComplete: () => void;
 }) {
   const { toast } = useToast();
@@ -280,7 +300,11 @@ function RequirementRow({
               {req.requiredPartNumber}
             </span>
             <Badge variant="outline" className="text-xs">
-              {isLayup ? formatLayupRequirementType(req.requirementType) : req.requirementType}
+              {isSubAssembly
+                ? formatSubAssemblyRequirementType(req.requirementType)
+                : isLayup
+                ? formatLayupRequirementType(req.requirementType)
+                : req.requirementType}
             </Badge>
             {req.isCritical && (
               <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs">
@@ -426,12 +450,14 @@ export function RequirementDrawer({
   onClose,
   onQueueRefetch,
   isLayup,
+  isSubAssembly,
 }: {
   kit: KitQueueItem | null;
   open: boolean;
   onClose: () => void;
   onQueueRefetch: () => void;
   isLayup?: boolean;
+  isSubAssembly?: boolean;
 }) {
   const {
     data: requirements = [],
@@ -464,14 +490,18 @@ export function RequirementDrawer({
       >
         <SheetHeader className="pb-4 border-b border-gray-200 dark:border-gray-700">
           <SheetTitle className="dark:text-white">
-            {isLayup ? 'Layup Allocation Control' : 'Allocation Control'}
+            {isSubAssembly
+              ? 'Sub-Assembly Allocation Control'
+              : isLayup
+              ? 'Layup Allocation Control'
+              : 'Allocation Control'}
           </SheetTitle>
           <SheetDescription className="dark:text-gray-400 space-y-0.5">
             <span className="font-mono font-semibold text-foreground dark:text-white">
               {kit?.inventoryItem?.agPartNumber ?? `Queue #${kit?.id}`}
             </span>
             {' — '}
-            {kit?.inventoryItem?.name ?? (isLayup ? 'Layup Item' : 'Kit Item')}
+            {kit?.inventoryItem?.name ?? (isSubAssembly ? 'Sub-Assembly Item' : isLayup ? 'Layup Item' : 'Kit Item')}
             <br />
             Readiness:{' '}
             <span className={`font-semibold ${readinessColor}`}>
@@ -502,6 +532,7 @@ export function RequirementDrawer({
                 req={req}
                 queueId={kit!.id}
                 isLayup={isLayup}
+                isSubAssembly={isSubAssembly}
                 onActionComplete={handleActionComplete}
               />
             ))

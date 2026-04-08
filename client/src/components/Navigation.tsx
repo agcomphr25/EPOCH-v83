@@ -1133,6 +1133,13 @@ export default function Navigation() {
         'Readiness gating for core prep jobs — confirm honeycomb/foam core stock, adhesive film, and consumables before release',
     },
     {
+      path: '/sub-assembly-queue',
+      label: 'Sub-Assembly Queue',
+      icon: Layers,
+      description:
+        'Readiness gating for sub-assembly jobs — confirm child parts, kits, and consumables are allocated before controlled build-up begins',
+    },
+    {
       path: '/po-products',
       label: 'PO Product Items',
       icon: Package,

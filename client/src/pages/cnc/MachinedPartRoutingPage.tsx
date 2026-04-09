@@ -468,7 +468,7 @@ export default function MachinedPartRoutingPage() {
                   >
                     {routingForm.inventoryItemId
                       ? (() => {
-                          const item = machinedParts.find(i => i.id === routingForm.inventoryItemId);
+                          const item = machinedParts.find(i => String(i.id) === routingForm.inventoryItemId);
                           if (item) return `${item.agPartNumber} — ${item.name}`;
                           if (routingForm.partNumber || routingForm.partName) {
                             return `${routingForm.partNumber}${routingForm.partName ? ` — ${routingForm.partName}` : ''}`.trim();
@@ -493,7 +493,7 @@ export default function MachinedPartRoutingPage() {
                             onSelect={() => {
                               setRoutingForm(p => ({
                                 ...p,
-                                inventoryItemId: item.id,
+                                inventoryItemId: String(item.id),
                                 partNumber: item.agPartNumber ?? p.partNumber,
                                 partName: item.name ?? p.partName,
                               }));
@@ -502,7 +502,7 @@ export default function MachinedPartRoutingPage() {
                             className="text-xs"
                           >
                             <Check
-                              className={cn('mr-2 h-3.5 w-3.5 flex-shrink-0', routingForm.inventoryItemId === item.id ? 'opacity-100' : 'opacity-0')}
+                              className={cn('mr-2 h-3.5 w-3.5 flex-shrink-0', routingForm.inventoryItemId === String(item.id) ? 'opacity-100' : 'opacity-0')}
                             />
                             <span className="font-mono font-medium mr-2">{item.agPartNumber}</span>
                             <span className="text-gray-600 truncate">{item.name}</span>
@@ -524,7 +524,7 @@ export default function MachinedPartRoutingPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoutingDialogOpen(false)}>Cancel</Button>
             <Button
-              disabled={!routingForm.routingName.trim() || !routingForm.inventoryItemId.trim() || createRouting.isPending || updateRouting.isPending}
+              disabled={!routingForm.routingName.trim() || !routingForm.inventoryItemId || createRouting.isPending || updateRouting.isPending}
               onClick={saveRouting}
             >
               {createRouting.isPending || updateRouting.isPending ? 'Saving…' : 'Save'}

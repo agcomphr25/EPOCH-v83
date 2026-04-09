@@ -3699,6 +3699,53 @@ async function initializeBackgroundServices() {
       } catch (auditErr: any) {
         console.warn('⚠️ metal_accessory_audit_log migration skipped:', auditErr?.message);
       }
+
+      // ── Machined Part Routings ─────────────────────────────────────────────
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS machined_part_routings (
+            id                      SERIAL PRIMARY KEY,
+            inventory_item_id       TEXT NOT NULL,
+            routing_name            TEXT NOT NULL,
+            part_number             TEXT,
+            part_name               TEXT,
+            notes                   TEXT,
+            created_by_display_name TEXT,
+            created_at              TIMESTAMPTZ DEFAULT NOW(),
+            updated_at              TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS machined_part_routing_ops (
+            id                    SERIAL PRIMARY KEY,
+            routing_id            INTEGER NOT NULL REFERENCES machined_part_routings(id) ON DELETE CASCADE,
+            op_number             INTEGER NOT NULL,
+            op_name               TEXT NOT NULL,
+            machine_type          TEXT,
+            preferred_machine_id  INTEGER,
+            program_names         JSONB DEFAULT '[]'::jsonb,
+            tool_list             JSONB DEFAULT '[]'::jsonb,
+            fixture_instructions  TEXT,
+            work_origin_notes     TEXT,
+            qc_tolerances         JSONB DEFAULT '[]'::jsonb,
+            reference_photo_links JSONB DEFAULT '[]'::jsonb,
+            tips                  TEXT,
+            sort_order            INTEGER NOT NULL DEFAULT 0,
+            created_at            TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS machined_part_routings_inventory_item_id_idx
+          ON machined_part_routings (inventory_item_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS machined_part_routing_ops_routing_id_idx
+          ON machined_part_routing_ops (routing_id)
+        `);
+        console.log('✅ Ensured machined_part_routings and machined_part_routing_ops tables exist');
+      } catch (mprErr: any) {
+        console.warn('⚠️ machined_part_routings migration skipped:', mprErr?.message);
+      }
     }
 
     // ── T7: CNC ↔ Traveler sync — every 30 minutes ────────────────────────────

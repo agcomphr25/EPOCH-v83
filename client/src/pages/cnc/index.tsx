@@ -244,17 +244,21 @@ export default function CNCDashboardPage() {
   const [machineDialogMachine, setMachineDialogMachine] = useState<CncMachine | null>(null);
   const [machineDeleteConfirm, setMachineDeleteConfirm] = useState<CncMachine | null>(null);
   const [machineForm, setMachineForm] = useState({ machineName: '', machineNumber: '', machineType: '', capability: '', active: true });
+  const [machineTypeCustom, setMachineTypeCustom] = useState('');
 
   useEffect(() => {
     if (machineDialogOpen) {
       const cap = machineDialogMachine?.capabilities;
+      const existingType = machineDialogMachine?.machineType ?? '';
+      const isBuiltIn = existingType === '' || existingType === 'Mill' || existingType === 'Lathe' || existingType === 'Other';
       setMachineForm({
         machineName: machineDialogMachine?.machineName ?? '',
         machineNumber: machineDialogMachine?.machineNumber ?? '',
-        machineType: machineDialogMachine?.machineType ?? '',
+        machineType: isBuiltIn ? existingType : 'Other',
         capability: typeof cap === 'string' ? cap : '',
         active: machineDialogMachine?.active ?? true,
       });
+      setMachineTypeCustom(isBuiltIn ? '' : existingType);
     }
   }, [machineDialogOpen, machineDialogMachine]);
 
@@ -1926,7 +1930,7 @@ export default function CNCDashboardPage() {
             </div>
             <div>
               <Label className="text-xs">Machine Type</Label>
-              <Select value={machineForm.machineType} onValueChange={v => setMachineForm(p => ({ ...p, machineType: v }))}>
+              <Select value={machineForm.machineType} onValueChange={v => { setMachineForm(p => ({ ...p, machineType: v })); if (v !== 'Other') setMachineTypeCustom(''); }}>
                 <SelectTrigger className="h-8 text-sm mt-1">
                   <SelectValue placeholder="Select type…" />
                 </SelectTrigger>
@@ -1934,6 +1938,14 @@ export default function CNCDashboardPage() {
                   {CNC_MACHINE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {machineForm.machineType === 'Other' && (
+                <Input
+                  className="h-8 text-sm mt-2"
+                  placeholder="Enter custom machine type…"
+                  value={machineTypeCustom}
+                  onChange={e => setMachineTypeCustom(e.target.value)}
+                />
+              )}
             </div>
             <div>
               <Label className="text-xs">Capability</Label>
@@ -1959,13 +1971,15 @@ export default function CNCDashboardPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setMachineDialogOpen(false)}>Cancel</Button>
             <Button
-              disabled={!machineForm.machineName.trim() || !machineForm.machineNumber.trim() || saveMachine.isPending}
+              disabled={!machineForm.machineName.trim() || !machineForm.machineNumber.trim() || (machineForm.machineType === 'Other' && !machineTypeCustom.trim()) || saveMachine.isPending}
               onClick={() => saveMachine.mutate({
                 id: machineDialogMachine?.id,
                 data: {
                   machineName: machineForm.machineName.trim(),
                   machineNumber: machineForm.machineNumber.trim() || null,
-                  machineType: machineForm.machineType || null,
+                  machineType: machineForm.machineType === 'Other'
+                    ? machineTypeCustom.trim()
+                    : (machineForm.machineType || null),
                   capabilities: machineForm.capability.trim() || null,
                   active: machineForm.active,
                 },

@@ -14,8 +14,8 @@ export interface CncMachine {
   createdAt: string;
 }
 
-export type CncMachineType = 'Mill' | 'Lathe' | 'Turn-Mill' | 'Router' | 'Waterjet' | 'Laser' | 'EDM' | 'Plasma' | 'Other';
-export const CNC_MACHINE_TYPES: CncMachineType[] = ['Mill', 'Lathe', 'Turn-Mill', 'Router', 'Waterjet', 'Laser', 'EDM', 'Plasma', 'Other'];
+export type CncMachineType = 'Mill' | 'Lathe' | 'Other';
+export const CNC_MACHINE_TYPES: CncMachineType[] = ['Mill', 'Lathe', 'Other'];
 export const CNC_AXIS_OPTIONS = ['3-Axis', '4-Axis', '5-Axis', 'Lathe', 'Turn-Mill', 'Router'] as const;
 
 export interface MachinedPartRouting {

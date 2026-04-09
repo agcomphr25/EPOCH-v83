@@ -1,0 +1,198 @@
+Yes — that should absolutely be part of the CNC dashboard.
+
+What you want is a machine capacity calendar setting, not just a display option.
+
+What it should control
+
+The CNC work order dashboard should let you define the shop schedule such as:
+
+4 days × 10 hours
+5 days × 8 hours
+later, custom schedules like:
+5 days × 10 hours
+weekend overtime
+half-day Friday
+per-machine exceptions
+
+That schedule should drive:
+
+available machine hours per week
+load percentage
+backlog visibility
+due-date risk
+scheduling recommendations
+Best way to structure it
+1. Global CNC schedule setting
+
+Start simple with a default schedule for the CNC department.
+
+Example:
+
+{
+  scheduleType: "FOUR_TEN" | "FIVE_EIGHT" | "CUSTOM",
+  daysPerWeek: 4,
+  hoursPerDay: 10,
+  weeklyCapacityHours: 40
+}
+2. Machine-level override
+
+Some machines may run different schedules.
+
+Example:
+
+VF2 runs 4x10
+VF3 runs 5x8
+Lathe runs overtime on Saturdays
+
+So each machine should optionally have:
+
+{
+  useDepartmentDefault: true,
+  daysPerWeek: 5,
+  hoursPerDay: 8
+}
+What the dashboard should show
+
+For each machine:
+
+total scheduled hours this week
+assigned setup hours
+assigned run hours
+remaining hours
+utilization percent
+overload flag
+
+Example:
+
+Haas VF2
+Weekly capacity: 40 hrs
+Assigned: 34.5 hrs
+Remaining: 5.5 hrs
+Utilization: 86%
+Haas VF3
+Weekly capacity: 40 hrs
+Assigned: 46 hrs
+Remaining: -6 hrs
+Utilization: 115%
+Status: Overloaded
+What fields you need
+CNC schedule settings table
+cnc_schedule_settings
+{
+  id: uuid,
+  name: string, // "Default CNC Schedule"
+  scheduleType: "FOUR_TEN" | "FIVE_EIGHT" | "CUSTOM",
+  daysPerWeek: number,
+  hoursPerDay: number,
+  weeklyCapacityHours: number,
+  isDefault: boolean,
+  createdAt: timestamp,
+  updatedAt: timestamp
+}
+Optional machine override fields
+
+Add to cnc_machines:
+
+{
+  useDefaultSchedule: boolean,
+  customDaysPerWeek: number | null,
+  customHoursPerDay: number | null,
+  customWeeklyCapacityHours: number | null
+}
+How it should work in routing and scheduling
+
+Every CNC routing op already should have:
+
+estimated setup time
+estimated run time
+
+Then dashboard calculates:
+
+totalLoadHours = sum(setupHours + runHours)
+capacityHours = machine weekly schedule
+utilization = totalLoadHours / capacityHours
+
+That is what makes the dashboard actually useful.
+
+Best UI layout
+
+At top of CNC dashboard:
+
+Capacity Settings
+Work week:
+4 days / 10 hours
+5 days / 8 hours
+Custom
+Effective weekly hours
+Apply to:
+entire CNC department
+selected machine only
+
+Then below that:
+
+Machine Load Board
+
+Columns:
+
+Machine
+Axis
+Weekly capacity
+Scheduled hours
+Remaining hours
+Utilization
+Status
+My recommendation for EPOCH
+
+Start with this order:
+
+Phase 1
+global CNC work week setting
+4x10 or 5x8 dropdown
+weekly capacity calculation
+machine load percentages
+Phase 2
+machine-specific override
+holiday/week exception support
+operator/labor capacity tie-in
+Phase 3
+drag-and-drop scheduling
+auto-balance jobs across machines
+Important design note
+
+Do not hardcode only two schedule types forever.
+
+Even if the UI starts with:
+
+4x10
+5x8
+
+the schema should still support custom values, because eventually you will want:
+
+overtime weeks
+shutdown weeks
+one machine on a different schedule
+second shift
+Clean user-facing wording
+
+Instead of saying only “set work week,” label it:
+
+CNC Capacity Schedule
+
+With:
+
+Schedule Template
+Days Per Week
+Hours Per Day
+Weekly Capacity Hours
+
+That will feel more manufacturing-grade.
+
+The dashboard formula is basically:
+
+weekly machine capacity = days per week × hours per day
+machine load = total scheduled setup/run hours
+utilization = load ÷ capacity
+
+That is the right backbone.
+
+I can turn this into a copy-paste Replit build spec next.

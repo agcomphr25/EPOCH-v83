@@ -84,6 +84,7 @@ import FinancialReviewSlidePage from './pages/FinancialReviewSlidePage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
+import MonthlyShippedReport from './pages/MonthlyShippedReport';
 import POProductionOrdersReport from './pages/POProductionOrdersReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import BulkPaymentHistoryPage from './pages/BulkPaymentHistoryPage';
@@ -831,6 +832,10 @@ function App() {
                   <Route
                     path="/finance/monthly-fulfilled"
                     component={MonthlyFulfilledReport}
+                  />
+                  <Route
+                    path="/finance/monthly-shipped"
+                    component={MonthlyShippedReport}
                   />
                   <Route
                     path="/finance/bulk-payment"

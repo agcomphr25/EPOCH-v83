@@ -970,6 +970,12 @@ export default function Navigation() {
       description: 'Monthly report of orders changed to FULFILLED status',
     },
     {
+      path: '/finance/monthly-shipped',
+      label: 'Monthly SHIPPED Report',
+      icon: FileText,
+      description: 'Monthly report of orders grouped by shipped date',
+    },
+    {
       path: '/payment-analytics',
       label: 'Payment Analytics',
       icon: TrendingUp,

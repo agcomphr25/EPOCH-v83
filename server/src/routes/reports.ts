@@ -166,6 +166,158 @@ router.get('/monthly-fulfilled', async (req, res) => {
   }
 });
 
+// Monthly SHIPPED Orders Report
+router.get('/monthly-shipped', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+
+    // Default to September 2025 if not provided
+    const reportMonth = month ? parseInt(month as string) : 9;
+    const reportYear = year ? parseInt(year as string) : 2025;
+
+    // Calculate date range for the selected month
+    const startDate = new Date(reportYear, reportMonth - 1, 1);
+    const endDate = new Date(reportYear, reportMonth, 1);
+
+    const orders = await db
+      .select({
+        orderId: allOrders.orderId,
+        customerId: allOrders.customerId,
+        orderDate: allOrders.orderDate,
+        shippedDate: allOrders.shippedDate,
+        basePrice:
+          sql<number>`COALESCE(${allOrders.priceOverride}, ${stockModels.price}, 0)`.as(
+            'base_price'
+          ),
+        shipping: allOrders.shipping,
+        customDiscountType: allOrders.customDiscountType,
+        customDiscountValue: allOrders.customDiscountValue,
+        showCustomDiscount: allOrders.showCustomDiscount,
+        features: allOrders.features,
+        modelId: allOrders.modelId,
+      })
+      .from(allOrders)
+      .leftJoin(stockModels, eq(allOrders.modelId, stockModels.id))
+      .where(
+        and(
+          sql`${allOrders.shippedDate} IS NOT NULL`,
+          gte(allOrders.shippedDate, startDate),
+          lt(allOrders.shippedDate, endDate),
+          // Exclude Production-Only Orders (PO_RELEASE) from financial reports
+          or(
+            eq(allOrders.orderSource, 'SALES'),
+            sql`${allOrders.orderSource} IS NULL`
+          )
+        )
+      )
+      .orderBy(allOrders.shippedDate);
+
+    // Get all feature definitions to calculate prices
+    const { storage } = await import('../../storage');
+    const allFeatures = await storage.getAllFeatures();
+
+    // Calculate features total for each order
+    const ordersWithTotals = orders.map((order) => {
+      let featuresTotal = 0;
+
+      if (order.features && typeof order.features === 'object') {
+        Object.entries(order.features).forEach(
+          ([featureCategory, selectedValue]) => {
+            const featureDef = allFeatures.find(
+              (f) => f.id === featureCategory || f.name === featureCategory
+            );
+
+            if (featureDef && featureDef.options) {
+              const values = Array.isArray(selectedValue)
+                ? selectedValue
+                : [selectedValue];
+
+              values.forEach((value) => {
+                if (value && value !== 'none') {
+                  const options = featureDef.options as any[];
+                  const option = options?.find(
+                    (opt: any) => opt.value === value
+                  );
+                  if (option && option.price) {
+                    featuresTotal += Number(option.price);
+                  }
+                }
+              });
+            }
+          }
+        );
+      }
+
+      const basePrice = Number(order.basePrice) || 0;
+      const shipping = Number(order.shipping) || 0;
+
+      let orderTotal = basePrice + featuresTotal + shipping;
+      let discountAmount = 0;
+
+      if (order.showCustomDiscount && order.customDiscountValue) {
+        if (order.customDiscountType === 'percent') {
+          discountAmount =
+            (basePrice + featuresTotal) * (order.customDiscountValue / 100);
+          orderTotal =
+            (basePrice + featuresTotal) *
+              (1 - order.customDiscountValue / 100) +
+            shipping;
+        } else if (
+          order.customDiscountType === 'fixed' ||
+          order.customDiscountType === 'amount'
+        ) {
+          discountAmount = order.customDiscountValue;
+          orderTotal =
+            basePrice + featuresTotal - order.customDiscountValue + shipping;
+        }
+      }
+
+      return {
+        orderId: order.orderId,
+        customerId: order.customerId,
+        orderDate: order.orderDate,
+        shippedDate: order.shippedDate,
+        basePrice,
+        featuresTotal,
+        shipping,
+        discountAmount,
+        customDiscountType: order.customDiscountType,
+        customDiscountValue: order.customDiscountValue,
+        showCustomDiscount: order.showCustomDiscount,
+        orderTotal,
+      };
+    });
+
+    // Calculate column totals
+    const columnTotals = ordersWithTotals.reduce(
+      (totals, order) => ({
+        basePrice: totals.basePrice + order.basePrice,
+        featuresTotal: totals.featuresTotal + order.featuresTotal,
+        shipping: totals.shipping + order.shipping,
+        discountAmount: totals.discountAmount + order.discountAmount,
+        orderTotal: totals.orderTotal + order.orderTotal,
+      }),
+      {
+        basePrice: 0,
+        featuresTotal: 0,
+        shipping: 0,
+        discountAmount: 0,
+        orderTotal: 0,
+      }
+    );
+
+    res.json({
+      orderCount: ordersWithTotals.length,
+      totalAmountDue: columnTotals.orderTotal,
+      columnTotals,
+      orders: ordersWithTotals,
+    });
+  } catch (error) {
+    console.error('Error fetching monthly SHIPPED orders:', error);
+    res.status(500).json({ error: 'Failed to fetch report data' });
+  }
+});
+
 // Get all available filter options (stock models, barrels, paints, etc.)
 router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (req, res) => {
   try {

@@ -206,6 +206,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/finance/ar': ['ADMIN', 'OWNER'],
   '/finance/cogs': ['ADMIN', 'OWNER'],
   '/finance/monthly-fulfilled': ['ADMIN', 'OWNER'],
+  '/finance/monthly-shipped': ['ADMIN', 'OWNER'],
   '/refund-queue': ['ADMIN', 'OWNER'],
   '/credit-memo': ['ADMIN', 'OWNER'],
   '/badge-configuration': ['ADMIN', 'OWNER'],

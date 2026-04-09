@@ -295,6 +295,14 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
     ],
   },
 
+  brianr: {
+    routes: [
+      '/brianr-dashboard',
+      '/employee-portal',
+      '/training-control-center',
+    ],
+  },
+
   bradw: {
     routes: [
       '/department-queue/gunsmith',

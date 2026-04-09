@@ -7067,40 +7067,65 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         `SELECT id, order_id, item_id, item_name, production_status, material_canonical, current_department
          FROM production_orders
          WHERE (${likeConditions})
-           AND production_status != 'CANCELLED'`
+           AND production_status != 'CANCELLED'
+           AND current_department NOT IN ('Shipping QC', 'Shipped', 'SHIPPED')`
       );
 
       const affected = await db.execute(selectQuery);
       const rows = affected.rows as Array<{ id: number; order_id: string; item_id: string; item_name: string; production_status: string; material_canonical: string; current_department: string }>;
 
+      let productionOrdersFixed = 0;
+      let orderIds: string[] = [];
+
       if (rows.length === 0) {
-        console.log('[remediate-metal-accessories] No active metal accessory production orders found.');
-        return res.json({ fixed: 0, orderIds: [] });
+        console.log('[remediate-metal-accessories] No misclassified metal accessory production orders found.');
+      } else {
+        orderIds = rows.map((r) => r.order_id);
+        console.log(`[remediate-metal-accessories] Fixing ${rows.length} metal accessory production order(s): ${orderIds.join(', ')}`);
+
+        // Fix each order individually so we can derive display names per SKU
+        for (const row of rows) {
+          const sku = row.item_id || row.item_name || '';
+          const displayName = deriveMetalAccessoryDisplayName(sku) !== sku
+            ? deriveMetalAccessoryDisplayName(sku)
+            : row.item_name; // keep existing name if no mapping
+          const idVal = row.id;
+          const updateQuery = sql.raw(
+            `UPDATE production_orders
+             SET material_canonical = 'Metal Accessory',
+                 current_department = 'Shipping QC',
+                 item_name = '${displayName.replace(/'/g, "''")}',
+                 updated_at = NOW()
+             WHERE id = ${idVal}`
+          );
+          await db.execute(updateQuery);
+          productionOrdersFixed++;
+        }
+
+        console.log(`[remediate-metal-accessories] production_orders updated: ${productionOrdersFixed} row(s). Orders: ${orderIds.join(', ')}`);
       }
 
-      const orderIds = rows.map((r) => r.order_id);
-      console.log(`[remediate-metal-accessories] Fixing ${rows.length} metal accessory production order(s): ${orderIds.join(', ')}`);
+      // Sync all_orders: update current_department for PO_RELEASE orders whose model_id matches metal accessory patterns
+      // This always runs regardless of whether production_orders had matches
+      const allOrdersLikeConditions = METAL_ACCESSORY_PATTERNS.map(
+        (p) => `UPPER(model_id) LIKE '${p}'`
+      ).join(' OR ');
 
-      // Fix each order individually so we can derive display names per SKU
-      for (const row of rows) {
-        const sku = row.item_id || row.item_name || '';
-        const displayName = deriveMetalAccessoryDisplayName(sku) !== sku
-          ? deriveMetalAccessoryDisplayName(sku)
-          : row.item_name; // keep existing name if no mapping
-        const idVal = row.id;
-        const updateQuery = sql.raw(
-          `UPDATE production_orders
-           SET material_canonical = 'Metal Accessory',
-               current_department = 'Shipping QC',
-               item_name = '${displayName.replace(/'/g, "''")}',
-               updated_at = NOW()
-           WHERE id = ${idVal}`
-        );
-        await db.execute(updateQuery);
-      }
+      const allOrdersUpdateQuery = sql.raw(
+        `UPDATE all_orders
+         SET current_department = 'Shipping QC',
+             updated_at = NOW()
+         WHERE source = 'PO_RELEASE'
+           AND (${allOrdersLikeConditions})
+           AND current_department NOT IN ('Shipping QC', 'Shipped', 'SHIPPED')
+           AND status != 'CANCELLED'`
+      );
 
-      console.log(`[remediate-metal-accessories] Done. Fixed orders: ${orderIds.join(', ')}`);
-      return res.json({ fixed: rows.length, orderIds });
+      const allOrdersResult = await db.execute(allOrdersUpdateQuery);
+      const allOrdersUpdated = allOrdersResult.rowCount ?? 0;
+      console.log(`[remediate-metal-accessories] all_orders updated: ${allOrdersUpdated} row(s) set to Shipping QC`);
+
+      return res.json({ fixed: productionOrdersFixed, orderIds, allOrdersFixed: allOrdersUpdated });
     } catch (_error) {
       console.error('[remediate-metal-accessories] Error:', _error);
       return res.status(500).json({ _error: 'Remediation failed', details: String(_error) });

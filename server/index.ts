@@ -272,6 +272,14 @@ async function initializeBackgroundServices() {
     } else {
       console.log('✅ Database connection successful');
 
+      // Ensure required user accounts exist (e.g. brian → /brian-dashboard)
+      try {
+        const { ensureRequiredUsersExist } = await import('./src/routes/auth');
+        await ensureRequiredUsersExist();
+      } catch (userSeedErr: any) {
+        console.warn('⚠️ ensureRequiredUsersExist failed:', userSeedErr.message);
+      }
+
       // ── Pre-deploy: safe integer→uuid / integer→text type fixes ─────────────
       // These run FIRST before any other boot migration so that subsequent
       // drizzle-kit push operations never see a stale integer column where the

@@ -217,6 +217,15 @@ const USERS = new Map([
       role: 'EMPLOYEE',
     },
   ],
+  [
+    'brian',
+    {
+      id: 20,
+      username: 'brian',
+      password: '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu',
+      role: 'EMPLOYEE',
+    },
+  ],
 ]);
 
 // Generate cryptographically secure session token
@@ -1000,5 +1009,51 @@ router.post('/validate-credentials', loginRateLimiter, async (req, res) => {
     res.status(500).json({ error: 'Failed to validate credentials' });
   }
 });
+
+/**
+ * Ensures required user accounts exist in the database.
+ * Called at server startup to prevent missing login accounts.
+ */
+export async function ensureRequiredUsersExist(): Promise<void> {
+  const DEFAULT_PASSWORD_HASH = '$2b$10$eqwAR9UqwOGL4dOWvYQUzOsmZIqDSAenu7FM7P1Ba5OB6mS71pMnu';
+
+  const requiredUsers = [
+    { username: 'brian', role: 'EMPLOYEE', firstName: 'Brian', lastName: 'Ramirez' },
+  ];
+
+  for (const u of requiredUsers) {
+    try {
+      const existing = await pool.query(
+        'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+        [u.username]
+      );
+
+      if (!existing || existing.length === 0) {
+        // Look up employee record by name — try exact full name first, then partial
+        let empResult = await pool.query(
+          `SELECT id FROM employees WHERE LOWER(name) = $1 LIMIT 1`,
+          [`${u.firstName.toLowerCase()} ${u.lastName.toLowerCase()}`]
+        );
+        if (!empResult || empResult.length === 0) {
+          empResult = await pool.query(
+            `SELECT id FROM employees WHERE LOWER(name) LIKE $1 AND LOWER(name) LIKE $2 LIMIT 1`,
+            [`%${u.firstName.toLowerCase()}%`, `%${u.lastName.toLowerCase()}%`]
+          );
+        }
+        const employeeId = empResult && empResult.length > 0 ? empResult[0].id : null;
+
+        await pool.query(
+          `INSERT INTO users (username, password, password_hash, role, is_active, first_name, last_name, employee_id, created_at, updated_at)
+           VALUES ($1, $2, $2, $3, true, $4, $5, $6, NOW(), NOW())
+           ON CONFLICT (username) DO NOTHING`,
+          [u.username, DEFAULT_PASSWORD_HASH, u.role, u.firstName, u.lastName, employeeId]
+        );
+        console.log(`✅ Created missing user account: ${u.username}`);
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ Could not ensure user account for ${u.username}: ${err.message}`);
+    }
+  }
+}
 
 export default router;

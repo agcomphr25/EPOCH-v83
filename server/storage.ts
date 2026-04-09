@@ -10392,8 +10392,10 @@ export class DatabaseStorage implements IStorage {
                  OR UPPER(poi.item_name) LIKE '%BOTTOM%METAL%' OR UPPER(poi.stock_model_name) LIKE '%BOTTOM%METAL%'
                  OR UPPER(poi.item_name) LIKE '%PIC%RAIL%' OR UPPER(poi.stock_model_name) LIKE '%PIC%RAIL%'
                  OR UPPER(poi.item_name) LIKE 'AG-BM-%' OR UPPER(poi.item_name) LIKE 'AGBM%'
-                 OR UPPER(poi.item_name) LIKE 'AGPIC%' OR UPPER(poi.item_name) LIKE 'AGARCA%'
-                 OR UPPER(poi.item_name) LIKE 'AGM5%' OR UPPER(poi.item_name) LIKE 'AGBDL%'
+                 OR UPPER(poi.item_name) LIKE 'AG-BDL-%' OR UPPER(poi.item_name) LIKE 'AGBDL%'
+                 OR UPPER(poi.item_name) LIKE 'AG-M5-%' OR UPPER(poi.item_name) LIKE 'AGM5%'
+                 OR UPPER(poi.item_name) LIKE 'AG-PIC-%' OR UPPER(poi.item_name) LIKE 'AGPIC%'
+                 OR UPPER(poi.item_name) LIKE 'AG-ARCA-%' OR UPPER(poi.item_name) LIKE 'AGARCA%'
                  THEN 'custom_model'
             WHEN (LOWER(poi.stock_model_name) IN ('mesa_universal', 'mesa universal')
                   OR LOWER(poi.item_name) IN ('mesa_universal', 'mesa universal'))
@@ -10682,12 +10684,21 @@ export class DatabaseStorage implements IStorage {
           } else {
             // Add all production orders
             poItem.productionOrders.forEach((prodOrder: any) => {
+              // Override department for metal accessories regardless of what production order stores
+              const isMetalAccessoryWithProdOrder = poItem.itemType && poItem.itemType.toLowerCase() !== 'stock_model';
+              let effectiveDepartment = prodOrder.currentDepartment;
+              let effectiveStatus = prodOrder.productionStatus;
+              if (isMetalAccessoryWithProdOrder) {
+                const isShippedProdOrder = prodOrder.isFulfilled || prodOrder.productionStatus === 'SHIPPED';
+                effectiveDepartment = isShippedProdOrder ? 'Shipped' : 'Shipping QC';
+                effectiveStatus = isShippedProdOrder ? 'SHIPPED' : 'IN_SHIPPING_QC';
+              }
               allItems.push({
                 orderId: prodOrder.orderId,
                 unitNumber: prodOrder.unitNumber,
                 poItemId: poItem.poItemId,
-                currentDepartment: prodOrder.currentDepartment,
-                productionStatus: prodOrder.productionStatus,
+                currentDepartment: effectiveDepartment,
+                productionStatus: effectiveStatus,
                 flatTop: poItem.flatTop,
                 description: poItem.description,
                 totalQuantity: poItem.quantity,
@@ -11021,8 +11032,15 @@ export class DatabaseStorage implements IStorage {
           : [];
         const inv = inventoryMatch[0];
 
+        // Check if item is a metal accessory by SKU prefix (itemName or itemId take priority over stockModelId)
+        const metalSkuPrefixes = ['AGBM', 'AGBDL', 'AGM5', 'AGPIC', 'AGARCA'];
+        const normalizeSkuForMetal = (s: string) => s.toUpperCase().replace(/[-_]/g, '');
+        const isMetalSkuByName =
+          metalSkuPrefixes.some((p) => normalizeSkuForMetal(item.itemName || '').startsWith(p)) ||
+          metalSkuPrefixes.some((p) => normalizeSkuForMetal(item.itemId || '').startsWith(p));
+
         let materialCanonical = '';
-        if (inv?.itemType === 'PURCHASED') {
+        if (inv?.itemType === 'PURCHASED' || isMetalSkuByName) {
           materialCanonical = 'Metal Accessory';
         } else {
           const stockModelForOrder = item.itemId || item.stockModelId || '';
@@ -11030,16 +11048,14 @@ export class DatabaseStorage implements IStorage {
         }
 
         let currentDepartment = 'P1 Production Queue';
-        if (inv?.itemType === 'PURCHASED') {
+        if (inv?.itemType === 'PURCHASED' || isMetalSkuByName) {
           currentDepartment = 'Shipping QC';
         }
 
         const normalizedItemType = (item.itemType || '').trim().toLowerCase().replace(/[\s\-]+/g, '_');
-        if (!inv && normalizedItemType && normalizedItemType !== 'stock_model') {
+        if (normalizedItemType && normalizedItemType !== 'stock_model') {
           currentDepartment = 'Shipping QC';
-          if (!materialCanonical) {
-            materialCanonical = 'Metal Accessory';
-          }
+          materialCanonical = 'Metal Accessory';
         }
 
         const stockModelForOrder = item.itemId || item.stockModelId || '';

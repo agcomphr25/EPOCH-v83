@@ -9,6 +9,24 @@ import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
 
 const router = Router();
 
+const METAL_ACCESSORY_PREFIXES = ['AGBM', 'AGBDL', 'AGM5', 'AGPIC', 'AGARCA'];
+
+function normalizeSkuForMatch(sku: string): string {
+  return sku.toUpperCase().replace(/[-_]/g, '');
+}
+
+function matchesMetal(value: string): boolean {
+  const norm = normalizeSkuForMatch(value);
+  return METAL_ACCESSORY_PREFIXES.some((p) => norm.startsWith(p));
+}
+
+function isMetalAccessorySku(itemName: string, itemId: string, itemType?: string): boolean {
+  if (itemType && itemType.toLowerCase() !== 'stock_model') return true;
+  if (itemName && matchesMetal(itemName)) return true;
+  if (itemId && matchesMetal(itemId)) return true;
+  return false;
+}
+
 router.use(authorizeApiRoute());
 
 // Get all open P1 Purchase Orders grouped by customer
@@ -381,7 +399,16 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
           // Start the sequence after the already-existing orders so IDs are deterministic.
           const remainingToCreate = quantity - realOrderCount;
 
-          // Create orders in all_orders table with P1 Production Queue department
+          // Detect metal accessories by item_name/item_id/item_type before inserting
+          // Metal accessories must route to Shipping QC, not P1 Production Queue
+          const itemIsMetalAccessory = isMetalAccessorySku(
+            item.item_name || '',
+            item.item_id || '',
+            item.item_type || undefined
+          );
+          const targetDepartment = itemIsMetalAccessory ? 'Shipping QC' : 'P1 Production Queue';
+
+          // Create orders in all_orders table with appropriate department
           for (let i = 0; i < remainingToCreate; i++) {
             // Use PO-format order ID for consistency with other PO releases
             // Format: PO-{po_number}-{po_item_id}-{sequence}
@@ -397,7 +424,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               action_length: specs.action_length || '',
             });
 
-            // Insert into all_orders table with P1 Production Queue department.
+            // Insert into all_orders table with the correct department.
             // ON CONFLICT DO NOTHING ensures idempotency now that a unique index exists on order_id.
             const insertOrderQuery = `
               INSERT INTO all_orders (
@@ -417,7 +444,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 created_at,
                 updated_at
               ) VALUES (
-                $1, NOW(), $2, $3, $4, 'P1 Production Queue', 'IN_PROGRESS', $5, $6::jsonb,
+                $1, NOW(), $2, $3, $4, $9, 'IN_PROGRESS', $5, $6::jsonb,
                 'PO_RELEASE', $7, $8, '[]'::jsonb, NOW(), NOW()
               )
               ON CONFLICT (order_id) DO NOTHING
@@ -432,6 +459,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               features,
               item.po_id,
               poItemId,
+              targetDepartment,
             ]);
 
             // Only proceed with downstream inserts/audit for rows that were actually inserted
@@ -453,7 +481,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 JSON.stringify(null),
                 JSON.stringify({
                   order_id: orderId,
-                  current_department: 'P1 Production Queue',
+                  current_department: targetDepartment,
                   status: 'IN_PROGRESS',
                   order_source: 'PO_RELEASE',
                   source_po_id: item.po_id,
@@ -490,10 +518,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
                 updated_at
               ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW(), $11,
-                'PENDING', 'P1 Production Queue', '[]'::jsonb, NOW(), NOW()
+                'PENDING', $12, '[]'::jsonb, NOW(), NOW()
               )
               ON CONFLICT (order_id) DO UPDATE
-              SET current_department = 'P1 Production Queue',
+              SET current_department = $12,
                   production_status = 'PENDING',
                   updated_at = NOW()
             `;
@@ -509,6 +537,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               resolveItemDisplayName(item.item_name || ''),
               JSON.stringify(specs),
               dueDate,
+              targetDepartment,
             ]);
 
             // Also add to layup_schedule table for scheduler visibility

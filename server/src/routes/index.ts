@@ -6755,18 +6755,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     /part.?only/i,
   ];
 
-  // Metal accessory prefixes tested per-field (with ^ anchor) to avoid false positives
-  // when the prefix appears in the middle of a concatenated string.
-  const METAL_ACCESSORY_PREFIX_PATTERNS = [
-    /^AGM5/i,
-    /^AGBDL/i,
-    /^AGBM/i,
-    /^AGPIC/i,
-    /^AGARCA/i,
-  ];
+  // Metal accessory prefixes — normalize hyphens/underscores before testing so both
+  // hyphenated (AG-M5-*) and non-hyphenated (AGM5*) formats are detected.
+  const METAL_ACCESSORY_NORMALIZED_PREFIXES = ['AGM5', 'AGBDL', 'AGBM', 'AGPIC', 'AGARCA'];
 
-  const isMetalAccessorySku = (value: string): boolean =>
-    !!value && METAL_ACCESSORY_PREFIX_PATTERNS.some(p => p.test(value.trim()));
+  const isMetalAccessorySku = (value: string): boolean => {
+    if (!value) return false;
+    const normalized = value.trim().toUpperCase().replace(/[-_]/g, '');
+    return METAL_ACCESSORY_NORMALIZED_PREFIXES.some((p) => normalized.startsWith(p));
+  };
 
   // Returns a human-readable display name for known metal accessory SKU patterns.
   // Keeps the raw SKU in parentheses so operators can still identify the exact part.
@@ -6952,8 +6949,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // CENTRALIZED: Use atomic order ID generator instead of inline pattern
           const orderId = await storage.generateNextOrderId();
 
-          const materialCanonical = deriveCanonicalMaterial(stockModelForOrder);
-          const isMetal = isMetalAccessorySku(stockModelForOrder);
+          // Detect metal accessories by checking itemName and itemId independently
+          // before falling back to stockModelId (which may be a fiberglass slug like 'mesa_universal')
+          const isMetal =
+            isMetalAccessorySku(item.itemName || '') ||
+            isMetalAccessorySku(item.itemId || '') ||
+            isMetalAccessorySku(stockModelForOrder);
+
+          const materialCanonical = isMetal ? 'Metal Accessory' : deriveCanonicalMaterial(stockModelForOrder);
 
           // Metal accessories skip manufacturing and ship directly; all others enter P1 queue.
           const initialDepartment = isMetal ? 'Shipping QC' : 'P1 Production Queue';
@@ -7051,7 +7054,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { db } = await import('../../db');
       const { sql } = await import('drizzle-orm');
 
-      const METAL_ACCESSORY_PATTERNS = ['AGM5%', 'AGBDL%', 'AGBM%', 'AGPIC%', 'AGARCA%'];
+      const METAL_ACCESSORY_PATTERNS = [
+        'AGM5%', 'AGBDL%', 'AGBM%', 'AGPIC%', 'AGARCA%',
+        'AG-M5-%', 'AG-BDL-%', 'AG-BM-%', 'AG-PIC-%', 'AG-ARCA-%',
+      ];
 
       const likeConditions = METAL_ACCESSORY_PATTERNS.map(
         (p) => `UPPER(item_id) LIKE '${p}' OR UPPER(item_name) LIKE '${p}'`

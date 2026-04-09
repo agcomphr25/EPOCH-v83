@@ -1083,7 +1083,7 @@ export default function CNCDashboardPage() {
         {/* ── Queue Tab ─────────────────────────────────────────────────────── */}
         {leftTab === 'queue' && <>
         {/* Queue table header — 10 columns */}
-        <div className="grid text-xs font-semibold text-gray-500 bg-gray-50 border-b px-2 py-1.5" style={{ gridTemplateColumns: '8px 95px 65px 32px 55px 40px 44px 52px 36px 60px' }}>
+        <div className="grid text-xs font-semibold text-gray-500 bg-gray-50 border-b px-2 py-1.5" style={{ gridTemplateColumns: '8px 95px 60px 32px 50px 40px 44px 64px 42px 68px' }}>
           <span />
           <span>Work Order / Part</span>
           <span>Part Name</span>
@@ -1107,7 +1107,7 @@ export default function CNCDashboardPage() {
                 <div
                   key={job.id}
                   className={`grid items-center px-2 py-2 cursor-pointer hover:bg-blue-50 transition-colors text-xs ${selectedJobId === job.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''}`}
-                  style={{ gridTemplateColumns: '8px 95px 65px 32px 55px 40px 44px 52px 36px 60px' }}
+                  style={{ gridTemplateColumns: '8px 95px 60px 32px 50px 40px 44px 64px 42px 68px' }}
                   onClick={() => handleSelectJob(job.id)}
                 >
                   <PriorityDot priority={job.priority} />

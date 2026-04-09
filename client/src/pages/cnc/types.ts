@@ -12,6 +12,10 @@ export interface CncMachine {
   maxHeightIn: number | null;
   active: boolean;
   createdAt: string;
+  useDefaultSchedule: boolean;
+  customDaysPerWeek: number | null;
+  customHoursPerDay: number | null;
+  customWeeklyCapacityHours: number | null;
 }
 
 export type CncMachineType = 'Mill' | 'Lathe' | 'Other';
@@ -54,6 +58,31 @@ export interface MachineUtilization {
   activeJobs: number;
   pendingHours: number;
   totalHours: number;
+}
+
+export interface CncScheduleSettings {
+  id: number | null;
+  name: string;
+  scheduleType: 'FOUR_TEN' | 'FIVE_EIGHT' | 'CUSTOM';
+  daysPerWeek: number;
+  hoursPerDay: number;
+  weeklyCapacityHours: number;
+  isDefault: boolean;
+}
+
+export interface MachineLoadSummary {
+  machineId: number;
+  machineName: string;
+  machineType: string | null;
+  axisCapabilities: string[] | null;
+  weeklyCapacityHours: number;
+  scheduledHours: number;
+  remainingHours: number;
+  utilizationPct: number;
+  overloaded: boolean;
+  useDefaultSchedule: boolean;
+  customDaysPerWeek: number | null;
+  customHoursPerDay: number | null;
 }
 
 export interface TravelerInfo {

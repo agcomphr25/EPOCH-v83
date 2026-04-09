@@ -3642,6 +3642,37 @@ async function initializeBackgroundServices() {
         // ── T5: Add preferred_machine column to part_routings ──────────────
         await pool.query(`ALTER TABLE part_routings ADD COLUMN IF NOT EXISTS preferred_machine TEXT`);
 
+        // ── T6: Add missing columns to cnc_machines ─────────────────────────
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS axis_capabilities TEXT[]`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS machine_type TEXT`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS max_length_in REAL`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS max_height_in REAL`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS use_default_schedule BOOLEAN NOT NULL DEFAULT true`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_days_per_week REAL`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_hours_per_day REAL`);
+        await pool.query(`ALTER TABLE cnc_machines ADD COLUMN IF NOT EXISTS custom_weekly_capacity_hours REAL`);
+
+        // ── T7: Ensure cnc_schedule_settings table exists ────────────────────
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS cnc_schedule_settings (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            schedule_type TEXT NOT NULL DEFAULT 'FOUR_TEN',
+            days_per_week REAL NOT NULL DEFAULT 4,
+            hours_per_day REAL NOT NULL DEFAULT 10,
+            weekly_capacity_hours REAL NOT NULL DEFAULT 40,
+            is_default BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        // Seed default schedule if none exists
+        await pool.query(`
+          INSERT INTO cnc_schedule_settings (name, schedule_type, days_per_week, hours_per_day, weekly_capacity_hours, is_default)
+          SELECT '4 Days x 10 Hours', 'FOUR_TEN', 4, 10, 40, true
+          WHERE NOT EXISTS (SELECT 1 FROM cnc_schedule_settings WHERE is_default = true LIMIT 1)
+        `);
+
         console.log('✅ Ensured CNC Dashboard tables exist');
       } catch (cncErr: any) {
         console.warn('⚠️ CNC Dashboard migration skipped:', cncErr?.message);

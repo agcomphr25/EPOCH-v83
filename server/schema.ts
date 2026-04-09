@@ -14515,6 +14515,22 @@ export type InsertOrderActivityEvent = z.infer<typeof insertOrderActivityEventSc
 
 // ─── CNC Dashboard ────────────────────────────────────────────────────────────
 
+export const cncScheduleSettings = pgTable('cnc_schedule_settings', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  scheduleType: text('schedule_type').notNull().default('FOUR_TEN'), // FOUR_TEN | FIVE_EIGHT | CUSTOM
+  daysPerWeek: real('days_per_week').notNull().default(4),
+  hoursPerDay: real('hours_per_day').notNull().default(10),
+  weeklyCapacityHours: real('weekly_capacity_hours').notNull().default(40),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertCncScheduleSettingsSchema = createInsertSchema(cncScheduleSettings).omit({ id: true, createdAt: true, updatedAt: true });
+export type CncScheduleSettings = typeof cncScheduleSettings.$inferSelect;
+export type InsertCncScheduleSettings = z.infer<typeof insertCncScheduleSettingsSchema>;
+
 export const cncMachines = pgTable('cnc_machines', {
   id: serial('id').primaryKey(),
   machineName: text('machine_name').notNull(),
@@ -14527,6 +14543,11 @@ export const cncMachines = pgTable('cnc_machines', {
   maxHeightIn: real('max_height_in'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at').defaultNow(),
+  // Schedule override fields
+  useDefaultSchedule: boolean('use_default_schedule').notNull().default(true),
+  customDaysPerWeek: real('custom_days_per_week'),
+  customHoursPerDay: real('custom_hours_per_day'),
+  customWeeklyCapacityHours: real('custom_weekly_capacity_hours'),
 });
 
 export const insertCncMachineSchema = createInsertSchema(cncMachines).omit({ id: true, createdAt: true });

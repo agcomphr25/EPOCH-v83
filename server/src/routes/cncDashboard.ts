@@ -4,6 +4,7 @@ import { storage } from '../../storage';
 import { pool } from '../../db';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import {
+  insertCncScheduleSettingsSchema,
   insertCncMachineSchema,
   insertCncJobSchema,
   insertCncJobOperationSchema,
@@ -627,6 +628,124 @@ router.delete('/qc-results/:id', async (req, res) => {
     const id = parseInt(req.params.id);
     await storage.deleteCncQcResult(id);
     res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Schedule Settings ─────────────────────────────────────────────────────────
+
+router.get('/schedule-settings', async (req, res) => {
+  try {
+    const settings = await storage.getCncScheduleSettings();
+    if (!settings) {
+      return res.json({
+        id: null, name: '4 Days x 10 Hours', scheduleType: 'FOUR_TEN',
+        daysPerWeek: 4, hoursPerDay: 10, weeklyCapacityHours: 40, isDefault: true,
+      });
+    }
+    res.json(settings);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/schedule-settings', async (req, res) => {
+  try {
+    const data = insertCncScheduleSettingsSchema.parse(req.body);
+    const settings = await storage.upsertCncScheduleSettings(data);
+    res.json(settings);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/schedule-settings', async (req, res) => {
+  try {
+    const data = insertCncScheduleSettingsSchema.partial().parse(req.body);
+    const existing = await storage.getCncScheduleSettings();
+    const merged = {
+      name: existing?.name ?? '4 Days x 10 Hours',
+      scheduleType: existing?.scheduleType ?? 'FOUR_TEN',
+      daysPerWeek: existing?.daysPerWeek ?? 4,
+      hoursPerDay: existing?.hoursPerDay ?? 10,
+      weeklyCapacityHours: existing?.weeklyCapacityHours ?? 40,
+      isDefault: true,
+      ...data,
+    };
+    const settings = await storage.upsertCncScheduleSettings(merged);
+    res.json(settings);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Machine Load ──────────────────────────────────────────────────────────────
+// Returns per-machine load summary based on active/queued job operations
+
+router.get('/machine-load', async (req, res) => {
+  try {
+    // Get default schedule settings
+    const schedSettings = await storage.getCncScheduleSettings();
+    const defaultDays = schedSettings?.daysPerWeek ?? 4;
+    const defaultHours = schedSettings?.hoursPerDay ?? 10;
+    const defaultCapacity = schedSettings?.weeklyCapacityHours ?? (defaultDays * defaultHours);
+
+    // Get all active machines
+    const machines = await storage.getCncMachines();
+    const activeMachines = machines.filter(m => m.active);
+
+    // Sum estimatedSetupMinutes + estimatedCycleMinutes from ops belonging to active/queued jobs
+    // Group by the operation's machine field
+    const loadResult = await pool.query(`
+      SELECT
+        COALESCE(ops.machine, j.machine, '(Unassigned)') AS machine_name,
+        COALESCE(SUM(
+          COALESCE(ops.estimated_setup_minutes, 0) + COALESCE(ops.estimated_cycle_minutes, 0)
+        ), 0) AS total_minutes
+      FROM cnc_jobs j
+      JOIN cnc_job_operations ops ON ops.job_id = j.id
+      WHERE j.status NOT IN ('complete', 'cancelled')
+        AND ops.status NOT IN ('complete')
+      GROUP BY COALESCE(ops.machine, j.machine, '(Unassigned)')
+    `);
+    const loadRows = Array.isArray(loadResult) ? loadResult : (loadResult as any).rows ?? [];
+    const loadByMachine: Record<string, number> = {};
+    for (const row of loadRows) {
+      loadByMachine[row.machine_name] = parseFloat(row.total_minutes) / 60; // convert to hours
+    }
+
+    // Build per-machine summary
+    const summary = activeMachines.map(m => {
+      const effectiveDays = m.useDefaultSchedule ? defaultDays : (m.customDaysPerWeek ?? defaultDays);
+      const effectiveHours = m.useDefaultSchedule ? defaultHours : (m.customHoursPerDay ?? defaultHours);
+      const weeklyCapacityHours = m.useDefaultSchedule
+        ? defaultCapacity
+        : (m.customWeeklyCapacityHours ?? (effectiveDays * effectiveHours));
+      const scheduledHours = loadByMachine[m.machineName] ?? 0;
+      const remainingHours = weeklyCapacityHours - scheduledHours;
+      const utilizationPct = weeklyCapacityHours > 0
+        ? Math.round((scheduledHours / weeklyCapacityHours) * 100)
+        : 0;
+      return {
+        machineId: m.id,
+        machineName: m.machineName,
+        machineType: m.machineType,
+        axisCapabilities: m.axisCapabilities,
+        weeklyCapacityHours,
+        scheduledHours: Math.round(scheduledHours * 100) / 100,
+        remainingHours: Math.round(remainingHours * 100) / 100,
+        utilizationPct,
+        overloaded: utilizationPct > 100,
+        useDefaultSchedule: m.useDefaultSchedule,
+        customDaysPerWeek: m.customDaysPerWeek,
+        customHoursPerDay: m.customHoursPerDay,
+      };
+    });
+
+    res.json(summary);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

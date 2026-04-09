@@ -57,6 +57,7 @@ import {
   p2NonconformingDispositions,
   p2Rmas,
   // CNC Dashboard tables
+  cncScheduleSettings,
   cncJobs,
   cncMachines,
   cncJobOperations,
@@ -524,6 +525,9 @@ import {
   supplySourceDashboardToLegacyDept,
   type ManufacturedCategory,
   // CNC Dashboard types
+  type CncScheduleSettings,
+  type InsertCncScheduleSettings,
+  insertCncScheduleSettingsSchema,
   type CncMachine,
   type InsertCncMachine,
   type CncJob,
@@ -2488,6 +2492,8 @@ export interface IStorage {
   updateP2Rma(id: number, data: Partial<InsertP2Rma & { shippedAt: Date | null; completedAt: Date | null }>): Promise<P2Rma | undefined>;
 
   // CNC Dashboard
+  getCncScheduleSettings(): Promise<CncScheduleSettings | undefined>;
+  upsertCncScheduleSettings(data: InsertCncScheduleSettings): Promise<CncScheduleSettings>;
   getCncMachines(): Promise<CncMachine[]>;
   createCncMachine(data: InsertCncMachine): Promise<CncMachine>;
   updateCncMachine(id: number, data: Partial<InsertCncMachine>): Promise<CncMachine | undefined>;
@@ -21438,6 +21444,27 @@ export class DatabaseStorage implements IStorage {
   async createCncTimeLog(data: InsertCncTimeLog): Promise<CncTimeLog> {
     const [log] = await db.insert(cncTimeLogs).values({ ...data, createdAt: new Date() }).returning();
     return log;
+  }
+
+  async getCncScheduleSettings(): Promise<CncScheduleSettings | undefined> {
+    const [settings] = await db.select().from(cncScheduleSettings).where(eq(cncScheduleSettings.isDefault, true)).limit(1);
+    return settings;
+  }
+
+  async upsertCncScheduleSettings(data: InsertCncScheduleSettings): Promise<CncScheduleSettings> {
+    const existing = await this.getCncScheduleSettings();
+    if (existing) {
+      const [updated] = await db.update(cncScheduleSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(cncScheduleSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(cncScheduleSettings)
+        .values({ ...data, isDefault: true, createdAt: new Date(), updatedAt: new Date() })
+        .returning();
+      return created;
+    }
   }
 
   async getCncMachines(): Promise<CncMachine[]> {

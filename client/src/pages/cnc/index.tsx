@@ -20,15 +20,17 @@ import {
   Plus, Play, Square, CheckCircle, Camera, ClipboardList,
   Settings, User, Flag, Trash2, Edit2, Save, X,
   Lightbulb, ArrowRight, ChevronRight, Link as LinkIcon, PauseCircle, BookOpen,
+  ChevronDown, AlertTriangle, Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type {
-  CncMachine, MachineUtilization, TravelerInfo,
+  CncMachine, TravelerInfo,
   CncJob, CncJobOperation, CncProgram, CncToolList, CncSetupPhoto,
   CncQcCheckpoint, CncQcResult, CncTimeLog, WorkOrderSearchResult,
   CreateJobPayload, UpdateJobPayload, CreateOperationPayload, UpdateOperationPayload,
   CreateToolPayload, CreateProgramPayload, CreatePhotoPayload,
   CreateCheckpointPayload, CreateQcResultPayload, CreateTimeLogPayload,
+  CncScheduleSettings, MachineLoadSummary,
 } from './types';
 import { extractErrorMessage as getErrMsg, CNC_MACHINE_TYPES } from './types';
 
@@ -239,6 +241,14 @@ export default function CNCDashboardPage() {
   // ── Left panel tab ─────────────────────────────────────────────────────────
   const [leftTab, setLeftTab] = useState<'queue' | 'machines'>('queue');
 
+  // ── Schedule settings panel state ──────────────────────────────────────────
+  const [schedPanelOpen, setSchedPanelOpen] = useState(false);
+  const [schedForm, setSchedForm] = useState<{ scheduleType: string; daysPerWeek: string; hoursPerDay: string }>({ scheduleType: 'FOUR_TEN', daysPerWeek: '4', hoursPerDay: '10' });
+
+  // ── Machine override expand state ───────────────────────────────────────────
+  const [overrideMachineId, setOverrideMachineId] = useState<number | null>(null);
+  const [overrideForm, setOverrideForm] = useState<{ daysPerWeek: string; hoursPerDay: string }>({ daysPerWeek: '4', hoursPerDay: '8' });
+
   // ── Machine CRUD dialog state ──────────────────────────────────────────────
   const [machineDialogOpen, setMachineDialogOpen] = useState(false);
   const [machineDialogMachine, setMachineDialogMachine] = useState<CncMachine | null>(null);
@@ -315,10 +325,27 @@ export default function CNCDashboardPage() {
 
   const activeMachines = useMemo(() => machines.filter(m => m.active), [machines]);
 
-  const { data: machineUtilization = [] } = useQuery<MachineUtilization[]>({
-    queryKey: ['/api/cnc/machine-utilization'],
+  const { data: scheduleSettings } = useQuery<CncScheduleSettings>({
+    queryKey: ['/api/cnc/schedule-settings'],
     enabled: leftTab === 'machines',
   });
+
+  const { data: machineLoad = [], isLoading: machineLoadLoading } = useQuery<MachineLoadSummary[]>({
+    queryKey: ['/api/cnc/machine-load'],
+    enabled: leftTab === 'machines',
+  });
+
+  // ── Sync schedForm when scheduleSettings loads ─────────────────────────────
+  useEffect(() => {
+    if (scheduleSettings) {
+      setSchedForm({
+        scheduleType: scheduleSettings.scheduleType,
+        daysPerWeek: String(scheduleSettings.daysPerWeek),
+        hoursPerDay: String(scheduleSettings.hoursPerDay),
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleSettings?.scheduleType, scheduleSettings?.daysPerWeek, scheduleSettings?.hoursPerDay]);
 
   // ── selectedJob must be derived BEFORE travelerInfo query to avoid TDZ ────
   const selectedJob = useMemo(() => jobs.find(j => j.id === selectedJobId) ?? null, [jobs, selectedJobId]);
@@ -371,6 +398,27 @@ export default function CNCDashboardPage() {
   function invalidateQcResults() { queryClient.invalidateQueries({ queryKey: ['/api/cnc/operations', selectedOpId, 'qc-results'] }); }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const saveScheduleSettings = useMutation<CncScheduleSettings, unknown, Record<string, unknown>>({
+    mutationFn: (data) => apiRequest('/api/cnc/schedule-settings', { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cnc/schedule-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cnc/machine-load'] });
+      toast({ title: 'Schedule settings saved' });
+    },
+    onError: showErr,
+  });
+
+  const saveMachineOverride = useMutation<CncMachine, unknown, { id: number; data: Record<string, unknown> }>({
+    mutationFn: ({ id, data }) => apiRequest(`/api/cnc/machines/${id}`, { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cnc/machines'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cnc/machine-load'] });
+      setOverrideMachineId(null);
+      toast({ title: 'Machine schedule updated' });
+    },
+    onError: showErr,
+  });
 
   const saveMachine = useMutation<CncMachine, unknown, { id?: number; data: Record<string, unknown> }>({
     mutationFn: ({ id, data }) => id
@@ -824,36 +872,182 @@ export default function CNCDashboardPage() {
         {leftTab === 'machines' && (
           <ScrollArea className="flex-1">
             <div className="p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 font-medium">Machine load — active (non-complete) CNC jobs</p>
-              </div>
-              <div className="space-y-1">
-                <div className="grid text-[10px] font-semibold text-gray-400 px-2 py-1" style={{ gridTemplateColumns: '1fr 60px 60px 70px 70px' }}>
-                  <span>Machine</span><span className="text-center">Active</span><span className="text-center">Total</span><span className="text-center">Pending Hrs</span><span className="text-center">Utilization</span>
-                </div>
-                {machineUtilization.length === 0 ? (
-                  <div className="text-center text-xs text-gray-400 py-6">No job data yet</div>
-                ) : machineUtilization.map(m => {
-                  const maxHrs = Math.max(...machineUtilization.map(x => x.pendingHours), 1);
-                  const pct = Math.min(100, Math.round((m.pendingHours / maxHrs) * 100));
-                  return (
-                    <div key={m.machine} className="grid items-center bg-white border rounded px-2 py-1.5 text-xs" style={{ gridTemplateColumns: '1fr 60px 60px 70px 70px' }}>
-                      <div>
-                        <p className="font-medium text-gray-800 truncate">{m.machine}</p>
-                      </div>
-                      <span className={`text-center font-semibold ${m.activeJobs > 0 ? 'text-blue-600' : 'text-gray-400'}`}>{m.activeJobs}</span>
-                      <span className="text-center text-gray-500">{m.totalJobs}</span>
-                      <span className="text-center text-gray-600">{m.pendingHours.toFixed(1)}h</span>
-                      <div className="flex items-center gap-1">
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-2 rounded-full ${pct > 75 ? 'bg-red-400' : pct > 40 ? 'bg-amber-400' : 'bg-green-400'}`} style={{ width: `${pct}%` }} />
+
+              {/* ── CNC Capacity Schedule panel ─────────────────────────────── */}
+              <div className="border rounded bg-white">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setSchedPanelOpen(o => !o)}
+                >
+                  <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-500" />CNC Capacity Schedule</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${schedPanelOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {schedPanelOpen && (
+                  <div className="px-3 pb-3 space-y-2 border-t pt-2">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['FOUR_TEN', 'FIVE_EIGHT', 'CUSTOM'] as const).map(type => {
+                        const label = type === 'FOUR_TEN' ? '4×10 hrs' : type === 'FIVE_EIGHT' ? '5×8 hrs' : 'Custom';
+                        return (
+                          <button
+                            key={type}
+                            className={`text-[10px] py-1.5 rounded border font-medium transition-colors ${schedForm.scheduleType === type ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}
+                            onClick={() => {
+                              const defaults: Record<string, { d: string; h: string }> = { FOUR_TEN: { d: '4', h: '10' }, FIVE_EIGHT: { d: '5', h: '8' }, CUSTOM: { d: schedForm.daysPerWeek, h: schedForm.hoursPerDay } };
+                              const def = defaults[type];
+                              setSchedForm({ scheduleType: type, daysPerWeek: def.d, hoursPerDay: def.h });
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {schedForm.scheduleType === 'CUSTOM' && (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <Label className="text-[10px] text-gray-500 mb-0.5 block">Days/Week</Label>
+                          <Input type="number" min="1" max="7" step="0.5" value={schedForm.daysPerWeek} onChange={e => setSchedForm(f => ({ ...f, daysPerWeek: e.target.value }))} className="h-7 text-xs" />
                         </div>
-                        <span className="text-[10px] text-gray-400 w-7 text-right">{pct}%</span>
+                        <div>
+                          <Label className="text-[10px] text-gray-500 mb-0.5 block">Hrs/Day</Label>
+                          <Input type="number" min="1" max="24" step="0.5" value={schedForm.hoursPerDay} onChange={e => setSchedForm(f => ({ ...f, hoursPerDay: e.target.value }))} className="h-7 text-xs" />
+                        </div>
                       </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-gray-500">
+                        Weekly capacity: <span className="font-semibold text-gray-800">{(parseFloat(schedForm.daysPerWeek) * parseFloat(schedForm.hoursPerDay)).toFixed(0)} hrs</span>
+                      </p>
+                      <Button size="sm" className="h-6 text-[10px] px-3" disabled={saveScheduleSettings.isPending} onClick={() => {
+                        const days = parseFloat(schedForm.daysPerWeek);
+                        const hours = parseFloat(schedForm.hoursPerDay);
+                        if (isNaN(days) || days <= 0 || isNaN(hours) || hours <= 0) {
+                          toast({ title: 'Invalid input', description: 'Days and hours must be positive numbers.', variant: 'destructive' });
+                          return;
+                        }
+                        const nameMap: Record<string, string> = { FOUR_TEN: '4 Days x 10 Hours', FIVE_EIGHT: '5 Days x 8 Hours', CUSTOM: `${days}×${hours} (Custom)` };
+                        saveScheduleSettings.mutate({
+                          scheduleType: schedForm.scheduleType,
+                          daysPerWeek: days,
+                          hoursPerDay: hours,
+                          weeklyCapacityHours: days * hours,
+                          name: nameMap[schedForm.scheduleType] ?? 'Custom',
+                          isDefault: true,
+                        });
+                      }}>
+                        <Save className="w-3 h-3 mr-1" />Save
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Machine Load Board ──────────────────────────────────────── */}
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-gray-600">Machine Load Board</p>
+                <div className="grid text-[10px] font-semibold text-gray-400 px-2 py-1" style={{ gridTemplateColumns: '1fr 50px 52px 52px 52px 64px 56px' }}>
+                  <span>Machine</span>
+                  <span className="text-center">Axis</span>
+                  <span className="text-center">Capacity</span>
+                  <span className="text-center">Sched.</span>
+                  <span className="text-center">Remain.</span>
+                  <span className="text-center">Utilization</span>
+                  <span className="text-center">Status</span>
+                </div>
+                {machineLoadLoading ? (
+                  <div className="text-center text-xs text-gray-400 py-4">Loading...</div>
+                ) : machineLoad.length === 0 ? (
+                  <div className="text-center text-xs text-gray-400 py-4">No active machines</div>
+                ) : machineLoad.map(m => {
+                  const utilPct = Math.min(m.utilizationPct, 100);
+                  const barColor = m.overloaded ? 'bg-red-500' : m.utilizationPct > 75 ? 'bg-amber-400' : 'bg-green-400';
+                  const isExpanded = overrideMachineId === m.machineId;
+                  const axisLabel = m.axisCapabilities && m.axisCapabilities.length > 0 ? m.axisCapabilities.join(', ') : '—';
+                  return (
+                    <div key={m.machineId} className={`bg-white border rounded text-xs ${m.overloaded ? 'border-red-200' : ''}`}>
+                      <div className="grid items-center px-2 py-1.5" style={{ gridTemplateColumns: '1fr 50px 52px 52px 52px 64px 56px' }}>
+                        <div className="min-w-0 pr-1">
+                          <p className="font-medium text-gray-800 truncate">{m.machineName}</p>
+                          {m.machineType && <p className="text-[10px] text-gray-400">{m.machineType}</p>}
+                        </div>
+                        <span className="text-center text-[10px] text-gray-500 truncate">{axisLabel}</span>
+                        <span className="text-center text-gray-600">{m.weeklyCapacityHours.toFixed(0)}h</span>
+                        <span className="text-center text-gray-600">{m.scheduledHours.toFixed(1)}h</span>
+                        <span className={`text-center font-medium ${m.remainingHours < 0 ? 'text-red-600' : 'text-gray-700'}`}>{m.remainingHours.toFixed(1)}h</span>
+                        <div className="px-1">
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${utilPct}%` }} />
+                          </div>
+                          <p className={`text-[10px] text-center mt-0.5 font-medium ${m.overloaded ? 'text-red-600' : 'text-gray-500'}`}>{m.utilizationPct}%</p>
+                        </div>
+                        <div className="text-center">
+                          {m.overloaded ? (
+                            <span className="inline-flex items-center gap-0.5 bg-red-100 text-red-700 text-[9px] font-bold px-1 py-0.5 rounded"><AlertTriangle className="w-2.5 h-2.5" />OVER</span>
+                          ) : (
+                            <span className="inline-block bg-green-100 text-green-700 text-[9px] font-bold px-1.5 py-0.5 rounded">OK</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Override schedule toggle */}
+                      <div className="border-t px-2 py-1 flex items-center justify-between bg-gray-50 rounded-b">
+                        <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                          {m.useDefaultSchedule ? 'Using dept. default' : `Custom: ${m.customDaysPerWeek}d × ${m.customHoursPerDay}h`}
+                        </span>
+                        <button
+                          className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
+                          onClick={() => {
+                            if (isExpanded) {
+                              setOverrideMachineId(null);
+                            } else {
+                              setOverrideMachineId(m.machineId);
+                              setOverrideForm({
+                                daysPerWeek: String(m.customDaysPerWeek ?? scheduleSettings?.daysPerWeek ?? 4),
+                                hoursPerDay: String(m.customHoursPerDay ?? scheduleSettings?.hoursPerDay ?? 10),
+                              });
+                            }
+                          }}
+                        >
+                          Override Schedule <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="px-2 pb-2 pt-1 space-y-1.5 border-t bg-blue-50 rounded-b">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <Label className="text-[10px] text-gray-500 mb-0.5 block">Days/Week</Label>
+                              <Input type="number" min="1" max="7" step="0.5" value={overrideForm.daysPerWeek} onChange={e => setOverrideForm(f => ({ ...f, daysPerWeek: e.target.value }))} className="h-6 text-xs" />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-gray-500 mb-0.5 block">Hrs/Day</Label>
+                              <Input type="number" min="1" max="24" step="0.5" value={overrideForm.hoursPerDay} onChange={e => setOverrideForm(f => ({ ...f, hoursPerDay: e.target.value }))} className="h-6 text-xs" />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-gray-500">Weekly: <b>{(parseFloat(overrideForm.daysPerWeek) * parseFloat(overrideForm.hoursPerDay)).toFixed(0)} hrs</b></p>
+                          <div className="flex gap-1">
+                            <Button size="sm" className="h-6 text-[10px] flex-1" disabled={saveMachineOverride.isPending} onClick={() => {
+                              const d = parseFloat(overrideForm.daysPerWeek);
+                              const h = parseFloat(overrideForm.hoursPerDay);
+                              if (isNaN(d) || d <= 0 || isNaN(h) || h <= 0) {
+                                toast({ title: 'Invalid input', description: 'Days and hours must be positive numbers.', variant: 'destructive' });
+                                return;
+                              }
+                              saveMachineOverride.mutate({ id: m.machineId, data: { useDefaultSchedule: false, customDaysPerWeek: d, customHoursPerDay: h, customWeeklyCapacityHours: d * h } });
+                            }}>
+                              <Save className="w-3 h-3 mr-1" />Save Override
+                            </Button>
+                            {!m.useDefaultSchedule && (
+                              <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={saveMachineOverride.isPending} onClick={() => saveMachineOverride.mutate({ id: m.machineId, data: { useDefaultSchedule: true, customDaysPerWeek: null, customHoursPerDay: null, customWeeklyCapacityHours: null } })}>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
+
               <Separator />
               <div className="space-y-1">
                 <div className="flex items-center justify-between">

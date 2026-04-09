@@ -527,6 +527,17 @@ const InventoryForm = ({
           />
         </div>
         <div>
+          <Label htmlFor="source">Source</Label>
+          <Input
+            id="source"
+            name="source"
+            value={formData.source}
+            onChange={onChange}
+            placeholder="Enter source"
+            data-testid="input-source"
+          />
+        </div>
+        <div>
           <Label htmlFor="secondarySource">Secondary Source</Label>
           <Input
             id="secondarySource"

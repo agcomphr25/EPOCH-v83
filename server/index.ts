@@ -1579,6 +1579,15 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ inventory_items classification columns migration:', invClassErr.message);
       }
 
+      // Ensure inventory_items has machine_type column (for Machined Part category)
+      try {
+        const { sql: sqlMachineType } = await import('drizzle-orm');
+        await db.execute(sqlMachineType`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS machine_type TEXT`);
+        console.log('✅ Ensured inventory_items has machine_type column');
+      } catch (machineTypeErr: any) {
+        console.warn('⚠️ machine_type migration:', machineTypeErr.message);
+      }
+
       try {
         const { sql: sqlMfgQ } = await import('drizzle-orm');
         await db.execute(sqlMfgQ`ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS parent_production_order_id TEXT`);

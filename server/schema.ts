@@ -677,6 +677,8 @@ export const inventoryItems = pgTable('inventory_items', {
   manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY
   // Manufactured items only — production level independent of category
   manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
+  // Machined parts only — type of machine required to produce the part
+  machineType: text('machine_type'), // CNC Mill 3rd Axis | CNC Mill 4th Axis | Lathe
   // Required receiving documents — enforced on acceptance in Receiving Control Center
   requiresSds: boolean('requires_sds').notNull().default(false),
   requiresTds: boolean('requires_tds').notNull().default(false),
@@ -2204,6 +2206,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
     manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
+    machineType: z.enum(['CNC Mill 3rd Axis', 'CNC Mill 4th Axis', 'Lathe']).optional().nullable(),
   });
 
 export const insertInventoryScanSchema = createInsertSchema(inventoryScans)

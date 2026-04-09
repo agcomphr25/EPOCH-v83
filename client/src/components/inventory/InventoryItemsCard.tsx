@@ -81,6 +81,7 @@ interface InventoryFormData {
   manufacturedCategory: string;
   manufacturingLevel: string;
   manufacturingDepartment: string;
+  machineType: string;
   source: string;
   vendorId: string;
   supplierPartNumber: string;
@@ -295,6 +296,7 @@ const InventoryForm = ({
               if (value === 'PURCHASED') {
                 onSelectChange('manufacturedCategory', '');
                 onSelectChange('manufacturingLevel', '');
+                onSelectChange('machineType', '');
               }
             }}
           >
@@ -313,7 +315,12 @@ const InventoryForm = ({
               <Label htmlFor="manufacturedCategory">Category *</Label>
               <Select
                 value={formData.manufacturedCategory || ''}
-                onValueChange={(value) => onSelectChange('manufacturedCategory', value)}
+                onValueChange={(value) => {
+                  onSelectChange('manufacturedCategory', value);
+                  if (value !== 'MACHINED_PART') {
+                    onSelectChange('machineType', '');
+                  }
+                }}
               >
                 <SelectTrigger data-testid="select-manufacturedCategory">
                   <SelectValue placeholder="Select category" />
@@ -330,6 +337,25 @@ const InventoryForm = ({
                 </SelectContent>
               </Select>
             </div>
+            {formData.manufacturedCategory === 'MACHINED_PART' && (
+              <div>
+                <Label htmlFor="machineType">Machine Type</Label>
+                <Select
+                  value={formData.machineType || ''}
+                  onValueChange={(value) => onSelectChange('machineType', value === '_none' ? '' : value)}
+                >
+                  <SelectTrigger data-testid="select-machineType">
+                    <SelectValue placeholder="Select machine type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">None / Not specified</SelectItem>
+                    <SelectItem value="CNC Mill 3rd Axis">CNC Mill 3rd Axis</SelectItem>
+                    <SelectItem value="CNC Mill 4th Axis">CNC Mill 4th Axis</SelectItem>
+                    <SelectItem value="Lathe">Lathe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label htmlFor="manufacturingLevel">Manufacturing Level</Label>
               <Select
@@ -1073,6 +1099,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     manufacturedCategory: '',
     manufacturingLevel: '',
     manufacturingDepartment: '',
+    machineType: '',
     source: '',
     vendorId: 'none',
     supplierPartNumber: '',
@@ -1686,6 +1713,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       manufacturedCategory: '',
       manufacturingLevel: '',
       manufacturingDepartment: '',
+      machineType: '',
       source: '',
       vendorId: 'none',
       supplierPartNumber: '',
@@ -1869,6 +1897,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         hasOtherDocs: formData.hasOtherDocs,
         assignedToAsset: formData.assignedToAsset || null,
         defaultOrderMethod: formData.defaultOrderMethod || null,
+        machineType: formData.manufacturedCategory === 'MACHINED_PART' && formData.machineType
+          ? formData.machineType
+          : null,
       };
 
       if (editingItem) {
@@ -1892,6 +1923,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       manufacturedCategory: item.manufacturedCategory || (item.isPacket ? 'PACKET' : ''),
       manufacturingLevel: item.manufacturingLevel || '',
       manufacturingDepartment: item.manufacturingDepartment || '',
+      machineType: item.machineType || '',
       source: item.source || '',
       vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',

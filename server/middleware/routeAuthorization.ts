@@ -121,6 +121,8 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
   joeyb: {
     routes: [
       '/department-queue/cnc',
+      '/cnc-dashboard',
+      '/cnc-part-routings',
       '/department-queue/gunsmith',
       '/cutting-control-center',
       '/orders-list',
@@ -132,6 +134,8 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
   johnl: {
     routes: [
       '/department-queue/cnc',
+      '/cnc-dashboard',
+      '/cnc-part-routings',
       '/orders-list',
       '/orders-management',
       '/employee-portal',
@@ -178,6 +182,8 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
   tims: {
     routes: [
       '/department-queue/cnc',
+      '/cnc-dashboard',
+      '/cnc-part-routings',
       '/department-queue/finish-qc',
       '/orders-list',
       '/orders-management',
@@ -259,6 +265,7 @@ const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
   '/api/analytics': ['/analytics'],
   '/api/gateway-reports': ['/gateway-reports'],
   '/api/reports': ['/finish-qc-completed-report'],
+  '/api/cnc': ['/cnc-dashboard', '/cnc-part-routings', '/department-queue/cnc'],
 };
 
 function normalizeRoute(route: string): string {

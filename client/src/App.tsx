@@ -203,6 +203,7 @@ import BarcodeQueuePage from './pages/BarcodeQueuePage';
 import BulkBarcodeReprint from './pages/BulkBarcodeReprint';
 import CNCQueuePage from './pages/CNCQueuePage';
 import CNCDashboardPage from './pages/CNCDashboardPage';
+import CNCPartRoutingsPage from './pages/CNCPartRoutingsPage';
 import FinishQCQueuePage from './pages/FinishQCQueuePage';
 import FinishQueuePage from './pages/FinishQueuePage';
 import FinishQCPage from './pages/FinishQCPage';
@@ -1086,6 +1087,7 @@ function App() {
                     component={CNCQueuePage}
                   />
                   <Route path="/cnc-dashboard" component={CNCDashboardPage} />
+                  <Route path="/cnc-part-routings" component={CNCPartRoutingsPage} />
                   <Route
                     path="/department-queue/finish"
                     component={FinishQueuePage}

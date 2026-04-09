@@ -66,6 +66,8 @@ import {
   cncQcCheckpoints,
   cncQcResults,
   cncTimeLogs,
+  machinedPartRoutings,
+  machinedPartRoutingOps,
   partRoutings,
   routingOperations,
   routingCncOperations,
@@ -540,6 +542,10 @@ import {
   type InsertCncQcResult,
   type CncTimeLog,
   type InsertCncTimeLog,
+  type MachinedPartRouting,
+  type InsertMachinedPartRouting,
+  type MachinedPartRoutingOp,
+  type InsertMachinedPartRoutingOp,
   orderActivityEvents,
   type InsertOrderActivityEvent,
   type RoutingOperation,
@@ -2518,6 +2524,18 @@ export interface IStorage {
   deleteCncQcResult(id: number): Promise<void>;
   getCncTimeLogs(operationId: number): Promise<CncTimeLog[]>;
   createCncTimeLog(data: InsertCncTimeLog): Promise<CncTimeLog>;
+  // Machined Part Routings
+  getMachinedPartRoutings(inventoryItemId?: string): Promise<MachinedPartRouting[]>;
+  getMachinedPartRoutingById(id: number): Promise<MachinedPartRouting | undefined>;
+  createMachinedPartRouting(data: InsertMachinedPartRouting): Promise<MachinedPartRouting>;
+  updateMachinedPartRouting(id: number, data: Partial<InsertMachinedPartRouting>): Promise<MachinedPartRouting | undefined>;
+  deleteMachinedPartRouting(id: number): Promise<void>;
+  getMachinedPartRoutingOps(routingId: number): Promise<MachinedPartRoutingOp[]>;
+  getMachinedPartRoutingOpById(id: number): Promise<MachinedPartRoutingOp | undefined>;
+  createMachinedPartRoutingOp(data: InsertMachinedPartRoutingOp): Promise<MachinedPartRoutingOp>;
+  updateMachinedPartRoutingOp(id: number, data: Partial<InsertMachinedPartRoutingOp>): Promise<MachinedPartRoutingOp | undefined>;
+  deleteMachinedPartRoutingOp(id: number): Promise<void>;
+  reorderMachinedPartRoutingOps(updates: { id: number; sortOrder: number }[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -21422,6 +21440,70 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCncMachine(id: number): Promise<void> {
     await db.delete(cncMachines).where(eq(cncMachines.id, id));
+  }
+
+  // ── Machined Part Routings ───────────────────────────────────────────────────
+
+  async getMachinedPartRoutings(inventoryItemId?: string): Promise<MachinedPartRouting[]> {
+    if (inventoryItemId) {
+      return db.select().from(machinedPartRoutings)
+        .where(eq(machinedPartRoutings.inventoryItemId, inventoryItemId))
+        .orderBy(asc(machinedPartRoutings.routingName));
+    }
+    return db.select().from(machinedPartRoutings).orderBy(asc(machinedPartRoutings.routingName));
+  }
+
+  async getMachinedPartRoutingById(id: number): Promise<MachinedPartRouting | undefined> {
+    const [routing] = await db.select().from(machinedPartRoutings).where(eq(machinedPartRoutings.id, id));
+    return routing;
+  }
+
+  async createMachinedPartRouting(data: InsertMachinedPartRouting): Promise<MachinedPartRouting> {
+    const [routing] = await db.insert(machinedPartRoutings).values({ ...data, createdAt: new Date(), updatedAt: new Date() }).returning();
+    return routing;
+  }
+
+  async updateMachinedPartRouting(id: number, data: Partial<InsertMachinedPartRouting>): Promise<MachinedPartRouting | undefined> {
+    const [routing] = await db.update(machinedPartRoutings).set({ ...data, updatedAt: new Date() }).where(eq(machinedPartRoutings.id, id)).returning();
+    return routing;
+  }
+
+  async deleteMachinedPartRouting(id: number): Promise<void> {
+    await db.delete(machinedPartRoutingOps).where(eq(machinedPartRoutingOps.routingId, id));
+    await db.delete(machinedPartRoutings).where(eq(machinedPartRoutings.id, id));
+  }
+
+  async getMachinedPartRoutingOps(routingId: number): Promise<MachinedPartRoutingOp[]> {
+    return db.select().from(machinedPartRoutingOps)
+      .where(eq(machinedPartRoutingOps.routingId, routingId))
+      .orderBy(asc(machinedPartRoutingOps.sortOrder), asc(machinedPartRoutingOps.opNumber));
+  }
+
+  async getMachinedPartRoutingOpById(id: number): Promise<MachinedPartRoutingOp | undefined> {
+    const [op] = await db.select().from(machinedPartRoutingOps).where(eq(machinedPartRoutingOps.id, id));
+    return op;
+  }
+
+  async createMachinedPartRoutingOp(data: InsertMachinedPartRoutingOp): Promise<MachinedPartRoutingOp> {
+    const [op] = await db.insert(machinedPartRoutingOps).values({ ...data, createdAt: new Date() }).returning();
+    return op;
+  }
+
+  async updateMachinedPartRoutingOp(id: number, data: Partial<InsertMachinedPartRoutingOp>): Promise<MachinedPartRoutingOp | undefined> {
+    const [op] = await db.update(machinedPartRoutingOps).set(data).where(eq(machinedPartRoutingOps.id, id)).returning();
+    return op;
+  }
+
+  async deleteMachinedPartRoutingOp(id: number): Promise<void> {
+    await db.delete(machinedPartRoutingOps).where(eq(machinedPartRoutingOps.id, id));
+  }
+
+  async reorderMachinedPartRoutingOps(updates: { id: number; sortOrder: number }[]): Promise<void> {
+    for (const { id, sortOrder } of updates) {
+      await db.update(machinedPartRoutingOps)
+        .set({ sortOrder })
+        .where(eq(machinedPartRoutingOps.id, id));
+    }
   }
 }
 

@@ -6,7 +6,45 @@ export interface CncMachine {
   machineNumber: string | null;
   workCenter: string | null;
   capabilities: unknown | null;
+  axisCapabilities: string[] | null;
+  machineType: string | null;
+  maxLengthIn: number | null;
+  maxHeightIn: number | null;
   active: boolean;
+  createdAt: string;
+}
+
+export type CncMachineType = 'Mill' | 'Lathe' | 'Turn-Mill' | 'Router' | 'Waterjet' | 'Laser' | 'EDM' | 'Plasma' | 'Other';
+export const CNC_MACHINE_TYPES: CncMachineType[] = ['Mill', 'Lathe', 'Turn-Mill', 'Router', 'Waterjet', 'Laser', 'EDM', 'Plasma', 'Other'];
+export const CNC_AXIS_OPTIONS = ['3-Axis', '4-Axis', '5-Axis', 'Lathe', 'Turn-Mill', 'Router'] as const;
+
+export interface MachinedPartRouting {
+  id: number;
+  inventoryItemId: string;
+  routingName: string;
+  partNumber: string | null;
+  partName: string | null;
+  notes: string | null;
+  createdByDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MachinedPartRoutingOp {
+  id: number;
+  routingId: number;
+  opNumber: number;
+  opName: string;
+  machineType: string | null;
+  preferredMachineId: number | null;
+  programNames: string[];
+  toolList: { toolNumber: string; pocket: string; description: string; diameter: string; offsetNotes: string }[];
+  fixtureInstructions: string | null;
+  workOriginNotes: string | null;
+  qcTolerances: { characteristic: string; nominal: string; tolerance: string; method: string }[];
+  referencePhotoLinks: { url: string; caption: string }[];
+  tips: string | null;
+  sortOrder: number;
   createdAt: string;
 }
 

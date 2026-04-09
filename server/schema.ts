@@ -14518,6 +14518,10 @@ export const cncMachines = pgTable('cnc_machines', {
   machineNumber: text('machine_number'),
   workCenter: text('work_center'),
   capabilities: jsonb('capabilities'),
+  axisCapabilities: text('axis_capabilities').array(),
+  machineType: text('machine_type'),
+  maxLengthIn: real('max_length_in'),
+  maxHeightIn: real('max_height_in'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -14525,6 +14529,46 @@ export const cncMachines = pgTable('cnc_machines', {
 export const insertCncMachineSchema = createInsertSchema(cncMachines).omit({ id: true, createdAt: true });
 export type CncMachine = typeof cncMachines.$inferSelect;
 export type InsertCncMachine = z.infer<typeof insertCncMachineSchema>;
+
+// ── Machined Part Routing Tables ──────────────────────────────────────────────
+
+export const machinedPartRoutings = pgTable('machined_part_routings', {
+  id: serial('id').primaryKey(),
+  inventoryItemId: text('inventory_item_id').notNull(),
+  routingName: text('routing_name').notNull(),
+  partNumber: text('part_number'),
+  partName: text('part_name'),
+  notes: text('notes'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertMachinedPartRoutingSchema = createInsertSchema(machinedPartRoutings).omit({ id: true, createdAt: true, updatedAt: true });
+export type MachinedPartRouting = typeof machinedPartRoutings.$inferSelect;
+export type InsertMachinedPartRouting = z.infer<typeof insertMachinedPartRoutingSchema>;
+
+export const machinedPartRoutingOps = pgTable('machined_part_routing_ops', {
+  id: serial('id').primaryKey(),
+  routingId: integer('routing_id').references(() => machinedPartRoutings.id).notNull(),
+  opNumber: integer('op_number').notNull(),
+  opName: text('op_name').notNull(),
+  machineType: text('machine_type'),
+  preferredMachineId: integer('preferred_machine_id'),
+  programNames: jsonb('program_names').$type<string[]>().default([]),
+  toolList: jsonb('tool_list').$type<{ toolNumber: string; pocket: string; description: string; diameter: string; offsetNotes: string }[]>().default([]),
+  fixtureInstructions: text('fixture_instructions'),
+  workOriginNotes: text('work_origin_notes'),
+  qcTolerances: jsonb('qc_tolerances').$type<{ characteristic: string; nominal: string; tolerance: string; method: string }[]>().default([]),
+  referencePhotoLinks: jsonb('reference_photo_links').$type<{ url: string; caption: string }[]>().default([]),
+  tips: text('tips'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertMachinedPartRoutingOpSchema = createInsertSchema(machinedPartRoutingOps).omit({ id: true, createdAt: true });
+export type MachinedPartRoutingOp = typeof machinedPartRoutingOps.$inferSelect;
+export type InsertMachinedPartRoutingOp = z.infer<typeof insertMachinedPartRoutingOpSchema>;
 
 export const cncJobs = pgTable('cnc_jobs', {
   id: serial('id').primaryKey(),

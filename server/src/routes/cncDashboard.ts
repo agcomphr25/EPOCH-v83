@@ -13,6 +13,8 @@ import {
   insertCncQcCheckpointSchema,
   insertCncQcResultSchema,
   insertCncTimeLogSchema,
+  insertMachinedPartRoutingSchema,
+  insertMachinedPartRoutingOpSchema,
 } from '../../schema';
 
 const router = Router();
@@ -826,6 +828,143 @@ router.post('/sync-from-travelers', async (req, res) => {
     }
 
     res.json({ created: created.length, jobs: created });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Machined Part Routings ────────────────────────────────────────────────────
+
+router.get('/machined-part-routings', async (req, res) => {
+  try {
+    const inventoryItemId = req.query.inventoryItemId as string | undefined;
+    const routings = await storage.getMachinedPartRoutings(inventoryItemId);
+    res.json(routings);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/machined-part-routings/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const routing = await storage.getMachinedPartRoutingById(id);
+    if (!routing) return res.status(404).json({ error: 'Routing not found' });
+    res.json(routing);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/machined-part-routings', async (req, res) => {
+  try {
+    const data = insertMachinedPartRoutingSchema.parse(req.body);
+    if (!data.inventoryItemId || !data.inventoryItemId.trim()) {
+      return res.status(400).json({ error: 'inventoryItemId is required and must not be empty' });
+    }
+    const enriched = {
+      ...data,
+      inventoryItemId: data.inventoryItemId.trim(),
+      createdByDisplayName: req.user ? req.user.username : null,
+    };
+    const routing = await storage.createMachinedPartRouting(enriched);
+    res.status(201).json(routing);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/machined-part-routings/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const data = insertMachinedPartRoutingSchema.partial().parse(req.body);
+    const routing = await storage.updateMachinedPartRouting(id, data);
+    if (!routing) return res.status(404).json({ error: 'Routing not found' });
+    res.json(routing);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/machined-part-routings/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await storage.deleteMachinedPartRouting(id);
+    res.status(204).end();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Machined Part Routing Operations ─────────────────────────────────────────
+
+router.get('/machined-part-routings/:routingId/ops', async (req, res) => {
+  try {
+    const routingId = parseInt(req.params.routingId);
+    const ops = await storage.getMachinedPartRoutingOps(routingId);
+    res.json(ops);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/machined-part-routings/:routingId/ops', async (req, res) => {
+  try {
+    const routingId = parseInt(req.params.routingId);
+    const data = insertMachinedPartRoutingOpSchema.parse({ ...req.body, routingId });
+    const op = await storage.createMachinedPartRoutingOp(data);
+    res.status(201).json(op);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/machined-part-routings/:routingId/ops/reorder', async (req, res) => {
+  try {
+    const routingId = parseInt(req.params.routingId);
+    const updates = z.array(z.object({ id: z.number().int(), sortOrder: z.number().int() })).parse(req.body);
+    const existingOps = await storage.getMachinedPartRoutingOps(routingId);
+    const existingIds = new Set(existingOps.map(o => o.id));
+    for (const { id } of updates) {
+      if (!existingIds.has(id)) return res.status(403).json({ error: `Op ${id} does not belong to routing ${routingId}` });
+    }
+    await storage.reorderMachinedPartRoutingOps(updates);
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/machined-part-routings/:routingId/ops/:id', async (req, res) => {
+  try {
+    const routingId = parseInt(req.params.routingId);
+    const id = parseInt(req.params.id);
+    const existing = await storage.getMachinedPartRoutingOpById(id);
+    if (!existing) return res.status(404).json({ error: 'Op not found' });
+    if (existing.routingId !== routingId) return res.status(403).json({ error: 'Op does not belong to this routing' });
+    const { routingId: _ignored, ...rest } = req.body;
+    const data = insertMachinedPartRoutingOpSchema.partial().parse(rest);
+    const op = await storage.updateMachinedPartRoutingOp(id, data);
+    res.json(op);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') return res.status(400).json({ error: err.message, issues: err.issues });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/machined-part-routings/:routingId/ops/:id', async (req, res) => {
+  try {
+    const routingId = parseInt(req.params.routingId);
+    const id = parseInt(req.params.id);
+    const existing = await storage.getMachinedPartRoutingOpById(id);
+    if (!existing) return res.status(404).json({ error: 'Op not found' });
+    if (existing.routingId !== routingId) return res.status(403).json({ error: 'Op does not belong to this routing' });
+    await storage.deleteMachinedPartRoutingOp(id);
+    res.status(204).end();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

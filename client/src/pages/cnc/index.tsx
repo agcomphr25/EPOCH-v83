@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { Link } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -18,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Plus, Play, Square, CheckCircle, Camera, ClipboardList,
   Settings, User, Flag, Trash2, Edit2, Save, X,
-  Lightbulb, ArrowRight, ChevronRight, Link as LinkIcon, PauseCircle,
+  Lightbulb, ArrowRight, ChevronRight, Link as LinkIcon, PauseCircle, BookOpen,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type {
@@ -29,7 +30,7 @@ import type {
   CreateToolPayload, CreateProgramPayload, CreatePhotoPayload,
   CreateCheckpointPayload, CreateQcResultPayload, CreateTimeLogPayload,
 } from './types';
-import { extractErrorMessage as getErrMsg } from './types';
+import { extractErrorMessage as getErrMsg, CNC_MACHINE_TYPES, CNC_AXIS_OPTIONS } from './types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -242,7 +243,7 @@ export default function CNCDashboardPage() {
   const [machineDialogOpen, setMachineDialogOpen] = useState(false);
   const [machineDialogMachine, setMachineDialogMachine] = useState<CncMachine | null>(null);
   const [machineDeleteConfirm, setMachineDeleteConfirm] = useState<CncMachine | null>(null);
-  const [machineForm, setMachineForm] = useState({ machineName: '', machineNumber: '', workCenter: '', active: true });
+  const [machineForm, setMachineForm] = useState({ machineName: '', machineNumber: '', workCenter: '', machineType: '', axisCapabilities: [] as string[], maxLengthIn: '', maxHeightIn: '', active: true });
 
   useEffect(() => {
     if (machineDialogOpen) {
@@ -250,6 +251,10 @@ export default function CNCDashboardPage() {
         machineName: machineDialogMachine?.machineName ?? '',
         machineNumber: machineDialogMachine?.machineNumber ?? '',
         workCenter: machineDialogMachine?.workCenter ?? '',
+        machineType: machineDialogMachine?.machineType ?? '',
+        axisCapabilities: machineDialogMachine?.axisCapabilities ?? [],
+        maxLengthIn: machineDialogMachine?.maxLengthIn != null ? String(machineDialogMachine.maxLengthIn) : '',
+        maxHeightIn: machineDialogMachine?.maxHeightIn != null ? String(machineDialogMachine.maxHeightIn) : '',
         active: machineDialogMachine?.active ?? true,
       });
     }
@@ -365,7 +370,7 @@ export default function CNCDashboardPage() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
-  const saveMachine = useMutation<CncMachine, unknown, { id?: number; data: { machineName: string; machineNumber?: string | null; workCenter?: string | null; active: boolean } }>({
+  const saveMachine = useMutation<CncMachine, unknown, { id?: number; data: Record<string, unknown> }>({
     mutationFn: ({ id, data }) => id
       ? apiRequest(`/api/cnc/machines/${id}`, { method: 'PATCH', body: data })
       : apiRequest('/api/cnc/machines', { method: 'POST', body: data }),
@@ -778,6 +783,11 @@ export default function CNCDashboardPage() {
               >
                 Machines ({machines.length})
               </button>
+              <Link href="/cnc-part-routings">
+                <button className="text-xs px-2.5 py-1 rounded font-semibold transition-colors text-gray-500 hover:bg-gray-100 flex items-center gap-1">
+                  <BookOpen className="w-3 h-3" />Part Routings
+                </button>
+              </Link>
             </div>
             {leftTab === 'queue' && (
               <Button size="sm" className="h-7 text-xs" onClick={() => setNewJobOpen(true)}>
@@ -851,17 +861,29 @@ export default function CNCDashboardPage() {
                   </Button>
                 </div>
                 {machines.map(m => (
-                  <div key={m.id} className="flex items-center justify-between bg-white border rounded px-2 py-1.5 text-xs">
-                    <div>
-                      <span className="font-medium text-gray-800">{m.machineName}</span>
-                      {m.machineNumber && <span className="text-gray-400 ml-1">#{m.machineNumber}</span>}
-                      {m.workCenter && <span className="text-blue-500 ml-1.5 text-[10px] bg-blue-50 px-1 rounded">{m.workCenter}</span>}
+                  <div key={m.id} className="bg-white border rounded px-2 py-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium text-gray-800">{m.machineName}</span>
+                        {m.machineNumber && <span className="text-gray-400 ml-1">#{m.machineNumber}</span>}
+                        {m.workCenter && <span className="text-blue-500 ml-1.5 text-[10px] bg-blue-50 px-1 rounded">{m.workCenter}</span>}
+                        {m.machineType && <span className="text-purple-600 ml-1 text-[10px] bg-purple-50 px-1 rounded">{m.machineType}</span>}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{m.active ? 'Active' : 'Inactive'}</span>
+                        <button className="p-0.5 text-gray-400 hover:text-blue-600" onClick={() => { setMachineDialogMachine(m); setMachineDialogOpen(true); }}><Edit2 className="w-3 h-3" /></button>
+                        <button className="p-0.5 text-gray-400 hover:text-red-600" onClick={() => setMachineDeleteConfirm(m)}><Trash2 className="w-3 h-3" /></button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{m.active ? 'Active' : 'Inactive'}</span>
-                      <button className="p-0.5 text-gray-400 hover:text-blue-600" onClick={() => { setMachineDialogMachine(m); setMachineDialogOpen(true); }}><Edit2 className="w-3 h-3" /></button>
-                      <button className="p-0.5 text-gray-400 hover:text-red-600" onClick={() => setMachineDeleteConfirm(m)}><Trash2 className="w-3 h-3" /></button>
-                    </div>
+                    {((m.axisCapabilities && m.axisCapabilities.length > 0) || m.maxLengthIn || m.maxHeightIn) && (
+                      <div className="mt-0.5 flex flex-wrap gap-1">
+                        {m.axisCapabilities?.map(a => (
+                          <span key={a} className="text-[9px] bg-gray-100 text-gray-600 px-1 rounded">{a}</span>
+                        ))}
+                        {m.maxLengthIn && <span className="text-[9px] bg-amber-50 text-amber-700 px-1 rounded">L:{m.maxLengthIn}"</span>}
+                        {m.maxHeightIn && <span className="text-[9px] bg-amber-50 text-amber-700 px-1 rounded">H:{m.maxHeightIn}"</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1891,9 +1913,9 @@ export default function CNCDashboardPage() {
 
       {/* ── Machine Add/Edit Dialog ─────────────────────────────────────── */}
       <Dialog open={machineDialogOpen} onOpenChange={open => { setMachineDialogOpen(open); if (!open) setMachineDialogMachine(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{machineDialogMachine ? 'Edit Machine' : 'Add Machine'}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto pr-1">
             <div>
               <Label className="text-xs">Machine Name *</Label>
               <Input
@@ -1903,9 +1925,10 @@ export default function CNCDashboardPage() {
               />
             </div>
             <div>
-              <Label className="text-xs">Machine Number</Label>
+              <Label className="text-xs">CNC # (In-House) *</Label>
               <Input
                 className="h-8 text-sm mt-1"
+                placeholder="e.g. CNC-01, VF2-01"
                 value={machineForm.machineNumber}
                 onChange={e => setMachineForm(p => ({ ...p, machineNumber: e.target.value }))}
               />
@@ -1917,6 +1940,62 @@ export default function CNCDashboardPage() {
                 value={machineForm.workCenter}
                 onChange={e => setMachineForm(p => ({ ...p, workCenter: e.target.value }))}
               />
+            </div>
+            <div>
+              <Label className="text-xs">Machine Type</Label>
+              <Select value={machineForm.machineType} onValueChange={v => setMachineForm(p => ({ ...p, machineType: v }))}>
+                <SelectTrigger className="h-8 text-sm mt-1">
+                  <SelectValue placeholder="Select type…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CNC_MACHINE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Axis Capabilities</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {CNC_AXIS_OPTIONS.map(opt => (
+                  <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={machineForm.axisCapabilities.includes(opt)}
+                      onChange={e => {
+                        setMachineForm(p => ({
+                          ...p,
+                          axisCapabilities: e.target.checked
+                            ? [...p.axisCapabilities, opt]
+                            : p.axisCapabilities.filter(a => a !== opt),
+                        }));
+                      }}
+                      className="w-3.5 h-3.5"
+                    />
+                    {opt}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Max Length (in.)</Label>
+                <Input
+                  type="number"
+                  className="h-8 text-sm mt-1"
+                  placeholder="e.g. 40"
+                  value={machineForm.maxLengthIn}
+                  onChange={e => setMachineForm(p => ({ ...p, maxLengthIn: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Max Height (in.)</Label>
+                <Input
+                  type="number"
+                  className="h-8 text-sm mt-1"
+                  placeholder="e.g. 25"
+                  value={machineForm.maxHeightIn}
+                  onChange={e => setMachineForm(p => ({ ...p, maxHeightIn: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -1932,13 +2011,17 @@ export default function CNCDashboardPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setMachineDialogOpen(false)}>Cancel</Button>
             <Button
-              disabled={!machineForm.machineName.trim() || saveMachine.isPending}
+              disabled={!machineForm.machineName.trim() || !machineForm.machineNumber.trim() || saveMachine.isPending}
               onClick={() => saveMachine.mutate({
                 id: machineDialogMachine?.id,
                 data: {
                   machineName: machineForm.machineName.trim(),
                   machineNumber: machineForm.machineNumber.trim() || null,
                   workCenter: machineForm.workCenter.trim() || null,
+                  machineType: machineForm.machineType || null,
+                  axisCapabilities: machineForm.axisCapabilities.length > 0 ? machineForm.axisCapabilities : null,
+                  maxLengthIn: machineForm.maxLengthIn ? parseFloat(machineForm.maxLengthIn) : null,
+                  maxHeightIn: machineForm.maxHeightIn ? parseFloat(machineForm.maxHeightIn) : null,
                   active: machineForm.active,
                 },
               })}

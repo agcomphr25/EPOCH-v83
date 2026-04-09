@@ -611,7 +611,11 @@ router.post('/finalized', async (req: Request, res: Response) => {
     
     // Use idempotent helper to create demand record (skip order update since already set)
     await reconcileBottomMetalDemand(order, false);
-    await reconcileRailDemand(order);
+    try {
+      await reconcileRailDemand(order);
+    } catch (railErr: any) {
+      console.warn('⚠️ reconcileRailDemand skipped on order create:', railErr?.message);
+    }
     
     if (hasStock) {
       console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
@@ -1249,7 +1253,11 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     // Idempotently reconcile bottom metal demand from the effective post-update order state
     // This handles all cases: feature changes, partial updates, drift correction, and updates bottomMetalSource
     await reconcileBottomMetalDemand(updatedOrder);
-    await reconcileRailDemand(updatedOrder);
+    try {
+      await reconcileRailDemand(updatedOrder);
+    } catch (railErr: any) {
+      console.warn('⚠️ reconcileRailDemand skipped on order update:', railErr?.message);
+    }
 
     return res.json(updatedOrder);
   } catch (error) {
@@ -2693,9 +2701,13 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
     // This validates demand state against order features instead of unconditionally re-opening
     try {
       await reconcileBottomMetalDemand(updatedOrder);
-      await reconcileRailDemand(updatedOrder);
     } catch (demandError) {
-      console.log('🔄 Bottom metal demand reconciliation failed on undo-cancel:', demandError);
+      console.warn('⚠️ reconcileBottomMetalDemand skipped on undo-cancel:', demandError);
+    }
+    try {
+      await reconcileRailDemand(updatedOrder);
+    } catch (railErr: any) {
+      console.warn('⚠️ reconcileRailDemand skipped on undo-cancel:', railErr?.message);
     }
 
     res.json({

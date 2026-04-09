@@ -3837,6 +3837,28 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Queue integrity service failed to start:', svcError);
     }
 
+    // Ensure rail_demands table exists (needed by reconcileRailDemand on every order save)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS rail_demands (
+          id SERIAL PRIMARY KEY,
+          order_id TEXT NOT NULL,
+          rail_sku TEXT NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'open',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS rail_demands_order_rail_unique
+        ON rail_demands (order_id, rail_sku)
+      `);
+      console.log('✅ Ensured rail_demands table exists');
+    } catch (railDemandsErr: any) {
+      console.warn('⚠️ rail_demands table migration skipped:', railDemandsErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

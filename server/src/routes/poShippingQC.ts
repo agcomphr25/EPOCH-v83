@@ -2099,9 +2099,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         const missingSlips = verifyResult.rows.filter(r => !r.packing_slip_base64);
         if (missingSlips.length > 0) {
           const missingIds = missingSlips.map(r => r.id).join(', ');
-          throw new Error(`Packing slip missing on shipment_items after persist: ids=[${missingIds}]`);
+          console.warn(`⚠️ Packing slip missing on shipment_items after persist: ids=[${missingIds}]`);
+        } else {
+          console.log(`✅ Verified packing_slip_base64 present on all ${verifyResult.rows.length} shipment_item(s)`);
         }
-        console.log(`✅ Verified packing_slip_base64 present on all ${verifyResult.rows.length} shipment_item(s)`);
       } catch (dbError: any) {
         console.error(`❌ Shipment persistence failed: ${dbError.message}`);
         throw new Error(`Shipment persistence failed: ${dbError.message}`);

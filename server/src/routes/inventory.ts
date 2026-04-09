@@ -87,9 +87,14 @@ const pdfUpload = multer({
 });
 
 // Enhanced Inventory API - Get all items (mounted at /api/enhanced/inventory/items)
+// Supports optional query param: ?manufacturedCategory=MACHINED_PART
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
-    const items = await storage.getAllInventoryItems();
+    let items = await storage.getAllInventoryItems();
+    const { manufacturedCategory } = req.query;
+    if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
+      items = items.filter(item => item.manufacturedCategory === manufacturedCategory);
+    }
     res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get enhanced inventory items error:', error);
@@ -98,9 +103,14 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 });
 
 // Also expose at /items for /api/inventory/items path
+// Supports optional query param: ?manufacturedCategory=MACHINED_PART
 router.get('/items', async (req: Request, res: Response) => {
   try {
-    const items = await storage.getAllInventoryItems();
+    let items = await storage.getAllInventoryItems();
+    const { manufacturedCategory } = req.query;
+    if (typeof manufacturedCategory === 'string' && manufacturedCategory) {
+      items = items.filter(item => item.manufacturedCategory === manufacturedCategory);
+    }
     res.json(items.map(withSupplySourceDashboard));
   } catch (error) {
     console.error('Get inventory items error:', error);

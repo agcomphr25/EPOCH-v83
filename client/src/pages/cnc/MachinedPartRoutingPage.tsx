@@ -12,14 +12,19 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Plus, Trash2, Edit2, ChevronDown, ChevronUp, Link as LinkIcon,
   Wrench, ClipboardList, Settings, Camera, Lightbulb, Search, BookOpen,
-  GripVertical, X, Check,
+  GripVertical, X, Check, ChevronsUpDown,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { MachinedPartRouting, MachinedPartRoutingOp, CncMachine } from './types';
 import { CNC_MACHINE_TYPES } from './types';
 
@@ -27,7 +32,7 @@ interface InventoryItem {
   id: string;
   agPartNumber: string;
   name: string;
-  category?: string;
+  manufacturedCategory: string | null;
 }
 
 const EMPTY_OP: Omit<MachinedPartRoutingOp, 'id' | 'routingId' | 'sortOrder' | 'createdAt'> = {
@@ -78,6 +83,13 @@ export default function MachinedPartRoutingPage() {
     queryKey: ['/api/cnc/machined-part-routings', selectedRoutingId, 'ops'],
     enabled: selectedRoutingId != null,
   });
+
+  const { data: machinedParts = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/inventory/items?manufacturedCategory=MACHINED_PART'],
+    select: (items) => [...items].sort((a, b) => (a.agPartNumber ?? '').localeCompare(b.agPartNumber ?? '')),
+  });
+
+  const [partPickerOpen, setPartPickerOpen] = useState(false);
 
   const selectedRouting = routings.find(r => r.id === selectedRoutingId) ?? null;
 
@@ -210,6 +222,7 @@ export default function MachinedPartRoutingPage() {
   function openNewRouting() {
     setEditingRouting(null);
     setRoutingForm({ inventoryItemId: '', routingName: '', partNumber: '', partName: '', notes: '' });
+    setPartPickerOpen(false);
     setRoutingDialogOpen(true);
   }
 
@@ -222,6 +235,7 @@ export default function MachinedPartRoutingPage() {
       partName: r.partName ?? '',
       notes: r.notes ?? '',
     });
+    setPartPickerOpen(false);
     setRoutingDialogOpen(true);
   }
 
@@ -443,10 +457,63 @@ export default function MachinedPartRoutingPage() {
                 onChange={e => setRoutingForm(p => ({ ...p, partName: e.target.value }))} />
             </div>
             <div>
-              <Label className="text-xs">Inventory Item ID *</Label>
-              <Input className="h-8 text-sm mt-1" placeholder="Inventory item UUID (from inventory)" value={routingForm.inventoryItemId}
-                onChange={e => setRoutingForm(p => ({ ...p, inventoryItemId: e.target.value }))} />
-              <p className="text-[10px] text-gray-400 mt-0.5">Link to a MACHINED_PART inventory item</p>
+              <Label className="text-xs">Inventory Item *</Label>
+              <Popover open={partPickerOpen} onOpenChange={setPartPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={partPickerOpen}
+                    className="w-full h-8 text-sm mt-1 justify-between font-normal"
+                  >
+                    {routingForm.inventoryItemId
+                      ? (() => {
+                          const item = machinedParts.find(i => i.id === routingForm.inventoryItemId);
+                          if (item) return `${item.agPartNumber} — ${item.name}`;
+                          if (routingForm.partNumber || routingForm.partName) {
+                            return `${routingForm.partNumber}${routingForm.partName ? ` — ${routingForm.partName}` : ''}`.trim();
+                          }
+                          return routingForm.inventoryItemId;
+                        })()
+                      : <span className="text-muted-foreground">Select a machined part…</span>
+                    }
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[340px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search by part number or name…" className="h-8 text-xs" />
+                    <CommandList>
+                      <CommandEmpty className="text-xs py-4">No machined parts found.</CommandEmpty>
+                      <CommandGroup>
+                        {machinedParts.map(item => (
+                          <CommandItem
+                            key={item.id}
+                            value={`${item.agPartNumber} ${item.name}`}
+                            onSelect={() => {
+                              setRoutingForm(p => ({
+                                ...p,
+                                inventoryItemId: item.id,
+                                partNumber: item.agPartNumber ?? p.partNumber,
+                                partName: item.name ?? p.partName,
+                              }));
+                              setPartPickerOpen(false);
+                            }}
+                            className="text-xs"
+                          >
+                            <Check
+                              className={cn('mr-2 h-3.5 w-3.5 flex-shrink-0', routingForm.inventoryItemId === item.id ? 'opacity-100' : 'opacity-0')}
+                            />
+                            <span className="font-mono font-medium mr-2">{item.agPartNumber}</span>
+                            <span className="text-gray-600 truncate">{item.name}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <p className="text-[10px] text-gray-400 mt-0.5">Shows MACHINED_PART inventory items only</p>
             </div>
             <div>
               <Label className="text-xs">Notes</Label>

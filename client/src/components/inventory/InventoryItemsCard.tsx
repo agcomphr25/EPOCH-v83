@@ -2144,6 +2144,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           <Dialog open={isCreateOpen} onOpenChange={(open) => {
             setIsCreateOpen(open);
             if (open && !editingItem) {
+              resetForm();
               fetch('/api/inventory/items/next-part-number')
                 .then(r => r.json())
                 .then(data => {

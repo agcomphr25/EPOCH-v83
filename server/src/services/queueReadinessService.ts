@@ -42,8 +42,8 @@ export async function evaluateQueueReadiness(queueId: number): Promise<Readiness
 
   if (requirements.length === 0) {
     const result: ReadinessResult = {
-      readinessStatus: 'NOT_READY',
-      percentReady: 0,
+      readinessStatus: 'READY',
+      percentReady: 100,
       blocking: [],
     };
 
@@ -52,7 +52,7 @@ export async function evaluateQueueReadiness(queueId: number): Promise<Readiness
       .set({
         readinessStatus: result.readinessStatus,
         percentReady: String(result.percentReady),
-        blockedReason: 'No allocation requirements defined',
+        blockedReason: null,
         updatedAt: new Date(),
       })
       .where(eq(manufacturingQueue.id, queueId));

@@ -10692,10 +10692,10 @@ export class DatabaseStorage implements IStorage {
             poItem.productionOrders.forEach((prodOrder: any) => {
               // Override department for metal accessories regardless of what production order stores
               const isMetalAccessoryWithProdOrder = poItem.itemType && poItem.itemType.toLowerCase() !== 'stock_model';
+              const isShippedProdOrder = prodOrder.isFulfilled || prodOrder.productionStatus === 'SHIPPED';
               let effectiveDepartment = prodOrder.currentDepartment;
               let effectiveStatus = prodOrder.productionStatus;
               if (isMetalAccessoryWithProdOrder) {
-                const isShippedProdOrder = prodOrder.isFulfilled || prodOrder.productionStatus === 'SHIPPED';
                 effectiveDepartment = isShippedProdOrder ? 'Shipped' : 'Shipping QC';
                 effectiveStatus = isShippedProdOrder ? 'SHIPPED' : 'IN_SHIPPING_QC';
               }
@@ -10718,7 +10718,9 @@ export class DatabaseStorage implements IStorage {
                 isFulfilled: prodOrder.isFulfilled,
                 fulfilledDate: prodOrder.fulfilledDate,
                 fulfilledBy: prodOrder.fulfilledBy,
-                isReadyToShip: prodOrder.isReadyToShip,
+                isReadyToShip: isMetalAccessoryWithProdOrder
+                  ? !isShippedProdOrder
+                  : prodOrder.isReadyToShip,
               });
             });
           }

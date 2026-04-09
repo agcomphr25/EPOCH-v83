@@ -30,7 +30,7 @@ import type {
   CreateToolPayload, CreateProgramPayload, CreatePhotoPayload,
   CreateCheckpointPayload, CreateQcResultPayload, CreateTimeLogPayload,
 } from './types';
-import { extractErrorMessage as getErrMsg, CNC_MACHINE_TYPES, CNC_AXIS_OPTIONS } from './types';
+import { extractErrorMessage as getErrMsg, CNC_MACHINE_TYPES } from './types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -243,18 +243,16 @@ export default function CNCDashboardPage() {
   const [machineDialogOpen, setMachineDialogOpen] = useState(false);
   const [machineDialogMachine, setMachineDialogMachine] = useState<CncMachine | null>(null);
   const [machineDeleteConfirm, setMachineDeleteConfirm] = useState<CncMachine | null>(null);
-  const [machineForm, setMachineForm] = useState({ machineName: '', machineNumber: '', workCenter: '', machineType: '', axisCapabilities: [] as string[], maxLengthIn: '', maxHeightIn: '', active: true });
+  const [machineForm, setMachineForm] = useState({ machineName: '', machineNumber: '', machineType: '', capability: '', active: true });
 
   useEffect(() => {
     if (machineDialogOpen) {
+      const cap = machineDialogMachine?.capabilities;
       setMachineForm({
         machineName: machineDialogMachine?.machineName ?? '',
         machineNumber: machineDialogMachine?.machineNumber ?? '',
-        workCenter: machineDialogMachine?.workCenter ?? '',
         machineType: machineDialogMachine?.machineType ?? '',
-        axisCapabilities: machineDialogMachine?.axisCapabilities ?? [],
-        maxLengthIn: machineDialogMachine?.maxLengthIn != null ? String(machineDialogMachine.maxLengthIn) : '',
-        maxHeightIn: machineDialogMachine?.maxHeightIn != null ? String(machineDialogMachine.maxHeightIn) : '',
+        capability: typeof cap === 'string' ? cap : '',
         active: machineDialogMachine?.active ?? true,
       });
     }
@@ -866,7 +864,6 @@ export default function CNCDashboardPage() {
                       <div className="min-w-0 flex-1">
                         <span className="font-medium text-gray-800">{m.machineName}</span>
                         {m.machineNumber && <span className="text-gray-400 ml-1">#{m.machineNumber}</span>}
-                        {m.workCenter && <span className="text-blue-500 ml-1.5 text-[10px] bg-blue-50 px-1 rounded">{m.workCenter}</span>}
                         {m.machineType && <span className="text-purple-600 ml-1 text-[10px] bg-purple-50 px-1 rounded">{m.machineType}</span>}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0 ml-1">
@@ -875,14 +872,8 @@ export default function CNCDashboardPage() {
                         <button className="p-0.5 text-gray-400 hover:text-red-600" onClick={() => setMachineDeleteConfirm(m)}><Trash2 className="w-3 h-3" /></button>
                       </div>
                     </div>
-                    {((m.axisCapabilities && m.axisCapabilities.length > 0) || m.maxLengthIn || m.maxHeightIn) && (
-                      <div className="mt-0.5 flex flex-wrap gap-1">
-                        {m.axisCapabilities?.map(a => (
-                          <span key={a} className="text-[9px] bg-gray-100 text-gray-600 px-1 rounded">{a}</span>
-                        ))}
-                        {m.maxLengthIn && <span className="text-[9px] bg-amber-50 text-amber-700 px-1 rounded">L:{m.maxLengthIn}"</span>}
-                        {m.maxHeightIn && <span className="text-[9px] bg-amber-50 text-amber-700 px-1 rounded">H:{m.maxHeightIn}"</span>}
-                      </div>
+                    {m.capabilities && typeof m.capabilities === 'string' && (
+                      <p className="mt-0.5 text-[10px] text-gray-500 truncate">{m.capabilities}</p>
                     )}
                   </div>
                 ))}
@@ -1925,20 +1916,12 @@ export default function CNCDashboardPage() {
               />
             </div>
             <div>
-              <Label className="text-xs">CNC # (In-House) *</Label>
+              <Label className="text-xs">Machine Number *</Label>
               <Input
                 className="h-8 text-sm mt-1"
                 placeholder="e.g. CNC-01, VF2-01"
                 value={machineForm.machineNumber}
                 onChange={e => setMachineForm(p => ({ ...p, machineNumber: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Work Center</Label>
-              <Input
-                className="h-8 text-sm mt-1"
-                value={machineForm.workCenter}
-                onChange={e => setMachineForm(p => ({ ...p, workCenter: e.target.value }))}
               />
             </div>
             <div>
@@ -1953,49 +1936,14 @@ export default function CNCDashboardPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Axis Capabilities</Label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {CNC_AXIS_OPTIONS.map(opt => (
-                  <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={machineForm.axisCapabilities.includes(opt)}
-                      onChange={e => {
-                        setMachineForm(p => ({
-                          ...p,
-                          axisCapabilities: e.target.checked
-                            ? [...p.axisCapabilities, opt]
-                            : p.axisCapabilities.filter(a => a !== opt),
-                        }));
-                      }}
-                      className="w-3.5 h-3.5"
-                    />
-                    {opt}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Max Length (in.)</Label>
-                <Input
-                  type="number"
-                  className="h-8 text-sm mt-1"
-                  placeholder="e.g. 40"
-                  value={machineForm.maxLengthIn}
-                  onChange={e => setMachineForm(p => ({ ...p, maxLengthIn: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Max Height (in.)</Label>
-                <Input
-                  type="number"
-                  className="h-8 text-sm mt-1"
-                  placeholder="e.g. 25"
-                  value={machineForm.maxHeightIn}
-                  onChange={e => setMachineForm(p => ({ ...p, maxHeightIn: e.target.value }))}
-                />
-              </div>
+              <Label className="text-xs">Capability</Label>
+              <textarea
+                className="w-full mt-1 text-sm border border-input rounded-md px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={3}
+                placeholder="Describe what this machine can do…"
+                value={machineForm.capability}
+                onChange={e => setMachineForm(p => ({ ...p, capability: e.target.value }))}
+              />
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -2017,11 +1965,8 @@ export default function CNCDashboardPage() {
                 data: {
                   machineName: machineForm.machineName.trim(),
                   machineNumber: machineForm.machineNumber.trim() || null,
-                  workCenter: machineForm.workCenter.trim() || null,
                   machineType: machineForm.machineType || null,
-                  axisCapabilities: machineForm.axisCapabilities.length > 0 ? machineForm.axisCapabilities : null,
-                  maxLengthIn: machineForm.maxLengthIn ? parseFloat(machineForm.maxLengthIn) : null,
-                  maxHeightIn: machineForm.maxHeightIn ? parseFloat(machineForm.maxHeightIn) : null,
+                  capabilities: machineForm.capability.trim() || null,
                   active: machineForm.active,
                 },
               })}

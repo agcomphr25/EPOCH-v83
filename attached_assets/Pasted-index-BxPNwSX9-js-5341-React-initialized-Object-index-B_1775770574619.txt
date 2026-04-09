@@ -1,0 +1,55 @@
+index-BxPNwSX9.js:5341 React initialized: Object
+index-BxPNwSX9.js:5341 React hooks: Object
+index-BxPNwSX9.js:5341 [EPOCH SYNC] Sync engine starting
+index-BxPNwSX9.js:5341 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-BxPNwSX9.js:5338 App component is rendering...
+index-BxPNwSX9.js:5338 Environment: production
+index-BxPNwSX9.js:5338 Base URL: /
+index-BxPNwSX9.js:1580 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-BxPNwSX9.js:1580 [EPOCH] Install prompt captured and ready
+cnc-part-routings:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/cnc/machined-part-routings:1  Failed to load resource: the server responded with a status of 500 ()
+index-BxPNwSX9.js:1586 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-BxPNwSX9.js:1586
+api/cnc/machined-part-routings:1  Failed to load resource: the server responded with a status of 500 ()
+index-BxPNwSX9.js:5338 App component is rendering...
+index-BxPNwSX9.js:5338 Environment: production
+index-BxPNwSX9.js:5338 Base URL: /
+index-BxPNwSX9.js:5338 App component is rendering...
+index-BxPNwSX9.js:5338 Environment: production
+index-BxPNwSX9.js:5338 Base URL: /
+index-BxPNwSX9.js:5341 TypeError: c.inventoryItemId.trim is not a function
+    at Kvn (index-BxPNwSX9.js:4211:132187)
+    at S3e (index-BxPNwSX9.js:38:17171)
+    at t2e (index-BxPNwSX9.js:40:3170)
+    at Zpt (index-BxPNwSX9.js:40:45306)
+    at Ypt (index-BxPNwSX9.js:40:40185)
+    at MGt (index-BxPNwSX9.js:40:40108)
+    at _oe (index-BxPNwSX9.js:40:39955)
+    at h2e (index-BxPNwSX9.js:40:36267)
+    at C7e (index-BxPNwSX9.js:40:37081)
+    at dD (index-BxPNwSX9.js:38:3323)
+console.error @ index-BxPNwSX9.js:5341
+index-BxPNwSX9.js:5341 Global error caught: TypeError: c.inventoryItemId.trim is not a function
+    at Kvn (index-BxPNwSX9.js:4211:132187)
+    at S3e (index-BxPNwSX9.js:38:17171)
+    at t2e (index-BxPNwSX9.js:40:3170)
+    at Zpt (index-BxPNwSX9.js:40:45306)
+    at Ypt (index-BxPNwSX9.js:40:40185)
+    at MGt (index-BxPNwSX9.js:40:40108)
+    at _oe (index-BxPNwSX9.js:40:39955)
+    at h2e (index-BxPNwSX9.js:40:36267)
+    at C7e (index-BxPNwSX9.js:40:37081)
+    at dD (index-BxPNwSX9.js:38:3323)
+console.error @ index-BxPNwSX9.js:5341
+index-BxPNwSX9.js:38 Uncaught TypeError: c.inventoryItemId.trim is not a function
+    at Kvn (index-BxPNwSX9.js:4211:132187)
+    at S3e (index-BxPNwSX9.js:38:17171)
+    at t2e (index-BxPNwSX9.js:40:3170)
+    at Zpt (index-BxPNwSX9.js:40:45306)
+    at Ypt (index-BxPNwSX9.js:40:40185)
+    at MGt (index-BxPNwSX9.js:40:40108)
+    at _oe (index-BxPNwSX9.js:40:39955)
+    at h2e (index-BxPNwSX9.js:40:36267)
+    at C7e (index-BxPNwSX9.js:40:37081)
+    at dD (index-BxPNwSX9.js:38:3323)

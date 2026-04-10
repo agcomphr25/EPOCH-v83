@@ -1247,6 +1247,41 @@ function PrintShipmentPopup({
     },
   });
   const handlePrintPackingSlip = () => {
+    if (packingSlips && packingSlips.length > 0) {
+      let anyOpened = false;
+      packingSlips.forEach((slip) => {
+        if (!slip.data) return;
+        try {
+          const byteCharacters = atob(slip.data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const pdfWindow = window.open(url, '_blank');
+          if (!pdfWindow) {
+            alert('Please allow popups for this site to print');
+            URL.revokeObjectURL(url);
+            return;
+          }
+          anyOpened = true;
+          pdfWindow.addEventListener('load', () => {
+            URL.revokeObjectURL(url);
+          });
+        } catch (e) {
+          console.error('Failed to open server-generated packing slip PDF:', e);
+          toast({
+            title: 'Failed to Open Packing Slip',
+            description: `Could not open PDF for PO ${slip.poNumber || 'unknown'}. Falling back to basic packing slip.`,
+            variant: 'destructive',
+          });
+        }
+      });
+      if (anyOpened) return;
+    }
+
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (!printWindow) {
       alert('Please allow popups for this site to print');

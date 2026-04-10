@@ -28,6 +28,19 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
   Package,
   Plus,
   Check,
@@ -40,6 +53,7 @@ import {
   Upload,
   ChevronRight,
   ChevronDown,
+  ChevronsUpDown,
   Tag,
   History,
   Barcode,
@@ -578,6 +592,12 @@ function ShipmentInfoStep({ receipt, onNext, onUpdate }: {
 }
 
 // Step 2: Line Items
+interface PurchasedItem {
+  agPartNumber: string;
+  name: string;
+  purchaseUnit: string | null;
+}
+
 function LineItemsStep({ receipt, onNext, onUpdate }: {
   receipt: Receipt;
   onNext: () => void;
@@ -588,6 +608,12 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
   const [editingLineId, setEditingLineId] = useState<number | null>(null);
   const [editQty, setEditQty] = useState('');
   const [newLine, setNewLine] = useState({ agPartNumber: '', description: '', orderedQty: '', receivedQty: '', uom: 'EA' });
+  const [partComboOpen, setPartComboOpen] = useState(false);
+  const [partSearch, setPartSearch] = useState('');
+
+  const { data: purchasedItems = [] } = useQuery<PurchasedItem[]>({
+    queryKey: ['/api/inventory/items/purchased'],
+  });
 
   const addLineMutation = useMutation({
     mutationFn: () => apiRequest(`/api/receipts/${receipt.id}/lines`, {
@@ -603,6 +629,8 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
       onUpdate(updated);
       setAddingLine(false);
       setNewLine({ agPartNumber: '', description: '', orderedQty: '', receivedQty: '', uom: 'EA' });
+      setPartSearch('');
+      setPartComboOpen(false);
     },
     onError: () => toast.error('Failed to add line'),
   });
@@ -700,7 +728,82 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Part #</Label>
-              <Input className="h-7 text-xs mt-0.5" value={newLine.agPartNumber} onChange={e => setNewLine(f => ({ ...f, agPartNumber: e.target.value }))} />
+              <Popover open={partComboOpen} onOpenChange={setPartComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={partComboOpen}
+                    className="h-7 w-full text-xs mt-0.5 justify-between font-normal px-2"
+                  >
+                    <span className="truncate">{newLine.agPartNumber || 'Search part...'}</span>
+                    <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search part # or name..."
+                      value={partSearch}
+                      onValueChange={setPartSearch}
+                      className="h-8 text-xs"
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="py-2 px-3 text-xs text-muted-foreground">
+                          No match. You can still type a part # manually.
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {purchasedItems
+                          .filter(item => {
+                            const q = partSearch.toLowerCase();
+                            return !q || item.agPartNumber.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
+                          })
+                          .slice(0, 50)
+                          .map(item => (
+                            <CommandItem
+                              key={item.agPartNumber}
+                              value={`${item.agPartNumber} ${item.name}`}
+                              onSelect={() => {
+                                setNewLine(f => ({
+                                  ...f,
+                                  agPartNumber: item.agPartNumber,
+                                  description: item.name,
+                                  uom: item.purchaseUnit || f.uom,
+                                }));
+                                setPartSearch('');
+                                setPartComboOpen(false);
+                              }}
+                              className="text-xs"
+                            >
+                              <Check
+                                className={`mr-1.5 h-3 w-3 ${newLine.agPartNumber === item.agPartNumber ? 'opacity-100' : 'opacity-0'}`}
+                              />
+                              <span className="font-mono mr-1.5">{item.agPartNumber}</span>
+                              <span className="text-muted-foreground truncate">{item.name}</span>
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                      {partSearch && !purchasedItems.some(i => i.agPartNumber.toLowerCase() === partSearch.toLowerCase()) && (
+                        <CommandGroup>
+                          <CommandItem
+                            value={`__adhoc__${partSearch}`}
+                            onSelect={() => {
+                              setNewLine(f => ({ ...f, agPartNumber: partSearch }));
+                              setPartSearch('');
+                              setPartComboOpen(false);
+                            }}
+                            className="text-xs text-muted-foreground italic"
+                          >
+                            Use &ldquo;{partSearch}&rdquo; as part # (ad-hoc)
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label className="text-xs">UOM</Label>
@@ -723,7 +826,7 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
             <Button size="sm" className="h-7 text-xs" onClick={() => addLineMutation.mutate()} disabled={addLineMutation.isPending}>
               {addLineMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAddingLine(false)}>Cancel</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setAddingLine(false); setPartSearch(''); }}>Cancel</Button>
           </div>
         </div>
       ) : (

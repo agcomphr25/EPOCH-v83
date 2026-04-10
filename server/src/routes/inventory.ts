@@ -160,6 +160,19 @@ router.get('/items/part-numbers', async (req: Request, res: Response) => {
   }
 });
 
+// Lightweight endpoint for purchased inventory items (for receipt line Part# combobox)
+router.get('/items/purchased', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT ag_part_number as "agPartNumber", name, purchase_unit as "purchaseUnit" FROM inventory_items WHERE item_type = 'PURCHASED' AND (is_active = true OR is_active IS NULL) ORDER BY ag_part_number`
+    );
+    res.json(result.rows || []);
+  } catch (error) {
+    console.error('Get purchased items error:', error);
+    res.status(500).json({ error: 'Failed to fetch purchased items' });
+  }
+});
+
 router.get('/items/fabric-items', async (req: Request, res: Response) => {
   try {
     const result = await db.execute(

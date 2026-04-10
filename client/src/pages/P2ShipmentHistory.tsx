@@ -66,7 +66,8 @@ export default function P2ShipmentHistory() {
       r.po_number?.toLowerCase().includes(q) ||
       r.customer_name?.toLowerCase().includes(q) ||
       r.part_number?.toLowerCase().includes(q) ||
-      r.tracking_number?.toLowerCase().includes(q)
+      r.tracking_number?.toLowerCase().includes(q) ||
+      r.packing_slip_number?.toLowerCase().includes(q)
     );
   }, [rows, search]);
 
@@ -118,7 +119,7 @@ export default function P2ShipmentHistory() {
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search lot, PO, customer, tracking…"
+          placeholder="Search lot, packing slip #, PO, customer, tracking…"
           className="pl-8"
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -143,6 +144,7 @@ export default function P2ShipmentHistory() {
                 <thead>
                   <tr className="border-b bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="text-left px-4 py-3 font-medium">Lot #</th>
+                    <th className="text-left px-4 py-3 font-medium">Packing Slip</th>
                     <th className="text-left px-4 py-3 font-medium">PO</th>
                     <th className="text-left px-4 py-3 font-medium">Customer</th>
                     <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Part</th>
@@ -161,6 +163,18 @@ export default function P2ShipmentHistory() {
                         >
                           {row.lot_number}
                         </Link>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {row.packing_slip_id ? (
+                          <Link
+                            to={`/p2/packing-slip/${row.packing_slip_id}`}
+                            className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                          >
+                            {row.packing_slip_number || '—'}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                         {row.po_number || '—'}

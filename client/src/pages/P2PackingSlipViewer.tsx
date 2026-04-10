@@ -1,13 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRoute, Link } from 'wouter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Printer, Download, ArrowLeft, Package, FileText, CheckCircle, Clock } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Printer, Download, ArrowLeft, Package, Clock, Pencil, X, Check, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { COMPANY_INFO } from '@shared/company-config';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 interface PackingSlipLineItem {
   partNumber: string;
@@ -43,14 +49,91 @@ interface PackingSlipData {
   updatedAt: string;
 }
 
+interface CurrentUser {
+  id: number;
+  username: string;
+  role: string;
+}
+
 export default function P2PackingSlipViewer() {
   const [match, params] = useRoute('/p2/packing-slip/:id');
   const packingSlipId = params?.id;
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [editMode, setEditMode] = useState(false);
+  const [editSlipNumber, setEditSlipNumber] = useState('');
+  const [editShipDate, setEditShipDate] = useState('');
+  const [editReason, setEditReason] = useState('');
+
+  const { data: currentUser } = useQuery<CurrentUser | null>({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/auth/session', { credentials: 'include' });
+        if (res.ok) return res.json();
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'OWNER';
 
   const { data: packingSlip, isLoading, error } = useQuery<PackingSlipData>({
     queryKey: ['/api/p2/packing-slips', packingSlipId],
     enabled: !!packingSlipId,
   });
+
+  const editMutation = useMutation({
+    mutationFn: async (payload: { packingSlipNumber: string; shipDate: string | null; reason: string }) => {
+      return apiRequest(`/api/p2/packing-slips/${packingSlipId}`, {
+        method: 'PATCH',
+        body: payload,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
+      toast({ title: 'Packing slip updated', description: 'Changes have been saved and logged.' });
+      setEditMode(false);
+      setEditReason('');
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to save', description: err.message || 'An error occurred.', variant: 'destructive' });
+    },
+  });
+
+  const handleStartEdit = () => {
+    if (!packingSlip) return;
+    setEditSlipNumber(packingSlip.packingSlipNumber);
+    setEditShipDate(
+      packingSlip.shipDate
+        ? format(new Date(packingSlip.shipDate), 'yyyy-MM-dd')
+        : ''
+    );
+    setEditReason('');
+    setEditMode(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setEditReason('');
+  };
+
+  const handleSaveEdit = () => {
+    if (!packingSlip) return;
+    if (!editReason.trim()) {
+      toast({ title: 'Reason required', description: 'Please provide a reason for the change.', variant: 'destructive' });
+      return;
+    }
+    editMutation.mutate({
+      packingSlipNumber: editSlipNumber,
+      shipDate: editShipDate ? new Date(editShipDate).toISOString() : null,
+      reason: editReason.trim(),
+    });
+  };
 
   const handlePrint = () => {
     window.print();
@@ -86,6 +169,10 @@ export default function P2PackingSlipViewer() {
 
   const lineItems = (packingSlip.lineItems as any[]) || [];
 
+  const displayDate = packingSlip.shipDate
+    ? format(new Date(packingSlip.shipDate), 'MMM d, yyyy')
+    : format(new Date(packingSlip.createdAt), 'MMM d, yyyy');
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       <div className="print:hidden flex items-center justify-between mb-6">
@@ -96,6 +183,12 @@ export default function P2PackingSlipViewer() {
           </Button>
         </Link>
         <div className="flex gap-2">
+          {canEdit && !editMode && (
+            <Button variant="outline" onClick={handleStartEdit}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          )}
           <Button variant="outline" onClick={handlePrint} data-testid="button-print">
             <Printer className="h-4 w-4 mr-2" />
             Print
@@ -106,6 +199,58 @@ export default function P2PackingSlipViewer() {
           </Button>
         </div>
       </div>
+
+      {editMode && (
+        <Card className="print:hidden mb-6 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+          <CardContent className="p-5 space-y-4">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100">Edit Packing Slip</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-slip-number">Packing Slip Number</Label>
+                <Input
+                  id="edit-slip-number"
+                  value={editSlipNumber}
+                  onChange={e => setEditSlipNumber(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-ship-date">Ship Date</Label>
+                <Input
+                  id="edit-ship-date"
+                  type="date"
+                  value={editShipDate}
+                  onChange={e => setEditShipDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-reason">Reason for Change <span className="text-red-500">*</span></Label>
+              <Textarea
+                id="edit-reason"
+                placeholder="Explain why this correction is needed…"
+                value={editReason}
+                onChange={e => setEditReason(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={handleCancelEdit} disabled={editMutation.isPending}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} disabled={editMutation.isPending}>
+                {editMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="print:shadow-none print:border-0" data-testid="packing-slip-document">
         <CardContent className="p-8">
@@ -136,7 +281,7 @@ export default function P2PackingSlipViewer() {
             <div className="text-right">
               <div className="mb-4">
                 <span className="text-sm text-gray-500">Date:</span>
-                <p data-testid="text-date">{packingSlip.shipDate ? format(new Date(packingSlip.shipDate), 'MMM d, yyyy') : format(new Date(packingSlip.createdAt), 'MMM d, yyyy')}</p>
+                <p data-testid="text-date">{displayDate}</p>
               </div>
               <div className="mb-4">
                 <span className="text-sm text-gray-500">PO Number:</span>

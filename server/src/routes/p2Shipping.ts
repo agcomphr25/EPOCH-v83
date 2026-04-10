@@ -309,6 +309,120 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
 });
 
 // ============================================================
+// PATCH /api/p2/packing-slips/:id — Edit packing slip number and/or ship date
+// Admin/Owner only. Writes audit log entries for each changed field.
+// changedBy is derived from authenticated user — never trusted from request body.
+// ============================================================
+const editPackingSlipSchema = z.object({
+  packingSlipNumber: z.string().trim().min(1).optional(),
+  shipDate: z.string().datetime({ offset: true }).nullable().optional(),
+  reason: z.string().trim().min(1, 'Reason is required'),
+});
+
+router.patch(
+  '/packing-slips/:id',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const input = editPackingSlipSchema.parse(req.body);
+      const actor = req.user!.username;
+      const slipId = req.params.id;
+
+      // Fetch current slip (outside transaction — read-only pre-check)
+      const slipRows = await pool.query<{
+        id: string;
+        packing_slip_number: string;
+        ship_date: string | null;
+      }>(
+        `SELECT id, packing_slip_number, ship_date FROM p2_packing_slips WHERE id = $1`,
+        [slipId]
+      );
+      if (slipRows.length === 0) {
+        return res.status(404).json({ error: 'Packing slip not found' });
+      }
+      const slip = slipRows[0];
+
+      const setClauses: string[] = ['updated_at = NOW()'];
+      const params: any[] = [];
+      const auditEntries: { fieldName: string; oldValue: string | null; newValue: string | null }[] = [];
+
+      if (input.packingSlipNumber !== undefined && input.packingSlipNumber !== slip.packing_slip_number) {
+        // Check uniqueness
+        const dupRows = await pool.query<{ id: string }>(
+          `SELECT id FROM p2_packing_slips WHERE packing_slip_number = $1 AND id != $2`,
+          [input.packingSlipNumber, slipId]
+        );
+        if (dupRows.length > 0) {
+          return res.status(409).json({ error: 'A packing slip with that number already exists' });
+        }
+        params.push(input.packingSlipNumber);
+        setClauses.push(`packing_slip_number = $${params.length}`);
+        auditEntries.push({
+          fieldName: 'packing_slip_number',
+          oldValue: slip.packing_slip_number,
+          newValue: input.packingSlipNumber,
+        });
+      }
+
+      if (input.shipDate !== undefined) {
+        const oldVal = slip.ship_date ?? null;
+        const newVal = input.shipDate;
+        if (oldVal !== newVal) {
+          params.push(newVal);
+          setClauses.push(`ship_date = $${params.length}`);
+          auditEntries.push({
+            fieldName: 'ship_date',
+            oldValue: oldVal,
+            newValue: newVal,
+          });
+        }
+      }
+
+      if (auditEntries.length === 0) {
+        // Nothing changed — return current record
+        const currentRows = await pool.query(
+          `SELECT * FROM p2_packing_slips WHERE id = $1`,
+          [slipId]
+        );
+        return res.json(currentRows[0]);
+      }
+
+      // Execute update + audit log in a single transaction using one client connection
+      const client = await pgPool.connect();
+      try {
+        await client.query('BEGIN');
+
+        params.push(slipId);
+        const updateSql = `UPDATE p2_packing_slips SET ${setClauses.join(', ')} WHERE id = $${params.length} RETURNING *`;
+        const updateResult = await client.query(updateSql, params);
+        const updated = updateResult.rows[0];
+
+        for (const entry of auditEntries) {
+          await client.query(
+            `INSERT INTO p2_shipping_audit_log (entity_type, entity_id, field_name, old_value, new_value, changed_by, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            ['packing_slip', slipId, entry.fieldName, entry.oldValue, entry.newValue, actor, input.reason]
+          );
+        }
+
+        await client.query('COMMIT');
+        return res.json(updated);
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        client.release();
+      }
+    } catch (err: any) {
+      if (err instanceof z.ZodError)
+        return res.status(400).json({ error: err.errors[0].message });
+      console.error('Edit packing slip error:', err);
+      return res.status(500).json({ error: 'Failed to update packing slip' });
+    }
+  }
+);
+
+// ============================================================
 // GET /api/p2/packing-slips/:id/pdf — Generate Packing Slip PDF
 // NOTE: This route generates the PDF on-the-fly from the persisted p2_packing_slips record.
 // The slip metadata is already stored in DB (created via POST /packing-slips); however,
@@ -361,8 +475,8 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       packingSlipNumber: slip.packingSlipNumber,
       poNumber: slip.poNumber || undefined,
       lotNumber: slip.lotNumber || undefined,
-      date: slip.createdAt
-        ? new Date(slip.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      date: (slip.shipDate || slip.createdAt)
+        ? new Date(slip.shipDate || slip.createdAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       customerName: slip.customerName,
       customerAddress: structuredAddress,

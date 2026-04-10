@@ -43,6 +43,52 @@ interface RFQAssessment {
   updatedAt: string;
 }
 
+const RiskRadioGroup = ({
+  name,
+  value,
+  onChange,
+  label,
+}: {
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) => (
+  <div className="space-y-3 pl-4">
+    <Label className="text-sm font-medium">{label}</Label>
+    <RadioGroup
+      value={value}
+      onValueChange={onChange}
+      className="flex gap-8 pl-2"
+    >
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="extreme" id={`${name}-extreme`} />
+        <Label htmlFor={`${name}-extreme`} className="text-sm">
+          Extreme
+        </Label>
+      </div>
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="high" id={`${name}-high`} />
+        <Label htmlFor={`${name}-high`} className="text-sm">
+          High
+        </Label>
+      </div>
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="medium" id={`${name}-medium`} />
+        <Label htmlFor={`${name}-medium`} className="text-sm">
+          Medium
+        </Label>
+      </div>
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="low" id={`${name}-low`} />
+        <Label htmlFor={`${name}-low`} className="text-sm">
+          Low
+        </Label>
+      </div>
+    </RadioGroup>
+  </div>
+);
+
 export default function RFQRiskAssessment() {
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
@@ -519,52 +565,6 @@ export default function RFQRiskAssessment() {
       }
     }
   };
-
-  const RiskRadioGroup = ({
-    name,
-    value,
-    onChange,
-    label,
-  }: {
-    name: string;
-    value: string;
-    onChange: (value: string) => void;
-    label: string;
-  }) => (
-    <div className="space-y-3 pl-4">
-      <Label className="text-sm font-medium">{label}</Label>
-      <RadioGroup
-        value={value}
-        onValueChange={onChange}
-        className="flex gap-8 pl-2"
-      >
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="extreme" id={`${name}-extreme`} />
-          <Label htmlFor={`${name}-extreme`} className="text-sm">
-            Extreme
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="high" id={`${name}-high`} />
-          <Label htmlFor={`${name}-high`} className="text-sm">
-            High
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="medium" id={`${name}-medium`} />
-          <Label htmlFor={`${name}-medium`} className="text-sm">
-            Medium
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="low" id={`${name}-low`} />
-          <Label htmlFor={`${name}-low`} className="text-sm">
-            Low
-          </Label>
-        </div>
-      </RadioGroup>
-    </div>
-  );
 
   // Validation function for required mitigation actions (only if risk score > 16)
   const validateForm = () => {

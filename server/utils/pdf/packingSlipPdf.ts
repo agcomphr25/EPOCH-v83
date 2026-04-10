@@ -317,3 +317,405 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
   const bytes = await pdfDoc.save();
   return Buffer.from(bytes);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PO-SPECIFIC PACKING SLIP (new format matching screenshot)
+// Layout:
+//   Top-left  : Company name + address as plain text
+//   Top-right : "Packing Slip" title + bordered Date/Invoice # box
+//   Below hdr : Bordered "Ship To:" box with customer name + address
+//   Table     : PO # | Contents | Sticker # Range | Quantity | Weekly Box # | Shipment #
+//   Table foot: Tracking # embedded in the Weekly Box # column cell at the bottom
+// ─────────────────────────────────────────────────────────────────────────────
+export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<Buffer> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const margins = await getMargins();
+  const margin = (margins.STANDARD as number) ?? 40;
+  const usableWidth = PAGE_WIDTH - margin * 2;
+
+  let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+
+  // ── TOP HEADER ──────────────────────────────────────────────────────────────
+  // Left side: company name + address lines
+  let leftY = PAGE_HEIGHT - margin;
+  const companyLines = [
+    'AG Composites, LLC',
+    '230 Hamer Rd',
+    'Owens Cross Roads, AL 35763',
+  ];
+
+  page.drawText(companyLines[0], {
+    x: margin,
+    y: leftY,
+    size: FONT_SIZES.BODY_LARGE,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  leftY -= LINE_HEIGHTS.COMPACT;
+
+  for (let i = 1; i < companyLines.length; i++) {
+    page.drawText(companyLines[i], {
+      x: margin,
+      y: leftY,
+      size: FONT_SIZES.BODY_SMALL,
+      font,
+      color: COLORS.TEXT_SECONDARY,
+    });
+    leftY -= LINE_HEIGHTS.COMPACT;
+  }
+
+  // Right side: "Packing Slip" title + bordered box [Date | Invoice #]
+  const rightBlockWidth = 180;
+  const rightBlockX = PAGE_WIDTH - margin - rightBlockWidth;
+
+  const titleText = 'Packing Slip';
+  const titleSize = FONT_SIZES.TITLE_SMALL;
+  const titleW = boldFont.widthOfTextAtSize(titleText, titleSize);
+  const titleX = rightBlockX + (rightBlockWidth - titleW) / 2;
+
+  page.drawText(titleText, {
+    x: titleX,
+    y: PAGE_HEIGHT - margin,
+    size: titleSize,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  // Bordered two-column box (Date | Invoice #)
+  const boxTop = PAGE_HEIGHT - margin - LINE_HEIGHTS.SECTION;
+  const boxHeight = 32;
+  const halfW = rightBlockWidth / 2;
+
+  // Outer border
+  page.drawRectangle({
+    x: rightBlockX,
+    y: boxTop - boxHeight,
+    width: rightBlockWidth,
+    height: boxHeight,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 0.75,
+  });
+
+  // Middle divider
+  page.drawLine({
+    start: { x: rightBlockX + halfW, y: boxTop },
+    end: { x: rightBlockX + halfW, y: boxTop - boxHeight },
+    thickness: 0.75,
+    color: rgb(0, 0, 0),
+  });
+
+  // Header row divider (label row at top)
+  const labelRowH = 14;
+  page.drawLine({
+    start: { x: rightBlockX, y: boxTop - labelRowH },
+    end: { x: rightBlockX + rightBlockWidth, y: boxTop - labelRowH },
+    thickness: 0.75,
+    color: rgb(0, 0, 0),
+  });
+
+  // "Date" label and value
+  page.drawText('Date', {
+    x: rightBlockX + 4,
+    y: boxTop - labelRowH + 4,
+    size: FONT_SIZES.BODY_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  page.drawText(data.date, {
+    x: rightBlockX + 4,
+    y: boxTop - boxHeight + 5,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  // "Invoice #" label and value
+  page.drawText('Invoice #', {
+    x: rightBlockX + halfW + 4,
+    y: boxTop - labelRowH + 4,
+    size: FONT_SIZES.BODY_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  page.drawText(data.packingSlipNumber, {
+    x: rightBlockX + halfW + 4,
+    y: boxTop - boxHeight + 5,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  // Move y below both header blocks (left company text + right box)
+  const headerBottom = Math.min(leftY, boxTop - boxHeight);
+  let y = headerBottom - SPACING.SECTION_GAP_SMALL;
+
+  // ── SHIP TO BOX ─────────────────────────────────────────────────────────────
+  const shipToLines: string[] = [data.customerName];
+
+  if (data.customerAddress) {
+    const addr = data.customerAddress;
+    if (addr.rawLines && addr.rawLines.length > 0) {
+      shipToLines.push(...addr.rawLines);
+    } else {
+      if (addr.street) shipToLines.push(addr.street);
+      if (addr.street2) shipToLines.push(addr.street2);
+      const cityStateZip = [addr.city, addr.state, addr.zip].filter(Boolean).join(', ');
+      if (cityStateZip) shipToLines.push(cityStateZip);
+    }
+  }
+
+  const shipToLineH = LINE_HEIGHTS.COMPACT;
+  const shipToBoxPad = 6;
+  const shipToInnerH = shipToLines.length * shipToLineH + shipToBoxPad * 2;
+  const shipToLabelH = 14;
+  const shipToBoxH = shipToInnerH + shipToLabelH;
+
+  // Border
+  page.drawRectangle({
+    x: margin,
+    y: y - shipToBoxH,
+    width: usableWidth,
+    height: shipToBoxH,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 0.75,
+  });
+
+  // "Ship To:" label row
+  page.drawLine({
+    start: { x: margin, y: y - shipToLabelH },
+    end: { x: margin + usableWidth, y: y - shipToLabelH },
+    thickness: 0.75,
+    color: rgb(0, 0, 0),
+  });
+  page.drawText('Ship To:', {
+    x: margin + 4,
+    y: y - shipToLabelH + 4,
+    size: FONT_SIZES.BODY_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+
+  // Address lines
+  let addrY = y - shipToLabelH - shipToBoxPad - 8;
+  for (const line of shipToLines) {
+    const isFirst = line === shipToLines[0];
+    page.drawText(line, {
+      x: margin + 6,
+      y: addrY,
+      size: isFirst ? FONT_SIZES.BODY_MEDIUM : FONT_SIZES.BODY_SMALL,
+      font: isFirst ? boldFont : font,
+      color: isFirst ? COLORS.TEXT_PRIMARY : COLORS.TEXT_SECONDARY,
+    });
+    addrY -= shipToLineH;
+  }
+
+  y -= shipToBoxH + SPACING.SECTION_GAP_SMALL;
+
+  // ── TABLE ───────────────────────────────────────────────────────────────────
+  // Columns: PO # | Contents | Sticker # Range | Quantity | Weekly Box # | Shipment #
+  // Width allocation out of usableWidth (≈532px with margin=40)
+  const TABLE_COL_WIDTHS = [70, 120, 75, 50, 90, 127] as const;
+  // Sanity: these sum to 532 for usableWidth=532
+
+  const tableColX: number[] = [margin];
+  for (let i = 0; i < TABLE_COL_WIDTHS.length - 1; i++) {
+    tableColX.push(tableColX[i] + TABLE_COL_WIDTHS[i]);
+  }
+
+  const TABLE_HEADERS = [
+    'PO #',
+    'Contents',
+    'Sticker # Range',
+    'Quantity',
+    'Weekly Box #',
+    'Shipment #',
+  ];
+
+  const hdrHeight = 16;
+
+  const renderPoTableHeader = (pg: PDFPage, startY: number) => {
+    // Draw outer border + header background
+    pg.drawRectangle({
+      x: margin,
+      y: startY - hdrHeight,
+      width: usableWidth,
+      height: hdrHeight,
+      color: rgb(0.88, 0.88, 0.88),
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 0.75,
+    });
+
+    TABLE_HEADERS.forEach((txt, i) => {
+      // Column vertical divider (except first)
+      if (i > 0) {
+        pg.drawLine({
+          start: { x: tableColX[i], y: startY },
+          end: { x: tableColX[i], y: startY - hdrHeight },
+          thickness: 0.75,
+          color: rgb(0, 0, 0),
+        });
+      }
+      pg.drawText(txt, {
+        x: tableColX[i] + 3,
+        y: startY - hdrHeight + 5,
+        size: FONT_SIZES.BODY_SMALL,
+        font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
+      });
+    });
+  };
+
+  renderPoTableHeader(page, y);
+  y -= hdrHeight;
+
+  const tableStartY = y; // remember for outer border drawing later
+
+  const ROW_HEIGHT = 18;
+
+  for (let idx = 0; idx < data.items.length; idx++) {
+    const item = data.items[idx];
+
+    // Page break
+    if (y - ROW_HEIGHT < margin + 60) {
+      // Close current page table border
+      page.drawRectangle({
+        x: margin,
+        y: y,
+        width: usableWidth,
+        height: tableStartY - y,
+        borderColor: rgb(0, 0, 0),
+        borderWidth: 0.75,
+      });
+
+      page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      y = PAGE_HEIGHT - margin;
+      renderPoTableHeader(page, y);
+      y -= hdrHeight;
+    }
+
+    const cellY = y - ROW_HEIGHT + 5;
+
+    // Alternating row background
+    if (idx % 2 === 1) {
+      page.drawRectangle({
+        x: margin,
+        y: y - ROW_HEIGHT,
+        width: usableWidth,
+        height: ROW_HEIGHT,
+        color: rgb(0.96, 0.96, 0.96),
+      });
+    }
+
+    // Row bottom border
+    page.drawLine({
+      start: { x: margin, y: y - ROW_HEIGHT },
+      end: { x: margin + usableWidth, y: y - ROW_HEIGHT },
+      thickness: 0.5,
+      color: rgb(0.6, 0.6, 0.6),
+    });
+
+    // Column dividers
+    for (let ci = 1; ci < TABLE_COL_WIDTHS.length; ci++) {
+      page.drawLine({
+        start: { x: tableColX[ci], y: y },
+        end: { x: tableColX[ci], y: y - ROW_HEIGHT },
+        thickness: 0.5,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+    }
+
+    const cellValues = [
+      data.poNumber || '',
+      item.contents || item.partNumber || '',
+      item.stickerRange || '',
+      String(item.quantity ?? 1),
+      item.weeklyBoxNumber || data.weeklyBoxNumber || '',
+      item.shipmentNumber || data.shipmentNumber || '',
+    ];
+
+    cellValues.forEach((val, ci) => {
+      page.drawText(val, {
+        x: tableColX[ci] + 3,
+        y: cellY,
+        size: FONT_SIZES.BODY_SMALL,
+        font,
+        color: COLORS.TEXT_SECONDARY,
+      });
+    });
+
+    y -= ROW_HEIGHT;
+  }
+
+  // ── TRACKING # ROW at bottom of table ──────────────────────────────────────
+  const trackingRowH = 18;
+
+  // Page break check
+  if (y - trackingRowH < margin + 40) {
+    page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    y = PAGE_HEIGHT - margin;
+  }
+
+  // Tracking row background (light gray to distinguish)
+  page.drawRectangle({
+    x: margin,
+    y: y - trackingRowH,
+    width: usableWidth,
+    height: trackingRowH,
+    color: rgb(0.92, 0.92, 0.92),
+  });
+
+  // Bottom border of tracking row
+  page.drawLine({
+    start: { x: margin, y: y - trackingRowH },
+    end: { x: margin + usableWidth, y: y - trackingRowH },
+    thickness: 0.75,
+    color: rgb(0, 0, 0),
+  });
+
+  // Column dividers for tracking row
+  for (let ci = 1; ci < TABLE_COL_WIDTHS.length; ci++) {
+    page.drawLine({
+      start: { x: tableColX[ci], y },
+      end: { x: tableColX[ci], y: y - trackingRowH },
+      thickness: 0.5,
+      color: rgb(0.6, 0.6, 0.6),
+    });
+  }
+
+  // "Tracking #" label and value both placed within the Weekly Box # column area (col 4)
+  // The label sits on the left, value follows inline within that column region
+  const trackingLabel = 'Tracking #:';
+  const trackingLabelW = boldFont.widthOfTextAtSize(trackingLabel, FONT_SIZES.BODY_SMALL);
+  page.drawText(trackingLabel, {
+    x: tableColX[4] + 3,
+    y: y - trackingRowH + 5,
+    size: FONT_SIZES.BODY_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  page.drawText(data.trackingNumber || '', {
+    x: tableColX[4] + 3 + trackingLabelW + 3,
+    y: y - trackingRowH + 5,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+
+  y -= trackingRowH;
+
+  // Outer table border (drawn as overlay on top of everything)
+  page.drawRectangle({
+    x: margin,
+    y: y,
+    width: usableWidth,
+    height: tableStartY - y,
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 0.75,
+  });
+
+  const bytes = await pdfDoc.save();
+  return Buffer.from(bytes);
+}

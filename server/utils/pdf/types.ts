@@ -6,6 +6,10 @@ export interface PackingSlipItem {
   serialNumbers?: string[];
   lotNumber?: string;
   specifications?: string;
+  contents?: string;
+  stickerRange?: string;
+  weeklyBoxNumber?: string;
+  shipmentNumber?: string;
 }
 
 export interface PackingSlipData {
@@ -27,4 +31,6 @@ export interface PackingSlipData {
   packedBy?: string;
   verifiedBy?: string;
   items: PackingSlipItem[];
+  weeklyBoxNumber?: string;
+  shipmentNumber?: string;
 }

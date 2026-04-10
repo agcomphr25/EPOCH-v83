@@ -4,7 +4,7 @@ import { authenticateToken } from '../../middleware/auth';
 import { createShipment, ShipTo } from '../utils/upsShipping';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
 import { auditService } from '../services/auditService';
-import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
+import { generatePoPackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 
 const router = Router();
@@ -221,27 +221,74 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
         customerName
       );
 
-      // Map assembled order data to PackingSlipData
-      const slipItems: PackingSlipItem[] = items.map((item) => {
-        const rawUnitNumber =
+      // Collect unit numbers across all items in this PO group to derive sticker range
+      const unitNumbers: number[] = items.map((item) => {
+        const rawUnit =
           item.order?.unitNumber ||
           (() => {
             if (!item.order?.orderId) return 1;
             const unitMatch = item.order.orderId.match(/-(\d+)$/);
             return unitMatch ? parseInt(unitMatch[1]) : 1;
           })();
-
-        const partNumber =
-          item.poItem.itemName || item.poItem.stockModelName || 'N/A';
-
-        return {
-          partNumber,
-          description: partNumber,
-          quantity: 1,
-          unitNumber: `Unit ${rawUnitNumber}`,
-          specifications: item.poItem.specifications || undefined,
-        };
+        return typeof rawUnit === 'number' ? rawUnit : parseInt(String(rawUnit), 10) || 1;
       });
+
+      const minUnit = Math.min(...unitNumbers);
+      const maxUnit = Math.max(...unitNumbers);
+      const stickerRange =
+        unitNumbers.length === 0
+          ? ''
+          : minUnit === maxUnit
+          ? String(minUnit)
+          : `${minUnit}-${maxUnit}`;
+
+      // Try to fetch shipment data to populate weeklyBoxNumber / shipmentNumber
+      let weeklyBoxNumber: string | undefined;
+      let shipmentNumber: string | undefined;
+      let trackingNumber: string | undefined;
+
+      try {
+        const shipmentRows = await pool.query<{
+          reference: string | null;
+          master_tracking_number: string | null;
+        }>(
+          `SELECT sr.reference, sr.master_tracking_number
+           FROM shipment_records sr
+           JOIN shipment_items si ON si.shipment_id = sr.id
+           WHERE si.po_number = $1
+           ORDER BY sr.shipped_at DESC
+           LIMIT 1`,
+          [poNumber]
+        );
+
+        // pool.query returns an array directly (not { rows: [...] })
+        if (shipmentRows.length > 0) {
+          const sr = shipmentRows[0];
+          shipmentNumber = sr.reference || undefined;
+          trackingNumber = sr.master_tracking_number || undefined;
+        }
+      } catch (shipErr: any) {
+        console.warn(`⚠️ Could not fetch shipment data for PO ${poNumber}: ${shipErr.message}`);
+      }
+
+      // Map assembled order data to PackingSlipData (one aggregated row per PO group)
+      const stockModelCode =
+        items[0].poItem.stockModelId ||
+        items[0].poItem.itemName ||
+        items[0].poItem.stockModelName ||
+        'N/A';
+
+      const slipItems: PackingSlipItem[] = [
+        {
+          partNumber: poNumber,
+          description: stockModelCode,
+          contents: stockModelCode,
+          stickerRange,
+          quantity: items.length,
+          weeklyBoxNumber,
+          shipmentNumber,
+        },
+      ];
 
       const slipData: PackingSlipData = {
         packingSlipNumber: invoiceNumber,
@@ -257,68 +304,14 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
               zip: customerAddress.zipCode,
             }
           : undefined,
+        trackingNumber,
         totalQuantity: items.length,
+        weeklyBoxNumber,
+        shipmentNumber,
         items: slipItems,
       };
 
-      // LEGACY PACKING SLIP RENDERER — REPLACED BY generatePackingSlipPdf
-      // const pdfDoc = await PDFDocument.create();
-      // let currentPage = pdfDoc.addPage([612, 792]);
-      // const { width, height } = currentPage.getSize();
-      // const margin = 50;
-      // const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      // const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      // let currentY = height - margin;
-      // // ── Header ──
-      // currentPage.drawText('AG COMPOSITES', { x: margin, y: currentY, size: 18, font: boldFont, color: rgb(0,0,0) });
-      // const agAddress = ['230 Hamer Rd', 'Owens Cross Roads, AL 35763', 'Phone: (256) 723-8381'];
-      // let agAddressY = currentY;
-      // agAddress.forEach((line) => { const tw = font.widthOfTextAtSize(line, 9); currentPage.drawText(line, { x: width - margin - tw, y: agAddressY, size: 9, font }); agAddressY -= 12; });
-      // currentY -= 35;
-      // currentPage.drawText('PACKING SLIP', { x: margin, y: currentY, size: 14, font: boldFont, color: rgb(0,0,0) });
-      // // ── Invoice & Date ──
-      // currentY -= 30;
-      // currentPage.drawText(`Invoice #: ${invoiceNumber}`, { x: margin, y: currentY, size: 11, font: boldFont });
-      // currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, { x: width - margin - 150, y: currentY, size: 11, font });
-      // currentY -= 20;
-      // currentPage.drawText(`PO Number: ${poNumber}`, { x: margin, y: currentY, size: 11, font: boldFont });
-      // // ── Ship To ──
-      // currentY -= 30;
-      // currentPage.drawText('SHIP TO:', { x: margin, y: currentY, size: 11, font: boldFont });
-      // currentY -= 15;
-      // currentPage.drawText(customerName, { x: margin, y: currentY, size: 10, font });
-      // if (customerAddress) {
-      //   currentY -= 15; currentPage.drawText(customerAddress.street, { x: margin, y: currentY, size: 10, font });
-      //   if (customerAddress.street2) { currentY -= 15; currentPage.drawText(customerAddress.street2, { x: margin, y: currentY, size: 10, font }); }
-      //   currentY -= 15; currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, { x: margin, y: currentY, size: 10, font });
-      // }
-      // currentY -= 25;
-      // currentPage.drawText('Tracking #: _________________________', { x: margin, y: currentY, size: 10, font });
-      // // ── Items table ──
-      // currentY -= 40;
-      // currentPage.drawText('Item', { x: margin, y: currentY, size: 11, font: boldFont });
-      // currentPage.drawText('Description', { x: margin + 80, y: currentY, size: 11, font: boldFont });
-      // currentPage.drawText('Unit #', { x: margin + 350, y: currentY, size: 11, font: boldFont });
-      // currentY -= 5;
-      // currentPage.drawLine({ start: { x: margin, y: currentY }, end: { x: width - margin, y: currentY }, thickness: 1, color: rgb(0,0,0) });
-      // currentY -= 20;
-      // items.forEach((item, idx) => {
-      //   if (currentY < margin + 50) { currentPage = pdfDoc.addPage([612, 792]); currentY = height - margin; }
-      //   const unitNumber = item.order?.unitNumber || (() => { if (!item.order?.orderId) return 1; const m = item.order.orderId.match(/-(\d+)$/); return m ? parseInt(m[1]) : 1; })();
-      //   currentPage.drawText(`${idx + 1}`, { x: margin, y: currentY, size: 10, font });
-      //   const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
-      //   currentPage.drawText(itemName.length > 30 ? itemName.slice(0, 30) + '...' : itemName, { x: margin + 80, y: currentY, size: 9, font });
-      //   currentPage.drawText(`${unitNumber}`, { x: margin + 350, y: currentY, size: 10, font });
-      //   currentY -= 20;
-      // });
-      // // ── Footer ──
-      // const pages = pdfDoc.getPages();
-      // const lastPage = pages[pages.length - 1];
-      // lastPage.drawText(`Total Items: ${items.length}`, { x: margin, y: margin + 20, size: 11, font: boldFont });
-      // const pdfBytes = await pdfDoc.save();
-      // pdfs.push({ poNumber, pdf: Buffer.from(pdfBytes) });
-
-      const pdfBuffer = await generatePackingSlipPdf(slipData);
+      const pdfBuffer = await generatePoPackingSlipPdf(slipData);
       const pdfBase64 = pdfBuffer.toString('base64');
 
       // Collect all matching shipment_items by po_number or order_id, deduplicated

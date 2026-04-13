@@ -971,6 +971,9 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
       try {
         const shipTo = item.ship_to_snapshot || {};
         const customerName = (shipTo.name as string) || 'N/A';
+        if (!customerName || customerName === 'N/A') {
+          console.warn(`⚠️ Packing slip regeneration: customerName is empty for itemId=${itemId}`);
+        }
         const customerAddress = {
           street: (shipTo.street as string) || 'N/A',
           street2: (shipTo.street2 as string) || undefined,
@@ -979,61 +982,109 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
           zip: (shipTo.postalCode as string) || 'N/A',
         };
 
-        const partNumber = (item.poi_item_id as string) || undefined;
-        const description =
-          (item.poi_item_name as string) ||
-          (item.poi_stock_model_name as string) ||
-          (item.description as string) ||
+        const poNumberForSlip = item.po_number || '';
+
+        // Fetch all items for this PO within the same shipment to compute aggregated fields
+        const siblingQuery = `
+          SELECT
+            si.id,
+            si.order_id,
+            si.quantity,
+            sr.reference AS shipment_reference,
+            poi.item_name AS poi_item_name,
+            poi.stock_model_name AS poi_stock_model_name,
+            poi.stock_model_id AS poi_stock_model_id
+          FROM shipment_items si
+          JOIN shipment_records sr ON sr.id = si.shipment_id
+          LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+          WHERE si.shipment_id = (
+            SELECT shipment_id FROM shipment_items WHERE id = $1
+          )
+          AND si.po_number = $2
+        `;
+        const siblingResult = await pool.query(siblingQuery, [itemId, poNumberForSlip]);
+        const siblingRows: any[] = (siblingResult.rows || siblingResult) as any[];
+
+        // Aggregate quantity across all items in this PO group
+        const totalQty = siblingRows.reduce((sum, r) => sum + (r.quantity || 1), 0);
+
+        // Derive sticker range from order_id suffix (e.g. FA001-3 → unit 3)
+        const unitNumbers: number[] = siblingRows.map((r) => {
+          if (!r.order_id) return 1;
+          const m = String(r.order_id).match(/-(\d+)$/);
+          return m ? parseInt(m[1]) : 1;
+        });
+        const minUnit = Math.min(...unitNumbers);
+        const maxUnit = Math.max(...unitNumbers);
+        const stickerRange =
+          unitNumbers.length === 0
+            ? ''
+            : minUnit === maxUnit
+            ? String(minUnit)
+            : `${minUnit}-${maxUnit}`;
+
+        const firstSibling = siblingRows[0] || item;
+        const stockModelCode =
+          firstSibling.poi_stock_model_id ||
+          firstSibling.poi_item_name ||
+          firstSibling.poi_stock_model_name ||
+          item.poi_item_name ||
+          item.poi_stock_model_name ||
+          item.description ||
           'N/A';
 
-        // Normalize serial_numbers from JSONB (array) if present
-        const rawSerials = item.serial_numbers;
-        const serialNumbers: string[] | undefined =
-          Array.isArray(rawSerials) && rawSerials.length > 0
-            ? (rawSerials as unknown[]).map(String)
-            : undefined;
+        // Use shipment reference from query result (sr.reference)
+        const shipmentRef = firstSibling.shipment_reference || undefined;
 
-        const lineItem = {
-          partNumber: partNumber || 'N/A',
-          description,
-          quantity: item.quantity || 1,
-          unitNumber: item.order_id || '',
-          ...(serialNumbers ? { serialNumbers } : {}),
-        };
+        const { storage: slipStorage } = await import('../../storage');
 
-        const lineItems = [lineItem];
+        // Require a proper PP-style invoice number — do not fall back to PS- placeholder
+        const invoiceNumber = await slipStorage.getNextInvoiceNumber('0', customerName);
+
+        const slipItems: PackingSlipItem[] = [
+          {
+            partNumber: poNumberForSlip,
+            description: stockModelCode,
+            contents: stockModelCode,
+            stickerRange,
+            quantity: totalQty,
+            shipmentNumber: shipmentRef,
+          },
+        ];
 
         console.log(
-          `📋 Packing slip data — customerName: "${customerName}", address:`,
-          customerAddress,
-          `items: ${lineItems.length}, partNumber: "${lineItem.partNumber}", description: "${lineItem.description}"`
+          `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${invoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
         );
-        if (!customerName || customerName === 'N/A') {
-          console.warn(`⚠️ Packing slip regeneration: customerName is empty for itemId=${itemId}`);
-        }
-        if (lineItems.length === 0) {
-          console.warn(`⚠️ Packing slip regeneration: no items resolved for itemId=${itemId}`);
-        }
 
         const slipData: PackingSlipData = {
-          packingSlipNumber: `PS-${item.order_id || item.po_number}`,
-          poNumber: item.po_number || '',
+          packingSlipNumber: invoiceNumber,
+          poNumber: poNumberForSlip,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           customerName,
           customerAddress,
           trackingNumber: item.tracking_number || '',
-          totalQuantity: item.quantity || 1,
-          items: lineItems,
+          totalQuantity: totalQty,
+          shipmentNumber: shipmentRef,
+          items: slipItems,
         };
-        const pdfBuffer = await generatePackingSlipPdf(slipData);
+        const pdfBuffer = await generatePoPackingSlipPdf(slipData);
         packingSlipBase64 = pdfBuffer.toString('base64');
 
-        // Persist so future fetches don't need to regenerate
-        await pool.query(
-          `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
-          [packingSlipBase64, itemId]
-        );
-        console.log(`✅ Packing slip regenerated and persisted: ${itemId}`);
+        // Persist to all sibling items in this PO group so future fetches don't regenerate
+        const siblingIds = siblingRows.map((r) => r.id).filter(Boolean);
+        if (siblingIds.length > 1) {
+          await pool.query(
+            `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = ANY($2::uuid[])`,
+            [packingSlipBase64, siblingIds]
+          );
+          console.log(`✅ Packing slip persisted to ${siblingIds.length} sibling item(s) for PO ${poNumberForSlip}`);
+        } else {
+          await pool.query(
+            `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
+            [packingSlipBase64, itemId]
+          );
+          console.log(`✅ Packing slip regenerated and persisted: ${itemId}`);
+        }
       } catch (regenErr: any) {
         console.error(`❌ Packing slip regeneration failed for item ${itemId}:`, regenErr.message);
         return res.status(404).json({ _error: 'Packing slip not available and could not be regenerated' });
@@ -2026,45 +2077,99 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           notificationMetadata: {},
         };
 
-        // Generate a packing slip PDF for each item
-        const shipmentItemsData = await Promise.all(orderDetails.map(async (detail) => {
-          const itemPoNumber = detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '';
-          const itemDescription = detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.stock_model_name || detail.poItem?.itemName || detail.poItem?.item_name || '';
-          const itemOrderId = detail.order.orderId || detail.order.order_id || '';
+        // Generate one packing slip per PO group, store on all items in that PO
+        const poSlipMap = new Map<string, string | null>();
 
-          let packingSlipBase64: string | null = null;
+        for (const [groupPoNumber, groupItems] of poGroups.entries()) {
           try {
+            const groupCustomerId = groupItems[0].po.customerId;
+            const groupCustomerName = groupItems[0].po.customerName || firstCustomer?.name || 'Unknown Customer';
+
+            let groupCustomerAddress = null;
+            try {
+              groupCustomerAddress = groupCustomerId
+                ? await storage.getCustomerDefaultAddress(String(groupCustomerId))
+                : null;
+            } catch (addrErr: any) {
+              console.warn(`⚠️ Could not fetch customer address for PO ${groupPoNumber}: ${addrErr.message}`);
+            }
+
+            const invoiceNumber = await storage.getNextInvoiceNumber(
+              String(groupCustomerId || '0'),
+              groupCustomerName
+            );
+
+            const unitNumbers: number[] = groupItems.map((gi) => {
+              const rawUnit =
+                gi.order?.unitNumber ||
+                (() => {
+                  if (!gi.order?.orderId) return 1;
+                  const unitMatch = gi.order.orderId.match(/-(\d+)$/);
+                  return unitMatch ? parseInt(unitMatch[1]) : 1;
+                })();
+              return typeof rawUnit === 'number' ? rawUnit : parseInt(String(rawUnit), 10) || 1;
+            });
+
+            const minUnit = Math.min(...unitNumbers);
+            const maxUnit = Math.max(...unitNumbers);
+            const stickerRange =
+              unitNumbers.length === 0
+                ? ''
+                : minUnit === maxUnit
+                ? String(minUnit)
+                : `${minUnit}-${maxUnit}`;
+
+            const stockModelCode =
+              groupItems[0].poItem.stockModelId ||
+              groupItems[0].poItem.itemName ||
+              groupItems[0].poItem.stockModelName ||
+              'N/A';
+
+            const slipItems: PackingSlipItem[] = [
+              {
+                partNumber: groupPoNumber,
+                description: stockModelCode,
+                contents: stockModelCode,
+                stickerRange,
+                quantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
+                shipmentNumber: referenceNumber || undefined,
+              },
+            ];
+
             const slipData: PackingSlipData = {
-              packingSlipNumber: `PS-${itemOrderId || itemPoNumber}`,
-              poNumber: itemPoNumber,
+              packingSlipNumber: invoiceNumber,
+              poNumber: groupPoNumber,
               date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              customerName: firstCustomer?.name || orderDetails[0].customer?.name || '',
-              customerAddress: primaryAddress
+              customerName: groupCustomerName,
+              customerAddress: groupCustomerAddress
                 ? {
-                    street: primaryAddress.street,
-                    street2: primaryAddress.street2 || undefined,
-                    city: primaryAddress.city,
-                    state: primaryAddress.state,
-                    zip: primaryAddress.zipCode,
+                    street: groupCustomerAddress.street,
+                    street2: groupCustomerAddress.street2 || undefined,
+                    city: groupCustomerAddress.city,
+                    state: groupCustomerAddress.state,
+                    zip: groupCustomerAddress.zipCode,
                   }
                 : undefined,
               trackingNumber: trackingNumber,
-              totalQuantity: detail.quantity,
-              items: [
-                {
-                  partNumber: detail.poItem?.itemName || detail.poItem?.stockModelName || itemDescription || 'N/A',
-                  description: itemDescription || detail.poItem?.itemName || detail.poItem?.stockModelName || 'N/A',
-                  quantity: detail.quantity,
-                  unitNumber: itemOrderId,
-                  specifications: detail.poItem?.specifications || undefined,
-                },
-              ],
+              totalQuantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
+              shipmentNumber: referenceNumber || undefined,
+              items: slipItems,
             };
-            const pdfBuffer = await generatePackingSlipPdf(slipData);
-            packingSlipBase64 = pdfBuffer.toString('base64');
+
+            const pdfBuffer = await generatePoPackingSlipPdf(slipData);
+            poSlipMap.set(groupPoNumber, pdfBuffer.toString('base64'));
+            console.log(`✅ Packing slip generated for PO ${groupPoNumber} (invoice: ${invoiceNumber})`);
           } catch (slipErr: any) {
-            console.warn(`⚠️ Packing slip generation failed for item ${itemOrderId}: ${slipErr.message}`);
+            console.warn(`⚠️ Packing slip generation failed for PO ${groupPoNumber}: ${slipErr.message}`);
+            poSlipMap.set(groupPoNumber, null);
           }
+        }
+
+        const shipmentItemsData = orderDetails.map((detail) => {
+          const itemPoNumber = detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '';
+          const itemDescription = detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.stock_model_name || detail.poItem?.itemName || detail.poItem?.item_name || '';
+          const itemOrderId = detail.order.orderId || detail.order.order_id || '';
+          const packingSlipBase64 = poSlipMap.get(itemPoNumber) || undefined;
 
           return {
             poItemId: detail.order.poItemId || detail.order.po_item_id,
@@ -2073,9 +2178,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             weightLbs: weightPerItemLbs * detail.quantity,
             description: itemDescription,
             poNumber: itemPoNumber,
-            packingSlipBase64: packingSlipBase64 || undefined,
+            packingSlipBase64,
           };
-        }));
+        });
 
         const createdShipment = await storage.createShipment({
           shipment: shipmentRecord,

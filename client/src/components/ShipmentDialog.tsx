@@ -1247,131 +1247,44 @@ function PrintShipmentPopup({
     },
   });
   const handlePrintPackingSlip = () => {
-    if (packingSlips && packingSlips.length > 0) {
-      let anyOpened = false;
-      packingSlips.forEach((slip) => {
-        if (!slip.data) return;
-        try {
-          const byteCharacters = atob(slip.data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'application/pdf' });
-          const url = URL.createObjectURL(blob);
-          const pdfWindow = window.open(url, '_blank');
-          if (!pdfWindow) {
-            alert('Please allow popups for this site to print');
-            URL.revokeObjectURL(url);
-            return;
-          }
-          anyOpened = true;
-          pdfWindow.addEventListener('load', () => {
-            URL.revokeObjectURL(url);
-          });
-        } catch (e) {
-          console.error('Failed to open server-generated packing slip PDF:', e);
-          toast({
-            title: 'Failed to Open Packing Slip',
-            description: `Could not open PDF for PO ${slip.poNumber || 'unknown'}. Falling back to basic packing slip.`,
-            variant: 'destructive',
-          });
-        }
+    if (!packingSlips || packingSlips.length === 0) {
+      toast({
+        title: 'No Packing Slip Available',
+        description: 'No packing slip PDF was generated for this shipment.',
+        variant: 'destructive',
       });
-      if (anyOpened) return;
-    }
-
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      alert('Please allow popups for this site to print');
       return;
     }
 
-    const today = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    packingSlips.forEach((slip) => {
+      if (!slip.data) return;
+      try {
+        const byteCharacters = atob(slip.data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const pdfWindow = window.open(url, '_blank');
+        if (!pdfWindow) {
+          alert('Please allow popups for this site to print');
+          URL.revokeObjectURL(url);
+          return;
+        }
+        pdfWindow.addEventListener('load', () => {
+          URL.revokeObjectURL(url);
+        });
+      } catch (e) {
+        console.error('Failed to open packing slip PDF:', e);
+        toast({
+          title: 'Failed to Open Packing Slip',
+          description: `Could not open PDF for PO ${slip.poNumber || 'unknown'}.`,
+          variant: 'destructive',
+        });
+      }
     });
-
-    const itemsHtml = items.map(item => `
-      <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.poNumber || '-'}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.orderId}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.description || 'Item'}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-      </tr>
-    `).join('');
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Packing Slip - ${poNumbers.join(', ')}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-          .logo { font-size: 24px; font-weight: bold; }
-          .title { font-size: 28px; text-align: center; margin-bottom: 30px; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
-          .info-box { background: #f9fafb; padding: 15px; border-radius: 8px; }
-          .info-label { font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 5px; }
-          .info-value { font-size: 16px; font-weight: 500; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background: #f3f4f6; padding: 12px 8px; text-align: left; font-weight: 600; border-bottom: 2px solid #d1d5db; }
-          .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px; }
-          @media print { body { padding: 20px; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="logo">AG Composites</div>
-          <div style="text-align: right; color: #6b7280;">
-            <div>Date: ${today}</div>
-          </div>
-        </div>
-        <h1 class="title">PACKING SLIP</h1>
-        <div class="info-grid">
-          <div class="info-box">
-            <div class="info-label">Ship To</div>
-            <div class="info-value">${customerName}</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">PO Number(s)</div>
-            <div class="info-value">${poNumbers.join(', ')}</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">Tracking Number</div>
-            <div class="info-value" style="font-family: monospace;">${trackingNumber}</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">Total Items</div>
-            <div class="info-value">${items.length} item(s)</div>
-          </div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>PO Number</th>
-              <th>Order ID</th>
-              <th>Item Name</th>
-              <th style="text-align: center;">Qty</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-        <div class="footer">
-          <p>Thank you for your business!</p>
-          <p>AG Composites</p>
-        </div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
   };
 
   const handlePrintShippingLabel = () => {

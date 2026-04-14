@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db, pool, pgPool } from '../../db';
+import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
 import {
   p2SerializedItems,
   p2Customers,
@@ -1179,6 +1180,14 @@ router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
             `UPDATE p2_packing_slips SET ${psUpdates.join(', ')} WHERE id = $${psIdx}`,
             psVals
           );
+        }
+
+        if (markShipped) {
+          try {
+            await createInvoiceFromPackingSlip(lotRow[0].packing_slip_id, lotId);
+          } catch (invoiceErr: any) {
+            console.error('Auto-invoice creation failed (shipment still succeeds):', invoiceErr);
+          }
         }
       }
     }

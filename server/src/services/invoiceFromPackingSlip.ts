@@ -26,6 +26,7 @@ export async function createInvoiceFromPackingSlip(
     .where(eq(arInvoices.packingSlipId, packingSlipId));
 
   if (existing.length > 0) {
+    console.log(`[InvoiceService] Duplicate prevented (pre-check): invoice already exists for packing slip ${packingSlipId}`);
     return;
   }
 
@@ -92,9 +93,11 @@ export async function createInvoiceFromPackingSlip(
     } else if (matches.length === 0) {
       pricingMismatch = true;
       unitPrice = 0;
+      console.warn(`[InvoiceService] Pricing mismatch: no PO match found for part number ${line.partNumber}`);
     } else {
       pricingAmbiguous = true;
       unitPrice = 0;
+      console.warn(`[InvoiceService] Pricing ambiguity: ${matches.length} PO matches found for part number ${line.partNumber}`);
     }
 
     const qty = line.quantity ?? 0;
@@ -164,10 +167,13 @@ export async function createInvoiceFromPackingSlip(
         .set({ invoiceNumber })
         .where(eq(p2PackingSlips.id, packingSlipId));
     });
+
+    console.log(`[InvoiceService] Invoice ${invoiceNumber} auto-created for packing slip ${packingSlipId}`);
   } catch (err: any) {
     // Postgres unique_violation (23505) on the packing_slip_id unique index means
     // a concurrent request already created the invoice — idempotent, not an error.
     if (err?.code === '23505') {
+      console.log(`[InvoiceService] Duplicate prevented (constraint): invoice already exists for packing slip ${packingSlipId}`);
       return;
     }
     throw err;

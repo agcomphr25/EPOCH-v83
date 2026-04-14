@@ -1758,6 +1758,11 @@ export interface IStorage {
     }
   ): Promise<Traveler>;
 
+  // Production Work Order traveler linkage
+  getTravelersByProductionWorkOrderId(workOrderId: string): Promise<Traveler[]>;
+  linkTravelerToProductionWorkOrder(travelerId: string, workOrderId: string): Promise<Traveler>;
+  unlinkTravelerFromProductionWorkOrder(travelerId: string): Promise<Traveler>;
+
   // P2 Serialized Item Traceability CRUD
   addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability>;
   getTraceabilityData(serializedItemId: string): Promise<P2SerializedItemTraceability[]>;
@@ -16891,6 +16896,56 @@ export class DatabaseStorage implements IStorage {
     });
 
     return traveler;
+  }
+
+  async getTravelersByProductionWorkOrderId(workOrderId: string): Promise<Traveler[]> {
+    return db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.productionWorkOrderId, workOrderId))
+      .orderBy(desc(travelers.createdAt));
+  }
+
+  async linkTravelerToProductionWorkOrder(travelerId: string, workOrderId: string): Promise<Traveler> {
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.id, travelerId));
+    if (!traveler) {
+      throw new Error(`Traveler ${travelerId} not found`);
+    }
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, workOrderId));
+    if (!wad) {
+      throw new Error(`Production work order ${workOrderId} not found`);
+    }
+
+    const [updated] = await db
+      .update(travelers)
+      .set({ productionWorkOrderId: workOrderId, updatedAt: new Date() })
+      .where(eq(travelers.id, travelerId))
+      .returning();
+    return updated;
+  }
+
+  async unlinkTravelerFromProductionWorkOrder(travelerId: string): Promise<Traveler> {
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.id, travelerId));
+    if (!traveler) {
+      throw new Error(`Traveler ${travelerId} not found`);
+    }
+
+    const [updated] = await db
+      .update(travelers)
+      .set({ productionWorkOrderId: null, updatedAt: new Date() })
+      .where(eq(travelers.id, travelerId))
+      .returning();
+    return updated;
   }
 
   // Generate traveler from structured routing operations (new path)

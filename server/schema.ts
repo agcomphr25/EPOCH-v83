@@ -6448,6 +6448,7 @@ export const insertTravelerSchema = createInsertSchema(travelers)
     partName: z.string().min(1, 'Part name is required'),
     salesOrderId: z.string().optional().nullable(),
     workOrderId: z.string().optional().nullable(),
+    productionWorkOrderId: z.string().uuid().optional().nullable(),
     lotNumber: z.string().optional().nullable(),
     serialNumber: z.string().optional().nullable(),
     internalControlNumber: z.string().optional().nullable(),

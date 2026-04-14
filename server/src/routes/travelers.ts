@@ -19,6 +19,7 @@ import {
   partRoutings,
   inventoryItems,
   manufacturingQueue,
+  productionWorkOrders,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
 } from '../../schema';
@@ -280,6 +281,20 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const validatedData = insertTravelerSchema.parse(req.body);
+
+    if (validatedData.productionWorkOrderId) {
+      const [wad] = await db
+        .select()
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, validatedData.productionWorkOrderId));
+      if (!wad) {
+        return res.status(404).json({
+          error: 'Production work order not found',
+          productionWorkOrderId: validatedData.productionWorkOrderId,
+        });
+      }
+    }
+
     const traveler = await storage.createTraveler(validatedData);
 
     await storage.createTravelerEvent({
@@ -376,10 +391,28 @@ router.get('/suggest-routing/:partNumber', async (req: Request, res: Response) =
 router.post('/from-part-number/:partNumber', async (req: Request, res: Response) => {
   try {
     const { partNumber } = req.params;
-    const { workOrderId, salesOrderId, lotNumber, serialNumber, internalControlNumber, quantity, createdBy } = req.body;
+    const { workOrderId, salesOrderId, lotNumber, serialNumber, internalControlNumber, quantity, createdBy, productionWorkOrderId } = req.body;
 
     if (!createdBy) {
       return res.status(400).json({ error: 'createdBy is required' });
+    }
+
+    if (productionWorkOrderId) {
+      const wadSchema = z.string().uuid();
+      const wadParsed = wadSchema.safeParse(productionWorkOrderId);
+      if (!wadParsed.success) {
+        return res.status(400).json({ error: 'productionWorkOrderId must be a valid UUID' });
+      }
+      const [wad] = await db
+        .select()
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, productionWorkOrderId));
+      if (!wad) {
+        return res.status(404).json({
+          error: 'Production work order not found',
+          productionWorkOrderId,
+        });
+      }
     }
 
     const invItem = await db.query.inventoryItems.findFirst({
@@ -424,7 +457,7 @@ router.post('/from-part-number/:partNumber', async (req: Request, res: Response)
       });
     }
 
-    const traveler = await storage.generateTravelerFromRouting(routing.id, {
+    let traveler = await storage.generateTravelerFromRouting(routing.id, {
       workOrderId,
       salesOrderId,
       lotNumber,
@@ -433,6 +466,10 @@ router.post('/from-part-number/:partNumber', async (req: Request, res: Response)
       quantity,
       createdBy,
     });
+
+    if (productionWorkOrderId) {
+      traveler = await storage.linkTravelerToProductionWorkOrder(traveler.id, productionWorkOrderId);
+    }
 
     res.status(201).json({ ...traveler, supplySourceDashboard: dashboard, leadDepartment });
   } catch (err: unknown) {
@@ -454,13 +491,32 @@ router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) 
       internalControlNumber,
       quantity,
       createdBy,
+      productionWorkOrderId,
     } = req.body;
 
     if (!createdBy) {
       return res.status(400).json({ error: 'createdBy is required' });
     }
 
-    const traveler = await storage.generateTravelerFromRouting(partRoutingId, {
+    if (productionWorkOrderId) {
+      const wadSchema = z.string().uuid();
+      const wadParsed = wadSchema.safeParse(productionWorkOrderId);
+      if (!wadParsed.success) {
+        return res.status(400).json({ error: 'productionWorkOrderId must be a valid UUID' });
+      }
+      const [wad] = await db
+        .select()
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, productionWorkOrderId));
+      if (!wad) {
+        return res.status(404).json({
+          error: 'Production work order not found',
+          productionWorkOrderId,
+        });
+      }
+    }
+
+    let traveler = await storage.generateTravelerFromRouting(partRoutingId, {
       workOrderId,
       salesOrderId,
       lotNumber,
@@ -469,6 +525,10 @@ router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) 
       quantity,
       createdBy,
     });
+
+    if (productionWorkOrderId) {
+      traveler = await storage.linkTravelerToProductionWorkOrder(traveler.id, productionWorkOrderId);
+    }
 
     res.status(201).json(traveler);
   } catch (error: any) {

@@ -8,6 +8,7 @@ import {
   inventoryItems,
   users,
   maintenanceSchedules,
+  productionWorkOrders,
   insertWorkOrderSchema,
   insertWorkOrderPartSchema,
   insertWorkOrderAttachmentSchema,
@@ -477,6 +478,116 @@ router.post('/generate-from-pm', requireAdmin, async (req: Request, res: Respons
 });
 
 export { generateWorkOrderFromPM };
+
+// ==================== PRODUCTION WORK ORDER (WAD) TRAVELER ENDPOINTS ====================
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateUuid(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
+// GET /api/work-orders/:id/travelers — return all travelers linked to a production WAD (newest first)
+router.get('/:id/travelers', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id));
+
+    if (!wad) {
+      return res.status(404).json({ error: 'Production work order not found', id });
+    }
+
+    const linkedTravelers = await storage.getTravelersByProductionWorkOrderId(id);
+    res.json(linkedTravelers);
+  } catch (error: any) {
+    console.error('Error fetching travelers for production work order:', error);
+    res.status(500).json({ error: 'Failed to fetch travelers', message: error.message });
+  }
+});
+
+// POST /api/work-orders/:id/travelers/:travelerId/link — link an existing traveler to a WAD
+router.post('/:id/travelers/:travelerId/link', async (req: Request, res: Response) => {
+  try {
+    const { id, travelerId } = req.params;
+
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+    if (!validateUuid(travelerId)) {
+      return res.status(400).json({ error: 'Invalid traveler ID format', travelerId });
+    }
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id));
+
+    if (!wad) {
+      return res.status(404).json({ error: 'Production work order not found', id });
+    }
+
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found', travelerId });
+    }
+
+    const updated = await storage.linkTravelerToProductionWorkOrder(travelerId, id);
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error linking traveler to production work order:', error);
+    res.status(500).json({ error: 'Failed to link traveler', message: error.message });
+  }
+});
+
+// DELETE /api/work-orders/:id/travelers/:travelerId/link — unlink a traveler from a WAD
+router.delete('/:id/travelers/:travelerId/link', async (req: Request, res: Response) => {
+  try {
+    const { id, travelerId } = req.params;
+
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+    if (!validateUuid(travelerId)) {
+      return res.status(400).json({ error: 'Invalid traveler ID format', travelerId });
+    }
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id));
+
+    if (!wad) {
+      return res.status(404).json({ error: 'Production work order not found', id });
+    }
+
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found', travelerId });
+    }
+
+    if (traveler.productionWorkOrderId !== id) {
+      return res.status(400).json({
+        error: 'Traveler is not linked to this production work order',
+        travelerId,
+        linkedWorkOrderId: traveler.productionWorkOrderId,
+      });
+    }
+
+    const updated = await storage.unlinkTravelerFromProductionWorkOrder(travelerId);
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error unlinking traveler from production work order:', error);
+    res.status(500).json({ error: 'Failed to unlink traveler', message: error.message });
+  }
+});
 
 async function generateWorkOrderFromPM(scheduleId: number, assetId?: string, userId?: number): Promise<any> {
   try {

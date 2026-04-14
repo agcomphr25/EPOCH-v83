@@ -56,6 +56,7 @@ import {
   p2SerializedItemEvents,
   p2NonconformingDispositions,
   p2Rmas,
+  p2ShippingRmas,
   // CNC Dashboard tables
   cncScheduleSettings,
   cncJobs,
@@ -316,6 +317,9 @@ import {
   type InsertP2NonconformingDisposition,
   type P2Rma,
   type InsertP2Rma,
+  type P2ShippingRma,
+  type InsertP2ShippingRma,
+  insertP2ShippingRmaSchema,
   type Traveler,
   type InsertTraveler,
   type TravelerStep,
@@ -2530,6 +2534,12 @@ export interface IStorage {
   getP2RmasByStatus(status: 'open' | 'shipped' | 'complete'): Promise<P2Rma[]>;
   createP2Rma(data: InsertP2Rma): Promise<P2Rma>;
   updateP2Rma(id: number, data: Partial<InsertP2Rma & { shippedAt: Date | null; completedAt: Date | null }>): Promise<P2Rma | undefined>;
+
+  // P2 Shipping RMAs (customer return RMAs after packing slip issuance)
+  listShippingRmas(): Promise<P2ShippingRma[]>;
+  getShippingRmaById(id: string): Promise<P2ShippingRma | undefined>;
+  createShippingRma(data: Omit<InsertP2ShippingRma, 'rmaNumber'> & { packingSlipId: string; createdBy: string }): Promise<P2ShippingRma>;
+  updateShippingRmaStatus(id: string, newStatus: 'RECEIVED' | 'CLOSED'): Promise<P2ShippingRma>;
 
   // CNC Dashboard
   getCncScheduleSettings(): Promise<CncScheduleSettings | undefined>;
@@ -21419,6 +21429,67 @@ export class DatabaseStorage implements IStorage {
       .update(p2Rmas)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(p2Rmas.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ─── P2 Shipping RMAs ───────────────────────────────────────────────────────
+
+  async listShippingRmas(): Promise<P2ShippingRma[]> {
+    return db.select().from(p2ShippingRmas).orderBy(desc(p2ShippingRmas.createdAt));
+  }
+
+  async getShippingRmaById(id: string): Promise<P2ShippingRma | undefined> {
+    const [rma] = await db.select().from(p2ShippingRmas).where(eq(p2ShippingRmas.id, id));
+    return rma;
+  }
+
+  async createShippingRma(data: Omit<InsertP2ShippingRma, 'rmaNumber'> & { packingSlipId: string; createdBy: string }): Promise<P2ShippingRma> {
+    // Generate RMA number: RMA-YYYYMMDD-NN
+    // Use retry loop to handle concurrent inserts safely — the UNIQUE constraint
+    // on rma_number guarantees correctness; retries handle race conditions.
+    const today = new Date();
+    const dateStr = today.getFullYear().toString() +
+      String(today.getMonth() + 1).padStart(2, '0') +
+      String(today.getDate()).padStart(2, '0');
+    const pattern = `RMA-${dateStr}-%`;
+
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      const existing = await db.select({ rmaNumber: p2ShippingRmas.rmaNumber })
+        .from(p2ShippingRmas)
+        .where(sql`${p2ShippingRmas.rmaNumber} LIKE ${pattern}`);
+      const seq = String(existing.length + attempt).padStart(2, '0');
+      const rmaNumber = `RMA-${dateStr}-${seq}`;
+      try {
+        const [rma] = await db
+          .insert(p2ShippingRmas)
+          .values({ ...data, rmaNumber, status: data.status ?? 'OPEN' })
+          .returning();
+        return rma;
+      } catch (err: any) {
+        const isUniqueViolation = err?.code === '23505' || err?.message?.includes('unique');
+        if (!isUniqueViolation || attempt === 10) throw err;
+      }
+    }
+    throw new Error('Failed to generate unique RMA number after 10 attempts');
+  }
+
+  async updateShippingRmaStatus(id: string, newStatus: 'RECEIVED' | 'CLOSED'): Promise<P2ShippingRma> {
+    const [current] = await db.select().from(p2ShippingRmas).where(eq(p2ShippingRmas.id, id));
+    if (!current) {
+      throw new Error(`RMA ${id} not found`);
+    }
+    const validTransitions: Record<string, string> = {
+      OPEN: 'RECEIVED',
+      RECEIVED: 'CLOSED',
+    };
+    if (validTransitions[current.status] !== newStatus) {
+      throw new Error(`Invalid status transition: ${current.status} → ${newStatus}. Allowed: ${current.status} → ${validTransitions[current.status] ?? '(none)'}`);
+    }
+    const [updated] = await db
+      .update(p2ShippingRmas)
+      .set({ status: newStatus })
+      .where(eq(p2ShippingRmas.id, id))
       .returning();
     return updated;
   }

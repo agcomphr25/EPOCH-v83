@@ -14410,6 +14410,31 @@ export const insertP2RmaSchema = createInsertSchema(p2Rmas).omit({
 export type P2Rma = typeof p2Rmas.$inferSelect;
 export type InsertP2Rma = z.infer<typeof insertP2RmaSchema>;
 
+// ─── P2 Shipping RMAs ─────────────────────────────────────────────────────────
+// Structured Return Merchandise Authorization for P2 customer shipments.
+// Created when a customer returns goods after a packing slip has been issued.
+export const p2ShippingRmas = pgTable('p2_shipping_rmas', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rmaNumber: text('rma_number').notNull().unique(),
+  packingSlipId: uuid('packing_slip_id').notNull().references(() => p2PackingSlips.id),
+  invoiceId: uuid('invoice_id').references(() => arInvoices.id),
+  reason: text('reason').notNull(),
+  status: text('status').notNull().default('OPEN'), // OPEN | RECEIVED | CLOSED
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: text('created_by').notNull(),
+});
+
+export const insertP2ShippingRmaSchema = createInsertSchema(p2ShippingRmas).omit({
+  id: true,
+  rmaNumber: true,
+  createdAt: true,
+}).extend({
+  status: z.enum(['OPEN', 'RECEIVED', 'CLOSED']).default('OPEN').optional(),
+});
+
+export type P2ShippingRma = typeof p2ShippingRmas.$inferSelect;
+export type InsertP2ShippingRma = z.infer<typeof insertP2ShippingRmaSchema>;
+
 // ─── QuickNotes ───────────────────────────────────────────────────────────────
 export const quickNotes = pgTable('quick_notes', {
   id: serial('id').primaryKey(),

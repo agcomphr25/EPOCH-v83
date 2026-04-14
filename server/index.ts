@@ -3337,6 +3337,25 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_nonconforming_dispositions/p2_rmas migration:', ncErr?.message);
       }
 
+      // Ensure P2 Shipping RMAs table exists (customer return RMAs linked to packing slips)
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS p2_shipping_rmas (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            rma_number TEXT NOT NULL UNIQUE,
+            packing_slip_id UUID NOT NULL REFERENCES p2_packing_slips(id),
+            invoice_id UUID REFERENCES ar_invoices(id),
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'OPEN',
+            created_at TIMESTAMP DEFAULT NOW(),
+            created_by TEXT NOT NULL
+          )
+        `);
+        console.log('✅ Ensured p2_shipping_rmas table exists');
+      } catch (srmaErr: any) {
+        console.warn('⚠️ p2_shipping_rmas migration:', srmaErr?.message);
+      }
+
       // Ensure schema governance audit log table exists
       try {
         const { sql: sqlGov } = await import('drizzle-orm');

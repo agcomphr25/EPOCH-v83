@@ -1,0 +1,134 @@
+Phase 3 Build Prompt (copy-paste)
+
+Use this next:
+
+You are a senior backend engineer building the AR control layer of an ERP system.
+
+You have already implemented:
+- Invoice schema (Phase 1)
+- Auto-create DRAFT invoices from packing slips (Phase 2)
+
+Now implement PHASE 3: Invoice lifecycle control.
+
+---
+
+## OBJECTIVE
+
+Turn invoices into controlled financial records.
+
+Implement:
+
+- POST (locks + creates journal entry)
+- SEND (tracks delivery)
+- VOID (with reversal)
+- Edit restrictions after posting
+
+---
+
+## BUSINESS RULES
+
+1. Invoices start as DRAFT
+2. Only DRAFT or REVIEW invoices can be edited
+3. POSTED invoices are locked
+4. SENT invoices are locked
+5. VOID invoices are locked
+6. Journal entries are created ONLY when invoice is POSTED
+7. If a POSTED invoice is VOIDED:
+   - create a reversing journal entry
+8. Sending does NOT affect accounting
+
+---
+
+## TASKS
+
+### 1. Create POST endpoint
+
+POST /api/ar-invoices/:id/post
+
+Logic:
+
+- Load invoice
+- Ensure status is DRAFT or REVIEW
+- Update:
+  - status = POSTED
+  - postedAt = now
+  - postedBy = current user
+- Create journal entry:
+  DR Accounts Receivable = totalAmount
+  CR Revenue — P2 Products = subtotal
+  CR Sales Tax Payable = taxAmount (if > 0)
+- Must be in ONE transaction
+- If journal fails → invoice must NOT be posted
+
+---
+
+### 2. Create SEND endpoint
+
+POST /api/ar-invoices/:id/send
+
+Logic:
+
+- Only allow if status = POSTED
+- Update:
+  - status = SENT
+  - sentAt = now
+  - sentBy = current user
+
+---
+
+### 3. Create VOID endpoint
+
+POST /api/ar-invoices/:id/void
+
+Logic:
+
+- Require voidReason
+- If status = DRAFT or REVIEW:
+  - just set status = VOID
+- If status = POSTED or SENT:
+  - create reversing journal entry:
+    DR Revenue
+    CR Accounts Receivable
+- Update:
+  - status = VOID
+  - voidedAt
+  - voidedBy
+  - voidReason
+
+---
+
+### 4. Enforce edit locking
+
+Modify:
+
+PUT /api/ar-invoices/:id
+
+- If status IN (POSTED, SENT, VOID, PAID):
+  - return 409 error
+  - message: "Invoice is locked"
+
+---
+
+### 5. Logging
+
+Add logs for:
+
+- Invoice posted
+- Journal entry created
+- Invoice sent
+- Invoice voided
+- Reversal journal created
+
+Use [InvoiceService] prefix
+
+---
+
+## OUTPUT
+
+Return:
+
+1. Routes added/modified
+2. Transaction handling approach
+3. Journal entry implementation details
+4. Locking enforcement confirmation
+5. Any edge cases identified

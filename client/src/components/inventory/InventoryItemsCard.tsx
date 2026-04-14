@@ -2660,10 +2660,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               {items.map((item) => (
                   <tr
                     key={item.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-150 hover:shadow-sm cursor-pointer"
                     data-testid={`row-item-${item.id}`}
+                    onClick={() => handleEdit(item)}
                   >
-                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedItems.has(item.id)}
                         onCheckedChange={() => toggleSelectItem(item.id)}
@@ -2738,7 +2739,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm">
                       {(item as any).assignedToAsset || <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex space-x-2">
                         <Button
                           variant="outline"
@@ -2870,7 +2871,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                               </tr>
                             ) : (
                               catItems.map((item) => (
-                                <tr key={item.id} className="border-b hover:bg-muted/50 transition-colors">
+                                <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
                                   <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                                   <td className="px-4 py-2 font-medium">{item.name}</td>
                                   <td className="px-4 py-2">
@@ -2894,7 +2895,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                   <td className="px-4 py-2 font-medium">
                                     {balancesByPart[item.agPartNumber] != null ? balancesByPart[item.agPartNumber] : 0}
                                   </td>
-                                  <td className="px-4 py-2">
+                                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex space-x-2">
                                       <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit" data-testid={`button-edit-mfg-${item.id}`}>
                                         <Edit className="h-4 w-4" />
@@ -2961,10 +2962,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                         </thead>
                         <tbody>
                           {filteredUncategorized.map((item) => (
-                            <tr key={item.id} className="border-b hover:bg-muted/50 transition-colors">
+                            <tr key={item.id} className="border-b hover:bg-muted/50 transition-all duration-150 hover:shadow-sm cursor-pointer" onClick={() => handleEdit(item)}>
                               <td className="px-4 py-2 font-mono text-xs">{item.agPartNumber}</td>
                               <td className="px-4 py-2 font-medium">{item.name}</td>
-                              <td className="px-4 py-2">
+                              <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex space-x-2">
                                   <Button variant="outline" size="sm" onClick={() => handleEdit(item)} title="Edit">
                                     <Edit className="h-4 w-4" />

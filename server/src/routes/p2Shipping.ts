@@ -22,6 +22,17 @@ const objectStorageService = new ObjectStorageService();
 
 const router = Router();
 
+// Ensure lot_validation_report_url column exists (idempotent migration)
+;(async () => {
+  try {
+    await pool.query(
+      `ALTER TABLE p2_lot_numbers ADD COLUMN IF NOT EXISTS lot_validation_report_url text`
+    );
+  } catch (err) {
+    console.error('Migration: lot_validation_report_url column error:', err);
+  }
+})();
+
 function buildCustomerAddress(customer: {
   customerName: string;
   shippingCompanyName?: string | null;
@@ -1042,6 +1053,7 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       notes: string | null;
       tracking_number: string | null; carrier: string | null;
       bill_of_lading_url: string | null;
+      lot_validation_report_url: string | null;
       packing_slip_upload_url: string | null;
       certificate_upload_url: string | null;
       created_by: string; created_at: string;
@@ -1051,6 +1063,7 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
               serialized_item_ids, status, closed_at, closed_by,
               shipped_at, shipped_by, packing_slip_id, certificate_id, notes,
               tracking_number, carrier, bill_of_lading_url,
+              lot_validation_report_url,
               packing_slip_upload_url, certificate_upload_url,
               created_by, created_at
        FROM p2_lot_numbers WHERE id = $1`,
@@ -1221,6 +1234,53 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
   } catch (err: any) {
     console.error('BoL download error:', err);
     return res.status(500).json({ error: 'Failed to retrieve bill of lading' });
+  }
+});
+
+// POST /api/p2/shipments/:lotId/upload-lot-validation-report — upload Lot Validation Report PDF/image
+router.post('/shipments/:lotId/upload-lot-validation-report', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const storagePath = await objectStorageService.uploadBuffer(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    await pool.query(
+      `UPDATE p2_lot_numbers SET lot_validation_report_url = $1, updated_at = NOW() WHERE id = $2`,
+      [storagePath, lotId]
+    );
+
+    return res.json({ success: true, lotValidationReportUrl: storagePath });
+  } catch (err: any) {
+    console.error('Lot validation report upload error:', err);
+    return res.status(500).json({ error: 'Failed to upload lot validation report' });
+  }
+});
+
+// GET /api/p2/shipments/:lotId/lot-validation-report — stream Lot Validation Report back to client
+router.get('/shipments/:lotId/lot-validation-report', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const rows = await pool.query<{ lot_validation_report_url: string | null }>(
+      `SELECT lot_validation_report_url FROM p2_lot_numbers WHERE id = $1`, [lotId]
+    );
+    const fileUrl = rows[0]?.lot_validation_report_url;
+    if (!fileUrl) return res.status(404).json({ error: 'No lot validation report attached' });
+
+    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const ext = fileUrl.split('.').pop()?.toLowerCase();
+    const contentType = ext === 'pdf' ? 'application/pdf'
+      : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
+    res.set('Content-Type', contentType);
+    res.set('Content-Disposition', `inline; filename="lot-validation-report"`);
+    return res.send(buffer);
+  } catch (err: any) {
+    console.error('Lot validation report download error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve lot validation report' });
   }
 });
 

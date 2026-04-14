@@ -52,6 +52,7 @@ interface ShipmentLot {
   tracking_number: string | null;
   carrier: string | null;
   bill_of_lading_url: string | null;
+  lot_validation_report_url: string | null;
   packing_slip_upload_url: string | null;
   certificate_upload_url: string | null;
   created_by: string;
@@ -157,9 +158,11 @@ export default function P2ShipmentDetail() {
   const [uploading, setUploading] = useState(false);
   const [uploadingPs, setUploadingPs] = useState(false);
   const [uploadingCert, setUploadingCert] = useState(false);
+  const [uploadingLvr, setUploadingLvr] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const psFileInputRef = useRef<HTMLInputElement>(null);
   const certFileInputRef = useRef<HTMLInputElement>(null);
+  const lvrFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: currentUser } = useQuery<CurrentUser | null>({
     queryKey: ['currentUser'],
@@ -278,6 +281,22 @@ export default function P2ShipmentDetail() {
       toast({ title: 'Upload failed', variant: 'destructive' });
     } finally {
       setUploadingCert(false);
+    }
+  }
+
+  async function handleLvrUpload(file: File) {
+    setUploadingLvr(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch(`/api/p2/shipments/${lotId}/upload-lot-validation-report`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('Upload failed');
+      toast({ title: 'Lot Validation Report uploaded' });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+    } catch {
+      toast({ title: 'Upload failed', variant: 'destructive' });
+    } finally {
+      setUploadingLvr(false);
     }
   }
 
@@ -639,6 +658,52 @@ export default function P2ShipmentDetail() {
                   <Upload className="h-3.5 w-3.5 mr-1" />
                 )}
                 {lot.bill_of_lading_url ? 'Replace' : 'Upload'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Lot Validation Report */}
+          <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="h-5 w-5 text-teal-500" />
+              <div>
+                <p className="text-sm font-medium">Lot Validation Report (If Applicable)</p>
+                <p className="text-xs text-muted-foreground">
+                  {lot.lot_validation_report_url ? 'File attached' : 'No file uploaded'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {lot.lot_validation_report_url && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`/api/p2/shipments/${lotId}/lot-validation-report`} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-3.5 w-3.5 mr-1" /> Download
+                  </a>
+                </Button>
+              )}
+              <input
+                ref={lvrFileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) handleLvrUpload(f);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => lvrFileInputRef.current?.click()}
+                disabled={uploadingLvr}
+              >
+                {uploadingLvr ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 mr-1" />
+                )}
+                {lot.lot_validation_report_url ? 'Replace' : 'Upload'}
               </Button>
             </div>
           </div>

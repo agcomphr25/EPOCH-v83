@@ -241,7 +241,11 @@ export default function P2ReadyToShipDashboard() {
           <div className="flex items-center gap-2">
             <Truck className="h-4 w-4 text-muted-foreground" />
             <h2 className="font-semibold text-sm">By Purchase Order</h2>
-            <Badge variant="secondary">{filteredPOs.length}</Badge>
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-secondary/80"
+              onClick={() => setLocation('/p2-control-center?tab=shipping')}
+            >{filteredPOs.length}</Badge>
           </div>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />

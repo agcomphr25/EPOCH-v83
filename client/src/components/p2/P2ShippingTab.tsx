@@ -876,16 +876,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           <Button
                             size="sm" variant="outline"
                             className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() => window.open(`/api/p2/packing-slips/${shipment.slipId}/pdf`, '_blank')}
-                          >
-                            <Download className="w-3 h-3 mr-1" />Packing Slip PDF
-                          </Button>
-                          <Button
-                            size="sm" variant="outline"
-                            className="border-green-300 text-green-700 hover:bg-green-50"
                             onClick={() => window.open(`/p2/packing-slip/${shipment.slipId}`, '_blank')}
                           >
-                            <FileText className="w-3 h-3 mr-1" />View Packing Slip
+                            <FileText className="w-3 h-3 mr-1" />Packing Slip
                           </Button>
                           <Button
                             size="sm" variant="outline"

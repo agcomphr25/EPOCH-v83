@@ -1,0 +1,146 @@
+Copy-paste prompt for Phase 2
+
+Use this next:
+
+You are a senior backend engineer working in a production ERP system.
+
+Your task is to implement PHASE 2 of the P2 invoicing workflow.
+
+Use the current codebase and the Phase 1 schema changes that are already in place.
+
+🚨 RULES
+- Make real code changes
+- Follow existing route/service/database patterns
+- Keep changes focused on backend logic only
+- Do NOT build the full UI yet
+- Do NOT implement posting/journal entry logic yet
+- This phase is only about auto-creating DRAFT invoices from SHIPPED packing slips
+
+---
+
+## OBJECTIVE
+
+When a P2 packing slip / lot is marked SHIPPED, the system should automatically create exactly one DRAFT invoice tied to that packing slip.
+
+This must support:
+- one packing slip = one invoice
+- idempotent behavior
+- pricing snapshot at invoice creation time
+- finance review later
+- no duplicate invoice creation
+
+---
+
+## BUSINESS RULES
+
+Treat these as final:
+
+1. P2 only
+2. One packing slip = exactly one invoice
+3. Invoice is auto-created when shipment becomes SHIPPED
+4. Invoice status should be DRAFT
+5. Invoice is not auto-sent
+6. Pricing should default from PO pricing
+7. Invoice lines should snapshot pricing at creation time
+8. If pricing cannot be resolved cleanly:
+   - do NOT block shipping
+   - still create the DRAFT invoice
+   - set flags on ar_invoices:
+     - pricingMismatch = true if no match found
+     - pricingAmbiguous = true if multiple PO item matches found
+   - use zero-dollar line values when unresolved
+9. Must be safe against duplicate creation
+10. Must update the packing slip’s denormalized invoice number field after invoice creation
+
+---
+
+## TASKS
+
+### 1. Find the exact SHIPPED hook point
+Use the current P2 shipping route where a lot / packing slip becomes SHIPPED.
+
+Implement the auto-invoice creation there.
+
+Preferred behavior:
+- if shipment and invoice creation are already inside a transaction-capable section, keep them atomic
+- if the route structure makes that difficult, use the cleanest safe pattern already present in the codebase
+- do not create duplicate invoices if the route is retried
+
+### 2. Add invoice auto-creation logic
+When markShipped occurs and a packingSlipId exists:
+
+- Check whether an invoice already exists for packingSlipId
+- If yes:
+  - do nothing further
+  - remain idempotent
+- If no:
+  - load the packing slip
+  - load the lot
+  - load the related PO and PO items
+  - build invoice header + invoice lines
+
+### 3. Resolve pricing
+For each packing slip line item:
+
+- match to p2_purchase_order_items using the best available current join path
+- try to match by part number first
+- if exactly one match:
+  - use that unit price
+  - snapshot qty, unit price, line total into ar_invoice_lines
+- if no match:
+  - create the line with unitPrice = 0 and lineTotal = 0
+  - mark invoice pricingMismatch = true
+- if multiple matches:
+  - create the line with unitPrice = 0 and lineTotal = 0
+  - mark invoice pricingAmbiguous = true
+
+Do not silently skip lines.
+
+### 4. Build invoice header
+Populate:
+- customerId
+- invoiceNumber
+- invoiceDate
+- dueDate
+- terms
+- packingSlipId
+- lotId
+- status = DRAFT
+- autoCreated = true
+- pricingMismatch / pricingAmbiguous flags as needed
+- subtotal
+- totalAmount
+
+Default terms:
+- use existing customer/payment terms if already available
+- otherwise default to NET_30
+
+If tax is not currently derivable, leave taxAmount at 0 for now.
+
+### 5. Generate invoice number
+Use the current project’s existing numbering conventions if one already exists.
+If none exists, implement a clean sequential invoice number generator consistent with existing app patterns.
+
+Make sure it is stable and collision-safe enough for current use.
+
+### 6. Update packing slip
+After invoice creation:
+- write the generated invoice number back to the packing slip’s denormalized invoice number field
+
+### 7. Keep implementation clean
+If the logic is getting large:
+- extract a helper/service for “create invoice from packing slip”
+- but do not over-architect
+
+---
+
+## OUTPUT
+
+Return:
+
+1. Files changed
+2. Exact route hook used
+3. Pricing resolution logic used
+4. Idempotency protection used
+5. Any assumptions made
+6. Any edge cases still unresolved

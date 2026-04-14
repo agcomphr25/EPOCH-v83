@@ -1,0 +1,553 @@
+Great. Here’s Step 4 — Process Time for the RFQ Builder.
+
+This adds:
+
+process/labor rows tied to an RFQ part
+default or custom departments
+setup hours
+hours per part
+hourly rate
+labor summary per selected part
+
+Once this is in, you’ll have three real cost buckets live:
+
+tooling
+material
+labor
+1. Add storage methods
+IStorage
+
+Add:
+
+getEstimatingProcessRows(rfqId: string): Promise<any[]>;
+createEstimatingProcessRow(data: any): Promise<any>;
+deleteEstimatingProcessRow(id: string): Promise<void>;
+DatabaseStorage
+
+Add:
+
+import { estimatingProcessRows } from "../schema"; // adjust path
+import { eq } from "drizzle-orm";
+
+async getEstimatingProcessRows(rfqId: string) {
+  return db
+    .select()
+    .from(estimatingProcessRows)
+    .where(eq(estimatingProcessRows.rfqId, rfqId));
+}
+
+async createEstimatingProcessRow(data: any) {
+  const [row] = await db
+    .insert(estimatingProcessRows)
+    .values(data)
+    .returning();
+  return row;
+}
+
+async deleteEstimatingProcessRow(id: string) {
+  await db
+    .delete(estimatingProcessRows)
+    .where(eq(estimatingProcessRows.id, id));
+}
+2. Add API routes
+
+In server/src/routes/estimating.ts, add:
+
+  // ---------------- PROCESS ROWS ----------------
+
+  app.get("/api/estimating/rfqs/:id/process-rows", async (req, res) => {
+    try {
+      const rows = await storage.getEstimatingProcessRows(req.params.id);
+      res.json(rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to fetch process rows");
+    }
+  });
+
+  app.post("/api/estimating/rfqs/:id/process-rows", async (req, res) => {
+    try {
+      const row = await storage.createEstimatingProcessRow({
+        ...req.body,
+        rfqId: req.params.id,
+      });
+      res.json(row);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to create process row");
+    }
+  });
+
+  app.delete("/api/estimating/process-rows/:id", async (req, res) => {
+    try {
+      await storage.deleteEstimatingProcessRow(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to delete process row");
+    }
+  });
+3. Add Step 4 logic inside RFQBuilderPage.tsx
+
+Add these types near your other types:
+
+type ProcessRow = {
+  id?: string;
+  rfqPartId: string;
+  departmentName: string;
+  sourceType: string;
+  setupHours: number;
+  hoursPerPart: number;
+  hourlyRate: number;
+  notes?: string;
+};
+
+const defaultDepartmentOptions = [
+  "CUTTING_TABLE",
+  "LAYUP",
+  "MOLD_ASSEMBLY_DISASSEMBLY",
+  "CURE_OVEN",
+  "CNC",
+  "FINISH",
+  "PAINT",
+  "QC",
+  "SHIPPING_PREP",
+  "OTHER",
+];
+
+const emptyProcessRow = (rfqPartId: string): ProcessRow => ({
+  rfqPartId,
+  departmentName: "LAYUP",
+  sourceType: "MANUAL",
+  setupHours: 0,
+  hoursPerPart: 0,
+  hourlyRate: 0,
+  notes: "",
+});
+
+Add state near your other hooks:
+
+const [selectedProcessPartId, setSelectedProcessPartId] = useState("");
+const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
+const [processMessage, setProcessMessage] = useState("");
+
+Add query:
+
+const processRowsQuery = useQuery({
+  queryKey: ["estimating-rfq-process-rows", rfqId],
+  enabled: !!rfqId,
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/process-rows`);
+    return res.json();
+  },
+});
+
+Load the data:
+
+useEffect(() => {
+  if (processRowsQuery.data && Array.isArray(processRowsQuery.data)) {
+    setProcessRows(
+      processRowsQuery.data.map((row: any) => ({
+        id: row.id,
+        rfqPartId: row.rfqPartId,
+        departmentName: row.departmentName ?? "LAYUP",
+        sourceType: row.sourceType ?? "MANUAL",
+        setupHours: Number(row.setupHours ?? 0),
+        hoursPerPart: Number(row.hoursPerPart ?? 0),
+        hourlyRate: Number(row.hourlyRate ?? 0),
+        notes: row.notes ?? "",
+      }))
+    );
+  }
+}, [processRowsQuery.data]);
+
+Set default selected part:
+
+useEffect(() => {
+  if (!selectedProcessPartId && parts.length > 0) {
+    const savedPart = parts.find((p) => p.id);
+    if (savedPart?.id) setSelectedProcessPartId(savedPart.id);
+  }
+}, [parts, selectedProcessPartId]);
+
+Add helpers:
+
+const filteredProcessRows = useMemo(() => {
+  if (!selectedProcessPartId) return [];
+  return processRows.filter((row) => row.rfqPartId === selectedProcessPartId);
+}, [processRows, selectedProcessPartId]);
+
+const addProcessRow = () => {
+  if (!rfqId) {
+    setProcessMessage("Save the RFQ first before adding process rows.");
+    return;
+  }
+
+  if (!selectedProcessPartId) {
+    setProcessMessage("Select an RFQ part first.");
+    return;
+  }
+
+  setProcessRows((prev) => [...prev, emptyProcessRow(selectedProcessPartId)]);
+};
+
+const updateProcessRow = (
+  index: number,
+  field: keyof ProcessRow,
+  value: string | number
+) => {
+  const matchingIndexes = processRows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => row.rfqPartId === selectedProcessPartId)
+    .map(({ i }) => i);
+
+  const actualIndex = matchingIndexes[index];
+  if (actualIndex === undefined) return;
+
+  setProcessRows((prev) => {
+    const next = [...prev];
+    next[actualIndex] = { ...next[actualIndex], [field]: value };
+    return next;
+  });
+};
+
+const saveProcessRow = async (row: ProcessRow) => {
+  if (!rfqId) {
+    setProcessMessage("Save the RFQ first before adding process rows.");
+    return;
+  }
+
+  if (!row.rfqPartId) {
+    setProcessMessage("A process row must be tied to an RFQ part.");
+    return;
+  }
+
+  if (!row.departmentName.trim()) {
+    setProcessMessage("Department name is required.");
+    return;
+  }
+
+  await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/process-rows`, {
+    rfqPartId: row.rfqPartId,
+    departmentName: row.departmentName,
+    sourceType: row.sourceType,
+    setupHours: Number(row.setupHours || 0),
+    hoursPerPart: Number(row.hoursPerPart || 0),
+    hourlyRate: Number(row.hourlyRate || 0),
+    notes: row.notes || "",
+  });
+
+  setProcessMessage("Process row saved.");
+  await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-process-rows", rfqId] });
+};
+
+const deleteProcessRow = async (index: number, row: ProcessRow) => {
+  if (row.id) {
+    await apiRequest("DELETE", `/api/estimating/process-rows/${row.id}`);
+    await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-process-rows", rfqId] });
+    setProcessMessage("Process row deleted.");
+    return;
+  }
+
+  const matchingIndexes = processRows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => row.rfqPartId === selectedProcessPartId)
+    .map(({ i }) => i);
+
+  const actualIndex = matchingIndexes[index];
+  if (actualIndex === undefined) return;
+
+  setProcessRows((prev) => prev.filter((_, i) => i !== actualIndex));
+};
+
+Add summary calculations:
+
+const processSummary = useMemo(() => {
+  return filteredProcessRows.reduce(
+    (acc, row) => {
+      const setupHours = Number(row.setupHours || 0);
+      const hoursPerPart = Number(row.hoursPerPart || 0);
+      const hourlyRate = Number(row.hourlyRate || 0);
+
+      const setupCost = setupHours * hourlyRate;
+      const recurringCostPerPart = hoursPerPart * hourlyRate;
+
+      acc.setupCost += setupCost;
+      acc.recurringCostPerPart += recurringCostPerPart;
+      acc.totalPerPart += recurringCostPerPart;
+
+      return acc;
+    },
+    {
+      setupCost: 0,
+      recurringCostPerPart: 0,
+      totalPerPart: 0,
+    }
+  );
+}, [filteredProcessRows]);
+
+const selectedProcessPart = useMemo(
+  () => parts.find((p) => p.id === selectedProcessPartId),
+  [parts, selectedProcessPartId]
+);
+
+const selectedProcessQty = Number(selectedProcessPart?.quantity ?? 0);
+
+const processExtendedTotal =
+  processSummary.setupCost + processSummary.recurringCostPerPart * selectedProcessQty;
+4. Add the Step 4 UI block
+
+Paste this below Step 3 BOM Builder and above your bottom action buttons.
+
+<div className="border rounded-lg p-5 space-y-4">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-semibold">Step 4 — Process Time</h2>
+      <p className="text-sm text-muted-foreground">
+        Add labor and processing time by department for the selected quoted part.
+      </p>
+    </div>
+
+    <button
+      className="border rounded px-4 py-2"
+      onClick={addProcessRow}
+      type="button"
+    >
+      + Add Process Row
+    </button>
+  </div>
+
+  {processMessage && (
+    <div className="rounded border px-3 py-2 text-sm">{processMessage}</div>
+  )}
+
+  <div className="flex items-end gap-4">
+    <div className="min-w-[320px]">
+      <label className="block text-sm mb-1">Selected RFQ Part</label>
+      <select
+        className="w-full border rounded px-3 py-2"
+        value={selectedProcessPartId}
+        onChange={(e) => setSelectedProcessPartId(e.target.value)}
+      >
+        <option value="">Select a part</option>
+        {parts
+          .filter((p) => p.id)
+          .map((part) => (
+            <option key={part.id} value={part.id}>
+              {part.lineNumber} - {part.partNumber} ({part.quantity})
+            </option>
+          ))}
+      </select>
+    </div>
+
+    {selectedProcessPart && (
+      <div className="text-sm text-muted-foreground">
+        Labor cost will be calculated for <strong>{selectedProcessPart.partNumber}</strong>
+      </div>
+    )}
+  </div>
+
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div className="lg:col-span-3 overflow-x-auto">
+      <table className="w-full border-collapse min-w-[1350px]">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-2">Department</th>
+            <th className="text-left p-2">Source</th>
+            <th className="text-left p-2">Setup Hours</th>
+            <th className="text-left p-2">Hours / Part</th>
+            <th className="text-left p-2">Hourly Rate</th>
+            <th className="text-left p-2">Setup Cost</th>
+            <th className="text-left p-2">Recurring / Part</th>
+            <th className="text-left p-2">Notes</th>
+            <th className="text-left p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {!selectedProcessPartId ? (
+            <tr>
+              <td colSpan={9} className="p-4 text-sm text-muted-foreground">
+                Select an RFQ part to begin adding process rows.
+              </td>
+            </tr>
+          ) : filteredProcessRows.length === 0 ? (
+            <tr>
+              <td colSpan={9} className="p-4 text-sm text-muted-foreground">
+                No process rows yet for this part.
+              </td>
+            </tr>
+          ) : (
+            filteredProcessRows.map((row, index) => {
+              const setupCost =
+                Number(row.setupHours || 0) * Number(row.hourlyRate || 0);
+              const recurringPerPart =
+                Number(row.hoursPerPart || 0) * Number(row.hourlyRate || 0);
+
+              return (
+                <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                  <td className="p-2">
+                    <select
+                      className="w-[180px] border rounded px-2 py-1"
+                      value={row.departmentName}
+                      onChange={(e) =>
+                        updateProcessRow(index, "departmentName", e.target.value)
+                      }
+                    >
+                      {defaultDepartmentOptions.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  <td className="p-2">
+                    <select
+                      className="w-[140px] border rounded px-2 py-1"
+                      value={row.sourceType}
+                      onChange={(e) =>
+                        updateProcessRow(index, "sourceType", e.target.value)
+                      }
+                    >
+                      <option value="MANUAL">Manual</option>
+                      <option value="ROUTING_TEMPLATE">Routing Template</option>
+                      <option value="HISTORICAL">Historical</option>
+                    </select>
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className="w-[110px] border rounded px-2 py-1"
+                      value={row.setupHours}
+                      onChange={(e) =>
+                        updateProcessRow(index, "setupHours", Number(e.target.value))
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min={0}
+                      className="w-[110px] border rounded px-2 py-1"
+                      value={row.hoursPerPart}
+                      onChange={(e) =>
+                        updateProcessRow(index, "hoursPerPart", Number(e.target.value))
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className="w-[110px] border rounded px-2 py-1"
+                      value={row.hourlyRate}
+                      onChange={(e) =>
+                        updateProcessRow(index, "hourlyRate", Number(e.target.value))
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    ${setupCost.toFixed(2)}
+                  </td>
+
+                  <td className="p-2">
+                    ${recurringPerPart.toFixed(4)}
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      className="w-[200px] border rounded px-2 py-1"
+                      value={row.notes ?? ""}
+                      onChange={(e) =>
+                        updateProcessRow(index, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <div className="flex gap-2">
+                      <button
+                        className="border rounded px-3 py-1"
+                        onClick={() => saveProcessRow(row)}
+                        type="button"
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="border rounded px-3 py-1"
+                        onClick={() => deleteProcessRow(index, row)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="border rounded-lg p-4 h-fit">
+      <h3 className="font-semibold mb-3">Labor Summary</h3>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span>Setup Cost</span>
+          <span>${processSummary.setupCost.toFixed(2)}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Recurring / Part</span>
+          <span>${processSummary.recurringCostPerPart.toFixed(4)}</span>
+        </div>
+
+        <div className="border-t pt-2 flex justify-between font-semibold">
+          <span>Labor / Part</span>
+          <span>${processSummary.totalPerPart.toFixed(4)}</span>
+        </div>
+
+        <div className="flex justify-between font-semibold">
+          <span>Total @ Qty</span>
+          <span>${processExtendedTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+5. What this gives you
+
+After this, your RFQ Builder will support:
+
+Step 1 RFQ header
+Step 1 multi-part parts list
+Step 2 tooling
+Step 3 material BOM costing
+Step 4 labor/process costing
+
+That means your quote builder now has the three biggest direct cost buckets working.
+
+6. Best next step
+
+After Step 4, the right next move is:
+
+Step 5 — Overhead + Cap X
+
+That’s where you’ll add:
+
+overhead adjustments
+compliance/documentation/admin charges
+Cap X asset needs
+include/exclude from customer pricing
+
+When you’re ready, send build Step 5 Overhead + Cap X.

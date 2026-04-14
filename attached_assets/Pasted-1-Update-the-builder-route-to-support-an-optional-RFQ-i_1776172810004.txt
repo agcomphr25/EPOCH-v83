@@ -1,0 +1,585 @@
+1. Update the builder route to support an optional RFQ id
+
+In client/src/App.tsx, change the builder route to:
+
+<Route path="/rfq-builder" component={RFQBuilderPage} />
+<Route path="/rfq-builder/:id" component={RFQBuilderPage} />
+2. Replace client/src/pages/RFQBuilderPage.tsx
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useRoute } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+
+type RfqPartRow = {
+  id?: string;
+  lineNumber: number;
+  partNumber: string;
+  partDescription: string;
+  quantity: number;
+  revision: string;
+  uom: string;
+  materialSpec: string;
+  processFamily: string;
+  makeBuyType: string;
+  partType: string;
+  notes: string;
+};
+
+type RfqHeader = {
+  rfqNumber: string;
+  customerId: string;
+  customerNameSnapshot: string;
+  revision: string;
+  quoteDueDate: string;
+  requestedDueDate: string;
+  notes: string;
+  assumptions: string;
+  status: string;
+};
+
+const emptyPart = (lineNumber: number): RfqPartRow => ({
+  lineNumber,
+  partNumber: "",
+  partDescription: "",
+  quantity: 1,
+  revision: "",
+  uom: "EA",
+  materialSpec: "",
+  processFamily: "",
+  makeBuyType: "",
+  partType: "",
+  notes: "",
+});
+
+export default function RFQBuilderPage() {
+  const [, setLocation] = useLocation();
+  const [, params] = useRoute("/rfq-builder/:id");
+  const rfqId = params?.id;
+  const queryClient = useQueryClient();
+
+  const [header, setHeader] = useState<RfqHeader>({
+    rfqNumber: "",
+    customerId: "",
+    customerNameSnapshot: "",
+    revision: "",
+    quoteDueDate: "",
+    requestedDueDate: "",
+    notes: "",
+    assumptions: "",
+    status: "DRAFT",
+  });
+
+  const [parts, setParts] = useState<RfqPartRow[]>([emptyPart(1)]);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  const isEditMode = useMemo(() => Boolean(rfqId), [rfqId]);
+
+  const rfqQuery = useQuery({
+    queryKey: ["estimating-rfq", rfqId],
+    enabled: !!rfqId,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}`);
+      return res.json();
+    },
+  });
+
+  const partsQuery = useQuery({
+    queryKey: ["estimating-rfq-parts", rfqId],
+    enabled: !!rfqId,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/parts`);
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (rfqQuery.data) {
+      const data = rfqQuery.data;
+      setHeader({
+        rfqNumber: data.rfqNumber ?? "",
+        customerId: data.customerId ? String(data.customerId) : "",
+        customerNameSnapshot: data.customerNameSnapshot ?? "",
+        revision: data.revision ?? "",
+        quoteDueDate: data.quoteDueDate ? String(data.quoteDueDate).slice(0, 10) : "",
+        requestedDueDate: data.requestedDueDate ? String(data.requestedDueDate).slice(0, 10) : "",
+        notes: data.notes ?? "",
+        assumptions: data.assumptions ?? "",
+        status: data.status ?? "DRAFT",
+      });
+    }
+  }, [rfqQuery.data]);
+
+  useEffect(() => {
+    if (partsQuery.data && Array.isArray(partsQuery.data) && partsQuery.data.length > 0) {
+      setParts(
+        partsQuery.data.map((p: any, index: number) => ({
+          id: p.id,
+          lineNumber: p.lineNumber ?? index + 1,
+          partNumber: p.partNumber ?? "",
+          partDescription: p.partDescription ?? "",
+          quantity: Number(p.quantity ?? 1),
+          revision: p.revision ?? "",
+          uom: p.uom ?? "EA",
+          materialSpec: p.materialSpec ?? "",
+          processFamily: p.processFamily ?? "",
+          makeBuyType: p.makeBuyType ?? "",
+          partType: p.partType ?? "",
+          notes: p.notes ?? "",
+        }))
+      );
+    }
+  }, [partsQuery.data]);
+
+  const createRfqMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        ...header,
+        customerId: header.customerId ? Number(header.customerId) : null,
+        quoteDueDate: header.quoteDueDate || null,
+        requestedDueDate: header.requestedDueDate || null,
+      };
+
+      const res = await apiRequest("POST", "/api/estimating/rfqs", payload);
+      return res.json();
+    },
+    onSuccess: async (created) => {
+      await saveParts(created.id);
+      await queryClient.invalidateQueries({ queryKey: ["estimating-rfqs"] });
+      setSaveMessage("Draft RFQ saved.");
+      setLocation(`/rfq-builder/${created.id}`);
+    },
+  });
+
+  const updateRfqMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        ...header,
+        customerId: header.customerId ? Number(header.customerId) : null,
+        quoteDueDate: header.quoteDueDate || null,
+        requestedDueDate: header.requestedDueDate || null,
+      };
+
+      const res = await apiRequest("PATCH", `/api/estimating/rfqs/${rfqId}`, payload);
+      return res.json();
+    },
+    onSuccess: async () => {
+      await saveParts(rfqId!);
+      await queryClient.invalidateQueries({ queryKey: ["estimating-rfq", rfqId] });
+      await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-parts", rfqId] });
+      await queryClient.invalidateQueries({ queryKey: ["estimating-rfqs"] });
+      setSaveMessage("Draft RFQ updated.");
+    },
+  });
+
+  const saveParts = async (id: string) => {
+    const validParts = parts
+      .filter((part) => part.partNumber.trim() !== "")
+      .map((part, index) => ({
+        lineNumber: index + 1,
+        partNumber: part.partNumber,
+        partDescription: part.partDescription,
+        quantity: Number(part.quantity || 1),
+        revision: part.revision,
+        uom: part.uom || "EA",
+        materialSpec: part.materialSpec,
+        processFamily: part.processFamily,
+        makeBuyType: part.makeBuyType,
+        partType: part.partType,
+        notes: part.notes,
+      }));
+
+    for (const part of validParts) {
+      await apiRequest("POST", `/api/estimating/rfqs/${id}/parts`, part);
+    }
+  };
+
+  const handleHeaderChange = (field: keyof RfqHeader, value: string) => {
+    setHeader((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePartChange = (
+    index: number,
+    field: keyof RfqPartRow,
+    value: string | number
+  ) => {
+    setParts((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const addPartRow = () => {
+    setParts((prev) => [...prev, emptyPart(prev.length + 1)]);
+  };
+
+  const removePartRow = (index: number) => {
+    setParts((prev) => {
+      if (prev.length === 1) return prev;
+      return prev
+        .filter((_, i) => i !== index)
+        .map((row, idx) => ({ ...row, lineNumber: idx + 1 }));
+    });
+  };
+
+  const onSaveDraft = async () => {
+    setSaveMessage("");
+
+    if (!header.rfqNumber.trim()) {
+      setSaveMessage("RFQ number is required.");
+      return;
+    }
+
+    if (!parts.some((p) => p.partNumber.trim())) {
+      setSaveMessage("Add at least one part number before saving.");
+      return;
+    }
+
+    if (isEditMode) {
+      updateRfqMutation.mutate();
+    } else {
+      createRfqMutation.mutate();
+    }
+  };
+
+  const isSaving = createRfqMutation.isPending || updateRfqMutation.isPending;
+  const isLoading = rfqQuery.isLoading || partsQuery.isLoading;
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="border rounded-lg p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">RFQ Builder</h1>
+            <p className="text-sm text-muted-foreground">
+              Step 1 — RFQ header and multi-part intake
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              className="border rounded px-4 py-2"
+              onClick={() => setLocation("/estimating")}
+              type="button"
+            >
+              Back to RFQs
+            </button>
+            <button
+              className="bg-primary text-primary-foreground rounded px-4 py-2 disabled:opacity-50"
+              onClick={onSaveDraft}
+              disabled={isSaving}
+              type="button"
+            >
+              {isSaving ? "Saving..." : "Save Draft"}
+            </button>
+          </div>
+        </div>
+
+        {saveMessage && (
+          <div className="mt-4 rounded border px-3 py-2 text-sm">{saveMessage}</div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="border rounded-lg p-5">Loading RFQ...</div>
+      ) : (
+        <>
+          <div className="border rounded-lg p-5 space-y-4">
+            <h2 className="text-lg font-semibold">RFQ Header</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm mb-1">RFQ Number</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={header.rfqNumber}
+                  onChange={(e) => handleHeaderChange("rfqNumber", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">Customer ID</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={header.customerId}
+                  onChange={(e) => handleHeaderChange("customerId", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">Customer Name Snapshot</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={header.customerNameSnapshot}
+                  onChange={(e) =>
+                    handleHeaderChange("customerNameSnapshot", e.target.value)
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">Revision</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={header.revision}
+                  onChange={(e) => handleHeaderChange("revision", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">Quote Due Date</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={header.quoteDueDate}
+                  onChange={(e) => handleHeaderChange("quoteDueDate", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">Requested Due Date</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={header.requestedDueDate}
+                  onChange={(e) =>
+                    handleHeaderChange("requestedDueDate", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Notes</label>
+              <textarea
+                className="w-full border rounded px-3 py-2 min-h-[90px]"
+                value={header.notes}
+                onChange={(e) => handleHeaderChange("notes", e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Assumptions</label>
+              <textarea
+                className="w-full border rounded px-3 py-2 min-h-[90px]"
+                value={header.assumptions}
+                onChange={(e) => handleHeaderChange("assumptions", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Quoted Parts</h2>
+                <p className="text-sm text-muted-foreground">
+                  Add one or more part lines for this RFQ.
+                </p>
+              </div>
+
+              <button
+                className="border rounded px-4 py-2"
+                onClick={addPartRow}
+                type="button"
+              >
+                + Add Part
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse min-w-[1200px]">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Line</th>
+                    <th className="text-left p-2">Part Number</th>
+                    <th className="text-left p-2">Description</th>
+                    <th className="text-left p-2">Qty</th>
+                    <th className="text-left p-2">Rev</th>
+                    <th className="text-left p-2">UOM</th>
+                    <th className="text-left p-2">Material Spec</th>
+                    <th className="text-left p-2">Process Family</th>
+                    <th className="text-left p-2">Make/Buy</th>
+                    <th className="text-left p-2">Part Type</th>
+                    <th className="text-left p-2">Notes</th>
+                    <th className="text-left p-2">Remove</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parts.map((part, index) => (
+                    <tr key={`${part.id ?? "new"}-${index}`} className="border-b align-top">
+                      <td className="p-2">{part.lineNumber}</td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[160px] border rounded px-2 py-1"
+                          value={part.partNumber}
+                          onChange={(e) =>
+                            handlePartChange(index, "partNumber", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[220px] border rounded px-2 py-1"
+                          value={part.partDescription}
+                          onChange={(e) =>
+                            handlePartChange(index, "partDescription", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          min={1}
+                          className="w-[90px] border rounded px-2 py-1"
+                          value={part.quantity}
+                          onChange={(e) =>
+                            handlePartChange(index, "quantity", Number(e.target.value))
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[90px] border rounded px-2 py-1"
+                          value={part.revision}
+                          onChange={(e) =>
+                            handlePartChange(index, "revision", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[90px] border rounded px-2 py-1"
+                          value={part.uom}
+                          onChange={(e) =>
+                            handlePartChange(index, "uom", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[180px] border rounded px-2 py-1"
+                          value={part.materialSpec}
+                          onChange={(e) =>
+                            handlePartChange(index, "materialSpec", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <select
+                          className="w-[150px] border rounded px-2 py-1"
+                          value={part.processFamily}
+                          onChange={(e) =>
+                            handlePartChange(index, "processFamily", e.target.value)
+                          }
+                        >
+                          <option value="">Select</option>
+                          <option value="CNC">CNC</option>
+                          <option value="COMPOSITE">Composite</option>
+                          <option value="ASSEMBLY">Assembly</option>
+                          <option value="TUBE">Tube</option>
+                          <option value="TOOLING">Tooling</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </td>
+
+                      <td className="p-2">
+                        <select
+                          className="w-[130px] border rounded px-2 py-1"
+                          value={part.makeBuyType}
+                          onChange={(e) =>
+                            handlePartChange(index, "makeBuyType", e.target.value)
+                          }
+                        >
+                          <option value="">Select</option>
+                          <option value="MAKE">Make</option>
+                          <option value="BUY">Buy</option>
+                          <option value="HYBRID">Hybrid</option>
+                        </select>
+                      </td>
+
+                      <td className="p-2">
+                        <select
+                          className="w-[160px] border rounded px-2 py-1"
+                          value={part.partType}
+                          onChange={(e) =>
+                            handlePartChange(index, "partType", e.target.value)
+                          }
+                        >
+                          <option value="">Select</option>
+                          <option value="PURCHASED">Purchased</option>
+                          <option value="MANUFACTURED">Manufactured</option>
+                          <option value="ASSEMBLY">Assembly</option>
+                          <option value="SUB_ASSEMBLY">Sub-Assembly</option>
+                        </select>
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[180px] border rounded px-2 py-1"
+                          value={part.notes}
+                          onChange={(e) =>
+                            handlePartChange(index, "notes", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <button
+                          className="border rounded px-3 py-1"
+                          onClick={() => removePartRow(index)}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button
+              className="border rounded px-4 py-2"
+              onClick={() => setLocation("/estimating")}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button
+              className="bg-primary text-primary-foreground rounded px-4 py-2 disabled:opacity-50"
+              onClick={onSaveDraft}
+              disabled={isSaving}
+              type="button"
+            >
+              {isSaving ? "Saving..." : "Save Draft"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+3. Recommended small backend improvement
+
+Right now, if you reopen and save the same RFQ, posting parts again can duplicate lines unless you already added replace logic.
+
+Add these methods to storage next:
+
+deleteEstimatingRfqPartsByRfqId(rfqId: string): Promise<void>;
+
+Implementation:
+
+async deleteEstimatingRfqPartsByRfqId(rfqId: string) {
+  await db.delete(estimatingRfqParts).where(eq(estimatingRfqParts.rfqId, rfqId));
+}
+
+Then in your PATCH /api/estimating/rfqs/:id flow, clear old parts before re-saving them. That will keep Step 1 clean.

@@ -4070,6 +4070,194 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ production_work_orders migration skipped:', wadErr?.message);
     }
 
+    // Ensure estimating / RFQ builder tables exist
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_rfqs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_number TEXT NOT NULL,
+          customer_id INTEGER,
+          customer_name_snapshot TEXT,
+          quote_id UUID,
+          source TEXT NOT NULL DEFAULT 'RFQ_BUILDER',
+          revision TEXT,
+          requested_due_date TIMESTAMP,
+          quote_due_date TIMESTAMP,
+          notes TEXT,
+          assumptions TEXT,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          created_by INTEGER,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_rfq_parts (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          line_number INTEGER NOT NULL,
+          inventory_item_id INTEGER,
+          ag_part_number TEXT,
+          part_number TEXT NOT NULL,
+          part_description TEXT,
+          revision TEXT,
+          quantity INTEGER NOT NULL,
+          uom TEXT DEFAULT 'EA',
+          part_type TEXT,
+          process_family TEXT,
+          material_spec TEXT,
+          make_buy_type TEXT,
+          is_draft_inventory_item BOOLEAN NOT NULL DEFAULT false,
+          draft_status TEXT DEFAULT 'ESTIMATING',
+          drawing_attached BOOLEAN NOT NULL DEFAULT false,
+          compliance_flags JSONB NOT NULL DEFAULT '[]',
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_rfq_parts_rfq_id_idx ON estimating_rfq_parts(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_tooling (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          description TEXT NOT NULL,
+          tooling_type TEXT NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          unit_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+          total_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+          applies_to_scope TEXT NOT NULL,
+          rfq_part_ids JSONB NOT NULL DEFAULT '[]',
+          pricing_treatment TEXT NOT NULL,
+          amortization_qty INTEGER,
+          charge_timing TEXT NOT NULL DEFAULT 'ONE_TIME',
+          customer_owned_tooling BOOLEAN NOT NULL DEFAULT false,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_tooling_rfq_id_idx ON estimating_tooling(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_bom_lines (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          rfq_part_id UUID NOT NULL REFERENCES estimating_rfq_parts(id) ON DELETE CASCADE,
+          inventory_item_id INTEGER,
+          child_part_ag_number TEXT,
+          description TEXT NOT NULL,
+          category TEXT,
+          quantity_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          uom TEXT DEFAULT 'EA',
+          estimated_unit_cost NUMERIC(12,4) NOT NULL DEFAULT 0,
+          scrap_percent NUMERIC(8,2) NOT NULL DEFAULT 0,
+          is_estimated BOOLEAN NOT NULL DEFAULT true,
+          is_draft_inventory_item BOOLEAN NOT NULL DEFAULT false,
+          vendor_name_snapshot TEXT,
+          material_spec TEXT,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_bom_lines_rfq_part_id_idx ON estimating_bom_lines(rfq_part_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_process_rows (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          rfq_part_id UUID NOT NULL REFERENCES estimating_rfq_parts(id) ON DELETE CASCADE,
+          department_name TEXT NOT NULL,
+          source_type TEXT NOT NULL DEFAULT 'MANUAL',
+          setup_hours NUMERIC(10,2) NOT NULL DEFAULT 0,
+          hours_per_part NUMERIC(10,4) NOT NULL DEFAULT 0,
+          hourly_rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_process_rows_rfq_part_id_idx ON estimating_process_rows(rfq_part_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_adjustments (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          rfq_part_id UUID REFERENCES estimating_rfq_parts(id) ON DELETE CASCADE,
+          adjustment_type TEXT NOT NULL,
+          description TEXT NOT NULL,
+          pricing_mode TEXT NOT NULL,
+          amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          percent_value NUMERIC(8,4),
+          applies_to_scope TEXT NOT NULL DEFAULT 'RFQ',
+          include_in_customer_price BOOLEAN NOT NULL DEFAULT true,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_adjustments_rfq_id_idx ON estimating_adjustments(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_shipping (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          rfq_part_id UUID REFERENCES estimating_rfq_parts(id) ON DELETE CASCADE,
+          shipping_mode TEXT NOT NULL,
+          description TEXT,
+          method TEXT,
+          amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+          allocation_method TEXT,
+          include_in_customer_price BOOLEAN NOT NULL DEFAULT true,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_shipping_rfq_id_idx ON estimating_shipping(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_quantity_breaks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          label TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_quantity_breaks_rfq_id_idx ON estimating_quantity_breaks(rfq_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_pricing_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfq_id UUID NOT NULL REFERENCES estimating_rfqs(id) ON DELETE CASCADE,
+          rfq_part_id UUID NOT NULL REFERENCES estimating_rfq_parts(id) ON DELETE CASCADE,
+          quantity_break_id UUID NOT NULL REFERENCES estimating_quantity_breaks(id) ON DELETE CASCADE,
+          material_cost_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          labor_cost_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          overhead_cost_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          shipping_cost_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          tooling_cost_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          total_cost_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          margin_percent NUMERIC(8,4) NOT NULL DEFAULT 0,
+          sell_price_per_part NUMERIC(12,4) NOT NULL DEFAULT 0,
+          extended_price NUMERIC(14,2) NOT NULL DEFAULT 0,
+          lead_time_days INTEGER,
+          calculation_version TEXT NOT NULL DEFAULT 'v1',
+          calculated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS estimating_pricing_snapshots_rfq_part_id_idx ON estimating_pricing_snapshots(rfq_part_id)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS estimating_defaults (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          default_labor_rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+          default_overhead_percent NUMERIC(8,4) NOT NULL DEFAULT 0,
+          default_margin_percent NUMERIC(8,4) NOT NULL DEFAULT 0,
+          default_quote_validity_days INTEGER NOT NULL DEFAULT 30,
+          default_shipping_method TEXT,
+          default_shipping_carrier TEXT,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      console.log('✅ Ensured estimating / RFQ builder tables exist');
+    } catch (estimatingErr: any) {
+      console.warn('⚠️ Estimating tables migration:', estimatingErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

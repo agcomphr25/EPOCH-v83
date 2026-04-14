@@ -1,0 +1,160 @@
+Great — this is the last big build to make the workflow feel complete.
+Step 8 — Pricing Summary + Quote Handoff
+This step should do three jobs:
+
+
+show a clean final quote-style summary
+
+
+persist pricing snapshots
+
+
+hand off into your existing quotes flow instead of inventing a second quote system
+
+
+That matches your EPOCH structure well because you already have a live quotes table, quote save/submit routes, and PDF generation flow. 
+
+What Step 8 should produce
+For each RFQ, you want a final section that shows:
+Quantity break summary
+For each break:
+
+
+quantity label
+
+
+per-part sell price by quoted part
+
+
+total extended value
+
+
+separate tooling line item
+
+
+combined quote total
+
+
+Quote notes
+
+
+assumptions
+
+
+exclusions
+
+
+validity
+
+
+lead time placeholder for now
+
+
+Handoff actions
+
+
+Save Pricing Snapshots
+
+
+Create Draft Quote
+
+
+later: Open in Quote Form
+
+
+
+Best implementation order
+Do this in 4 pieces:
+1. Pricing snapshot backend
+Use the existing estimatingPricingSnapshots table
+2. Snapshot save route
+Persist calculated values from Step 7
+3. Pricing Summary UI block
+Render the quote-style output
+4. Quote handoff route
+Create or update a draft quote in your existing quotes system
+
+Part 1 — pricing snapshot storage
+Add to IStorage
+getEstimatingPricingSnapshots(rfqId: string): Promise<any[]>;replaceEstimatingPricingSnapshots(  rfqId: string,  rows: any[]): Promise<any[]>;
+Add to DatabaseStorage
+import { estimatingPricingSnapshots } from "../schema"; // adjust pathimport { eq } from "drizzle-orm";async getEstimatingPricingSnapshots(rfqId: string) {  return db    .select()    .from(estimatingPricingSnapshots)    .where(eq(estimatingPricingSnapshots.rfqId, rfqId));}async replaceEstimatingPricingSnapshots(rfqId: string, rows: any[]) {  await db    .delete(estimatingPricingSnapshots)    .where(eq(estimatingPricingSnapshots.rfqId, rfqId));  if (!rows.length) return [];  return db    .insert(estimatingPricingSnapshots)    .values(rows)    .returning();}
+
+Part 2 — snapshot routes
+Add to server/src/routes/estimating.ts
+  // ---------------- PRICING SNAPSHOTS ----------------  app.get("/api/estimating/rfqs/:id/pricing-snapshots", async (req, res) => {    try {      const rows = await storage.getEstimatingPricingSnapshots(req.params.id);      res.json(rows);    } catch (err) {      console.error(err);      res.status(500).send("Failed to fetch pricing snapshots");    }  });  app.post("/api/estimating/rfqs/:id/pricing-snapshots", async (req, res) => {    try {      const rows = Array.isArray(req.body) ? req.body : [];      const saved = await storage.replaceEstimatingPricingSnapshots(req.params.id, rows);      res.json(saved);    } catch (err) {      console.error(err);      res.status(500).send("Failed to save pricing snapshots");    }  });
+
+Part 3 — quote handoff route
+Since your app already has quote save/submit flow and quote PDF generation, the cleanest first handoff is:
+
+
+build one draft quote
+
+
+write summary data into it
+
+
+keep the user in Estimating for now
+
+
+later add “Open in Quote Form” if needed 
+
+
+Add this route to server/src/routes/estimating.ts:
+  // ---------------- QUOTE HANDOFF ----------------  app.post("/api/estimating/rfqs/:id/create-draft-quote", async (req, res) => {    try {      const rfqId = req.params.id;      const rfq = await storage.getEstimatingRfqById(rfqId);      if (!rfq) {        return res.status(404).send("RFQ not found");      }      const parts = await storage.getEstimatingRfqParts(rfqId);      const snapshots = await storage.getEstimatingPricingSnapshots(rfqId);      const groupedByBreak = snapshots.reduce((acc: Record<string, any[]>, row: any) => {        const key = row.quantityBreakId;        if (!acc[key]) acc[key] = [];        acc[key].push(row);        return acc;      }, {});      const quoteLineItems = Object.values(groupedByBreak).map((rows: any[]) => {        const first = rows[0];        const qty = Number(first?.quantity ?? 0);        const total = rows.reduce((sum, r) => sum + Number(r.extendedPrice || 0), 0);        return {          description: `Estimated pricing for qty break ${qty}`,          quantity: 1,          unitPrice: total,          totalPrice: total,        };      });      const quotePayload = {        customerId: rfq.customerId ? String(rfq.customerId) : "",        title: `RFQ ${rfq.rfqNumber}`,        description: rfq.notes || `Generated from Estimating RFQ ${rfq.rfqNumber}`,        status: "DRAFT",        lineItems: quoteLineItems,        validUntil: null,      };      const createdQuote = await storage.createQuote(quotePayload);      await storage.updateEstimatingRfq(rfqId, {        quoteId: createdQuote.id,        status: "QUOTED",      });      res.json({        success: true,        quoteId: createdQuote.id,      });    } catch (err) {      console.error(err);      res.status(500).send("Failed to create draft quote");    }  });
+Important note
+Your existing createQuote signature may need a slightly different payload shape, because your quotes flow is already implemented in EPOCH. Adjust the payload keys to match your existing quote save method and route shape. The reason this is the right integration target is that quotes, draft status, and PDF generation are already part of the current system. 
+
+Part 4 — Step 8 frontend state and helpers
+Add to RFQBuilderPage.tsx:
+State
+const [pricingSnapshotMessage, setPricingSnapshotMessage] = useState("");const [quoteHandoffMessage, setQuoteHandoffMessage] = useState("");
+Build snapshot payload from Step 7 matrix
+const pricingSnapshotRows = useMemo(() => {  return pricingMatrix.flatMap((breakRow) =>    breakRow.rows.map((row) => ({      rfqId,      rfqPartId: row.partId,      quantityBreakId: breakRow.id,      quantity: breakRow.quantity,      label: breakRow.label,      materialCostPerPart: row.materialPerPart,      laborCostPerPart: row.laborPerPart,      overheadCostPerPart: row.adjustmentPerPart,      shippingCostPerPart: row.shippingPerPart,      toolingCostPerPart: row.toolingPerPart,      totalCostPerPart: row.totalCostPerPart,      marginPercent: marginPercent,      sellPricePerPart: row.sellPricePerPart,      extendedPrice: row.extendedPrice,      calculationVersion: "v1",    }))  );}, [pricingMatrix, rfqId, marginPercent]);
+Save snapshots
+const savePricingSnapshots = async () => {  if (!rfqId) {    setPricingSnapshotMessage("Save the RFQ first before saving pricing.");    return;  }  if (!pricingSnapshotRows.length) {    setPricingSnapshotMessage("No pricing rows to save.");    return;  }  await apiRequest(    "POST",    `/api/estimating/rfqs/${rfqId}/pricing-snapshots`,    pricingSnapshotRows  );  setPricingSnapshotMessage("Pricing snapshots saved.");};
+Create draft quote
+const createDraftQuoteFromRfq = async () => {  if (!rfqId) {    setQuoteHandoffMessage("Save the RFQ first before creating a quote.");    return;  }  await savePricingSnapshots();  const res = await apiRequest(    "POST",    `/api/estimating/rfqs/${rfqId}/create-draft-quote`,    {}  );  const data = await res.json();  setQuoteHandoffMessage(`Draft quote created successfully.`);  console.log("Created quote id:", data.quoteId);};
+
+Part 5 — Step 8 UI block
+Paste this below Step 7 and above the final action buttons.
+<div className="border rounded-lg p-5 space-y-5">  <div className="flex items-center justify-between gap-4">    <div>      <h2 className="text-lg font-semibold">Step 8 — Pricing Summary + Quote Handoff</h2>      <p className="text-sm text-muted-foreground">        Review final pricing, save snapshots, and create a draft quote.      </p>    </div>    <div className="flex gap-2">      <button        className="border rounded px-4 py-2"        onClick={savePricingSnapshots}        type="button"      >        Save Pricing Snapshots      </button>      <button        className="bg-primary text-primary-foreground rounded px-4 py-2"        onClick={createDraftQuoteFromRfq}        type="button"      >        Create Draft Quote      </button>    </div>  </div>  {pricingSnapshotMessage && (    <div className="rounded border px-3 py-2 text-sm">{pricingSnapshotMessage}</div>  )}  {quoteHandoffMessage && (    <div className="rounded border px-3 py-2 text-sm">{quoteHandoffMessage}</div>  )}  <div className="space-y-6">    {pricingMatrix.length === 0 ? (      <div className="rounded border p-4 text-sm text-muted-foreground">        Add quantity breaks and pricing inputs to generate the final summary.      </div>    ) : (      pricingMatrix.map((breakRow) => {        const totalExtended = breakRow.rows.reduce(          (sum, row) => sum + Number(row.extendedPrice || 0),          0        );        const separateToolingTotal = toolingRows.reduce((sum, row) => {          if (row.pricingTreatment !== "SEPARATE_LINE") return sum;          return sum + Number(row.totalCost || 0);        }, 0);        const grandTotal = totalExtended + separateToolingTotal;        return (          <div key={breakRow.label} className="border rounded-lg p-4 space-y-4">            <div className="flex items-center justify-between">              <h3 className="font-semibold">                {breakRow.label} ({breakRow.quantity})              </h3>              <div className="text-sm text-muted-foreground">                Margin: {marginPercent.toFixed(2)}%              </div>            </div>            <div className="overflow-x-auto">              <table className="w-full border-collapse min-w-[850px]">                <thead>                  <tr className="border-b">                    <th className="text-left p-2">Part</th>                    <th className="text-left p-2">Sell / Part</th>                    <th className="text-left p-2">Extended</th>                  </tr>                </thead>                <tbody>                  {breakRow.rows.map((row) => (                    <tr key={row.partId} className="border-b">                      <td className="p-2">{row.partNumber}</td>                      <td className="p-2 font-medium">                        ${row.sellPricePerPart.toFixed(4)}                      </td>                      <td className="p-2 font-medium">                        ${row.extendedPrice.toFixed(2)}                      </td>                    </tr>                  ))}                </tbody>              </table>            </div>            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">              <div className="border rounded p-3">                <div className="text-sm text-muted-foreground">RFQ Extended Total</div>                <div className="text-lg font-semibold">                  ${totalExtended.toFixed(2)}                </div>              </div>              <div className="border rounded p-3">                <div className="text-sm text-muted-foreground">Separate Tooling</div>                <div className="text-lg font-semibold">                  ${separateToolingTotal.toFixed(2)}                </div>              </div>              <div className="border rounded p-3">                <div className="text-sm text-muted-foreground">Grand Total</div>                <div className="text-lg font-semibold">                  ${grandTotal.toFixed(2)}                </div>              </div>            </div>          </div>        );      })    )}  </div>  <div className="border rounded-lg p-4 space-y-3">    <h3 className="font-semibold">Quote Notes</h3>    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">      <div>        <div className="font-medium mb-1">Assumptions</div>        <div className="text-muted-foreground whitespace-pre-wrap">          {header.assumptions || "No assumptions entered."}        </div>      </div>      <div>        <div className="font-medium mb-1">Notes</div>        <div className="text-muted-foreground whitespace-pre-wrap">          {header.notes || "No notes entered."}        </div>      </div>    </div>  </div></div>
+
+What this gives you
+After this build, the Estimating workflow can:
+
+
+calculate quote pricing by quantity break
+
+
+persist those pricing results
+
+
+create a draft quote using your existing quote infrastructure
+
+
+keep Estimating separate from P2 while still handing off into the live quote flow
+
+
+That’s the cleanest architecture for the system you already have. Your current codebase already separates quotes from other production records and supports draft/submit/PDF behavior, so this handoff is the right endpoint for Estimating. 
+
+Best follow-up after Step 8
+After this, the smartest next improvements are:
+
+
+open the created draft quote directly in your existing quote form
+
+
+save true estimatingDefaults values for margin/validity defaults
+
+
+add update routes instead of create/delete-only rows
+
+
+add lead time modeling
+
+
+compare estimated vs actual once awarded
+
+
+When this is in, send Step 8 done and I’ll help you tighten the handoff and polish the final workflow.

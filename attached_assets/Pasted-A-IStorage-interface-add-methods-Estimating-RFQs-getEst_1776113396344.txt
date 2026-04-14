@@ -1,0 +1,254 @@
+A. IStorage interface (add methods)
+// Estimating - RFQs
+getEstimatingRfqs(): Promise<any[]>;
+getEstimatingRfqById(id: string): Promise<any | null>;
+createEstimatingRfq(data: any): Promise<any>;
+updateEstimatingRfq(id: string, data: any): Promise<any>;
+
+// RFQ Parts
+getEstimatingRfqParts(rfqId: string): Promise<any[]>;
+createEstimatingRfqPart(data: any): Promise<any>;
+
+// Tooling
+getEstimatingTooling(rfqId: string): Promise<any[]>;
+createEstimatingTooling(data: any): Promise<any>;
+deleteEstimatingTooling(id: string): Promise<void>;
+B. DatabaseStorage implementation
+
+Adjust import paths to your schema exports
+
+import {
+  estimatingRfqs,
+  estimatingRfqParts,
+  estimatingTooling,
+} from "../schema"; // adjust path
+
+import { eq } from "drizzle-orm";
+
+// ---------------- RFQs ----------------
+
+async getEstimatingRfqs() {
+  return db.select().from(estimatingRfqs);
+}
+
+async getEstimatingRfqById(id: string) {
+  const [row] = await db
+    .select()
+    .from(estimatingRfqs)
+    .where(eq(estimatingRfqs.id, id));
+  return row || null;
+}
+
+async createEstimatingRfq(data: any) {
+  const [row] = await db
+    .insert(estimatingRfqs)
+    .values(data)
+    .returning();
+  return row;
+}
+
+async updateEstimatingRfq(id: string, data: any) {
+  const [row] = await db
+    .update(estimatingRfqs)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(eq(estimatingRfqs.id, id))
+    .returning();
+  return row;
+}
+
+// ---------------- RFQ PARTS ----------------
+
+async getEstimatingRfqParts(rfqId: string) {
+  return db
+    .select()
+    .from(estimatingRfqParts)
+    .where(eq(estimatingRfqParts.rfqId, rfqId));
+}
+
+async createEstimatingRfqPart(data: any) {
+  const [row] = await db
+    .insert(estimatingRfqParts)
+    .values(data)
+    .returning();
+  return row;
+}
+
+// ---------------- TOOLING ----------------
+
+async getEstimatingTooling(rfqId: string) {
+  return db
+    .select()
+    .from(estimatingTooling)
+    .where(eq(estimatingTooling.rfqId, rfqId));
+}
+
+async createEstimatingTooling(data: any) {
+  const [row] = await db
+    .insert(estimatingTooling)
+    .values({
+      ...data,
+      totalCost:
+        Number(data.quantity || 0) * Number(data.unitCost || 0),
+    })
+    .returning();
+  return row;
+}
+
+async deleteEstimatingTooling(id: string) {
+  await db
+    .delete(estimatingTooling)
+    .where(eq(estimatingTooling.id, id));
+}
+✅ 2) API Routes
+
+Create:
+
+server/src/routes/estimating.ts
+import express from "express";
+
+export function registerEstimatingRoutes(app, storage) {
+
+  // ---------------- RFQs ----------------
+
+  app.get("/api/estimating/rfqs", async (req, res) => {
+    try {
+      const data = await storage.getEstimatingRfqs();
+      res.json(data);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to fetch RFQs");
+    }
+  });
+
+  app.post("/api/estimating/rfqs", async (req, res) => {
+    try {
+      const rfq = await storage.createEstimatingRfq(req.body);
+      res.json(rfq);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to create RFQ");
+    }
+  });
+
+  app.get("/api/estimating/rfqs/:id", async (req, res) => {
+    try {
+      const rfq = await storage.getEstimatingRfqById(req.params.id);
+      res.json(rfq);
+    } catch (err) {
+      res.status(500).send("Failed to fetch RFQ");
+    }
+  });
+
+  app.patch("/api/estimating/rfqs/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateEstimatingRfq(
+        req.params.id,
+        req.body
+      );
+      res.json(updated);
+    } catch (err) {
+      res.status(500).send("Failed to update RFQ");
+    }
+  });
+
+  // ---------------- RFQ PARTS ----------------
+
+  app.get("/api/estimating/rfqs/:id/parts", async (req, res) => {
+    try {
+      const parts = await storage.getEstimatingRfqParts(req.params.id);
+      res.json(parts);
+    } catch (err) {
+      res.status(500).send("Failed to fetch parts");
+    }
+  });
+
+  app.post("/api/estimating/rfqs/:id/parts", async (req, res) => {
+    try {
+      const part = await storage.createEstimatingRfqPart({
+        ...req.body,
+        rfqId: req.params.id,
+      });
+      res.json(part);
+    } catch (err) {
+      res.status(500).send("Failed to create part");
+    }
+  });
+
+  // ---------------- TOOLING ----------------
+
+  app.get("/api/estimating/rfqs/:id/tooling", async (req, res) => {
+    try {
+      const tooling = await storage.getEstimatingTooling(req.params.id);
+      res.json(tooling);
+    } catch (err) {
+      res.status(500).send("Failed to fetch tooling");
+    }
+  });
+
+  app.post("/api/estimating/rfqs/:id/tooling", async (req, res) => {
+    try {
+      const tooling = await storage.createEstimatingTooling({
+        ...req.body,
+        rfqId: req.params.id,
+      });
+      res.json(tooling);
+    } catch (err) {
+      res.status(500).send("Failed to create tooling");
+    }
+  });
+
+  app.delete("/api/estimating/tooling/:id", async (req, res) => {
+    try {
+      await storage.deleteEstimatingTooling(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).send("Failed to delete tooling");
+    }
+  });
+}
+✅ 3) Register routes
+
+In:
+
+server/src/routes/index.ts
+import { registerEstimatingRoutes } from "./estimating";
+
+registerEstimatingRoutes(app, storage);
+✅ 4) Hook into frontend (RFQ List page)
+
+Update your stub:
+
+RFQListPage.tsx
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+
+export default function RFQListPage() {
+  const { data = [] } = useQuery({
+    queryKey: ["estimating-rfqs"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/estimating/rfqs");
+      return res.json();
+    },
+  });
+
+  return (
+    <div className="p-6">
+      <h1 className="text-xl font-bold mb-4">RFQs</h1>
+
+      <div className="border p-4 rounded">
+        {data.length === 0 ? (
+          <p>No RFQs yet</p>
+        ) : (
+          data.map((rfq: any) => (
+            <div key={rfq.id} className="border-b py-2">
+              {rfq.rfqNumber} — {rfq.status}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

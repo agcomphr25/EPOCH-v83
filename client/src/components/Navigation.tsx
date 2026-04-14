@@ -76,6 +76,7 @@ import {
   PackageCheck,
   ShieldAlert,
   Tv,
+  FileSearch,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -243,6 +244,7 @@ export default function Navigation() {
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
   const [centralStorageExpanded, setCentralStorageExpanded] = useState(false);
   const [systemHealthExpanded, setSystemHealthExpanded] = useState(false);
+  const [estimatingExpanded, setEstimatingExpanded] = useState(false);
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -260,6 +262,7 @@ export default function Navigation() {
     setVerifiedModulesExpanded(false);
     setCentralStorageExpanded(false);
     setSystemHealthExpanded(false);
+    setEstimatingExpanded(false);
   }, []);
 
   // Helper function to toggle dropdown
@@ -292,6 +295,8 @@ export default function Navigation() {
           setCentralStorageExpanded(false);
         if (dropdownName !== 'systemHealth')
           setSystemHealthExpanded(false);
+        if (dropdownName !== 'estimating')
+          setEstimatingExpanded(false);
       }
     },
     []
@@ -443,6 +448,21 @@ export default function Navigation() {
       label: 'Shipping Status Audit',
       icon: PackageCheck,
       description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
+    },
+  ];
+
+  const estimatingItems: NavItemDef[] = [
+    {
+      path: '/estimating',
+      label: 'RFQs',
+      icon: FileSearch,
+      description: 'View and manage Requests for Quotation',
+    },
+    {
+      path: '/rfq-builder',
+      label: 'Cost Builder',
+      icon: Calculator,
+      description: 'BOM-driven cost estimation with overhead rates and margins',
     },
   ];
 
@@ -1504,6 +1524,10 @@ export default function Navigation() {
     () => filterByPermissions(systemHealthItems, currentUser?.username, userRole),
     [systemHealthItems, currentUser?.username, userRole]
   );
+  const filteredEstimatingItems = useMemo(
+    () => filterByPermissions(estimatingItems, currentUser?.username, userRole),
+    [estimatingItems, currentUser?.username, userRole]
+  );
 
   const isSystemHealthActive = systemHealthItems.some(
     (item) => location === item.path
@@ -1512,6 +1536,9 @@ export default function Navigation() {
     (item) => location === item.path
   );
   const isOrderManagementActive = orderManagementItems.some(
+    (item) => location === item.path
+  );
+  const isEstimatingActive = estimatingItems.some(
     (item) => location === item.path
   );
   const isFormsReportsActive = formsReportsItems.some(
@@ -1642,6 +1669,60 @@ export default function Navigation() {
                 {orderManagementExpanded && (
                   <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                     {filteredOrderManagementItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
+
+                      return (
+                        <button
+                          key={item.path}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                            isActive && 'bg-primary text-white hover:bg-primary'
+                          )}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Estimating Dropdown */}
+            {filteredEstimatingItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isEstimatingActive ? 'default' : 'ghost'}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    isEstimatingActive && 'bg-primary text-white'
+                  )}
+                  onClick={() =>
+                    toggleDropdown(
+                      'estimating',
+                      estimatingExpanded,
+                      setEstimatingExpanded
+                    )
+                  }
+                >
+                  <Calculator className="h-4 w-4" />
+                  Estimating
+                  {estimatingExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {estimatingExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredEstimatingItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;
 

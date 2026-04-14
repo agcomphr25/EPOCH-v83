@@ -1,0 +1,900 @@
+Great — here’s the best next build:
+
+Step 6 — Shipping
+
+and
+
+extract Step 3 — BOM Builder
+
+This keeps the quote engine moving and keeps RFQBuilderPage.tsx from getting out of hand.
+
+Part 1 — Step 6 backend
+
+Your estimatingShipping table already exists, so this is storage + routes + frontend wiring.
+
+1. Add to IStorage
+getEstimatingShipping(rfqId: string): Promise<any[]>;
+createEstimatingShipping(data: any): Promise<any>;
+deleteEstimatingShipping(id: string): Promise<void>;
+2. Add to DatabaseStorage
+import { estimatingShipping } from "../schema"; // adjust path
+import { eq } from "drizzle-orm";
+
+async getEstimatingShipping(rfqId: string) {
+  return db
+    .select()
+    .from(estimatingShipping)
+    .where(eq(estimatingShipping.rfqId, rfqId));
+}
+
+async createEstimatingShipping(data: any) {
+  const [row] = await db
+    .insert(estimatingShipping)
+    .values(data)
+    .returning();
+  return row;
+}
+
+async deleteEstimatingShipping(id: string) {
+  await db
+    .delete(estimatingShipping)
+    .where(eq(estimatingShipping.id, id));
+}
+3. Add routes to server/src/routes/estimating.ts
+  // ---------------- SHIPPING ----------------
+
+  app.get("/api/estimating/rfqs/:id/shipping", async (req, res) => {
+    try {
+      const rows = await storage.getEstimatingShipping(req.params.id);
+      res.json(rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to fetch shipping rows");
+    }
+  });
+
+  app.post("/api/estimating/rfqs/:id/shipping", async (req, res) => {
+    try {
+      const row = await storage.createEstimatingShipping({
+        ...req.body,
+        rfqId: req.params.id,
+      });
+      res.json(row);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to create shipping row");
+    }
+  });
+
+  app.delete("/api/estimating/shipping/:id", async (req, res) => {
+    try {
+      await storage.deleteEstimatingShipping(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to delete shipping row");
+    }
+  });
+Part 2 — extract Step 3 BOM component
+
+Create:
+
+client/src/components/estimating/RFQBuilderStep3Bom.tsx
+import { useMemo } from "react";
+
+export type BomLineRow = {
+  id?: string;
+  rfqPartId: string;
+  inventoryItemId?: number | null;
+  childPartAgNumber?: string;
+  description: string;
+  category: string;
+  quantityPerPart: number;
+  uom: string;
+  estimatedUnitCost: number;
+  scrapPercent: number;
+  isEstimated: boolean;
+  isDraftInventoryItem: boolean;
+  vendorNameSnapshot?: string;
+  materialSpec?: string;
+  notes?: string;
+};
+
+type PartOption = {
+  id?: string;
+  lineNumber: number;
+  partNumber: string;
+  quantity: number;
+};
+
+type Props = {
+  parts: PartOption[];
+  selectedBomPartId: string;
+  setSelectedBomPartId: (value: string) => void;
+  filteredBomLines: BomLineRow[];
+  bomMessage: string;
+  bomSummary: {
+    totalPerPart: number;
+    prepreg: number;
+    consumables: number;
+    paint: number;
+    hardware: number;
+    packaging: number;
+    adhesive: number;
+    other: number;
+  };
+  bomExtendedTotal: number;
+  onAddBomLine: () => void;
+  onUpdateBomLine: (
+    index: number,
+    field: keyof BomLineRow,
+    value: string | number | boolean | null
+  ) => void;
+  onSaveBomLine: (row: BomLineRow) => void;
+  onDeleteBomLine: (index: number, row: BomLineRow) => void;
+};
+
+export default function RFQBuilderStep3Bom({
+  parts,
+  selectedBomPartId,
+  setSelectedBomPartId,
+  filteredBomLines,
+  bomMessage,
+  bomSummary,
+  bomExtendedTotal,
+  onAddBomLine,
+  onUpdateBomLine,
+  onSaveBomLine,
+  onDeleteBomLine,
+}: Props) {
+  const selectedBomPart = useMemo(
+    () => parts.find((p) => p.id === selectedBomPartId),
+    [parts, selectedBomPartId]
+  );
+
+  return (
+    <div className="border rounded-lg p-5 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Step 3 — BOM Builder</h2>
+          <p className="text-sm text-muted-foreground">
+            Add estimated material lines for the selected quoted part.
+          </p>
+        </div>
+
+        <button
+          className="border rounded px-4 py-2"
+          onClick={onAddBomLine}
+          type="button"
+        >
+          + Add BOM Line
+        </button>
+      </div>
+
+      {bomMessage && (
+        <div className="rounded border px-3 py-2 text-sm">{bomMessage}</div>
+      )}
+
+      <div className="flex items-end gap-4">
+        <div className="min-w-[320px]">
+          <label className="block text-sm mb-1">Selected RFQ Part</label>
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={selectedBomPartId}
+            onChange={(e) => setSelectedBomPartId(e.target.value)}
+          >
+            <option value="">Select a part</option>
+            {parts
+              .filter((p) => p.id)
+              .map((part) => (
+                <option key={part.id} value={part.id}>
+                  {part.lineNumber} - {part.partNumber} ({part.quantity})
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {selectedBomPart && (
+          <div className="text-sm text-muted-foreground">
+            Material cost will be calculated for <strong>{selectedBomPart.partNumber}</strong>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-3 overflow-x-auto">
+          <table className="w-full border-collapse min-w-[1550px]">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left p-2">Description</th>
+                <th className="text-left p-2">Category</th>
+                <th className="text-left p-2">Qty / Part</th>
+                <th className="text-left p-2">UOM</th>
+                <th className="text-left p-2">Unit Cost</th>
+                <th className="text-left p-2">Scrap %</th>
+                <th className="text-left p-2">Cost / Part</th>
+                <th className="text-left p-2">AG Part #</th>
+                <th className="text-left p-2">Vendor</th>
+                <th className="text-left p-2">Material Spec</th>
+                <th className="text-left p-2">Estimated</th>
+                <th className="text-left p-2">Draft Item</th>
+                <th className="text-left p-2">Notes</th>
+                <th className="text-left p-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!selectedBomPartId ? (
+                <tr>
+                  <td colSpan={14} className="p-4 text-sm text-muted-foreground">
+                    Select an RFQ part to begin adding BOM lines.
+                  </td>
+                </tr>
+              ) : filteredBomLines.length === 0 ? (
+                <tr>
+                  <td colSpan={14} className="p-4 text-sm text-muted-foreground">
+                    No BOM lines yet for this part.
+                  </td>
+                </tr>
+              ) : (
+                filteredBomLines.map((row, index) => {
+                  const costPerPart =
+                    Number(row.quantityPerPart || 0) *
+                    Number(row.estimatedUnitCost || 0) *
+                    (1 + Number(row.scrapPercent || 0) / 100);
+
+                  return (
+                    <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                      <td className="p-2">
+                        <input
+                          className="w-[180px] border rounded px-2 py-1"
+                          value={row.description}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "description", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <select
+                          className="w-[150px] border rounded px-2 py-1"
+                          value={row.category}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "category", e.target.value)
+                          }
+                        >
+                          <option value="PREPREG">Prepreg</option>
+                          <option value="CONSUMABLE">Consumable</option>
+                          <option value="PAINT">Paint</option>
+                          <option value="HARDWARE">Hardware</option>
+                          <option value="PACKAGING">Packaging</option>
+                          <option value="ADHESIVE">Adhesive</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          step="0.0001"
+                          min={0}
+                          className="w-[110px] border rounded px-2 py-1"
+                          value={row.quantityPerPart}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "quantityPerPart", Number(e.target.value))
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[90px] border rounded px-2 py-1"
+                          value={row.uom}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "uom", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          step="0.0001"
+                          min={0}
+                          className="w-[110px] border rounded px-2 py-1"
+                          value={row.estimatedUnitCost}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "estimatedUnitCost", Number(e.target.value))
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          className="w-[90px] border rounded px-2 py-1"
+                          value={row.scrapPercent}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "scrapPercent", Number(e.target.value))
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">${costPerPart.toFixed(4)}</td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[130px] border rounded px-2 py-1"
+                          value={row.childPartAgNumber ?? ""}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "childPartAgNumber", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[130px] border rounded px-2 py-1"
+                          value={row.vendorNameSnapshot ?? ""}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "vendorNameSnapshot", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[150px] border rounded px-2 py-1"
+                          value={row.materialSpec ?? ""}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "materialSpec", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="checkbox"
+                          checked={!!row.isEstimated}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "isEstimated", e.target.checked)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          type="checkbox"
+                          checked={!!row.isDraftInventoryItem}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "isDraftInventoryItem", e.target.checked)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <input
+                          className="w-[160px] border rounded px-2 py-1"
+                          value={row.notes ?? ""}
+                          onChange={(e) =>
+                            onUpdateBomLine(index, "notes", e.target.value)
+                          }
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <div className="flex gap-2">
+                          <button
+                            className="border rounded px-3 py-1"
+                            onClick={() => onSaveBomLine(row)}
+                            type="button"
+                          >
+                            Save
+                          </button>
+                          <button
+                            className="border rounded px-3 py-1"
+                            onClick={() => onDeleteBomLine(index, row)}
+                            type="button"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="border rounded-lg p-4 h-fit">
+          <h3 className="font-semibold mb-3">Material Summary</h3>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Prepreg</span>
+              <span>${bomSummary.prepreg.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Consumables</span>
+              <span>${bomSummary.consumables.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Paint</span>
+              <span>${bomSummary.paint.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Hardware</span>
+              <span>${bomSummary.hardware.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Packaging</span>
+              <span>${bomSummary.packaging.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Adhesive</span>
+              <span>${bomSummary.adhesive.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Other</span>
+              <span>${bomSummary.other.toFixed(4)}</span>
+            </div>
+
+            <div className="border-t pt-2 flex justify-between font-semibold">
+              <span>Cost / Part</span>
+              <span>${bomSummary.totalPerPart.toFixed(4)}</span>
+            </div>
+
+            <div className="flex justify-between font-semibold">
+              <span>Total @ Qty</span>
+              <span>${bomExtendedTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+Part 3 — use the extracted BOM component
+
+In RFQBuilderPage.tsx, add:
+
+import RFQBuilderStep3Bom from "@/components/estimating/RFQBuilderStep3Bom";
+
+Then replace the inline Step 3 block with:
+
+<RFQBuilderStep3Bom
+  parts={parts}
+  selectedBomPartId={selectedBomPartId}
+  setSelectedBomPartId={setSelectedBomPartId}
+  filteredBomLines={filteredBomLines}
+  bomMessage={bomMessage}
+  bomSummary={bomSummary}
+  bomExtendedTotal={bomExtendedTotal}
+  onAddBomLine={addBomLine}
+  onUpdateBomLine={updateBomLine}
+  onSaveBomLine={saveBomLine}
+  onDeleteBomLine={deleteBomLine}
+/>
+Part 4 — add Step 6 shipping logic to RFQBuilderPage.tsx
+Add types
+type ShippingRow = {
+  id?: string;
+  rfqPartId?: string | null;
+  shippingMode: string;
+  description?: string;
+  method?: string;
+  amount: number;
+  allocationMethod?: string;
+  includeInCustomerPrice: boolean;
+  notes?: string;
+};
+
+const shippingModeOptions = ["PER_PART", "PER_PO", "INTERNAL_ONLY"];
+const shippingAllocationOptions = ["EVEN", "BY_QUANTITY", "BY_VALUE", "MANUAL"];
+
+const emptyShippingRow = (): ShippingRow => ({
+  rfqPartId: null,
+  shippingMode: "PER_PO",
+  description: "",
+  method: "",
+  amount: 0,
+  allocationMethod: "EVEN",
+  includeInCustomerPrice: true,
+  notes: "",
+});
+Add state
+const [selectedShippingPartId, setSelectedShippingPartId] = useState("");
+const [shippingScopeFilter, setShippingScopeFilter] = useState<"RFQ" | "PART">("RFQ");
+const [shippingRows, setShippingRows] = useState<ShippingRow[]>([]);
+const [shippingMessage, setShippingMessage] = useState("");
+Add query
+const shippingQuery = useQuery({
+  queryKey: ["estimating-rfq-shipping", rfqId],
+  enabled: !!rfqId,
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/shipping`);
+    return res.json();
+  },
+});
+Load data
+useEffect(() => {
+  if (shippingQuery.data && Array.isArray(shippingQuery.data)) {
+    setShippingRows(
+      shippingQuery.data.map((row: any) => ({
+        id: row.id,
+        rfqPartId: row.rfqPartId ?? null,
+        shippingMode: row.shippingMode ?? "PER_PO",
+        description: row.description ?? "",
+        method: row.method ?? "",
+        amount: Number(row.amount ?? 0),
+        allocationMethod: row.allocationMethod ?? "EVEN",
+        includeInCustomerPrice: row.includeInCustomerPrice !== false,
+        notes: row.notes ?? "",
+      }))
+    );
+  }
+}, [shippingQuery.data]);
+Add helpers
+const filteredShippingRows = useMemo(() => {
+  return shippingRows.filter((row) => {
+    if (shippingScopeFilter === "RFQ") return !row.rfqPartId;
+    return row.rfqPartId === selectedShippingPartId;
+  });
+}, [shippingRows, shippingScopeFilter, selectedShippingPartId]);
+
+const addShippingRow = () => {
+  if (!rfqId) {
+    setShippingMessage("Save the RFQ first before adding shipping.");
+    return;
+  }
+
+  if (shippingScopeFilter === "PART" && !selectedShippingPartId) {
+    setShippingMessage("Select an RFQ part first.");
+    return;
+  }
+
+  setShippingRows((prev) => [
+    ...prev,
+    {
+      ...emptyShippingRow(),
+      rfqPartId: shippingScopeFilter === "PART" ? selectedShippingPartId : null,
+    },
+  ]);
+};
+
+const updateShippingRow = (
+  index: number,
+  field: keyof ShippingRow,
+  value: string | number | boolean | null
+) => {
+  const matchingIndexes = shippingRows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => {
+      if (shippingScopeFilter === "RFQ") return !row.rfqPartId;
+      return row.rfqPartId === selectedShippingPartId;
+    })
+    .map(({ i }) => i);
+
+  const actualIndex = matchingIndexes[index];
+  if (actualIndex === undefined) return;
+
+  setShippingRows((prev) => {
+    const next = [...prev];
+    next[actualIndex] = { ...next[actualIndex], [field]: value };
+    return next;
+  });
+};
+
+const saveShippingRow = async (row: ShippingRow) => {
+  if (!rfqId) {
+    setShippingMessage("Save the RFQ first before adding shipping.");
+    return;
+  }
+
+  await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/shipping`, {
+    rfqPartId: shippingScopeFilter === "PART" ? row.rfqPartId : null,
+    shippingMode: row.shippingMode,
+    description: row.description || "",
+    method: row.method || "",
+    amount: Number(row.amount || 0),
+    allocationMethod: row.allocationMethod || "EVEN",
+    includeInCustomerPrice: !!row.includeInCustomerPrice,
+    notes: row.notes || "",
+  });
+
+  setShippingMessage("Shipping row saved.");
+  await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-shipping", rfqId] });
+};
+
+const deleteShippingRow = async (index: number, row: ShippingRow) => {
+  if (row.id) {
+    await apiRequest("DELETE", `/api/estimating/shipping/${row.id}`);
+    await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-shipping", rfqId] });
+    setShippingMessage("Shipping row deleted.");
+    return;
+  }
+
+  const matchingIndexes = shippingRows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => {
+      if (shippingScopeFilter === "RFQ") return !row.rfqPartId;
+      return row.rfqPartId === selectedShippingPartId;
+    })
+    .map(({ i }) => i);
+
+  const actualIndex = matchingIndexes[index];
+  if (actualIndex === undefined) return;
+
+  setShippingRows((prev) => prev.filter((_, i) => i !== actualIndex));
+};
+Add summary
+const shippingSummary = useMemo(() => {
+  return filteredShippingRows.reduce(
+    (acc, row) => {
+      const amount = Number(row.amount || 0);
+      acc.total += amount;
+
+      if (row.includeInCustomerPrice && row.shippingMode !== "INTERNAL_ONLY") {
+        acc.customerFacing += amount;
+      } else {
+        acc.internalOnly += amount;
+      }
+
+      if (row.shippingMode === "PER_PART") acc.perPart += amount;
+      if (row.shippingMode === "PER_PO") acc.perPo += amount;
+
+      return acc;
+    },
+    {
+      total: 0,
+      customerFacing: 0,
+      internalOnly: 0,
+      perPart: 0,
+      perPo: 0,
+    }
+  );
+}, [filteredShippingRows]);
+Part 5 — add Step 6 shipping UI block
+
+Paste this below Step 5 and above the bottom action buttons.
+
+<div className="border rounded-lg p-5 space-y-4">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-semibold">Step 6 — Shipping</h2>
+      <p className="text-sm text-muted-foreground">
+        Add shipping estimates at the RFQ or part level.
+      </p>
+    </div>
+
+    <button
+      className="border rounded px-4 py-2"
+      onClick={addShippingRow}
+      type="button"
+    >
+      + Add Shipping
+    </button>
+  </div>
+
+  {shippingMessage && (
+    <div className="rounded border px-3 py-2 text-sm">{shippingMessage}</div>
+  )}
+
+  <div className="flex flex-wrap items-end gap-4">
+    <div>
+      <label className="block text-sm mb-1">Scope</label>
+      <select
+        className="border rounded px-3 py-2"
+        value={shippingScopeFilter}
+        onChange={(e) => setShippingScopeFilter(e.target.value as "RFQ" | "PART")}
+      >
+        <option value="RFQ">RFQ-Level</option>
+        <option value="PART">Part-Level</option>
+      </select>
+    </div>
+
+    {shippingScopeFilter === "PART" && (
+      <div className="min-w-[320px]">
+        <label className="block text-sm mb-1">Selected RFQ Part</label>
+        <select
+          className="w-full border rounded px-3 py-2"
+          value={selectedShippingPartId}
+          onChange={(e) => setSelectedShippingPartId(e.target.value)}
+        >
+          <option value="">Select a part</option>
+          {parts
+            .filter((p) => p.id)
+            .map((part) => (
+              <option key={part.id} value={part.id}>
+                {part.lineNumber} - {part.partNumber} ({part.quantity})
+              </option>
+            ))}
+        </select>
+      </div>
+    )}
+  </div>
+
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div className="lg:col-span-3 overflow-x-auto">
+      <table className="w-full border-collapse min-w-[1400px]">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-2">Mode</th>
+            <th className="text-left p-2">Description</th>
+            <th className="text-left p-2">Method</th>
+            <th className="text-left p-2">Amount</th>
+            <th className="text-left p-2">Allocation</th>
+            <th className="text-left p-2">Include in Price</th>
+            <th className="text-left p-2">Notes</th>
+            <th className="text-left p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredShippingRows.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="p-4 text-sm text-muted-foreground">
+                No shipping rows yet for this scope.
+              </td>
+            </tr>
+          ) : (
+            filteredShippingRows.map((row, index) => (
+              <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                <td className="p-2">
+                  <select
+                    className="w-[140px] border rounded px-2 py-1"
+                    value={row.shippingMode}
+                    onChange={(e) =>
+                      updateShippingRow(index, "shippingMode", e.target.value)
+                    }
+                  >
+                    {shippingModeOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+
+                <td className="p-2">
+                  <input
+                    className="w-[220px] border rounded px-2 py-1"
+                    value={row.description ?? ""}
+                    onChange={(e) =>
+                      updateShippingRow(index, "description", e.target.value)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <input
+                    className="w-[160px] border rounded px-2 py-1"
+                    value={row.method ?? ""}
+                    onChange={(e) =>
+                      updateShippingRow(index, "method", e.target.value)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    className="w-[120px] border rounded px-2 py-1"
+                    value={row.amount}
+                    onChange={(e) =>
+                      updateShippingRow(index, "amount", Number(e.target.value))
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <select
+                    className="w-[140px] border rounded px-2 py-1"
+                    value={row.allocationMethod ?? "EVEN"}
+                    onChange={(e) =>
+                      updateShippingRow(index, "allocationMethod", e.target.value)
+                    }
+                  >
+                    {shippingAllocationOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    checked={!!row.includeInCustomerPrice}
+                    onChange={(e) =>
+                      updateShippingRow(index, "includeInCustomerPrice", e.target.checked)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <input
+                    className="w-[220px] border rounded px-2 py-1"
+                    value={row.notes ?? ""}
+                    onChange={(e) =>
+                      updateShippingRow(index, "notes", e.target.value)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <div className="flex gap-2">
+                    <button
+                      className="border rounded px-3 py-1"
+                      onClick={() => saveShippingRow(row)}
+                      type="button"
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="border rounded px-3 py-1"
+                      onClick={() => deleteShippingRow(index, row)}
+                      type="button"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="border rounded-lg p-4 h-fit">
+      <h3 className="font-semibold mb-3">Shipping Summary</h3>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span>Per Part</span>
+          <span>${shippingSummary.perPart.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Per PO</span>
+          <span>${shippingSummary.perPo.toFixed(2)}</span>
+        </div>
+        <div className="border-t pt-2 flex justify-between">
+          <span>Customer-Facing</span>
+          <span>${shippingSummary.customerFacing.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Internal Only</span>
+          <span>${shippingSummary.internalOnly.toFixed(2)}</span>
+        </div>
+        <div className="border-t pt-2 flex justify-between font-semibold">
+          <span>Total Shipping</span>
+          <span>${shippingSummary.total.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+What this gives you
+
+After this build, your RFQ Builder supports:
+
+Step 1 RFQ header + parts
+Step 2 Tooling
+Step 3 BOM
+Step 4 Process / labor
+Step 5 Overhead + Cap X
+Step 6 Shipping
+
+That means nearly every cost input is now present.
+
+Best next move after this
+
+The next best step is:
+
+Step 7 — Quantity Break Pricing

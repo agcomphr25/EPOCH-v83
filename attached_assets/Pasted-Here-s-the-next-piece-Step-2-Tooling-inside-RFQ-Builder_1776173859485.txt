@@ -1,0 +1,465 @@
+Here’s the next piece: Step 2 — Tooling inside RFQ Builder.
+
+This assumes:
+
+Step 1 already creates and saves an RFQ
+tooling endpoints are already working
+/rfq-builder/:id exists
+
+The goal here is to let the user:
+
+load tooling rows for the RFQ
+add/edit/delete tooling
+choose pricing treatment
+see total tooling summary
+1. Add Step 2 section inside RFQBuilderPage.tsx
+
+You can add this below the Quoted Parts section in your existing RFQBuilderPage.tsx.
+
+Add this state and query near the top
+
+Put this with your other state/hooks:
+
+type ToolingRow = {
+  id?: string;
+  description: string;
+  toolingType: string;
+  quantity: number;
+  unitCost: number;
+  totalCost?: number;
+  appliesToScope: string;
+  pricingTreatment: string;
+  amortizationQty?: number | null;
+  chargeTiming: string;
+  customerOwnedTooling?: boolean;
+  notes?: string;
+};
+
+const emptyToolingRow = (): ToolingRow => ({
+  description: "",
+  toolingType: "MANDREL",
+  quantity: 1,
+  unitCost: 0,
+  appliesToScope: "ALL_PARTS",
+  pricingTreatment: "SEPARATE_LINE",
+  amortizationQty: null,
+  chargeTiming: "ONE_TIME",
+  customerOwnedTooling: false,
+  notes: "",
+});
+
+const [toolingRows, setToolingRows] = useState<ToolingRow[]>([]);
+const [toolingMessage, setToolingMessage] = useState("");
+
+Then add this query:
+
+const toolingQuery = useQuery({
+  queryKey: ["estimating-rfq-tooling", rfqId],
+  enabled: !!rfqId,
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/tooling`);
+    return res.json();
+  },
+});
+
+Then load the data:
+
+useEffect(() => {
+  if (toolingQuery.data && Array.isArray(toolingQuery.data)) {
+    setToolingRows(
+      toolingQuery.data.map((row: any) => ({
+        id: row.id,
+        description: row.description ?? "",
+        toolingType: row.toolingType ?? "MANDREL",
+        quantity: Number(row.quantity ?? 1),
+        unitCost: Number(row.unitCost ?? 0),
+        totalCost: Number(row.totalCost ?? 0),
+        appliesToScope: row.appliesToScope ?? "ALL_PARTS",
+        pricingTreatment: row.pricingTreatment ?? "SEPARATE_LINE",
+        amortizationQty: row.amortizationQty ? Number(row.amortizationQty) : null,
+        chargeTiming: row.chargeTiming ?? "ONE_TIME",
+        customerOwnedTooling: !!row.customerOwnedTooling,
+        notes: row.notes ?? "",
+      }))
+    );
+  }
+}, [toolingQuery.data]);
+2. Add tooling helpers
+
+Put these below your part helpers:
+
+const addToolingRow = () => {
+  if (!rfqId) {
+    setToolingMessage("Save the RFQ header first before adding tooling.");
+    return;
+  }
+  setToolingRows((prev) => [...prev, emptyToolingRow()]);
+};
+
+const updateToolingRow = (
+  index: number,
+  field: keyof ToolingRow,
+  value: string | number | boolean | null
+) => {
+  setToolingRows((prev) => {
+    const next = [...prev];
+    const updated = { ...next[index], [field]: value };
+
+    updated.totalCost = Number(updated.quantity || 0) * Number(updated.unitCost || 0);
+
+    next[index] = updated;
+    return next;
+  });
+};
+
+const saveToolingRow = async (row: ToolingRow) => {
+  if (!rfqId) {
+    setToolingMessage("Save the RFQ header first before adding tooling.");
+    return;
+  }
+
+  if (!row.description.trim()) {
+    setToolingMessage("Tooling description is required.");
+    return;
+  }
+
+  await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/tooling`, {
+    description: row.description,
+    toolingType: row.toolingType,
+    quantity: Number(row.quantity || 0),
+    unitCost: Number(row.unitCost || 0),
+    appliesToScope: row.appliesToScope,
+    pricingTreatment: row.pricingTreatment,
+    amortizationQty: row.amortizationQty ? Number(row.amortizationQty) : null,
+    chargeTiming: row.chargeTiming,
+    customerOwnedTooling: !!row.customerOwnedTooling,
+    notes: row.notes ?? "",
+  });
+
+  setToolingMessage("Tooling row saved.");
+  await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-tooling", rfqId] });
+};
+
+const deleteToolingRow = async (index: number, row: ToolingRow) => {
+  if (row.id) {
+    await apiRequest("DELETE", `/api/estimating/tooling/${row.id}`);
+    await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-tooling", rfqId] });
+    setToolingMessage("Tooling row deleted.");
+    return;
+  }
+
+  setToolingRows((prev) => prev.filter((_, i) => i !== index));
+};
+3. Add tooling summary calculations
+
+Put this near your other computed values:
+
+const toolingSummary = useMemo(() => {
+  return toolingRows.reduce(
+    (acc, row) => {
+      const total = Number(row.totalCost ?? Number(row.quantity || 0) * Number(row.unitCost || 0));
+
+      acc.total += total;
+
+      if (row.pricingTreatment === "SEPARATE_LINE") acc.separate += total;
+      if (row.pricingTreatment === "BLENDED_UNIT_PRICE") acc.blended += total;
+      if (row.pricingTreatment === "AMORTIZED") acc.amortized += total;
+      if (row.pricingTreatment === "INTERNAL_ONLY") acc.internal += total;
+
+      return acc;
+    },
+    {
+      total: 0,
+      separate: 0,
+      blended: 0,
+      amortized: 0,
+      internal: 0,
+    }
+  );
+}, [toolingRows]);
+4. Add the Tooling UI block
+
+Paste this below your Quoted Parts section and above the final buttons.
+
+<div className="border rounded-lg p-5 space-y-4">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-semibold">Step 2 — Tooling</h2>
+      <p className="text-sm text-muted-foreground">
+        Add mandrels, molds, fixtures, inserts, setup tooling, and one-time production costs.
+      </p>
+    </div>
+
+    <button
+      className="border rounded px-4 py-2"
+      onClick={addToolingRow}
+      type="button"
+    >
+      + Add Tooling
+    </button>
+  </div>
+
+  {toolingMessage && (
+    <div className="rounded border px-3 py-2 text-sm">{toolingMessage}</div>
+  )}
+
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div className="lg:col-span-3 overflow-x-auto">
+      <table className="w-full border-collapse min-w-[1400px]">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-2">Description</th>
+            <th className="text-left p-2">Type</th>
+            <th className="text-left p-2">Qty</th>
+            <th className="text-left p-2">Unit Cost</th>
+            <th className="text-left p-2">Total</th>
+            <th className="text-left p-2">Applies To</th>
+            <th className="text-left p-2">Pricing Treatment</th>
+            <th className="text-left p-2">Amortization Qty</th>
+            <th className="text-left p-2">Charge Timing</th>
+            <th className="text-left p-2">Customer Owned</th>
+            <th className="text-left p-2">Notes</th>
+            <th className="text-left p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {toolingRows.length === 0 ? (
+            <tr>
+              <td colSpan={12} className="p-4 text-sm text-muted-foreground">
+                No tooling rows yet.
+              </td>
+            </tr>
+          ) : (
+            toolingRows.map((row, index) => (
+              <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                <td className="p-2">
+                  <input
+                    className="w-[180px] border rounded px-2 py-1"
+                    value={row.description}
+                    onChange={(e) =>
+                      updateToolingRow(index, "description", e.target.value)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <select
+                    className="w-[160px] border rounded px-2 py-1"
+                    value={row.toolingType}
+                    onChange={(e) =>
+                      updateToolingRow(index, "toolingType", e.target.value)
+                    }
+                  >
+                    <option value="MANDREL">Mandrel</option>
+                    <option value="MOLD">Mold</option>
+                    <option value="FIXTURE">Fixture</option>
+                    <option value="INSERT_TOOLING">Insert Tooling</option>
+                    <option value="CNC_SETUP_TOOLING">CNC Setup Tooling</option>
+                    <option value="POLISHING_TOOLING">Polishing Tooling</option>
+                    <option value="INSPECTION_TOOLING">Inspection Tooling</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </td>
+
+                <td className="p-2">
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-[90px] border rounded px-2 py-1"
+                    value={row.quantity}
+                    onChange={(e) =>
+                      updateToolingRow(index, "quantity", Number(e.target.value))
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="w-[120px] border rounded px-2 py-1"
+                    value={row.unitCost}
+                    onChange={(e) =>
+                      updateToolingRow(index, "unitCost", Number(e.target.value))
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  ${(Number(row.totalCost ?? 0)).toFixed(2)}
+                </td>
+
+                <td className="p-2">
+                  <select
+                    className="w-[140px] border rounded px-2 py-1"
+                    value={row.appliesToScope}
+                    onChange={(e) =>
+                      updateToolingRow(index, "appliesToScope", e.target.value)
+                    }
+                  >
+                    <option value="ALL_PARTS">All Parts</option>
+                    <option value="PART">This Part Only</option>
+                    <option value="SELECTED_PARTS">Selected Parts</option>
+                  </select>
+                </td>
+
+                <td className="p-2">
+                  <select
+                    className="w-[170px] border rounded px-2 py-1"
+                    value={row.pricingTreatment}
+                    onChange={(e) =>
+                      updateToolingRow(index, "pricingTreatment", e.target.value)
+                    }
+                  >
+                    <option value="SEPARATE_LINE">Separate Line Item</option>
+                    <option value="BLENDED_UNIT_PRICE">Blend Into Unit Price</option>
+                    <option value="AMORTIZED">Amortized</option>
+                    <option value="INTERNAL_ONLY">Internal Only</option>
+                  </select>
+                </td>
+
+                <td className="p-2">
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-[120px] border rounded px-2 py-1"
+                    value={row.amortizationQty ?? ""}
+                    onChange={(e) =>
+                      updateToolingRow(
+                        index,
+                        "amortizationQty",
+                        e.target.value ? Number(e.target.value) : null
+                      )
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <select
+                    className="w-[150px] border rounded px-2 py-1"
+                    value={row.chargeTiming}
+                    onChange={(e) =>
+                      updateToolingRow(index, "chargeTiming", e.target.value)
+                    }
+                  >
+                    <option value="ONE_TIME">One-Time</option>
+                    <option value="FIRST_PO_ONLY">First PO Only</option>
+                    <option value="FIRST_ARTICLE_ONLY">First Article Only</option>
+                    <option value="EVERY_ORDER">Every Order</option>
+                  </select>
+                </td>
+
+                <td className="p-2">
+                  <input
+                    type="checkbox"
+                    checked={!!row.customerOwnedTooling}
+                    onChange={(e) =>
+                      updateToolingRow(index, "customerOwnedTooling", e.target.checked)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <input
+                    className="w-[180px] border rounded px-2 py-1"
+                    value={row.notes ?? ""}
+                    onChange={(e) =>
+                      updateToolingRow(index, "notes", e.target.value)
+                    }
+                  />
+                </td>
+
+                <td className="p-2">
+                  <div className="flex gap-2">
+                    <button
+                      className="border rounded px-3 py-1"
+                      onClick={() => saveToolingRow(row)}
+                      type="button"
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="border rounded px-3 py-1"
+                      onClick={() => deleteToolingRow(index, row)}
+                      type="button"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="border rounded-lg p-4 h-fit">
+      <h3 className="font-semibold mb-3">Tooling Summary</h3>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span>Total Tooling</span>
+          <span>${toolingSummary.total.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Separate Line</span>
+          <span>${toolingSummary.separate.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Blended</span>
+          <span>${toolingSummary.blended.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Amortized</span>
+          <span>${toolingSummary.amortized.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Internal Only</span>
+          <span>${toolingSummary.internal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+5. Small improvement you should add next
+
+Right now each tooling row saves independently, which is fine for now. But the next cleanup task should be:
+
+add PATCH /api/estimating/tooling/:id
+update tooling rows instead of only inserting new ones
+
+For the current step, this still works and gets you moving.
+
+6. What this gives you
+
+After this, your RFQ Builder will support:
+
+Step 1 RFQ header
+multi-part quoted parts
+Step 2 tooling rows
+tooling summary by treatment type
+persistent tooling tied to RFQ id
+
+That is the first real version of the builder.
+
+7. Best next step
+
+After this, the next most valuable build is:
+
+Step 3 — BOM Builder
+
+That’s where:
+
+inventory lookup
+draft estimated lines
+prepreg / consumables / paint costing
+
+start producing actual material cost.
+
+Reply with:
+
+build Step 3 BOM Builder
+
+and I’ll give you the next code block.

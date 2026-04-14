@@ -1,0 +1,654 @@
+Thought for a couple of seconds
+
+Here’s the next build: Step 3 — BOM Builder inside RFQBuilderPage.
+
+This version gives you:
+
+BOM lines tied to a specific RFQ part
+existing inventory item lookup later
+manual estimated material lines now
+per-part material cost summary
+save/load/delete for BOM lines
+
+I’m keeping this aligned with what you already built so it drops in cleanly.
+
+1. Add storage methods
+IStorage
+
+Add:
+
+getEstimatingBomLines(rfqId: string): Promise<any[]>;
+createEstimatingBomLine(data: any): Promise<any>;
+deleteEstimatingBomLine(id: string): Promise<void>;
+DatabaseStorage
+
+Add:
+
+import { estimatingBomLines } from "../schema"; // adjust path
+import { eq } from "drizzle-orm";
+
+async getEstimatingBomLines(rfqId: string) {
+  return db
+    .select()
+    .from(estimatingBomLines)
+    .where(eq(estimatingBomLines.rfqId, rfqId));
+}
+
+async createEstimatingBomLine(data: any) {
+  const [row] = await db
+    .insert(estimatingBomLines)
+    .values(data)
+    .returning();
+  return row;
+}
+
+async deleteEstimatingBomLine(id: string) {
+  await db
+    .delete(estimatingBomLines)
+    .where(eq(estimatingBomLines.id, id));
+}
+2. Add API routes
+server/src/routes/estimating.ts
+
+Add:
+
+  // ---------------- BOM LINES ----------------
+
+  app.get("/api/estimating/rfqs/:id/bom-lines", async (req, res) => {
+    try {
+      const lines = await storage.getEstimatingBomLines(req.params.id);
+      res.json(lines);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to fetch BOM lines");
+    }
+  });
+
+  app.post("/api/estimating/rfqs/:id/bom-lines", async (req, res) => {
+    try {
+      const line = await storage.createEstimatingBomLine({
+        ...req.body,
+        rfqId: req.params.id,
+      });
+      res.json(line);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to create BOM line");
+    }
+  });
+
+  app.delete("/api/estimating/bom-lines/:id", async (req, res) => {
+    try {
+      await storage.deleteEstimatingBomLine(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to delete BOM line");
+    }
+  });
+3. Add Step 3 state/query/helpers inside RFQBuilderPage.tsx
+
+Add these types near your other types:
+
+type BomLineRow = {
+  id?: string;
+  rfqPartId: string;
+  inventoryItemId?: number | null;
+  childPartAgNumber?: string;
+  description: string;
+  category: string;
+  quantityPerPart: number;
+  uom: string;
+  estimatedUnitCost: number;
+  scrapPercent: number;
+  isEstimated: boolean;
+  isDraftInventoryItem: boolean;
+  vendorNameSnapshot?: string;
+  materialSpec?: string;
+  notes?: string;
+};
+
+const emptyBomLine = (rfqPartId: string): BomLineRow => ({
+  rfqPartId,
+  inventoryItemId: null,
+  childPartAgNumber: "",
+  description: "",
+  category: "PREPREG",
+  quantityPerPart: 0,
+  uom: "EA",
+  estimatedUnitCost: 0,
+  scrapPercent: 0,
+  isEstimated: true,
+  isDraftInventoryItem: false,
+  vendorNameSnapshot: "",
+  materialSpec: "",
+  notes: "",
+});
+
+Add state near your other hooks:
+
+const [selectedBomPartId, setSelectedBomPartId] = useState("");
+const [bomLines, setBomLines] = useState<BomLineRow[]>([]);
+const [bomMessage, setBomMessage] = useState("");
+
+Add query:
+
+const bomLinesQuery = useQuery({
+  queryKey: ["estimating-rfq-bom-lines", rfqId],
+  enabled: !!rfqId,
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/bom-lines`);
+    return res.json();
+  },
+});
+
+Load the data:
+
+useEffect(() => {
+  if (bomLinesQuery.data && Array.isArray(bomLinesQuery.data)) {
+    setBomLines(
+      bomLinesQuery.data.map((line: any) => ({
+        id: line.id,
+        rfqPartId: line.rfqPartId,
+        inventoryItemId: line.inventoryItemId ?? null,
+        childPartAgNumber: line.childPartAgNumber ?? "",
+        description: line.description ?? "",
+        category: line.category ?? "PREPREG",
+        quantityPerPart: Number(line.quantityPerPart ?? 0),
+        uom: line.uom ?? "EA",
+        estimatedUnitCost: Number(line.estimatedUnitCost ?? 0),
+        scrapPercent: Number(line.scrapPercent ?? 0),
+        isEstimated: !!line.isEstimated,
+        isDraftInventoryItem: !!line.isDraftInventoryItem,
+        vendorNameSnapshot: line.vendorNameSnapshot ?? "",
+        materialSpec: line.materialSpec ?? "",
+        notes: line.notes ?? "",
+      }))
+    );
+  }
+}, [bomLinesQuery.data]);
+
+Set default selected RFQ part:
+
+useEffect(() => {
+  if (!selectedBomPartId && parts.length > 0) {
+    const savedPart = parts.find((p) => p.id);
+    if (savedPart?.id) setSelectedBomPartId(savedPart.id);
+  }
+}, [parts, selectedBomPartId]);
+
+Add helpers:
+
+const filteredBomLines = useMemo(() => {
+  if (!selectedBomPartId) return [];
+  return bomLines.filter((line) => line.rfqPartId === selectedBomPartId);
+}, [bomLines, selectedBomPartId]);
+
+const addBomLine = () => {
+  if (!rfqId) {
+    setBomMessage("Save the RFQ first before adding BOM lines.");
+    return;
+  }
+
+  if (!selectedBomPartId) {
+    setBomMessage("Select an RFQ part first.");
+    return;
+  }
+
+  setBomLines((prev) => [...prev, emptyBomLine(selectedBomPartId)]);
+};
+
+const updateBomLine = (
+  index: number,
+  field: keyof BomLineRow,
+  value: string | number | boolean | null
+) => {
+  const matchingIndexes = bomLines
+    .map((line, i) => ({ line, i }))
+    .filter(({ line }) => line.rfqPartId === selectedBomPartId)
+    .map(({ i }) => i);
+
+  const actualIndex = matchingIndexes[index];
+  if (actualIndex === undefined) return;
+
+  setBomLines((prev) => {
+    const next = [...prev];
+    next[actualIndex] = { ...next[actualIndex], [field]: value };
+    return next;
+  });
+};
+
+const saveBomLine = async (row: BomLineRow) => {
+  if (!rfqId) {
+    setBomMessage("Save the RFQ first before adding BOM lines.");
+    return;
+  }
+
+  if (!row.rfqPartId) {
+    setBomMessage("A BOM line must be tied to an RFQ part.");
+    return;
+  }
+
+  if (!row.description.trim()) {
+    setBomMessage("BOM line description is required.");
+    return;
+  }
+
+  await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/bom-lines`, {
+    rfqPartId: row.rfqPartId,
+    inventoryItemId: row.inventoryItemId ?? null,
+    childPartAgNumber: row.childPartAgNumber || "",
+    description: row.description,
+    category: row.category,
+    quantityPerPart: Number(row.quantityPerPart || 0),
+    uom: row.uom || "EA",
+    estimatedUnitCost: Number(row.estimatedUnitCost || 0),
+    scrapPercent: Number(row.scrapPercent || 0),
+    isEstimated: !!row.isEstimated,
+    isDraftInventoryItem: !!row.isDraftInventoryItem,
+    vendorNameSnapshot: row.vendorNameSnapshot || "",
+    materialSpec: row.materialSpec || "",
+    notes: row.notes || "",
+  });
+
+  setBomMessage("BOM line saved.");
+  await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-bom-lines", rfqId] });
+};
+
+const deleteBomLine = async (index: number, row: BomLineRow) => {
+  if (row.id) {
+    await apiRequest("DELETE", `/api/estimating/bom-lines/${row.id}`);
+    await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-bom-lines", rfqId] });
+    setBomMessage("BOM line deleted.");
+    return;
+  }
+
+  const matchingIndexes = bomLines
+    .map((line, i) => ({ line, i }))
+    .filter(({ line }) => line.rfqPartId === selectedBomPartId)
+    .map(({ i }) => i);
+
+  const actualIndex = matchingIndexes[index];
+  if (actualIndex === undefined) return;
+
+  setBomLines((prev) => prev.filter((_, i) => i !== actualIndex));
+};
+
+const bomSummary = useMemo(() => {
+  return filteredBomLines.reduce(
+    (acc, row) => {
+      const qty = Number(row.quantityPerPart || 0);
+      const unit = Number(row.estimatedUnitCost || 0);
+      const scrap = Number(row.scrapPercent || 0) / 100;
+      const costPerPart = qty * unit * (1 + scrap);
+
+      acc.totalPerPart += costPerPart;
+
+      if (row.category === "PREPREG") acc.prepreg += costPerPart;
+      if (row.category === "CONSUMABLE") acc.consumables += costPerPart;
+      if (row.category === "PAINT") acc.paint += costPerPart;
+      if (row.category === "HARDWARE") acc.hardware += costPerPart;
+      if (row.category === "PACKAGING") acc.packaging += costPerPart;
+      if (row.category === "ADHESIVE") acc.adhesive += costPerPart;
+      if (row.category === "OTHER") acc.other += costPerPart;
+
+      return acc;
+    },
+    {
+      totalPerPart: 0,
+      prepreg: 0,
+      consumables: 0,
+      paint: 0,
+      hardware: 0,
+      packaging: 0,
+      adhesive: 0,
+      other: 0,
+    }
+  );
+}, [filteredBomLines]);
+
+const selectedBomPart = useMemo(
+  () => parts.find((p) => p.id === selectedBomPartId),
+  [parts, selectedBomPartId]
+);
+
+const selectedBomPartQty = Number(selectedBomPart?.quantity ?? 0);
+const bomExtendedTotal = bomSummary.totalPerPart * selectedBomPartQty;
+4. Add the Step 3 UI block
+
+Paste this below Step 2 Tooling and above the bottom action buttons.
+
+<div className="border rounded-lg p-5 space-y-4">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-semibold">Step 3 — BOM Builder</h2>
+      <p className="text-sm text-muted-foreground">
+        Add estimated material lines for the selected quoted part.
+      </p>
+    </div>
+
+    <button
+      className="border rounded px-4 py-2"
+      onClick={addBomLine}
+      type="button"
+    >
+      + Add BOM Line
+    </button>
+  </div>
+
+  {bomMessage && (
+    <div className="rounded border px-3 py-2 text-sm">{bomMessage}</div>
+  )}
+
+  <div className="flex items-end gap-4">
+    <div className="min-w-[320px]">
+      <label className="block text-sm mb-1">Selected RFQ Part</label>
+      <select
+        className="w-full border rounded px-3 py-2"
+        value={selectedBomPartId}
+        onChange={(e) => setSelectedBomPartId(e.target.value)}
+      >
+        <option value="">Select a part</option>
+        {parts
+          .filter((p) => p.id)
+          .map((part) => (
+            <option key={part.id} value={part.id}>
+              {part.lineNumber} - {part.partNumber} ({part.quantity})
+            </option>
+          ))}
+      </select>
+    </div>
+
+    {selectedBomPart && (
+      <div className="text-sm text-muted-foreground">
+        Material cost will be calculated for <strong>{selectedBomPart.partNumber}</strong>
+      </div>
+    )}
+  </div>
+
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div className="lg:col-span-3 overflow-x-auto">
+      <table className="w-full border-collapse min-w-[1550px]">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-2">Description</th>
+            <th className="text-left p-2">Category</th>
+            <th className="text-left p-2">Qty / Part</th>
+            <th className="text-left p-2">UOM</th>
+            <th className="text-left p-2">Unit Cost</th>
+            <th className="text-left p-2">Scrap %</th>
+            <th className="text-left p-2">Cost / Part</th>
+            <th className="text-left p-2">AG Part #</th>
+            <th className="text-left p-2">Vendor</th>
+            <th className="text-left p-2">Material Spec</th>
+            <th className="text-left p-2">Estimated</th>
+            <th className="text-left p-2">Draft Item</th>
+            <th className="text-left p-2">Notes</th>
+            <th className="text-left p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {!selectedBomPartId ? (
+            <tr>
+              <td colSpan={14} className="p-4 text-sm text-muted-foreground">
+                Select an RFQ part to begin adding BOM lines.
+              </td>
+            </tr>
+          ) : filteredBomLines.length === 0 ? (
+            <tr>
+              <td colSpan={14} className="p-4 text-sm text-muted-foreground">
+                No BOM lines yet for this part.
+              </td>
+            </tr>
+          ) : (
+            filteredBomLines.map((row, index) => {
+              const costPerPart =
+                Number(row.quantityPerPart || 0) *
+                Number(row.estimatedUnitCost || 0) *
+                (1 + Number(row.scrapPercent || 0) / 100);
+
+              return (
+                <tr key={`${row.id ?? "new"}-${index}`} className="border-b align-top">
+                  <td className="p-2">
+                    <input
+                      className="w-[180px] border rounded px-2 py-1"
+                      value={row.description}
+                      onChange={(e) =>
+                        updateBomLine(index, "description", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <select
+                      className="w-[150px] border rounded px-2 py-1"
+                      value={row.category}
+                      onChange={(e) =>
+                        updateBomLine(index, "category", e.target.value)
+                      }
+                    >
+                      <option value="PREPREG">Prepreg</option>
+                      <option value="CONSUMABLE">Consumable</option>
+                      <option value="PAINT">Paint</option>
+                      <option value="HARDWARE">Hardware</option>
+                      <option value="PACKAGING">Packaging</option>
+                      <option value="ADHESIVE">Adhesive</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min={0}
+                      className="w-[110px] border rounded px-2 py-1"
+                      value={row.quantityPerPart}
+                      onChange={(e) =>
+                        updateBomLine(index, "quantityPerPart", Number(e.target.value))
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      className="w-[90px] border rounded px-2 py-1"
+                      value={row.uom}
+                      onChange={(e) =>
+                        updateBomLine(index, "uom", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min={0}
+                      className="w-[110px] border rounded px-2 py-1"
+                      value={row.estimatedUnitCost}
+                      onChange={(e) =>
+                        updateBomLine(index, "estimatedUnitCost", Number(e.target.value))
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className="w-[90px] border rounded px-2 py-1"
+                      value={row.scrapPercent}
+                      onChange={(e) =>
+                        updateBomLine(index, "scrapPercent", Number(e.target.value))
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    ${costPerPart.toFixed(4)}
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      className="w-[130px] border rounded px-2 py-1"
+                      value={row.childPartAgNumber ?? ""}
+                      onChange={(e) =>
+                        updateBomLine(index, "childPartAgNumber", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      className="w-[130px] border rounded px-2 py-1"
+                      value={row.vendorNameSnapshot ?? ""}
+                      onChange={(e) =>
+                        updateBomLine(index, "vendorNameSnapshot", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      className="w-[150px] border rounded px-2 py-1"
+                      value={row.materialSpec ?? ""}
+                      onChange={(e) =>
+                        updateBomLine(index, "materialSpec", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="checkbox"
+                      checked={!!row.isEstimated}
+                      onChange={(e) =>
+                        updateBomLine(index, "isEstimated", e.target.checked)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      type="checkbox"
+                      checked={!!row.isDraftInventoryItem}
+                      onChange={(e) =>
+                        updateBomLine(index, "isDraftInventoryItem", e.target.checked)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <input
+                      className="w-[160px] border rounded px-2 py-1"
+                      value={row.notes ?? ""}
+                      onChange={(e) =>
+                        updateBomLine(index, "notes", e.target.value)
+                      }
+                    />
+                  </td>
+
+                  <td className="p-2">
+                    <div className="flex gap-2">
+                      <button
+                        className="border rounded px-3 py-1"
+                        onClick={() => saveBomLine(row)}
+                        type="button"
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="border rounded px-3 py-1"
+                        onClick={() => deleteBomLine(index, row)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="border rounded-lg p-4 h-fit">
+      <h3 className="font-semibold mb-3">Material Summary</h3>
+
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span>Prepreg</span>
+          <span>${bomSummary.prepreg.toFixed(4)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Consumables</span>
+          <span>${bomSummary.consumables.toFixed(4)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Paint</span>
+          <span>${bomSummary.paint.toFixed(4)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Hardware</span>
+          <span>${bomSummary.hardware.toFixed(4)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Packaging</span>
+          <span>${bomSummary.packaging.toFixed(4)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Adhesive</span>
+          <span>${bomSummary.adhesive.toFixed(4)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Other</span>
+          <span>${bomSummary.other.toFixed(4)}</span>
+        </div>
+
+        <div className="border-t pt-2 flex justify-between font-semibold">
+          <span>Cost / Part</span>
+          <span>${bomSummary.totalPerPart.toFixed(4)}</span>
+        </div>
+
+        <div className="flex justify-between font-semibold">
+          <span>Total @ Qty</span>
+          <span>${bomExtendedTotal.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+5. What this gives you now
+
+After this, your builder supports:
+
+Step 1 RFQ header
+Step 1 multi-part lines
+Step 2 tooling
+Step 3 BOM material costing by RFQ part
+
+That means you now have two major cost buckets working:
+
+tooling
+materials
+6. Best next step
+
+After this, the strongest next build is:
+
+Step 4 — Process Time
+
+That’s where:
+
+layup hours
+CNC hours
+QC hours
+custom departments
+hourly rates
+
+turn into labor cost.
+
+When you’re ready, send build Step 4 Process Time.

@@ -69,6 +69,15 @@ import {
   cncTimeLogs,
   machinedPartRoutings,
   machinedPartRoutingOps,
+  estimatingRfqs,
+  estimatingRfqParts,
+  estimatingTooling,
+  estimatingBomLines,
+  estimatingProcessRows,
+  estimatingAdjustments,
+  estimatingShipping,
+  estimatingQuantityBreaks,
+  estimatingPricingSnapshots,
   partRoutings,
   routingOperations,
   routingCncOperations,
@@ -550,6 +559,24 @@ import {
   type InsertMachinedPartRouting,
   type MachinedPartRoutingOp,
   type InsertMachinedPartRoutingOp,
+  type EstimatingRfq,
+  type InsertEstimatingRfq,
+  type EstimatingRfqPart,
+  type InsertEstimatingRfqPart,
+  type EstimatingTooling,
+  type InsertEstimatingTooling,
+  type EstimatingBomLine,
+  type InsertEstimatingBomLine,
+  type EstimatingProcessRow,
+  type InsertEstimatingProcessRow,
+  type EstimatingAdjustment,
+  type InsertEstimatingAdjustment,
+  type EstimatingShipping,
+  type InsertEstimatingShipping,
+  type EstimatingQuantityBreak,
+  type InsertEstimatingQuantityBreak,
+  type EstimatingPricingSnapshot,
+  type InsertEstimatingPricingSnapshot,
   orderActivityEvents,
   type InsertOrderActivityEvent,
   type RoutingOperation,
@@ -2550,6 +2577,51 @@ export interface IStorage {
   updateMachinedPartRoutingOp(id: number, data: Partial<InsertMachinedPartRoutingOp>): Promise<MachinedPartRoutingOp | undefined>;
   deleteMachinedPartRoutingOp(id: number): Promise<void>;
   reorderMachinedPartRoutingOps(updates: { id: number; sortOrder: number }[]): Promise<void>;
+
+  // Estimating – RFQs
+  getEstimatingRfqs(): Promise<EstimatingRfq[]>;
+  getEstimatingRfqById(id: string): Promise<EstimatingRfq | null>;
+  createEstimatingRfq(data: InsertEstimatingRfq): Promise<EstimatingRfq>;
+  updateEstimatingRfq(id: string, data: Partial<InsertEstimatingRfq>): Promise<EstimatingRfq>;
+
+  // Estimating – RFQ Parts
+  getEstimatingRfqParts(rfqId: string): Promise<EstimatingRfqPart[]>;
+  createEstimatingRfqPart(data: InsertEstimatingRfqPart): Promise<EstimatingRfqPart>;
+  deleteEstimatingRfqPartsByRfqId(rfqId: string): Promise<void>;
+
+  // Estimating – Tooling
+  getEstimatingTooling(rfqId: string): Promise<EstimatingTooling[]>;
+  createEstimatingTooling(data: InsertEstimatingTooling): Promise<EstimatingTooling>;
+  deleteEstimatingTooling(id: string): Promise<void>;
+
+  // Estimating – BOM Lines
+  getEstimatingBomLines(rfqId: string): Promise<EstimatingBomLine[]>;
+  createEstimatingBomLine(data: InsertEstimatingBomLine): Promise<EstimatingBomLine>;
+  deleteEstimatingBomLine(id: string): Promise<void>;
+
+  // Estimating – Process Rows
+  getEstimatingProcessRows(rfqId: string): Promise<EstimatingProcessRow[]>;
+  createEstimatingProcessRow(data: InsertEstimatingProcessRow): Promise<EstimatingProcessRow>;
+  deleteEstimatingProcessRow(id: string): Promise<void>;
+
+  // Estimating – Adjustments
+  getEstimatingAdjustments(rfqId: string): Promise<EstimatingAdjustment[]>;
+  createEstimatingAdjustment(data: InsertEstimatingAdjustment): Promise<EstimatingAdjustment>;
+  deleteEstimatingAdjustment(id: string): Promise<void>;
+
+  // Estimating – Shipping
+  getEstimatingShipping(rfqId: string): Promise<EstimatingShipping[]>;
+  createEstimatingShipping(data: InsertEstimatingShipping): Promise<EstimatingShipping>;
+  deleteEstimatingShipping(id: string): Promise<void>;
+
+  // Estimating – Quantity Breaks
+  getEstimatingQuantityBreaks(rfqId: string): Promise<EstimatingQuantityBreak[]>;
+  createEstimatingQuantityBreak(data: InsertEstimatingQuantityBreak): Promise<EstimatingQuantityBreak>;
+  deleteEstimatingQuantityBreak(id: string): Promise<void>;
+
+  // Estimating – Pricing Snapshots
+  getEstimatingPricingSnapshots(rfqId: string): Promise<EstimatingPricingSnapshot[]>;
+  replaceEstimatingPricingSnapshots(rfqId: string, rows: InsertEstimatingPricingSnapshot[]): Promise<EstimatingPricingSnapshot[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -21580,6 +21652,189 @@ export class DatabaseStorage implements IStorage {
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
     return row || undefined;
+  }
+
+  // ── Estimating – RFQs ────────────────────────────────────────────────────────
+
+  async getEstimatingRfqs(): Promise<EstimatingRfq[]> {
+    return db.select().from(estimatingRfqs).orderBy(estimatingRfqs.createdAt);
+  }
+
+  async getEstimatingRfqById(id: string): Promise<EstimatingRfq | null> {
+    const [row] = await db.select().from(estimatingRfqs).where(eq(estimatingRfqs.id, id));
+    return row || null;
+  }
+
+  async createEstimatingRfq(data: InsertEstimatingRfq): Promise<EstimatingRfq> {
+    const [row] = await db.insert(estimatingRfqs).values(data).returning();
+    return row;
+  }
+
+  async updateEstimatingRfq(id: string, data: Partial<InsertEstimatingRfq>): Promise<EstimatingRfq> {
+    const [row] = await db
+      .update(estimatingRfqs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(estimatingRfqs.id, id))
+      .returning();
+    return row;
+  }
+
+  // ── Estimating – RFQ Parts ───────────────────────────────────────────────────
+
+  async getEstimatingRfqParts(rfqId: string): Promise<EstimatingRfqPart[]> {
+    return db
+      .select()
+      .from(estimatingRfqParts)
+      .where(eq(estimatingRfqParts.rfqId, rfqId))
+      .orderBy(estimatingRfqParts.lineNumber);
+  }
+
+  async createEstimatingRfqPart(data: InsertEstimatingRfqPart): Promise<EstimatingRfqPart> {
+    const [row] = await db.insert(estimatingRfqParts).values(data).returning();
+    return row;
+  }
+
+  async deleteEstimatingRfqPartsByRfqId(rfqId: string): Promise<void> {
+    await db.delete(estimatingRfqParts).where(eq(estimatingRfqParts.rfqId, rfqId));
+  }
+
+  // ── Estimating – Tooling ─────────────────────────────────────────────────────
+
+  async getEstimatingTooling(rfqId: string): Promise<EstimatingTooling[]> {
+    return db
+      .select()
+      .from(estimatingTooling)
+      .where(eq(estimatingTooling.rfqId, rfqId))
+      .orderBy(estimatingTooling.createdAt);
+  }
+
+  async createEstimatingTooling(data: InsertEstimatingTooling): Promise<EstimatingTooling> {
+    const unitCost = Number(data.unitCost ?? 0);
+    const qty = Number(data.quantity ?? 1);
+    const [row] = await db
+      .insert(estimatingTooling)
+      .values({ ...data, totalCost: String(unitCost * qty) })
+      .returning();
+    return row;
+  }
+
+  async deleteEstimatingTooling(id: string): Promise<void> {
+    await db.delete(estimatingTooling).where(eq(estimatingTooling.id, id));
+  }
+
+  // ── Estimating – BOM Lines ───────────────────────────────────────────────────
+
+  async getEstimatingBomLines(rfqId: string): Promise<EstimatingBomLine[]> {
+    return db
+      .select()
+      .from(estimatingBomLines)
+      .where(eq(estimatingBomLines.rfqId, rfqId))
+      .orderBy(estimatingBomLines.createdAt);
+  }
+
+  async createEstimatingBomLine(data: InsertEstimatingBomLine): Promise<EstimatingBomLine> {
+    const [row] = await db.insert(estimatingBomLines).values(data).returning();
+    return row;
+  }
+
+  async deleteEstimatingBomLine(id: string): Promise<void> {
+    await db.delete(estimatingBomLines).where(eq(estimatingBomLines.id, id));
+  }
+
+  // ── Estimating – Process Rows ─────────────────────────────────────────────
+
+  async getEstimatingProcessRows(rfqId: string): Promise<EstimatingProcessRow[]> {
+    return db
+      .select()
+      .from(estimatingProcessRows)
+      .where(eq(estimatingProcessRows.rfqId, rfqId))
+      .orderBy(estimatingProcessRows.createdAt);
+  }
+
+  async createEstimatingProcessRow(data: InsertEstimatingProcessRow): Promise<EstimatingProcessRow> {
+    const [row] = await db.insert(estimatingProcessRows).values(data).returning();
+    return row;
+  }
+
+  async deleteEstimatingProcessRow(id: string): Promise<void> {
+    await db.delete(estimatingProcessRows).where(eq(estimatingProcessRows.id, id));
+  }
+
+  // ── Estimating – Adjustments ──────────────────────────────────────────────
+
+  async getEstimatingAdjustments(rfqId: string): Promise<EstimatingAdjustment[]> {
+    return db
+      .select()
+      .from(estimatingAdjustments)
+      .where(eq(estimatingAdjustments.rfqId, rfqId))
+      .orderBy(estimatingAdjustments.createdAt);
+  }
+
+  async createEstimatingAdjustment(data: InsertEstimatingAdjustment): Promise<EstimatingAdjustment> {
+    const [row] = await db.insert(estimatingAdjustments).values(data).returning();
+    return row;
+  }
+
+  async deleteEstimatingAdjustment(id: string): Promise<void> {
+    await db.delete(estimatingAdjustments).where(eq(estimatingAdjustments.id, id));
+  }
+
+  // ── Estimating – Shipping ─────────────────────────────────────────────────
+
+  async getEstimatingShipping(rfqId: string): Promise<EstimatingShipping[]> {
+    return db
+      .select()
+      .from(estimatingShipping)
+      .where(eq(estimatingShipping.rfqId, rfqId))
+      .orderBy(estimatingShipping.createdAt);
+  }
+
+  async createEstimatingShipping(data: InsertEstimatingShipping): Promise<EstimatingShipping> {
+    const [row] = await db.insert(estimatingShipping).values(data).returning();
+    return row;
+  }
+
+  async deleteEstimatingShipping(id: string): Promise<void> {
+    await db.delete(estimatingShipping).where(eq(estimatingShipping.id, id));
+  }
+
+  // ── Estimating – Quantity Breaks ──────────────────────────────────────────
+
+  async getEstimatingQuantityBreaks(rfqId: string): Promise<EstimatingQuantityBreak[]> {
+    return db
+      .select()
+      .from(estimatingQuantityBreaks)
+      .where(eq(estimatingQuantityBreaks.rfqId, rfqId))
+      .orderBy(estimatingQuantityBreaks.sortOrder);
+  }
+
+  async createEstimatingQuantityBreak(data: InsertEstimatingQuantityBreak): Promise<EstimatingQuantityBreak> {
+    const [row] = await db.insert(estimatingQuantityBreaks).values(data).returning();
+    return row;
+  }
+
+  async deleteEstimatingQuantityBreak(id: string): Promise<void> {
+    await db.delete(estimatingQuantityBreaks).where(eq(estimatingQuantityBreaks.id, id));
+  }
+
+  // ── Estimating – Pricing Snapshots ───────────────────────────────────────────
+
+  async getEstimatingPricingSnapshots(rfqId: string): Promise<EstimatingPricingSnapshot[]> {
+    return db
+      .select()
+      .from(estimatingPricingSnapshots)
+      .where(eq(estimatingPricingSnapshots.rfqId, rfqId));
+  }
+
+  async replaceEstimatingPricingSnapshots(
+    rfqId: string,
+    rows: InsertEstimatingPricingSnapshot[],
+  ): Promise<EstimatingPricingSnapshot[]> {
+    await db
+      .delete(estimatingPricingSnapshots)
+      .where(eq(estimatingPricingSnapshots.rfqId, rfqId));
+    if (!rows.length) return [];
+    return db.insert(estimatingPricingSnapshots).values(rows).returning();
   }
 }
 

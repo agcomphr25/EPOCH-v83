@@ -15095,3 +15095,208 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
 
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
+
+// ─── ESTIMATING / RFQ BUILDER ─────────────────────────────────────────────────
+
+export const estimatingRfqs = pgTable('estimating_rfqs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqNumber: text('rfq_number').notNull(),
+  customerId: integer('customer_id'),
+  customerNameSnapshot: text('customer_name_snapshot'),
+  quoteId: uuid('quote_id'),
+  source: text('source').default('RFQ_BUILDER').notNull(),
+  revision: text('revision'),
+  requestedDueDate: timestamp('requested_due_date'),
+  quoteDueDate: timestamp('quote_due_date'),
+  notes: text('notes'),
+  assumptions: text('assumptions'),
+  status: text('status').default('DRAFT').notNull(),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingRfqSchema = createInsertSchema(estimatingRfqs).omit({ id: true, createdAt: true, updatedAt: true });
+export type EstimatingRfq = typeof estimatingRfqs.$inferSelect;
+export type InsertEstimatingRfq = z.infer<typeof insertEstimatingRfqSchema>;
+
+export const estimatingRfqParts = pgTable('estimating_rfq_parts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  lineNumber: integer('line_number').notNull(),
+  inventoryItemId: integer('inventory_item_id'),
+  agPartNumber: text('ag_part_number'),
+  partNumber: text('part_number').notNull(),
+  partDescription: text('part_description'),
+  revision: text('revision'),
+  quantity: integer('quantity').notNull(),
+  uom: text('uom').default('EA'),
+  partType: text('part_type'),
+  processFamily: text('process_family'),
+  materialSpec: text('material_spec'),
+  makeBuyType: text('make_buy_type'),
+  isDraftInventoryItem: boolean('is_draft_inventory_item').default(false).notNull(),
+  draftStatus: text('draft_status').default('ESTIMATING'),
+  drawingAttached: boolean('drawing_attached').default(false).notNull(),
+  complianceFlags: jsonb('compliance_flags').default([]).notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingRfqPartSchema = createInsertSchema(estimatingRfqParts).omit({ id: true, createdAt: true, updatedAt: true });
+export type EstimatingRfqPart = typeof estimatingRfqParts.$inferSelect;
+export type InsertEstimatingRfqPart = z.infer<typeof insertEstimatingRfqPartSchema>;
+
+export const estimatingTooling = pgTable('estimating_tooling', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  description: text('description').notNull(),
+  toolingType: text('tooling_type').notNull(),
+  quantity: integer('quantity').default(1).notNull(),
+  unitCost: numeric('unit_cost', { precision: 12, scale: 2 }).default('0').notNull(),
+  totalCost: numeric('total_cost', { precision: 12, scale: 2 }).default('0').notNull(),
+  appliesToScope: text('applies_to_scope').notNull(),
+  rfqPartIds: jsonb('rfq_part_ids').default([]).notNull(),
+  pricingTreatment: text('pricing_treatment').notNull(),
+  amortizationQty: integer('amortization_qty'),
+  chargeTiming: text('charge_timing').default('ONE_TIME').notNull(),
+  customerOwnedTooling: boolean('customer_owned_tooling').default(false).notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingToolingSchema = createInsertSchema(estimatingTooling).omit({ id: true, createdAt: true });
+export type EstimatingTooling = typeof estimatingTooling.$inferSelect;
+export type InsertEstimatingTooling = z.infer<typeof insertEstimatingToolingSchema>;
+
+export const estimatingBomLines = pgTable('estimating_bom_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  rfqPartId: uuid('rfq_part_id').notNull(),
+  inventoryItemId: integer('inventory_item_id'),
+  childPartAgNumber: text('child_part_ag_number'),
+  description: text('description').notNull(),
+  category: text('category'),
+  quantityPerPart: numeric('quantity_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  uom: text('uom').default('EA'),
+  estimatedUnitCost: numeric('estimated_unit_cost', { precision: 12, scale: 4 }).default('0').notNull(),
+  scrapPercent: numeric('scrap_percent', { precision: 8, scale: 2 }).default('0').notNull(),
+  isEstimated: boolean('is_estimated').default(true).notNull(),
+  isDraftInventoryItem: boolean('is_draft_inventory_item').default(false).notNull(),
+  vendorNameSnapshot: text('vendor_name_snapshot'),
+  materialSpec: text('material_spec'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingBomLineSchema = createInsertSchema(estimatingBomLines).omit({ id: true, createdAt: true });
+export type EstimatingBomLine = typeof estimatingBomLines.$inferSelect;
+export type InsertEstimatingBomLine = z.infer<typeof insertEstimatingBomLineSchema>;
+
+export const estimatingProcessRows = pgTable('estimating_process_rows', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  rfqPartId: uuid('rfq_part_id').notNull(),
+  departmentName: text('department_name').notNull(),
+  sourceType: text('source_type').default('MANUAL').notNull(),
+  setupHours: numeric('setup_hours', { precision: 10, scale: 2 }).default('0').notNull(),
+  hoursPerPart: numeric('hours_per_part', { precision: 10, scale: 4 }).default('0').notNull(),
+  hourlyRate: numeric('hourly_rate', { precision: 12, scale: 2 }).default('0').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingProcessRowSchema = createInsertSchema(estimatingProcessRows).omit({ id: true, createdAt: true });
+export type EstimatingProcessRow = typeof estimatingProcessRows.$inferSelect;
+export type InsertEstimatingProcessRow = z.infer<typeof insertEstimatingProcessRowSchema>;
+
+export const estimatingAdjustments = pgTable('estimating_adjustments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  rfqPartId: uuid('rfq_part_id'),
+  adjustmentType: text('adjustment_type').notNull(),
+  description: text('description').notNull(),
+  pricingMode: text('pricing_mode').notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  percentValue: numeric('percent_value', { precision: 8, scale: 4 }),
+  appliesToScope: text('applies_to_scope').default('RFQ').notNull(),
+  includeInCustomerPrice: boolean('include_in_customer_price').default(true).notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingAdjustmentSchema = createInsertSchema(estimatingAdjustments).omit({ id: true, createdAt: true });
+export type EstimatingAdjustment = typeof estimatingAdjustments.$inferSelect;
+export type InsertEstimatingAdjustment = z.infer<typeof insertEstimatingAdjustmentSchema>;
+
+export const estimatingShipping = pgTable('estimating_shipping', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  rfqPartId: uuid('rfq_part_id'),
+  shippingMode: text('shipping_mode').notNull(),
+  description: text('description'),
+  method: text('method'),
+  amount: numeric('amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  allocationMethod: text('allocation_method'),
+  includeInCustomerPrice: boolean('include_in_customer_price').default(true).notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingShippingSchema = createInsertSchema(estimatingShipping).omit({ id: true, createdAt: true });
+export type EstimatingShipping = typeof estimatingShipping.$inferSelect;
+export type InsertEstimatingShipping = z.infer<typeof insertEstimatingShippingSchema>;
+
+export const estimatingQuantityBreaks = pgTable('estimating_quantity_breaks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  label: text('label').notNull(),
+  quantity: integer('quantity').notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingQuantityBreakSchema = createInsertSchema(estimatingQuantityBreaks).omit({ id: true, createdAt: true });
+export type EstimatingQuantityBreak = typeof estimatingQuantityBreaks.$inferSelect;
+export type InsertEstimatingQuantityBreak = z.infer<typeof insertEstimatingQuantityBreakSchema>;
+
+export const estimatingPricingSnapshots = pgTable('estimating_pricing_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull(),
+  rfqPartId: uuid('rfq_part_id').notNull(),
+  quantityBreakId: uuid('quantity_break_id').notNull(),
+  materialCostPerPart: numeric('material_cost_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  laborCostPerPart: numeric('labor_cost_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  overheadCostPerPart: numeric('overhead_cost_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  shippingCostPerPart: numeric('shipping_cost_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  toolingCostPerPart: numeric('tooling_cost_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  totalCostPerPart: numeric('total_cost_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  marginPercent: numeric('margin_percent', { precision: 8, scale: 4 }).default('0').notNull(),
+  sellPricePerPart: numeric('sell_price_per_part', { precision: 12, scale: 4 }).default('0').notNull(),
+  extendedPrice: numeric('extended_price', { precision: 14, scale: 2 }).default('0').notNull(),
+  leadTimeDays: integer('lead_time_days'),
+  calculationVersion: text('calculation_version').default('v1').notNull(),
+  calculatedAt: timestamp('calculated_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingPricingSnapshotSchema = createInsertSchema(estimatingPricingSnapshots).omit({ id: true, calculatedAt: true });
+export type EstimatingPricingSnapshot = typeof estimatingPricingSnapshots.$inferSelect;
+export type InsertEstimatingPricingSnapshot = z.infer<typeof insertEstimatingPricingSnapshotSchema>;
+
+export const estimatingDefaults = pgTable('estimating_defaults', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  defaultLaborRate: numeric('default_labor_rate', { precision: 12, scale: 2 }).default('0').notNull(),
+  defaultOverheadPercent: numeric('default_overhead_percent', { precision: 8, scale: 4 }).default('0').notNull(),
+  defaultMarginPercent: numeric('default_margin_percent', { precision: 8, scale: 4 }).default('0').notNull(),
+  defaultQuoteValidityDays: integer('default_quote_validity_days').default(30).notNull(),
+  defaultShippingMethod: text('default_shipping_method'),
+  defaultShippingCarrier: text('default_shipping_carrier'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertEstimatingDefaultsSchema = createInsertSchema(estimatingDefaults).omit({ id: true, createdAt: true, updatedAt: true });
+export type EstimatingDefaults = typeof estimatingDefaults.$inferSelect;
+export type InsertEstimatingDefaults = z.infer<typeof insertEstimatingDefaultsSchema>;

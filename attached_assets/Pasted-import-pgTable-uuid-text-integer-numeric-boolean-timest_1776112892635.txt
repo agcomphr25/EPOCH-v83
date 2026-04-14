@@ -1,0 +1,298 @@
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  numeric,
+  boolean,
+  timestamp,
+  jsonb,
+} from "drizzle-orm/pg-core";
+
+/**
+ * ESTIMATING / RFQ HEADER
+ */
+export const estimatingRfqs = pgTable("estimating_rfqs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqNumber: text("rfq_number").notNull(),
+  customerId: integer("customer_id"), // links to customers.id
+  customerNameSnapshot: text("customer_name_snapshot"),
+
+  quoteId: uuid("quote_id"), // optional link to existing quotes table if uuid; adjust if your quotes.id differs
+  source: text("source").default("RFQ_BUILDER").notNull(),
+
+  revision: text("revision"),
+  requestedDueDate: timestamp("requested_due_date"),
+  quoteDueDate: timestamp("quote_due_date"),
+
+  notes: text("notes"),
+  assumptions: text("assumptions"),
+
+  status: text("status").default("DRAFT").notNull(), 
+  // DRAFT | IN_PROGRESS | PRICED | QUOTED | WON | LOST | ARCHIVED
+
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * RFQ PART LINES
+ * Supports multi-part RFQs
+ */
+export const estimatingRfqParts = pgTable("estimating_rfq_parts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+
+  lineNumber: integer("line_number").notNull(),
+
+  inventoryItemId: integer("inventory_item_id"), // optional link to inventoryItems.id
+  agPartNumber: text("ag_part_number"),
+  partNumber: text("part_number").notNull(),
+  partDescription: text("part_description"),
+
+  revision: text("revision"),
+  quantity: integer("quantity").notNull(),
+  uom: text("uom").default("EA"),
+
+  partType: text("part_type"), 
+  // PURCHASED | MANUFACTURED | ASSEMBLY | SUB_ASSEMBLY
+
+  processFamily: text("process_family"),
+  // CNC | COMPOSITE | ASSEMBLY | TUBE | TOOLING | OTHER
+
+  materialSpec: text("material_spec"),
+  makeBuyType: text("make_buy_type"), 
+  // MAKE | BUY | HYBRID
+
+  isDraftInventoryItem: boolean("is_draft_inventory_item").default(false).notNull(),
+  draftStatus: text("draft_status").default("ESTIMATING"), 
+  // ESTIMATING | REVIEW | APPROVED | CONVERTED
+
+  drawingAttached: boolean("drawing_attached").default(false).notNull(),
+
+  complianceFlags: jsonb("compliance_flags").default([]).notNull(),
+  // e.g. ["ITAR","BUY_AMERICAN","COC_REQUIRED"]
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * TOOLING
+ */
+export const estimatingTooling = pgTable("estimating_tooling", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+
+  description: text("description").notNull(),
+  toolingType: text("tooling_type").notNull(),
+  // MANDREL | MOLD | FIXTURE | INSERT_TOOLING | CNC_SETUP_TOOLING | POLISHING_TOOLING | INSPECTION_TOOLING | OTHER
+
+  quantity: integer("quantity").default(1).notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  totalCost: numeric("total_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+
+  appliesToScope: text("applies_to_scope").notNull(),
+  // PART | SELECTED_PARTS | ALL_PARTS
+
+  rfqPartIds: jsonb("rfq_part_ids").default([]).notNull(),
+
+  pricingTreatment: text("pricing_treatment").notNull(),
+  // SEPARATE_LINE | BLENDED_UNIT_PRICE | AMORTIZED | INTERNAL_ONLY
+
+  amortizationQty: integer("amortization_qty"),
+
+  chargeTiming: text("charge_timing").default("ONE_TIME").notNull(),
+  // ONE_TIME | FIRST_PO_ONLY | FIRST_ARTICLE_ONLY | EVERY_ORDER
+
+  customerOwnedTooling: boolean("customer_owned_tooling").default(false).notNull(),
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * ESTIMATING BOM LINES
+ * Snapshot-style estimating BOM, separate from released robust BOM
+ */
+export const estimatingBomLines = pgTable("estimating_bom_lines", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+  rfqPartId: uuid("rfq_part_id").notNull(),
+
+  inventoryItemId: integer("inventory_item_id"),
+  childPartAgNumber: text("child_part_ag_number"),
+
+  description: text("description").notNull(),
+  category: text("category"),
+  // PREPREG | CONSUMABLE | PAINT | HARDWARE | PACKAGING | CORE | ADHESIVE | OTHER
+
+  quantityPerPart: numeric("quantity_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+  uom: text("uom").default("EA"),
+
+  estimatedUnitCost: numeric("estimated_unit_cost", { precision: 12, scale: 4 }).default("0").notNull(),
+  scrapPercent: numeric("scrap_percent", { precision: 8, scale: 2 }).default("0").notNull(),
+
+  isEstimated: boolean("is_estimated").default(true).notNull(),
+  isDraftInventoryItem: boolean("is_draft_inventory_item").default(false).notNull(),
+
+  vendorNameSnapshot: text("vendor_name_snapshot"),
+  materialSpec: text("material_spec"),
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * PROCESS TIME / LABOR
+ */
+export const estimatingProcessRows = pgTable("estimating_process_rows", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+  rfqPartId: uuid("rfq_part_id").notNull(),
+
+  departmentName: text("department_name").notNull(),
+  sourceType: text("source_type").default("MANUAL").notNull(),
+  // MANUAL | ROUTING_TEMPLATE | HISTORICAL
+
+  setupHours: numeric("setup_hours", { precision: 10, scale: 2 }).default("0").notNull(),
+  hoursPerPart: numeric("hours_per_part", { precision: 10, scale: 4 }).default("0").notNull(),
+  hourlyRate: numeric("hourly_rate", { precision: 12, scale: 2 }).default("0").notNull(),
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * OVERHEAD / CAPEX / ADJUSTMENTS
+ */
+export const estimatingAdjustments = pgTable("estimating_adjustments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+  rfqPartId: uuid("rfq_part_id"), // null means RFQ-level shared adjustment
+
+  adjustmentType: text("adjustment_type").notNull(),
+  // OVERHEAD | COMPLIANCE | DOCUMENTATION | ADMIN | CAPEX | SHIPPING_MISC | OTHER
+
+  description: text("description").notNull(),
+
+  pricingMode: text("pricing_mode").notNull(),
+  // FLAT | PER_PART | PERCENT_OF_MATERIAL | PERCENT_OF_LABOR | INTERNAL_ONLY
+
+  amount: numeric("amount", { precision: 12, scale: 2 }).default("0").notNull(),
+  percentValue: numeric("percent_value", { precision: 8, scale: 4 }),
+
+  appliesToScope: text("applies_to_scope").default("RFQ").notNull(),
+  // RFQ | PART
+
+  includeInCustomerPrice: boolean("include_in_customer_price").default(true).notNull(),
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * SHIPPING
+ */
+export const estimatingShipping = pgTable("estimating_shipping", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+  rfqPartId: uuid("rfq_part_id"), // null = RFQ-level shipping
+
+  shippingMode: text("shipping_mode").notNull(),
+  // PER_PART | PER_PO | INTERNAL_ONLY
+
+  description: text("description"),
+  method: text("method"), // UPS Ground, Freight, etc.
+
+  amount: numeric("amount", { precision: 12, scale: 2 }).default("0").notNull(),
+
+  allocationMethod: text("allocation_method"),
+  // EVEN | BY_QUANTITY | BY_VALUE | MANUAL
+
+  includeInCustomerPrice: boolean("include_in_customer_price").default(true).notNull(),
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * QUANTITY BREAKS
+ */
+export const estimatingQuantityBreaks = pgTable("estimating_quantity_breaks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+
+  label: text("label").notNull(), // "3 pcs", "25 pcs", "100+ pcs"
+  quantity: integer("quantity").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * CALCULATED PRICING SNAPSHOT
+ */
+export const estimatingPricingSnapshots = pgTable("estimating_pricing_snapshots", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  rfqId: uuid("rfq_id").notNull(),
+  rfqPartId: uuid("rfq_part_id").notNull(),
+  quantityBreakId: uuid("quantity_break_id").notNull(),
+
+  materialCostPerPart: numeric("material_cost_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+  laborCostPerPart: numeric("labor_cost_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+  overheadCostPerPart: numeric("overhead_cost_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+  shippingCostPerPart: numeric("shipping_cost_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+  toolingCostPerPart: numeric("tooling_cost_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+
+  totalCostPerPart: numeric("total_cost_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+
+  marginPercent: numeric("margin_percent", { precision: 8, scale: 4 }).default("0").notNull(),
+  sellPricePerPart: numeric("sell_price_per_part", { precision: 12, scale: 4 }).default("0").notNull(),
+  extendedPrice: numeric("extended_price", { precision: 14, scale: 2 }).default("0").notNull(),
+
+  leadTimeDays: integer("lead_time_days"),
+
+  calculationVersion: text("calculation_version").default("v1").notNull(),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+});
+
+/**
+ * GLOBAL COSTING DEFAULTS
+ * Your current company_settings does not hold shop rate / markup defaults,
+ * so this gives estimating a safe place to start.
+ */
+export const estimatingDefaults = pgTable("estimating_defaults", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  defaultLaborRate: numeric("default_labor_rate", { precision: 12, scale: 2 }).default("0").notNull(),
+  defaultOverheadPercent: numeric("default_overhead_percent", { precision: 8, scale: 4 }).default("0").notNull(),
+  defaultMarginPercent: numeric("default_margin_percent", { precision: 8, scale: 4 }).default("0").notNull(),
+
+  defaultQuoteValidityDays: integer("default_quote_validity_days").default(30).notNull(),
+
+  defaultShippingMethod: text("default_shipping_method"),
+  defaultShippingCarrier: text("default_shipping_carrier"),
+
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

@@ -1,0 +1,652 @@
+Great — this is the right next step.
+
+Step 7 — Quantity Break Pricing
+
+This is the point where your estimating builder becomes a real quote engine.
+
+You already have the inputs:
+
+tooling
+material
+labor
+adjustments
+shipping
+
+Now we add:
+
+RFQ-level quantity breaks
+margin %
+computed pricing snapshots by part and by break
+What Step 7 should do
+
+For each RFQ:
+
+Quantity breaks
+
+Examples:
+
+3 pcs
+25 pcs
+100+ pcs
+For each RFQ part and each quantity break
+
+Calculate:
+
+material cost per part
+labor cost per part
+tooling cost per part
+adjustment cost per part
+shipping cost per part
+total cost per part
+sell price per part
+extended total
+Pricing rules for first version
+
+Use these practical rules first:
+
+Material
+
+From Step 3:
+
+bomSummary.totalPerPart
+Labor
+
+From Step 4:
+
+recurring labor per part
+plus setup spread across quantity break
+
+Formula:
+
+laborCostPerPart = recurringCostPerPart + (setupCost / breakQty)
+Tooling
+
+From Step 2:
+
+Separate line
+excluded from per-part sell price
+shown separately later
+Blended into unit price
+toolingCostPerPart = toolingTotal / breakQty
+Amortized
+toolingCostPerPart = toolingTotal / amortizationQty
+Internal only
+excluded from customer-facing unit price
+Adjustments
+Flat
+RFQ-level: spread across break qty
+part-level: spread across that part qty
+Per part
+direct per-part addition
+% of material
+based on material total
+% of labor
+based on labor total
+Internal only
+excluded from customer-facing price
+Shipping
+Per part
+add directly per part
+Per PO
+spread across break qty
+Internal only
+excluded from customer-facing price
+Margin
+
+Use:
+
+sellPricePerPart = totalCostPerPart / (1 - marginPercent)
+
+Example:
+
+20% margin = 0.20
+Best implementation path
+
+Do this in 4 pieces:
+
+1. Quantity break CRUD
+
+Use the existing estimatingQuantityBreaks table
+
+2. Estimating defaults
+
+Use estimatingDefaults or temporary manual margin input
+
+3. Pricing calculator function
+
+Pure frontend function first is fine
+
+4. Save pricing snapshots
+
+Write to estimatingPricingSnapshots
+
+Part 1 — backend for quantity breaks
+Add to IStorage
+getEstimatingQuantityBreaks(rfqId: string): Promise<any[]>;
+createEstimatingQuantityBreak(data: any): Promise<any>;
+deleteEstimatingQuantityBreak(id: string): Promise<void>;
+Add to DatabaseStorage
+import { estimatingQuantityBreaks } from "../schema"; // adjust path
+import { eq } from "drizzle-orm";
+
+async getEstimatingQuantityBreaks(rfqId: string) {
+  return db
+    .select()
+    .from(estimatingQuantityBreaks)
+    .where(eq(estimatingQuantityBreaks.rfqId, rfqId));
+}
+
+async createEstimatingQuantityBreak(data: any) {
+  const [row] = await db
+    .insert(estimatingQuantityBreaks)
+    .values(data)
+    .returning();
+  return row;
+}
+
+async deleteEstimatingQuantityBreak(id: string) {
+  await db
+    .delete(estimatingQuantityBreaks)
+    .where(eq(estimatingQuantityBreaks.id, id));
+}
+Add routes to server/src/routes/estimating.ts
+  // ---------------- QUANTITY BREAKS ----------------
+
+  app.get("/api/estimating/rfqs/:id/quantity-breaks", async (req, res) => {
+    try {
+      const rows = await storage.getEstimatingQuantityBreaks(req.params.id);
+      res.json(rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to fetch quantity breaks");
+    }
+  });
+
+  app.post("/api/estimating/rfqs/:id/quantity-breaks", async (req, res) => {
+    try {
+      const row = await storage.createEstimatingQuantityBreak({
+        ...req.body,
+        rfqId: req.params.id,
+      });
+      res.json(row);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to create quantity break");
+    }
+  });
+
+  app.delete("/api/estimating/quantity-breaks/:id", async (req, res) => {
+    try {
+      await storage.deleteEstimatingQuantityBreak(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Failed to delete quantity break");
+    }
+  });
+Part 2 — frontend state for quantity breaks
+
+Add this to RFQBuilderPage.tsx.
+
+Types
+type QuantityBreakRow = {
+  id?: string;
+  label: string;
+  quantity: number;
+  sortOrder: number;
+};
+
+const emptyQuantityBreak = (sortOrder: number): QuantityBreakRow => ({
+  label: "",
+  quantity: 1,
+  sortOrder,
+});
+State
+const [quantityBreakRows, setQuantityBreakRows] = useState<QuantityBreakRow[]>([]);
+const [quantityBreakMessage, setQuantityBreakMessage] = useState("");
+const [marginPercent, setMarginPercent] = useState(20);
+Query
+const quantityBreaksQuery = useQuery({
+  queryKey: ["estimating-rfq-quantity-breaks", rfqId],
+  enabled: !!rfqId,
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/quantity-breaks`);
+    return res.json();
+  },
+});
+Load
+useEffect(() => {
+  if (quantityBreaksQuery.data && Array.isArray(quantityBreaksQuery.data)) {
+    setQuantityBreakRows(
+      quantityBreaksQuery.data.map((row: any, index: number) => ({
+        id: row.id,
+        label: row.label ?? "",
+        quantity: Number(row.quantity ?? 1),
+        sortOrder: Number(row.sortOrder ?? index),
+      }))
+    );
+  }
+}, [quantityBreaksQuery.data]);
+Helpers
+const addQuantityBreakRow = () => {
+  if (!rfqId) {
+    setQuantityBreakMessage("Save the RFQ first before adding quantity breaks.");
+    return;
+  }
+
+  setQuantityBreakRows((prev) => [
+    ...prev,
+    emptyQuantityBreak(prev.length),
+  ]);
+};
+
+const updateQuantityBreakRow = (
+  index: number,
+  field: keyof QuantityBreakRow,
+  value: string | number
+) => {
+  setQuantityBreakRows((prev) => {
+    const next = [...prev];
+    next[index] = { ...next[index], [field]: value };
+    return next;
+  });
+};
+
+const saveQuantityBreakRow = async (row: QuantityBreakRow) => {
+  if (!rfqId) {
+    setQuantityBreakMessage("Save the RFQ first before adding quantity breaks.");
+    return;
+  }
+
+  if (!row.label.trim()) {
+    setQuantityBreakMessage("Quantity break label is required.");
+    return;
+  }
+
+  await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/quantity-breaks`, {
+    label: row.label,
+    quantity: Number(row.quantity || 1),
+    sortOrder: Number(row.sortOrder || 0),
+  });
+
+  setQuantityBreakMessage("Quantity break saved.");
+  await queryClient.invalidateQueries({
+    queryKey: ["estimating-rfq-quantity-breaks", rfqId],
+  });
+};
+
+const deleteQuantityBreakRow = async (index: number, row: QuantityBreakRow) => {
+  if (row.id) {
+    await apiRequest("DELETE", `/api/estimating/quantity-breaks/${row.id}`);
+    await queryClient.invalidateQueries({
+      queryKey: ["estimating-rfq-quantity-breaks", rfqId],
+    });
+    setQuantityBreakMessage("Quantity break deleted.");
+    return;
+  }
+
+  setQuantityBreakRows((prev) => prev.filter((_, i) => i !== index));
+};
+Part 3 — pricing calculation engine
+
+Add these helper functions inside RFQBuilderPage.tsx or move later to a util file.
+
+const getToolingCostPerPartForBreak = (breakQty: number) => {
+  return toolingRows.reduce((sum, row) => {
+    const total = Number(row.totalCost ?? 0);
+
+    if (row.pricingTreatment === "BLENDED_UNIT_PRICE") {
+      return sum + (breakQty > 0 ? total / breakQty : 0);
+    }
+
+    if (row.pricingTreatment === "AMORTIZED") {
+      const amortQty = Number(row.amortizationQty || 0);
+      return sum + (amortQty > 0 ? total / amortQty : 0);
+    }
+
+    return sum;
+  }, 0);
+};
+
+const getAdjustmentCostForPartAndBreak = (
+  partId: string | undefined,
+  breakQty: number,
+  materialCostPerPart: number,
+  laborCostPerPart: number
+) => {
+  const applicable = adjustmentRows.filter((row) => {
+    if (!row.includeInCustomerPrice) return false;
+    if (row.pricingMode === "INTERNAL_ONLY") return false;
+    if (row.appliesToScope === "RFQ") return true;
+    return row.appliesToScope === "PART" && row.rfqPartId === partId;
+  });
+
+  return applicable.reduce((sum, row) => {
+    if (row.pricingMode === "FLAT") {
+      return sum + (breakQty > 0 ? Number(row.amount || 0) / breakQty : 0);
+    }
+
+    if (row.pricingMode === "PER_PART") {
+      return sum + Number(row.amount || 0);
+    }
+
+    if (row.pricingMode === "PERCENT_OF_MATERIAL") {
+      return sum + materialCostPerPart * (Number(row.percentValue || 0) / 100);
+    }
+
+    if (row.pricingMode === "PERCENT_OF_LABOR") {
+      return sum + laborCostPerPart * (Number(row.percentValue || 0) / 100);
+    }
+
+    return sum;
+  }, 0);
+};
+
+const getShippingCostPerPartForBreak = (partId: string | undefined, breakQty: number) => {
+  const applicable = shippingRows.filter((row) => {
+    if (!row.includeInCustomerPrice) return false;
+    if (row.shippingMode === "INTERNAL_ONLY") return false;
+    if (!row.rfqPartId) return true;
+    return row.rfqPartId === partId;
+  });
+
+  return applicable.reduce((sum, row) => {
+    if (row.shippingMode === "PER_PART") {
+      return sum + Number(row.amount || 0);
+    }
+
+    if (row.shippingMode === "PER_PO") {
+      return sum + (breakQty > 0 ? Number(row.amount || 0) / breakQty : 0);
+    }
+
+    return sum;
+  }, 0);
+};
+
+const getMaterialCostPerPartForPart = (partId: string | undefined) => {
+  return bomLines
+    .filter((line) => line.rfqPartId === partId)
+    .reduce((sum, row) => {
+      const qty = Number(row.quantityPerPart || 0);
+      const unit = Number(row.estimatedUnitCost || 0);
+      const scrap = Number(row.scrapPercent || 0) / 100;
+      return sum + qty * unit * (1 + scrap);
+    }, 0);
+};
+
+const getLaborCostPerPartForPartAndBreak = (partId: string | undefined, breakQty: number) => {
+  const rows = processRows.filter((row) => row.rfqPartId === partId);
+
+  const setupCost = rows.reduce(
+    (sum, row) => sum + Number(row.setupHours || 0) * Number(row.hourlyRate || 0),
+    0
+  );
+
+  const recurringPerPart = rows.reduce(
+    (sum, row) => sum + Number(row.hoursPerPart || 0) * Number(row.hourlyRate || 0),
+    0
+  );
+
+  return recurringPerPart + (breakQty > 0 ? setupCost / breakQty : 0);
+};
+Compute pricing matrix
+const pricingMatrix = useMemo(() => {
+  return quantityBreakRows
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((qb) => {
+      const breakQty = Number(qb.quantity || 0);
+      const toolingPerPart = getToolingCostPerPartForBreak(breakQty);
+
+      const partRows = parts
+        .filter((p) => p.id)
+        .map((part) => {
+          const materialPerPart = getMaterialCostPerPartForPart(part.id);
+          const laborPerPart = getLaborCostPerPartForPartAndBreak(part.id, breakQty);
+          const adjustmentPerPart = getAdjustmentCostForPartAndBreak(
+            part.id,
+            breakQty,
+            materialPerPart,
+            laborPerPart
+          );
+          const shippingPerPart = getShippingCostPerPartForBreak(part.id, breakQty);
+
+          const totalCostPerPart =
+            materialPerPart +
+            laborPerPart +
+            toolingPerPart +
+            adjustmentPerPart +
+            shippingPerPart;
+
+          const marginDecimal = Number(marginPercent || 0) / 100;
+          const sellPricePerPart =
+            marginDecimal >= 1
+              ? totalCostPerPart
+              : totalCostPerPart / (1 - marginDecimal);
+
+          const extendedPrice = sellPricePerPart * breakQty;
+
+          return {
+            partId: part.id,
+            partNumber: part.partNumber,
+            materialPerPart,
+            laborPerPart,
+            toolingPerPart,
+            adjustmentPerPart,
+            shippingPerPart,
+            totalCostPerPart,
+            sellPricePerPart,
+            extendedPrice,
+          };
+        });
+
+      return {
+        id: qb.id,
+        label: qb.label,
+        quantity: breakQty,
+        rows: partRows,
+      };
+    });
+}, [
+  quantityBreakRows,
+  parts,
+  bomLines,
+  processRows,
+  toolingRows,
+  adjustmentRows,
+  shippingRows,
+  marginPercent,
+]);
+Part 4 — Step 7 UI block
+
+Paste this below Step 6 and above the final action buttons.
+
+<div className="border rounded-lg p-5 space-y-4">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-semibold">Step 7 — Quantity Break Pricing</h2>
+      <p className="text-sm text-muted-foreground">
+        Define quantity tiers and calculate price per part and total value.
+      </p>
+    </div>
+
+    <button
+      className="border rounded px-4 py-2"
+      onClick={addQuantityBreakRow}
+      type="button"
+    >
+      + Add Quantity Break
+    </button>
+  </div>
+
+  {quantityBreakMessage && (
+    <div className="rounded border px-3 py-2 text-sm">{quantityBreakMessage}</div>
+  )}
+
+  <div className="flex flex-wrap items-end gap-4">
+    <div>
+      <label className="block text-sm mb-1">Margin %</label>
+      <input
+        type="number"
+        min={0}
+        step="0.01"
+        className="border rounded px-3 py-2 w-[140px]"
+        value={marginPercent}
+        onChange={(e) => setMarginPercent(Number(e.target.value))}
+      />
+    </div>
+  </div>
+
+  <div className="overflow-x-auto">
+    <table className="w-full border-collapse min-w-[700px]">
+      <thead>
+        <tr className="border-b">
+          <th className="text-left p-2">Label</th>
+          <th className="text-left p-2">Quantity</th>
+          <th className="text-left p-2">Sort</th>
+          <th className="text-left p-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {quantityBreakRows.length === 0 ? (
+          <tr>
+            <td colSpan={4} className="p-4 text-sm text-muted-foreground">
+              No quantity breaks yet.
+            </td>
+          </tr>
+        ) : (
+          quantityBreakRows.map((row, index) => (
+            <tr key={`${row.id ?? "new"}-${index}`} className="border-b">
+              <td className="p-2">
+                <input
+                  className="w-[180px] border rounded px-2 py-1"
+                  value={row.label}
+                  onChange={(e) =>
+                    updateQuantityBreakRow(index, "label", e.target.value)
+                  }
+                />
+              </td>
+              <td className="p-2">
+                <input
+                  type="number"
+                  min={1}
+                  className="w-[120px] border rounded px-2 py-1"
+                  value={row.quantity}
+                  onChange={(e) =>
+                    updateQuantityBreakRow(index, "quantity", Number(e.target.value))
+                  }
+                />
+              </td>
+              <td className="p-2">
+                <input
+                  type="number"
+                  min={0}
+                  className="w-[100px] border rounded px-2 py-1"
+                  value={row.sortOrder}
+                  onChange={(e) =>
+                    updateQuantityBreakRow(index, "sortOrder", Number(e.target.value))
+                  }
+                />
+              </td>
+              <td className="p-2">
+                <div className="flex gap-2">
+                  <button
+                    className="border rounded px-3 py-1"
+                    onClick={() => saveQuantityBreakRow(row)}
+                    type="button"
+                  >
+                    Save
+                  </button>
+                  <button
+                    className="border rounded px-3 py-1"
+                    onClick={() => deleteQuantityBreakRow(index, row)}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="space-y-6">
+    {pricingMatrix.length === 0 ? (
+      <div className="rounded border p-4 text-sm text-muted-foreground">
+        Add at least one quantity break to calculate pricing.
+      </div>
+    ) : (
+      pricingMatrix.map((breakRow) => (
+        <div key={breakRow.label} className="border rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">
+              {breakRow.label} ({breakRow.quantity})
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[1100px]">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Part</th>
+                  <th className="text-left p-2">Material / Part</th>
+                  <th className="text-left p-2">Labor / Part</th>
+                  <th className="text-left p-2">Tooling / Part</th>
+                  <th className="text-left p-2">Adjustments / Part</th>
+                  <th className="text-left p-2">Shipping / Part</th>
+                  <th className="text-left p-2">Cost / Part</th>
+                  <th className="text-left p-2">Sell / Part</th>
+                  <th className="text-left p-2">Extended</th>
+                </tr>
+              </thead>
+              <tbody>
+                {breakRow.rows.map((row) => (
+                  <tr key={row.partId} className="border-b">
+                    <td className="p-2">{row.partNumber}</td>
+                    <td className="p-2">${row.materialPerPart.toFixed(4)}</td>
+                    <td className="p-2">${row.laborPerPart.toFixed(4)}</td>
+                    <td className="p-2">${row.toolingPerPart.toFixed(4)}</td>
+                    <td className="p-2">${row.adjustmentPerPart.toFixed(4)}</td>
+                    <td className="p-2">${row.shippingPerPart.toFixed(4)}</td>
+                    <td className="p-2 font-medium">${row.totalCostPerPart.toFixed(4)}</td>
+                    <td className="p-2 font-medium">${row.sellPricePerPart.toFixed(4)}</td>
+                    <td className="p-2 font-semibold">${row.extendedPrice.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
+What this gives you
+
+After this, your RFQ Builder can:
+
+define quantity tiers
+calculate cost per part
+calculate sell price per part
+show total by quantity break
+
+That is the first full quote-pricing engine pass.
+
+Best next step
+
+After this, the best next move is:
+
+Step 8 — Pricing Summary + Quote Handoff
+
+That should:
+
+summarize all breaks in a quote-style table
+show separate tooling line items
+prepare data for your existing quote output flow
+
+When Step 7 is in, send:
+Step 7 done
+and I’ll give you the clean Step 8 build.

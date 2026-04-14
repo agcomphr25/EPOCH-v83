@@ -285,6 +285,8 @@ import UrgentOrdersReport from './pages/UrgentOrdersReport';
 import OTDReport from './pages/OTDReport';
 import OrderHeatMap from './pages/OrderHeatMap';
 import QuickNotesPage from './pages/QuickNotesPage';
+import RFQListPage from './pages/RFQListPage';
+import RFQBuilderPage from './pages/RFQBuilderPage';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -488,6 +490,9 @@ function App() {
                   <Route path="/otd-report" component={OTDReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
                   <Route path="/quick-notes" component={QuickNotesPage} />
+                  <Route path="/estimating" component={RFQListPage} />
+                  <Route path="/rfq-builder" component={RFQBuilderPage} />
+                  <Route path="/rfq-builder/:id" component={RFQBuilderPage} />
                   <Route path="/analytics" component={AnalyticsDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />

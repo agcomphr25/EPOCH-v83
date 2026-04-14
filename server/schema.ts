@@ -10020,12 +10020,14 @@ export const creditMemos = pgTable('credit_memos', {
   reason: text('reason').notNull(),
   notes: text('notes'),
   status: text('status').default('active').notNull(),
-  sourceType: text('source_type').default('manual').notNull(), // 'manual', 'overpayment', 'return'
+  sourceType: text('source_type').default('manual').notNull(), // 'manual', 'overpayment', 'return', 'invoice_correction'
   sourceReference: text('source_reference'), // Reference to source (e.g., order_id for overpayment, refund_request_id for return)
   issuedDate: timestamp('issued_date').defaultNow().notNull(),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  // arInvoiceId — FK to ar_invoices; set when this memo is linked to a specific AR invoice
+  arInvoiceId: uuid('ar_invoice_id').references(() => arInvoices.id),
 }, (table) => ({
   customerIdIdx: index('credit_memos_customer_id_idx').on(table.customerId),
   statusIdx: index('credit_memos_status_idx').on(table.status),
@@ -14142,7 +14144,8 @@ export const arInvoices = pgTable('ar_invoices', {
   subtotal: numeric('subtotal').notNull(),
   taxAmount: numeric('tax_amount').notNull().default('0'),
   totalAmount: numeric('total_amount').notNull(),
-  status: text('status').notNull().default('OPEN'),
+  // status valid values: DRAFT, REVIEW, POSTED, SENT, DISPUTED, VOID, PAID
+  status: text('status').notNull().default('DRAFT'),
   notes: text('notes'),
   // Shipment traceability — populated when invoice is raised against a specific shipment
   lotId: uuid('lot_id').references(() => p2LotNumbers.id),
@@ -14150,10 +14153,26 @@ export const arInvoices = pgTable('ar_invoices', {
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  // ─── Lifecycle fields ───────────────────────────────────────────────────────
+  postedAt: timestamp('posted_at'),
+  postedBy: text('posted_by'),
+  sentAt: timestamp('sent_at'),
+  sentBy: text('sent_by'),
+  voidedAt: timestamp('voided_at'),
+  voidedBy: text('voided_by'),
+  voidReason: text('void_reason'),
+  isDisputed: boolean('is_disputed').default(false),
+  disputeNote: text('dispute_note'),
+  // creditMemoId — FK to credit_memos, set when a credit memo is applied/linked
+  creditMemoId: integer('credit_memo_id').references(() => creditMemos.id),
+  autoCreated: boolean('auto_created').default(false),
+  pricingMismatch: boolean('pricing_mismatch').default(false),
+  pricingAmbiguous: boolean('pricing_ambiguous').default(false),
 }, (table) => ({
   customerIdx: index('ar_invoices_customer_id_idx').on(table.customerId),
   invoiceNumberIdx: index('ar_invoices_invoice_number_idx').on(table.invoiceNumber),
   lotIdIdx: index('ar_invoices_lot_id_idx').on(table.lotId),
+  packingSlipIdUniq: uniqueIndex('ar_invoices_packing_slip_id_uniq').on(table.packingSlipId),
 }));
 
 export const insertArInvoiceSchema = createInsertSchema(arInvoices).omit({

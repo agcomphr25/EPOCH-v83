@@ -6,10 +6,15 @@ import {
   arPaymentAllocations,
   p2Customers,
   p2PurchaseOrders,
+  chartOfAccounts,
+  journalEntries,
+  journalLines,
 } from '../../schema';
 import { eq, desc, sql, and, ilike } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
+
+const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
 const router = Router();
 
@@ -380,6 +385,10 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Invoice not found' });
     }
 
+    if (LOCKED_STATUSES.includes(existing.status)) {
+      return res.status(409).json({ error: 'Invoice is locked' });
+    }
+
     const result = await db.transaction(async (tx) => {
       let subtotal = parseFloat(existing.subtotal);
       let tax = parseFloat(taxAmount ?? existing.taxAmount);
@@ -423,7 +432,6 @@ router.put('/:id', async (req: Request, res: Response) => {
           ...(poId !== undefined && { poId: poId || null }),
           ...(poOverride !== undefined && { poOverride: poOverride || null }),
           ...(notes !== undefined && { notes: notes || null }),
-          ...(status !== undefined && { status }),
           subtotal: subtotal.toFixed(2),
           taxAmount: tax.toFixed(2),
           totalAmount: total.toFixed(2),
@@ -444,6 +452,201 @@ router.put('/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to update invoice:', error);
     res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
+router.post('/:id/post', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user?.username || null;
+
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    if (!['DRAFT', 'REVIEW'].includes(invoice.status)) {
+      return res.status(409).json({ error: `Cannot post invoice with status ${invoice.status}` });
+    }
+
+    const total = parseFloat(invoice.totalAmount);
+    const subtotal = parseFloat(invoice.subtotal);
+    const tax = parseFloat(invoice.taxAmount);
+
+    const allAccounts = await db.select().from(chartOfAccounts);
+    const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
+    const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
+    const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
+
+    if (!arAccount || !revenueAccount) {
+      return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
+    }
+    if (tax > 0 && !taxAccount) {
+      return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(arInvoices)
+        .set({ status: 'POSTED', postedAt: new Date(), postedBy: user, updatedAt: new Date() })
+        .where(eq(arInvoices.id, id))
+        .returning();
+
+      const [entry] = await tx
+        .insert(journalEntries)
+        .values({
+          transactionType: 'AR_INVOICE',
+          referenceType: 'ar_invoice',
+          referenceId: 0,
+          effectiveDate: new Date(),
+          memo: `AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
+          status: 'DRAFT',
+          createdBy: user,
+        })
+        .returning();
+
+      type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
+      const lines: LineInsert[] = [
+        { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: total, creditAmount: 0 },
+        { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: 0, creditAmount: subtotal },
+      ];
+      if (tax > 0) {
+        lines.push({ journalEntryId: entry.id, accountId: taxAccount.id, debitAmount: 0, creditAmount: tax });
+      }
+
+      await tx.insert(journalLines).values(lines);
+
+      console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) posted by ${user}`);
+      console.log(`[InvoiceService] Journal entry ${entry.id} created for invoice ${invoice.invoiceNumber} — DR AR ${total}, CR Revenue ${subtotal}${tax > 0 ? `, CR Sales Tax ${tax}` : ''}`);
+
+      return updated;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to post invoice:', error);
+    res.status(500).json({ error: 'Failed to post invoice' });
+  }
+});
+
+router.post('/:id/send', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user?.username || null;
+
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    if (invoice.status !== 'POSTED') {
+      return res.status(409).json({ error: `Cannot send invoice with status ${invoice.status}` });
+    }
+
+    const [updated] = await db
+      .update(arInvoices)
+      .set({ status: 'SENT', sentAt: new Date(), sentBy: user, updatedAt: new Date() })
+      .where(eq(arInvoices.id, id))
+      .returning();
+
+    console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) sent by ${user}`);
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to send invoice:', error);
+    res.status(500).json({ error: 'Failed to send invoice' });
+  }
+});
+
+router.post('/:id/void', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { voidReason } = req.body;
+    const user = (req as any).user?.username || null;
+
+    if (!voidReason) {
+      return res.status(400).json({ error: 'voidReason is required' });
+    }
+
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const voidableStatuses = ['DRAFT', 'REVIEW', 'POSTED', 'SENT'];
+    if (!voidableStatuses.includes(invoice.status)) {
+      return res.status(409).json({ error: `Cannot void invoice with status ${invoice.status}` });
+    }
+
+    const needsReversal = ['POSTED', 'SENT'].includes(invoice.status);
+
+    if (needsReversal) {
+      const allAccounts = await db.select().from(chartOfAccounts);
+      const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
+      const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
+
+      const total = parseFloat(invoice.totalAmount);
+      const subtotal = parseFloat(invoice.subtotal);
+      const tax = parseFloat(invoice.taxAmount);
+
+      const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
+
+      if (!arAccount || !revenueAccount) {
+        return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
+      }
+      if (tax > 0 && !taxAccount) {
+        return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(arInvoices)
+          .set({ status: 'VOID', voidedAt: new Date(), voidedBy: user, voidReason, updatedAt: new Date() })
+          .where(eq(arInvoices.id, id))
+          .returning();
+
+        const [entry] = await tx
+          .insert(journalEntries)
+          .values({
+            transactionType: 'AR_INVOICE_REVERSAL',
+            referenceType: 'ar_invoice',
+            referenceId: 0,
+            effectiveDate: new Date(),
+            memo: `Reversal — AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
+            status: 'DRAFT',
+            createdBy: user,
+          })
+          .returning();
+
+        type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
+        const lines: LineInsert[] = [
+          { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: subtotal, creditAmount: 0 },
+          { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: 0, creditAmount: total },
+        ];
+        if (tax > 0) {
+          lines.push({ journalEntryId: entry.id, accountId: taxAccount.id, debitAmount: tax, creditAmount: 0 });
+        }
+
+        await tx.insert(journalLines).values(lines);
+
+        console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user} — reason: ${voidReason}`);
+        console.log(`[InvoiceService] Reversal journal entry ${entry.id} created for invoice ${invoice.invoiceNumber} — DR Revenue ${subtotal}, CR AR ${total}${tax > 0 ? `, DR Sales Tax ${tax}` : ''}`);
+
+        return updated;
+      });
+
+      return res.json(result);
+    }
+
+    const [updated] = await db
+      .update(arInvoices)
+      .set({ status: 'VOID', voidedAt: new Date(), voidedBy: user, voidReason, updatedAt: new Date() })
+      .where(eq(arInvoices.id, id))
+      .returning();
+
+    console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user} — reason: ${voidReason}`);
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to void invoice:', error);
+    res.status(500).json({ error: 'Failed to void invoice' });
   }
 });
 

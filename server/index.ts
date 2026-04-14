@@ -4022,6 +4022,54 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ quotes tables migration skipped:', quotesErr?.message);
     }
 
+    // Ensure production_work_orders (WAD) table and related columns exist — EPOCH v9 spine
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS production_work_orders (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          work_order_number TEXT NOT NULL UNIQUE,
+          project_id UUID NOT NULL REFERENCES projects(id),
+          part_number TEXT NOT NULL,
+          description TEXT,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'PLANNED',
+          department_budgets JSONB NOT NULL DEFAULT '{}',
+          total_budget_hours NUMERIC,
+          start_date DATE,
+          due_date DATE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS production_work_orders_number_idx ON production_work_orders (work_order_number)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS production_work_orders_project_id_idx ON production_work_orders (project_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS production_work_orders_status_idx ON production_work_orders (status)`);
+      await pool.query(`ALTER TABLE travelers ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS production_work_order_id UUID`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS traveler_id UUID`);
+      // If column was previously created as TEXT, upgrade to UUID
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'time_clock_entries'
+              AND column_name = 'traveler_id'
+              AND data_type = 'text'
+          ) THEN
+            ALTER TABLE time_clock_entries ALTER COLUMN traveler_id TYPE UUID USING NULLIF(traveler_id, '')::uuid;
+          END IF;
+        END $$
+      `);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS department TEXT`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS operation TEXT`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS charge_code TEXT`);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS approval_status TEXT DEFAULT 'AUTO'`);
+      console.log('✅ Ensured production_work_orders table and WAD spine columns exist');
+    } catch (wadErr: any) {
+      console.warn('⚠️ production_work_orders migration skipped:', wadErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

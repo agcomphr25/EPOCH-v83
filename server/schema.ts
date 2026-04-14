@@ -32,6 +32,7 @@ import {
   uniqueIndex,
   serial,
   varchar,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
@@ -1783,6 +1784,12 @@ export const timeClockEntries = pgTable('time_clock_entries', {
   clockOut: timestamp('clock_out'),
   date: date('date').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
+  productionWorkOrderId: uuid('production_work_order_id'),
+  travelerId: uuid('traveler_id'),
+  department: text('department'),
+  operation: text('operation'),
+  chargeCode: text('charge_code'),
+  approvalStatus: text('approval_status').default('AUTO'),
 });
 
 export const checklistItems = pgTable('checklist_items', {
@@ -5110,6 +5117,7 @@ export const travelers = pgTable('travelers', {
 
   salesOrderId: varchar('sales_order_id', { length: 255 }),
   workOrderId: varchar('work_order_id', { length: 255 }),
+  productionWorkOrderId: uuid('production_work_order_id').references((): AnyPgColumn => productionWorkOrders.id),
 
   lotNumber: varchar('lot_number', { length: 255 }),
   serialNumber: varchar('serial_number', { length: 255 }),
@@ -15045,3 +15053,45 @@ export type InsertChecklistInstanceItem = z.infer<typeof insertChecklistInstance
 export const insertChecklistInstanceEventSchema = createInsertSchema(checklistInstanceEvents).omit({ id: true, createdAt: true });
 export type ChecklistInstanceEvent = typeof checklistInstanceEvents.$inferSelect;
 export type InsertChecklistInstanceEvent = z.infer<typeof insertChecklistInstanceEventSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EPOCH v9 Production Work Order (WAD) — spine linking Project → Traveler → Time
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const productionWorkOrders = pgTable('production_work_orders', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  workOrderNumber: text('work_order_number').notNull().unique(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  partNumber: text('part_number').notNull(),
+  description: text('description'),
+  quantity: integer('quantity').default(1).notNull(),
+  status: text('status').notNull().default('PLANNED'),
+  departmentBudgets: jsonb('department_budgets').default({}).notNull(),
+  totalBudgetHours: numeric('total_budget_hours'),
+  startDate: date('start_date'),
+  dueDate: date('due_date'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  workOrderNumberIdx: index('production_work_orders_number_idx').on(table.workOrderNumber),
+  projectIdIdx: index('production_work_orders_project_id_idx').on(table.projectId),
+  statusIdx: index('production_work_orders_status_idx').on(table.status),
+}));
+
+export const insertProductionWorkOrderSchema = createInsertSchema(productionWorkOrders)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    workOrderNumber: z.string().min(1, 'Work order number is required'),
+    projectId: z.string().uuid('projectId must be a valid UUID'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    quantity: z.number().int().positive().default(1),
+    status: z.enum(['PLANNED', 'READY', 'RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED']).default('PLANNED'),
+    description: z.string().optional().nullable(),
+    totalBudgetHours: z.string().optional().nullable(),
+    startDate: z.string().optional().nullable(),
+    dueDate: z.string().optional().nullable(),
+    departmentBudgets: z.record(z.any()).optional(),
+  });
+
+export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
+export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;

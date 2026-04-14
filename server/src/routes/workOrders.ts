@@ -11,9 +11,11 @@ import {
   insertWorkOrderSchema,
   insertWorkOrderPartSchema,
   insertWorkOrderAttachmentSchema,
+  insertProductionWorkOrderSchema,
 } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { storage } from '../../storage';
 
 const router = Router();
 
@@ -82,7 +84,72 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// ==================== PRODUCTION WORK ORDERS (WAD) — EPOCH v9 spine ====================
+
+// GET /project/:projectId — list production work orders for a project, newest-first
+router.get('/project/:projectId', async (req: Request, res: Response) => {
+  try {
+    const workOrderList = await storage.getWorkOrdersByProject(req.params.projectId);
+    return res.json(workOrderList);
+  } catch (err: any) {
+    console.error('[ProductionWorkOrders] Error fetching by project:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to fetch work orders' });
+  }
+});
+
+// GET /:id — checks production WO first; falls back to maintenance WO for legacy compat
 router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Production WO lookup takes priority
+    const productionWO = await storage.getWorkOrderById(id);
+    if (productionWO) {
+      return res.json(productionWO);
+    }
+
+    // Compatibility alias: fall through to maintenance WO for legacy clients
+    const [wo] = await db
+      .select({
+        id: workOrders.id,
+        assetId: workOrders.assetId,
+        type: workOrders.type,
+        title: workOrders.title,
+        description: workOrders.description,
+        priority: workOrders.priority,
+        status: workOrders.status,
+        severity: workOrders.severity,
+        reportedAt: workOrders.reportedAt,
+        startedAt: workOrders.startedAt,
+        completedAt: workOrders.completedAt,
+        downtimeStart: workOrders.downtimeStart,
+        downtimeEnd: workOrders.downtimeEnd,
+        createdBy: workOrders.createdBy,
+        closedBy: workOrders.closedBy,
+        maintenanceScheduleId: workOrders.maintenanceScheduleId,
+        createdAt: workOrders.createdAt,
+        assetName: assets.name,
+        assetTag: assets.assetTag,
+        createdByUsername: users.username,
+      })
+      .from(workOrders)
+      .leftJoin(assets, eq(workOrders.assetId, assets.id))
+      .leftJoin(users, eq(workOrders.createdBy, users.id))
+      .where(eq(workOrders.id, id))
+      .limit(1);
+
+    if (!wo) {
+      return res.status(404).json({ error: 'Work order not found' });
+    }
+    return res.json(wo);
+  } catch (err: any) {
+    console.error('[WorkOrders] Error fetching work order:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to fetch work order' });
+  }
+});
+
+// GET /maintenance/:id — maintenance work order detail (legacy)
+router.get('/maintenance/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -155,17 +222,36 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', requireAdmin, async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
+  const user = (req as any).user;
+
   try {
+    // Production Work Order path — detected by presence of workOrderNumber
+    if (req.body.workOrderNumber !== undefined) {
+      // Require authentication for production WO creation
+      if (!user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      const parsed = insertProductionWorkOrderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+      }
+      const productionWO = await storage.createProductionWorkOrder(parsed.data);
+      return res.status(201).json(productionWO);
+    }
+
+    // Maintenance Work Order path — requires admin role
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'OWNER')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
     const parsed = insertWorkOrderSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid data', details: parsed.error.issues });
     }
 
-    const userId = (req as any).user?.id;
     const [wo] = await db.insert(workOrders).values({
       ...parsed.data,
-      createdBy: userId,
+      createdBy: user?.id,
     }).returning();
 
     res.status(201).json(wo);

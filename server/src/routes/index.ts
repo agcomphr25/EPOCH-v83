@@ -723,7 +723,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Asset Management routes
   app.use('/api/assets', assetManagementRoutes);
 
-  // Work Orders (Maintenance Events) routes
+  // Work Orders — Consolidated: maintenance events + production WADs (EPOCH v9 spine)
   app.use('/api/work-orders', workOrdersRoutes);
 
   // AQL Sampling Chart routes

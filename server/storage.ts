@@ -577,6 +577,9 @@ import {
   type TravelerComponentAssociation,
   type InsertTravelerComponentAssociation,
   p2LotNumbers,
+  productionWorkOrders,
+  type ProductionWorkOrder,
+  type InsertProductionWorkOrder,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2408,6 +2411,11 @@ export interface IStorage {
   createAllocationResult(data: InsertAllocationResult): Promise<AllocationResult>;
   deleteAllocationResult(id: string): Promise<void>;
   calculateAllocations(year: number, month: number): Promise<void>;
+
+  // Production Work Orders (WAD)
+  createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder>;
+  getWorkOrdersByProject(projectId: string): Promise<ProductionWorkOrder[]>;
+  getWorkOrderById(id: string): Promise<ProductionWorkOrder | undefined>;
 
   // P2 Projects CRUD
   getAllProjects(): Promise<Project[]>;
@@ -21549,6 +21557,29 @@ export class DatabaseStorage implements IStorage {
         .set({ sortOrder })
         .where(eq(machinedPartRoutingOps.id, id));
     }
+  }
+
+  // ── Production Work Orders (WAD) ──────────────────────────────────────────
+
+  async createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder> {
+    const [row] = await db.insert(productionWorkOrders).values(data).returning();
+    return row;
+  }
+
+  async getWorkOrdersByProject(projectId: string): Promise<ProductionWorkOrder[]> {
+    return await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.projectId, projectId))
+      .orderBy(desc(productionWorkOrders.createdAt));
+  }
+
+  async getWorkOrderById(id: string): Promise<ProductionWorkOrder | undefined> {
+    const [row] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id));
+    return row || undefined;
   }
 }
 

@@ -73,6 +73,13 @@ export async function createInvoiceFromPackingSlip(
   // Process line items from the packing slip
   const lineItems: LineItem[] = Array.isArray(slip.lineItems) ? (slip.lineItems as LineItem[]) : [];
 
+  // No-charge replacement: all line totals are forced to zero without touching
+  // the normal price-resolution path (which still runs for auditing purposes).
+  const isNoCharge = slip.isNoChargeReplacement === true;
+  if (isNoCharge) {
+    console.log(`[InvoiceService] No-charge replacement flag active for packing slip ${packingSlipId} — all line prices forced to $0`);
+  }
+
   let pricingMismatch = false;
   let pricingAmbiguous = false;
   let subtotal = 0;
@@ -101,13 +108,15 @@ export async function createInvoiceFromPackingSlip(
     }
 
     const qty = line.quantity ?? 0;
-    const lineTotal = unitPrice * qty;
+    // Force unit price and line total to zero for no-charge replacement slips
+    const effectiveUnitPrice = isNoCharge ? 0 : unitPrice;
+    const lineTotal = effectiveUnitPrice * qty;
     subtotal += lineTotal;
 
     resolvedLines.push({
       description: line.partName ? `${line.partNumber} – ${line.partName}` : line.partNumber,
       qty,
-      unitPrice,
+      unitPrice: effectiveUnitPrice,
       lineTotal,
     });
   }

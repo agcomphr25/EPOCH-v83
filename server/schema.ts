@@ -5548,6 +5548,13 @@ export const p2PackingSlips = pgTable('p2_packing_slips', {
   status: text('status').notNull().default('DRAFT'), // DRAFT, FINALIZED, SHIPPED
   notes: text('notes'),
   externalPdfUrl: text('external_pdf_url'),
+  // Replacement shipment linkage (Phase 5C)
+  // Self-referential FK is intentionally omitted from Drizzle .references() to avoid
+  // circular TypeScript inference issues (same pattern as mediaFolders.parentId).
+  // The FK constraint is enforced at the database level via migration 0031.
+  replacesPackingSlipId: uuid('replaces_packing_slip_id'),
+  replacementReason: text('replacement_reason'),
+  isNoChargeReplacement: boolean('is_no_charge_replacement').notNull().default(false),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

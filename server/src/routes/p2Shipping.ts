@@ -223,6 +223,10 @@ router.get('/lots/:id', async (req: Request, res: Response) => {
 const createPackingSlipSchema = z.object({
   lotId: z.string().uuid(),
   createdBy: z.string().min(1).default('system'),
+  // Optional replacement linkage fields (Phase 5C)
+  replacesPackingSlipId: z.string().uuid().optional(),
+  replacementReason: z.string().optional(),
+  isNoChargeReplacement: z.boolean().optional(),
 });
 
 router.post('/packing-slips', async (req: Request, res: Response) => {
@@ -235,9 +239,25 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
-    // Guard: one packing slip per lot
+    // Guard: one packing slip per lot.
+    // This guard checks whether the lot already has a packing slip assigned via
+    // p2_lot_numbers.packing_slip_id. Replacement slips are always created for
+    // NEW lots (the replacement items are repacked as a new lot with new serials),
+    // so this guard does not conflict with replacements — each lot can only ever
+    // have one packing slip regardless of whether the slip is a replacement.
     if (lot.packingSlipId) {
       return res.status(409).json({ error: 'Packing slip already exists for this lot' });
+    }
+
+    // Validate that replacesPackingSlipId references an existing slip
+    if (input.replacesPackingSlipId) {
+      const [originalSlip] = await db
+        .select({ id: p2PackingSlips.id })
+        .from(p2PackingSlips)
+        .where(eq(p2PackingSlips.id, input.replacesPackingSlipId));
+      if (!originalSlip) {
+        return res.status(422).json({ error: `Original packing slip ${input.replacesPackingSlipId} not found — cannot create replacement` });
+      }
     }
 
     const serialIds = (lot.serializedItemIds as string[]) || [];
@@ -287,8 +307,19 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
         totalQuantity: serials.length,
         status: 'DRAFT',
         createdBy: input.createdBy,
+        replacesPackingSlipId: input.replacesPackingSlipId ?? null,
+        replacementReason: input.replacementReason ?? null,
+        isNoChargeReplacement: input.isNoChargeReplacement ?? false,
       })
       .returning();
+
+    if (input.replacesPackingSlipId) {
+      console.log(`[P2Shipping] Replacement packing slip ${slip.packingSlipNumber} (${slip.id}) created, replacing original slip ${input.replacesPackingSlipId}`);
+      console.log(`[P2Shipping] Original packing slip linked: ${input.replacesPackingSlipId} → replacement: ${slip.id}`);
+    }
+    if (input.isNoChargeReplacement) {
+      console.log(`[P2Shipping] No-charge replacement flag active for packing slip ${slip.packingSlipNumber} (${slip.id}) — invoice will be zero-dollar`);
+    }
 
     await db
       .update(p2LotNumbers)
@@ -306,6 +337,9 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
 
 // ============================================================
 // GET /api/p2/packing-slips/:id
+// Returns the packing slip plus bi-directional replacement linkage:
+//   - originalPackingSlip: the slip that this one replaces (populated when replacesPackingSlipId is set)
+//   - replacementSlips: array of slips that reference this one as their original
 // ============================================================
 router.get('/packing-slips/:id', async (req: Request, res: Response) => {
   try {
@@ -314,7 +348,24 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.id, req.params.id));
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
-    return res.json(slip);
+
+    // Fetch original slip (if this slip is a replacement)
+    let originalPackingSlip: typeof slip | null = null;
+    if (slip.replacesPackingSlipId) {
+      const [original] = await db
+        .select()
+        .from(p2PackingSlips)
+        .where(eq(p2PackingSlips.id, slip.replacesPackingSlipId));
+      originalPackingSlip = original ?? null;
+    }
+
+    // Fetch any replacement slips that reference this one as the original
+    const replacementSlips = await db
+      .select()
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.replacesPackingSlipId, slip.id));
+
+    return res.json({ ...slip, originalPackingSlip, replacementSlips });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
   }

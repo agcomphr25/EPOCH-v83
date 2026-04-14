@@ -390,7 +390,11 @@ router.post('/progress-to-shipping', async (req, res) => {
     // Process each order with validation
     for (const orderId of orderIds) {
       try {
-        const order = await storage.getProductionOrderByOrderId(orderId);
+        // Try the given ID first; fall back to "PO-{id}" if the frontend sent a bare "{poItemId}-{unitNumber}" key
+        let order = await storage.getProductionOrderByOrderId(orderId);
+        if (!order && /^\d+-\d+$/.test(orderId)) {
+          order = await storage.getProductionOrderByOrderId(`PO-${orderId}`);
+        }
         
         // Validate order exists
         if (!order) {
@@ -2023,9 +2027,96 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     // Skip database persistence if using test mode (no real UPS)
     const skipDbPersistence = !useRealUps || !hasUpsCredentials;
 
-    // Packing slip map populated during DB persistence; reused for response in step 10
+    // Generate one packing slip per PO group (runs unconditionally, regardless of test mode)
     const poSlipMap = new Map<string, string | null>();
-    
+    const failedPackingSlips: Array<{ poNumber: string; reason: string }> = [];
+
+    for (const [groupPoNumber, groupItems] of poGroups.entries()) {
+      try {
+        const groupCustomerId = groupItems[0].po.customerId;
+        const groupCustomerName = groupItems[0].po.customerName || firstCustomer?.name || 'Unknown Customer';
+
+        let groupCustomerAddress = null;
+        try {
+          groupCustomerAddress = groupCustomerId
+            ? await storage.getCustomerDefaultAddress(String(groupCustomerId))
+            : null;
+        } catch (addrErr: any) {
+          console.warn(`⚠️ Could not fetch customer address for PO ${groupPoNumber}: ${addrErr.message}`);
+        }
+
+        const invoiceNumber = await storage.getNextInvoiceNumber(
+          String(groupCustomerId || '0'),
+          groupCustomerName
+        );
+
+        const unitNumbers: number[] = groupItems.map((gi) => {
+          const rawUnit =
+            gi.order?.unitNumber ||
+            (() => {
+              if (!gi.order?.orderId) return 1;
+              const unitMatch = gi.order.orderId.match(/-(\d+)$/);
+              return unitMatch ? parseInt(unitMatch[1]) : 1;
+            })();
+          return typeof rawUnit === 'number' ? rawUnit : parseInt(String(rawUnit), 10) || 1;
+        });
+
+        const minUnit = Math.min(...unitNumbers);
+        const maxUnit = Math.max(...unitNumbers);
+        const stickerRange =
+          unitNumbers.length === 0
+            ? ''
+            : minUnit === maxUnit
+            ? String(minUnit)
+            : `${minUnit}-${maxUnit}`;
+
+        const stockModelCode =
+          groupItems[0].poItem.stockModelId ||
+          groupItems[0].poItem.itemName ||
+          groupItems[0].poItem.stockModelName ||
+          'N/A';
+
+        const slipItems: PackingSlipItem[] = [
+          {
+            partNumber: groupPoNumber,
+            description: stockModelCode,
+            contents: stockModelCode,
+            stickerRange,
+            quantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
+            shipmentNumber: referenceNumber || undefined,
+          },
+        ];
+
+        const slipData: PackingSlipData = {
+          packingSlipNumber: invoiceNumber,
+          poNumber: groupPoNumber,
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          customerName: groupCustomerName,
+          customerAddress: groupCustomerAddress
+            ? {
+                street: groupCustomerAddress.street,
+                street2: groupCustomerAddress.street2 || undefined,
+                city: groupCustomerAddress.city,
+                state: groupCustomerAddress.state,
+                zip: groupCustomerAddress.zipCode,
+              }
+            : undefined,
+          trackingNumber: trackingNumber,
+          totalQuantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
+          shipmentNumber: referenceNumber || undefined,
+          items: slipItems,
+        };
+
+        const pdfBuffer = await generatePoPackingSlipPdf(slipData);
+        poSlipMap.set(groupPoNumber, pdfBuffer.toString('base64'));
+        console.log(`✅ Packing slip generated for PO ${groupPoNumber} (invoice: ${invoiceNumber})`);
+      } catch (slipErr: any) {
+        console.error(`❌ Packing slip generation failed for PO ${groupPoNumber}: ${slipErr.message}`, slipErr.stack);
+        poSlipMap.set(groupPoNumber, null);
+        failedPackingSlips.push({ poNumber: groupPoNumber, reason: slipErr.message });
+      }
+    }
+
     if (skipDbPersistence) {
       console.log(`🧪 TEST MODE: Skipping shipment record persistence (shipmentId: ${shipmentId})`);
     } else {
@@ -2079,92 +2170,6 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           ].filter(Boolean),
           notificationMetadata: {},
         };
-
-        // Generate one packing slip per PO group, store on all items in that PO
-        for (const [groupPoNumber, groupItems] of poGroups.entries()) {
-          try {
-            const groupCustomerId = groupItems[0].po.customerId;
-            const groupCustomerName = groupItems[0].po.customerName || firstCustomer?.name || 'Unknown Customer';
-
-            let groupCustomerAddress = null;
-            try {
-              groupCustomerAddress = groupCustomerId
-                ? await storage.getCustomerDefaultAddress(String(groupCustomerId))
-                : null;
-            } catch (addrErr: any) {
-              console.warn(`⚠️ Could not fetch customer address for PO ${groupPoNumber}: ${addrErr.message}`);
-            }
-
-            const invoiceNumber = await storage.getNextInvoiceNumber(
-              String(groupCustomerId || '0'),
-              groupCustomerName
-            );
-
-            const unitNumbers: number[] = groupItems.map((gi) => {
-              const rawUnit =
-                gi.order?.unitNumber ||
-                (() => {
-                  if (!gi.order?.orderId) return 1;
-                  const unitMatch = gi.order.orderId.match(/-(\d+)$/);
-                  return unitMatch ? parseInt(unitMatch[1]) : 1;
-                })();
-              return typeof rawUnit === 'number' ? rawUnit : parseInt(String(rawUnit), 10) || 1;
-            });
-
-            const minUnit = Math.min(...unitNumbers);
-            const maxUnit = Math.max(...unitNumbers);
-            const stickerRange =
-              unitNumbers.length === 0
-                ? ''
-                : minUnit === maxUnit
-                ? String(minUnit)
-                : `${minUnit}-${maxUnit}`;
-
-            const stockModelCode =
-              groupItems[0].poItem.stockModelId ||
-              groupItems[0].poItem.itemName ||
-              groupItems[0].poItem.stockModelName ||
-              'N/A';
-
-            const slipItems: PackingSlipItem[] = [
-              {
-                partNumber: groupPoNumber,
-                description: stockModelCode,
-                contents: stockModelCode,
-                stickerRange,
-                quantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
-                shipmentNumber: referenceNumber || undefined,
-              },
-            ];
-
-            const slipData: PackingSlipData = {
-              packingSlipNumber: invoiceNumber,
-              poNumber: groupPoNumber,
-              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              customerName: groupCustomerName,
-              customerAddress: groupCustomerAddress
-                ? {
-                    street: groupCustomerAddress.street,
-                    street2: groupCustomerAddress.street2 || undefined,
-                    city: groupCustomerAddress.city,
-                    state: groupCustomerAddress.state,
-                    zip: groupCustomerAddress.zipCode,
-                  }
-                : undefined,
-              trackingNumber: trackingNumber,
-              totalQuantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
-              shipmentNumber: referenceNumber || undefined,
-              items: slipItems,
-            };
-
-            const pdfBuffer = await generatePoPackingSlipPdf(slipData);
-            poSlipMap.set(groupPoNumber, pdfBuffer.toString('base64'));
-            console.log(`✅ Packing slip generated for PO ${groupPoNumber} (invoice: ${invoiceNumber})`);
-          } catch (slipErr: any) {
-            console.warn(`⚠️ Packing slip generation failed for PO ${groupPoNumber}: ${slipErr.message}`);
-            poSlipMap.set(groupPoNumber, null);
-          }
-        }
 
         const shipmentItemsData = orderDetails.map((detail) => {
           const itemPoNumber = detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '';
@@ -2237,24 +2242,20 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       await autoClosePOIfFullyShipped(poId);
     }
 
-    // 10. BUILD PACKING SLIP RESPONSE (reuse PDFs already generated during DB persistence in step 8)
+    // 10. BUILD PACKING SLIP RESPONSE (reuse PDFs already generated in step 8)
     const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
 
-    if (skipDbPersistence) {
-      console.log(`🧪 TEST MODE: No packing slips in response (persistence skipped)`);
-    } else {
-      for (const [poNumber, slipBase64] of poSlipMap.entries()) {
-        if (slipBase64) {
-          packingSlips.push({
-            poNumber,
-            filename: `Packing-Slip-PO-${poNumber}.pdf`,
-            data: slipBase64,
-          });
-        }
+    for (const [poNumber, slipBase64] of poSlipMap.entries()) {
+      if (slipBase64) {
+        packingSlips.push({
+          poNumber,
+          filename: `Packing-Slip-PO-${poNumber}.pdf`,
+          data: slipBase64,
+        });
       }
     }
 
-    console.log(`📄 Generated ${packingSlips.length} packing slip(s)`);
+    console.log(`📄 Generated ${packingSlips.length} packing slip(s)${failedPackingSlips.length > 0 ? `, ${failedPackingSlips.length} failed` : ''}`);
 
     // Return comprehensive response (production orders already updated in persistence block)
     res.json({
@@ -2267,6 +2268,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         data: labelBase64,
       },
       packingSlips,
+      failedPackingSlips: failedPackingSlips.length > 0 ? failedPackingSlips : undefined,
       itemsShipped: orderDetails.length,
       poNumbers: Array.from(poGroups.keys()),
       totalWeight: totalWeight,

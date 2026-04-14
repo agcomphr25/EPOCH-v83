@@ -167,6 +167,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
     poNumbers: string[];
     shippingLabel?: { format: string; data: string } | null;
     packingSlips?: Array<{ poNumber: string; filename: string; data: string }>;
+    failedPackingSlips?: Array<{ poNumber: string; reason: string }>;
   } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -253,7 +254,19 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         poNumbers,
         shippingLabel: data.shippingLabel || null,
         packingSlips: data.packingSlips || [],
+        failedPackingSlips: data.failedPackingSlips || [],
       });
+
+      if (data.failedPackingSlips && data.failedPackingSlips.length > 0) {
+        const failedDetails = data.failedPackingSlips
+          .map((f: { poNumber: string; reason: string }) => `PO ${f.poNumber}: ${f.reason}`)
+          .join('; ');
+        toast({
+          title: 'Packing Slip Generation Failed',
+          description: `${failedDetails}. The shipment was still created successfully.`,
+          variant: 'destructive',
+        });
+      }
       
       if (onSuccess) {
         onSuccess(data);
@@ -545,6 +558,7 @@ export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: Ship
         items={printPopup.items}
         shippingLabel={printPopup.shippingLabel}
         packingSlips={printPopup.packingSlips}
+        failedPackingSlips={printPopup.failedPackingSlips}
         onClose={() => {
           setPrintPopup(null);
           onClose();
@@ -1195,6 +1209,7 @@ function PrintShipmentPopup({
   items,
   shippingLabel,
   packingSlips,
+  failedPackingSlips,
   onClose,
 }: {
   trackingNumber: string;
@@ -1209,6 +1224,7 @@ function PrintShipmentPopup({
   }>;
   shippingLabel?: { format: string; data: string } | null;
   packingSlips?: Array<{ poNumber: string; filename: string; data: string }>;
+  failedPackingSlips?: Array<{ poNumber: string; reason: string }>;
   onClose: () => void;
 }) {
   const { toast } = useToast();
@@ -1248,9 +1264,12 @@ function PrintShipmentPopup({
   });
   const handlePrintPackingSlip = () => {
     if (!packingSlips || packingSlips.length === 0) {
+      const failedDesc = failedPackingSlips && failedPackingSlips.length > 0
+        ? failedPackingSlips.map(f => `PO ${f.poNumber}: ${f.reason}`).join('; ') + '.'
+        : 'No packing slip PDF was generated for this shipment.';
       toast({
         title: 'No Packing Slip Available',
-        description: 'No packing slip PDF was generated for this shipment.',
+        description: failedDesc,
         variant: 'destructive',
       });
       return;

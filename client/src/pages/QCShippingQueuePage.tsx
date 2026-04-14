@@ -59,7 +59,7 @@ export default function QCShippingQueuePage() {
   const [showLabelViewer, setShowLabelViewer] = useState(false);
   
   // State for PO order selection (customer-level selection)
-  // Using unique key format: orderId or poItemId-unitNumber for items without orderId
+  // Using unique key format: orderId or PO-{poItemId}-{unitNumber} for items without orderId
   const [selectedPOItems, setSelectedPOItems] = useState<Set<string>>(new Set());
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   
@@ -233,8 +233,8 @@ export default function QCShippingQueuePage() {
             orderIdMap.set(item.orderId, metadata);
           }
 
-          // Always map by composite key
-          const compositeKey = `${item.poItemId}-${item.unitNumber}`;
+          // Always map by composite key (using PO- prefix to match itemKey format)
+          const compositeKey = `PO-${item.poItemId}-${item.unitNumber}`;
           compositeKeyMap.set(compositeKey, metadata);
         });
       });
@@ -1721,7 +1721,7 @@ export default function QCShippingQueuePage() {
                                                   <CollapsibleContent>
                                                     <div className="mt-1 space-y-1 pl-2">
                                                       {deptItems.map((item: any) => {
-                                                        const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
+                                                        const itemKey = item.orderId || `PO-${item.poItemId}-${item.unitNumber}`;
                                                         const isSelected = selectedPOItems.has(itemKey);
                                                         const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                                         const departmentBadge = getDepartmentBadge(item.currentDepartment);

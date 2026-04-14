@@ -10,7 +10,7 @@ import {
   journalEntries,
   journalLines,
 } from '../../schema';
-import { eq, desc, sql, and, ilike } from 'drizzle-orm';
+import { eq, desc, sql, and, ilike, or, inArray, isNull, not } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
 
@@ -181,6 +181,11 @@ router.get('/', async (req: Request, res: Response) => {
         notes: arInvoices.notes,
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
+        sentAt: arInvoices.sentAt,
+        isDisputed: arInvoices.isDisputed,
+        pricingMismatch: arInvoices.pricingMismatch,
+        pricingAmbiguous: arInvoices.pricingAmbiguous,
+        autoCreated: arInvoices.autoCreated,
         amountPaid: sql<string>`COALESCE(
           (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
           0
@@ -207,6 +212,116 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to fetch invoices:', error);
     res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
+const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof p2Customers) => ({
+  id: invoices.id,
+  customerId: invoices.customerId,
+  customerName: customers.customerName,
+  invoiceNumber: invoices.invoiceNumber,
+  invoiceDate: invoices.invoiceDate,
+  dueDate: invoices.dueDate,
+  totalAmount: invoices.totalAmount,
+  status: invoices.status,
+  sentAt: invoices.sentAt,
+  isDisputed: invoices.isDisputed,
+  pricingMismatch: invoices.pricingMismatch,
+  pricingAmbiguous: invoices.pricingAmbiguous,
+  autoCreated: invoices.autoCreated,
+  balance: sql<string>`(
+    ${invoices.totalAmount}::numeric - COALESCE(
+      (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${invoices.id}),
+      0
+    )
+  )`,
+});
+
+router.get('/summary-counts', async (_req: Request, res: Response) => {
+  try {
+    const [needsReviewRow, unsentRow, disputedRow] = await Promise.all([
+      db.execute(sql`
+        SELECT COUNT(*)::int AS count FROM ar_invoices
+        WHERE status IN ('DRAFT','REVIEW') OR pricing_mismatch = true OR pricing_ambiguous = true
+      `),
+      db.execute(sql`
+        SELECT COUNT(*)::int AS count FROM ar_invoices
+        WHERE status = 'POSTED' AND sent_at IS NULL
+      `),
+      db.execute(sql`
+        SELECT COUNT(*)::int AS count FROM ar_invoices
+        WHERE is_disputed = true AND status NOT IN ('VOID','PAID')
+      `),
+    ]);
+    res.json({
+      needsReview: parseInt((needsReviewRow.rows?.[0] ?? (needsReviewRow as any)[0])?.count ?? '0'),
+      unsent: parseInt((unsentRow.rows?.[0] ?? (unsentRow as any)[0])?.count ?? '0'),
+      disputed: parseInt((disputedRow.rows?.[0] ?? (disputedRow as any)[0])?.count ?? '0'),
+    });
+  } catch (error) {
+    console.error('Failed to fetch summary counts:', error);
+    res.status(500).json({ error: 'Failed to fetch summary counts' });
+  }
+});
+
+router.get('/needs-review', async (_req: Request, res: Response) => {
+  try {
+    const results = await db
+      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers))
+      .from(arInvoices)
+      .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .where(
+        or(
+          inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
+          eq(arInvoices.pricingMismatch, true),
+          eq(arInvoices.pricingAmbiguous, true),
+        )
+      )
+      .orderBy(desc(arInvoices.createdAt));
+    res.json(results);
+  } catch (error) {
+    console.error('Failed to fetch needs-review invoices:', error);
+    res.status(500).json({ error: 'Failed to fetch needs-review invoices' });
+  }
+});
+
+router.get('/unsent', async (_req: Request, res: Response) => {
+  try {
+    const results = await db
+      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers))
+      .from(arInvoices)
+      .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .where(
+        and(
+          eq(arInvoices.status, 'POSTED'),
+          isNull(arInvoices.sentAt),
+        )
+      )
+      .orderBy(desc(arInvoices.createdAt));
+    res.json(results);
+  } catch (error) {
+    console.error('Failed to fetch unsent invoices:', error);
+    res.status(500).json({ error: 'Failed to fetch unsent invoices' });
+  }
+});
+
+router.get('/disputed', async (_req: Request, res: Response) => {
+  try {
+    const results = await db
+      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers))
+      .from(arInvoices)
+      .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .where(
+        and(
+          eq(arInvoices.isDisputed, true),
+          not(inArray(arInvoices.status, ['VOID', 'PAID'])),
+        )
+      )
+      .orderBy(desc(arInvoices.createdAt));
+    res.json(results);
+  } catch (error) {
+    console.error('Failed to fetch disputed invoices:', error);
+    res.status(500).json({ error: 'Failed to fetch disputed invoices' });
   }
 });
 

@@ -2652,6 +2652,27 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ ar_invoices traceability columns warning:', arLinkErr?.message);
       }
 
+      // Add Phase 4 dashboard columns to ar_invoices
+      try {
+        const { sql: sqlArP4 } = await import('drizzle-orm');
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS posted_at TIMESTAMP`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS posted_by TEXT`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS sent_by TEXT`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS voided_by TEXT`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS void_reason TEXT`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS is_disputed BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS dispute_note TEXT`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS auto_created BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS pricing_mismatch BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS pricing_ambiguous BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlArP4`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS credit_memo_id INTEGER`);
+        console.log('✅ Ensured ar_invoices has Phase 4 dashboard columns');
+      } catch (arP4Err: any) {
+        console.warn('⚠️ ar_invoices Phase 4 columns warning:', arP4Err?.message);
+      }
+
       // Ensure Receiving Control Center tables exist (5 tables + receipt_id column on material_lot_transactions)
       try {
         const { sql: sqlRcc } = await import('drizzle-orm');

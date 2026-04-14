@@ -1,0 +1,208 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=f7ee6a52f2ff566e5a50a6ea6f73270cc00fea836825deaea469c9b19231ac8c' failed: 
+ [EPOCH SYNC] Offline — skipping queue processing
+ [EPOCH SYNC] Offline — skipping queue processing
+ [EPOCH SYNC] Connection restored — triggering sync
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/login:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ [EPOCH SYNC] Connection restored — triggering sync
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ [EPOCH SYNC] Connection restored — triggering sync
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ [EPOCH SYNC] Connection restored — triggering sync
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-AXSalI5R.js:5341 [EPOCH SYNC] Connection restored — triggering sync
+index-AXSalI5R.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+index-AXSalI5R.js:5341 [EPOCH SYNC] Connection restored — triggering sync
+index-AXSalI5R.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-AXSalI5R.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-AXSalI5R.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+api/calendar/google-events:1  Failed to load resource: the server responded with a status of 409 ()
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:1586 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-AXSalI5R.js:1586
+index-AXSalI5R.js:4095 ✅ Direct PDF URL loaded successfully in iframe
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:5341 [EPOCH SYNC] Connection restored — triggering sync
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+api/calendar/google-events:1  Failed to load resource: the server responded with a status of 409 ()
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:5341 [EPOCH SYNC] Connection restored — triggering sync
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+api/calendar/google-events:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+api/calendar/events:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+api/internal-messages/unread/count/19:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+index-AXSalI5R.js:4095 📅 Local events raw data: Array(0)
+index-AXSalI5R.js:4095 📅 Local events transformed: 0
+index-AXSalI5R.js:4095 📅 Calendar state: Object
+api/auth/session:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+index-AXSalI5R.js:5341 Failed to fetch user data: TypeError: Failed to fetch
+    at queryFn (index-AXSalI5R.js:1589:78050)
+    at Object.o [as fn] (index-AXSalI5R.js:51:29556)
+    at p (index-AXSalI5R.js:51:24788)
+    at Object.start (index-AXSalI5R.js:51:25271)
+    at Llt.fetch (index-AXSalI5R.js:51:30390)
+    at zlt.bz (index-AXSalI5R.js:51:51640)
+    at zlt.fetch (index-AXSalI5R.js:51:48405)
+    at zlt.refetch (index-AXSalI5R.js:51:48200)
+    at Llt.onOnline (index-AXSalI5R.js:51:28179)
+    at index-AXSalI5R.js:51:33842
+console.error @ index-AXSalI5R.js:5341
+api/auth/session:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:5341 [EPOCH SYNC] Offline — skipping queue processing
+index-AXSalI5R.js:5341 [EPOCH SYNC] Connection restored — triggering sync
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+api/auth/session:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+index-AXSalI5R.js:5341 Failed to fetch user data: TypeError: Failed to fetch
+    at queryFn (index-AXSalI5R.js:1589:78050)
+    at Object.o [as fn] (index-AXSalI5R.js:51:29556)
+    at p (index-AXSalI5R.js:51:24788)
+    at Object.start (index-AXSalI5R.js:51:25271)
+    at Llt.fetch (index-AXSalI5R.js:51:30390)
+    at zlt.bz (index-AXSalI5R.js:51:51640)
+    at zlt.fetch (index-AXSalI5R.js:51:48405)
+    at zlt.refetch (index-AXSalI5R.js:51:48200)
+    at Llt.onOnline (index-AXSalI5R.js:51:28179)
+    at index-AXSalI5R.js:51:33842
+console.error @ index-AXSalI5R.js:5341
+api/auth/session:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+api/internal-messages/unread/count/19:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589
+api/internal-messages/unread/count/19:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+api/internal-messages/unread/count/19:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+api/auth/login:1  Failed to load resource: net::ERR_CERT_DATE_INVALID
+index-AXSalI5R.js:5341 Login error: TypeError: Failed to fetch
+    at v (index-AXSalI5R.js:3784:43443)
+    at Object.aKt (index-AXSalI5R.js:37:9950)
+    at oKt (index-AXSalI5R.js:37:10112)
+    at lKt (index-AXSalI5R.js:37:10172)
+    at WLe (index-AXSalI5R.js:37:31894)
+    at Zft (index-AXSalI5R.js:37:32314)
+    at index-AXSalI5R.js:37:37311
+    at O3e (index-AXSalI5R.js:40:37302)
+    at Nft (index-AXSalI5R.js:37:9076)
+    at Qge (index-AXSalI5R.js:37:33628)
+console.error @ index-AXSalI5R.js:5341
+The FetchEvent for "https://agcompepoch.xyz/assets/index-BxK4Rn7w.css" resulted in a network error response: the promise was rejected.
+sw.js:52  Uncaught (in promise) TypeError: Failed to fetch
+    at sw.js:52:14
+(anonymous) @ sw.js:52
+Promise.then
+(anonymous) @ sw.js:48
+index-AXSalI5R.js:1589 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=b26fea28337390b17c505a9ddf33ad1fb7e0d1ae5034c11aeb2d7a3972b2e7b5' failed: 
+(anonymous) @ index-AXSalI5R.js:1589

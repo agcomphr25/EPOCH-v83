@@ -1,0 +1,179 @@
+What I need from EPOCH
+1. Database schema
+
+I need the exact table definitions and exported schema objects for:
+
+inventory items
+BOMs and BOM lines
+customers
+orders or quotes, if any already exist
+routing / part routing
+company settings, if you store rates there
+
+Most important file:
+
+shared/schema.ts
+
+If your schema is split across files, send those too.
+
+2. Storage layer
+
+I need the file where EPOCH does database reads/writes.
+
+Usually this is something like:
+
+server/storage.ts
+
+Or multiple files like:
+
+server/storage/inventory.ts
+server/storage/boms.ts
+server/storage/customers.ts
+
+I need to see:
+
+how inserts are done
+whether you use one storage class/interface
+naming conventions
+how transactions are handled
+3. Existing API routes
+
+I need the route files for the objects this quote builder will touch.
+
+Most useful:
+
+inventory routes
+BOM routes
+customer routes
+routing routes
+order or quote routes if they already exist
+
+Examples:
+
+server/routes/inventory.ts
+server/routes/boms.ts
+server/routes/customers.ts
+
+This lets me match your existing endpoint style.
+
+4. Frontend inventory and BOM pages
+
+I need the current UI components that:
+
+search inventory
+create inventory items
+manage BOMs
+show customer selection
+use your wizard or drawer pattern
+
+Most useful files:
+
+inventory page
+inventory item form / modal
+BOM page or BOM editor
+customer selector component
+any existing multi-step wizard
+5. Your route registration / app entry files
+
+I need to know where backend and frontend routes get wired in.
+
+Usually:
+
+server/index.ts
+server/routes.ts
+client/src/App.tsx
+
+This is important so I can tell you exactly where to register:
+
+new API endpoints
+new page routes
+wizard navigation
+6. UI component pattern
+
+Because EPOCH already has a look and feel, I need one or two examples of the page structure you want this to follow.
+
+Best examples:
+
+a multi-step wizard page
+a table with add/edit rows
+a drawer or modal used for line-item editing
+
+If you use:
+
+ShadCN
+TanStack Table
+React Hook Form
+Zod
+send one example using that stack.
+7. Any existing quote, RFQ, or draft logic
+
+If anything already exists for:
+
+quote numbers
+draft records
+estimate pages
+pricing snapshots
+customer-facing PDFs
+
+I need that too, even if incomplete.
+
+8. Company settings / costing logic
+
+Because your builder includes overhead, Cap X, and later margin logic, I need to know whether EPOCH already stores:
+
+overhead rate
+loaded labor rate
+shop rate
+department hourly rates
+shipping defaults
+markup defaults
+quote validity defaults
+
+If this already exists, send the schema and UI for it.
+
+9. Navigation target
+
+Tell me where you want this to live in EPOCH.
+
+For example:
+
+under Sales
+under Customers
+under Inventory
+as its own “RFQ Builder” page
+under P2 Control Center
+under a new “Estimating” section
+
+That affects how I wire the page and permissions.
+
+10. A real code sample of one complete feature
+
+The single most useful thing you can send is one feature that includes all 4 layers:
+
+schema
+storage
+API route
+frontend page
+
+For example:
+
+Inventory item create/edit
+or
+BOM create/edit
+
+That gives me the exact pattern to follow.
+
+Minimum set I need first
+
+If you want to keep it small and move fast, send just these first:
+
+shared/schema.ts
+server/storage.ts
+inventory routes file
+BOM routes file
+client/src/App.tsx
+inventory page component
+BOM page/component
+one existing wizard component, if you have one
+
+That is enough for me to start structuring the integration correctly.

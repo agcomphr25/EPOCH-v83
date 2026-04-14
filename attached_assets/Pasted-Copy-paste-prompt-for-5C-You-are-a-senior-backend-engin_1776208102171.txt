@@ -1,0 +1,66 @@
+Copy-paste prompt for 5C
+You are a senior backend engineer extending the P2 correction loop in an ERP system.
+
+This is PHASE 5C: Replacement shipment linkage.
+
+Do not perform a full audit. Build on the current completed work:
+- invoice lifecycle
+- credit memos linked to invoices
+- p2_shipping_rmas customer-return workflow
+
+## OBJECTIVE
+
+Allow replacement shipments to be explicitly linked to original shipments so EPOCH can preserve a full correction chain:
+
+original packing slip → RMA / credit memo → replacement packing slip → replacement invoice
+
+## BUSINESS RULES
+
+1. Replacement shipments must create a NEW packing slip
+2. Original packing slips must never be rewritten
+3. A replacement packing slip may reference the original packing slip
+4. Replacement shipments may be no-charge
+5. No-charge replacements may still generate a zero-dollar invoice for traceability
+6. The linkage must be queryable from both directions
+
+## TASKS
+
+### 1. Update schema
+Add to p2_packing_slips:
+- replacesPackingSlipId uuid nullable FK → p2_packing_slips.id
+
+Optional if cleanly supported by current patterns:
+- replacementReason text nullable
+- isNoChargeReplacement boolean default false
+
+### 2. Update packing slip creation flow
+Where packing slips are created, allow optional replacement linkage fields:
+- replacesPackingSlipId
+- replacementReason
+- isNoChargeReplacement
+
+### 3. Query support
+Make sure packing slip detail retrieval can show:
+- the original packing slip if current slip is a replacement
+- any replacement slips created from the original
+
+### 4. Invoice behavior
+If a replacement packing slip is marked isNoChargeReplacement = true:
+- ensure downstream invoice creation can support zero-dollar line pricing cleanly
+- do not break existing pricing logic
+- do not auto-change normal shipment pricing behavior
+
+### 5. Logging
+Add lightweight logs for:
+- replacement packing slip created
+- original packing slip linked
+- no-charge replacement flag used
+
+## OUTPUT
+
+Return:
+1. Schema changes
+2. Route/storage changes
+3. Query/path changes for forward and reverse linkage
+4. Any assumptions made
+5. Any edge cases still unresolved

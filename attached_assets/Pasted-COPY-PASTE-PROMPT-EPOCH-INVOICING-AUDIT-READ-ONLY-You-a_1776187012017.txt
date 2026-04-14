@@ -1,0 +1,185 @@
+COPY-PASTE PROMPT: EPOCH INVOICING AUDIT (READ-ONLY)
+You are a senior software architect and forensic code auditor.
+
+Your task is to perform a COMPLETE, READ-ONLY audit of this codebase to prepare for implementing an INVOICING SYSTEM derived from PACKING SLIPS.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any code
+- DO NOT suggest refactors yet
+- DO NOT write new files
+- ONLY analyze and report
+- Be exhaustive and structured
+
+---
+
+## 🎯 OBJECTIVE
+
+We are preparing to:
+
+1. Generate INVOICES from PACKING SLIPS
+2. Validate that ALL packing slips have corresponding invoices (no missed revenue)
+3. Prevent duplicate invoicing
+4. Create JOURNAL ENTRIES for QuickBooks export (AR + Revenue + possibly COGS later)
+
+---
+
+## 🔍 PHASE 1: DATA MODEL DISCOVERY
+
+Scan the entire repo and identify ALL relevant tables, schemas, and types related to:
+
+### A) Packing Slips
+- Table name(s)
+- Fields (especially: id, order_id, shipped_date, status, quantities, pricing if present)
+- Relationships (orders, customers, shipments, line items)
+- Whether multiple packing slips can exist per order
+
+### B) Orders / Sales Orders
+- Table structure
+- How pricing is stored (unit price, discounts, totals)
+- Whether pricing is final at order level or recalculated downstream
+
+### C) Customers
+- Customer table
+- Billing vs shipping fields
+- Any AR-related fields (terms, credit, etc.)
+
+### D) Line Items
+- Where quantities and pricing live
+- Whether packing slips copy, reference, or derive from order line items
+
+### E) Existing Financial / Accounting Structures
+- Any tables related to:
+  - invoices
+  - journal_entries
+  - transactions
+  - ledgers
+- If none exist, explicitly state that
+
+---
+
+## 🔍 PHASE 2: CURRENT LOGIC FLOW
+
+Trace the FULL lifecycle:
+
+1. Order created →
+2. Production →
+3. Shipping →
+4. Packing slip generated →
+
+Answer:
+
+- Where in the code are packing slips created?
+- What triggers their creation?
+- Are they editable after creation?
+- Is there a "final" or "posted" state?
+
+---
+
+## 🔍 PHASE 3: REVENUE RISK ANALYSIS
+
+Determine:
+
+1. Can a packing slip exist WITHOUT an invoice? (likely yes)
+2. Is there ANY current linkage between packing slips and invoices? (probably none)
+3. Can duplicate packing slips exist?
+4. Can partial shipments occur (multiple packing slips per order)?
+5. Is there any concept of:
+   - billed quantity vs shipped quantity
+   - remaining quantity
+
+---
+
+## 🔍 PHASE 4: INVOICE READINESS CHECK
+
+Evaluate whether the system already contains enough data to generate an invoice:
+
+For each packing slip, determine if we can derive:
+
+- Customer
+- Bill-to address
+- Ship-to address
+- Item descriptions
+- Quantities shipped
+- Unit price
+- Extended price
+- Taxes (if any)
+- Shipping charges (if any)
+
+Clearly state any missing pieces.
+
+---
+
+## 🔍 PHASE 5: DUPLICATE / MISSING INVOICE DETECTION STRATEGY
+
+Based on the current schema, propose (but do NOT implement):
+
+- A method to determine:
+  1. Which packing slips have NOT been invoiced
+  2. Which have been invoiced
+  3. Whether partial invoicing is possible
+
+This should include:
+
+- Suggested linking strategy (e.g., packing_slip_id on invoice)
+- Edge cases (partial shipments, split invoices)
+
+---
+
+## 🔍 PHASE 6: JOURNAL ENTRY MAPPING (READ-ONLY DESIGN)
+
+Based on available data, outline how an invoice WOULD map to accounting entries:
+
+Expected structure:
+
+- Debit: Accounts Receivable
+- Credit: Revenue
+
+If data supports it, also evaluate:
+- COGS
+- Inventory relief
+
+List EXACT fields in the system that would feed:
+
+- invoice total
+- revenue accounts (if available)
+- customer AR tracking
+
+---
+
+## 🔍 PHASE 7: CODE STRUCTURE & ENTRY POINTS
+
+Identify:
+
+- Where a new "invoice service" would logically live
+- Existing service patterns (controllers, routes, services)
+- Any reusable patterns from:
+  - orders
+  - packing slips
+  - reporting modules
+
+---
+
+## 📦 OUTPUT FORMAT (MANDATORY)
+
+Return a structured report with:
+
+1. **Schema Map (tables + relationships)**
+2. **Packing Slip Lifecycle**
+3. **Revenue Risk Findings**
+4. **Invoice Readiness Gaps**
+5. **Proposed Invoice Link Strategy**
+6. **Journal Entry Mapping**
+7. **Recommended Integration Points**
+
+Be specific. Use actual table and field names from the code.
+
+---
+
+## 🧠 FINAL NOTE
+
+Assume this system will need to pass:
+- DCAA audit scrutiny
+- Financial audit traceability
+- "No revenue left behind" validation
+
+Your job is to expose the TRUTH of the system as it exists today.

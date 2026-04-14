@@ -1,0 +1,340 @@
+To begin cleanly, I need the parts of EPOCH that already touch inventory, manufacturing, and traceability so I can wire consumption into what you already have instead of building around it.
+Send me these from Replit:
+
+
+Database schema
+I need the tables and relations for:
+
+
+inventory_items
+
+
+any existing inventory_transactions or movement tables
+
+
+receipts / received units / lots / ICN tables
+
+
+reservations tables
+
+
+travelers
+
+
+manufacturing queue
+
+
+BOM or demand tables
+
+
+work orders / projects if inventory will consume against them
+
+
+Best thing to paste:
+
+
+your shared/schema.ts
+
+
+any SQL migration files related to inventory, receipts, lots, travelers, or reservations
+
+
+
+
+Storage layer
+I need the methods that already read/write inventory and traceability.
+Paste:
+
+
+server/storage.ts
+
+
+server/db.ts if inventory logic uses it
+
+
+any inventory-specific storage/service files
+
+
+
+
+API routes
+I need to see what endpoints already exist so I do not duplicate them.
+Paste:
+
+
+inventory routes
+
+
+receiving routes
+
+
+traveler routes
+
+
+manufacturing queue routes
+
+
+any material consumption routes if placeholders already exist
+
+
+Usually files like:
+
+
+server/routes/inventory*.ts
+
+
+server/routes/receiving*.ts
+
+
+server/routes/travelers*.ts
+
+
+
+
+Frontend pages/components
+I need the screens where this will actually happen.
+Paste:
+
+
+inventory item page
+
+
+receiving page
+
+
+traveler execution page
+
+
+any queue drawer where material allocation happens
+
+
+any transaction history UI
+
+
+
+
+Your placeholder locations
+Since you said placeholders already exist, send me:
+
+
+the exact files/components/routes where you left placeholders
+
+
+notes on what each placeholder was intended to do
+
+
+
+
+Current business rules
+I need your rules before coding so the logic matches your floor.
+Tell me:
+
+
+what types of inventory can be consumed: raw material, consumables, hardware, kits, subassemblies?
+
+
+should consumption happen from general stock, specific lot/ICN, or reservation only?
+
+
+can users over-consume into negative inventory, or should it block?
+
+
+do you want issue, return, adjustment, scrap, and transfer transaction types?
+
+
+should every consumption require a traveler, work order, or project?
+
+
+do you want department-level traceability by lot/ICN?
+
+
+when material is reserved, does on-hand stay the same and available decrease?
+
+
+when material is consumed, does reserved decrease and on-hand decrease?
+
+
+
+
+How balances should work
+I need to know the balance model you want:
+
+
+onHand
+
+
+reserved
+
+
+available
+
+
+inInspection
+
+
+quarantined
+
+
+expired
+
+
+atVendor / outside process
+
+
+If you already have some of these, tell me which ones are real and which are planned.
+
+
+Units of measure
+I need examples of how your materials are tracked:
+
+
+rolls
+
+
+square meters
+
+
+feet
+
+
+pounds
+
+
+each
+
+
+kits
+
+
+Especially for composites:
+
+
+do you consume by roll, partial roll, square meter, or per cut packet?
+
+
+do you want conversions handled automatically?
+
+
+
+
+A few real examples
+Give me 3 real scenarios from your floor, for example:
+
+
+issue prepreg from freezer lot X to traveler Y
+
+
+consume adhesive batch Z during layup
+
+
+return unused material back to stock
+
+
+scrap damaged material
+
+
+consume machined rail from finished inventory into assembly
+
+
+Real examples help me design the workflow correctly the first time.
+
+
+Any existing errors or broken areas
+If inventory placeholders already half-exist, send:
+
+
+
+
+current errors
+
+
+incomplete forms
+
+
+endpoints returning 400/500
+
+
+screenshots of pages that are ready for buildout
+
+
+
+Best first package to send me
+If you want the fastest start, paste these first:
+
+
+shared/schema.ts
+
+
+server/storage.ts
+
+
+inventory routes file
+
+
+traveler routes file
+
+
+receiving routes file
+
+
+the traveler execution frontend page
+
+
+the inventory frontend page
+
+
+That is usually enough for me to map the full integration and give you copy/paste-ready build steps.
+What I will build from that
+Once I see those files, I can give you the exact implementation plan for:
+
+
+inventory transaction table structure
+
+
+balance calculation rules
+
+
+reservation vs consumption logic
+
+
+traveler-linked material issue/consume flow
+
+
+return/scrap/adjustment flow
+
+
+transaction history UI
+
+
+safe API endpoints
+
+
+auditability for AS9100 / traceability
+
+
+My recommendation for build order
+The cleanest order is:
+
+
+transaction model
+
+
+balance engine
+
+
+reservation logic
+
+
+consume/return endpoints
+
+
+traveler UI integration
+
+
+history/audit screens
+
+
+blocking rules and approvals
+
+
+Send the files in chunks if needed, and I’ll turn them into the exact next build steps.

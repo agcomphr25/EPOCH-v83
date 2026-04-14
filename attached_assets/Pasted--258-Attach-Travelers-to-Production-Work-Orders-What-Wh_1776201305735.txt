@@ -1,0 +1,116 @@
+#258 - Attach Travelers to Production Work Orders
+What & Why
+Now that the production_work_orders backbone is live and verified, the next step is to make Travelers attach to that backbone instead of floating with only loose text references. The goal is to make this relationship real:
+
+Project → Work Order (WAD) → Traveler → Time Entry
+
+Right now the schema supports the link because travelers.productionWorkOrderId exists as a nullable UUID FK, but traveler creation and lookup flows do not yet consistently use it. This ticket makes the WAD spine actually usable in production without breaking legacy traveler flows. The WAD table, nullable traveler FK, and time entry extensions are already in place and validated.
+
+Done looks like
+Travelers can be created with an optional productionWorkOrderId
+If a productionWorkOrderId is provided during traveler creation, it is validated and saved
+New storage methods exist to:
+get travelers by production work order
+link an existing traveler to a production work order
+optionally unlink if needed for admin correction
+New route support exists for:
+GET /api/work-orders/:id/travelers
+POST /api/work-orders/:id/travelers/:travelerId/link
+Existing traveler creation paths still work when productionWorkOrderId is omitted
+Traveler detail responses include productionWorkOrderId
+No legacy workOrderId behavior is removed or refactored
+No frontend work is required in this ticket
+Out of scope
+Auto-creating travelers from a WAD
+Auto-creating WADs from projects or quotes
+Barcode-driven time charging
+UI for selecting WAD during traveler creation
+Backfilling old travelers
+Removing or refactoring legacy workOrderId
+Tasks
+1. Schema validation support
+
+Update the traveler insert/update validation schemas in server/schema.ts so they allow nullable productionWorkOrderId.
+
+Requirements:
+
+if present, it must be a UUID
+omission remains valid for legacy flows
+exported insert/update types stay aligned
+2. Storage methods
+
+Add to IStorage and implement in server/storage.ts:
+
+getTravelersByProductionWorkOrderId(productionWorkOrderId: string)
+linkTravelerToProductionWorkOrder(travelerId: string, productionWorkOrderId: string)
+unlinkTravelerFromProductionWorkOrder(travelerId: string) if you want admin-safe correction now
+
+Behavior:
+
+linking should verify both records exist
+linking should update only the new UUID field
+legacy workOrderId varchar stays untouched
+3. Traveler route support
+
+Update traveler creation logic in server/src/routes/travelers.ts so:
+
+productionWorkOrderId is accepted on create
+if provided, it is validated against an existing production_work_orders.id
+traveler creation fails with 400 or 404 if invalid
+
+Also ensure traveler detail/list responses include the field if they currently shape responses manually.
+
+4. Work order route support
+
+Extend the existing work order route module to add:
+
+GET /api/work-orders/:id/travelers
+returns all travelers linked to that production WAD
+POST /api/work-orders/:id/travelers/:travelerId/link
+links an existing traveler to the WAD
+optional:
+POST /api/work-orders/:id/travelers/:travelerId/unlink
+5. Route registration
+
+No new top-level route file is required if you extend the existing work order router. If you prefer separation, keep the public mount under /api/work-orders.
+
+6. Tests / sanity checks
+
+Verify:
+
+traveler can still be created without productionWorkOrderId
+traveler can be created with a valid productionWorkOrderId
+create fails when productionWorkOrderId points to a missing WAD
+GET /api/work-orders/:id/travelers returns linked travelers
+link route updates the traveler correctly
+existing traveler endpoints still work
+Relevant files
+server/schema.ts
+server/storage.ts
+server/src/routes/travelers.ts
+server/src/routes/workOrders.ts or equivalent consolidated work order route file
+server/src/routes/index.ts if needed for registration
+Recommended implementation notes
+Keep rollout non-breaking
+
+This should be an additive ticket only:
+
+do not remove workOrderId
+do not make productionWorkOrderId required yet
+do not change traveler generation from routing unless needed to pass the new field through
+Prefer WAD-aware creation, not WAD-only creation
+
+Some travelers may still come from existing routing or order flows. Let them continue to do so while accepting the new link.
+
+Return newest-first in WAD traveler list
+
+If your traveler table already has createdAt, use it for sort order.
+
+Acceptance checklist
+ traveler create accepts nullable productionWorkOrderId
+ valid WAD ID saves on traveler row
+ invalid WAD ID is rejected
+ GET /api/work-orders/:id/travelers works
+ link endpoint works
+ old traveler flows still work
+ no legacy columns removed

@@ -8,6 +8,10 @@ import {
   payments,
   insertCreditMemoSchema,
   insertCreditMemoApplicationSchema,
+  arInvoices,
+  journalEntries,
+  journalLines,
+  chartOfAccounts,
 } from '../../schema';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
@@ -259,34 +263,101 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { customerId, amount, reason, notes, createdBy } = req.body;
+    const { customerId, amount, reason, notes, createdBy, arInvoiceId } = req.body;
     
-    if (!customerId || !amount || !reason) {
-      return res.status(400).json({ error: 'Missing required fields: customerId, amount, reason' });
+    if (!customerId || !amount || !reason || !arInvoiceId) {
+      return res.status(400).json({ error: 'Missing required fields: customerId, amount, reason, arInvoiceId' });
     }
     
     if (amount <= 0) {
       return res.status(400).json({ error: 'Amount must be greater than zero' });
     }
-    
+
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, arInvoiceId));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    if (invoice.customerId !== customerId.toString()) {
+      return res.status(400).json({ error: 'customerId does not match the referenced invoice customer' });
+    }
+    if (invoice.status === 'VOID') {
+      return res.status(409).json({ error: 'Cannot create credit memo for a VOID invoice' });
+    }
+    if (!['POSTED', 'SENT'].includes(invoice.status)) {
+      return res.status(409).json({ error: `Cannot create credit memo for invoice with status ${invoice.status}. Invoice must be POSTED or SENT.` });
+    }
+
+    const paymentsRes = await db.execute(sql`
+      SELECT COALESCE(SUM(amount_applied::numeric), 0) AS total_payments
+      FROM ar_payment_allocations WHERE invoice_id = ${arInvoiceId}::uuid
+    `);
+    const creditsRes = await db.execute(sql`
+      SELECT COALESCE(SUM(amount::numeric), 0) AS total_credits
+      FROM credit_memos WHERE ar_invoice_id = ${arInvoiceId}::uuid AND status != 'cancelled'
+    `);
+    const paymentsRow = (paymentsRes.rows?.[0] ?? {}) as Record<string, string>;
+    const creditsRow = (creditsRes.rows?.[0] ?? {}) as Record<string, string>;
+    const totalPayments = parseFloat(paymentsRow.total_payments || '0');
+    const totalCredits = parseFloat(creditsRow.total_credits || '0');
+    const invoiceTotal = parseFloat(invoice.totalAmount);
+    const remainingBalance = invoiceTotal - totalPayments - totalCredits;
+
+    if (amount > remainingBalance) {
+      return res.status(400).json({
+        error: `Credit amount $${amount.toFixed(2)} exceeds remaining invoice balance of $${remainingBalance.toFixed(2)}`,
+      });
+    }
+
+    const allAccounts = await db.select().from(chartOfAccounts);
+    const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
+    const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
+    if (!arAccount || !revenueAccount) {
+      return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
+    }
+
     const memoNumber = await generateMemoNumber();
-    
-    const [newMemo] = await db
-      .insert(creditMemos)
-      .values({
-        memoNumber,
-        customerId: customerId.toString(),
-        amount,
-        appliedAmount: 0,
-        unappliedAmount: amount,
-        reason,
-        notes,
-        status: 'active',
-        createdBy: createdBy || 'System',
-      })
-      .returning();
-    
-    console.log('Created credit memo:', newMemo.memoNumber);
+
+    const newMemo = await db.transaction(async (tx) => {
+      const [memo] = await tx
+        .insert(creditMemos)
+        .values({
+          memoNumber,
+          customerId: customerId.toString(),
+          amount,
+          appliedAmount: 0,
+          unappliedAmount: amount,
+          reason,
+          notes,
+          status: 'active',
+          sourceType: 'invoice_correction',
+          arInvoiceId,
+          createdBy: createdBy || 'System',
+        })
+        .returning();
+
+      const [entry] = await tx
+        .insert(journalEntries)
+        .values({
+          transactionType: 'AR_CREDIT_MEMO',
+          referenceType: 'credit_memo',
+          referenceId: memo.id,
+          effectiveDate: new Date(),
+          memo: `Credit Memo ${memoNumber} — Invoice ${invoice.invoiceNumber}`,
+          status: 'DRAFT',
+          createdBy: createdBy || 'System',
+        })
+        .returning();
+
+      await tx.insert(journalLines).values([
+        { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: amount, creditAmount: 0 },
+        { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: 0, creditAmount: amount },
+      ]);
+
+      console.log(`[CreditMemoService] Credit memo ${memoNumber} created for invoice ${invoice.invoiceNumber} — amount $${amount}`);
+      console.log(`[CreditMemoService] Journal entry ${entry.id} created — DR Revenue — P2 Products $${amount}, CR Accounts Receivable $${amount}`);
+
+      return memo;
+    });
 
     try {
       await auditService.logEvent({
@@ -299,6 +370,8 @@ router.post('/', async (req: Request, res: Response) => {
           customerId,
           amount,
           reason,
+          arInvoiceId,
+          invoiceNumber: invoice.invoiceNumber,
         },
       });
     } catch (auditError) {

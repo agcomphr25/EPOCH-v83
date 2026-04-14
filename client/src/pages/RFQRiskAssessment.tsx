@@ -459,18 +459,21 @@ export default function RFQRiskAssessment() {
   const handleSubmitAssessment = async () => {
     // Check authorization for high-risk RFQs
     if (requiresExecutiveApproval && !canApprove) {
-      alert(
-        `Authorization Required\n\n` +
-        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
-        `Only Dave Tandy or Matt Tandy are authorized to approve and submit high-risk RFQs.\n\n` +
-        `Current user: ${session?.username || 'Not logged in'}`
-      );
+      toast({
+        title: 'Authorization Required',
+        description: `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16). Only Dave Tandy or Matt Tandy are authorized to approve and submit high-risk RFQs.`,
+        variant: 'destructive',
+      });
       return;
     }
 
     // Validate signature is present
     if (!formData.signature) {
-      alert('Please sign the form before submitting.');
+      toast({
+        title: 'Signature Required',
+        description: 'Please sign the form before submitting.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -528,13 +531,20 @@ export default function RFQRiskAssessment() {
           throw new Error(error.error || 'Failed to submit RFQ Risk Assessment');
         }
 
-        alert('RFQ Risk Assessment saved and submitted successfully!');
+        toast({
+          title: 'Assessment Submitted',
+          description: 'RFQ Risk Assessment saved and submitted successfully!',
+        });
         clearForm();
         await refetchAssessments();
         setActiveTab('view');
       } catch (error) {
         console.error('Error submitting RFQ Risk Assessment:', error);
-        alert(`Failed to submit RFQ Risk Assessment: ${error instanceof Error ? error.message : 'Please try again.'}`);
+        toast({
+          title: 'Submission Failed',
+          description: error instanceof Error ? error.message : 'Failed to submit RFQ Risk Assessment. Please try again.',
+          variant: 'destructive',
+        });
       }
     } else {
       // Assessment already exists, just submit it
@@ -555,13 +565,20 @@ export default function RFQRiskAssessment() {
           throw new Error(error.error || 'Failed to submit RFQ Risk Assessment');
         }
 
-        alert('RFQ Risk Assessment submitted successfully!');
+        toast({
+          title: 'Assessment Submitted',
+          description: 'RFQ Risk Assessment submitted successfully!',
+        });
         clearForm();
         await refetchAssessments();
         setActiveTab('view');
       } catch (error) {
         console.error('Error submitting RFQ Risk Assessment:', error);
-        alert(`Failed to submit RFQ Risk Assessment: ${error instanceof Error ? error.message : 'Please try again.'}`);
+        toast({
+          title: 'Submission Failed',
+          description: error instanceof Error ? error.message : 'Failed to submit RFQ Risk Assessment. Please try again.',
+          variant: 'destructive',
+        });
       }
     }
   };
@@ -574,9 +591,11 @@ export default function RFQRiskAssessment() {
         !formData.mitigationActionB.trim() ||
         !formData.mitigationActionC.trim()
       ) {
-        alert(
-          'Mitigation Actions are required when the overall risk score is above 16. Please fill in all three mitigation action fields.'
-        );
+        toast({
+          title: 'Mitigation Actions Required',
+          description: 'Mitigation Actions are required when the overall risk score is above 16. Please fill in all three mitigation action fields.',
+          variant: 'destructive',
+        });
         return false;
       }
     }
@@ -584,6 +603,24 @@ export default function RFQRiskAssessment() {
   };
 
   const handleSave = async () => {
+    // Pre-save validation: customer and RFQ number must be set
+    if (!formData.customerId) {
+      toast({
+        title: 'Customer Required',
+        description: 'Please select a customer before saving. Selecting a customer will auto-generate the RFQ number.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!formData.rfqNumber) {
+      toast({
+        title: 'RFQ Number Missing',
+        description: 'No RFQ number has been generated. Please re-select the customer to generate one.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!validateForm()) return;
     
     // Show warning for high-risk RFQs being saved by non-authorized users
@@ -632,7 +669,8 @@ export default function RFQRiskAssessment() {
       }
 
       if (!response.ok) {
-        throw new Error('Failed to save RFQ Risk Assessment');
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || `Server returned ${response.status}`);
       }
 
       const savedAssessment = await response.json();
@@ -658,19 +696,22 @@ export default function RFQRiskAssessment() {
       }
     } catch (error) {
       console.error('Error saving RFQ Risk Assessment:', error);
-      alert('Failed to save RFQ Risk Assessment. Please try again.');
+      toast({
+        title: 'Save Failed',
+        description: error instanceof Error ? error.message : 'Failed to save RFQ Risk Assessment. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
   const handlePrint = () => {
     // Check authorization for high-risk RFQs
     if (requiresExecutiveApproval && !canApprove) {
-      alert(
-        `Authorization Required\n\n` +
-        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
-        `Only Dave Tandy or Matt Tandy are authorized to print high-risk RFQs.\n\n` +
-        `Current user: ${session?.username || 'Not logged in'}`
-      );
+      toast({
+        title: 'Authorization Required',
+        description: `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16). Only Dave Tandy or Matt Tandy are authorized to print high-risk RFQs.`,
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -880,18 +921,24 @@ export default function RFQRiskAssessment() {
         
         // Check if assessment is already submitted
         if (assessment.status === 'submitted') {
-          alert(
-            `Viewing submitted assessment - This is read-only.\n\n` +
-            `Submitted by: ${assessment.submittedBy || 'Unknown'}\n` +
-            `Submitted on: ${assessment.submittedAt ? format(new Date(assessment.submittedAt), 'MM/dd/yyyy') : 'Unknown'}`
-          );
+          toast({
+            title: 'Read-Only View',
+            description: `Viewing submitted assessment. Submitted by: ${assessment.submittedBy || 'Unknown'} on ${assessment.submittedAt ? format(new Date(assessment.submittedAt), 'MM/dd/yyyy') : 'Unknown'}.`,
+          });
         } else {
-          alert(`Loaded RFQ ${rfqNumber} for editing. Make your changes and click "Save Form" to update.`);
+          toast({
+            title: 'Assessment Loaded',
+            description: `Loaded RFQ ${rfqNumber} for editing. Make your changes and click "Save Form" to update.`,
+          });
         }
       }
     } catch (error) {
       console.error('Error loading assessment:', error);
-      alert('Failed to load assessment. Please try again.');
+      toast({
+        title: 'Load Failed',
+        description: 'Failed to load assessment. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 

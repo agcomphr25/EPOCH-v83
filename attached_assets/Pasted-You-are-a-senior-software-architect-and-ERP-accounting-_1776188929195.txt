@@ -1,0 +1,124 @@
+You are a senior software architect and ERP/accounting systems designer.
+
+This is a READ-ONLY planning audit. Do not modify code. Do not create files. Do not refactor. Only analyze and report.
+
+We have already completed an invoicing audit. Now we are defining the implementation plan for P2 invoicing in EPOCH.
+
+## Locked business rules
+
+Treat these as final requirements:
+
+1. One packing slip = exactly one invoice
+2. Invoices are for P2 only
+3. When a packing slip becomes SHIPPED, the system should automatically create an invoice in a review state
+4. Invoices are NOT auto-sent; they are sent manually
+5. We need notification / dashboard visibility for unsent invoices
+6. Invoice pricing should default from PO pricing
+7. Invoice lines should snapshot pricing at invoice creation time
+8. Invoices should be editable before posting, but locked after posting
+9. After posting, corrections should happen through:
+   - void (if appropriate before send / early internal correction)
+   - credit memo
+   - replacement shipment / replacement packing slip
+   - RMA workflow if physical return is involved
+10. Journal entries only will be exported to QuickBooks
+11. EPOCH should be the system of record for AR
+12. We want full audit traceability:
+    Order / PO → Lot → Packing Slip → Invoice → Journal Entry → Payment
+
+## Your task
+
+Based on the CURRENT codebase, produce a precise implementation plan for adding this workflow.
+
+### Phase 1 — Constraint and status model
+Identify:
+- existing invoice statuses
+- where posting/locking logic would need to live
+- whether current schema supports:
+  - draft
+  - review
+  - posted
+  - sent
+  - disputed
+  - void
+- what schema changes are required for:
+  - sentAt
+  - postedAt
+  - postedBy
+  - voidedAt
+  - voidReason
+  - dispute status / flags
+  - credit memo linkage
+  - unique packingSlipId constraint
+
+### Phase 2 — Auto-create invoice from shipped packing slip
+Identify:
+- exact route/service where packing slips become SHIPPED
+- best hook point to auto-create invoice
+- whether this should happen synchronously in the same transaction or via a job/event pattern
+- all data joins required to create invoice lines from:
+  - packing slip
+  - lot
+  - purchase order
+  - purchase order items
+
+Return the exact field path needed to derive:
+- customer
+- bill-to
+- item description
+- qty shipped
+- unit price
+- subtotal
+- due date / terms if available
+
+### Phase 3 — Review/edit workflow
+Identify:
+- current UI pages/components that should become the separate Invoices module
+- where a review/edit screen should live
+- whether current InvoiceFormPage.tsx already supports enough editing for this purpose
+- what data is missing from the review screen for a real posting workflow
+
+### Phase 4 — Posting + journal entry creation
+Identify:
+- current route/service where invoice creation happens
+- best place to create journal_entries and journal_lines when an invoice is posted
+- whether journal creation should happen on invoice creation, review approval, or posting
+- what transaction boundaries should exist so invoice + journal entry are atomic
+
+### Phase 5 — Exception dashboards
+Design, based on current schema:
+- “Shipped not invoiced”
+- “Invoiced not sent”
+- “Disputed invoices”
+- “Credit memos”
+
+For each one, provide:
+- SQL or Drizzle-level logic
+- recommended page/component location
+
+### Phase 6 — Correction workflows
+Analyze whether the current codebase has any support for:
+- RMAs
+- credit memos
+- returns
+- replacement shipments
+- zero-dollar invoice lines
+- negative invoice lines
+
+If not, explicitly say so and recommend the cleanest extension path.
+
+## Output format
+
+Return:
+
+1. Required schema changes
+2. Required backend changes
+3. Required UI changes
+4. Exact hook point for auto-invoice creation
+5. Exact hook point for invoice posting and journal creation
+6. Exception dashboard logic
+7. Correction workflow recommendations
+8. Risks / edge cases that must be decided before coding
+
+Use actual table names, route names, file names, and field names from the codebase.
+Be concrete and exhaustive.

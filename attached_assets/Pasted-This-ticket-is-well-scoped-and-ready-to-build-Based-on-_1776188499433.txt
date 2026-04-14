@@ -1,0 +1,158 @@
+This ticket is well-scoped and ready to build. Based on your current codebase shape, this is the right way to implement it without breaking existing behavior. The file dump confirms the current gaps and the exact places this needs to land.
+
+Build order for #257
+1. server/schema.ts
+
+Add the new production_work_orders table first, then extend the two existing tables.
+
+What to add:
+
+productionWorkOrders
+insertProductionWorkOrderSchema
+exported TS types:
+ProductionWorkOrder
+InsertProductionWorkOrder
+
+Also extend:
+
+travelers with nullable productionWorkOrderId
+time_clock_entries with nullable:
+productionWorkOrderId
+travelerId
+department
+operation
+chargeCode
+approvalStatus default "AUTO"
+
+Important implementation notes:
+
+keep work_orders untouched
+keep travelers.workOrderId untouched
+keep all new links nullable for safe rollout
+use UUID FK for productionWorkOrderId
+status should be constrained by schema validation even if stored as text
+2. schema exports
+
+Wherever your insert schemas and inferred types are exported near the bottom of server/schema.ts, add the new table exports there too. Your codebase already follows that pattern.
+
+3. server/storage.ts
+
+Add to IStorage:
+
+createProductionWorkOrder
+getWorkOrdersByProject
+getWorkOrderById
+
+Then implement them in DatabaseStorage using the existing Drizzle patterns already used across projects, quotes, and travelers.
+
+Recommended behavior:
+
+createProductionWorkOrder(data) returns inserted row
+getWorkOrdersByProject(projectId) returns all matching rows, ideally newest first
+getWorkOrderById(id) returns single row or undefined
+4. new route file
+
+Create:
+
+server/src/routes/workOrders.ts
+
+Minimum endpoints:
+
+POST /
+GET /project/:projectId
+GET /:id
+
+Recommended route behavior:
+
+POST / validates with insertProductionWorkOrderSchema
+reject bad payload with 400
+use storage only, no direct DB query in route
+GET /:id returns 404 when not found
+5. register router
+
+In server/src/routes/index.ts, register:
+
+/api/work-orders
+
+That keeps naming aligned with your ticket and avoids collision with existing maintenance work orders.
+
+Suggested schema shape
+
+You already defined the right fields in the ticket. I would implement them exactly like this conceptually:
+
+production_work_orders
+id
+workOrderNumber
+projectId
+partNumber
+quantity
+status
+departmentBudgets
+totalBudgetHours
+startDate
+dueDate
+createdAt
+updatedAt
+
+A couple of small recommendations:
+
+include description too, even though your final “done looks like” did not repeat it from the earlier discussion
+default quantity to 1
+default status to PLANNED
+default departmentBudgets to {} or [], whichever matches your app’s current budgeting pattern more closely
+Safe validation rules
+
+For insertProductionWorkOrderSchema, I would validate:
+
+workOrderNumber: required, non-empty
+projectId: required UUID
+partNumber: required, non-empty
+quantity: integer, positive, default 1
+status: enum of
+PLANNED
+READY
+RELEASED
+IN_PROGRESS
+COMPLETE
+CLOSED
+departmentBudgets: optional object/json
+totalBudgetHours: optional numeric/string depending how the rest of schema stores numeric
+startDate: optional
+dueDate: optional
+Biggest gotchas to avoid
+customer/project mismatch
+
+Your current system has mixed text-vs-FK patterns around customers and projects, but this ticket should not try to fix that yet. Keep this ticket narrowly anchored to projects.id.
+
+traveler compatibility
+
+Do not remove or repurpose the old workOrderId on travelers yet. Existing flows may still read it.
+
+time clock compatibility
+
+Your current time_clock_entries is legacy and only loosely linked, so adding nullable columns is the correct non-breaking move. Do not try to enforce job charging in this ticket.
+
+route naming
+
+Use /api/work-orders, not /api/production-work-orders, because your ticket already establishes the public route contract.
+
+What I would check after coding
+schema
+migration generates cleanly
+no integer→uuid cast problems
+no accidental edit to maintenance work_orders
+API
+POST /api/work-orders creates row
+GET /api/work-orders/project/:projectId returns list
+GET /api/work-orders/:id returns single row
+DB linkage
+can insert a production work order tied to a real projects.id
+can update a traveler later with productionWorkOrderId
+can insert a time entry later with productionWorkOrderId
+Recommended acceptance test list
+Create a production work order for an existing project.
+Fetch all work orders for that project.
+Fetch a single work order by id.
+Confirm traveler rows still work with old workOrderId untouched.
+Confirm time_clock_entries accepts null for all new fields.
+Confirm approvalStatus defaults to "AUTO" when omitted.

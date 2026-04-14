@@ -1,0 +1,131 @@
+Create a real production work order system (WAD) that connects:
+
+Project
+Traveler
+Time
+Future charge codes
+🧱 1. CREATE NEW TABLE
+
+Add this to your server/schema.ts
+
+export const productionWorkOrders = pgTable("production_work_orders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  workOrderNumber: text("work_order_number").notNull().unique(),
+
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+
+  partNumber: text("part_number").notNull(),
+  description: text("description"),
+
+  quantity: integer("quantity").default(1),
+
+  status: text("status").default("PLANNED"), 
+  // PLANNED | READY | RELEASED | IN_PROGRESS | COMPLETE | CLOSED
+
+  departmentBudgets: jsonb("department_budgets").default({}),
+  totalBudgetHours: numeric("total_budget_hours"),
+
+  startDate: timestamp("start_date"),
+  dueDate: timestamp("due_date"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+🔗 2. LINK TRAVELERS TO WORK ORDERS
+
+Update travelers table:
+
+ADD:
+productionWorkOrderId: uuid("production_work_order_id")
+  .references(() => productionWorkOrders.id),
+
+👉 DO NOT delete existing workOrderId yet
+(keep for backward compatibility)
+
+⏱️ 3. FIX TIME CLOCK STRUCTURE (MINIMUM VIABLE)
+
+Update time_clock_entries:
+
+ADD:
+productionWorkOrderId: uuid("production_work_order_id"),
+travelerId: uuid("traveler_id"),
+department: text("department"),
+operation: text("operation"),
+chargeCode: text("charge_code"),
+approvalStatus: text("approval_status").default("AUTO"),
+🧩 4. STORAGE LAYER (server/storage.ts)
+
+Add these methods:
+
+async createProductionWorkOrder(data) {
+  return await db.insert(productionWorkOrders).values(data).returning();
+}
+
+async getWorkOrdersByProject(projectId: string) {
+  return await db
+    .select()
+    .from(productionWorkOrders)
+    .where(eq(productionWorkOrders.projectId, projectId));
+}
+
+async getWorkOrderById(id: string) {
+  return await db
+    .select()
+    .from(productionWorkOrders)
+    .where(eq(productionWorkOrders.id, id))
+    .limit(1);
+}
+🌐 5. ROUTES (NEW FILE)
+
+Create:
+
+📁 server/src/routes/workOrders.ts
+
+router.post("/", async (req, res) => {
+  const wo = await storage.createProductionWorkOrder(req.body);
+  res.json(wo);
+});
+
+router.get("/project/:projectId", async (req, res) => {
+  const list = await storage.getWorkOrdersByProject(req.params.projectId);
+  res.json(list);
+});
+🧠 6. HOW THIS CHANGES YOUR SYSTEM
+
+Right now:
+
+Project → Travelers (loose)
+Time → nothing
+
+After this:
+
+Project
+  ↓
+Work Order (WAD)
+  ↓
+Traveler
+  ↓
+Time Entry
+
+👉 THIS is the backbone
+
+🔥 7. WHAT YOU SHOULD TEST IMMEDIATELY
+
+After implementing:
+
+Test flow:
+Create a Project
+Create a Work Order tied to project
+Create a Traveler tied to Work Order
+Simulate time entry tied to Work Order
+
+If this works:
+👉 You just created the core of EPOCH v9
+
+⚠️ IMPORTANT RULES
+DO NOT delete old fields yet
+DO NOT refactor everything at once
+ADD → then migrate → then clean later

@@ -3954,6 +3954,74 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ rail_demands table migration skipped:', railDemandsErr?.message);
     }
 
+    // Ensure rfq_risk_assessments table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS rfq_risk_assessments (
+          id SERIAL PRIMARY KEY,
+          rfq_number TEXT NOT NULL,
+          customer_id TEXT NOT NULL REFERENCES p2_customers(customer_id),
+          customer_name TEXT NOT NULL,
+          description TEXT,
+          form_data JSONB NOT NULL DEFAULT '{}',
+          total_overall_points INTEGER DEFAULT 0,
+          adjusted_risk_level INTEGER DEFAULT 0,
+          risk_determination TEXT,
+          bid_decision TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',
+          submitted_by TEXT,
+          submitted_at TIMESTAMP,
+          attachments TEXT[],
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_rfq_created ON rfq_risk_assessments (created_at)
+      `);
+      console.log('✅ Ensured rfq_risk_assessments table exists');
+    } catch (rfqErr: any) {
+      console.warn('⚠️ rfq_risk_assessments table migration skipped:', rfqErr?.message);
+    }
+
+    // Ensure quotes and quote_line_items tables exist
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quotes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          quote_number TEXT NOT NULL,
+          customer_id TEXT NOT NULL,
+          customer_name TEXT NOT NULL,
+          description TEXT,
+          total_amount REAL NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'DRAFT',
+          valid_until TIMESTAMP,
+          quoted_by TEXT,
+          notes TEXT,
+          attachments TEXT[],
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quote_line_items (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+          line_number INTEGER NOT NULL,
+          quantity REAL NOT NULL DEFAULT 1,
+          description TEXT NOT NULL,
+          unit_price REAL NOT NULL DEFAULT 0,
+          total_price REAL NOT NULL DEFAULT 0,
+          inventory_item_id INTEGER,
+          ag_part_number TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      console.log('✅ Ensured quotes and quote_line_items tables exist');
+    } catch (quotesErr: any) {
+      console.warn('⚠️ quotes tables migration skipped:', quotesErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

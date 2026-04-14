@@ -1,0 +1,159 @@
+To start 3.1 Define the system backbone, I need the parts of Replit that show your current source of truth, identifiers, and relationships.
+
+Send me these in the simplest way possible.
+
+What I need from Replit first
+1. Database schema files
+
+I need the files that define your tables and relations, especially anything like:
+
+shared/schema.ts
+Drizzle schema files
+relation files
+migration files if schema is split
+
+I need to see whether you already have tables for:
+
+customers
+quotes
+orders
+p2 projects
+work orders
+travelers
+time clock / time entries
+training records
+permissions / roles
+project closing or lessons learned
+audit logs
+2. Storage layer / data access files
+
+I need the files that show how records are created and linked.
+
+Usually things like:
+
+server/storage.ts
+server/db.ts
+any project, traveler, quote, time clock, or training service files
+
+This tells me:
+
+what is already wired
+what IDs are already being used
+where to extend without breaking anything
+3. Route files for the major modules
+
+I need the backend route files for the systems we are connecting.
+
+Please send the route files for:
+
+quote / RFQ / order routes
+customer routes
+P2 / project routes
+work order routes if they exist
+traveler routes
+time clock routes
+training routes
+permission / role routes
+
+If there is no separate quote route yet, that is fine.
+
+4. Frontend pages tied to those modules
+
+I need the main UI pages/components for:
+
+customers
+quote or order entry
+P2 Control Center
+travelers
+time clock
+training
+permissions or user management
+
+This helps me design the backbone so the UI still matches your app flow.
+
+5. A quick table of “what currently creates what”
+
+Even plain text is enough. I need to know your current logic.
+
+For example:
+
+does a quote become an order
+does an order become a project
+does P2 create work orders
+do travelers come from routings only
+does time track to traveler, work order, or nothing yet
+is training only informational, or blocking
+
+This saves a lot of guesswork.
+
+Most important thing I need first
+
+If you only send 3 things, send these first:
+
+shared/schema.ts
+server/storage.ts
+the main P2 / traveler / time clock route files
+
+That is enough for me to map the backbone and tell you:
+
+what already exists
+what needs to be added
+what should become the master parent record
+what relationships should be one-to-one, one-to-many, or optional
+What I will build from that
+
+Once I see those files, I can give you:
+
+A. Backbone relationship map
+
+Example:
+
+customer → quotes
+quote → project
+project → WADs
+project → work orders
+work order → travelers
+traveler → time entries
+traveler + employee → training eligibility check
+project → closing record
+B. Recommended ID strategy
+
+I will define what should be the master anchor:
+
+customerId
+quoteId
+projectId
+wadId
+workOrderId
+travelerId
+timeEntryId
+closingRecordId
+C. Gap analysis
+
+I will show:
+
+what is missing
+what is duplicated
+what should be merged
+what should stay separate
+D. A safe implementation order
+
+So you can build this without breaking current EPOCH behavior.
+
+Best way to send it
+
+You can paste:
+
+file contents directly here
+or the important sections from each file
+or a repo tree plus the exact files you want me to review
+
+Start with:
+
+shared/schema.ts
+server/storage.ts
+P2 routes
+traveler routes
+time clock routes
+
+Once you send those, I’ll map the full system backbone for EPOCH.

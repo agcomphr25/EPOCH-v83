@@ -317,7 +317,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
 
     const textY = y - SPACING.ROW_TEXT_OFFSET;
     page.drawText(String(item.lineNumber ?? i + 1), { x: cols.line + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
-    page.drawText(truncateText(item.agPartNumber || '', TABLE_COL_WIDTHS.PART_NUM - FONT_SIZE.TABLE_CELL, font, FONT_SIZE.TABLE_CELL), { x: cols.partNum + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
+    page.drawText(truncateText(item.supplierPartNumber || item.agPartNumber || '', TABLE_COL_WIDTHS.PART_NUM - FONT_SIZE.TABLE_CELL, font, FONT_SIZE.TABLE_CELL), { x: cols.partNum + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
 
     for (let dl = 0; dl < descLines.length; dl++) {
       page.drawText(descLines[dl], { x: cols.description + SPACING.CELL_PAD, y: textY - (dl * LINE_HEIGHT.SMALL), size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });

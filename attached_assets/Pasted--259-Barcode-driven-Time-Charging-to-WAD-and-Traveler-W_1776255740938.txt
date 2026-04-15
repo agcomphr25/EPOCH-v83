@@ -1,0 +1,423 @@
+#259 - Barcode-driven Time Charging to WAD and Traveler
+What & Why
+Now that the WAD backbone is live and travelers can attach to production work orders, the next step is to make the time clock use that backbone automatically. The goal is to remove manual job selection and make labor charging traceable, auditable, and ready for DCAA-style controls.
+This ticket makes the time flow real:
+scan Traveler barcode → resolve linked WAD → resolve project/charge path → create or switch Time Entry
+Today, time_clock_entries has the new nullable fields needed for this, but the time clock does not yet auto-populate them from a scanned traveler. This ticket adds that behavior without breaking existing kiosk/manual clock flows.
+Done looks like
+
+
+Time clock accepts a traveler barcode or traveler number as a scan input
+
+
+System resolves the traveler and its linked productionWorkOrderId
+
+
+System reads the linked WAD and derives the correct charge context
+
+
+A clock-in or job-switch action creates or updates a time_clock_entries row with:
+
+
+productionWorkOrderId
+
+
+travelerId
+
+
+department
+
+
+operation when available
+
+
+chargeCode
+
+
+approvalStatus
+
+
+
+
+If the traveler is not linked to a WAD, the scan is rejected with a clear error
+
+
+If the barcode is invalid, the scan is rejected cleanly
+
+
+Existing manual time clock flows still work when barcode flow is not used
+
+
+No legacy columns or routes are removed
+
+
+Out of scope
+
+
+Budget overrun approval workflow
+
+
+Auto-approval escalation
+
+
+Full labor review dashboard
+
+
+UI redesign of the time clock page
+
+
+Barcode printing changes
+
+
+Auto-closing previous time segments across all edge cases
+
+
+DCAA policy lockouts beyond the minimum needed for safe job switching
+
+
+Tasks
+1. Add traveler barcode resolution support
+Update the time clock flow so it can accept a traveler scan input.
+Supported input:
+
+
+traveler barcode
+
+
+traveler number
+
+
+traveler id if your current barcode format uses it
+
+
+Requirements:
+
+
+resolve to exactly one traveler
+
+
+traveler must have productionWorkOrderId
+
+
+return clear errors for:
+
+
+not found
+
+
+malformed scan
+
+
+traveler missing WAD link
+
+
+
+
+2. Add storage methods
+Add to IStorage and implement in server/storage.ts:
+
+
+getTravelerByScanValue(scanValue: string)
+
+
+getProductionWorkOrderByTravelerId(travelerId: string)
+
+
+createTimeClockEntryWithChargeContext(...)
+
+
+switchActiveTimeEntryToTraveler(...) or equivalent helper if your current time clock supports active job switching
+
+
+Behavior:
+
+
+lookup should support your current traveler human-facing identifier first
+
+
+WAD lookup should join through travelers.productionWorkOrderId
+
+
+create/switch methods should only write the new nullable WAD/time context columns, not disturb legacy behavior beyond what is needed
+
+
+3. Extend time clock routes
+Update server/src/routes/timeClock.ts to add barcode-aware endpoints.
+Minimum endpoints:
+
+
+POST /scan/traveler
+
+
+body: { scanValue, employeeId }
+
+
+resolves traveler + WAD + charge context
+
+
+returns resolved payload for confirmation or immediate use
+
+
+
+
+POST /clock-in/traveler
+
+
+body: { scanValue, employeeId }
+
+
+creates a time entry with the resolved traveler/WAD fields
+
+
+
+
+optional:
+
+
+POST /switch-job/traveler
+
+
+for active employee reassignment to a newly scanned traveler
+
+
+
+
+
+
+If your existing time clock route already has a clock-in action, it is acceptable to extend that route instead of adding a separate one, as long as traveler scan is clearly supported.
+4. Charge code derivation rules
+Add a first-pass charge code derivation rule.
+Recommended minimum:
+
+
+derive chargeCode from the linked production work order
+
+
+if a formal WAD charge code field does not yet exist, use a temporary deterministic value such as:
+
+
+workOrderNumber
+
+
+or projectCode + department
+
+
+or projectId + partNumber
+
+
+
+
+keep derivation centralized in one helper so it can be replaced later when full WAD charge code architecture is added
+
+
+5. Department and operation derivation
+Populate:
+
+
+department
+
+
+from active traveler step if determinable
+
+
+otherwise from traveler/work order context
+
+
+
+
+operation
+
+
+from active traveler task/step title if already available
+
+
+otherwise leave null
+
+
+
+
+Do not over-engineer this ticket. Populate what is safely available today.
+6. Approval status handling
+Set:
+
+
+approvalStatus = "AUTO" for valid traveler scan-based charging
+
+
+Do not add full approval routing yet. That comes later with overrun and edit controls.
+7. Safety rules
+Minimum safety behavior:
+
+
+reject scans for travelers without linked WAD
+
+
+reject scans for nonexistent travelers
+
+
+reject clock-in if employee identity is missing or invalid
+
+
+do not silently fall back to blank charge codes on a traveler scan flow
+
+
+8. Preserve manual compatibility
+Existing manual clock-in behavior must remain valid when scan-based flow is not used.
+That means:
+
+
+old kiosk/manual actions continue to work
+
+
+new barcode flow is additive
+
+
+no fields become required globally yet
+
+
+Relevant files
+
+
+server/storage.ts
+
+
+server/schema.ts
+
+
+server/src/routes/timeClock.ts
+
+
+server/src/routes/travelers.ts
+
+
+server/src/routes/workOrders.ts
+
+
+client/src/pages/TimeClockAdminPage.tsx only if a minimal input/control is needed
+
+
+any barcode scan helper currently used by traveler or inventory flows
+
+
+Recommended implementation notes
+Prefer traveler number first
+If your barcode already encodes travelerNumber, resolve by that before trying raw UUID. That keeps scans human-friendly and aligns with shop-floor use.
+Keep clock entry writes minimal
+Only populate the new WAD context fields on time_clock_entries. Do not try to redesign payroll/timekeeping in this ticket.
+Use one resolver helper
+Create a small helper that returns:
+
+
+traveler
+
+
+production work order
+
+
+derived charge code
+
+
+department
+
+
+operation
+
+
+Then both preview and clock-in routes can reuse it.
+Return a useful payload
+For POST /scan/traveler, return:
+
+
+traveler id and number
+
+
+production work order id and number
+
+
+project id
+
+
+derived charge code
+
+
+department
+
+
+operation
+
+
+That will make UI work easier later.
+Acceptance checklist
+
+
+ traveler scan resolves valid traveler
+
+
+ traveler without WAD is rejected
+
+
+ invalid scan is rejected cleanly
+
+
+ scan-based clock-in creates time entry with traveler + WAD fields
+
+
+ approvalStatus defaults to "AUTO"
+
+
+ manual clock-in flow still works
+
+
+ no legacy fields or routes removed
+
+
+Suggested live tests
+
+
+Scan a valid traveler linked to a WAD and confirm the resolved payload.
+
+
+Clock in using that traveler scan and confirm the new time entry has:
+
+
+productionWorkOrderId
+
+
+travelerId
+
+
+chargeCode
+
+
+approvalStatus = AUTO
+
+
+
+
+Scan a traveler with no WAD and confirm rejection.
+
+
+Scan garbage input and confirm clean 400/404 response.
+
+
+Confirm legacy manual time clock flow still works.
+
+
+Best next ticket after this
+#260 - Labor Budget Overrun Gate and Approval Workflow
+That ticket should:
+
+
+compare active labor against WAD department budgets
+
+
+warn or block when budget is exhausted
+
+
+require authorized approval to continue
+
+
+log who approved, when, and why
+
+
+If you want, I can write #260 next so you have the full DCAA labor-control sequence lined up.

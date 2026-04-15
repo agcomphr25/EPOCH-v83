@@ -1,0 +1,170 @@
+🔴 Replace your existing /consume route logic with this enhanced version
+
+(Only showing the critical added sections — integrate into your current route)
+
+🧩 1. ADD LOT STATUS VALIDATION (TOP OF ROUTE)
+// BLOCK invalid lot states
+const blockedStatuses = ['QUARANTINE', 'REJECTED', 'EXPIRED'];
+
+if (blockedStatuses.includes(lot.status)) {
+  return res.status(400).json({
+    error: 'LOT_NOT_USABLE',
+    status: lot.status,
+  });
+}
+
+// BLOCK expired by date
+if (lot.expirationDate && new Date(lot.expirationDate) < new Date()) {
+  return res.status(400).json({
+    error: 'LOT_EXPIRED',
+    expirationDate: lot.expirationDate,
+  });
+}
+🧩 2. REPLACE RESERVATION FULFILLMENT (CRITICAL FIX)
+
+Replace this:
+
+await storage.fulfillLotReservation(match.id);
+
+With this:
+
+if (match) {
+  const reservedQty = parseFloat(String(match.quantityReserved));
+
+  if (consumed >= reservedQty) {
+    // Full fulfill
+    await storage.fulfillLotReservation(match.id);
+  } else {
+    // Partial fulfill → reduce reservation
+    const newReserved = reservedQty - consumed;
+
+    await db
+      .update(materialLotReservations)
+      .set({ quantityReserved: newReserved.toString() })
+      .where(eq(materialLotReservations.id, match.id));
+  }
+}
+
+👉 Now reservations stay accurate.
+
+🧩 3. ADD INVENTORY TRANSACTION (NEW)
+
+Right after lot transaction:
+
+await storage.createInventoryTransaction({
+  agPartNumber: lot.materialPartNumber,
+  transactionType: 'consumption',
+  quantity: -consumed,
+  unitOfMeasure: lot.unitOfMeasure,
+  referenceType: 'TRAVELER',
+  referenceId: validatedData.travelerId,
+  performedBy: validatedData.scannedBy,
+  notes: `Consumed from ICN ${lot.internalControlNumber}`,
+});
+🧩 4. UPDATE INVENTORY BALANCES (NEW)
+
+Add:
+
+// Find inventory balance for this material
+const balance = await db.query.inventoryBalances.findFirst({
+  where: (b, { eq }) => eq(b.agPartNumber, lot.materialPartNumber),
+});
+
+if (balance) {
+  const newOnHand = balance.quantityOnHand - consumed;
+
+  let newAllocated = balance.quantityAllocated;
+  if (match) {
+    newAllocated = Math.max(0, newAllocated - consumed);
+  }
+
+  const newAvailable = newOnHand - newAllocated;
+
+  await storage.updateInventoryBalance(balance.id, {
+    quantityOnHand: newOnHand,
+    quantityAllocated: newAllocated,
+    quantityAvailable: newAvailable,
+  });
+}
+🧩 5. (OPTIONAL BUT STRONGLY RECOMMENDED) WRAP IN TRANSACTION
+
+If you have DB transaction support:
+
+await db.transaction(async (tx) => {
+  // ALL of:
+  // - create consumption
+  // - update lot
+  // - create lot transaction
+  // - update reservation
+  // - create inventory transaction
+  // - update inventory balance
+});
+
+👉 Prevents partial writes = critical for ERP integrity
+
+🧠 What this gives you now
+
+After this change, your system will:
+
+✅ Be physically accurate
+lot qty = true stock
+inventory = matches lot totals
+✅ Be allocation-safe
+reservations respected
+no double usage
+✅ Be audit complete
+full trace:
+lot → transaction → traveler → operator
+✅ Be AS9100-ready
+blocked bad material
+traceable consumption
+controlled allocation
+⚠️ One important design decision (confirm this)
+
+Right now your system behaves like:
+
+👉 Consume = immediate usage (no “issue” stage)
+
+That is GOOD for your operation if:
+
+operators scan material at time of use
+not pre-kitting everything ahead
+
+If later you want:
+
+kitting carts
+staging materials
+
+Then we add:
+
+ISSUE → CONSUME → RETURN
+
+But for now — your current model is correct.
+
+🚀 Next step (after you implement this)
+
+After this is in:
+
+We move to Phase 2:
+
+scrap endpoint
+return endpoint
+adjustment endpoint
+lot history UI
+traveler reservation visibility
+👊 Bottom line
+
+You were already very close.
+
+This upgrade:
+
+locks your system
+prevents inventory drift
+makes reservations real
+keeps everything auditable
+
+When you drop this in, tell me:
+
+👉 “done”
+
+and I’ll walk you through testing it properly + next phase build.

@@ -647,6 +647,7 @@ import {
   formatOrderId,
 } from './utils/orderIdGenerator';
 import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
+import { normalizeKey } from './lib/customerKey';
 
 // Helper: Explicit column selection for production_orders table
 // Explicitly list all columns needed by getAllOrders() normalization logic.
@@ -7952,6 +7953,8 @@ export class DatabaseStorage implements IStorage {
   async createCustomer(data: InsertCustomer): Promise<Customer> {
     // Explicitly omit id field to prevent null value insertion
     const { id, ...cleanData } = data as any;
+    // Always derive customer_key from name so it is never NULL
+    cleanData.customerKey = normalizeKey(cleanData.name ?? '');
     const [customer] = await db.insert(customers).values(cleanData).returning();
     return customer;
   }
@@ -7960,9 +7963,14 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertCustomer>
   ): Promise<Customer> {
+    const updateData: Partial<InsertCustomer> = { ...data };
+    // Regenerate customer_key whenever name is being updated
+    if (updateData.name !== undefined) {
+      updateData.customerKey = normalizeKey(updateData.name);
+    }
     const [customer] = await db
       .update(customers)
-      .set(data)
+      .set(updateData)
       .where(eq(customers.id, id))
       .returning();
     return customer;

@@ -339,6 +339,20 @@ async function initializeBackgroundServices() {
         console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeFiles.length} applied (or already correct)`);
       }
 
+      // Backfill: ensure all customers have a customer_key derived from their name
+      try {
+        const result = await pool.query(
+          `UPDATE customers SET customer_key = UPPER(REPLACE(TRIM(name), ' ', '_')) WHERE customer_key IS NULL`
+        );
+        const updated: number = result.rowCount ?? 0;
+        if (updated > 0) {
+          console.log(`✅ Backfilled customer_key for ${updated} customer(s) with NULL value`);
+        }
+      } catch (bfErr: unknown) {
+        const msg = bfErr instanceof Error ? bfErr.message : String(bfErr);
+        console.warn('⚠️ customer_key backfill skipped:', msg);
+      }
+
       // One-time migration: Reassign Red Hawk Rifles LLC POs from inactive customer 698 to active customer 547
       try {
         const { sql } = await import('drizzle-orm');

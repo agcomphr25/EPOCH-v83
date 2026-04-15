@@ -15,6 +15,71 @@ import { sql } from 'drizzle-orm';
 
 const router = Router();
 
+/**
+ * Build the set of allowed recipient emails for a vendor:
+ * primary email, additionalEmail, and all active vendor_contact emails.
+ * Used to validate client-provided recipient lists server-side before sending.
+ */
+async function getAllowedVendorEmails(vendorId: number): Promise<Set<string>> {
+  const vendor = await storage.getVendor(vendorId);
+  const allowed = new Set<string>();
+  if (vendor?.email) allowed.add(vendor.email.trim().toLowerCase());
+  if (vendor?.additionalEmail) allowed.add(vendor.additionalEmail.trim().toLowerCase());
+  const contacts = await storage.getVendorContacts(vendorId);
+  for (const c of contacts) {
+    if (c.email) allowed.add(c.email.trim().toLowerCase());
+  }
+  return allowed;
+}
+
+/**
+ * Intersect a client-provided recipients array with the allowed set.
+ * Returns only the emails that are genuinely allowed for this vendor.
+ */
+function filterAllowedRecipients(raw: unknown, allowed: Set<string>): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((e): e is string => typeof e === 'string')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => allowed.has(e));
+}
+
+/**
+ * Derive authoritative `to` and `cc` from the validated recipient selection.
+ *
+ * Rules:
+ *  - If no valid selections → fall back to primaryEmail as `to`.
+ *  - If primary is in the selection → use primaryEmail as `to`, rest go to CC.
+ *  - If primary is NOT in the selection → first validated entry is `to`, rest go to CC.
+ *  - standardCc entries (laurie@, issuing user email) are merged into CC, deduped.
+ */
+function deriveToAndCc(
+  rawRecipients: unknown,
+  primaryEmail: string,
+  allowedEmails: Set<string>,
+  standardCc: string[]
+): { to: string; cc: string[] } {
+  const validated = filterAllowedRecipients(rawRecipients, allowedEmails);
+  const primaryNorm = primaryEmail.trim().toLowerCase();
+
+  if (validated.length === 0) {
+    return { to: primaryEmail, cc: standardCc };
+  }
+
+  const to = validated.includes(primaryNorm) ? primaryEmail : validated[0];
+  const toNorm = to.trim().toLowerCase();
+  const extras = validated.filter((e) => e !== toNorm);
+
+  const cc = [...standardCc];
+  for (const email of extras) {
+    if (!cc.map((c) => c.toLowerCase()).includes(email)) {
+      cc.push(email);
+    }
+  }
+
+  return { to, cc };
+}
+
 // Query params schema for list vendor POs
 const listVendorPOsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -599,6 +664,60 @@ router.put('/:id/optional-settings', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendor-pos/:id/email-recipients - List available email recipients for a vendor PO
+router.get('/:id/email-recipients', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const vendor = await storage.getVendor(vendorPO.vendorId);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    const recipients: { name: string; email: string; type: 'primary' | 'additional' | 'contact' }[] = [];
+
+    if (vendor.email) {
+      recipients.push({
+        name: vendor.contactPerson || vendor.name,
+        email: vendor.email,
+        type: 'primary',
+      });
+    }
+
+    if (vendor.additionalEmail) {
+      recipients.push({
+        name: vendor.name,
+        email: vendor.additionalEmail,
+        type: 'additional',
+      });
+    }
+
+    const contacts = await storage.getVendorContacts(vendorPO.vendorId);
+    for (const contact of contacts) {
+      if (contact.email) {
+        recipients.push({
+          name: contact.name,
+          email: contact.email,
+          type: 'contact',
+        });
+      }
+    }
+
+    res.json(recipients);
+  } catch (error) {
+    console.error('Get email recipients error:', error);
+    res.status(500).json({ error: 'Failed to retrieve email recipients' });
+  }
+});
+
 // POST /api/vendor-pos/:id/send-rfq - Send an RFQ email to vendor (non-binding quote request)
 router.post('/:id/send-rfq', async (req: Request, res: Response) => {
   try {
@@ -630,6 +749,15 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
         message: 'Please add a contact email for this vendor before sending an RFQ.',
       });
     }
+
+    const { recipients: rawRecipients } = req.body ?? {};
+    const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
+    const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
+      rawRecipients,
+      vendor.email,
+      allowedEmails,
+      ['laurie@agcomposites.com']
+    );
 
     // Fetch line items for the RFQ
     const items = await storage.getVendorPOItems(id);
@@ -677,8 +805,8 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
     const emailResult = await sendCommunication({
       templateKey: 'vendor_rfq',
       context: rfqContext,
-      to: vendor.email,
-      cc: 'laurie@agcomposites.com',
+      to: rfqTo,
+      cc: rfqCc,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
       capabilityRequired: 'send_vendor_rfq',
       orderId: String(id),
@@ -696,14 +824,14 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
     // Update status to RFQ Sent (no PO number assigned — stays null)
     const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
 
-    console.log(`✅ RFQ sent to ${vendor.email} for vendor PO ID ${id} (cc: laurie@agcomposites.com)`);
+    console.log(`✅ RFQ sent to ${rfqTo} for vendor PO ID ${id} (cc: ${rfqCc.join(', ')})`);
 
     res.json({
       ...updatedPO,
       emailSent: true,
-      emailRecipient: vendor.email,
-      emailCc: 'laurie@agcomposites.com',
-      message: `RFQ sent successfully to ${vendor.email}.`,
+      emailRecipient: rfqTo,
+      emailCc: rfqCc,
+      message: `RFQ sent successfully to ${rfqTo}.`,
     });
   } catch (error) {
     console.error('Send RFQ error:', error);
@@ -722,7 +850,7 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
-    const { skipEmail, reason } = req.body ?? {};
+    const { skipEmail, reason, recipients: additionalRecipients } = req.body ?? {};
     const skip = Boolean(skipEmail);
 
     // Get the PO first for vendor lookup and pre-flight checks
@@ -800,12 +928,21 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       expiresInMinutes: 60 * 24 * 7, // 7 days expiration
     });
 
-    // Build CC list: always include laurie@agcomposites.com, append issuing user's email if available
-    const ccList: string[] = ['laurie@agcomposites.com'];
+    // Build standard CC list: always include laurie@agcomposites.com + issuing user's email
+    const standardCc: string[] = ['laurie@agcomposites.com'];
     const issuingUserEmail = (req as any).user?.email as string | undefined;
-    if (issuingUserEmail && !ccList.includes(issuingUserEmail)) {
-      ccList.push(issuingUserEmail);
+    if (issuingUserEmail && !standardCc.map((c) => c.toLowerCase()).includes(issuingUserEmail.toLowerCase())) {
+      standardCc.push(issuingUserEmail);
     }
+
+    // Derive authoritative to/cc from selected recipients (validated against vendor's allowed emails)
+    const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
+    const { to: issueToEmail, cc: issueCcList } = deriveToAndCc(
+      additionalRecipients,
+      vendor.email,
+      allowedEmails,
+      standardCc
+    );
 
     const issueContext = {
       vendor_name: vendor.name,
@@ -820,8 +957,8 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
     const emailResult = await sendCommunication({
       templateKey: 'vendor_po_issue',
       context: issueContext,
-      to: vendor.email,
-      cc: ccList,
+      to: issueToEmail,
+      cc: issueCcList,
       triggeredBy: performedBy,
       capabilityRequired: 'issue_vendor_po',
       orderId: String(id),
@@ -837,15 +974,15 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${vendor.email}, cc: ${ccList.join(', ')}`);
+    console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${issueToEmail}, cc: ${issueCcList.join(', ')}`);
 
     return res.json({
       ...issuedPO,
       emailSent: true,
-      emailRecipient: vendor.email,
-      emailCc: ccList,
+      emailRecipient: issueToEmail,
+      emailCc: issueCcList,
       confirmationLinkExpires: expiresAt,
-      message: `PO issued successfully. Confirmation email sent to ${vendor.email}.`,
+      message: `PO issued successfully. Confirmation email sent to ${issueToEmail}.`,
     });
   } catch (error: any) {
     console.error('Issue vendor PO error:', error);
@@ -897,6 +1034,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       });
     }
 
+    const { recipients: additionalRecipients } = req.body ?? {};
+
     const { link, expiresAt } = await generateMagicLink({
       email: vendor.email,
       purpose: 'vendor_po_confirmation',
@@ -911,11 +1050,19 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     const poNumber = vendorPO.poNumber;
 
-    const ccList: string[] = ['laurie@agcomposites.com'];
+    const standardResendCc: string[] = ['laurie@agcomposites.com'];
     const resendingUserEmail = (req as any).user?.email as string | undefined;
-    if (resendingUserEmail && !ccList.includes(resendingUserEmail)) {
-      ccList.push(resendingUserEmail);
+    if (resendingUserEmail && !standardResendCc.map((c) => c.toLowerCase()).includes(resendingUserEmail.toLowerCase())) {
+      standardResendCc.push(resendingUserEmail);
     }
+
+    const resendAllowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
+    const { to: resendToEmail, cc: resendCcList } = deriveToAndCc(
+      additionalRecipients,
+      vendor.email,
+      resendAllowedEmails,
+      standardResendCc
+    );
 
     const resendContext = {
       vendor_name: vendor.name,
@@ -930,8 +1077,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     const emailResult = await sendCommunication({
       templateKey: 'vendor_po_resend',
       context: resendContext,
-      to: vendor.email,
-      cc: ccList,
+      to: resendToEmail,
+      cc: resendCcList,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
       capabilityRequired: 'resend_vendor_po',
       orderId: String(id),
@@ -946,14 +1093,14 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${vendor.email}, cc: ${ccList.join(', ')}`);
+    console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${resendToEmail}, cc: ${resendCcList.join(', ')}`);
 
     res.json({
       emailSent: true,
-      emailRecipient: vendor.email,
-      emailCc: ccList,
+      emailRecipient: resendToEmail,
+      emailCc: resendCcList,
       confirmationLinkExpires: expiresAt,
-      message: `PO resent successfully. Confirmation email sent to ${vendor.email}.`,
+      message: `PO resent successfully. Confirmation email sent to ${resendToEmail}.`,
     });
   } catch (error) {
     console.error('Resend vendor PO error:', error);

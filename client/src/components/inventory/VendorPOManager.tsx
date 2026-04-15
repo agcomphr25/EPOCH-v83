@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -95,6 +96,78 @@ function formatCurrency(value: number | undefined | null, decimals: number = 2):
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+}
+
+type EmailRecipient = {
+  name: string;
+  email: string;
+  type: 'primary' | 'additional' | 'contact';
+};
+
+function RecipientPickerList({
+  recipients,
+  selected,
+  onChange,
+  isLoading,
+}: {
+  recipients: EmailRecipient[];
+  selected: string[];
+  onChange: (emails: string[]) => void;
+  isLoading: boolean;
+}) {
+  const toggle = (email: string) => {
+    if (selected.includes(email)) {
+      onChange(selected.filter((e) => e !== email));
+    } else {
+      onChange([...selected, email]);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading recipients…
+      </div>
+    );
+  }
+
+  if (recipients.length === 0) {
+    return (
+      <div className="py-2 text-sm text-muted-foreground italic">
+        No additional contacts found for this vendor.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 py-1">
+      {recipients.map((r) => (
+        <div
+          key={r.email}
+          className="flex items-start gap-3 p-2.5 border rounded-lg hover:bg-muted/40 cursor-pointer transition-colors"
+          onClick={() => toggle(r.email)}
+        >
+          <Checkbox
+            id={`recipient-${r.email}`}
+            checked={selected.includes(r.email)}
+            onCheckedChange={() => toggle(r.email)}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-0.5"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-sm">{r.name}</div>
+            <div className="text-xs text-muted-foreground truncate">{r.email}</div>
+          </div>
+          {r.type === 'primary' && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
+              Primary
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Types based on our schema
@@ -972,6 +1045,7 @@ function VendorPOForm({
 
 // Main component
 export default function VendorPOManager() {
+  const { toast } = useToast();
   const [selectedVendorPO, setSelectedVendorPO] = useState<VendorPO | null>(
     null
   );
@@ -985,6 +1059,17 @@ export default function VendorPOManager() {
   const [noEmailMode, setNoEmailMode] = useState(false);
   const [noEmailReason, setNoEmailReason] = useState('');
   const [noEmailConfirmed, setNoEmailConfirmed] = useState(false);
+
+  // Recipient picker state (shared across Issue / RFQ / Resend dialogs)
+  const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+
+  // RFQ confirmation dialog state
+  const [showRFQDialog, setShowRFQDialog] = useState(false);
+
+  // Resend confirmation dialog state
+  const [showResendDialog, setShowResendDialog] = useState(false);
 
   // Revision dialog state
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
@@ -1110,10 +1195,10 @@ export default function VendorPOManager() {
 
   // Issue PO mutation - sends confirmation email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false, reason }: { id: number; skipEmail?: boolean; reason?: string }) =>
+    mutationFn: ({ id, skipEmail = false, reason, recipients }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[] }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail, reason }),
+        body: JSON.stringify({ skipEmail, reason, recipients }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
@@ -1145,9 +1230,10 @@ export default function VendorPOManager() {
 
   // Send RFQ mutation - sends quote request email to vendor
   const sendRFQMutation = useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
+        body: JSON.stringify({ recipients }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
@@ -1159,6 +1245,7 @@ export default function VendorPOManager() {
       if (selectedVendorPO) {
         setSelectedVendorPO({ ...selectedVendorPO, status: 'RFQ Sent' });
       }
+      setShowRFQDialog(false);
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to send RFQ');
@@ -1166,9 +1253,10 @@ export default function VendorPOManager() {
   });
 
   const resendPOMutation = useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
       apiRequest(`/api/vendor-pos/${id}/resend`, {
         method: 'POST',
+        body: JSON.stringify({ recipients }),
       }),
     onSuccess: (data: any) => {
       if (data.emailSent) {
@@ -1176,6 +1264,7 @@ export default function VendorPOManager() {
       } else {
         toast.error(data.message || 'Failed to resend PO');
       }
+      setShowResendDialog(false);
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to resend PO');
@@ -1221,6 +1310,47 @@ export default function VendorPOManager() {
     }
   };
 
+  const loadRecipientsForPO = async (poId: number) => {
+    setIsLoadingRecipients(true);
+    setDialogRecipients([]);
+    setSelectedRecipients([]);
+    try {
+      const raw: EmailRecipient[] = await apiRequest(`/api/vendor-pos/${poId}/email-recipients`);
+      const seen = new Set<string>();
+      const recipients = raw.filter((r) => {
+        const key = r.email.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setDialogRecipients(recipients);
+      const primary = recipients.find((r) => r.type === 'primary');
+      setSelectedRecipients(primary ? [primary.email] : recipients.slice(0, 1).map((r) => r.email));
+    } catch {
+      setDialogRecipients([]);
+      setSelectedRecipients([]);
+      toast({
+        title: 'Could not load recipients',
+        description: 'Failed to load vendor contacts. Please close and try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingRecipients(false);
+    }
+  };
+
+  const handleOpenRFQDialog = () => {
+    if (!selectedVendorPO) return;
+    setShowRFQDialog(true);
+    loadRecipientsForPO(selectedVendorPO.id);
+  };
+
+  const handleOpenResendDialog = () => {
+    if (!selectedVendorPO) return;
+    setShowResendDialog(true);
+    loadRecipientsForPO(selectedVendorPO.id);
+  };
+
   const handleIssuePO = (id: number, _skipEmail: boolean = false) => {
     // Find the PO in the list so it can be set as selectedVendorPO (list-view entry point)
     const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === id);
@@ -1235,6 +1365,8 @@ export default function VendorPOManager() {
     setNoEmailConfirmed(false);
     setPendingStatus('Sent');
     setShowStatusChangeDialog(true);
+    // Load recipients for the picker
+    loadRecipientsForPO(id);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -1269,6 +1401,9 @@ export default function VendorPOManager() {
   const handleStatusChange = (newStatus: string) => {
     setPendingStatus(newStatus);
     setShowStatusChangeDialog(true);
+    if (newStatus === 'Sent' && selectedVendorPO) {
+      loadRecipientsForPO(selectedVendorPO.id);
+    }
   };
 
   const confirmStatusChange = (skipEmail: boolean = false) => {
@@ -1278,6 +1413,7 @@ export default function VendorPOManager() {
           id: selectedVendorPO.id,
           skipEmail,
           reason: skipEmail ? noEmailReason.trim() : undefined,
+          recipients: skipEmail ? undefined : selectedRecipients,
         });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
@@ -1873,7 +2009,7 @@ export default function VendorPOManager() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => sendRFQMutation.mutate(selectedVendorPO.id)}
+                onClick={handleOpenRFQDialog}
                 disabled={sendRFQMutation.isPending}
                 className="text-orange-600 hover:text-orange-800 border-orange-300 hover:border-orange-400"
                 data-testid="button-send-rfq"
@@ -1903,11 +2039,7 @@ export default function VendorPOManager() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  if (confirm('Are you sure you want to resend this PO? A new confirmation email with a fresh magic link will be sent to the vendor.')) {
-                    resendPOMutation.mutate(selectedVendorPO.id);
-                  }
-                }}
+                onClick={handleOpenResendDialog}
                 disabled={resendPOMutation.isPending}
                 className="text-blue-600 hover:text-blue-800 border-blue-300 hover:border-blue-400"
                 data-testid="button-resend-po"
@@ -1983,6 +2115,18 @@ export default function VendorPOManager() {
                       : 'Choose how to issue this purchase order.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+
+                {!noEmailMode && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Email Recipients</Label>
+                    <RecipientPickerList
+                      recipients={dialogRecipients}
+                      selected={selectedRecipients}
+                      onChange={setSelectedRecipients}
+                      isLoading={isLoadingRecipients}
+                    />
+                  </div>
+                )}
 
                 {noEmailMode && (
                   <div className="space-y-3 py-2">
@@ -2060,7 +2204,7 @@ export default function VendorPOManager() {
                       </Button>
                       <AlertDialogAction
                         onClick={() => confirmStatusChange(false)}
-                        disabled={issuePOMutation.isPending}
+                        disabled={issuePOMutation.isPending || selectedRecipients.length === 0}
                         data-testid="button-confirm-status-change"
                         className="whitespace-nowrap"
                       >
@@ -2090,6 +2234,80 @@ export default function VendorPOManager() {
                 </AlertDialogFooter>
               </>
             )}
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Send RFQ Confirmation Dialog */}
+        <AlertDialog open={showRFQDialog} onOpenChange={setShowRFQDialog}>
+          <AlertDialogContent className="sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Send Request for Quote</AlertDialogTitle>
+              <AlertDialogDescription>
+                Select the recipients for this RFQ email. At least one recipient must be checked.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email Recipients</Label>
+              <RecipientPickerList
+                recipients={dialogRecipients}
+                selected={selectedRecipients}
+                onChange={setSelectedRecipients}
+                isLoading={isLoadingRecipients}
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button
+                onClick={() => {
+                  if (selectedVendorPO) {
+                    sendRFQMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                  }
+                }}
+                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0}
+                data-testid="button-confirm-send-rfq"
+              >
+                {sendRFQMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
+                ) : 'Send RFQ'}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Resend PO Confirmation Dialog */}
+        <AlertDialog open={showResendDialog} onOpenChange={setShowResendDialog}>
+          <AlertDialogContent className="sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Resend Purchase Order</AlertDialogTitle>
+              <AlertDialogDescription>
+                Select the recipients for this resend email. A fresh confirmation link will be included. At least one recipient must be checked.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email Recipients</Label>
+              <RecipientPickerList
+                recipients={dialogRecipients}
+                selected={selectedRecipients}
+                onChange={setSelectedRecipients}
+                isLoading={isLoadingRecipients}
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button
+                onClick={() => {
+                  if (selectedVendorPO) {
+                    resendPOMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                  }
+                }}
+                disabled={resendPOMutation.isPending || selectedRecipients.length === 0}
+                data-testid="button-confirm-resend-po"
+              >
+                {resendPOMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Resending…</>
+                ) : 'Resend PO'}
+              </Button>
+            </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -1045,7 +1044,6 @@ function VendorPOForm({
 
 // Main component
 export default function VendorPOManager() {
-  const { toast } = useToast();
   const [selectedVendorPO, setSelectedVendorPO] = useState<VendorPO | null>(
     null
   );
@@ -1329,11 +1327,7 @@ export default function VendorPOManager() {
     } catch {
       setDialogRecipients([]);
       setSelectedRecipients([]);
-      toast({
-        title: 'Could not load recipients',
-        description: 'Failed to load vendor contacts. Please close and try again.',
-        variant: 'destructive',
-      });
+      toast.error('Could not load recipients — failed to load vendor contacts. Please close and try again.');
     } finally {
       setIsLoadingRecipients(false);
     }

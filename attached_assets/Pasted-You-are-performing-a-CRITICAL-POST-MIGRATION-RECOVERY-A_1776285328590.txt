@@ -1,0 +1,125 @@
+You are performing a CRITICAL POST-MIGRATION RECOVERY AUDIT for the EPOCH ERP system.
+
+CONTEXT:
+A recent schema change introduced a new field customers.customer_key and related normalization logic.
+
+After this change:
+
+New customers cannot be created
+Customer UI hover actions no longer work
+A pending migration is attempting to DROP ar_invoice_id from credit_memos
+
+Your job is to identify EXACTLY what broke and how to fix it safely.
+
+STEP 1 — SCHEMA VALIDATION
+
+Inspect the current database schema for:
+
+customers table:
+
+Does customer_key exist?
+Is it marked UNIQUE?
+Does it allow NULL values?
+
+Check:
+
+Are there duplicate or null customer_key values?
+Did the UNIQUE constraint fail silently?
+STEP 2 — INSERT FAILURE ANALYSIS
+
+Trace the backend flow for creating a new customer:
+
+Find the API endpoint used to create customers
+Inspect validation logic
+Inspect insert query
+
+Determine:
+
+Is customer_key being generated on insert?
+Is it missing or null?
+Is it violating UNIQUE constraint?
+
+Return:
+
+Exact reason inserts are failing
+The failing SQL or validation rule
+STEP 3 — FRONTEND BREAK (HOVER ISSUE)
+
+Investigate customer UI hover behavior:
+
+Identify component responsible for hover
+Check API calls used to populate customer data
+Verify response shape
+
+Determine:
+
+Is customer_key now expected but missing?
+Did response structure change?
+Is a query failing due to join mismatch?
+
+Return:
+
+Root cause of hover failure
+STEP 4 — MIGRATION DANGER ANALYSIS
+
+Inspect the pending migration:
+
+Why is ar_invoice_id being dropped from credit_memos?
+Is this column used anywhere in:
+AR logic
+invoice linking
+reporting
+
+Determine:
+
+If applying this migration will break AR functionality
+STEP 5 — DATA INTEGRITY CHECK
+
+Check for:
+
+Customers with NULL customer_key
+Duplicate normalized keys
+Orders or invoices referencing customers that no longer match
+STEP 6 — REQUIRED FIXES (PRIORITIZED)
+
+Provide a clear fix plan:
+
+Priority 1 (must fix immediately):
+
+What is breaking customer creation?
+
+Priority 2:
+
+What broke the UI?
+
+Priority 3:
+
+What to do about the dangerous migration
+
+Include:
+
+Exact code fixes
+SQL fixes
+Whether to rollback or patch forward
+STEP 7 — SAFE PATCH PLAN
+
+Provide a step-by-step recovery plan:
+
+Fix schema safely
+Restore customer creation
+Restore UI functionality
+Prevent future breakage
+
+IMPORTANT:
+
+Do NOT assume anything — verify against actual code
+Do NOT suggest full rewrites
+Focus only on stabilizing system after Prompt 1 changes
+Be precise and critical
+
+OUTPUT FORMAT:
+
+ROOT CAUSE SUMMARY
+BROKEN AREAS
+EXACT FIXES
+SAFE RECOVERY PLAN

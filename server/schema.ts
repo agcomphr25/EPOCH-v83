@@ -3293,7 +3293,7 @@ export type LayupSchedule = typeof layupSchedule.$inferSelect;
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
-  customerKey: text('customer_key').unique(),
+  customerKey: text('customer_key'),
   email: text('email'),
   phone: text('phone'),
   company: text('company'),

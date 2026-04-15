@@ -475,6 +475,45 @@ router.get('/outstanding', async (req: Request, res: Response) => {
   }
 });
 
+// Overdue Orders route - orders past due_date with no shipment (must be before :orderId route)
+router.get('/overdue', async (req: Request, res: Response) => {
+  interface OverdueOrderRow {
+    id: string;
+    order_number: string;
+    customer: string;
+    due_date: Date;
+    days_late: number;
+  }
+  try {
+    const result = await pool.query<OverdueOrderRow>(`
+      SELECT
+        o.id,
+        o.order_number,
+        o.customer,
+        o.due_date,
+        FLOOR(EXTRACT(EPOCH FROM (NOW() - o.due_date)) / 86400)::int AS days_late
+      FROM all_orders o
+      WHERE o.due_date < NOW()
+      AND NOT EXISTS (
+        SELECT 1 FROM v_all_shipments s
+        WHERE s.order_id = o.id
+      )
+      ORDER BY o.due_date ASC
+    `);
+    const overdueOrders = result.rows.map((row) => ({
+      id: row.id,
+      orderNumber: row.order_number,
+      customer: row.customer,
+      dueDate: row.due_date,
+      daysLate: row.days_late,
+    }));
+    res.json(overdueOrders);
+  } catch (error) {
+    console.error('Get overdue orders error:', error);
+    res.status(500).json({ error: 'Failed to get overdue orders' });
+  }
+});
+
 // Get orders by department (must be before :orderId route)
 router.get('/department/:department', async (req: Request, res: Response) => {
   try {

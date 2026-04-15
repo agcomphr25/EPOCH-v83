@@ -1,0 +1,81 @@
+The next best step is:
+
+Scrap / Return / Adjustment backend flows
+
+That is the natural follow-on to #271 because you now have a trustworthy consume path, and these three actions complete the inventory lifecycle around it. Your schema already supports the transaction types for this direction, especially in inventory_transactions and material_lot_transactions.
+
+Here is the order I would build it in:
+
+#272 — Scrap route backend
+
+Add a POST /api/material-lots/:id/scrap route that:
+
+blocks scrap on already consumed lots
+decrements material_lots.remainingQty
+writes material_lot_transactions with transactionType='SCRAP'
+writes inventory_transactions with negative quantity and transactionType='adjustment' or 'scrap' depending on your naming choice
+updates inventory_balances
+requires reason, performedBy, and qty
+runs atomically in db.transaction()
+#273 — Return route backend
+
+Add a POST /api/material-lots/:id/return route for unused issued material that:
+
+increases remainingQty
+writes material_lot_transactions with RETURN
+writes inventory_transactions with positive quantity
+updates inventory_balances
+optionally reopens lot status from ISSUED to ACCEPTED if appropriate
+runs atomically
+#274 — Adjustment route backend
+
+Add a supervisor/admin-controlled POST /api/material-lots/:id/adjust route that:
+
+supports positive or negative corrections
+requires a reason code and notes
+writes both inventory and lot transaction records
+updates balances
+blocks adjustments that would drive qty below zero unless explicitly overridden
+#275 — Transaction history read model
+
+After those routes:
+
+add a clean endpoint that returns merged lot + inventory transaction history
+useful for future UI and audits
+
+The reason this is the right next step is simple: you already have ISSUE/consume logic and inventory balance structure in place, but you still need the controlled exception flows to keep real shop-floor inventory honest. Your schema already has the needed fields and transaction tables to support that cleanly.
+
+I’d start with this exact ticket:
+
+#272 - Scrap Route Backend Hardening
+
+What & Why
+Add a controlled scrap route for material lots so unusable, damaged, contaminated, or expired material can be permanently removed from stock with a reasoned audit trail. Without this, operators or admins may rely on manual quantity edits, which weakens traceability and causes balance drift.
+
+Done looks like
+
+POST /api/material-lots/:id/scrap exists
+Requires qty, reason, and performedBy
+Blocks scrap if qty is greater than lot remainingQty
+Blocks scrap on lots already fully consumed
+Updates material_lots.remainingQty
+Sets lot status to SCRAPPED if remaining reaches zero; otherwise leaves status usable or moves to partial-scrap logic per current rule
+Writes material_lot_transactions with transactionType='SCRAP'
+Writes inventory_transactions
+Updates inventory_balances.quantityOnHand
+Recomputes quantityAvailable = quantityOnHand - quantityAllocated
+All writes happen in one transaction
+
+Out of scope
+
+Scrap UI
+Approval workflow
+Return/adjustment endpoints
+
+Relevant files
+
+server/src/routes/materialLots.ts
+server/storage.ts
+server/schema.ts for material_lots, material_lot_transactions, inventory_transactions, inventory_balances
+
+Paste the scrap route file section when you’re ready, and I’ll help shape #272 the same way we did #271

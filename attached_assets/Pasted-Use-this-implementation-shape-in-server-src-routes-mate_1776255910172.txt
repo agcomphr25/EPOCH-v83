@@ -1,0 +1,240 @@
+Use this implementation shape in server/src/routes/materialLots.ts for POST /api/material-lots/consume:
+
+import { and, eq } from "drizzle-orm";
+import { db } from "../db";
+import {
+  inventoryBalances,
+  materialLotReservations,
+} from "../../shared/schema";
+
+// POST /api/material-lots/consume
+router.post("/consume", async (req, res) => {
+  try {
+    const validatedData = insertTravelerMaterialConsumptionSchema.parse(req.body);
+
+    const lot = await storage.getMaterialLot(validatedData.materialLotId);
+    if (!lot) {
+      return res.status(404).json({ error: "LOT_NOT_FOUND" });
+    }
+
+    const consumed = parseFloat(String(validatedData.qtyUsed));
+    const remaining = parseFloat(String(lot.remainingQty));
+
+    // Hard guard: unusable lot statuses
+    const blockedStatuses = new Set(["QUARANTINE", "REJECTED", "EXPIRED"]);
+    if (blockedStatuses.has(lot.status)) {
+      return res.status(400).json({
+        error: "LOT_NOT_USABLE",
+        status: lot.status,
+      });
+    }
+
+    // Hard guard: expiration date in the past
+    if (lot.expirationDate && new Date(lot.expirationDate) < new Date()) {
+      return res.status(400).json({
+        error: "LOT_EXPIRED",
+        expirationDate: lot.expirationDate,
+      });
+    }
+
+    // Reservation-aware availability check
+    const reservedQty = await storage.getReservedQtyForLot(lot.id).catch(() => 0);
+    let effectiveAvailableQty = Math.max(0, remaining - reservedQty);
+
+    let allReservations: Awaited<ReturnType<typeof storage.getLotReservations>> = [];
+    let matchingReservation:
+      | Awaited<ReturnType<typeof storage.getLotReservations>>[number]
+      | undefined;
+
+    if (validatedData.travelerId) {
+      allReservations = await storage.getLotReservations(lot.id);
+
+      const ownReserved = allReservations
+        .filter(
+          (r) =>
+            r.status === "active" &&
+            r.travelerId === validatedData.travelerId
+        )
+        .reduce((sum, r) => sum + parseFloat(String(r.quantityReserved)), 0);
+
+      effectiveAvailableQty = Math.max(
+        0,
+        remaining - (reservedQty - ownReserved)
+      );
+
+      matchingReservation = allReservations.find(
+        (r) =>
+          r.status === "active" &&
+          r.travelerId === validatedData.travelerId
+      );
+    }
+
+    if (consumed > remaining) {
+      return res.status(400).json({
+        error: "INSUFFICIENT_LOT_QTY",
+        remaining,
+        reservedQty,
+        availableQty: effectiveAvailableQty,
+      });
+    }
+
+    if (consumed > effectiveAvailableQty) {
+      return res.status(409).json({
+        error: "OVER_COMMITTED",
+        remaining,
+        reservedQty,
+        availableQty: effectiveAvailableQty,
+        requested: consumed,
+      });
+    }
+
+    // Keep this if your current route already resolves a physical received unit.
+    let resolvedRuId: number | null = validatedData.receivedUnitId ?? null;
+    // ... existing received_unit resolution / validation stays here ...
+
+    const result = await db.transaction(async (tx) => {
+      const consumptionPayload =
+        resolvedRuId !== null
+          ? { ...validatedData, receivedUnitId: resolvedRuId }
+          : validatedData;
+
+      const consumption = await tx
+        .insert(travelerMaterialConsumption)
+        .values(consumptionPayload)
+        .returning()
+        .then((rows) => rows[0]);
+
+      const newRemaining = remaining - consumed;
+      const newStatus = newRemaining <= 0 ? "CONSUMED" : lot.status;
+
+      await tx
+        .update(materialLots)
+        .set({
+          remainingQty: newRemaining.toString(),
+          status: newStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(materialLots.id, lot.id));
+
+      await tx.insert(materialLotTransactions).values({
+        materialLotId: lot.id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: "ISSUE",
+        qtyBefore: lot.remainingQty,
+        qtyChange: (-consumed).toString(),
+        qtyAfter: newRemaining.toString(),
+        referenceType: "TRAVELER",
+        referenceId: validatedData.travelerId,
+        performedBy: validatedData.scannedBy,
+      });
+
+      let fulfilledReservationId: number | null = null;
+      let reservedPortionConsumed = 0;
+
+      if (matchingReservation) {
+        const reserved = parseFloat(String(matchingReservation.quantityReserved));
+        reservedPortionConsumed = Math.min(consumed, reserved);
+
+        if (consumed >= reserved) {
+          await tx
+            .update(materialLotReservations)
+            .set({
+              status: "fulfilled",
+              updatedAt: new Date(),
+            })
+            .where(eq(materialLotReservations.id, matchingReservation.id));
+
+          fulfilledReservationId = matchingReservation.id;
+        } else {
+          const reducedReservedQty = reserved - consumed;
+
+          await tx
+            .update(materialLotReservations)
+            .set({
+              quantityReserved: reducedReservedQty.toString(),
+              updatedAt: new Date(),
+            })
+            .where(eq(materialLotReservations.id, matchingReservation.id));
+        }
+      }
+
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lot.materialPartNumber,
+        transactionType: "consumption",
+        quantity: -consumed,
+        unitOfMeasure: lot.unitOfMeasure,
+        referenceType: "TRAVELER",
+        referenceId: validatedData.travelerId ?? null,
+        performedBy: validatedData.scannedBy,
+        notes: `Consumed from ICN ${lot.internalControlNumber}`,
+        metadata: {
+          materialLotId: lot.id,
+          internalControlNumber: lot.internalControlNumber,
+          travelerStepId: validatedData.travelerStepId,
+          travelerTaskId: validatedData.travelerTaskId ?? null,
+        },
+      });
+
+      const balance = await tx.query.inventoryBalances.findFirst({
+        where: eq(inventoryBalances.agPartNumber, lot.materialPartNumber),
+      });
+
+      if (balance) {
+        const newQuantityOnHand = balance.quantityOnHand - consumed;
+        const newQuantityAllocated = Math.max(
+          0,
+          balance.quantityAllocated - reservedPortionConsumed
+        );
+        const newQuantityAvailable =
+          newQuantityOnHand - newQuantityAllocated;
+
+        await tx
+          .update(inventoryBalances)
+          .set({
+            quantityOnHand: newQuantityOnHand,
+            quantityAllocated: newQuantityAllocated,
+            quantityAvailable: newQuantityAvailable,
+            updatedAt: new Date(),
+          })
+          .where(eq(inventoryBalances.id, balance.id));
+      }
+
+      return {
+        consumption,
+        updatedLot: {
+          ...lot,
+          remainingQty: newRemaining.toString(),
+          status: newStatus,
+        },
+        fulfilledReservationId,
+      };
+    });
+
+    return res.status(201).json(result);
+  } catch (error) {
+    console.error("Error consuming material lot:", error);
+    return res.status(500).json({
+      error: "CONSUME_FAILED",
+      message: "Failed to consume material lot",
+    });
+  }
+});
+
+A few notes before you paste it in:
+
+db.transaction() should own all six writes. Inside the transaction, avoid calling storage helpers that use the global db, or they can escape the transaction boundary. Use tx.insert, tx.update, and tx.query... directly for the route-level atomic path.
+
+If inventory_balances has multiple rows per part number by location, this route currently needs a deterministic rule for which row to update. Your ticket says “matching agPartNumber,” but the schema also has locationId, so if you track stock by freezer, warehouse, or production area, you should key this update by both part number and source location rather than the first row found.
+
+For expiration checking, new Date(lot.expirationDate) < new Date() is acceptable for now, but if your floor treats expiry as end-of-day rather than exact timestamp, normalize that later so you do not reject material too early.
+
+I would test these six cases right after patching:
+
+accepted lot, no reservation, valid qty
+accepted lot, partial against reservation
+accepted lot, full consume against reservation
+consume greater than remaining
+consume greater than available because another traveler reserved the lot
+lot status QUARANTINE or past expiration date
+
+Your ticket is solid as written, and this patch shape matches it closely.

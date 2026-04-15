@@ -12,9 +12,15 @@ import {
   cuttingFabricInventory,
   manufacturingQueue,
   allocationRequirements,
+  materialLots,
+  materialLotTransactions,
+  travelerMaterialConsumption,
+  materialLotReservations,
+  inventoryTransactions,
+  inventoryBalances,
 } from '../../schema';
 import { db } from '../../db';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 
 const router = Router();
@@ -771,6 +777,25 @@ router.post('/consume', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Material lot not found' });
     }
 
+    // ── Guard 1: Lot status ────────────────────────────────────────────────────
+    const blockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'EXPIRED'];
+    if (blockedStatuses.includes(lot.status as MaterialLotStatus)) {
+      return res.status(400).json({
+        error: 'LOT_NOT_USABLE',
+        message: `Lot cannot be consumed — current status is ${lot.status}`,
+        status: lot.status,
+      });
+    }
+
+    // ── Guard 2: Expiration date ───────────────────────────────────────────────
+    if (lot.expirationDate && new Date(lot.expirationDate) < new Date()) {
+      return res.status(400).json({
+        error: 'LOT_EXPIRED',
+        message: `Lot expired on ${new Date(lot.expirationDate).toISOString()}`,
+        expirationDate: lot.expirationDate,
+      });
+    }
+
     const remaining = parseFloat(lot.remainingQty);
     const consumed = parseFloat(validatedData.qtyUsed);
 
@@ -866,33 +891,117 @@ router.post('/consume', async (req: Request, res: Response) => {
       ? { ...validatedData, receivedUnitId: resolvedRuId }
       : validatedData;
 
-    // Create consumption record
-    const consumption = await storage.createTravelerMaterialConsumption(consumptionData);
-
-    // Update lot quantity
+    // Computed values needed inside and outside the transaction
     const newRemaining = (remaining - consumed).toString();
     const newStatus: MaterialLotStatus = parseFloat(newRemaining) <= 0 ? 'CONSUMED' : lot.status as MaterialLotStatus;
+    const lotTxNotes = `Consumed for traveler step ${validatedData.travelerStepId}${resolvedRuId ? ` (received_unit #${resolvedRuId})` : ''}`;
 
-    await storage.updateMaterialLot(lot.id, {
-      remainingQty: newRemaining,
-      status: newStatus,
+    // ── Atomic transaction: all six writes succeed or fail together ─────────
+    const { consumption, fulfilledReservationId, reservationUpdatedId } = await db.transaction(async (tx) => {
+
+      // 1. Consumption record
+      const [consumption] = await tx
+        .insert(travelerMaterialConsumption)
+        .values(consumptionData)
+        .returning();
+
+      // 2. Update lot remaining qty and status
+      await tx
+        .update(materialLots)
+        .set({ remainingQty: newRemaining, status: newStatus, updatedAt: new Date() })
+        .where(eq(materialLots.id, lot.id));
+
+      // 3. Lot ISSUE transaction
+      await tx.insert(materialLotTransactions).values(createTransaction({
+        materialLotId: lot.id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: 'ISSUE',
+        qtyBefore: lot.remainingQty,
+        qtyChange: (-consumed).toString(),
+        qtyAfter: newRemaining,
+        referenceType: 'TRAVELER',
+        referenceId: validatedData.travelerId,
+        performedBy: validatedData.scannedBy,
+        notes: lotTxNotes,
+      }));
+
+      // 4. Reservation update — partial or full fulfillment
+      // Track how much of the consumed qty comes from the reservation (may be
+      // less than consumed if the traveler is also drawing unreserved stock).
+      let reservationUpdatedId: number | null = null;
+      let fulfilledReservationId: number | null = null;
+      let reservedPortionConsumed = 0;
+      if (validatedData.travelerId) {
+        const activeReservations = await tx
+          .select()
+          .from(materialLotReservations)
+          .where(
+            and(
+              eq(materialLotReservations.materialLotId, lot.id),
+              eq(materialLotReservations.status, 'active'),
+              eq(materialLotReservations.travelerId, validatedData.travelerId)
+            )
+          )
+          .limit(1);
+        const match = activeReservations[0] ?? null;
+        if (match) {
+          const reservedQtyMatch = parseFloat(String(match.quantityReserved));
+          // The reserved portion consumed is at most the full reservation amount
+          reservedPortionConsumed = Math.min(consumed, reservedQtyMatch);
+          reservationUpdatedId = match.id;
+          if (consumed >= reservedQtyMatch) {
+            // Full fulfillment — reservation is fully consumed
+            await tx
+              .update(materialLotReservations)
+              .set({ status: 'fulfilled', updatedAt: new Date() })
+              .where(eq(materialLotReservations.id, match.id));
+            fulfilledReservationId = match.id;
+          } else {
+            // Partial — reduce reserved qty only by what was consumed, keep active
+            const newReservedQty = (reservedQtyMatch - consumed).toString();
+            await tx
+              .update(materialLotReservations)
+              .set({ quantityReserved: newReservedQty, updatedAt: new Date() })
+              .where(eq(materialLotReservations.id, match.id));
+          }
+        }
+      }
+
+      // 5. Inventory transaction (consumption type, negative qty)
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lot.materialPartNumber,
+        transactionType: 'consumption',
+        quantity: -consumed,
+        unitOfMeasure: lot.unitOfMeasure,
+        referenceType: 'TRAVELER',
+        referenceId: validatedData.travelerId ?? null,
+        performedBy: validatedData.scannedBy,
+      });
+
+      // 6. Inventory balance update
+      // quantityAllocated decrements only by the reserved portion that was consumed
+      // (not by the full consumed amount, which may include unreserved stock).
+      const [balance] = await tx
+        .select()
+        .from(inventoryBalances)
+        .where(eq(inventoryBalances.agPartNumber, lot.materialPartNumber))
+        .limit(1);
+      if (balance) {
+        const newOnHand = Math.max(0, balance.quantityOnHand - consumed);
+        const newAllocated = reservationUpdatedId !== null
+          ? Math.max(0, balance.quantityAllocated - reservedPortionConsumed)
+          : balance.quantityAllocated;
+        const newAvailable = Math.max(0, newOnHand - newAllocated);
+        await tx
+          .update(inventoryBalances)
+          .set({ quantityOnHand: newOnHand, quantityAllocated: newAllocated, quantityAvailable: newAvailable, updatedAt: new Date() })
+          .where(eq(inventoryBalances.id, balance.id));
+      }
+
+      return { consumption, fulfilledReservationId, reservationUpdatedId };
     });
 
-    // Record ISSUE transaction against the lot
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: lot.id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'ISSUE',
-      qtyBefore: lot.remainingQty,
-      qtyChange: (-consumed).toString(),
-      qtyAfter: newRemaining,
-      referenceType: 'TRAVELER',
-      referenceId: validatedData.travelerId,
-      performedBy: validatedData.scannedBy,
-      notes: `Consumed for traveler step ${validatedData.travelerStepId}${resolvedRuId ? ` (received_unit #${resolvedRuId})` : ''}`,
-    }));
-
-    // Decrement physical received_unit quantity (best-effort, non-blocking)
+    // Decrement physical received_unit quantity (best-effort, outside transaction)
     if (resolvedRuId !== null) {
       try {
         await db.execute(
@@ -903,28 +1012,12 @@ router.post('/consume', async (req: Request, res: Response) => {
       }
     }
 
-    // Auto-fulfill matching active reservation for this traveler (best-effort)
-    let fulfilledReservationId: number | null = null;
-    if (validatedData.travelerId) {
-      try {
-        const reservations = await storage.getLotReservations(lot.id);
-        const match = reservations.find(r =>
-          r.status === 'active' && r.travelerId === validatedData.travelerId
-        );
-        if (match) {
-          await storage.fulfillLotReservation(match.id);
-          fulfilledReservationId = match.id;
-        }
-      } catch (resErr: any) {
-        console.warn('[consume] reservation auto-fulfill failed (non-fatal):', resErr.message);
-      }
-    }
-
     res.status(201).json({
       consumption,
       updatedLot: { ...lot, remainingQty: newRemaining, status: newStatus },
       receivedUnitId: resolvedRuId,
       fulfilledReservationId,
+      reservationUpdatedId,
     });
   } catch (error: any) {
     console.error('Error recording consumption:', error);

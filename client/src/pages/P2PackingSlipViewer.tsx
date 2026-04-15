@@ -176,12 +176,10 @@ export default function P2PackingSlipViewer() {
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       <div className="print:hidden flex items-center justify-between mb-6">
-        <Link href="/p2-traveler-viewer">
-          <Button variant="ghost">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-        </Link>
+        <Button variant="ghost" onClick={() => window.history.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
         <div className="flex gap-2">
           {canEdit && !editMode && (
             <Button variant="outline" onClick={handleStartEdit}>

@@ -1,0 +1,108 @@
+PART 2 — COPY-PASTE AUDIT PROMPT
+
+Use this inside your agent / Replit / Claude / etc.
+
+Writing
+
+EPOCH vs COSTPOINT — READ-ONLY SYSTEM AUDIT PROMPT
+
+You are a senior ERP systems architect and DCAA compliance expert.
+
+Your task is to perform a READ-ONLY audit of the EPOCH ERP system and compare it directly against Deltek Costpoint.
+
+DO NOT MODIFY ANY CODE.
+DO NOT MAKE ASSUMPTIONS.
+ONLY USE VERIFIED SCHEMA, ROUTES, AND UI.
+
+PHASE 1 — DOMAIN INVENTORY
+Identify all core domains in EPOCH:
+Orders
+Shipping
+AR / Invoicing
+Customers
+Vendors
+Inventory
+Production
+Timekeeping
+Any additional domains
+For each domain, define:
+Source of truth table(s)
+Key fields
+Relationships (FKs or lack thereof)
+Any duplicate or conflicting fields
+PHASE 2 — SYSTEM OF TRUTH ANALYSIS
+
+For each domain:
+
+Is there a SINGLE source of truth? (Yes/No)
+Are there duplicate state fields? (status vs statusId, etc.)
+Are relationships enforced at DB level?
+Are there orphan records possible?
+
+Output:
+
+Domain Truth Map (table format)
+PHASE 3 — ACCOUNTING READINESS
+
+Evaluate whether EPOCH has:
+
+General Ledger structure
+Project-based accounting
+Cost pools (labor, overhead, G&A)
+Revenue recognition logic
+Audit traceability
+
+Output:
+
+PASS / PARTIAL / FAIL per category
+PHASE 4 — COMPLIANCE GAP ANALYSIS
+
+Compare EPOCH to Costpoint capabilities:
+
+DCAA compliance
+FAR/CAS alignment
+Audit trail completeness
+Role-based access control depth
+Data immutability
+
+Output:
+
+Explicit gap list
+PHASE 5 — ARCHITECTURE COMPARISON
+
+Compare EPOCH vs Costpoint in:
+
+Data model structure
+Module integration
+Workflow orchestration
+Reporting / BI
+AI integration
+PHASE 6 — RISK ASSESSMENT
+
+Identify:
+
+Critical risks (will break at scale)
+Financial risks (misstated revenue, etc.)
+Compliance risks (audit failure points)
+Operational risks (duplicate systems, manual fixes)
+PHASE 7 — PRIORITIZED ROADMAP
+
+Output EXACTLY:
+
+TIER 1 — MUST FIX (system viability)
+TIER 2 — ENTERPRISE READINESS
+TIER 3 — COMPETITIVE ADVANTAGE
+
+Each item must include:
+
+Problem
+Impact
+Recommended fix
+FINAL OUTPUT FORMAT
+Executive Summary (non-technical)
+Domain Truth Map
+Gap Analysis (vs Costpoint)
+Risk Assessment
+Roadmap
+
+Make the report suitable for company ownership review.

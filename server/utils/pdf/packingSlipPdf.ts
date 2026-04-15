@@ -515,9 +515,9 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
   y -= shipToBoxH + SPACING.SECTION_GAP_SMALL;
 
   // ── TABLE ───────────────────────────────────────────────────────────────────
-  // Columns: PO # | Contents | Sticker # Range | Quantity | Weekly Box # | Shipment #
+  // Columns: PO # | Contents | Sticker # Range | Quantity | Tracking #
   // Width allocation out of usableWidth (≈532px with margin=40)
-  const TABLE_COL_WIDTHS = [70, 120, 75, 50, 90, 127] as const;
+  const TABLE_COL_WIDTHS = [70, 120, 75, 50, 217] as const;
   // Sanity: these sum to 532 for usableWidth=532
 
   const tableColX: number[] = [margin];
@@ -530,8 +530,7 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
     'Contents',
     'Sticker # Range',
     'Quantity',
-    'Weekly Box #',
-    'Shipment #',
+    'Tracking #',
   ];
 
   const hdrHeight = 16;
@@ -632,8 +631,7 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
       item.contents || item.partNumber || '',
       item.stickerRange || '',
       String(item.quantity ?? 1),
-      item.weeklyBoxNumber || data.weeklyBoxNumber || '',
-      item.shipmentNumber || data.shipmentNumber || '',
+      data.trackingNumber || '',
     ];
 
     cellValues.forEach((val, ci) => {
@@ -648,63 +646,6 @@ export async function generatePoPackingSlipPdf(data: PackingSlipData): Promise<B
 
     y -= ROW_HEIGHT;
   }
-
-  // ── TRACKING # ROW at bottom of table ──────────────────────────────────────
-  const trackingRowH = 18;
-
-  // Page break check
-  if (y - trackingRowH < margin + 40) {
-    page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    y = PAGE_HEIGHT - margin;
-  }
-
-  // Tracking row background (light gray to distinguish)
-  page.drawRectangle({
-    x: margin,
-    y: y - trackingRowH,
-    width: usableWidth,
-    height: trackingRowH,
-    color: rgb(0.92, 0.92, 0.92),
-  });
-
-  // Bottom border of tracking row
-  page.drawLine({
-    start: { x: margin, y: y - trackingRowH },
-    end: { x: margin + usableWidth, y: y - trackingRowH },
-    thickness: 0.75,
-    color: rgb(0, 0, 0),
-  });
-
-  // Column dividers for tracking row
-  for (let ci = 1; ci < TABLE_COL_WIDTHS.length; ci++) {
-    page.drawLine({
-      start: { x: tableColX[ci], y },
-      end: { x: tableColX[ci], y: y - trackingRowH },
-      thickness: 0.5,
-      color: rgb(0.6, 0.6, 0.6),
-    });
-  }
-
-  // "Tracking #" label and value both placed within the Weekly Box # column area (col 4)
-  // The label sits on the left, value follows inline within that column region
-  const trackingLabel = 'Tracking #:';
-  const trackingLabelW = boldFont.widthOfTextAtSize(trackingLabel, FONT_SIZES.BODY_SMALL);
-  page.drawText(trackingLabel, {
-    x: tableColX[4] + 3,
-    y: y - trackingRowH + 5,
-    size: FONT_SIZES.BODY_SMALL,
-    font: boldFont,
-    color: COLORS.TEXT_PRIMARY,
-  });
-  page.drawText(data.trackingNumber || '', {
-    x: tableColX[4] + 3 + trackingLabelW + 3,
-    y: y - trackingRowH + 5,
-    size: FONT_SIZES.BODY_SMALL,
-    font,
-    color: COLORS.TEXT_SECONDARY,
-  });
-
-  y -= trackingRowH;
 
   // Outer table border (drawn as overlay on top of everything)
   page.drawRectangle({

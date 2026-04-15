@@ -204,12 +204,14 @@ export default function OEMShipmentsPage() {
   };
 
   const downloadShippingLabel = async (shipmentId: number, trackingNumber: string) => {
+    const newTab = window.open('', '_blank');
     try {
       const response = await fetch(`/api/po-orders/oem-shipments/${shipmentId}/label`, {
         credentials: 'include',
       });
 
       if (response.status === 404) {
+        newTab?.close();
         toast({
           title: 'No label on file',
           description: 'No label on file — return this shipment to QC to regenerate.',
@@ -219,21 +221,24 @@ export default function OEMShipmentsPage() {
       }
 
       if (!response.ok) {
-        throw new Error('Failed to download shipping label');
+        newTab?.close();
+        throw new Error('Failed to open shipping label');
       }
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `shipping-label-${trackingNumber}.gif`;
-      link.click();
-      URL.revokeObjectURL(url);
+      if (newTab) {
+        newTab.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
-      toast({ title: 'Shipping label downloaded' });
+      toast({ title: 'Shipping label opened in new tab' });
     } catch (error: any) {
+      newTab?.close();
       toast({
-        title: 'Download failed',
+        title: 'Failed to open label',
         description: error.message,
         variant: 'destructive',
       });
@@ -241,12 +246,14 @@ export default function OEMShipmentsPage() {
   };
 
   const downloadPackingSlip = async (itemId: number, poNumber: string, orderId: string) => {
+    const newTab = window.open('', '_blank');
     try {
       const response = await fetch(`/api/po-orders/oem-shipments/packing-slip/${itemId}`, {
         credentials: 'include',
       });
 
       if (response.status === 404) {
+        newTab?.close();
         toast({
           title: 'No packing slip available',
           description: 'No packing slip could be found or regenerated for this shipment.',
@@ -256,21 +263,24 @@ export default function OEMShipmentsPage() {
       }
 
       if (!response.ok) {
-        throw new Error('Failed to download packing slip');
+        newTab?.close();
+        throw new Error('Failed to open packing slip');
       }
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `packing-slip-PO${poNumber}-${orderId}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
+      if (newTab) {
+        newTab.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
-      toast({ title: 'Packing slip downloaded' });
+      toast({ title: 'Packing slip opened in new tab' });
     } catch (error: any) {
+      newTab?.close();
       toast({
-        title: 'Download failed',
+        title: 'Failed to open packing slip',
         description: error.message,
         variant: 'destructive',
       });
@@ -824,7 +834,7 @@ export default function OEMShipmentsPage() {
                                           className={!shipment.has_shipping_label ? 'pointer-events-none opacity-50' : ''}
                                         >
                                           <Printer className="h-4 w-4 mr-2" />
-                                          Reprint Label
+                                          View Label
                                         </Button>
                                       </span>
                                     </TooltipTrigger>
@@ -858,7 +868,7 @@ export default function OEMShipmentsPage() {
                                                 onClick={() => { const slipItem = items.find(i => i.hasPackingSlip) || items[0]; downloadPackingSlip(slipItem.id, poNumber, slipItem.orderId); }}
                                               >
                                                 <FileText className="h-4 w-4 mr-2" />
-                                                Reprint Packing Slip
+                                                View Packing Slip
                                               </Button>
                                             </span>
                                           </TooltipTrigger>
@@ -876,7 +886,7 @@ export default function OEMShipmentsPage() {
                                       <DropdownMenuTrigger asChild>
                                         <Button size="sm" variant="outline">
                                           <FileText className="h-4 w-4 mr-2" />
-                                          Reprint Packing Slip
+                                          View Packing Slip
                                           <ChevronDown className="h-3 w-3 ml-1" />
                                         </Button>
                                       </DropdownMenuTrigger>
@@ -1117,7 +1127,7 @@ export default function OEMShipmentsPage() {
                                       onClick={() => downloadPackingSlip(item.id, item.poNumber, item.orderId)}
                                     >
                                       <Printer className="h-3 w-3 mr-1" />
-                                      Reprint Packing Slip
+                                      View Packing Slip
                                     </Button>
                                     <Button
                                       size="sm"
@@ -1125,7 +1135,7 @@ export default function OEMShipmentsPage() {
                                       onClick={() => downloadShippingLabel(item.shipmentId, item.trackingNumber)}
                                     >
                                       <Printer className="h-3 w-3 mr-1" />
-                                      Reprint Label
+                                      View Label
                                     </Button>
                                   </div>
                                 </td>

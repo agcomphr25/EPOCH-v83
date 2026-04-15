@@ -63,6 +63,7 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
+  Paperclip,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -586,6 +587,13 @@ function VendorPOCard({
 }) {
   // Check if PO is formally issued (cannot be directly edited) — RFQ Sent remains editable
   const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
+  const [showAttachments, setShowAttachments] = useState(false);
+
+  const { data: attachments = [] } = useQuery<any[]>({
+    queryKey: ['/api/vendor-po-attachments/list', vendorPo.id],
+    queryFn: () => apiRequest(`/api/vendor-po-attachments/list/${vendorPo.id}`),
+    enabled: isIssued,
+  });
   
   return (
     <Card
@@ -709,6 +717,18 @@ function VendorPOCard({
               Create Revision
             </Button>
           )}
+          {/* Show Attach Docs button for issued POs */}
+          {isIssued && (
+            <Button
+              variant={showAttachments ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowAttachments(prev => !prev)}
+              data-testid={`button-attach-docs-${vendorPo.id}`}
+            >
+              <Paperclip className="w-4 h-4 mr-1" />
+              Attach Docs{attachments.length > 0 && ` (${attachments.length})`}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -730,6 +750,12 @@ function VendorPOCard({
             >
               {vendorPo.notes}
             </p>
+          </div>
+        )}
+
+        {isIssued && showAttachments && (
+          <div className="mt-3 pt-3 border-t">
+            <VendorPOAttachments vendorPoId={vendorPo.id} />
           </div>
         )}
       </CardContent>

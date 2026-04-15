@@ -10043,7 +10043,9 @@ export const creditMemos = pgTable('credit_memos', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   // arInvoiceId — FK to ar_invoices; set when this memo is linked to a specific AR invoice
-  arInvoiceId: uuid('ar_invoice_id').references(() => arInvoices.id),
+  // Note: .references() intentionally omitted — the FK constraint exists in the DB under
+  // a legacy naming convention; removing it here prevents drizzle-kit from renaming it.
+  arInvoiceId: uuid('ar_invoice_id'),
 }, (table) => ({
   customerIdIdx: index('credit_memos_customer_id_idx').on(table.customerId),
   statusIdx: index('credit_memos_status_idx').on(table.status),

@@ -977,8 +977,18 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
 
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const customerId = parseInt(req.params.id);
-    const customer = await storage.getCustomer(customerId);
+    const raw = req.params.id;
+    // Use strict all-digits test so keys like "3M" or "123_ABC" aren't mis-parsed as numbers
+    const isStrictNumeric = /^\d+$/.test(raw);
+    let customer;
+
+    if (isStrictNumeric) {
+      // Fast path: pure numeric DB id
+      customer = await storage.getCustomer(parseInt(raw, 10));
+    } else {
+      // Fallback: treat the param as a customer_key / customer name (canonical key lookup)
+      customer = await storage.getCustomerByKey(raw);
+    }
 
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });

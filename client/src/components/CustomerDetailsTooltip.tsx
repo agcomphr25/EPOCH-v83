@@ -62,16 +62,25 @@ export default function CustomerDetailsTooltip({
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [defaultType, setDefaultType] = useState<'email' | 'sms'>('email');
 
-  // Fetch customer details
-  const { data: customer } = useQuery<Customer>({
+  // Enable fetch for any non-empty, non-zero customerId.
+  // The backend GET /api/customers/:id handles both numeric IDs and canonical key/name lookups.
+  const isQueryEnabled = isOpen && !!customerId && customerId !== '0';
+
+  // Fetch customer details (numeric or canonical key lookup — backend supports both)
+  const { data: customer, isLoading: customerLoading } = useQuery<Customer>({
     queryKey: [`/api/customers/${customerId}`],
-    enabled: isOpen && !!customerId,
+    enabled: isQueryEnabled,
   });
+
+  // For addresses, we prefer the resolved numeric customer id if available (avoids NaN parse)
+  const resolvedCustomerId = customer?.id?.toString() ?? customerId;
+  const numericResolvedId = parseInt(resolvedCustomerId, 10);
+  const addressesEnabled = isQueryEnabled && !isNaN(numericResolvedId) && numericResolvedId > 0;
 
   // Fetch customer addresses
   const { data: addresses = [] } = useQuery<CustomerAddress[]>({
-    queryKey: [`/api/addresses?customerId=${customerId}`],
-    enabled: isOpen && !!customerId,
+    queryKey: [`/api/addresses?customerId=${resolvedCustomerId}`],
+    enabled: addressesEnabled,
   });
 
   // Get the primary/default address
@@ -226,10 +235,20 @@ export default function CustomerDetailsTooltip({
               </div>
             )}
 
-            {/* Loading State */}
-            {isOpen && !customer && (
+            {/* Loading / fallback states */}
+            {isQueryEnabled && customerLoading && (
               <div className="text-center py-4 text-sm text-gray-500">
                 Loading customer details...
+              </div>
+            )}
+            {isQueryEnabled && !customerLoading && !customer && (
+              <div className="text-center py-4 text-sm text-gray-400">
+                No additional details found.
+              </div>
+            )}
+            {!isQueryEnabled && (
+              <div className="text-center py-4 text-sm text-gray-400">
+                Customer details unavailable.
               </div>
             )}
           </div>

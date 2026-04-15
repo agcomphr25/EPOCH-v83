@@ -1329,6 +1329,7 @@ export interface IStorage {
   getCustomersWithPurchaseOrders(): Promise<Customer[]>;
   searchCustomers(query: string): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
+  getCustomerByKey(key: string): Promise<Customer | undefined>;
   createCustomer(data: InsertCustomer): Promise<Customer>;
   updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: number): Promise<void>;
@@ -7927,6 +7928,23 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(customers)
       .where(eq(customers.id, id))
+      .limit(1);
+    return customer;
+  }
+
+  async getCustomerByKey(key: string): Promise<Customer | undefined> {
+    // Normalize the lookup key the same way the migration does:
+    // UPPER(REPLACE(TRIM(name), ' ', '_'))
+    const normalized = key.trim().toUpperCase().replace(/\s+/g, '_');
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(
+        or(
+          eq(customers.customerKey, normalized),
+          ilike(customers.name, key.trim())
+        )
+      )
       .limit(1);
     return customer;
   }

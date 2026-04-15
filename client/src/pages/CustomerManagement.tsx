@@ -983,7 +983,7 @@ export default function CustomerManagement() {
 
   // Create customer mutation with address support
   const createCustomerMutation = useMutation({
-    mutationFn: async (data: CustomerFormData) => {
+    mutationFn: async (data: CustomerFormData): Promise<{ customer: any; addressError: any; addrPayload: any }> => {
       // Create customer first
       const customer = await apiRequest('/api/customers/create-bypass', {
         method: 'POST',
@@ -1023,30 +1023,42 @@ export default function CustomerManagement() {
           });
         } catch (addrError: any) {
           if (addrError.responseData?.validationStatus && addrError.status === 400) {
-            setPendingAddressCustomerId(customer.id.toString());
-            setPendingAddressData(addrPayload);
-            setAddressValidationError(addrError.responseData);
-            return customer;
+            // Return address error via the mutation result so onSuccess can handle it
+            // without relying on stale React state
+            return { customer, addressError: addrError.responseData, addrPayload };
           }
           throw addrError;
         }
       }
 
-      return customer;
+      return { customer, addressError: null, addrPayload: null };
     },
-    onSuccess: (customer) => {
+    onSuccess: ({ customer, addressError, addrPayload }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-      if (!addressValidationError) {
+      if (addressError) {
+        // Address validation failed — close dialog, reset form fields, then surface review UI.
+        // resetForm() is called first (clears addressValidationError), then
+        // setAddressValidationError is called last so its value wins in the React batch.
         setIsCreateDialogOpen(false);
         resetForm();
+        setPendingAddressCustomerId(customer.id.toString());
+        setPendingAddressData(addrPayload);
+        setAddressValidationError(addressError); // must come after resetForm to win the batch
+        toast({
+          title: 'Customer created',
+          description: 'Customer created. Please review the address.',
+        });
+      } else {
+        setIsCreateDialogOpen(false);
+        resetForm();
+        toast({
+          title: 'Success',
+          description: addrPayload
+            ? 'Customer and address created successfully'
+            : 'Customer created successfully',
+        });
       }
-      toast({
-        title: 'Success',
-        description: addressValidationError
-          ? 'Customer created. Please review the address.'
-          : 'Customer and address created successfully',
-      });
     },
     onError: (error: any) => {
       toast({
@@ -1223,7 +1235,8 @@ export default function CustomerManagement() {
   };
 
   const isValidPhone = (phone: string): boolean => {
-    const phoneRegex = /^[\+]?[\d\s\-\(\)]{10,}$/;
+    // Allow digits, spaces, hyphens, dots, parentheses, and leading +
+    const phoneRegex = /^[\+]?[\d\s\-\(\)\.]{7,}$/;
     return phoneRegex.test(phone);
   };
 
@@ -1353,6 +1366,7 @@ export default function CustomerManagement() {
     setFormData(initialFormData);
     setFormErrors({});
     setSelectedCustomer(null);
+    setAddressValidationError(null);
   };
 
   const handleAddressUseSuggested = async (suggested: { street: string; city: string; state: string; zipCode: string }) => {

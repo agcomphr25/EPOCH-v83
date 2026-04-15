@@ -233,6 +233,7 @@ function generatePDF(inputPath, outputPath) {
 
   const doc = new PDFDocument({
     size: 'LETTER',
+    layout: 'landscape',
     margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
     info: {
       Title: 'EPOCH ERP System Audit Report',

@@ -14,7 +14,8 @@
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "predb:push": "npx tsx server/pre-deploy-migrate.ts",
     "db:push": "drizzle-kit push",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "generate:audit-pdf": "node scripts/generate-audit-pdf.cjs"
   },
   "config": {
     "script-shell": "bash"
@@ -168,6 +169,7 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.3.5",
     "pdfjs-dist": "^5.4.530",
+    "pdfkit": "^0.18.0",
     "pg": "^8.17.2",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

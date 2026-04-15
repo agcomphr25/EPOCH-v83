@@ -6,3 +6,9 @@ id = "JdId6NNk44WP4I_FhYfaB"
 uri = "file://.local/EPOCH_SYSTEM_AUDIT_2026-04-15.md"
 type = "text"
 title = "EPOCH System Audit Report — April 15, 2026"
+
+[[outputs]]
+id = "4JMfvBKV6yDHs_IQiil3Z"
+uri = "file://_audit_exports/EPOCH_SYSTEM_AUDIT_2026-04-15.pdf"
+type = "pdf"
+title = "EPOCH System Audit Report — April 15, 2026"

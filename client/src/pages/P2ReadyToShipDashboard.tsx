@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { Card } from '@/components/ui/card';
@@ -29,6 +29,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  ListChecks,
 } from 'lucide-react';
 
 type SerializedUnit = {
@@ -172,6 +173,8 @@ export default function P2ReadyToShipDashboard() {
     }));
   };
 
+  const expandedRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
   const toggleExpandPO = (poNumber: string) => {
     setExpandedPOs((prev) => {
       const next = new Set(prev);
@@ -180,6 +183,18 @@ export default function P2ReadyToShipDashboard() {
       return next;
     });
   };
+
+  const handleSelectItems = useCallback((poNumber: string) => {
+    setExpandedPOs((prev) => {
+      if (prev.has(poNumber)) return prev;
+      const next = new Set(prev);
+      next.add(poNumber);
+      return next;
+    });
+    setTimeout(() => {
+      expandedRowRefs.current[poNumber]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 80);
+  }, []);
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-6xl">
@@ -304,14 +319,15 @@ export default function P2ReadyToShipDashboard() {
                       {po.readyCount > 0 && (
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
+                          size="sm"
+                          className="h-6 px-1.5 gap-0.5 text-muted-foreground hover:text-foreground"
                           onClick={() => toggleExpandPO(po.poNumber)}
+                          title={isExpanded ? 'Collapse unit list' : 'Expand to select individual units'}
                           aria-label={isExpanded ? 'Collapse unit list' : 'Expand unit list'}
                         >
                           {isExpanded
-                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            ? <ChevronDown className="h-3.5 w-3.5" />
+                            : <ChevronRight className="h-3.5 w-3.5" />}
                         </Button>
                       )}
                     </TableCell>
@@ -369,14 +385,26 @@ export default function P2ReadyToShipDashboard() {
                             <Truck className="h-3 w-3 mr-1" />Ship Selected ({selCount})
                           </Button>
                         ) : (
-                          <Button
-                            size="sm"
-                            disabled={po.readyCount === 0}
-                            className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-                            onClick={() => handleShipAll(po)}
-                          >
-                            <Zap className="h-3 w-3 mr-1" />Ship All Ready
-                          </Button>
+                          <>
+                            {po.readyCount > 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                onClick={() => handleSelectItems(po.poNumber)}
+                              >
+                                <ListChecks className="h-3 w-3 mr-1" />Select Items
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              disabled={po.readyCount === 0}
+                              className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                              onClick={() => handleShipAll(po)}
+                            >
+                              <Zap className="h-3 w-3 mr-1" />Ship All Ready
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -386,7 +414,10 @@ export default function P2ReadyToShipDashboard() {
                 const expandedRow = isExpanded && po.readyUnits.length > 0 ? (
                   <TableRow key={`${po.poNumber}-expanded`} className="bg-green-50/20 dark:bg-green-900/5 hover:bg-green-50/30">
                     <TableCell colSpan={8} className="py-0 pb-3 px-4">
-                      <div className="border border-green-200 dark:border-green-800 rounded-md overflow-hidden mt-1">
+                      <div
+                        ref={(el) => { expandedRowRefs.current[po.poNumber] = el; }}
+                        className="border border-green-200 dark:border-green-800 rounded-md overflow-hidden mt-1"
+                      >
                         {/* Select All row */}
                         <div className="flex items-center gap-3 px-3 py-2 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
                           <Checkbox

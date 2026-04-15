@@ -167,7 +167,9 @@ router.get('/customer-summary/:customerId', async (req: Request, res: Response) 
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, customerId, search } = req.query;
+    const { status, customerId, search, packingSlipId } = req.query;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safePackingSlipId = packingSlipId && UUID_REGEX.test(String(packingSlipId)) ? String(packingSlipId) : null;
 
     const results = await db
       .select({
@@ -192,6 +194,7 @@ router.get('/', async (req: Request, res: Response) => {
         pricingMismatch: arInvoices.pricingMismatch,
         pricingAmbiguous: arInvoices.pricingAmbiguous,
         autoCreated: arInvoices.autoCreated,
+        packingSlipId: arInvoices.packingSlipId,
         amountPaid: sql<string>`COALESCE(
           (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
           0
@@ -216,6 +219,7 @@ router.get('/', async (req: Request, res: Response) => {
           status && status !== 'all' ? eq(arInvoices.status, String(status)) : undefined,
           customerId ? eq(arInvoices.customerId, String(customerId)) : undefined,
           search ? ilike(arInvoices.invoiceNumber, `%${String(search)}%`) : undefined,
+          safePackingSlipId ? eq(arInvoices.packingSlipId, safePackingSlipId) : undefined,
         )
       )
       .orderBy(desc(arInvoices.createdAt));
@@ -355,6 +359,11 @@ router.get('/:id', async (req: Request, res: Response) => {
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
+        packingSlipId: arInvoices.packingSlipId,
+        lotId: arInvoices.lotId,
+        pricingMismatch: arInvoices.pricingMismatch,
+        pricingAmbiguous: arInvoices.pricingAmbiguous,
+        autoCreated: arInvoices.autoCreated,
         subtotal: arInvoices.subtotal,
         taxAmount: arInvoices.taxAmount,
         totalAmount: arInvoices.totalAmount,

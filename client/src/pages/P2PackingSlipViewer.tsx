@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRoute, Link } from 'wouter';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Download, ArrowLeft, Package, Clock, Pencil, X, Check, Loader2 } from 'lucide-react';
+import { Printer, Download, ArrowLeft, Package, Clock, Pencil, X, Check, Loader2, Receipt, ClipboardList, ExternalLink, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { COMPANY_INFO } from '@shared/company-config';
 import { useToast } from '@/hooks/use-toast';
@@ -84,6 +84,18 @@ export default function P2PackingSlipViewer() {
 
   const { data: packingSlip, isLoading, error } = useQuery<PackingSlipData>({
     queryKey: ['/api/p2/packing-slips', packingSlipId],
+    enabled: !!packingSlipId,
+  });
+
+  const { data: linkedInvoices = [] } = useQuery<any[]>({
+    queryKey: ['/api/ar-invoices', { packingSlipId }],
+    queryFn: () => fetch(`/api/ar-invoices?packingSlipId=${packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+    enabled: !!packingSlipId,
+  });
+
+  const { data: linkedRmas = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2/rmas', { packingSlipId }],
+    queryFn: () => fetch(`/api/p2/rmas?packingSlipId=${packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
     enabled: !!packingSlipId,
   });
 
@@ -377,6 +389,119 @@ export default function P2PackingSlipViewer() {
           )}
         </CardContent>
       </Card>
+
+      {/* Linked Records — not printed */}
+      <div className="print:hidden mt-6 space-y-4">
+        {/* Linked Invoice section — always visible */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-muted-foreground" />
+              Linked Invoice
+              {Array.isArray(linkedInvoices) && linkedInvoices.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{linkedInvoices.length}</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!Array.isArray(linkedInvoices) || linkedInvoices.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Receipt className="h-4 w-4 opacity-50" />
+                No invoice created for this packing slip yet.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {linkedInvoices.map((inv: any) => (
+                  <div key={inv.id} className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+                    <div>
+                      <p className="text-sm font-medium font-mono">{inv.invoiceNumber}</p>
+                      <p className="text-xs text-muted-foreground">{inv.customerName || inv.customerId}</p>
+                      {(inv.pricingMismatch || inv.pricingAmbiguous) && (
+                        <p className="text-xs text-yellow-700 flex items-center gap-1 mt-0.5">
+                          <AlertTriangle className="h-3 w-3" /> Pricing requires review
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className={
+                        inv.status === 'PAID' ? 'bg-green-100 text-green-800' :
+                        inv.status === 'POSTED' ? 'bg-indigo-100 text-indigo-700' :
+                        inv.status === 'SENT' ? 'bg-teal-100 text-teal-700' :
+                        inv.status === 'VOID' ? 'bg-gray-100 text-gray-600' :
+                        inv.status === 'DRAFT' ? 'bg-blue-50 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      }>{inv.status}</Badge>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/finance/invoices/${inv.id}`}>
+                          View Invoice <ExternalLink className="h-3 w-3 ml-1" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Linked RMAs section — always visible */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              Return Merchandise Authorizations (RMAs)
+              {Array.isArray(linkedRmas) && linkedRmas.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{linkedRmas.length}</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!Array.isArray(linkedRmas) || linkedRmas.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No RMAs linked to this packing slip.</p>
+            ) : (
+              <div className="space-y-2">
+                {linkedRmas.map((rma: any) => (
+                  <div key={rma.id} className="p-3 rounded-md border bg-muted/30">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium font-mono">{rma.rmaNumber}</p>
+                        <p className="text-xs text-muted-foreground">{rma.reason}</p>
+                        <p className="text-xs text-muted-foreground">{rma.createdAt ? format(new Date(rma.createdAt), 'MMM d, yyyy') : '—'}</p>
+                      </div>
+                      <Badge className={
+                        rma.status === 'CLOSED' ? 'bg-blue-100 text-blue-800' :
+                        rma.status === 'RECEIVED' ? 'bg-green-100 text-green-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }>{rma.status}</Badge>
+                    </div>
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/p2/rma/${rma.id}`}>
+                          <ClipboardList className="h-3.5 w-3.5 mr-1" /> View RMA Detail
+                        </Link>
+                      </Button>
+                      {packingSlip?.lotNumberId && (
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/p2/shipments/${packingSlip.lotNumberId}`}>
+                            <ExternalLink className="h-3.5 w-3.5 mr-1" /> Shipment Record
+                          </Link>
+                        </Button>
+                      )}
+                      {rma.invoiceId && (
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/finance/invoices/${rma.invoiceId}`}>
+                            <Receipt className="h-3.5 w-3.5 mr-1" /> View Invoice
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <style>{`
         @media print {

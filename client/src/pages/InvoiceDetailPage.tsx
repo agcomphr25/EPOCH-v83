@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useRoute, useLocation } from 'wouter';
+import { useRoute, useLocation, Link } from 'wouter';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
@@ -11,6 +11,9 @@ import {
   DollarSign,
   CreditCard,
   Loader2,
+  AlertTriangle,
+  ExternalLink,
+  RotateCcw,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -124,6 +127,24 @@ export default function InvoiceDetailPage() {
   const { data: invoice, isLoading } = useQuery<any>({
     queryKey: ['/api/ar-invoices', id],
     enabled: !!id,
+  });
+
+  const { data: linkedCreditMemos = [] } = useQuery<any[]>({
+    queryKey: ['/api/credit-memos/invoice', id],
+    queryFn: () => fetch(`/api/credit-memos/invoice/${id}`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+    enabled: !!id,
+  });
+
+  const { data: packingSlipInfo } = useQuery<any>({
+    queryKey: ['/api/p2/packing-slips', invoice?.packingSlipId],
+    queryFn: () => fetch(`/api/p2/packing-slips/${invoice.packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
+    enabled: !!invoice?.packingSlipId,
+  });
+
+  const { data: lotInfo } = useQuery<any>({
+    queryKey: ['/api/p2/lots', invoice?.lotId],
+    queryFn: () => fetch(`/api/p2/lots/${invoice.lotId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
+    enabled: !!invoice?.lotId,
   });
 
   const markPaidMutation = useMutation({
@@ -356,6 +377,15 @@ export default function InvoiceDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="credit-memos" className="flex items-center gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" />
+            Credit Memos
+            {linkedCreditMemos.length > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                {linkedCreditMemos.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="attachments" className="flex items-center gap-1.5">
             <Paperclip className="h-3.5 w-3.5" />
             Attachments
@@ -368,6 +398,26 @@ export default function InvoiceDetailPage() {
               <CardTitle>Invoice Details</CardTitle>
             </CardHeader>
             <CardContent>
+              {(invoice.pricingMismatch || invoice.pricingAmbiguous) && (
+                <div className="flex items-start gap-2 mb-4 p-3 rounded-md bg-yellow-50 border border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Pricing requires review</p>
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {invoice.pricingMismatch && (
+                        <Badge className="bg-yellow-100 text-yellow-800 text-xs hover:bg-yellow-100">Pricing Mismatch</Badge>
+                      )}
+                      {invoice.pricingAmbiguous && (
+                        <Badge className="bg-orange-100 text-orange-800 text-xs hover:bg-orange-100">Pricing Ambiguous</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                      This invoice was auto-created but pricing could not be fully resolved from the PO. Please review and correct line items before posting.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Customer</p>
@@ -400,6 +450,44 @@ export default function InvoiceDetailPage() {
                   </div>
                 )}
               </div>
+
+              {(invoice.packingSlipId || invoice.lotId || invoice.poOverride || invoice.poId) && (
+                <>
+                  <Separator className="my-4" />
+                  <div>
+                    <p className="text-sm font-medium mb-2">Source Documents</p>
+                    <div className="flex flex-wrap gap-2">
+                      {invoice.packingSlipId && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/p2/packing-slip/${invoice.packingSlipId}`}>
+                            <FileText className="h-3.5 w-3.5 mr-1.5" />
+                            Packing Slip{packingSlipInfo?.packingSlipNumber ? ` ${packingSlipInfo.packingSlipNumber}` : ''}
+                            <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                          </Link>
+                        </Button>
+                      )}
+                      {invoice.lotId && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/p2/shipments/${invoice.lotId}`}>
+                            <FileText className="h-3.5 w-3.5 mr-1.5" />
+                            Lot{lotInfo?.lotNumber ? ` ${lotInfo.lotNumber}` : ' Record'}
+                            <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                          </Link>
+                        </Button>
+                      )}
+                      {(invoice.poOverride || invoice.poId) && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/purchase-orders?search=${encodeURIComponent(invoice.poOverride || invoice.poId || '')}`}>
+                            <FileText className="h-3.5 w-3.5 mr-1.5" />
+                            PO: {invoice.poOverride || invoice.poId}
+                            <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Separator className="my-4" />
 
@@ -566,6 +654,71 @@ export default function InvoiceDetailPage() {
                     </div>
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="credit-memos" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5" />
+                Credit Memos
+                {linkedCreditMemos.length > 0 && (
+                  <Badge variant="secondary">{linkedCreditMemos.length}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-end mb-3">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/credit-memo${invoice?.customerId ? `?customerId=${invoice.customerId}` : ''}`}>
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Manage Credit Memos
+                    <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                  </Link>
+                </Button>
+              </div>
+              {linkedCreditMemos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <RotateCcw className="h-8 w-8 text-muted-foreground mb-3 opacity-50" />
+                  <p className="text-sm text-muted-foreground">No credit memos are linked to this invoice.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {linkedCreditMemos.map((cm: any) => (
+                    <Link key={cm.id} href={`/credit-memo${invoice?.customerId ? `?customerId=${invoice.customerId}` : ''}`} className="block">
+                      <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer">
+                        <div>
+                          <p className="text-sm font-medium font-mono">{cm.memoNumber}</p>
+                          <p className="text-xs text-muted-foreground">{cm.reason}</p>
+                          <p className="text-xs text-muted-foreground">{formatDate(cm.createdAt)}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                            {formatCurrency(cm.amount)}
+                          </span>
+                          <Badge className={
+                            cm.status === 'APPLIED' ? 'bg-green-100 text-green-800' :
+                            cm.status === 'DRAFT' ? 'bg-gray-100 text-gray-700' :
+                            cm.status === 'VOID' ? 'bg-red-100 text-red-700' :
+                            'bg-blue-100 text-blue-700'
+                          }>{cm.status}</Badge>
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  <div className="flex justify-end pt-2 border-t">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">Total Credit Applied:</span>
+                      <span className="font-semibold text-green-700 dark:text-green-400">
+                        {formatCurrency(linkedCreditMemos.reduce((sum: number, cm: any) => sum + Number(cm.amount || 0), 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

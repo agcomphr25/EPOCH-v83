@@ -118,6 +118,7 @@ import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
 import P2CertificateViewer from './pages/P2CertificateViewer';
+import P2RmaDetailPage from './pages/P2RmaDetailPage';
 import P2ShipmentDetail from './pages/P2ShipmentDetail';
 import P2ShipmentHistory from './pages/P2ShipmentHistory';
 import P2TestReportViewer from './pages/P2TestReportViewer';
@@ -921,6 +922,7 @@ function App() {
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
                   <Route path="/p2/packing-slip/:id" component={P2PackingSlipViewer} />
+                  <Route path="/p2/rma/:id" component={P2RmaDetailPage} />
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
                   <Route path="/p2/shipments" component={P2ShipmentHistory} />
                   <Route path="/p2/shipments/:lotId" component={P2ShipmentDetail} />

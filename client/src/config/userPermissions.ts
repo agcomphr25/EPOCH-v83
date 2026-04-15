@@ -325,6 +325,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/p2-traveler-viewer',
       '/p2/shipments',
       '/p2/packing-slip',
+      '/p2/rma',
       '/p2/certificate',
       '/p2/ready-to-ship',
       '/p2/test-report',

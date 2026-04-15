@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +86,23 @@ export default function CreditMemoPage() {
   const [activeTab, setActiveTab] = useState('create');
   const [selectedUnappliedMemo, setSelectedUnappliedMemo] = useState<CreditMemo | null>(null);
   const [applyAmounts, setApplyAmounts] = useState<Map<string, number>>(new Map());
+
+  const urlCustomerId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('customerId')
+    : null;
+
+  const { data: preselectedCustomer } = useQuery<Customer>({
+    queryKey: ['/api/customers', urlCustomerId],
+    queryFn: () => apiRequest(`/api/customers/${urlCustomerId}`),
+    enabled: !!urlCustomerId && !selectedCustomer,
+  });
+
+  useEffect(() => {
+    if (preselectedCustomer && !selectedCustomer) {
+      setSelectedCustomer(preselectedCustomer);
+      setActiveTab('history');
+    }
+  }, [preselectedCustomer]);
 
   const { data: customerOrders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ['/api/orders/customer', selectedCustomer?.id],

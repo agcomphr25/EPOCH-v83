@@ -40,9 +40,15 @@ router.post('/rmas', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/p2/rmas
-router.get('/rmas', authenticateToken, async (_req: Request, res: Response) => {
+// GET /api/p2/rmas?packingSlipId=xxx
+router.get('/rmas', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const { packingSlipId } = req.query;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (packingSlipId && typeof packingSlipId === 'string' && UUID_REGEX.test(packingSlipId)) {
+      const rmas = await storage.listShippingRmasByPackingSlipId(packingSlipId);
+      return res.json(rmas);
+    }
     const rmas = await storage.listShippingRmas();
     return res.json(rmas);
   } catch (err: any) {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useRoute, useLocation } from 'wouter';
+import { useRoute, useLocation, Link } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -137,6 +137,20 @@ function statusColor(status: string) {
   }
 }
 
+function invoiceStatusColor(status: string) {
+  switch (status?.toUpperCase()) {
+    case 'DRAFT': return 'bg-blue-50 text-blue-700';
+    case 'REVIEW': return 'bg-orange-100 text-orange-700';
+    case 'POSTED': return 'bg-indigo-100 text-indigo-700';
+    case 'SENT': return 'bg-teal-100 text-teal-700';
+    case 'PAID': return 'bg-green-100 text-green-800';
+    case 'VOID': return 'bg-gray-100 text-gray-600';
+    case 'OVERDUE': return 'bg-red-100 text-red-800';
+    case 'DISPUTED': return 'bg-red-100 text-red-700';
+    default: return 'bg-gray-100 text-gray-700';
+  }
+}
+
 function fmt(ts: string | null) {
   if (!ts) return '—';
   return new Date(ts).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -200,6 +214,18 @@ export default function P2ShipmentDetail() {
     enabled: !!lotId && canOverride,
   });
 
+  const packingSlipId = data?.packingSlip?.id;
+  const { data: linkedRmas = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2/rmas', { packingSlipId }],
+    queryFn: async () => {
+      if (!packingSlipId) return [];
+      const r = await fetch(`/api/p2/rmas?packingSlipId=${encodeURIComponent(packingSlipId)}`, { credentials: 'include' });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!packingSlipId,
+  });
+
   useEffect(() => {
     if (data?.lot) {
       setTracking(data.lot.tracking_number ?? '');
@@ -210,7 +236,7 @@ export default function P2ShipmentDetail() {
 
   const updateMutation = useMutation({
     mutationFn: (payload: object) =>
-      apiRequest('PATCH', `/api/p2/shipments/${lotId}`, payload),
+      apiRequest(`/api/p2/shipments/${lotId}`, { method: 'PATCH', body: payload }),
     onSuccess: () => {
       toast({ title: 'Shipment updated', description: 'Changes saved successfully.' });
       setEditMode(false);
@@ -221,17 +247,21 @@ export default function P2ShipmentDetail() {
 
   const markShippedMutation = useMutation({
     mutationFn: () =>
-      apiRequest('PATCH', `/api/p2/shipments/${lotId}`, {
-        trackingNumber: tracking,
-        carrier,
-        notes,
-        markShipped: true,
-        shippedBy: 'user',
+      apiRequest(`/api/p2/shipments/${lotId}`, {
+        method: 'PATCH',
+        body: {
+          trackingNumber: tracking,
+          carrier,
+          notes,
+          markShipped: true,
+          shippedBy: currentUser?.username || 'user',
+        },
       }),
     onSuccess: () => {
-      toast({ title: 'Marked as Shipped', description: 'Lot status updated to SHIPPED.' });
+      toast({ title: 'Marked as Shipped', description: 'Lot shipped and invoice auto-created.' });
       qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
       qc.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
     },
     onError: () => toast({ title: 'Mark shipped failed', variant: 'destructive' }),
   });
@@ -709,29 +739,92 @@ export default function P2ShipmentDetail() {
           </div>
 
           {/* Invoice */}
-          {invoice && (
-            <>
-              <Separator />
-              <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
-                <div className="flex items-center gap-3">
-                  <Receipt className="h-5 w-5 text-green-500" />
-                  <div>
-                    <p className="text-sm font-medium">AR Invoice</p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {invoice.invoice_number}
-                      <Badge className={`ml-2 text-xs ${statusColor(invoice.status)}`}>{invoice.status}</Badge>
+          <>
+            <Separator />
+            <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+              <div className="flex items-center gap-3">
+                <Receipt className="h-5 w-5 text-green-500" />
+                <div>
+                  <p className="text-sm font-medium">AR Invoice</p>
+                  {invoice ? (
+                    <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+                      <Link
+                        href={`/finance/invoices/${invoice.id}`}
+                        className="text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        {invoice.invoice_number}
+                      </Link>
+                      <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
                     </p>
-                  </div>
-                </div>
-                <div className="text-right text-sm">
-                  <p className="font-medium">${parseFloat(invoice.total_amount).toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">{fmt(invoice.invoice_date)}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No invoice created yet</p>
+                  )}
                 </div>
               </div>
-            </>
-          )}
+              {invoice && (
+                <div className="text-right text-sm flex items-center gap-2">
+                  <div>
+                    <p className="font-medium">${parseFloat(invoice.total_amount).toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{fmt(invoice.invoice_date)}</p>
+                  </div>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/finance/invoices/${invoice.id}`}>
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
         </CardContent>
       </Card>
+
+      {/* RMAs linked to packing slip */}
+      {(linkedRmas.length > 0 || packingSlip) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              Return Merchandise Authorizations (RMAs)
+              {linkedRmas.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{linkedRmas.length}</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {linkedRmas.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No RMAs linked to this packing slip.</p>
+            ) : (
+              <div className="space-y-2">
+                {linkedRmas.map((rma: any) => (
+                  <div key={rma.id} className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+                    <div>
+                      <p className="text-sm font-medium font-mono">{rma.rmaNumber}</p>
+                      <p className="text-xs text-muted-foreground">{rma.reason}</p>
+                      <p className="text-xs text-muted-foreground">{fmt(rma.createdAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={statusColor(rma.status)}>{rma.status}</Badge>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/p2/packing-slip/${rma.packingSlipId}`}>
+                          <ClipboardList className="h-3.5 w-3.5 mr-1" /> View Packing Slip
+                        </Link>
+                      </Button>
+                      {rma.invoiceId && (
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/finance/invoices/${rma.invoiceId}`}>
+                            <Receipt className="h-3.5 w-3.5 mr-1" /> Invoice
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Serialized Items Table */}
       <Card>

@@ -338,9 +338,16 @@ function FlatInvoiceTable({
               {formatCurrency(invoice.totalAmount)}
             </TableCell>
             <TableCell>
-              <div className="flex flex-wrap gap-1 items-center">
-                {getStatusBadge(invoice.status)}
-                {getFlagBadges(invoice)}
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {getStatusBadge(invoice.status)}
+                  {getFlagBadges(invoice)}
+                </div>
+                {(invoice.pricingMismatch || invoice.pricingAmbiguous) && (
+                  <span className="text-xs text-yellow-700 dark:text-yellow-400 flex items-center gap-0.5">
+                    ⚠ Pricing requires review
+                  </span>
+                )}
               </div>
             </TableCell>
             <TableCell>
@@ -469,7 +476,7 @@ export default function InvoicesPage() {
     setVoidDialog({ open: true, invoiceId: id, invoiceNumber, reason: '' });
   const handleView = (id: string) => setLocation(`/finance/invoices/${id}`);
 
-  const customerGroups = allInvoices ? groupByCustomer(allInvoices) : [];
+  const customerGroups = Array.isArray(allInvoices) ? groupByCustomer(allInvoices) : [];
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const customerGroupKey = customerGroups.map((g) => g.customerId).join('|');
 

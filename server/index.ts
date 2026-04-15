@@ -2653,6 +2653,23 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ ar_invoices traceability columns warning:', arLinkErr?.message);
       }
 
+      // Add ar_invoice_id FK to credit_memos
+      try {
+        const { sql: sqlCmLink } = await import('drizzle-orm');
+        await db.execute(sqlCmLink`
+          ALTER TABLE credit_memos
+          ADD COLUMN IF NOT EXISTS ar_invoice_id UUID REFERENCES ar_invoices(id)
+        `);
+        await db.execute(sqlCmLink`
+          CREATE INDEX IF NOT EXISTS credit_memos_ar_invoice_id_idx
+          ON credit_memos (ar_invoice_id)
+          WHERE ar_invoice_id IS NOT NULL
+        `);
+        console.log('✅ Ensured credit_memos has ar_invoice_id column');
+      } catch (cmLinkErr: any) {
+        console.warn('⚠️ credit_memos ar_invoice_id migration warning:', cmLinkErr?.message);
+      }
+
       // Add Phase 4 dashboard columns to ar_invoices
       try {
         const { sql: sqlArP4 } = await import('drizzle-orm');

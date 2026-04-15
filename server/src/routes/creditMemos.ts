@@ -183,6 +183,35 @@ router.get('/customer/:customerId/summary', async (req: Request, res: Response) 
   }
 });
 
+// GET /api/credit-memos/invoice/:invoiceId - Get credit memos linked to a specific AR invoice
+router.get('/invoice/:invoiceId', async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.params;
+    const memos = await db
+      .select({
+        id: creditMemos.id,
+        memoNumber: creditMemos.memoNumber,
+        customerId: creditMemos.customerId,
+        amount: creditMemos.amount,
+        appliedAmount: creditMemos.appliedAmount,
+        unappliedAmount: creditMemos.unappliedAmount,
+        reason: creditMemos.reason,
+        notes: creditMemos.notes,
+        status: creditMemos.status,
+        issuedDate: creditMemos.issuedDate,
+        createdBy: creditMemos.createdBy,
+        createdAt: creditMemos.createdAt,
+      })
+      .from(creditMemos)
+      .where(eq(creditMemos.arInvoiceId, invoiceId))
+      .orderBy(desc(creditMemos.createdAt));
+    res.json(memos);
+  } catch (error) {
+    console.error('Error fetching credit memos by invoice:', error);
+    res.status(500).json({ error: 'Failed to fetch credit memos for invoice' });
+  }
+});
+
 // GET /api/credit-memos/order/:orderId/applications - Get credit applications for a specific order
 router.get('/order/:orderId/applications', async (req: Request, res: Response) => {
   try {

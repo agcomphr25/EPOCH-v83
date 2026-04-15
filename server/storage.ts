@@ -2537,6 +2537,7 @@ export interface IStorage {
 
   // P2 Shipping RMAs (customer return RMAs after packing slip issuance)
   listShippingRmas(): Promise<P2ShippingRma[]>;
+  listShippingRmasByPackingSlipId(packingSlipId: string): Promise<P2ShippingRma[]>;
   getShippingRmaById(id: string): Promise<P2ShippingRma | undefined>;
   createShippingRma(data: Omit<InsertP2ShippingRma, 'rmaNumber'> & { packingSlipId: string; createdBy: string }): Promise<P2ShippingRma>;
   updateShippingRmaStatus(id: string, newStatus: 'RECEIVED' | 'CLOSED'): Promise<P2ShippingRma>;
@@ -21437,6 +21438,12 @@ export class DatabaseStorage implements IStorage {
 
   async listShippingRmas(): Promise<P2ShippingRma[]> {
     return db.select().from(p2ShippingRmas).orderBy(desc(p2ShippingRmas.createdAt));
+  }
+
+  async listShippingRmasByPackingSlipId(packingSlipId: string): Promise<P2ShippingRma[]> {
+    return db.select().from(p2ShippingRmas)
+      .where(eq(p2ShippingRmas.packingSlipId, packingSlipId))
+      .orderBy(desc(p2ShippingRmas.createdAt));
   }
 
   async getShippingRmaById(id: string): Promise<P2ShippingRma | undefined> {

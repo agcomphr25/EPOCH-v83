@@ -98,6 +98,8 @@ interface MaterialLot {
   receivedAt?: string;
   acceptedBy?: string;
   acceptedAt?: string;
+  reservedQty?: number;
+  availableQty?: number;
 }
 
 interface Transaction {
@@ -683,7 +685,15 @@ export default function MaterialInventoryPage() {
                       <TableCell>{lot.materialName}</TableCell>
                       <TableCell>{lot.supplier}</TableCell>
                       <TableCell>
-                        {lot.remainingQty} / {lot.receivedQty} {lot.unitOfMeasure}
+                        <div className="space-y-0.5 text-sm">
+                          <div>{lot.remainingQty} / {lot.receivedQty} {lot.unitOfMeasure}</div>
+                          <div className="text-muted-foreground text-xs">
+                            Reserved: {(lot.reservedQty ?? 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} {lot.unitOfMeasure}
+                          </div>
+                          <div className="text-muted-foreground text-xs">
+                            Available: {(lot.availableQty ?? parseFloat(lot.remainingQty)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {lot.unitOfMeasure}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>{lot.storageLocation || '-'}</TableCell>
                       <TableCell>{getStatusBadge(lot.status)}</TableCell>
@@ -709,6 +719,12 @@ export default function MaterialInventoryPage() {
                               <GitBranch className="h-3 w-3 mr-1" />
                               Split
                             </Badge>
+                          )}
+                          {(lot.reservedQty ?? 0) > 0 && (lot.availableQty ?? parseFloat(lot.remainingQty)) > 0 && (
+                            <Badge variant="outline" className="text-xs text-blue-600 border-blue-600">Reserved</Badge>
+                          )}
+                          {(lot.reservedQty ?? 0) > 0 && (lot.availableQty ?? parseFloat(lot.remainingQty)) <= 0 && (
+                            <Badge variant="destructive" className="text-xs">Fully Reserved</Badge>
                           )}
                         </div>
                       </TableCell>

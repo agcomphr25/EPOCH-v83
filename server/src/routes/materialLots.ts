@@ -57,7 +57,21 @@ router.get('/', async (req: Request, res: Response) => {
       lots = await storage.getAllMaterialLots();
     }
 
-    res.json(lots);
+    const lotsWithReservations = await Promise.all(
+      lots.map(async (lot) => {
+        try {
+          const reservedQty = await storage.getReservedQtyForLot(lot.id);
+          const remaining = parseFloat(lot.remainingQty);
+          const availableQty = Math.max(0, remaining - reservedQty);
+          return { ...lot, reservedQty, availableQty };
+        } catch (_) {
+          const remaining = parseFloat(lot.remainingQty);
+          return { ...lot, reservedQty: 0, availableQty: Math.max(0, remaining) };
+        }
+      })
+    );
+
+    res.json(lotsWithReservations);
   } catch (error: any) {
     console.error('Error fetching material lots:', error);
     res.status(500).json({ error: 'Failed to fetch material lots', message: error.message });

@@ -140,6 +140,10 @@ export default function MaterialInventoryPage() {
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; firstName?: string; lastName?: string; role: string }>({
+    queryKey: ['/api/auth/session'],
+  });
+
   const { data: lots = [], isLoading } = useQuery<MaterialLot[]>({
     queryKey: ['/api/material-lots'],
   });
@@ -162,7 +166,8 @@ export default function MaterialInventoryPage() {
       closeActionDialog();
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to move material');
+      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to move material';
+      toast.error(msg);
     },
   });
 
@@ -179,7 +184,8 @@ export default function MaterialInventoryPage() {
       closeActionDialog();
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to split lot');
+      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to split lot';
+      toast.error(msg);
     },
   });
 
@@ -196,7 +202,8 @@ export default function MaterialInventoryPage() {
       closeActionDialog();
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to update status');
+      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to update status';
+      toast.error(msg);
     },
   });
 
@@ -212,7 +219,8 @@ export default function MaterialInventoryPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/material-lots'] });
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to issue material');
+      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to issue material';
+      toast.error(msg);
     },
   });
 
@@ -228,7 +236,8 @@ export default function MaterialInventoryPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/material-lots'] });
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to return material');
+      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to return material';
+      toast.error(msg);
     },
   });
 
@@ -245,7 +254,8 @@ export default function MaterialInventoryPage() {
       closeActionDialog();
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to scrap lot');
+      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to scrap lot';
+      toast.error(msg);
     },
   });
 
@@ -265,6 +275,10 @@ export default function MaterialInventoryPage() {
   const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status' | 'scrap') => {
     setSelectedLot(lot);
     setActionType(type);
+    if (type === 'scrap' && currentUser) {
+      const displayName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.username;
+      setScrapPerformedBy(displayName);
+    }
     setActionDialogOpen(true);
   };
 
@@ -600,7 +614,7 @@ export default function MaterialInventoryPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
+      <Dialog open={actionDialogOpen} onOpenChange={(open) => { if (!open) closeActionDialog(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>

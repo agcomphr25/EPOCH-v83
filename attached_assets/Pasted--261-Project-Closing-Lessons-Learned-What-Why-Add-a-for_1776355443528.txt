@@ -1,0 +1,230 @@
+#261 - Project Closing + Lessons Learned
+
+What & Why
+Add a formal Project Closing module so projects cannot quietly finish without capturing what happened, what went wrong, what worked, and what must change next time. Right now EPOCH has projects, project steps, travelers, training, and the new WAD backbone, but no true closing record or lessons-learned structure. This ticket adds that missing endcap so the system becomes:
+
+Quote → Project → WAD → Traveler → Time → Closing → Next Project Improvement
+
+Your current schema has no project closing or lessons-learned table yet, so this is a net-new module.
+
+Done looks like
+A project_closings table exists and links to projects.id
+A project can have one formal closing record
+Closing captures:
+summary
+what went wrong
+strengths
+opportunities
+similarities to prior projects
+recommended actions for next time
+Supporting child tables exist for:
+risks encountered
+action items
+Storage methods exist to:
+create closing
+get closing by project
+create project risk
+list project risks
+create closing action
+list closing actions
+Routes exist to:
+create/update a project closing
+get project closing by project id
+add/list project risks
+add/list closing actions
+Project closing is additive only; no existing project flow is broken
+No frontend pages are required in this ticket
+Out of scope
+UI page for project closing
+mandatory close gate in P2 workflow
+analytics dashboards
+AI-generated recommendations
+backfilling old projects
+quote feedback loop automation
+Tasks
+1. Schema additions
+
+Add new tables to server/schema.ts.
+
+project_closings
+
+Fields:
+
+id UUID PK
+projectId UUID FK → projects.id (unique, one closing per project)
+summary text
+whatWentWrong text
+strengths text
+opportunities text
+similaritiesToPreviousProjects text
+nextProjectRecommendations text
+closedBy integer FK → employees.id or nullable if your current user model needs flexibility
+closedAt timestamp default now
+createdAt timestamp default now
+updatedAt timestamp default now
+project_closing_risks
+
+Fields:
+
+id UUID PK
+projectClosingId UUID FK → project_closings.id
+projectId UUID FK → projects.id
+category text
+severity text
+description text
+department text nullable
+owner text nullable
+createdAt timestamp default now
+
+Recommended categories:
+
+material
+supplier
+machine
+environment
+staffing
+training
+routing
+schedule
+quality
+design_change
+planning
+other
+
+Recommended severities:
+
+low
+medium
+high
+critical
+project_closing_actions
+
+Fields:
+
+id UUID PK
+projectClosingId UUID FK → project_closings.id
+projectId UUID FK → projects.id
+action text
+owner text nullable
+department text nullable
+dueDate timestamp nullable
+status text default "OPEN"
+createdAt timestamp default now
+updatedAt timestamp default now
+
+Recommended statuses:
+
+OPEN
+IN_PROGRESS
+COMPLETE
+CANCELED
+2. Insert schemas and exported types
+
+Add:
+
+insertProjectClosingSchema
+insertProjectClosingRiskSchema
+insertProjectClosingActionSchema
+
+Export TS types:
+
+ProjectClosing
+InsertProjectClosing
+ProjectClosingRisk
+InsertProjectClosingRisk
+ProjectClosingAction
+InsertProjectClosingAction
+3. Storage methods
+
+Add to IStorage and implement in server/storage.ts:
+
+createProjectClosing(data)
+updateProjectClosing(id, data)
+getProjectClosingByProjectId(projectId)
+createProjectClosingRisk(data)
+getProjectClosingRisks(projectId)
+createProjectClosingAction(data)
+getProjectClosingActions(projectId)
+
+Recommended behavior:
+
+createProjectClosing should fail or upsert safely if one already exists for the project
+getProjectClosingByProjectId returns one record or undefined
+list methods return newest first unless your app uses oldest-first for action tracking
+4. Routes
+
+Create or extend a route module, ideally under project routes, for example:
+
+server/src/routes/projectClosings.ts
+
+Minimum endpoints:
+
+POST /api/projects/:projectId/closing
+create closing
+PATCH /api/projects/:projectId/closing
+update closing
+GET /api/projects/:projectId/closing
+get closing
+POST /api/projects/:projectId/closing/risks
+add risk
+GET /api/projects/:projectId/closing/risks
+list risks
+POST /api/projects/:projectId/closing/actions
+add action
+GET /api/projects/:projectId/closing/actions
+list actions
+
+Validate all request bodies with Zod before storage calls.
+
+5. Route registration
+
+Register the new route module in the main route index, or extend projects.ts if you want closing to stay fully under the projects router.
+
+6. Data integrity rules
+project must exist before closing can be created
+only one closing per project
+risks/actions must point to the same project as the parent closing
+no silent creation of orphaned risks/actions
+Relevant files
+server/schema.ts
+server/storage.ts
+server/src/routes/index.ts
+server/src/routes/projects.ts
+optional new file: server/src/routes/projectClosings.ts
+Recommended implementation notes
+Keep one closing per project
+
+Use a unique constraint on projectId in project_closings. That makes the closeout record the official final review.
+
+Keep risks/actions separate
+
+Do not store risks and actions as raw JSON blobs for this ticket. Use real child tables so they can later drive dashboards, follow-ups, and future quote intelligence.
+
+Keep text fields flexible
+
+For the narrative sections:
+
+summary
+whatWentWrong
+strengths
+opportunities
+similaritiesToPreviousProjects
+nextProjectRecommendations
+
+Use text fields now. Structured templates can come later.
+
+Acceptance checklist
+ project_closings table exists
+ one closing can be created per project
+ closing can be fetched by project id
+ risks can be added and listed
+ actions can be added and listed
+ duplicate closing for same project is prevented
+ no existing project flows break
+Suggested live tests
+Create a closing for a real project.
+Fetch it by project id.
+Add two risks with different categories/severities.
+Add two actions with different statuses.
+Confirm duplicate closing creation is rejected or converted to update behavior.
+Confirm risks/actions cannot be created for a nonexistent project.

@@ -11,6 +11,7 @@ import dashboardRouter from "./dashboard";
 import costCodesRouter from "./cost-codes";
 import amendmentsRouter from "./amendments";
 import leaveRouter from "./leave";
+import laborRouter from "./labor";
 
 const router: IRouter = Router();
 
@@ -26,6 +27,7 @@ router.use("/dashboard", requireAdmin);
 router.use("/punches", requireAdmin);
 router.use("/cost-codes", requireAdmin);
 router.use("/leave-entries", requireAuth);
+router.use("/labor", requireAuth);
 
 router.use(employeesRouter);
 router.use(punchesRouter);
@@ -35,5 +37,6 @@ router.use(dashboardRouter);
 router.use(costCodesRouter);
 router.use(amendmentsRouter);
 router.use(leaveRouter);
+router.use(laborRouter);
 
 export default router;

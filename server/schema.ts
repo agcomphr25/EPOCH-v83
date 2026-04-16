@@ -5139,6 +5139,8 @@ export const travelers = pgTable('travelers', {
   salesOrderId: varchar('sales_order_id', { length: 255 }),
   workOrderId: varchar('work_order_id', { length: 255 }),
   productionWorkOrderId: uuid('production_work_order_id').references((): AnyPgColumn => productionWorkOrders.id),
+  projectId: uuid('project_id').references((): AnyPgColumn => projects.id),
+  defaultChargeCodeId: integer('default_charge_code_id'),
 
   lotNumber: varchar('lot_number', { length: 255 }),
   serialNumber: varchar('serial_number', { length: 255 }),
@@ -10492,6 +10494,7 @@ export const projects = pgTable('projects', {
   reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
   lastReminderSentAt: timestamp('last_reminder_sent_at'),
   notes: text('notes'),
+  defaultChargeCodeId: integer('default_charge_code_id'),
   createdBy: integer('created_by').references(() => employees.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -15242,6 +15245,7 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   dueDate: date('due_date'),
   warningThreshold: numeric('warning_threshold'),
   blockedThreshold: numeric('blocked_threshold'),
+  defaultChargeCodeId: integer('default_charge_code_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

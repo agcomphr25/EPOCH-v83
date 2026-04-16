@@ -110,6 +110,7 @@ interface Project {
   customer?: { id: number; customerId: string; name: string };
   projectManager?: { id: number; name: string };
   activityLog: ActivityLog[];
+  closingStatus: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
 }
 
 interface Employee {
@@ -196,6 +197,7 @@ interface ProjectClosing {
   nextProjectRecommendations: string | null;
   closedBy: number | null;
   closedByDisplayName: string | null;
+  approvedBy: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -632,6 +634,16 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const CLOSING_FIELD_LABELS: Record<string, string> = {
+    summary: 'Summary',
+    whatWentWrong: 'What Went Wrong',
+    strengths: 'Strengths',
+    opportunities: 'Opportunities',
+    similaritiesToPriorProjects: 'Similarities to Prior Projects',
+    nextProjectRecommendations: 'Next Project Recommendations',
+    closedByDisplayName: 'Closed By',
+  };
+
   const updateProjectMutation = useMutation({
     mutationFn: async (data: Partial<Project>) => {
       return apiRequest(`/api/projects/${id}`, {
@@ -642,6 +654,39 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       setIsEditDialogOpen(false);
+    },
+    onError: (err: any) => {
+      const responseData = err?.responseData;
+      const status = err?.status;
+
+      if (status === 403 && responseData?.message?.toLowerCase().includes('approved')) {
+        toast({
+          title: 'Manager approval required',
+          description: 'The closing record must be approved by a manager before this project can be marked complete.',
+          variant: 'destructive',
+        });
+      } else if (status === 400 && responseData?.missingFields?.length) {
+        const fieldLabels = (responseData.missingFields as string[])
+          .map((f: string) => CLOSING_FIELD_LABELS[f] || f)
+          .join(', ');
+        toast({
+          title: 'Closing record is incomplete',
+          description: `The following fields are still empty: ${fieldLabels}. Please complete the closing record before marking the project complete.`,
+          variant: 'destructive',
+        });
+      } else if (status === 400 && responseData?.message?.includes('closing record')) {
+        toast({
+          title: 'Closing record required',
+          description: 'A lessons-learned closing record must be created before this project can be marked complete. Go to the "Close Project" tab to get started.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Failed to update project',
+          description: responseData?.message || err?.message || 'An unexpected error occurred.',
+          variant: 'destructive',
+        });
+      }
     },
   });
 
@@ -910,6 +955,18 @@ export default function ProjectDetailPage() {
                 {STAGE_LABELS[project.currentStage] || project.currentStage}
               </Badge>
             )}
+            <Badge
+              className={
+                project.closingStatus === 'COMPLETE'
+                  ? 'bg-green-100 text-green-800 text-xs'
+                  : project.closingStatus === 'INCOMPLETE'
+                  ? 'bg-yellow-100 text-yellow-800 text-xs'
+                  : 'bg-red-100 text-red-800 text-xs'
+              }
+              title="Closing record status"
+            >
+              Closing: {project.closingStatus}
+            </Badge>
           </div>
           <p className="text-lg text-muted-foreground">{project.projectName}</p>
         </div>
@@ -986,6 +1043,16 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="closing" data-testid="tab-closing">
             <BookOpen className="h-4 w-4 mr-1.5" />
             Close Project
+            <span
+              className={`ml-1.5 inline-block w-2 h-2 rounded-full ${
+                project.closingStatus === 'COMPLETE'
+                  ? 'bg-green-500'
+                  : project.closingStatus === 'INCOMPLETE'
+                  ? 'bg-yellow-500'
+                  : 'bg-red-400'
+              }`}
+              title={`Closing: ${project.closingStatus}`}
+            />
           </TabsTrigger>
         </TabsList>
 

@@ -2542,6 +2542,7 @@ export interface IStorage {
   generateNextICN(): Promise<string>;
 
   scrapMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
+  returnMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; lotTransaction: MaterialLotTransaction }>;
 
   // Material Lot Transactions
   getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]>;
@@ -21208,6 +21209,108 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMaterialLot(id: string): Promise<void> {
     await db.delete(materialLots).where(eq(materialLots.id, id));
+  }
+
+  async returnMaterialLot(
+    id: string,
+    params: { qty: number; reason: string; performedBy: string }
+  ): Promise<{ lot: MaterialLot; lotTransaction: MaterialLotTransaction }> {
+    const lot = await this.getMaterialLot(id);
+    if (!lot) throw new Error('Material lot not found');
+
+    const blockedStatuses = ['SCRAPPED', 'CONSUMED'];
+    if (blockedStatuses.includes(lot.status)) {
+      throw Object.assign(new Error(`Cannot return a lot with status ${lot.status}`), { statusCode: 400 });
+    }
+
+    if (params.qty <= 0) {
+      throw Object.assign(new Error('Return quantity must be greater than zero'), { statusCode: 400 });
+    }
+
+    const qtyBefore = parseFloat(lot.remainingQty);
+    const qtyAfter = qtyBefore + params.qty;
+    const newStatus = lot.status === 'ISSUED' ? 'ACCEPTED' : lot.status;
+
+    // Compute out-time if the lot is physically out of storage
+    let additionalOutTime = 0;
+    if (lot.currentlyOutOfStorage && lot.lastOutAt) {
+      additionalOutTime = Math.floor((Date.now() - new Date(lot.lastOutAt).getTime()) / (1000 * 60));
+    }
+    const newTotalOutTime = (lot.totalOutTimeMinutes || 0) + additionalOutTime;
+
+    const result = await db.transaction(async (tx) => {
+      const lotUpdate: Record<string, unknown> = {
+        remainingQty: qtyAfter.toString(),
+        status: newStatus,
+        updatedAt: new Date(),
+      };
+      if (lot.currentlyOutOfStorage) {
+        lotUpdate.currentlyOutOfStorage = false;
+        lotUpdate.totalOutTimeMinutes = newTotalOutTime;
+      }
+
+      const [updatedLot] = await tx
+        .update(materialLots)
+        .set(lotUpdate)
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      const [lotTransaction] = await tx
+        .insert(materialLotTransactions)
+        .values({
+          materialLotId: id,
+          internalControlNumber: lot.internalControlNumber,
+          transactionType: 'RETURN',
+          qtyBefore: qtyBefore.toString(),
+          qtyChange: params.qty.toString(),
+          qtyAfter: qtyAfter.toString(),
+          performedBy: params.performedBy,
+          reason: params.reason,
+          wasOverride: false,
+        })
+        .returning();
+
+      if (lot.currentlyOutOfStorage) {
+        await tx.insert(materialLotTransactions).values({
+          materialLotId: id,
+          internalControlNumber: lot.internalControlNumber,
+          transactionType: 'OUT_END',
+          performedBy: params.performedBy,
+          notes: `Returned to storage. Out for ${additionalOutTime} minutes. Total out-time: ${newTotalOutTime} minutes`,
+          wasOverride: false,
+        });
+      }
+
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lot.materialPartNumber,
+        transactionType: 'receipt',
+        quantity: params.qty,
+        unitOfMeasure: lot.unitOfMeasure,
+        referenceType: 'RETURN',
+        referenceId: id,
+        performedBy: params.performedBy,
+        notes: params.reason,
+      });
+
+      const [balance] = await tx
+        .select()
+        .from(inventoryBalances)
+        .where(eq(inventoryBalances.agPartNumber, lot.materialPartNumber))
+        .limit(1);
+
+      if (balance) {
+        const newOnHand = balance.quantityOnHand + params.qty;
+        const newAvailable = Math.max(0, newOnHand - balance.quantityAllocated);
+        await tx
+          .update(inventoryBalances)
+          .set({ quantityOnHand: newOnHand, quantityAvailable: newAvailable, updatedAt: new Date() })
+          .where(eq(inventoryBalances.id, balance.id));
+      }
+
+      return { lot: updatedLot, lotTransaction };
+    });
+
+    return result;
   }
 
   async generateNextICN(): Promise<string> {

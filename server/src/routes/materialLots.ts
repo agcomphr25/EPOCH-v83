@@ -601,62 +601,47 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
   }
 });
 
-// Return material to storage (end out-time tracking)
+// Return unused issued material to inventory stock
+const returnSchema = z.object({
+  qty: z.number().positive('qty must be a positive number'),
+  reason: z.string().min(1, 'reason is required'),
+  performedBy: z.string().min(1, 'performedBy is required'),
+});
+
 router.post('/:id/return', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { performedBy, toLocation, notes } = req.body;
+
+    const parseResult = returnSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation error',
+        details: parseResult.error.errors,
+      });
+    }
+
+    const { qty, reason, performedBy } = parseResult.data;
 
     const lot = await storage.getMaterialLot(id);
     if (!lot) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
 
-    if (!lot.currentlyOutOfStorage) {
-      return res.status(400).json({ error: 'Material is not currently out of storage' });
+    const blockedStatuses: MaterialLotStatus[] = ['SCRAPPED', 'CONSUMED'];
+    if (blockedStatuses.includes(lot.status as MaterialLotStatus)) {
+      return res.status(400).json({
+        error: 'INVALID_LOT_STATUS',
+        message: `Cannot return a lot with status ${lot.status}`,
+      });
     }
 
-    // Calculate out-time duration
-    let additionalOutTime = 0;
-    if (lot.lastOutAt) {
-      const now = new Date();
-      const outAt = new Date(lot.lastOutAt);
-      additionalOutTime = Math.floor((now.getTime() - outAt.getTime()) / (1000 * 60));
-    }
+    const result = await storage.returnMaterialLot(id, { qty, reason, performedBy });
 
-    const newTotalOutTime = (lot.totalOutTimeMinutes || 0) + additionalOutTime;
-
-    const updatedLot = await storage.updateMaterialLot(id, {
-      status: 'ACCEPTED',
-      currentlyOutOfStorage: false,
-      totalOutTimeMinutes: newTotalOutTime,
-      storageLocation: toLocation || lot.storageLocation,
-    });
-
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'OUT_END',
-      performedBy,
-      notes: `Returned to storage. Out for ${additionalOutTime} minutes. Total out-time: ${newTotalOutTime} minutes`,
-    }));
-
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'RETURN',
-      qtyBefore: lot.remainingQty,
-      qtyAfter: lot.remainingQty,
-      fromLocation: lot.storageLocation || undefined,
-      toLocation: toLocation || lot.storageLocation,
-      performedBy,
-      notes,
-    }));
-
-    res.json(updatedLot);
+    res.json(result);
   } catch (error: any) {
     console.error('Error returning material lot:', error);
-    res.status(500).json({ error: 'Failed to return material lot', message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ error: 'Failed to return material lot', message: error.message });
   }
 });
 

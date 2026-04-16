@@ -210,24 +210,7 @@ export function calculateSiteLaborSummary(
   };
 }
 
-export function getPayPeriodDates(referenceDate: Date = new Date()): { start: Date; end: Date } {
-  const day = referenceDate.getDate();
-  const month = referenceDate.getMonth();
-  const year = referenceDate.getFullYear();
-
-  let start: Date;
-  let end: Date;
-
-  if (day <= 15) {
-    start = new Date(year, month, 1, 0, 0, 0, 0);
-    end = new Date(year, month, 15, 23, 59, 59, 999);
-  } else {
-    start = new Date(year, month, 16, 0, 0, 0, 0);
-    end = new Date(year, month + 1, 0, 23, 59, 59, 999);
-  }
-
-  return { start, end };
-}
+export { getPayPeriodDates } from './payPeriod';
 
 export function getTodayDateRange(): { start: Date; end: Date } {
   const now = new Date();

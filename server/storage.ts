@@ -2544,6 +2544,8 @@ export interface IStorage {
   scrapMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
   returnMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; lotTransaction: MaterialLotTransaction }>;
 
+  adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
+
   // Material Lot Transactions
   getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]>;
   getMaterialLotTransactionsByICN(icn: string): Promise<MaterialLotTransaction[]>;
@@ -21425,6 +21427,105 @@ export class DatabaseStorage implements IStorage {
       }
 
       const newOnHand = Math.max(0, balance.quantityOnHand - qty);
+      const newAvailable = Math.max(0, newOnHand - balance.quantityAllocated);
+      await tx
+        .update(inventoryBalances)
+        .set({ quantityOnHand: newOnHand, quantityAvailable: newAvailable, updatedAt: new Date() })
+        .where(eq(inventoryBalances.id, balance.id));
+
+      return { updatedLot, lotTx };
+    });
+
+    return { lot: updatedLot, transaction: lotTx };
+  }
+
+  async adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }> {
+    const { delta, reasonCode, notes, performedBy, allowNegative = false } = params;
+
+    const [preCheck] = await db.select({ id: materialLots.id }).from(materialLots).where(eq(materialLots.id, id));
+    if (!preCheck) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+
+    const { updatedLot, lotTx } = await db.transaction(async (tx) => {
+      // Row-lock the lot for the duration of the transaction to prevent concurrent conflicts.
+      const [lockedLot] = await tx
+        .select({
+          id: materialLots.id,
+          remainingQty: materialLots.remainingQty,
+          status: materialLots.status,
+          internalControlNumber: materialLots.internalControlNumber,
+          materialPartNumber: materialLots.materialPartNumber,
+          unitOfMeasure: materialLots.unitOfMeasure,
+        })
+        .from(materialLots)
+        .where(eq(materialLots.id, id))
+        .for('update');
+
+      if (!lockedLot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+
+      const remaining = parseFloat(lockedLot.remainingQty);
+      const newRemaining = remaining + delta;
+      const wasOverride = allowNegative && newRemaining < 0;
+
+      if (newRemaining < 0 && !allowNegative) {
+        throw Object.assign(
+          new Error(`Adjustment of ${delta} would drive remainingQty to ${newRemaining} (below zero). Pass allowNegative: true to override.`),
+          { statusCode: 400 }
+        );
+      }
+
+      const newRemainingStr = newRemaining.toString();
+
+      // 1. Update material_lots.remainingQty
+      const [updatedLot] = await tx
+        .update(materialLots)
+        .set({ remainingQty: newRemainingStr, updatedAt: new Date() })
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      // 2. Write material_lot_transactions audit record
+      const [lotTx] = await tx
+        .insert(materialLotTransactions)
+        .values({
+          materialLotId: id,
+          internalControlNumber: lockedLot.internalControlNumber,
+          transactionType: 'ADJUST',
+          qtyBefore: lockedLot.remainingQty,
+          qtyChange: delta.toString(),
+          qtyAfter: newRemainingStr,
+          performedBy,
+          reason: reasonCode,
+          notes: notes ?? null,
+          wasOverride,
+        })
+        .returning();
+
+      // 3. Write inventory_transactions record (signed delta for global ledger)
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lockedLot.materialPartNumber,
+        transactionType: 'adjustment',
+        quantity: delta,
+        unitOfMeasure: lockedLot.unitOfMeasure,
+        referenceType: 'ADJUST',
+        referenceId: id,
+        performedBy,
+        notes: notes ? `${reasonCode}: ${notes}` : reasonCode,
+      });
+
+      // 4. Update inventory_balances — mandatory; rollback if no balance row exists.
+      const [balance] = await tx
+        .select()
+        .from(inventoryBalances)
+        .where(eq(inventoryBalances.agPartNumber, lockedLot.materialPartNumber))
+        .limit(1);
+
+      if (!balance) {
+        throw Object.assign(
+          new Error(`No inventory balance row found for part ${lockedLot.materialPartNumber}. Adjustment aborted to preserve ledger integrity.`),
+          { statusCode: 409 }
+        );
+      }
+
+      const newOnHand = balance.quantityOnHand + delta;
       const newAvailable = Math.max(0, newOnHand - balance.quantityAllocated);
       await tx
         .update(inventoryBalances)

@@ -699,6 +699,55 @@ router.post('/:id/scrap', async (req: Request, res: Response) => {
   }
 });
 
+// Adjust material lot quantity (cycle count correction)
+const adjustBodySchema = z.object({
+  delta: z.number({ required_error: 'delta is required' }).refine(v => v !== 0, { message: 'delta must be non-zero' }),
+  reasonCode: z.string().min(1, 'reasonCode is required'),
+  notes: z.string().optional(),
+  performedBy: z.string().min(1, 'performedBy is required'),
+  allowNegative: z.boolean().optional().default(false),
+});
+
+router.post('/:id/adjust', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const parsed = adjustBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation error', details: parsed.error.errors });
+    }
+
+    const { delta, reasonCode, notes, performedBy, allowNegative } = parsed.data;
+
+    const lot = await storage.getMaterialLot(id);
+    if (!lot) {
+      return res.status(404).json({ error: 'Material lot not found' });
+    }
+
+    const remaining = parseFloat(lot.remainingQty);
+    if (remaining + delta < 0 && !allowNegative) {
+      return res.status(400).json({
+        error: 'NEGATIVE_QTY',
+        message: `Adjustment of ${delta} would drive remainingQty to ${remaining + delta} (below zero). Set allowNegative: true to override.`,
+        remainingQty: remaining,
+        delta,
+        projectedQty: remaining + delta,
+      });
+    }
+
+    const result = await storage.adjustMaterialLot(id, { delta, reasonCode, notes, performedBy, allowNegative });
+
+    res.json({
+      lot: result.lot,
+      transaction: result.transaction,
+    });
+  } catch (error: any) {
+    console.error('Error adjusting material lot:', error);
+    const statusCode = [400, 404, 409].includes(error.statusCode) ? error.statusCode : 500;
+    res.status(statusCode).json({ error: 'Failed to adjust material lot', message: error.message });
+  }
+});
+
 // Split material lot
 router.post('/:id/split', async (req: Request, res: Response) => {
   try {

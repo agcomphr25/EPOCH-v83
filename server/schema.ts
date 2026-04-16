@@ -9298,6 +9298,41 @@ export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit
 export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
 export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
 
+// Quote Execution Feedback — Historical labor/risk data captured after project close
+export const quoteExecutionFeedback = pgTable('quote_execution_feedback', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteId: uuid('quote_id').references(() => quotes.id, { onDelete: 'set null' }),
+  projectId: uuid('project_id').notNull(),
+  projectClosingId: uuid('project_closing_id'),
+  partNumber: text('part_number'),
+  customerId: text('customer_id'),
+  projectType: text('project_type'),
+  quotedLaborHours: real('quoted_labor_hours'),
+  actualLaborHours: real('actual_labor_hours'),
+  laborVarianceHours: real('labor_variance_hours'),
+  laborVariancePercent: real('labor_variance_percent'),
+  quotedDepartments: jsonb('quoted_departments'),
+  actualDepartments: jsonb('actual_departments'),
+  quotedLeadTimeDays: integer('quoted_lead_time_days'),
+  actualLeadTimeDays: integer('actual_lead_time_days'),
+  overrunFlag: boolean('overrun_flag').default(false),
+  keyRisks: jsonb('key_risks'),
+  strengths: jsonb('strengths'),
+  opportunities: jsonb('opportunities'),
+  recommendedQuotingNotes: text('recommended_quoting_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertQuoteExecutionFeedbackSchema = createInsertSchema(quoteExecutionFeedback).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type QuoteExecutionFeedback = typeof quoteExecutionFeedback.$inferSelect;
+export type InsertQuoteExecutionFeedback = z.infer<typeof insertQuoteExecutionFeedbackSchema>;
+
 // Cost Centers - Track business units, departments, and projects for expense allocation
 export const costCenters = pgTable('cost_centers', {
   id: uuid('id').defaultRandom().primaryKey(),

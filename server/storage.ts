@@ -651,6 +651,9 @@ import {
   cycleCountLines,
   type CycleCountSession,
   type CycleCountLine,
+  // Quote Execution Feedback
+  quoteExecutionFeedback,
+  type QuoteExecutionFeedback,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2765,6 +2768,9 @@ export interface IStorage {
   getLaborCostRecordsByPeriod(year: number, month: number): Promise<LaborCostRecord[]>;
   deleteLaborCostRecordsByPeriod(year: number, month: number): Promise<void>;
   updateLaborCostRecordJournalEntry(id: string, journalEntryId: number): Promise<LaborCostRecord | undefined>;
+
+  // Quote Suggestions
+  getQuoteSuggestions(input: { partNumber?: string; projectType?: string; customerId?: string }): Promise<QuoteExecutionFeedback[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -23237,6 +23243,21 @@ export class DatabaseStorage implements IStorage {
     });
 
     return result;
+  }
+
+  async getQuoteSuggestions(input: { partNumber?: string; projectType?: string; customerId?: string }): Promise<QuoteExecutionFeedback[]> {
+    const { partNumber, projectType, customerId } = input;
+    if (!partNumber && !projectType && !customerId) return [];
+    return db
+      .select()
+      .from(quoteExecutionFeedback)
+      .where(
+        or(
+          partNumber ? eq(quoteExecutionFeedback.partNumber, partNumber) : undefined,
+          projectType ? eq(quoteExecutionFeedback.projectType, projectType) : undefined,
+          customerId ? eq(quoteExecutionFeedback.customerId, customerId) : undefined,
+        ),
+      );
   }
 }
 

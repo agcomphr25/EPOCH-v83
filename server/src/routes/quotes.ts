@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
-import { quotes, quoteLineItems, insertQuoteSchema, insertQuoteLineItemSchema } from '../../schema';
+import { quotes, quoteLineItems, insertQuoteSchema, insertQuoteLineItemSchema, type QuoteExecutionFeedback } from '../../schema';
 import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { randomUUID } from 'crypto';
 import { quoteAttachmentUpload, quoteAttachmentsDir } from '../../utils/fileUpload';
 import path from 'path';
 import fs from 'fs';
+import { z } from 'zod';
+import { storage } from '../../storage';
 
 const router = Router();
 
@@ -729,6 +731,129 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
       error: 'Failed to generate PDF',
       details: error instanceof Error ? error.message : String(error)
     });
+  }
+});
+
+// ─── Quote Suggestion Engine ────────────────────────────────────────────────
+
+const suggestionsBodySchema = z.object({
+  partNumber: z.string().optional(),
+  projectType: z.string().optional(),
+  customerId: z.string().optional(),
+});
+
+/**
+ * Pure similarity filter: returns all feedback records that match on any one
+ * of the provided search fields (partNumber, projectType, customerId).
+ */
+function filterFeedbackByInput(
+  records: QuoteExecutionFeedback[],
+  input: { partNumber?: string; projectType?: string; customerId?: string },
+): QuoteExecutionFeedback[] {
+  return records.filter((r) => {
+    if (input.partNumber && r.partNumber === input.partNumber) return true;
+    if (input.projectType && r.projectType === input.projectType) return true;
+    if (input.customerId && r.customerId === input.customerId) return true;
+    return false;
+  });
+}
+
+interface SuggestionSummary {
+  avgLaborVariancePercent: number;
+  avgActualLaborHours: number;
+  overrunRisk: boolean;
+  recommendedAdjustment: string;
+}
+
+/**
+ * Pure aggregator: computes summary statistics from a list of matched records.
+ * Returns null when the list is empty.
+ */
+function aggregateFeedback(matches: QuoteExecutionFeedback[]): SuggestionSummary | null {
+  if (matches.length === 0) return null;
+
+  const varianceValues = matches
+    .map((r) => r.laborVariancePercent)
+    .filter((v): v is number => v !== null && v !== undefined);
+
+  const actualHoursValues = matches
+    .map((r) => r.actualLaborHours)
+    .filter((v): v is number => v !== null && v !== undefined);
+
+  const avgLaborVariancePercent =
+    varianceValues.length > 0
+      ? varianceValues.reduce((sum, v) => sum + v, 0) / varianceValues.length
+      : 0;
+
+  const avgActualLaborHours =
+    actualHoursValues.length > 0
+      ? actualHoursValues.reduce((sum, v) => sum + v, 0) / actualHoursValues.length
+      : 0;
+
+  const overrunRisk = avgLaborVariancePercent > 10;
+
+  let recommendedAdjustment: string;
+  if (avgLaborVariancePercent > 20) {
+    recommendedAdjustment = `Increase labor estimate by ~${Math.round(avgLaborVariancePercent)}% based on ${matches.length} similar project(s). High overrun risk detected.`;
+  } else if (avgLaborVariancePercent > 10) {
+    recommendedAdjustment = `Consider adding a ${Math.round(avgLaborVariancePercent)}% labor buffer based on ${matches.length} similar project(s).`;
+  } else if (avgLaborVariancePercent > 0) {
+    recommendedAdjustment = `Minor overruns observed (~${Math.round(avgLaborVariancePercent)}%) across ${matches.length} similar project(s). Current estimate appears reasonable.`;
+  } else {
+    recommendedAdjustment = `No significant overruns observed across ${matches.length} similar project(s). Current estimate appears reasonable.`;
+  }
+
+  return { avgLaborVariancePercent, avgActualLaborHours, overrunRisk, recommendedAdjustment };
+}
+
+// POST /api/quotes/suggestions
+router.post('/api/quotes/suggestions', async (req: Request, res: Response) => {
+  try {
+    const parsed = suggestionsBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body', details: parsed.error.format() });
+    }
+
+    const input = parsed.data;
+
+    if (!input.partNumber && !input.projectType && !input.customerId) {
+      return res.status(400).json({ error: 'At least one of partNumber, projectType, or customerId is required' });
+    }
+
+    // Storage already performs OR-based DB-level filtering; results are the matches.
+    const matches = await storage.getQuoteSuggestions(input);
+
+    const summary = aggregateFeedback(matches);
+
+    const risks: string[] = matches.flatMap((r) => {
+      if (!r.keyRisks) return [];
+      const raw = r.keyRisks as unknown;
+      if (Array.isArray(raw)) return raw.map(String);
+      return [];
+    });
+
+    const strengths: string[] = matches.flatMap((r) => {
+      if (!r.strengths) return [];
+      const raw = r.strengths as unknown;
+      if (Array.isArray(raw)) return raw.map(String);
+      return [];
+    });
+
+    const opportunities: string[] = matches.flatMap((r) => {
+      if (!r.opportunities) return [];
+      const raw = r.opportunities as unknown;
+      if (Array.isArray(raw)) return raw.map(String);
+      return [];
+    });
+
+    const recommendations: string[] = matches
+      .map((r) => r.recommendedQuotingNotes)
+      .filter((n): n is string => !!n);
+
+    res.json({ matches, summary, risks, strengths, opportunities, recommendations });
+  } catch (error) {
+    console.error('Quote suggestions error:', error);
+    res.status(500).json({ error: 'Failed to fetch quote suggestions' });
   }
 });
 

@@ -6407,8 +6407,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
       console.log('🔧 Updated PO item:', updatedItem.id);
       res.json(updatedItem);
-    } catch (_error) {
+    } catch (_error: any) {
       console.error('🔧 Update PO item _error:', _error);
+      if (_error?.name === 'TransitionValidationError') {
+        return res.status(422).json({ _error: _error.message, code: _error.code, context: _error.context });
+      }
       res.status(500).json({ _error: 'Failed to update purchase order item' });
     }
   });
@@ -6451,8 +6454,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       console.log(`🔧 PATCH stock-model: PO item ${itemId} → ${stockModel.id} (${stockModel.displayName})`);
       res.json(updatedItem);
-    } catch (_error) {
+    } catch (_error: any) {
       console.error('🔧 PATCH stock-model error:', _error);
+      if (_error?.name === 'TransitionValidationError') {
+        return res.status(422).json({ error: _error.message, code: _error.code, context: _error.context });
+      }
       res.status(500).json({ error: 'Failed to update stock model on PO item' });
     }
   });

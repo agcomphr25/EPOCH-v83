@@ -10987,16 +10987,38 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertPurchaseOrderItem>
   ): Promise<PurchaseOrderItem> {
-    // Calculate total price if quantity or unitPrice changed
-    if (data.quantity !== undefined || data.unitPrice !== undefined) {
-      const currentItem = await db
-        .select()
-        .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.id, id));
-      if (currentItem.length > 0) {
-        const item = currentItem[0];
-        const quantity = data.quantity ?? item.quantity;
-        const unitPrice = data.unitPrice ?? item.unitPrice;
+    const { TransitionValidationError } = await import('./src/services/orderTransitionValidator');
+
+    function isTerminalStockStatus(s: string | null | undefined): boolean {
+      return s === 'SHIPPED' || s === 'FULFILLED';
+    }
+
+    // Guard: fetch current item to check stock status before any update
+    const currentItems = await db
+      .select()
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id));
+
+    if (currentItems.length > 0) {
+      const current = currentItems[0];
+
+      // Prevent clearing or downgrading a SHIPPED or FULFILLED item's stock status
+      if (
+        isTerminalStockStatus(current.stockStatus) &&
+        'stockStatus' in data &&
+        !isTerminalStockStatus(data.stockStatus)
+      ) {
+        throw new TransitionValidationError(
+          'SHIPPED_ITEM_STATUS_DOWNGRADE',
+          `PO item ${id} is already ${current.stockStatus} — its stock status cannot be cleared or downgraded.`,
+          { itemId: id, currentStatus: current.stockStatus, attemptedStatus: data.stockStatus ?? null }
+        );
+      }
+
+      // Calculate total price if quantity or unitPrice changed
+      if (data.quantity !== undefined || data.unitPrice !== undefined) {
+        const quantity = data.quantity ?? current.quantity;
+        const unitPrice = data.unitPrice ?? current.unitPrice;
         data.totalPrice = quantity * unitPrice;
       }
     }

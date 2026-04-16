@@ -1312,15 +1312,31 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
     let totalUpdated = 0;
 
     // Update purchase_order_items.stock_status back to null (ready for shipping QC)
+    // Guard: skip items that have already reached a terminal SHIPPED or FULFILLED status.
+    // NULL stock_status rows must be explicitly included via IS NULL because SQL's NOT IN
+    // returns UNKNOWN (not TRUE) for NULL values, which would incorrectly exclude them.
     if (uniquePoItemIds.length > 0) {
       const poItemResult = await pool.query(`
         UPDATE purchase_order_items 
         SET stock_status = NULL,
             updated_at = NOW()
         WHERE id = ANY($1::int[])
+          AND (stock_status IS NULL OR stock_status NOT IN ('SHIPPED', 'FULFILLED'))
         RETURNING id, stock_status
       `, [uniquePoItemIds]);
       const poItemsUpdated = poItemResult.rows || poItemResult;
+
+      // Count items that were skipped because they are in a terminal status
+      const terminalCheckResult = await pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM purchase_order_items
+        WHERE id = ANY($1::int[])
+          AND stock_status IN ('SHIPPED', 'FULFILLED')
+      `, [uniquePoItemIds]);
+      const terminalSkipped = terminalCheckResult.rows[0]?.count ?? 0;
+      if (terminalSkipped > 0) {
+        console.warn(`⚠️ Skipped ${terminalSkipped} purchase_order_items that are already SHIPPED or FULFILLED — their status was not cleared.`);
+      }
       console.log(`✅ Updated ${poItemsUpdated.length} purchase_order_items to null stock_status`);
       totalUpdated += poItemsUpdated.length;
     }
@@ -1486,6 +1502,9 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);
+    if (error?.name === 'TransitionValidationError') {
+      return res.status(422).json({ _error: error.message, code: error.code, context: error.context });
+    }
     res.status(500).json({ _error: 'Failed to update fulfilled status', details: error.message });
   }
 });

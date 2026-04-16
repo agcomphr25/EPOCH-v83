@@ -67,6 +67,28 @@ interface AllocationInputRow {
   units: number;
 }
 
+function toLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getCurrentBiweeklyPeriod(): { start: string; end: string } {
+  const today = new Date();
+  const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const anchor = new Date(2024, 0, 1);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysSinceAnchor = Math.floor((localToday.getTime() - anchor.getTime()) / msPerDay);
+  const periodIndex = Math.floor(daysSinceAnchor / 14);
+  const startDate = new Date(anchor.getTime() + periodIndex * 14 * msPerDay);
+  const endDate = new Date(startDate.getTime() + 13 * msPerDay);
+  return {
+    start: toLocalDateString(startDate),
+    end: toLocalDateString(endDate),
+  };
+}
+
 const PUNCH_LABELS: Record<string, string> = {
   clock_in: 'Clock In',
   clock_out: 'Clock Out',
@@ -112,21 +134,22 @@ export default function TimeClockAdminPage() {
 
   const [isExporting, setIsExporting] = useState(false);
 
+  const defaultPeriod = getCurrentBiweeklyPeriod();
+  const [periodStart, setPeriodStart] = useState(defaultPeriod.start);
+  const [periodEnd, setPeriodEnd] = useState(defaultPeriod.end);
+
   const handleGustoExport = async () => {
-    if (!data?.payPeriod) return;
+    if (!periodStart || !periodEnd) return;
     setIsExporting(true);
     try {
-      const params = new URLSearchParams({
-        periodStart: data.payPeriod.start,
-        periodEnd: data.payPeriod.end,
-      });
-      const response = await fetch(`/api/timekeeping/admin/export/gusto?${params}`);
+      const params = new URLSearchParams({ periodStart, periodEnd });
+      const response = await fetch(`/api/timekeeping/export/gusto?${params}`);
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `gusto-export-${data.payPeriod.start}-to-${data.payPeriod.end}.csv`;
+      a.download = `gusto-export-${periodStart}-to-${periodEnd}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -620,26 +643,42 @@ export default function TimeClockAdminPage() {
       {/* Payroll export */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" />
             Payroll Export
-            <div className="flex items-center gap-2">
-              {!data?.payPeriod && (
-                <span className="text-xs text-muted-foreground">Load an employee first to enable export</span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleGustoExport}
-                disabled={isExporting || !data?.payPeriod}
-              >
-                {isExporting
-                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  : <Download className="w-4 h-4 mr-2" />}
-                {isExporting ? 'Exporting…' : 'Export Approved Hours (Gusto)'}
-              </Button>
-            </div>
           </CardTitle>
         </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground font-medium">Period Start</label>
+              <input
+                type="date"
+                value={periodStart}
+                onChange={e => setPeriodStart(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground font-medium">Period End</label>
+              <input
+                type="date"
+                value={periodEnd}
+                onChange={e => setPeriodEnd(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <Button
+              onClick={handleGustoExport}
+              disabled={isExporting || !periodStart || !periodEnd}
+            >
+              {isExporting
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <Download className="w-4 h-4 mr-2" />}
+              {isExporting ? 'Exporting…' : 'Export Approved Hours (Gusto)'}
+            </Button>
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

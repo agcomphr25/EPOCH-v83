@@ -1,0 +1,211 @@
+COPY-PASTE PROMPT — EPOCH FINANCE DOMAIN AUDIT
+You are performing a READ-ONLY forensic audit of the EPOCH ERP codebase.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any files
+- DO NOT generate new code
+- DO NOT assume anything
+- ONLY report what actually exists in the codebase
+- If something is missing, explicitly say "NOT FOUND"
+
+--------------------------------------------------
+🎯 OBJECTIVE
+--------------------------------------------------
+
+Audit the current implementation of:
+
+1) /finance/cost-accounting
+2) /finance/cost-centers
+
+We are preparing to implement:
+- DCAA-compliant cost accounting
+- General Ledger (GL)
+- Chart of Accounts (COA)
+- Cost allocations (Direct, Overhead, G&A, IR&D)
+
+Your job is to determine:
+- What already exists
+- What is partially implemented
+- What is missing
+- Where integration points exist
+
+--------------------------------------------------
+🔍 PHASE 1 — FILE & STRUCTURE DISCOVERY
+--------------------------------------------------
+
+Scan and list all files related to:
+
+/finance/cost-accounting
+/finance/cost-centers
+
+Include:
+- Frontend components
+- Backend routes
+- Database schema (Drizzle)
+- API handlers
+- Services / utilities
+
+Return:
+
+FILE_MAP:
+- filepath
+- purpose (inferred from code, not guessed)
+
+--------------------------------------------------
+🧱 PHASE 2 — DATA MODEL AUDIT (CRITICAL)
+--------------------------------------------------
+
+Identify ALL database tables related to:
+
+- account categories
+- chart of accounts
+- cost centers
+- departments
+- budgets
+- allocations
+- financial transactions
+
+For EACH table, return:
+
+TABLE_NAME:
+- columns (name + type)
+- primary keys
+- foreign keys
+- relationships
+
+Then explicitly answer:
+
+DOES A GL TABLE EXIST?
+- If yes: describe structure
+- If no: say NOT FOUND
+
+DOES A CHART OF ACCOUNTS TABLE EXIST?
+- If yes: list fields (code, name, type, etc.)
+- If no: say NOT FOUND
+
+DO COST CENTERS LINK TO PROJECTS OR CHARGE CODES?
+- Show actual relationships or say NOT LINKED
+
+--------------------------------------------------
+⚙️ PHASE 3 — BEHAVIOR / LOGIC AUDIT
+--------------------------------------------------
+
+Search for any logic related to:
+
+- journal entries
+- debits / credits
+- financial posting rules
+- cost allocation logic
+- overhead / G&A calculations
+- timekeeping → cost mapping
+- inventory → cost mapping
+
+Return:
+
+LOGIC_MAP:
+- file
+- function
+- what it actually does
+
+Then answer clearly:
+
+IS THERE A POSTING ENGINE?
+(e.g., time entry → GL)
+
+IS THERE AN ALLOCATION ENGINE?
+(e.g., overhead applied to labor)
+
+IS THERE ANY DOUBLE-ENTRY ACCOUNTING LOGIC?
+
+--------------------------------------------------
+🔗 PHASE 4 — INTEGRATION POINTS
+--------------------------------------------------
+
+Identify connections between:
+
+- cost centers ↔ departments
+- cost centers ↔ orders / jobs
+- cost centers ↔ employees
+- cost centers ↔ inventory
+- cost centers ↔ purchasing
+
+Return:
+
+INTEGRATION_MAP:
+- source → target
+- how they are linked (foreign key, inferred, none)
+
+--------------------------------------------------
+🚨 PHASE 5 — GAP ANALYSIS (MOST IMPORTANT)
+--------------------------------------------------
+
+Based ONLY on what exists, identify gaps for:
+
+DCAA-compliant system requirements:
+
+1) Chart of Accounts (COA)
+2) General Ledger (GL)
+3) Posting Rules Engine
+4) Cost Allocation Engine
+5) Audit Trail (who changed what, when)
+6) Direct vs Indirect cost segregation
+7) Timekeeping integration
+8) Inventory cost tracking
+9) Project / Job cost accumulation
+
+Return:
+
+GAPS:
+- Missing
+- Partially implemented
+- Misaligned design
+
+--------------------------------------------------
+🧠 PHASE 6 — DESIGN TRUTH ASSESSMENT
+--------------------------------------------------
+
+Evaluate current design philosophy:
+
+Is the system currently:
+A) UI-first (forms without logic)
+B) Data-first (tables but no behavior)
+C) Logic-first (rules engine exists)
+D) Hybrid
+
+Explain WHY using real code evidence.
+
+--------------------------------------------------
+📊 PHASE 7 — READINESS SCORE
+--------------------------------------------------
+
+Score each category (0–5):
+
+- COA readiness
+- GL readiness
+- Cost center design
+- Allocation capability
+- Audit readiness
+
+Then give:
+
+OVERALL READINESS SCORE (0–100)
+
+--------------------------------------------------
+📌 OUTPUT FORMAT (STRICT)
+--------------------------------------------------
+
+Return in this exact structure:
+
+1) FILE_MAP
+2) TABLES
+3) LOGIC_MAP
+4) INTEGRATION_MAP
+5) GAPS
+6) DESIGN ASSESSMENT
+7) READINESS SCORE
+
+Do NOT add suggestions yet.
+Do NOT propose fixes.
+Do NOT generate code.
+
+This is a READ-ONLY DOMAIN TRUTH AUDIT.

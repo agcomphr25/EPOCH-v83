@@ -129,7 +129,7 @@ export default function MaterialInventoryPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLot, setSelectedLot] = useState<MaterialLot | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
-  const [actionType, setActionType] = useState<'move' | 'split' | 'status' | 'scrap' | null>(null);
+  const [actionType, setActionType] = useState<'move' | 'split' | 'status' | 'scrap' | 'return' | null>(null);
   const [moveLocation, setMoveLocation] = useState('');
   const [splitQty, setSplitQty] = useState('');
   const [newStatus, setNewStatus] = useState('');
@@ -137,6 +137,9 @@ export default function MaterialInventoryPage() {
   const [scrapQty, setScrapQty] = useState('');
   const [scrapReason, setScrapReason] = useState('');
   const [scrapPerformedBy, setScrapPerformedBy] = useState('');
+  const [returnQty, setReturnQty] = useState('');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnPerformedBy, setReturnPerformedBy] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -225,18 +228,19 @@ export default function MaterialInventoryPage() {
   });
 
   const returnMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, qty, reason, performedBy }: { id: string; qty: number; reason: string; performedBy: string }) => {
       return apiRequest(`/api/material-lots/${id}/return`, {
         method: 'POST',
-        body: JSON.stringify({ performedBy: 'Current User' }),
+        body: JSON.stringify({ qty, reason, performedBy }),
       });
     },
     onSuccess: () => {
       toast.success('Material returned to storage');
       queryClient.invalidateQueries({ queryKey: ['/api/material-lots'] });
+      closeActionDialog();
     },
     onError: (error: any) => {
-      const msg = error.responseData?.code || error.responseData?.error || error.message || 'Failed to return material';
+      const msg = error.responseData?.message || error.responseData?.error || error.message || 'Failed to return material';
       toast.error(msg);
     },
   });
@@ -270,14 +274,23 @@ export default function MaterialInventoryPage() {
     setScrapQty('');
     setScrapReason('');
     setScrapPerformedBy('');
+    setReturnQty('');
+    setReturnReason('');
+    setReturnPerformedBy('');
   };
 
-  const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status' | 'scrap') => {
+  const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status' | 'scrap' | 'return') => {
     setSelectedLot(lot);
     setActionType(type);
-    if (type === 'scrap' && currentUser) {
-      const displayName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.username;
+    const displayName = currentUser
+      ? ([currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.username)
+      : '';
+    if (type === 'scrap') {
       setScrapPerformedBy(displayName);
+    }
+    if (type === 'return') {
+      setReturnQty(lot.remainingQty);
+      setReturnPerformedBy(displayName);
     }
     setActionDialogOpen(true);
   };
@@ -309,6 +322,31 @@ export default function MaterialInventoryPage() {
         return;
       }
       scrapMutation.mutate({
+        id: selectedLot.id,
+        qty: parsed.data.qty,
+        reason: parsed.data.reason,
+        performedBy: parsed.data.performedBy,
+      });
+    } else if (actionType === 'return') {
+      const remaining = parseFloat(selectedLot.remainingQty);
+      const returnSchema = z.object({
+        qty: z
+          .number({ invalid_type_error: 'Quantity must be a number' })
+          .positive('Quantity must be greater than 0')
+          .max(remaining, `Quantity cannot exceed remaining quantity (${remaining})`),
+        reason: z.string().trim().min(1, 'Reason is required'),
+        performedBy: z.string().trim().min(1, 'Performed by is required'),
+      });
+      const parsed = returnSchema.safeParse({
+        qty: returnQty === '' ? undefined : Number(returnQty),
+        reason: returnReason,
+        performedBy: returnPerformedBy,
+      });
+      if (!parsed.success) {
+        toast.error(parsed.error.errors[0].message);
+        return;
+      }
+      returnMutation.mutate({
         id: selectedLot.id,
         qty: parsed.data.qty,
         reason: parsed.data.reason,
@@ -597,7 +635,10 @@ export default function MaterialInventoryPage() {
                               </DropdownMenuItem>
                             )}
                             {lot.currentlyOutOfStorage && (
-                              <DropdownMenuItem onClick={() => returnMutation.mutate(lot.id)}>
+                              <DropdownMenuItem
+                                onClick={() => openActionDialog(lot, 'return')}
+                                disabled={returnMutation.isPending}
+                              >
                                 <Pause className="h-4 w-4 mr-2" />
                                 Return to Storage
                               </DropdownMenuItem>
@@ -622,6 +663,7 @@ export default function MaterialInventoryPage() {
               {actionType === 'split' && 'Split Lot'}
               {actionType === 'status' && 'Change Status'}
               {actionType === 'scrap' && 'Scrap Lot'}
+              {actionType === 'return' && 'Return to Storage'}
             </DialogTitle>
             <DialogDescription>
               {selectedLot?.internalControlNumber} - {selectedLot?.materialName}
@@ -705,6 +747,48 @@ export default function MaterialInventoryPage() {
             </div>
           )}
 
+          {actionType === 'return' && selectedLot && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="returnQty">Quantity to Return</Label>
+                <Input
+                  id="returnQty"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  max={Number(selectedLot.remainingQty)}
+                  value={returnQty}
+                  onChange={(e) => setReturnQty(e.target.value)}
+                  placeholder="Quantity to return"
+                  data-testid="input-return-qty"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Remaining: {selectedLot.remainingQty} {selectedLot.unitOfMeasure}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="returnReason">Reason <span className="text-destructive">*</span></Label>
+                <Input
+                  id="returnReason"
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  placeholder="Reason for return (e.g. unused, job complete)"
+                  data-testid="input-return-reason"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="returnPerformedBy">Performed By <span className="text-destructive">*</span></Label>
+                <Input
+                  id="returnPerformedBy"
+                  value={returnPerformedBy}
+                  onChange={(e) => setReturnPerformedBy(e.target.value)}
+                  placeholder="Name of person performing return"
+                  data-testid="input-return-performed-by"
+                />
+              </div>
+            </div>
+          )}
+
           {actionType === 'scrap' && selectedLot && (
             <div className="space-y-4">
               <div className="space-y-2">
@@ -757,15 +841,16 @@ export default function MaterialInventoryPage() {
                 moveMutation.isPending ||
                 splitMutation.isPending ||
                 statusMutation.isPending ||
-                scrapMutation.isPending
+                scrapMutation.isPending ||
+                returnMutation.isPending
               }
               variant={actionType === 'scrap' ? 'destructive' : 'default'}
               data-testid="button-confirm-action"
             >
-              {(moveMutation.isPending || splitMutation.isPending || statusMutation.isPending || scrapMutation.isPending) && (
+              {(moveMutation.isPending || splitMutation.isPending || statusMutation.isPending || scrapMutation.isPending || returnMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {actionType === 'scrap' ? 'Scrap Lot' : 'Confirm'}
+              {actionType === 'scrap' ? 'Scrap Lot' : actionType === 'return' ? 'Return to Storage' : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>

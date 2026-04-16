@@ -21358,6 +21358,10 @@ export class DatabaseStorage implements IStorage {
       throw Object.assign(new Error(`Cannot return a lot with status ${lot.status}`), { statusCode: 400 });
     }
 
+    if (!lot.currentlyOutOfStorage) {
+      throw Object.assign(new Error('This lot is not currently out of storage and cannot be returned'), { statusCode: 409 });
+    }
+
     if (params.qty <= 0) {
       throw Object.assign(new Error('Return quantity must be greater than zero'), { statusCode: 400 });
     }

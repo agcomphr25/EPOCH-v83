@@ -633,6 +633,13 @@ router.post('/:id/return', async (req: Request, res: Response) => {
       });
     }
 
+    if (!lot.currentlyOutOfStorage) {
+      return res.status(409).json({
+        error: 'NOT_OUT_OF_STORAGE',
+        message: 'This lot is not currently out of storage and cannot be returned',
+      });
+    }
+
     const result = await storage.returnMaterialLot(id, { qty, reason, performedBy });
 
     res.json(result);

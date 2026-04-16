@@ -1,0 +1,196 @@
+🔧 #260 — BUILD IMPLEMENTATION (Copy/Paste Ready)
+
+We’re adding:
+
+labor tracking calculations
+overrun detection
+approval system
+time clock enforcement
+🧱 1. SCHEMA CHANGES (server/schema.ts)
+✅ Add labor_approvals table
+export const laborApprovals = pgTable("labor_approvals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  productionWorkOrderId: uuid("production_work_order_id")
+    .notNull()
+    .references(() => productionWorkOrders.id, { onDelete: "cascade" }),
+
+  employeeId: integer("employee_id")
+    .notNull()
+    .references(() => employees.id),
+
+  approvedBy: integer("approved_by")
+    .notNull()
+    .references(() => employees.id),
+
+  department: text("department"),
+  reason: text("reason").notNull(),
+
+  hoursAtApproval: numeric("hours_at_approval"),
+
+  approvedAt: timestamp("approved_at").defaultNow()
+});
+✅ (Optional but recommended) extend time_clock_entries
+approvalId: uuid("approval_id")
+  .references(() => laborApprovals.id),
+✅ Export types
+export type LaborApproval = typeof laborApprovals.$inferSelect;
+export type InsertLaborApproval = typeof laborApprovals.$inferInsert;
+🧠 2. STORAGE METHODS (server/storage.ts)
+Add to IStorage
+getLaborHoursByWorkOrder(workOrderId: string): Promise<number>;
+getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string): Promise<number>;
+createLaborApproval(data: InsertLaborApproval): Promise<LaborApproval>;
+Implement in DatabaseStorage
+✅ Total hours
+async getLaborHoursByWorkOrder(workOrderId: string) {
+  const result = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (clock_out - clock_in)) / 3600), 0)`
+    })
+    .from(timeClockEntries)
+    .where(eq(timeClockEntries.productionWorkOrderId, workOrderId));
+
+  return result[0]?.total || 0;
+}
+✅ Department hours
+async getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string) {
+  const result = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(EXTRACT(EPOCH FROM (clock_out - clock_in)) / 3600), 0)`
+    })
+    .from(timeClockEntries)
+    .where(
+      and(
+        eq(timeClockEntries.productionWorkOrderId, workOrderId),
+        eq(timeClockEntries.department, department)
+      )
+    );
+
+  return result[0]?.total || 0;
+}
+✅ Create approval
+async createLaborApproval(data: InsertLaborApproval) {
+  const result = await db
+    .insert(laborApprovals)
+    .values(data)
+    .returning();
+
+  return result[0];
+}
+🧮 3. LABOR STATUS HELPER (NEW FILE)
+
+📁 server/src/lib/laborStatus.ts
+
+export async function evaluateWorkOrderLaborStatus(storage, workOrderId, department?) {
+  const workOrder = await storage.getWorkOrderById(workOrderId);
+
+  const totalHours = await storage.getLaborHoursByWorkOrder(workOrderId);
+
+  let departmentHours = 0;
+  let departmentBudget = null;
+
+  if (department && workOrder.departmentBudgets) {
+    departmentHours = await storage.getLaborHoursByWorkOrderAndDepartment(workOrderId, department);
+    departmentBudget = workOrder.departmentBudgets?.[department] || null;
+  }
+
+  const totalBudget = Number(workOrder.totalBudgetHours || 0);
+
+  const percentUsed = totalBudget > 0 ? (totalHours / totalBudget) * 100 : 0;
+
+  let status = "OK";
+  if (percentUsed >= 100) status = "BLOCKED";
+  else if (percentUsed >= 80) status = "WARNING";
+
+  return {
+    totalHours,
+    departmentHours,
+    totalBudget,
+    departmentBudget,
+    percentUsed,
+    status
+  };
+}
+🌐 4. ROUTES — TIME CLOCK ENFORCEMENT
+
+📁 server/src/routes/timeClock.ts
+
+🔴 Inject check into traveler clock-in
+
+Inside your existing:
+
+POST /clock-in/traveler
+ADD THIS BEFORE INSERTING TIME ENTRY:
+const status = await evaluateWorkOrderLaborStatus(
+  storage,
+  productionWorkOrderId,
+  department
+);
+
+if (status.status === "BLOCKED") {
+  return res.status(403).json({
+    error: "Labor budget exceeded",
+    details: status
+  });
+}
+
+if (status.status === "WARNING") {
+  // optional: include warning in response
+}
+🟢 5. APPROVAL ROUTE
+
+📁 server/src/routes/workOrders.ts
+
+Add endpoint:
+router.post("/:id/approve-overrun", async (req, res) => {
+  const { employeeId, approvedBy, reason } = req.body;
+
+  const approval = await storage.createLaborApproval({
+    productionWorkOrderId: req.params.id,
+    employeeId,
+    approvedBy,
+    reason,
+    hoursAtApproval: await storage.getLaborHoursByWorkOrder(req.params.id)
+  });
+
+  res.json(approval);
+});
+🧠 6. ALLOW OVERRIDE WITH APPROVAL
+
+Modify your time clock route:
+
+if (status.status === "BLOCKED" && !req.body.approvalId) {
+  return res.status(403).json({
+    error: "Approval required for labor overrun"
+  });
+}
+🧪 7. TEST FLOW (DO THIS EXACTLY)
+1. Create WAD
+totalBudgetHours = 10
+2. Log 8 hours
+
+→ should pass
+
+3. Log 10 hours
+
+→ should hit WARNING
+
+4. Try more
+
+→ should BLOCK
+
+5. Call approval endpoint
+6. Retry with approvalId
+
+→ should pass
+
+🔥 WHAT YOU JUST BUILT
+
+After this:
+
+labor is controlled
+overruns are tracked
+approvals are logged
+time is tied to WAD
+audit trail exists

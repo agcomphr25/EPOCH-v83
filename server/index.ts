@@ -4455,6 +4455,25 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Labor approvals migration:', laborApprovalErr?.message);
     }
 
+    // Configurable labor warning/blocked thresholds: per-WO columns + system-wide settings table
+    try {
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS warning_threshold NUMERIC`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS blocked_threshold NUMERIC`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS labor_threshold_settings (
+          id INTEGER PRIMARY KEY DEFAULT 1,
+          warning_threshold NUMERIC NOT NULL DEFAULT 0.8,
+          blocked_threshold NUMERIC NOT NULL DEFAULT 1.0,
+          updated_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT labor_threshold_settings_singleton CHECK (id = 1),
+          CONSTRAINT labor_threshold_settings_valid CHECK (warning_threshold > 0 AND blocked_threshold > warning_threshold)
+        )
+      `);
+      console.log('✅ Ensured labor threshold threshold columns and settings table exist');
+    } catch (laborThresholdErr: any) {
+      console.warn('⚠️ Labor threshold settings migration skipped:', laborThresholdErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

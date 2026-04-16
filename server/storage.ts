@@ -635,6 +635,8 @@ import {
   laborApprovals,
   type LaborApproval,
   type InsertLaborApproval,
+  laborThresholdSettings,
+  type LaborThresholdSettings,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -1348,6 +1350,10 @@ export interface IStorage {
   getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string): Promise<number>;
   createLaborApproval(data: InsertLaborApproval): Promise<LaborApproval>;
   getLaborApprovalById(id: number): Promise<LaborApproval | null>;
+
+  // Labor threshold settings (system-wide)
+  getLaborThresholdSettings(): Promise<LaborThresholdSettings | null>;
+  upsertLaborThresholdSettings(warningThreshold: string, blockedThreshold: string): Promise<LaborThresholdSettings>;
 
   // Checklist CRUD
   getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]>;
@@ -16063,6 +16069,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(laborApprovals.id, id))
       .limit(1);
     return approval ?? null;
+  }
+
+  async getLaborThresholdSettings(): Promise<LaborThresholdSettings | null> {
+    const [row] = await db
+      .select()
+      .from(laborThresholdSettings)
+      .where(eq(laborThresholdSettings.id, 1))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async upsertLaborThresholdSettings(warningThreshold: string, blockedThreshold: string): Promise<LaborThresholdSettings> {
+    const [row] = await db
+      .insert(laborThresholdSettings)
+      .values({ id: 1, warningThreshold, blockedThreshold })
+      .onConflictDoUpdate({
+        target: laborThresholdSettings.id,
+        set: { warningThreshold, blockedThreshold, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
   }
 
   async updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler> {

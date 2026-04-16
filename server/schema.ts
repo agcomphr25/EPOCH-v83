@@ -15126,6 +15126,8 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   totalBudgetHours: numeric('total_budget_hours'),
   startDate: date('start_date'),
   dueDate: date('due_date'),
+  warningThreshold: numeric('warning_threshold'),
+  blockedThreshold: numeric('blocked_threshold'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
@@ -15147,10 +15149,45 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
     startDate: z.string().optional().nullable(),
     dueDate: z.string().optional().nullable(),
     departmentBudgets: z.record(z.any()).optional(),
+    warningThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
+    blockedThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    const hasWarning = data.warningThreshold != null;
+    const hasBlocked = data.blockedThreshold != null;
+    if (hasWarning !== hasBlocked) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'warningThreshold and blockedThreshold must be provided together', path: ['warningThreshold'] });
+    }
+    if (hasWarning && hasBlocked) {
+      const w = parseFloat(String(data.warningThreshold));
+      const b = parseFloat(String(data.blockedThreshold));
+      if (w <= 0 || w >= b) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'warningThreshold must be positive and less than blockedThreshold', path: ['warningThreshold'] });
+      }
+    }
   });
 
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
+
+// ─── LABOR THRESHOLD SETTINGS (system-wide singleton) ─────────────────────────
+
+export const laborThresholdSettings = pgTable('labor_threshold_settings', {
+  id: integer('id').primaryKey().default(1),
+  warningThreshold: numeric('warning_threshold').notNull().default('0.8'),
+  blockedThreshold: numeric('blocked_threshold').notNull().default('1.0'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertLaborThresholdSettingsSchema = createInsertSchema(laborThresholdSettings)
+  .omit({ id: true, updatedAt: true })
+  .extend({
+    warningThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal'),
+    blockedThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal'),
+  });
+
+export type LaborThresholdSettings = typeof laborThresholdSettings.$inferSelect;
+export type InsertLaborThresholdSettings = z.infer<typeof insertLaborThresholdSettingsSchema>;
 
 // ─── ESTIMATING / RFQ BUILDER ─────────────────────────────────────────────────
 

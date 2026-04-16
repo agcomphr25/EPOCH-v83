@@ -13,15 +13,17 @@ export interface WorkOrderLaborStatusResult {
   percentUsed: number | null;
   departmentPercentUsed: number | null;
   status: LaborStatus;
+  warningThreshold: number;
+  blockedThreshold: number;
 }
 
-const WARNING_THRESHOLD = 0.8;
-const BLOCKED_THRESHOLD = 1.0;
+const DEFAULT_WARNING_THRESHOLD = 0.8;
+const DEFAULT_BLOCKED_THRESHOLD = 1.0;
 
-function toStatus(ratio: number | null): LaborStatus {
+function toStatus(ratio: number | null, warningThreshold: number, blockedThreshold: number): LaborStatus {
   if (ratio == null) return 'OK';
-  if (ratio >= BLOCKED_THRESHOLD) return 'BLOCKED';
-  if (ratio >= WARNING_THRESHOLD) return 'WARNING';
+  if (ratio >= blockedThreshold) return 'BLOCKED';
+  if (ratio >= warningThreshold) return 'WARNING';
   return 'OK';
 }
 
@@ -29,6 +31,31 @@ const STATUS_RANK: Record<LaborStatus, number> = { OK: 0, WARNING: 1, BLOCKED: 2
 
 function worstStatus(a: LaborStatus, b: LaborStatus): LaborStatus {
   return STATUS_RANK[a] >= STATUS_RANK[b] ? a : b;
+}
+
+async function resolveThresholds(wad: { warningThreshold?: string | null; blockedThreshold?: string | null } | null): Promise<{ warningThreshold: number; blockedThreshold: number }> {
+  if (
+    wad?.warningThreshold != null &&
+    wad?.blockedThreshold != null
+  ) {
+    return {
+      warningThreshold: parseFloat(String(wad.warningThreshold)),
+      blockedThreshold: parseFloat(String(wad.blockedThreshold)),
+    };
+  }
+
+  const systemSettings = await storage.getLaborThresholdSettings();
+  if (systemSettings) {
+    return {
+      warningThreshold: parseFloat(String(systemSettings.warningThreshold)),
+      blockedThreshold: parseFloat(String(systemSettings.blockedThreshold)),
+    };
+  }
+
+  return {
+    warningThreshold: DEFAULT_WARNING_THRESHOLD,
+    blockedThreshold: DEFAULT_BLOCKED_THRESHOLD,
+  };
 }
 
 export async function evaluateWorkOrderLaborStatus(
@@ -48,6 +75,8 @@ export async function evaluateWorkOrderLaborStatus(
       ? Number(departmentBudgets[department])
       : null;
 
+  const { warningThreshold, blockedThreshold } = await resolveThresholds(wad ?? null);
+
   const totalHours = await storage.getLaborHoursByWorkOrder(workOrderId);
   const departmentHours =
     department
@@ -60,8 +89,8 @@ export async function evaluateWorkOrderLaborStatus(
       ? departmentHours / departmentBudget
       : null;
 
-  const totalStatus = toStatus(totalRatio);
-  const deptStatus = toStatus(deptRatio);
+  const totalStatus = toStatus(totalRatio, warningThreshold, blockedThreshold);
+  const deptStatus = toStatus(deptRatio, warningThreshold, blockedThreshold);
   const status = worstStatus(totalStatus, deptStatus);
 
   const percentUsed = totalRatio != null ? Math.round(totalRatio * 10000) / 100 : null;
@@ -75,5 +104,7 @@ export async function evaluateWorkOrderLaborStatus(
     percentUsed,
     departmentPercentUsed,
     status,
+    warningThreshold,
+    blockedThreshold,
   };
 }

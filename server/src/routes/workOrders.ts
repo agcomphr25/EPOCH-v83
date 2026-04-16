@@ -13,6 +13,7 @@ import {
   insertWorkOrderPartSchema,
   insertWorkOrderAttachmentSchema,
   insertProductionWorkOrderSchema,
+  insertLaborThresholdSettingsSchema,
 } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -681,6 +682,118 @@ router.get('/:id/labor-status', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('[WorkOrders] Error fetching labor status:', error);
     return res.status(500).json({ error: 'Failed to fetch labor status', message: error.message });
+  }
+});
+
+// ==================== LABOR THRESHOLD SETTINGS (system-wide) ====================
+
+router.get('/production/labor-settings', async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getLaborThresholdSettings();
+    if (!settings) {
+      return res.json({
+        warningThreshold: '0.8',
+        blockedThreshold: '1.0',
+        isDefault: true,
+      });
+    }
+    return res.json({ ...settings, isDefault: false });
+  } catch (error: any) {
+    console.error('[WorkOrders] Error fetching labor threshold settings:', error);
+    return res.status(500).json({ error: 'Failed to fetch labor threshold settings', message: error.message });
+  }
+});
+
+router.put('/production/labor-settings', authenticateToken, requireSupervisorOrAdmin, async (req: Request, res: Response) => {
+  try {
+    const parsed = insertLaborThresholdSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid threshold values', details: parsed.error.flatten() });
+    }
+
+    const { warningThreshold, blockedThreshold } = parsed.data;
+    const warning = parseFloat(warningThreshold);
+    const blocked = parseFloat(blockedThreshold);
+
+    if (warning <= 0 || warning >= blocked) {
+      return res.status(400).json({ error: 'warningThreshold must be positive and less than blockedThreshold' });
+    }
+
+    const settings = await storage.upsertLaborThresholdSettings(warningThreshold, blockedThreshold);
+    return res.json(settings);
+  } catch (error: any) {
+    console.error('[WorkOrders] Error updating labor threshold settings:', error);
+    return res.status(500).json({ error: 'Failed to update labor threshold settings', message: error.message });
+  }
+});
+
+// ==================== PER-WORK-ORDER THRESHOLD OVERRIDE ====================
+
+router.patch('/production/:id/labor-thresholds', authenticateToken, requireSupervisorOrAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+
+    const patchSchema = z.object({
+      warningThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').nullable().optional(),
+      blockedThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').nullable().optional(),
+    }).refine(
+      (data) => {
+        const hasWarning = data.warningThreshold !== undefined;
+        const hasBlocked = data.blockedThreshold !== undefined;
+        return hasWarning === hasBlocked;
+      },
+      { message: 'warningThreshold and blockedThreshold must be provided or cleared together' }
+    );
+
+    const parsed = patchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid threshold values', details: parsed.error.flatten() });
+    }
+
+    const { warningThreshold, blockedThreshold } = parsed.data;
+
+    const [existing] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Production work order not found' });
+    }
+
+    const newWarning = warningThreshold !== undefined ? warningThreshold : existing.warningThreshold;
+    const newBlocked = blockedThreshold !== undefined ? blockedThreshold : existing.blockedThreshold;
+
+    if (newWarning != null && newBlocked != null) {
+      const w = parseFloat(String(newWarning));
+      const b = parseFloat(String(newBlocked));
+      if (w <= 0 || w >= b) {
+        return res.status(400).json({ error: 'warningThreshold must be positive and less than blockedThreshold' });
+      }
+    }
+
+    const [updated] = await db
+      .update(productionWorkOrders)
+      .set({
+        warningThreshold: newWarning,
+        blockedThreshold: newBlocked,
+        updatedAt: new Date(),
+      })
+      .where(eq(productionWorkOrders.id, id))
+      .returning();
+
+    return res.json({
+      id: updated.id,
+      warningThreshold: updated.warningThreshold,
+      blockedThreshold: updated.blockedThreshold,
+    });
+  } catch (error: any) {
+    console.error('[WorkOrders] Error updating work order labor thresholds:', error);
+    return res.status(500).json({ error: 'Failed to update labor thresholds', message: error.message });
   }
 });
 

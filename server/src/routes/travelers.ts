@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { eq, and, asc, desc, ilike, notInArray } from 'drizzle-orm';
 import { storage } from '../../storage';
-import { evaluateTravelerStartGates, evaluateTravelerFinishGates } from '../lib/travelerGates';
+import { evaluateTravelerStartGates, evaluateTravelerFinishGates, evaluateStartGatesDetailed } from '../lib/travelerGates';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -951,6 +951,54 @@ router.patch('/:travelerId/steps/:stepId', async (req: Request, res: Response) =
   } catch (error: any) {
     console.error('Error updating step notes:', error);
     res.status(500).json({ error: 'Failed to update step notes', message: error.message });
+  }
+});
+
+// Get per-gate status for a NOT_STARTED step (for inline display)
+router.get('/:travelerId/steps/:stepId/gates', async (req: Request, res: Response) => {
+  try {
+    const { travelerId, stepId } = req.params;
+
+    // Verify the step belongs to this traveler
+    const step = await storage.getTravelerStep(stepId);
+    if (!step || step.travelerId !== travelerId) {
+      return res.status(404).json({ error: 'Step not found' });
+    }
+
+    // Resolve optional badge scan to employee identity (mirrors the start-step logic)
+    const { badge } = req.query as Record<string, string>;
+    let resolvedEmployeeId: number | undefined;
+    let resolvedEmployeeName: string | undefined;
+    if (badge) {
+      const byBadge = await db
+        .select({ id: employees.id, name: employees.name })
+        .from(employees)
+        .where(eq(employees.badgeScanCode, badge))
+        .limit(1);
+      if (byBadge.length > 0) {
+        resolvedEmployeeId = byBadge[0].id;
+        resolvedEmployeeName = byBadge[0].name;
+      } else {
+        const byCode = await db
+          .select({ id: employees.id, name: employees.name })
+          .from(employees)
+          .where(eq(employees.employeeCode, badge))
+          .limit(1);
+        if (byCode.length > 0) {
+          resolvedEmployeeId = byCode[0].id;
+          resolvedEmployeeName = byCode[0].name;
+        }
+      }
+    }
+
+    const gates = await evaluateStartGatesDetailed(travelerId, stepId, {
+      employeeId: resolvedEmployeeId,
+      employeeName: resolvedEmployeeName,
+    });
+    res.json({ gates });
+  } catch (error: any) {
+    console.error('Error evaluating step gates:', error);
+    res.status(500).json({ error: 'Failed to evaluate gates', message: error.message });
   }
 });
 

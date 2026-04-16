@@ -8,6 +8,13 @@ export interface GateResult {
   reason?: string;
 }
 
+export interface GateCheckResult {
+  key: string;
+  label: string;
+  passed: boolean;
+  reason?: string;
+}
+
 /**
  * Evaluate all gates that must pass before an operator can START a traveler step.
  *
@@ -98,6 +105,110 @@ export async function evaluateTravelerStartGates(
   }
 
   return { allowed: true };
+}
+
+/**
+ * Evaluate all START gates individually and return per-gate results (for inline display).
+ * Unlike evaluateTravelerStartGates, this runs every gate and collects all results
+ * rather than returning on the first failure.
+ */
+export async function evaluateStartGatesDetailed(
+  travelerId: string,
+  stepId: string,
+  options: { employeeId?: number; employeeName?: string } = {}
+): Promise<GateCheckResult[]> {
+  const results: GateCheckResult[] = [];
+
+  const traveler = await storage.getTraveler(travelerId);
+  if (!traveler) {
+    return [{ key: 'traveler', label: 'Traveler', passed: false, reason: 'Traveler not found.' }];
+  }
+
+  const step = await storage.getTravelerStep(stepId);
+  if (!step) {
+    return [{ key: 'step', label: 'Step', passed: false, reason: 'Step not found.' }];
+  }
+
+  // Gate 1: Sequence
+  const allSteps = await storage.getTravelerSteps(travelerId);
+  const currentIndex = allSteps.findIndex((s) => s.id === stepId);
+  if (currentIndex === 0) {
+    // First step — no predecessor required
+    results.push({ key: 'sequence', label: 'Previous step done', passed: true });
+  } else {
+    const previousStep = allSteps[currentIndex - 1];
+    if (previousStep.status !== 'COMPLETED') {
+      results.push({
+        key: 'sequence',
+        label: 'Previous step done',
+        passed: false,
+        reason: `Step ${previousStep.stepNumber} (${previousStep.departmentName}) must be completed first.`,
+      });
+    } else {
+      results.push({ key: 'sequence', label: 'Previous step done', passed: true });
+    }
+  }
+
+  // Gate 2: Training
+  if (traveler.partNumber) {
+    if (!options.employeeId) {
+      results.push({
+        key: 'training',
+        label: 'Training verified',
+        passed: false,
+        reason: `Employee identity could not be verified for part ${traveler.partNumber}. Scan a valid badge before starting.`,
+      });
+    } else {
+      const [auth] = await db
+        .select({ id: travelerAuthorizations.id })
+        .from(travelerAuthorizations)
+        .where(
+          and(
+            eq(travelerAuthorizations.employeeId, options.employeeId),
+            eq(travelerAuthorizations.partNumber, traveler.partNumber),
+            eq(travelerAuthorizations.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!auth) {
+        const name = options.employeeName || `Employee #${options.employeeId}`;
+        results.push({
+          key: 'training',
+          label: 'Training verified',
+          passed: false,
+          reason: `${name} does not have a training authorization for part ${traveler.partNumber}.`,
+        });
+      } else {
+        results.push({ key: 'training', label: 'Training verified', passed: true });
+      }
+    }
+  }
+
+  // Gate 3: Material
+  const hasMaterialOnTraveler = !!(traveler.lotNumber || traveler.internalControlNumber);
+  if (!hasMaterialOnTraveler) {
+    const [consumption] = await db
+      .select({ id: travelerMaterialConsumption.id })
+      .from(travelerMaterialConsumption)
+      .where(eq(travelerMaterialConsumption.travelerId, travelerId))
+      .limit(1);
+
+    if (!consumption) {
+      results.push({
+        key: 'material',
+        label: 'Material assigned',
+        passed: false,
+        reason: 'No material (lot number or ICN) has been allocated to this traveler.',
+      });
+    } else {
+      results.push({ key: 'material', label: 'Material assigned', passed: true });
+    }
+  } else {
+    results.push({ key: 'material', label: 'Material assigned', passed: true });
+  }
+
+  return results;
 }
 
 /**

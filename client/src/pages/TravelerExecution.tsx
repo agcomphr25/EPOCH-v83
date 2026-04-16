@@ -32,6 +32,11 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -71,6 +76,7 @@ import {
   Search,
   GitBranch,
   Plus,
+  Info,
 } from 'lucide-react';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
@@ -443,6 +449,31 @@ export default function TravelerExecution() {
     queryKey: ['/api/travelers', travelerId, 'component-associations'],
     enabled: !!travelerId && !!traveler?.partRoutingId,
   });
+
+  interface GateCheckResult {
+    key: string;
+    label: string;
+    passed: boolean;
+    reason?: string;
+  }
+
+  const gatesBadge = signatureData.badgeScan || activeBadge || '';
+  const isCurrentStepNotStarted = steps.find((s) => s.id === currentStepId)?.status === 'NOT_STARTED';
+  const { data: gatesData } = useQuery<{ gates: GateCheckResult[] }>({
+    queryKey: ['/api/travelers', travelerId, 'steps', currentStepId, 'gates', gatesBadge],
+    queryFn: () => {
+      const url = new URL(`/api/travelers/${travelerId}/steps/${currentStepId}/gates`, window.location.origin);
+      if (gatesBadge) url.searchParams.set('badge', gatesBadge);
+      return fetch(url.toString()).then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch gate status');
+        return res.json();
+      });
+    },
+    enabled: !!travelerId && !!currentStepId && isCurrentStepNotStarted,
+    refetchInterval: isCurrentStepNotStarted ? 10000 : false,
+  });
+
+  const stepGates = gatesData?.gates ?? [];
 
   const [newAssoc, setNewAssoc] = useState({
     childPartNumber: '',
@@ -1521,6 +1552,43 @@ export default function TravelerExecution() {
                         Start Step
                       </Button>
                     </div>
+
+                    {stepGates.length > 0 && (
+                      <div className="mt-6 max-w-sm mx-auto">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Step Requirements
+                        </p>
+                        <ul className="space-y-1">
+                          {stepGates.map((gate) => (
+                            <li key={gate.key} className="flex items-center gap-2 text-sm">
+                              {gate.passed ? (
+                                <>
+                                  <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                  <span className="text-muted-foreground">{gate.label}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                                  <span className="font-medium text-amber-700 dark:text-amber-400">{gate.label}</span>
+                                  {gate.reason && (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button className="ml-auto text-muted-foreground hover:text-foreground">
+                                          <Info className="h-3.5 w-3.5" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent side="top" className="max-w-xs text-sm">
+                                        {gate.reason}
+                                      </PopoverContent>
+                                    </Popover>
+                                  )}
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 

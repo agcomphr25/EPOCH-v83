@@ -1,0 +1,95 @@
+Here’s the exact next ticket I’d use:
+
+#276 — Material Lot Adjustment Route + UI
+What & Why
+
+Add a controlled adjustment flow for material lots so inventory can be corrected without using direct database edits or hidden manual workarounds. This covers cycle count corrections, found/lost material, freezer quantity corrections, and supervisor-authorized fixes. The Material Inventory page already supports action-based lot operations like move, split, status change, scrap, issue, return, and history, so adjustment fits naturally into the same action pattern.
+
+Done looks like
+A backend route exists for adjusting a lot, such as POST /api/material-lots/:id/adjust
+The adjustment supports positive or negative quantity changes
+Adjustment requires:
+quantity change
+reason
+performed by
+The backend updates all affected records atomically:
+material_lots.remainingQty
+material_lot_transactions
+inventory_transactions
+inventory_balances
+Negative adjustments are blocked if they would reduce the lot below zero
+The Material Inventory page includes an Adjust Lot action in the lot actions dropdown
+Clicking it opens a dialog with:
+quantity change
+reason
+performed by
+Successful adjustment closes the dialog, invalidates the lots query, and shows a success toast
+Errors are shown clearly in a toast
+Transaction history reflects the adjustment clearly
+Why this is next
+
+Your Material Inventory page already has a mature action pattern with dropdown actions, dialog-driven forms, React Query mutations, and a transaction history dialog. It already supports move, split, change status, scrap, issue, and return, which makes adjustment the next natural lifecycle action to complete inventory control.
+
+Out of scope
+Cycle count session workflow
+Approval routing or supervisor-only permissions
+NCR linkage
+Full reconciliation dashboard
+Bulk adjustments
+Backend tasks
+Add POST /api/material-lots/:id/adjust
+Validate:
+lot exists
+quantity change is not zero
+reason is required
+performedBy is required
+resulting remainingQty cannot go below zero
+In one db.transaction():
+update material_lots.remainingQty
+optionally update lot status if needed by your current rules
+insert material_lot_transactions with transactionType='ADJUST'
+insert inventory_transactions
+update inventory_balances.quantityOnHand
+recompute quantityAvailable = quantityOnHand - quantityAllocated
+Frontend tasks
+Add Adjust Lot to the actions dropdown in MaterialInventoryPage.tsx
+Disable it if the lot is fully consumed or scrapped, depending on your rule
+Add adjustment dialog fields:
+quantity change
+reason
+performed by
+Add Zod validation:
+quantity change cannot be zero
+negative adjustment cannot exceed current remaining quantity
+reason required
+performed by required
+Add mutation to call the new backend route
+On success:
+close dialog
+reset form
+invalidate ['/api/material-lots']
+show success toast
+On error:
+show clear backend-driven error toast
+Relevant files
+client/src/pages/MaterialInventoryPage.tsx — existing lot action/dialog pattern, issue/return/scrap actions, and history dialog already live here.
+server/src/routes/materialLots.ts
+server/storage.ts
+server/schema.ts
+Suggested follow-up after #276
+
+After adjustment is in, the next strongest inventory feature would be:
+inventory balance reconciliation / cycle count support, because then you’ll have the full core movement set:
+
+receive
+move
+split
+issue
+return
+consume
+scrap
+adjust
+
+That’s the point where inventory becomes operationally trustworthy.
+
+If you want, I can draft the exact backend and UI implementation shape for #276 next.

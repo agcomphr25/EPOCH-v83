@@ -23,6 +23,8 @@ import {
   productionWorkOrders,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
+  capabilities,
+  employeeCapabilities,
 } from '../../schema';
 import type { ManufacturedCategory } from '../../schema';
 
@@ -1002,7 +1004,292 @@ router.get('/:travelerId/steps/:stepId/gates', async (req: Request, res: Respons
   }
 });
 
-// Start a step
+/**
+ * Shared post-gate side effects for starting a traveler step.
+ *
+ * Both the normal start route and the supervisor override route call this
+ * after any gate checks have been satisfied (or intentionally bypassed).
+ *
+ * Side effects:
+ *  1. Updates the step to IN_PROGRESS
+ *  2. Auto-completes the START_GATE task (if present)
+ *  3. Auto-completes badge-mention gate-check tasks in the START phase (if badgeScan provided)
+ *  4. Emits a STEP_STARTED traveler event
+ *  5. Auto-creates a CNC job + manufacturing-queue entry when the step is in a CNC department
+ */
+async function performStepStart(
+  travelerId: string,
+  stepId: string,
+  traveler: Awaited<ReturnType<typeof storage.getTraveler>>,
+  step: Awaited<ReturnType<typeof storage.getTravelerStep>>,
+  operatorName: string,
+  badgeScan?: string
+): Promise<Awaited<ReturnType<typeof storage.updateTravelerStep>>> {
+  const updatedStep = await storage.updateTravelerStep(stepId, {
+    status: 'IN_PROGRESS',
+    startedAt: new Date(),
+    startedBy: operatorName,
+  });
+
+  const tasks = await storage.getTravelerTasks(stepId);
+
+  const startGateTask = tasks.find((t) => t.taskType === 'START_GATE');
+  if (startGateTask) {
+    await storage.updateTravelerTask(startGateTask.id, {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      completedBy: operatorName,
+    });
+  }
+
+  const autoCompletedGateChecks: string[] = [];
+  if (badgeScan) {
+    const badgeGatePattern = /badge/i;
+    const gateCheckTasks = tasks.filter(
+      (t) =>
+        t.taskPhase === 'START' &&
+        (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
+        t.status === 'NOT_STARTED' &&
+        !t.requiresSignature &&
+        !t.requiresCertification &&
+        badgeGatePattern.test(t.title)
+    );
+    for (const gateTask of gateCheckTasks) {
+      await storage.updateTravelerTask(gateTask.id, {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        completedBy: operatorName,
+      });
+      autoCompletedGateChecks.push(gateTask.title);
+    }
+  }
+
+  await storage.createTravelerEvent({
+    travelerId,
+    actor: operatorName,
+    action: 'STEP_STARTED',
+    details: {
+      stepId,
+      stepNumber: step!.stepNumber,
+      departmentName: step!.departmentName,
+      badgeScan,
+      autoCompletedGateChecks,
+    },
+  });
+
+  // ── Auto-create CNC job when a CNC department step is started ──────────
+  if (/cnc/i.test(step!.departmentName)) {
+    try {
+      const { pool: dbPool } = await import('../../db');
+
+      const existing = await dbPool.query(
+        `SELECT id FROM cnc_jobs WHERE linked_traveler_step_id = $1 LIMIT 1`,
+        [stepId],
+      );
+      const existingRows = Array.isArray(existing) ? existing : (existing.rows ?? []);
+      if (existingRows.length === 0) {
+        let dueDate: string | null = null;
+        let customerPo: string | null = null;
+        let preferredMachine: string | null = null;
+
+        if (traveler!.salesOrderId) {
+          const orderResult = await dbPool.query(
+            `SELECT due_date, customer_po FROM all_orders WHERE order_id = $1 LIMIT 1`,
+            [traveler!.salesOrderId],
+          );
+          const orderRows = Array.isArray(orderResult) ? orderResult : (orderResult.rows ?? []);
+          if (orderRows.length > 0) {
+            dueDate = orderRows[0].due_date
+              ? new Date(orderRows[0].due_date).toISOString().split('T')[0]
+              : null;
+            customerPo = orderRows[0].customer_po ?? null;
+          }
+        }
+
+        if (traveler!.partNumber) {
+          const machineResult = await dbPool.query(
+            `SELECT preferred_machine FROM part_routings
+             WHERE part_number = $1 AND preferred_machine IS NOT NULL LIMIT 1`,
+            [traveler!.partNumber],
+          );
+          const machineRows = Array.isArray(machineResult) ? machineResult : (machineResult.rows ?? []);
+          if (machineRows.length > 0) {
+            preferredMachine = machineRows[0].preferred_machine ?? null;
+          }
+        }
+
+        const newJob = await storage.createCncJob({
+          workOrder: traveler!.workOrderId ?? traveler!.salesOrderId ?? 'AUTO',
+          partNumber: traveler!.partNumber ?? 'UNKNOWN',
+          partName: traveler!.partName ?? 'From Traveler',
+          qty: traveler!.quantity ?? 1,
+          dueDate: dueDate ?? undefined,
+          customerPo: customerPo ?? undefined,
+          machine: preferredMachine ?? undefined,
+          priority: 'medium',
+          status: 'queued',
+          linkedTravelerId: travelerId,
+          linkedTravelerStepId: stepId,
+          createdByDisplayName: 'Traveler Auto-Create',
+        });
+        console.log(`[Traveler] Auto-created CNC job ${newJob.id} for traveler ${travelerId}, step ${stepId}`);
+
+        const { createManufacturingQueueEntryForCncJob } = await import('../lib/cncMq');
+        await createManufacturingQueueEntryForCncJob(newJob);
+      }
+    } catch (cncErr: any) {
+      console.warn('[Traveler] Failed to auto-create CNC job:', cncErr?.message);
+    }
+  }
+
+  return updatedStep;
+}
+// Supervisor gate override — bypasses all hard start gates when the supervisor has the
+// 'traveler_gate_override' capability.  Every bypass is recorded in traveler_events.
+router.post('/:travelerId/steps/:stepId/start/override', async (req: Request, res: Response) => {
+  try {
+    const { travelerId, stepId } = req.params;
+    // operatorBadge: the badge/code of the employee who will actually do the work.
+    // supervisorBadge: the badge/code of the supervisor authorising the bypass.
+    const { supervisorBadge, overrideReason, operatorBadge } = req.body;
+
+    if (!supervisorBadge) {
+      return res.status(400).json({ error: 'supervisorBadge is required' });
+    }
+    if (!overrideReason || !overrideReason.trim()) {
+      return res.status(400).json({ error: 'overrideReason is required' });
+    }
+
+    // Helper: resolve an employee record by badgeScanCode then employeeCode fallback
+    async function resolveEmployee(badge: string): Promise<{ id: number; name: string } | null> {
+      const byBadge = await db
+        .select({ id: employees.id, name: employees.name })
+        .from(employees)
+        .where(eq(employees.badgeScanCode, badge))
+        .limit(1);
+      if (byBadge.length > 0) return byBadge[0];
+      const byCode = await db
+        .select({ id: employees.id, name: employees.name })
+        .from(employees)
+        .where(eq(employees.employeeCode, badge))
+        .limit(1);
+      return byCode.length > 0 ? byCode[0] : null;
+    }
+
+    // Resolve supervisor server-side (never trusted from client claims)
+    const supervisor = await resolveEmployee(supervisorBadge);
+    if (!supervisor) {
+      return res.status(403).json({ error: 'Supervisor badge not recognised. Scan a valid supervisor badge to override.' });
+    }
+
+    // Verify the supervisor has the traveler_gate_override capability
+    const capRows = await db
+      .select({ capName: capabilities.name })
+      .from(employeeCapabilities)
+      .innerJoin(capabilities, eq(employeeCapabilities.capabilityId, capabilities.id))
+      .where(
+        and(
+          eq(employeeCapabilities.employeeId, supervisor.id),
+          eq(capabilities.name, 'traveler_gate_override'),
+          eq(capabilities.isActive, true)
+        )
+      )
+      .limit(1);
+
+    if (capRows.length === 0) {
+      return res.status(403).json({
+        error: 'Supervisor not authorised to override traveler gates.',
+        reason: `${supervisor.name} does not have the traveler_gate_override capability. Contact an administrator to grant this permission.`,
+      });
+    }
+
+    // Resolve the operator identity server-side (improves audit attribution integrity).
+    // If an operatorBadge is provided, resolve it from the DB; otherwise fall back to
+    // the supervisor's own name (they are acting as the operator).
+    let resolvedOperator: { id?: number; name: string } = { name: supervisor.name };
+    let operatorBadgeScan: string | undefined;
+    if (operatorBadge) {
+      const op = await resolveEmployee(operatorBadge);
+      if (op) {
+        resolvedOperator = op;
+        operatorBadgeScan = operatorBadge;
+      }
+      // Unknown badge: do not trust the client's claim — log as supervisor acting
+    }
+    const operatorName = resolvedOperator.name;
+
+    // Validate traveler and step state
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) return res.status(404).json({ error: 'Traveler not found' });
+
+    if (traveler.status !== 'IN_PROGRESS') {
+      return res.status(400).json({
+        error: 'Traveler must be IN_PROGRESS to start a step',
+        currentStatus: traveler.status,
+      });
+    }
+
+    const step = await storage.getTravelerStep(stepId);
+    if (!step || step.travelerId !== travelerId) {
+      return res.status(404).json({ error: 'Step not found' });
+    }
+
+    if (step.status !== 'NOT_STARTED') {
+      return res.status(400).json({
+        error: 'Step has already been started',
+        currentStatus: step.status,
+      });
+    }
+
+    // Evaluate gates with the actual operator identity (if known) so the blocked
+    // reason in the audit log reflects the real condition rather than a generic one
+    const gateResult = await evaluateTravelerStartGates(travelerId, stepId, {
+      employeeId: (resolvedOperator as any).id,
+      employeeName: operatorName,
+    });
+
+    // Execute all normal step-start side effects (update step, auto-complete gate tasks,
+    // emit STEP_STARTED event, auto-create CNC job / manufacturing-queue entry, etc.)
+    const updatedStep = await performStepStart(
+      travelerId,
+      stepId,
+      traveler,
+      step,
+      operatorName,
+      operatorBadgeScan
+    );
+
+    // Record the gate bypass in traveler_events (in addition to the STEP_STARTED event
+    // emitted by performStepStart above)
+    await storage.createTravelerEvent({
+      travelerId,
+      actor: supervisor.name,
+      action: 'GATE_BYPASSED',
+      details: {
+        stepId,
+        stepNumber: step.stepNumber,
+        departmentName: step.departmentName,
+        overrideReason: overrideReason.trim(),
+        operatorName,
+        operatorId: (resolvedOperator as any).id ?? null,
+        gatesWouldBlock: !gateResult.allowed,
+        blockedReason: gateResult.reason ?? null,
+        supervisorId: supervisor.id,
+      },
+    });
+
+    return res.json({
+      message: 'Gate bypassed by supervisor',
+      step: updatedStep,
+      supervisor: supervisor.name,
+      operator: operatorName,
+    });
+  } catch (err) {
+    console.error('[Traveler override] Error:', err);
+    return res.status(500).json({ error: 'Failed to process gate override' });
+  }
+});
+
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
@@ -1068,127 +1355,14 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
-    const updatedStep = await storage.updateTravelerStep(stepId, {
-      status: 'IN_PROGRESS',
-      startedAt: new Date(),
-      startedBy: resolvedName,
-    });
-
-    const tasks = await storage.getTravelerTasks(stepId);
-    const startGateTask = tasks.find((t) => t.taskType === 'START_GATE');
-    if (startGateTask) {
-      await storage.updateTravelerTask(startGateTask.id, {
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        completedBy: resolvedName,
-      });
-    }
-
-    const autoCompletedGateChecks: string[] = [];
-    if (badgeScan) {
-      const badgeGatePattern = /badge/i;
-      const gateCheckTasks = tasks.filter(
-        (t) =>
-          t.taskPhase === 'START' &&
-          (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
-          t.status === 'NOT_STARTED' &&
-          !t.requiresSignature &&
-          !t.requiresCertification &&
-          badgeGatePattern.test(t.title)
-      );
-      for (const gateTask of gateCheckTasks) {
-        await storage.updateTravelerTask(gateTask.id, {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          completedBy: resolvedName,
-        });
-        autoCompletedGateChecks.push(gateTask.title);
-      }
-    }
-
-    await storage.createTravelerEvent({
+    const updatedStep = await performStepStart(
       travelerId,
-      actor: resolvedName,
-      action: 'STEP_STARTED',
-      details: {
-        stepId,
-        stepNumber: step.stepNumber,
-        departmentName: step.departmentName,
-        badgeScan,
-        autoCompletedGateChecks,
-      },
-    });
-
-    // ── Auto-create CNC job when a CNC department step is started ──────────
-    if (/cnc/i.test(step.departmentName)) {
-      try {
-        const { pool: dbPool } = await import('../../db');
-
-        // Dedup by linkedTravelerStepId — each step creates at most one CNC job
-        const existing = await dbPool.query(
-          `SELECT id FROM cnc_jobs WHERE linked_traveler_step_id = $1 LIMIT 1`,
-          [stepId],
-        );
-        const existingRows = Array.isArray(existing) ? existing : (existing.rows ?? []);
-        if (existingRows.length === 0) {
-          // ── Pull enrichment data from linked order ──────────────────────
-          let dueDate: string | null = null;
-          let customerPo: string | null = null;
-          let preferredMachine: string | null = null;
-
-          if (traveler.salesOrderId) {
-            const orderResult = await dbPool.query(
-              `SELECT due_date, customer_po FROM all_orders WHERE order_id = $1 LIMIT 1`,
-              [traveler.salesOrderId],
-            );
-            const orderRows = Array.isArray(orderResult) ? orderResult : (orderResult.rows ?? []);
-            if (orderRows.length > 0) {
-              dueDate = orderRows[0].due_date
-                ? new Date(orderRows[0].due_date).toISOString().split('T')[0]
-                : null;
-              customerPo = orderRows[0].customer_po ?? null;
-            }
-          }
-
-          // ── T5: Auto machine assignment from part routing ───────────────
-          // Look up preferred machine via part_routings or inventory_items
-          if (traveler.partNumber) {
-            const machineResult = await dbPool.query(
-              `SELECT preferred_machine FROM part_routings
-               WHERE part_number = $1 AND preferred_machine IS NOT NULL LIMIT 1`,
-              [traveler.partNumber],
-            );
-            const machineRows = Array.isArray(machineResult) ? machineResult : (machineResult.rows ?? []);
-            if (machineRows.length > 0) {
-              preferredMachine = machineRows[0].preferred_machine ?? null;
-            }
-          }
-
-          // ── Create CNC job via storage layer (full data) ────────────────
-          const newJob = await storage.createCncJob({
-            workOrder: traveler.workOrderId ?? traveler.salesOrderId ?? 'AUTO',
-            partNumber: traveler.partNumber ?? 'UNKNOWN',
-            partName: traveler.partName ?? 'From Traveler',
-            qty: traveler.quantity ?? 1,
-            dueDate: dueDate ?? undefined,
-            customerPo: customerPo ?? undefined,
-            machine: preferredMachine ?? undefined,
-            priority: 'medium',
-            status: 'queued',
-            linkedTravelerId: travelerId,
-            linkedTravelerStepId: stepId,
-            createdByDisplayName: 'Traveler Auto-Create',
-          });
-          console.log(`[Traveler] Auto-created CNC job ${newJob.id} for traveler ${travelerId}, step ${stepId}`);
-
-          // ── T4: Insert into manufacturing_queue via shared helper ──────
-          const { createManufacturingQueueEntryForCncJob } = await import('../lib/cncMq');
-          await createManufacturingQueueEntryForCncJob(newJob);
-        }
-      } catch (cncErr: any) {
-        console.warn('[Traveler] Failed to auto-create CNC job:', cncErr?.message);
-      }
-    }
+      stepId,
+      traveler,
+      step,
+      resolvedName,
+      badgeScan
+    );
 
     res.json(updatedStep);
   } catch (error: any) {

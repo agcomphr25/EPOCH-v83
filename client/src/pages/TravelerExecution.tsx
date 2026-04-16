@@ -3,6 +3,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { useParams, Link } from 'wouter';
 import FabricInventoryPicker from '@/components/FabricInventoryPicker';
 import {
@@ -295,6 +296,11 @@ export default function TravelerExecution() {
   const activeTimerProgram = activeTimerData?.program ?? null;
   const [showAdminForceSign, setShowAdminForceSign] = useState(false);
   const [adminForceReason, setAdminForceReason] = useState('');
+  const [showGateOverrideDialog, setShowGateOverrideDialog] = useState(false);
+  const [gateOverridePendingStep, setGateOverridePendingStep] = useState<{ stepId: string; badge: string; techName: string } | null>(null);
+  const [gateOverrideBlockedReason, setGateOverrideBlockedReason] = useState('');
+  const [gateOverrideSupervisorBadge, setGateOverrideSupervisorBadge] = useState('');
+  const [gateOverrideReason, setGateOverrideReason] = useState('');
   const [showQcApprovalDialog, setShowQcApprovalDialog] = useState(false);
   const [qcApprovalData, setQcApprovalData] = useState<{
     taskId: string;
@@ -600,10 +606,61 @@ export default function TravelerExecution() {
       toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
       refetch();
     },
+    onError: (error: any, variables) => {
+      const reason = error.reason ?? error.responseData?.reason;
+      const description = reason ? `${error.message}: ${reason}` : error.message;
+      const isGateBlock = error.message?.toLowerCase().includes('gate') || reason?.toLowerCase().includes('gate') || description?.toLowerCase().includes('gate');
+      toast({
+        title: 'Cannot Start Step',
+        description,
+        variant: 'destructive',
+        action: isGateBlock ? (
+          <ToastAction
+            altText="Request supervisor override for this gate"
+            onClick={() => {
+              setGateOverridePendingStep({ stepId: variables.stepId, badge: variables.badge, techName: variables.techName });
+              setGateOverrideBlockedReason(reason || description || '');
+              setGateOverrideSupervisorBadge('');
+              setGateOverrideReason('');
+              setShowGateOverrideDialog(true);
+            }}
+          >
+            Request Override
+          </ToastAction>
+        ) : undefined,
+      });
+    },
+  });
+
+  const gateOverrideMutation = useMutation({
+    mutationFn: ({ stepId, supervisorBadge, overrideReason, operatorBadge }: {
+      stepId: string;
+      supervisorBadge: string;
+      overrideReason: string;
+      operatorBadge: string;
+    }) =>
+      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start/override`, {
+        method: 'POST',
+        body: JSON.stringify({ supervisorBadge, overrideReason, operatorBadge }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: (_data, variables) => {
+      setShowGateOverrideDialog(false);
+      setGateOverridePendingStep(null);
+      setGateOverrideBlockedReason('');
+      setGateOverrideSupervisorBadge('');
+      setGateOverrideReason('');
+      if (gateOverridePendingStep) {
+        setActiveBadge(gateOverridePendingStep.badge);
+        setActiveTechName(gateOverridePendingStep.techName || gateOverridePendingStep.badge);
+      }
+      toast({ title: 'Gate Override Applied', description: 'Supervisor override recorded. Step has been started.' });
+      refetch();
+    },
     onError: (error: any) => {
       const reason = error.reason ?? error.responseData?.reason;
       const description = reason ? `${error.message}: ${reason}` : error.message;
-      toast({ title: 'Cannot Start Step', description, variant: 'destructive' });
+      toast({ title: 'Override Failed', description, variant: 'destructive' });
     },
   });
 
@@ -2668,6 +2725,97 @@ export default function TravelerExecution() {
             >
               {blockMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Block Traveler
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gate Override Dialog */}
+      <Dialog open={showGateOverrideDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowGateOverrideDialog(false);
+          setGateOverridePendingStep(null);
+          setGateOverrideBlockedReason('');
+          setGateOverrideSupervisorBadge('');
+          setGateOverrideReason('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <Shield className="h-5 w-5" />
+              Supervisor Gate Override
+            </DialogTitle>
+            <DialogDescription>
+              A process gate is blocking this step. A supervisor with the gate override capability can bypass it. Every override is permanently recorded in the audit log.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {gateOverrideBlockedReason && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-amber-800 mb-1">Blocked reason:</p>
+                <p className="text-sm text-amber-700">{gateOverrideBlockedReason}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="override-supervisor-badge">Supervisor Badge Scan *</Label>
+              <Input
+                id="override-supervisor-badge"
+                name="override-supervisor-badge"
+                value={gateOverrideSupervisorBadge}
+                onChange={(e) => setGateOverrideSupervisorBadge(e.target.value)}
+                placeholder="Scan or type supervisor badge code..."
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">The supervisor must have the <code>traveler_gate_override</code> capability assigned in their employee profile.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="override-reason">Override Reason *</Label>
+              <Textarea
+                id="override-reason"
+                name="override-reason"
+                value={gateOverrideReason}
+                onChange={(e) => setGateOverrideReason(e.target.value)}
+                placeholder="Explain why this gate is being bypassed (e.g., emergency onboarding, training record pending)..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowGateOverrideDialog(false);
+              setGateOverridePendingStep(null);
+              setGateOverrideBlockedReason('');
+              setGateOverrideSupervisorBadge('');
+              setGateOverrideReason('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                if (!gateOverridePendingStep) return;
+                gateOverrideMutation.mutate({
+                  stepId: gateOverridePendingStep.stepId,
+                  supervisorBadge: gateOverrideSupervisorBadge.trim(),
+                  overrideReason: gateOverrideReason.trim(),
+                  operatorBadge: gateOverridePendingStep.badge,
+                });
+              }}
+              disabled={
+                !gateOverrideSupervisorBadge.trim() ||
+                !gateOverrideReason.trim() ||
+                gateOverrideMutation.isPending
+              }
+            >
+              {gateOverrideMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Shield className="h-4 w-4 mr-2" />
+              Apply Override
             </Button>
           </DialogFooter>
         </DialogContent>

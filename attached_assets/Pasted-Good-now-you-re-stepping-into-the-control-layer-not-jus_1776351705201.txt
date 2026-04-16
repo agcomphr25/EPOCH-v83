@@ -1,0 +1,179 @@
+Good — now you’re stepping into the control layer, not just data wiring.
+
+This next piece is what separates:
+👉 “we track time”
+from
+👉 “we control labor (DCAA-style)”
+
+#260 - Labor Budget Overrun Gate and Approval Workflow
+What & Why
+
+Now that:
+
+WAD (production work order) exists ✅
+Travelers are linked ✅
+Time entries are linked via scan ✅
+
+👉 You can now enforce labor control
+
+This ticket introduces:
+
+❗ You cannot work unlimited time on a job without accountability
+
+🎯 Goal
+
+Track and control labor against:
+
+production_work_orders.departmentBudgets
+production_work_orders.totalBudgetHours
+
+And enforce:
+
+IF actual_hours >= budget_hours
+  → warn OR block
+  → require approval to continue
+🧱 Done Looks Like
+Time entries aggregate against:
+productionWorkOrderId
+AND optionally department
+System calculates:
+total actual hours
+department actual hours
+When user attempts to:
+clock in
+switch job
+
+👉 system checks budget status
+
+If under budget:
+
+✅ allow
+
+If near budget:
+
+⚠️ warn (soft threshold)
+
+If over budget:
+
+⛔ block OR require approval
+
+🚀 Tasks
+1. Add Budget Calculation Methods (Storage)
+
+Add to IStorage:
+
+getLaborHoursByWorkOrder(workOrderId: string)
+getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string)
+
+Implementation:
+
+sum time_clock_entries duration
+filter by:
+productionWorkOrderId
+optionally department
+2. Add Budget Check Helper
+
+Create helper:
+
+evaluateWorkOrderLaborStatus(workOrderId, department?)
+
+Returns:
+
+{
+  totalHours,
+  departmentHours,
+  totalBudget,
+  departmentBudget,
+  status: "OK" | "WARNING" | "BLOCKED",
+  percentUsed
+}
+3. Add Approval Table (NEW)
+labor_approvals
+id
+productionWorkOrderId
+employeeId
+approvedBy
+department
+reason
+approvedAt
+hoursAtApproval
+
+👉 This is your audit trail
+
+4. Extend Time Clock Logic
+
+Update:
+
+POST /clock-in/traveler
+POST /switch-job/traveler
+
+Add:
+
+const status = evaluateWorkOrderLaborStatus(...)
+Behavior
+🟢 OK
+proceed normally
+🟡 WARNING (ex: >80%)
+allow
+return warning message
+🔴 BLOCKED (>=100%)
+reject OR require approval
+5. Approval Flow
+
+Add endpoint:
+
+POST /api/work-orders/:id/approve-overrun
+
+Body:
+
+{
+  "employeeId": "...",
+  "approvedBy": "...",
+  "reason": "Additional layup required due to rework"
+}
+
+Behavior:
+
+create record in labor_approvals
+allow time entry to proceed
+6. Modify Time Entry Creation
+
+When over budget:
+
+require approval before insert
+OR attach approval reference to time entry
+
+Add to time_clock_entries (optional enhancement):
+
+approvalId (FK → labor_approvals.id)
+7. Threshold Rules
+
+Start simple:
+
+WARNING = 80%
+BLOCKED = 100%
+
+Make configurable later.
+
+⚠️ Safety Rules
+never silently allow overrun
+never silently block without explanation
+always log approval
+never modify historical time entries automatically
+🧪 Acceptance Tests
+Create WAD with budget = 10 hours
+Log 8 hours → ⚠️ warning
+Log 10 hours → ⛔ blocked
+Attempt more time → rejected
+Approve overrun → allowed
+Approval record created
+Time entry linked correctly
+🔥 What This Unlocks
+
+After this ticket:
+
+You now have:
+controlled labor tracking
+audit trail for overruns
+project cost visibility
+compliance-grade behavior

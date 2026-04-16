@@ -7,12 +7,14 @@ import * as authorizations from "../services/labor-authorizations.service";
 import * as authRequests from "../services/labor-authorization-requests.service";
 import * as sessions from "../services/labor-sessions.service";
 import * as dailyTimesheets from "../services/labor-daily-timesheets.service";
+import * as punches from "../services/labor-punches.service";
 import {
   insertLaborChargeCodeSchema,
   insertLaborAuthorizationSchema,
   insertLaborAuthorizationRequestSchema,
   insertLaborWorkSessionSchema,
   insertDailyTimesheetSchema,
+  insertLaborTimeClockPunchSchema,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -342,6 +344,102 @@ router.post("/labor/sessions/:id/close", async (req, res): Promise<void> => {
     return;
   }
   res.json(result.session);
+});
+
+// ─── Time Clock Punches ───────────────────────────────────────────────────────
+
+const CreatePunchBody = insertLaborTimeClockPunchSchema
+  .omit({ employeeId: true })
+  .extend({
+    employeeId: z.number().int().positive().optional(),
+    sessionId: z.number().int().positive().optional().nullable(),
+    type: z.enum(["clock_in", "clock_out"]),
+    source: z.enum(["web", "kiosk", "api"]).optional(),
+  });
+
+const PUNCH_TYPES = ["clock_in", "clock_out"] as const;
+
+router.get("/labor/punches", async (req, res): Promise<void> => {
+  const isAdmin = req.user?.role === "admin";
+  const callerEmployeeId = actingEmployeeId(req);
+
+  if (!isAdmin && callerEmployeeId == null) {
+    res.status(403).json({ error: "A linked employee record is required to list punches" });
+    return;
+  }
+
+  let employeeIdFilter: number | undefined;
+  if (isAdmin) {
+    if (req.query.employeeId !== undefined && req.query.employeeId !== "") {
+      const parsed = parseInt(req.query.employeeId as string, 10);
+      if (isNaN(parsed)) { res.status(400).json({ error: "employeeId must be a valid integer" }); return; }
+      employeeIdFilter = parsed;
+    }
+  } else {
+    employeeIdFilter = callerEmployeeId!;
+  }
+
+  let sessionIdFilter: number | undefined;
+  if (req.query.sessionId !== undefined && req.query.sessionId !== "") {
+    const parsed = parseInt(req.query.sessionId as string, 10);
+    if (isNaN(parsed)) { res.status(400).json({ error: "sessionId must be a valid integer" }); return; }
+    sessionIdFilter = parsed;
+  }
+
+  const rawType = req.query.type as string | undefined;
+  if (rawType && !(PUNCH_TYPES as readonly string[]).includes(rawType)) {
+    res.status(400).json({ error: `type must be one of: ${PUNCH_TYPES.join(", ")}` });
+    return;
+  }
+
+  const filters = {
+    employeeId: employeeIdFilter,
+    sessionId: sessionIdFilter,
+    type: rawType,
+  };
+  res.json(await punches.listPunches(filters));
+});
+
+router.get("/labor/punches/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const row = await punches.getPunch(id);
+  if (!row) { res.status(404).json({ error: "Punch not found" }); return; }
+  const isAdmin = req.user?.role === "admin";
+  const callerEmployeeId = actingEmployeeId(req);
+  if (!isAdmin && row.employeeId !== callerEmployeeId) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+  res.json(row);
+});
+
+router.post("/labor/punches", async (req, res): Promise<void> => {
+  const body = CreatePunchBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const isAdmin = req.user?.role === "admin";
+  const callerEmployeeId = actingEmployeeId(req);
+  // Admins may submit a punch on behalf of another employee by providing employeeId in the body.
+  // Non-admins are always scoped to their own employee record and must have a linked employee.
+  if (!isAdmin && callerEmployeeId == null) { res.status(403).json({ error: "A linked employee record is required" }); return; }
+  if (isAdmin && body.data.employeeId == null && callerEmployeeId == null) {
+    res.status(400).json({ error: "employeeId is required when submitting a punch without a linked employee record" });
+    return;
+  }
+  const employeeId = (isAdmin && body.data.employeeId != null ? body.data.employeeId : callerEmployeeId) as number;
+  const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+  const result = await punches.createPunch({ ...body.data, employeeId }, actor);
+  if (result.error) {
+    const statusMap: Record<string, number> = {
+      session_not_found: 404,
+      session_not_open: 409,
+      session_access_denied: 403,
+    };
+    const status = result.errorCode ? (statusMap[result.errorCode] ?? 422) : 422;
+    res.status(status).json({ error: result.error, errorCode: result.errorCode });
+    return;
+  }
+  res.status(201).json(result.punch);
 });
 
 // ─── Daily Timesheets ─────────────────────────────────────────────────────────

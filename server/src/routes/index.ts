@@ -123,6 +123,7 @@ import healthChecksRoutes from './healthChecks';
 import monitoredLinksRoutes from './monitoredLinks';
 import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
+import projectClosingsRoutes from './projectClosings';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
@@ -930,6 +931,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);
+
+  // Project Closing (Lessons Learned) routes
+  app.use('/api/projects/:projectId/closing', projectClosingsRoutes);
 
   // Project Step Attachments routes
   app.use('/api/project-step-attachments', projectStepAttachmentsRoutes);

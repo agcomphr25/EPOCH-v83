@@ -496,6 +496,9 @@ import {
   projectActivityLog,
   projectNotifications,
   projectStepAttachments,
+  projectClosings,
+  projectClosingRisks,
+  projectClosingActions,
   preproductionChecklists,
   manufacturingQueue,
   type Project,
@@ -508,6 +511,12 @@ import {
   type InsertProjectActivityLog,
   type ProjectNotification,
   type InsertProjectNotification,
+  type ProjectClosing,
+  type InsertProjectClosing,
+  type ProjectClosingRisk,
+  type InsertProjectClosingRisk,
+  type ProjectClosingAction,
+  type InsertProjectClosingAction,
   // Material Lot types
   materialLots,
   materialLotTransactions,
@@ -2563,6 +2572,15 @@ export interface IStorage {
   createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification>;
   markProjectNotificationRead(id: number): Promise<void>;
   markAllProjectNotificationsRead(recipientId: number): Promise<void>;
+
+  // Project Closing (Lessons Learned)
+  createProjectClosing(data: InsertProjectClosing): Promise<ProjectClosing>;
+  updateProjectClosing(id: number, data: Partial<InsertProjectClosing>): Promise<ProjectClosing>;
+  getProjectClosingByProjectId(projectId: string): Promise<ProjectClosing | undefined>;
+  createProjectClosingRisk(data: InsertProjectClosingRisk): Promise<ProjectClosingRisk>;
+  getProjectClosingRisks(projectId: string): Promise<ProjectClosingRisk[]>;
+  createProjectClosingAction(data: InsertProjectClosingAction): Promise<ProjectClosingAction>;
+  getProjectClosingActions(projectId: string): Promise<ProjectClosingAction[]>;
 
   // Material Lot Management
   getAllMaterialLots(): Promise<MaterialLot[]>;
@@ -21370,6 +21388,86 @@ export class DatabaseStorage implements IStorage {
       .update(projectNotifications)
       .set({ isRead: true, readAt: new Date() })
       .where(eq(projectNotifications.recipientId, recipientId));
+  }
+
+  // Project Closing (Lessons Learned)
+  async createProjectClosing(data: InsertProjectClosing): Promise<ProjectClosing> {
+    const existing = await db
+      .select({ id: projectClosings.id })
+      .from(projectClosings)
+      .where(eq(projectClosings.projectId, data.projectId))
+      .limit(1);
+    if (existing.length > 0) {
+      throw new Error(`A closing record already exists for project ${data.projectId}`);
+    }
+    const [closing] = await db.insert(projectClosings).values(data).returning();
+    return closing;
+  }
+
+  async updateProjectClosing(id: number, data: Partial<InsertProjectClosing>): Promise<ProjectClosing> {
+    const [closing] = await db
+      .update(projectClosings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projectClosings.id, id))
+      .returning();
+    return closing;
+  }
+
+  async getProjectClosingByProjectId(projectId: string): Promise<ProjectClosing | undefined> {
+    const [closing] = await db
+      .select()
+      .from(projectClosings)
+      .where(eq(projectClosings.projectId, projectId))
+      .limit(1);
+    return closing || undefined;
+  }
+
+  async createProjectClosingRisk(data: InsertProjectClosingRisk): Promise<ProjectClosingRisk> {
+    const [closing] = await db
+      .select({ id: projectClosings.id, projectId: projectClosings.projectId })
+      .from(projectClosings)
+      .where(eq(projectClosings.id, data.closingId))
+      .limit(1);
+    if (!closing) {
+      throw new Error(`Closing record ${data.closingId} not found`);
+    }
+    if (closing.projectId !== data.projectId) {
+      throw new Error(`Closing record ${data.closingId} does not belong to project ${data.projectId}`);
+    }
+    const [risk] = await db.insert(projectClosingRisks).values(data).returning();
+    return risk;
+  }
+
+  async getProjectClosingRisks(projectId: string): Promise<ProjectClosingRisk[]> {
+    return await db
+      .select()
+      .from(projectClosingRisks)
+      .where(eq(projectClosingRisks.projectId, projectId))
+      .orderBy(desc(projectClosingRisks.createdAt));
+  }
+
+  async createProjectClosingAction(data: InsertProjectClosingAction): Promise<ProjectClosingAction> {
+    const [closing] = await db
+      .select({ id: projectClosings.id, projectId: projectClosings.projectId })
+      .from(projectClosings)
+      .where(eq(projectClosings.id, data.closingId))
+      .limit(1);
+    if (!closing) {
+      throw new Error(`Closing record ${data.closingId} not found`);
+    }
+    if (closing.projectId !== data.projectId) {
+      throw new Error(`Closing record ${data.closingId} does not belong to project ${data.projectId}`);
+    }
+    const [action] = await db.insert(projectClosingActions).values(data).returning();
+    return action;
+  }
+
+  async getProjectClosingActions(projectId: string): Promise<ProjectClosingAction[]> {
+    return await db
+      .select()
+      .from(projectClosingActions)
+      .where(eq(projectClosingActions.projectId, projectId))
+      .orderBy(desc(projectClosingActions.createdAt));
   }
 
   // Material Lot Management

@@ -10588,6 +10588,83 @@ export const insertProjectStepAttachmentSchema = createInsertSchema(projectStepA
 export type ProjectStepAttachment = typeof projectStepAttachments.$inferSelect;
 export type InsertProjectStepAttachment = z.infer<typeof insertProjectStepAttachmentSchema>;
 
+// Project Closing - Formal end-of-project record capturing lessons learned
+export const projectClosings = pgTable('project_closings', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().unique().references(() => projects.id, { onDelete: 'cascade' }),
+  summary: text('summary'),
+  whatWentWrong: text('what_went_wrong'),
+  strengths: text('strengths'),
+  opportunities: text('opportunities'),
+  similaritiesToPriorProjects: text('similarities_to_prior_projects'),
+  nextProjectRecommendations: text('next_project_recommendations'),
+  closedBy: integer('closed_by').references(() => employees.id),
+  closedByDisplayName: text('closed_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_closings_project_id_idx').on(table.projectId),
+}));
+
+export const insertProjectClosingSchema = createInsertSchema(projectClosings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectClosing = typeof projectClosings.$inferSelect;
+export type InsertProjectClosing = z.infer<typeof insertProjectClosingSchema>;
+
+// Project Closing Risks - Risks identified during project closing
+export const projectClosingRisks = pgTable('project_closing_risks', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  closingId: integer('closing_id').notNull().references(() => projectClosings.id, { onDelete: 'cascade' }),
+  category: text('category').notNull(),
+  severity: text('severity').notNull(), // 'low', 'medium', 'high', 'critical'
+  description: text('description').notNull(),
+  department: text('department'),
+  owner: text('owner'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_closing_risks_project_id_idx').on(table.projectId),
+  closingIdIdx: index('project_closing_risks_closing_id_idx').on(table.closingId),
+}));
+
+export const insertProjectClosingRiskSchema = createInsertSchema(projectClosingRisks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectClosingRisk = typeof projectClosingRisks.$inferSelect;
+export type InsertProjectClosingRisk = z.infer<typeof insertProjectClosingRiskSchema>;
+
+// Project Closing Actions - Follow-up actions from the closing review
+export const projectClosingActions = pgTable('project_closing_actions', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  closingId: integer('closing_id').notNull().references(() => projectClosings.id, { onDelete: 'cascade' }),
+  actionText: text('action_text').notNull(),
+  owner: text('owner'),
+  department: text('department'),
+  dueDate: date('due_date'),
+  status: text('status').default('open'), // 'open', 'in_progress', 'completed', 'cancelled'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_closing_actions_project_id_idx').on(table.projectId),
+  closingIdIdx: index('project_closing_actions_closing_id_idx').on(table.closingId),
+}));
+
+export const insertProjectClosingActionSchema = createInsertSchema(projectClosingActions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectClosingAction = typeof projectClosingActions.$inferSelect;
+export type InsertProjectClosingAction = z.infer<typeof insertProjectClosingActionSchema>;
+
 // AQL Sampling Chart - Standard quality sampling requirements based on lot size
 export const aqlSamplingChart = pgTable('aql_sampling_chart', {
   id: serial('id').primaryKey(),

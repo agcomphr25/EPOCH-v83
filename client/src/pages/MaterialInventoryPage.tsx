@@ -515,6 +515,51 @@ export default function MaterialInventoryPage() {
     );
   };
 
+  const getTransactionBadge = (type: string) => {
+    const configs: Record<string, { label: string; className: string }> = {
+      RECEIVE:              { label: 'Receive',              className: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700' },
+      RECEIVED:             { label: 'Receive',              className: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700' },
+      MOVE:                 { label: 'Move',                 className: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-700' },
+      ISSUE:                { label: 'Issue',                className: 'bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700' },
+      RETURN:               { label: 'Return',               className: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700' },
+      RETURNED_TO_STORAGE:  { label: 'Returned to Storage',  className: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700' },
+      SPLIT:                { label: 'Split',                className: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700' },
+      SCRAP:                { label: 'Scrap',                className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700' },
+      SCRAPPED:             { label: 'Scrap',                className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700' },
+      ADJUST:               { label: 'Adjust',               className: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700' },
+      ADJUSTMENT:           { label: 'Adjust',               className: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700' },
+      ACCEPT:               { label: 'Accept',               className: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700' },
+      ACCEPTED:             { label: 'Accept',               className: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700' },
+      REJECT:               { label: 'Reject',               className: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700' },
+      REJECTED:             { label: 'Reject',               className: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700' },
+      QUARANTINE:           { label: 'Quarantine',           className: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700' },
+      OUT_START:            { label: 'Out Start',            className: 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700' },
+    };
+    const cfg = configs[type] || { label: type, className: 'bg-muted text-muted-foreground border-border' };
+    return (
+      <Badge className={`whitespace-nowrap border ${cfg.className}`}>
+        {cfg.label}
+      </Badge>
+    );
+  };
+
+  const formatQty = (val: string | undefined, uom: string) => {
+    if (!val) return '—';
+    const n = parseFloat(val);
+    return `${isNaN(n) ? val : n.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${uom}`;
+  };
+
+  const renderQtyChange = (qtyChange: string | undefined, uom: string) => {
+    if (!qtyChange) return <span className="text-muted-foreground">—</span>;
+    const n = parseFloat(qtyChange);
+    if (isNaN(n)) return <span>{qtyChange}</span>;
+    const sign = n > 0 ? '+' : '';
+    const formatted = `${sign}${n.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${uom}`;
+    if (n > 0) return <span className="font-semibold text-green-600 dark:text-green-400">{formatted}</span>;
+    if (n < 0) return <span className="font-semibold text-red-600 dark:text-red-400">{formatted}</span>;
+    return <span className="text-muted-foreground">{formatted}</span>;
+  };
+
   const getValidStatusTransitions = (currentStatus: string): string[] => {
     const transitions: Record<string, string[]> = {
       RECEIVED: ['QUARANTINE', 'ACCEPTED', 'REJECTED'],
@@ -1008,39 +1053,39 @@ export default function MaterialInventoryPage() {
       </Dialog>
 
       <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>Transaction History</DialogTitle>
             <DialogDescription>
               {selectedLot?.internalControlNumber} - {selectedLot?.materialName}
             </DialogDescription>
           </DialogHeader>
-          {!loadingTransactions && transactions.filter(tx => tx.transactionType === 'RETURN').length > 0 && (
-            <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3">
-              <p className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
-                Returns ({transactions.filter(tx => tx.transactionType === 'RETURN').length})
-              </p>
-              <div className="space-y-1">
-                {transactions
-                  .filter(tx => tx.transactionType === 'RETURN')
-                  .map(tx => (
-                    <div key={tx.id} className="text-sm text-blue-700 dark:text-blue-400 flex flex-wrap gap-x-4 gap-y-0.5">
-                      <span className="font-medium">{format(new Date(tx.performedAt), 'MM/dd/yyyy HH:mm')}</span>
-                      {tx.qtyChange && (
-                        <span>
-                          Qty: <span className="font-medium text-green-700 dark:text-green-400">+{Math.abs(parseFloat(tx.qtyChange))}</span>
-                        </span>
-                      )}
-                      <span>By: <span className="font-medium">{tx.performedBy}</span></span>
-                      {(tx.reason || tx.notes) && (
-                        <span className="italic">{tx.reason || tx.notes}</span>
-                      )}
-                    </div>
-                  ))}
+
+          {selectedLot && !loadingTransactions && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground mb-1">Current Remaining</p>
+                <p className="text-sm font-semibold">
+                  {parseFloat(selectedLot.remainingQty).toLocaleString(undefined, { maximumFractionDigits: 4 })}{' '}
+                  <span className="font-normal text-muted-foreground">{selectedLot.unitOfMeasure}</span>
+                </p>
+              </div>
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground mb-1">Status</p>
+                <div className="mt-0.5">{getStatusBadge(selectedLot.status)}</div>
+              </div>
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground mb-1">Location</p>
+                <p className="text-sm font-semibold truncate">{selectedLot.storageLocation || '—'}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground mb-1">Transactions</p>
+                <p className="text-sm font-semibold">{transactions.length}</p>
               </div>
             </div>
           )}
-          <div className="max-h-[360px] overflow-y-auto">
+
+          <div className="max-h-[400px] overflow-y-auto">
             {loadingTransactions ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1051,50 +1096,65 @@ export default function MaterialInventoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date/Time</TableHead>
+                    <TableHead className="whitespace-nowrap">Date / Time</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Qty Change</TableHead>
+                    <TableHead className="whitespace-nowrap">Qty Change</TableHead>
+                    <TableHead className="whitespace-nowrap">Before → After</TableHead>
                     <TableHead>Location</TableHead>
-                    <TableHead>Performed By</TableHead>
-                    <TableHead>Notes / Reason</TableHead>
+                    <TableHead className="whitespace-nowrap">Performed By</TableHead>
+                    <TableHead>Reason / Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((tx) => (
-                    <TableRow
-                      key={tx.id}
-                      className={tx.transactionType === 'RETURN' ? 'bg-blue-50 dark:bg-blue-950/20' : undefined}
-                    >
-                      <TableCell className="text-sm">
-                        {format(new Date(tx.performedAt), 'MM/dd/yyyy HH:mm')}
-                      </TableCell>
-                      <TableCell>
-                        {tx.transactionType === 'RETURN' ? (
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700">
-                            RETURN
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">{tx.transactionType}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {tx.qtyChange && (
-                          <span className={parseFloat(tx.qtyChange) < 0 ? 'text-red-600' : 'text-green-600'}>
-                            {parseFloat(tx.qtyChange) > 0 ? '+' : ''}{tx.qtyChange}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {tx.fromLocation && tx.toLocation
-                          ? `${tx.fromLocation} → ${tx.toLocation}`
-                          : tx.toLocation || tx.fromLocation || '-'}
-                      </TableCell>
-                      <TableCell>{tx.performedBy}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                        {tx.notes || tx.reason || '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {transactions.map((tx) => {
+                    const uom = selectedLot?.unitOfMeasure ?? '';
+                    const hasReason = tx.reason && tx.reason.trim();
+                    const hasNotes = tx.notes && tx.notes.trim();
+                    return (
+                      <TableRow key={tx.id}>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {format(new Date(tx.performedAt), 'MM/dd/yyyy HH:mm')}
+                        </TableCell>
+                        <TableCell>
+                          {getTransactionBadge(tx.transactionType)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {renderQtyChange(tx.qtyChange, uom)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {tx.qtyBefore != null && tx.qtyAfter != null
+                            ? <>{formatQty(tx.qtyBefore, uom)} <span className="text-foreground/40">→</span> {formatQty(tx.qtyAfter, uom)}</>
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {tx.fromLocation && tx.toLocation
+                            ? <>{tx.fromLocation} <span className="text-muted-foreground">→</span> {tx.toLocation}</>
+                            : tx.toLocation || tx.fromLocation || <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{tx.performedBy}</TableCell>
+                        <TableCell className="text-sm max-w-[200px]">
+                          {hasReason || hasNotes ? (
+                            <div className="space-y-0.5">
+                              {hasReason && (
+                                <p>
+                                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reason: </span>
+                                  {tx.reason}
+                                </p>
+                              )}
+                              {hasNotes && (
+                                <p>
+                                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes: </span>
+                                  {tx.notes}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

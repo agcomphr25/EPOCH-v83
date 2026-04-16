@@ -432,6 +432,12 @@ export default function Navigation() {
       description: 'Monitor and test critical system components daily',
     },
     {
+      path: '/admin/inventory-reconciliation',
+      label: 'Inventory Reconciliation',
+      icon: PackageCheck,
+      description: 'Compare lot quantities vs. inventory balance records to spot mismatches',
+    },
+    {
       path: '/admin/domain-truth',
       label: 'Domain Truth Inspector',
       icon: Database,

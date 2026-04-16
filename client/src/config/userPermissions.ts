@@ -23,6 +23,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/orders',
   '/admin/audit-settings',
   '/admin/health-checks',
+  '/admin/inventory-reconciliation',
   '/admin/domain-truth',
   '/admin/queue-integrity',
   '/admin/control-tower',

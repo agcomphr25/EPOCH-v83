@@ -3272,4 +3272,99 @@ router.get('/mrp/run', async (req: Request, res: Response) => {
   }
 });
 
+interface ReconciliationRawRow {
+  agPartNumber: unknown;
+  materialName: unknown;
+  lotQtyTotal: unknown;
+  quantityOnHand: unknown;
+  quantityAllocated: unknown;
+  quantityAvailable: unknown;
+  variance: unknown;
+  lotCount: unknown;
+  orphanedBalance: unknown;
+  missingBalance: unknown;
+}
+
+function parseDbBool(v: unknown): boolean {
+  return v === true || v === 't' || v === 'true' || v === '1' || v === 1;
+}
+
+function toNumber(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toStr(v: unknown): string {
+  return typeof v === 'string' ? v : String(v ?? '');
+}
+
+// Inventory Reconciliation — read-only comparison of lot quantities vs. balance records
+router.get('/reconciliation', async (req: Request, res: Response) => {
+  try {
+    const result = await db.execute(sql`
+      WITH active_lots AS (
+        SELECT
+          material_part_number AS ag_part_number,
+          MAX(material_name)   AS material_name,
+          SUM(remaining_qty::numeric) AS lot_qty_total,
+          COUNT(*)             AS lot_count
+        FROM material_lots
+        WHERE status IN ('RECEIVED', 'ACCEPTED', 'ISSUED', 'QUARANTINE')
+        GROUP BY material_part_number
+      ),
+      balance_summary AS (
+        SELECT
+          ag_part_number,
+          SUM(quantity_on_hand)    AS quantity_on_hand,
+          SUM(quantity_allocated)  AS quantity_allocated,
+          SUM(quantity_available)  AS quantity_available
+        FROM inventory_balances
+        GROUP BY ag_part_number
+      )
+      SELECT
+        COALESCE(al.ag_part_number, bs.ag_part_number)        AS "agPartNumber",
+        COALESCE(al.material_name, ii.name)                    AS "materialName",
+        COALESCE(al.lot_qty_total, 0)                          AS "lotQtyTotal",
+        COALESCE(bs.quantity_on_hand, 0)                       AS "quantityOnHand",
+        COALESCE(bs.quantity_allocated, 0)                     AS "quantityAllocated",
+        COALESCE(bs.quantity_available, 0)                     AS "quantityAvailable",
+        COALESCE(al.lot_qty_total, 0) - COALESCE(bs.quantity_on_hand, 0) AS "variance",
+        COALESCE(al.lot_count, 0)                              AS "lotCount",
+        (al.ag_part_number IS NULL)                            AS "orphanedBalance",
+        (bs.ag_part_number IS NULL)                            AS "missingBalance"
+      FROM active_lots al
+      FULL OUTER JOIN balance_summary bs ON al.ag_part_number = bs.ag_part_number
+      LEFT JOIN inventory_items ii ON ii.ag_part_number = COALESCE(al.ag_part_number, bs.ag_part_number)
+      ORDER BY ABS(COALESCE(al.lot_qty_total, 0) - COALESCE(bs.quantity_on_hand, 0)) DESC, "agPartNumber"
+    `);
+
+    const rows = (Array.isArray(result) ? result : result.rows) as ReconciliationRawRow[];
+
+    const data = rows.map((row) => {
+      const orphaned = parseDbBool(row.orphanedBalance);
+      const missing  = parseDbBool(row.missingBalance);
+      const variance = toNumber(row.variance);
+      return {
+        agPartNumber:      toStr(row.agPartNumber),
+        materialName:      row.materialName != null ? toStr(row.materialName) : null,
+        lotQtyTotal:       toNumber(row.lotQtyTotal),
+        quantityOnHand:    toNumber(row.quantityOnHand),
+        quantityAllocated: toNumber(row.quantityAllocated),
+        quantityAvailable: toNumber(row.quantityAvailable),
+        variance,
+        lotCount:          toNumber(row.lotCount),
+        orphanedBalance:   orphaned,
+        missingBalance:    missing,
+        isMismatch:        variance !== 0 || orphaned || missing,
+      };
+    });
+
+    res.json(data);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error fetching inventory reconciliation:', msg);
+    res.status(500).json({ error: 'Failed to fetch reconciliation data', message: msg });
+  }
+});
+
 export default router;

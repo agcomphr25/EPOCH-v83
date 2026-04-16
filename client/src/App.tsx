@@ -281,6 +281,7 @@ import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
 import MaterialInventoryPage from './pages/MaterialInventoryPage';
+import InventoryReconciliationPage from './pages/InventoryReconciliationPage';
 import FilteredOrdersReport from './pages/FilteredOrdersReport';
 import UrgentOrdersReport from './pages/UrgentOrdersReport';
 import OTDReport from './pages/OTDReport';
@@ -532,6 +533,7 @@ function App() {
                   <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/admin/shipping-status-audit" component={ShippingStatusAuditPage} />
                   <Route path="/admin/control-tower" component={ProductionControlTower} />
+                  <Route path="/admin/inventory-reconciliation" component={InventoryReconciliationPage} />
                   <Route path="/admin/locate-order" component={LocateOrder} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />

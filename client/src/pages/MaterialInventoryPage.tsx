@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -128,8 +128,18 @@ function buildScrapSchema(remainingQty: number) {
 }
 
 export default function MaterialInventoryPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const initialPartNumber = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('partNumber') ?? ''
+    : '';
+  const [searchQuery, setSearchQuery] = useState(initialPartNumber);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pn = params.get('partNumber');
+    if (pn) setSearchQuery(pn);
+  }, []);
+
   const [selectedLot, setSelectedLot] = useState<MaterialLot | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'move' | 'split' | 'status' | 'scrap' | 'return' | 'adjust' | null>(null);

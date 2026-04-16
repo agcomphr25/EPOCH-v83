@@ -54,6 +54,9 @@ import {
   DollarSign,
   Eye,
   CreditCard,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   Table,
@@ -646,6 +649,8 @@ export default function CustomerManagement() {
   const [filterActive, setFilterActive] = useState<
     'all' | 'active' | 'inactive'
   >('all');
+  const [sortField, setSortField] = useState<null | 'type' | 'state'>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
@@ -783,6 +788,51 @@ export default function CustomerManagement() {
 
     return matchesSearch && matchesFilter;
   });
+
+  // Precompute default state per customer for efficient sorting
+  const customerDefaultStateMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    if (addressesData) {
+      const byCustomer: Record<number, CustomerAddress[]> = {};
+      for (const addr of addressesData) {
+        const cid = typeof addr.customerId === 'string' ? parseInt(addr.customerId, 10) : addr.customerId;
+        if (!byCustomer[cid]) byCustomer[cid] = [];
+        byCustomer[cid].push(addr);
+      }
+      for (const [cid, addrs] of Object.entries(byCustomer)) {
+        const def = addrs.find((a) => a.isDefault) || addrs[0];
+        map[Number(cid)] = (def?.state ?? '').toLowerCase();
+      }
+    }
+    return map;
+  }, [addressesData]);
+
+  // Sort customers by type or state
+  const sortedCustomers = sortField
+    ? [...filteredCustomers].sort((a: Customer, b: Customer) => {
+        let aVal = '';
+        let bVal = '';
+        if (sortField === 'type') {
+          aVal = (a.customerType ?? '').toLowerCase();
+          bVal = (b.customerType ?? '').toLowerCase();
+        } else if (sortField === 'state') {
+          aVal = customerDefaultStateMap[a.id] ?? '';
+          bVal = customerDefaultStateMap[b.id] ?? '';
+        }
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      })
+    : filteredCustomers;
+
+  const handleSort = (field: 'type' | 'state') => {
+    if (sortField === field) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   // Address suggestions state for separate address dialog
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
@@ -1870,7 +1920,7 @@ export default function CustomerManagement() {
       {/* Customer Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Customers ({filteredCustomers.length})</CardTitle>
+          <CardTitle>Customers ({sortedCustomers.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -1880,8 +1930,32 @@ export default function CustomerManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort('state')}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Address
+                      {sortField === 'state' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort('type')}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Type
+                      {sortField === 'type' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+                      )}
+                    </span>
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   {isGlennj && (
@@ -1891,7 +1965,7 @@ export default function CustomerManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCustomers.map((customer: Customer) => {
+                {sortedCustomers.map((customer: Customer) => {
                   // Get addresses for this customer - properly handle type conversion
                   const customerAddresses =
                     addressesData?.filter((addr) => {

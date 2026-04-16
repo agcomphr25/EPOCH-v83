@@ -57,7 +57,8 @@ import {
   RefreshCw,
   TrendingUp,
   TrendingDown,
-  Minus
+  Minus,
+  ClipboardList
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -255,6 +256,14 @@ interface QuoteExecutionFeedback {
   updatedAt: string;
 }
 
+interface ProjectWorkOrder {
+  id: string;
+  workOrderNumber: string;
+  status: string;
+  partNumber: string;
+  description: string | null;
+}
+
 const STEP_CONFIG: Record<string, { label: string; route: string; icon: typeof FileText }> = {
   rfq_risk_assessment: { label: 'RFQ Risk Assessment', route: '/rfq-risk-assessment', icon: FileText },
   quote: { label: 'Quote', route: '/p2-quote-form', icon: FileText },
@@ -391,6 +400,12 @@ export default function ProjectDetailPage() {
     onError: (err: any) => {
       toast({ title: 'Link failed', description: err?.message || 'Failed to link PO.', variant: 'destructive' });
     },
+  });
+
+  const { data: projectWorkOrders = [] } = useQuery<ProjectWorkOrder[]>({
+    queryKey: ['/api/work-orders/project', id],
+    queryFn: () => fetch(`/api/work-orders/project/${id}`).then(r => r.json()),
+    enabled: !!id,
   });
 
   const { data: allStepAttachments = [] } = useQuery<StepAttachment[]>({
@@ -1076,6 +1091,22 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {projectWorkOrders.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {projectWorkOrders.map(wo => (
+            <button
+              key={wo.id}
+              onClick={() => setLocation(`/maintenance-events/${wo.id}`)}
+              className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              Work Order: {wo.workOrderNumber}
+              <ExternalLink className="h-3 w-3 opacity-60" />
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <div className="flex justify-between text-sm">

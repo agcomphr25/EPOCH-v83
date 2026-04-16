@@ -94,6 +94,7 @@ import {
   travelerTaskFields,
   travelerSignatures,
   travelerEvents,
+  travelerAuthorizations,
   p2SerializedItemTraceability,
   P2_DEPARTMENT_STAGES,
   rfqRiskAssessments,
@@ -332,6 +333,7 @@ import {
   type InsertTravelerSignature,
   type TravelerEvent,
   type InsertTravelerEvent,
+  type TravelerAuthorization,
   type RFQRiskAssessment,
   type InsertRFQRiskAssessment,
   type Mold,
@@ -1808,11 +1810,14 @@ export interface IStorage {
   createTravelerStep(data: InsertTravelerStep): Promise<TravelerStep>;
   getTravelerSteps(travelerId: string): Promise<TravelerStep[]>;
   getTravelerStep(id: string): Promise<TravelerStep | undefined>;
+  getTravelerStepById(stepId: string): Promise<TravelerStep | undefined>;
+  getPreviousStep(step: TravelerStep): Promise<TravelerStep | undefined>;
   updateTravelerStep(id: string, data: Partial<InsertTravelerStep>): Promise<TravelerStep>;
   deleteTravelerStep(id: string): Promise<void>;
 
   // Traveler Tasks
   createTravelerTask(data: InsertTravelerTask): Promise<TravelerTask>;
+  getTasksByStep(stepId: string): Promise<TravelerTask[]>;
   getTravelerTasks(stepId: string): Promise<TravelerTask[]>;
   getTravelerTask(id: string): Promise<TravelerTask | undefined>;
   updateTravelerTask(id: string, data: Partial<InsertTravelerTask>): Promise<TravelerTask>;
@@ -1827,6 +1832,10 @@ export interface IStorage {
   // Traveler Signatures
   createTravelerSignature(data: InsertTravelerSignature): Promise<TravelerSignature>;
   getTravelerSignatures(stepId: string): Promise<TravelerSignature[]>;
+
+  // Traveler Gate helpers
+  checkTravelerAuthorization(travelerId: string, employeeId: number): Promise<TravelerAuthorization | undefined>;
+  checkMaterialTraceability(travelerId: string): Promise<boolean>;
 
   // Traveler Events (audit trail)
   createTravelerEvent(data: InsertTravelerEvent): Promise<TravelerEvent>;
@@ -16221,6 +16230,61 @@ export class DatabaseStorage implements IStorage {
       .from(travelerSignatures)
       .where(eq(travelerSignatures.travelerStepId, stepId))
       .orderBy(travelerSignatures.signedAt);
+  }
+
+  // Traveler Step aliases (gate-engine helpers)
+  async getTravelerStepById(stepId: string): Promise<TravelerStep | undefined> {
+    return this.getTravelerStep(stepId);
+  }
+
+  async getPreviousStep(step: TravelerStep): Promise<TravelerStep | undefined> {
+    const allSteps = await this.getTravelerSteps(step.travelerId);
+    const currentIndex = allSteps.findIndex((s) => s.id === step.id);
+    if (currentIndex <= 0) return undefined;
+    return allSteps[currentIndex - 1];
+  }
+
+  // Traveler Task alias (gate-engine helpers)
+  async getTasksByStep(stepId: string): Promise<TravelerTask[]> {
+    return this.getTravelerTasks(stepId);
+  }
+
+  // Traveler Gate helpers
+  async checkTravelerAuthorization(
+    travelerId: string,
+    employeeId: number
+  ): Promise<TravelerAuthorization | undefined> {
+    const traveler = await this.getTraveler(travelerId);
+    if (!traveler?.partNumber) return undefined;
+
+    const [auth] = await db
+      .select()
+      .from(travelerAuthorizations)
+      .where(
+        and(
+          eq(travelerAuthorizations.employeeId, employeeId),
+          eq(travelerAuthorizations.partNumber, traveler.partNumber),
+          eq(travelerAuthorizations.isActive, true)
+        )
+      )
+      .limit(1);
+
+    return auth;
+  }
+
+  async checkMaterialTraceability(travelerId: string): Promise<boolean> {
+    const traveler = await this.getTraveler(travelerId);
+    if (!traveler) return false;
+
+    if (traveler.lotNumber || traveler.internalControlNumber) return true;
+
+    const [consumption] = await db
+      .select({ id: travelerMaterialConsumption.id })
+      .from(travelerMaterialConsumption)
+      .where(eq(travelerMaterialConsumption.travelerId, travelerId))
+      .limit(1);
+
+    return !!consumption;
   }
 
   // Traveler Events (audit trail)

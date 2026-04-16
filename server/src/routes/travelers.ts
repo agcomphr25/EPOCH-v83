@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { eq, and, asc, desc, ilike, notInArray } from 'drizzle-orm';
 import { storage } from '../../storage';
+import { evaluateTravelerStartGates, evaluateTravelerFinishGates } from '../lib/travelerGates';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -929,23 +930,26 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     const { travelerId, stepId } = req.params;
     const { startedBy, badgeScan } = req.body;
 
-    // Resolve badge scan code to employee name if badge was scanned
+    // Resolve badge scan code to employee name and ID if badge was scanned
     let resolvedName = startedBy || 'unknown';
+    let resolvedEmployeeId: number | undefined;
     if (badgeScan) {
-      const emp = await db.select({ name: employees.name })
+      const emp = await db.select({ id: employees.id, name: employees.name })
         .from(employees)
         .where(eq(employees.badgeScanCode, badgeScan))
         .limit(1);
       if (emp.length > 0) {
         resolvedName = emp[0].name;
+        resolvedEmployeeId = emp[0].id;
       } else {
         // Fallback: match by employeeCode (e.g. EMP003 typed/scanned directly)
-        const empByCode = await db.select({ name: employees.name })
+        const empByCode = await db.select({ id: employees.id, name: employees.name })
           .from(employees)
           .where(eq(employees.employeeCode, badgeScan))
           .limit(1);
         if (empByCode.length > 0) {
           resolvedName = empByCode[0].name;
+          resolvedEmployeeId = empByCode[0].id;
         }
       }
     }
@@ -974,20 +978,16 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
-    const steps = await storage.getTravelerSteps(travelerId);
-    const currentStepIndex = steps.findIndex((s) => s.id === stepId);
-    if (currentStepIndex > 0) {
-      const previousStep = steps[currentStepIndex - 1];
-      if (previousStep.status !== 'COMPLETED') {
-        return res.status(400).json({
-          error: 'Previous step must be completed first',
-          previousStep: {
-            stepNumber: previousStep.stepNumber,
-            departmentName: previousStep.departmentName,
-            status: previousStep.status,
-          },
-        });
-      }
+    // Hard gate checks: sequence, training, material
+    const startGate = await evaluateTravelerStartGates(travelerId, stepId, {
+      employeeId: resolvedEmployeeId,
+      employeeName: resolvedName,
+    });
+    if (!startGate.allowed) {
+      return res.status(403).json({
+        error: 'Step start blocked by process gate',
+        reason: startGate.reason,
+      });
     }
 
     const updatedStep = await storage.updateTravelerStep(stepId, {
@@ -1130,7 +1130,10 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     }
 
     if (!sigData) {
-      return res.status(400).json({ error: 'A drawn signature is required' });
+      return res.status(403).json({
+        error: 'Step finish blocked by process gate',
+        reason: 'A drawn signature is required before signing off this step.',
+      });
     }
 
     const traveler = await storage.getTraveler(travelerId);
@@ -1147,6 +1150,15 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       return res.status(400).json({
         error: 'Step must be IN_PROGRESS to sign',
         currentStatus: step.status,
+      });
+    }
+
+    // Hard gate check: required QC tasks must be complete before signing
+    const finishGate = await evaluateTravelerFinishGates(stepId);
+    if (!finishGate.allowed) {
+      return res.status(403).json({
+        error: 'Step finish blocked by process gate',
+        reason: finishGate.reason,
       });
     }
 

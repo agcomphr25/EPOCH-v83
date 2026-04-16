@@ -570,7 +570,9 @@ export default function TravelerExecution() {
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      const reason = error.reason ?? error.responseData?.reason;
+      const description = reason ? `${error.message}: ${reason}` : error.message;
+      toast({ title: 'Cannot Start Step', description, variant: 'destructive' });
     },
   });
 
@@ -647,7 +649,9 @@ export default function TravelerExecution() {
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      const reason = error.reason ?? error.responseData?.reason;
+      const description = reason ? `${error.message}: ${reason}` : error.message;
+      toast({ title: 'Cannot Sign Step', description, variant: 'destructive' });
     },
   });
 

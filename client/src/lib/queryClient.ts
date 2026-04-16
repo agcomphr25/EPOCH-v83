@@ -26,6 +26,7 @@ async function throwIfResNotOk(res: Response) {
     error.status = res.status;
     if (errorData) {
       Object.assign(error, errorData);
+      error.responseData = errorData;
     }
     throw error;
   }

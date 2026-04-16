@@ -15209,7 +15209,12 @@ export const estimatingRfqs = pgTable('estimating_rfqs', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const insertEstimatingRfqSchema = createInsertSchema(estimatingRfqs).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEstimatingRfqSchema = createInsertSchema(estimatingRfqs)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    requestedDueDate: z.coerce.date().nullable().optional(),
+    quoteDueDate: z.coerce.date().nullable().optional(),
+  });
 export type EstimatingRfq = typeof estimatingRfqs.$inferSelect;
 export type InsertEstimatingRfq = z.infer<typeof insertEstimatingRfqSchema>;
 

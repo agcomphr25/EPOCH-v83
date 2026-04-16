@@ -56,6 +56,7 @@ router.post('/rfqs', async (req, res) => {
     res.status(201).json(rfq);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
+      console.error('[POST /rfqs] Validation error:', JSON.stringify(err.errors, null, 2));
       return res.status(400).json({ error: 'Validation failed', details: err.errors });
     }
     res.status(500).json({ error: err.message });
@@ -92,6 +93,7 @@ router.patch('/rfqs/:id', async (req, res) => {
     res.json(rfq);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
+      console.error('[PATCH /rfqs/:id] Validation error:', JSON.stringify(err.errors, null, 2));
       return res.status(400).json({ error: 'Validation failed', details: err.errors });
     }
     res.status(500).json({ error: err.message });

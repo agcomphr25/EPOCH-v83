@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Clock, CheckCircle, Trash2, Pencil, Download, Search, Briefcase, PieChart, Plus, X } from 'lucide-react';
+import { Clock, CheckCircle, Trash2, Pencil, Download, Search, Briefcase, PieChart, Plus, X, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PunchRow {
@@ -30,11 +30,6 @@ interface AdminEmployeeData {
   payPeriod: { start: string; end: string; label: string };
 }
 
-interface PayrollData {
-  payPeriod: { label: string };
-  employees: Array<{ epochEmployeeId: number; totalHours: number; intervals: any[] }>;
-  generatedAt: string;
-}
 
 interface JobLaborEmployee {
   employeeId: number;
@@ -115,11 +110,34 @@ export default function TimeClockAdminPage() {
     enabled: activeEmployeeId !== null,
   });
 
-  const { data: payrollData, refetch: refetchPayroll, isFetching: payrollFetching } =
-    useQuery<PayrollData>({
-      queryKey: ['/api/timekeeping/admin/payroll'],
-      enabled: false,
-    });
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleGustoExport = async () => {
+    if (!data?.payPeriod) return;
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams({
+        periodStart: data.payPeriod.start,
+        periodEnd: data.payPeriod.end,
+      });
+      const response = await fetch(`/api/timekeeping/admin/export/gusto?${params}`);
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gusto-export-${data.payPeriod.start}-to-${data.payPeriod.end}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: 'CSV download started' });
+    } catch {
+      toast({ title: 'Failed to export CSV', variant: 'destructive' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const {
     data: jobLaborData,
@@ -604,46 +622,24 @@ export default function TimeClockAdminPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center justify-between">
             Payroll Export
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => refetchPayroll()}
-              disabled={payrollFetching}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {payrollFetching ? 'Loading…' : 'Export Approved Punches'}
-            </Button>
+            <div className="flex items-center gap-2">
+              {!data?.payPeriod && (
+                <span className="text-xs text-muted-foreground">Load an employee first to enable export</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGustoExport}
+                disabled={isExporting || !data?.payPeriod}
+              >
+                {isExporting
+                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  : <Download className="w-4 h-4 mr-2" />}
+                {isExporting ? 'Exporting…' : 'Export Approved Hours (Gusto)'}
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
-        {payrollData && (
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">
-              Pay period: {payrollData.payPeriod.label} — Generated {new Date(payrollData.generatedAt).toLocaleString()}
-            </p>
-            {payrollData.employees.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No approved punches found for this pay period.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee ID</TableHead>
-                    <TableHead>Intervals</TableHead>
-                    <TableHead className="text-right">Total Hours</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payrollData.employees.map(emp => (
-                    <TableRow key={emp.epochEmployeeId}>
-                      <TableCell className="font-mono text-sm">#{emp.epochEmployeeId}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{emp.intervals.length} interval(s)</TableCell>
-                      <TableCell className="text-right font-bold">{formatHours(emp.totalHours)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        )}
       </Card>
     </div>
   );

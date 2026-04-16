@@ -25,6 +25,7 @@ export interface UseTimeClockReturn {
   clockOut: () => Promise<void>;
   startBreak: () => Promise<void>;
   endBreak: () => Promise<void>;
+  refreshStatus: () => Promise<void>;
   loading: boolean;
 }
 
@@ -133,6 +134,7 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     clockOut,
     startBreak,
     endBreak,
+    refreshStatus,
     loading,
   };
 }

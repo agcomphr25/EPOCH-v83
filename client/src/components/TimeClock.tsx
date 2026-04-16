@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Card,
   CardContent,
@@ -16,9 +17,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, PlayCircle, Timer, Briefcase, Zap } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Clock,
+  LogIn,
+  LogOut,
+  Coffee,
+  PlayCircle,
+  Timer,
+  Briefcase,
+  Zap,
+  ScanBarcode,
+  CheckCircle,
+  AlertCircle,
+  X,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useTimeClock from '@/hooks/useTimeClock';
+import { apiRequest } from '@/lib/queryClient';
 
 interface Job {
   id: number;
@@ -37,12 +53,29 @@ interface HoursData {
   totalHours: number;
 }
 
+interface ChargeContext {
+  travelerId: string;
+  travelerNumber: string;
+  wadId: string;
+  wadNumber: string;
+  projectId: string;
+  chargeCode: string;
+  department: string | null;
+  operation: string | null;
+}
+
 interface TimeClockProps {
   employeeId: string;
   disableClockOut?: boolean;
 }
 
 const QUICK_START_LIMIT = 6;
+
+const SCAN_ERROR_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'No traveler found for this barcode. Check the barcode and try again.',
+  NO_WAD_LINK: 'This traveler is not linked to a Work Authorization Document. Contact your supervisor.',
+  MALFORMED: 'The barcode could not be read. It may contain invalid characters.',
+};
 
 export default function TimeClock({
   employeeId,
@@ -61,12 +94,21 @@ export default function TimeClock({
     clockOut,
     startBreak,
     endBreak,
+    refreshStatus,
     loading,
   } = useTimeClock(employeeId);
 
   const { toast } = useToast();
   const [selectedJobId, setSelectedJobId] = useState('');
   const [showAllJobs, setShowAllJobs] = useState(false);
+
+  // Traveler barcode scan state
+  const [scanValue, setScanValue] = useState('');
+  // The barcode value that was actually submitted and resolved — locked when context is shown
+  const [resolvedScanValue, setResolvedScanValue] = useState('');
+  const [chargeContext, setChargeContext] = useState<ChargeContext | null>(null);
+  const [scanError, setScanError] = useState<{ code: string; message: string } | null>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
 
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: ['/api/timekeeping/jobs'],
@@ -83,6 +125,70 @@ export default function TimeClock({
       setSelectedJobId(String(activeJobId));
     }
   }, [loading, activeJobId, clockedIn, selectedJobId]);
+
+  const resetScan = () => {
+    setScanValue('');
+    setResolvedScanValue('');
+    setChargeContext(null);
+    setScanError(null);
+    setTimeout(() => scanInputRef.current?.focus(), 0);
+  };
+
+  const scanMutation = useMutation({
+    mutationFn: async (value: string) => {
+      const res = await apiRequest('/api/time-clock/scan/traveler', {
+        method: 'POST',
+        body: { scanValue: value, employeeId },
+      });
+      return res as { chargeContext: ChargeContext };
+    },
+    onSuccess: (data, submittedValue) => {
+      setResolvedScanValue(submittedValue);
+      setChargeContext(data.chargeContext);
+      setScanError(null);
+    },
+    onError: (err: any) => {
+      // apiRequest builds the error object with:
+      //   err.message       = data?.message || data?.error || statusText
+      //   err.responseData  = full parsed JSON response body
+      const code: string = err?.responseData?.error ?? 'UNKNOWN';
+      const fallback: string = err?.message ?? 'Failed to read the barcode. Please try again.';
+      setScanError({ code, message: SCAN_ERROR_MESSAGES[code] ?? fallback });
+      setChargeContext(null);
+      setResolvedScanValue('');
+    },
+  });
+
+  const clockInTravelerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('/api/time-clock/clock-in/traveler', {
+        method: 'POST',
+        // Use the locked resolved barcode — not the (possibly-edited) input value
+        body: { scanValue: resolvedScanValue, employeeId },
+      });
+      return res;
+    },
+    onSuccess: async () => {
+      resetScan();
+      // Refresh both time-clock status and hours so the UI transitions correctly
+      await refreshStatus();
+      refetchHours();
+      toast({ title: 'Clocked in via traveler!' });
+    },
+    onError: (err: any) => {
+      const message: string = err?.message ?? 'Failed to clock in via traveler barcode. Please try again.';
+      toast({ title: message, variant: 'destructive' });
+    },
+  });
+
+  const handleScan = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setChargeContext(null);
+    setScanError(null);
+    setResolvedScanValue('');
+    scanMutation.mutate(trimmed);
+  };
 
   const handleClockIn = async (jobId?: string) => {
     const id = jobId ?? selectedJobId;
@@ -237,6 +343,120 @@ export default function TimeClock({
               <div>
                 <p className="text-xs text-blue-600 font-medium leading-none mb-0.5">Currently working on</p>
                 <p className="font-semibold text-blue-900 leading-tight">{activeJobLabel}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Traveler barcode scan section — only shown before clock-in */}
+          {!clockedIn && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                <ScanBarcode className="h-3 w-3" />
+                Scan Traveler Barcode
+              </p>
+              <div className="flex gap-1.5">
+                <Input
+                  ref={scanInputRef}
+                  value={scanValue}
+                  onChange={(e) => setScanValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleScan(scanValue);
+                  }}
+                  placeholder="Scan or type barcode…"
+                  className="text-sm h-8"
+                  disabled={!!chargeContext || scanMutation.isPending || clockInTravelerMutation.isPending}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleScan(scanValue)}
+                  disabled={!!chargeContext || !scanValue.trim() || scanMutation.isPending || clockInTravelerMutation.isPending}
+                  className="h-8 px-2.5 shrink-0"
+                >
+                  {scanMutation.isPending ? (
+                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-current" />
+                  ) : (
+                    <ScanBarcode className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+
+              {/* Scan error */}
+              {scanError && (
+                <Alert variant="destructive" className="py-2 px-3">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <AlertDescription className="text-xs ml-1">
+                    <span className="font-semibold">{scanError.code}:</span> {scanError.message}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Resolved charge context confirmation */}
+              {chargeContext && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Traveler resolved — confirm details
+                    </p>
+                    <button
+                      onClick={resetScan}
+                      className="text-indigo-400 hover:text-indigo-600"
+                      aria-label="Clear scan"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div>
+                      <dt className="text-indigo-500 font-medium">WAD #</dt>
+                      <dd className="font-mono font-semibold text-indigo-900">{chargeContext.wadNumber}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-indigo-500 font-medium">Charge Code</dt>
+                      <dd className="font-mono font-semibold text-indigo-900">{chargeContext.chargeCode}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-indigo-500 font-medium">Department</dt>
+                      <dd className="text-indigo-900">{chargeContext.department ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-indigo-500 font-medium">Operation</dt>
+                      <dd className="text-indigo-900 truncate" title={chargeContext.operation ?? undefined}>
+                        {chargeContext.operation ?? '—'}
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-indigo-500 font-medium">Traveler</dt>
+                      <dd className="font-mono text-indigo-900">{chargeContext.travelerNumber}</dd>
+                    </div>
+                  </dl>
+
+                  <Button
+                    onClick={() => clockInTravelerMutation.mutate()}
+                    disabled={clockInTravelerMutation.isPending}
+                    className="w-full bg-green-600 hover:bg-green-700 h-8 text-sm"
+                  >
+                    {clockInTravelerMutation.isPending ? (
+                      <>
+                        <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
+                        Clocking in…
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="h-3.5 w-3.5 mr-1.5" />
+                        Confirm Clock-In
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              <div className="relative flex items-center">
+                <div className="flex-grow border-t border-border" />
+                <span className="mx-2 text-[10px] text-muted-foreground">or select a job</span>
+                <div className="flex-grow border-t border-border" />
               </div>
             </div>
           )}

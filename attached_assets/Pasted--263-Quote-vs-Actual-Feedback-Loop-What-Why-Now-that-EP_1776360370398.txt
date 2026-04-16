@@ -1,0 +1,248 @@
+#263 - Quote vs Actual Feedback Loop
+
+What & Why
+Now that EPOCH has the backbone to connect Project → WAD → Traveler → Time → Closing, the next step is to make the system learn from finished work instead of treating each quote like a fresh guess. This ticket adds the first real feedback loop between estimating and execution:
+
+Quote → Project → WAD / Labor / Closing → Quote Intelligence
+
+Today, you already have quotes, projects, WADs, time entries, and closing records, but they are not yet being compared in a structured way to improve future quoting. The current schema shows quotes and projects exist, and the newer WAD/time chain was added afterward, so this feedback loop is still missing.
+
+Done looks like
+A quote can be compared to actual execution results after project completion
+System stores a reusable snapshot of:
+quoted labor
+actual labor
+quoted schedule assumptions
+actual completion timing
+closing risks and lessons
+A new project/quote analysis record exists per project or quote conversion
+Storage methods exist to generate and fetch quote-vs-actual summaries
+Routes exist to:
+generate the comparison
+retrieve it by project
+retrieve it by quote
+Comparison includes at minimum:
+quoted hours
+actual hours
+variance
+actual departments used
+overrun flag
+key closing lessons
+No current quote, project, traveler, or time flows are broken
+No UI is required in this ticket
+Out of scope
+automatic quote price recalculation
+AI-generated quote recommendations
+customer-facing quote changes
+dashboard UI
+auto-updating existing quotes
+predictive estimating engine
+material-cost variance unless already cleanly available
+Tasks
+1. Add schema for quote execution feedback
+
+Add a new table to server/schema.ts.
+
+quote_execution_feedback
+
+Fields:
+
+id UUID PK
+quoteId UUID FK → quotes.id nullable if some projects were not created from quotes
+projectId UUID FK → projects.id not null
+projectClosingId UUID FK → project_closings.id nullable
+generatedAt timestamp default now
+quotedLaborHours numeric nullable
+actualLaborHours numeric nullable
+laborVarianceHours numeric nullable
+laborVariancePercent numeric nullable
+quotedDepartments jsonb nullable
+actualDepartments jsonb nullable
+quotedLeadTimeDays integer nullable
+actualLeadTimeDays integer nullable
+scheduleVarianceDays integer nullable
+overrunFlag boolean default false
+summary text nullable
+keyRisks jsonb nullable
+keyStrengths text nullable
+keyOpportunities text nullable
+recommendedQuotingNotes text nullable
+createdAt timestamp default now
+updatedAt timestamp default now
+
+Recommended constraints:
+
+unique on projectId if you want one official feedback record per completed project
+2. Add insert schema and exported types
+
+Add:
+
+insertQuoteExecutionFeedbackSchema
+
+Export types:
+
+QuoteExecutionFeedback
+InsertQuoteExecutionFeedback
+3. Add storage methods
+
+Add to IStorage and implement in server/storage.ts:
+
+generateQuoteExecutionFeedback(projectId: string)
+getQuoteExecutionFeedbackByProjectId(projectId: string)
+getQuoteExecutionFeedbackByQuoteId(quoteId: string)
+
+Recommended behavior for generateQuoteExecutionFeedback(projectId):
+
+load the project
+load linked quote if available via project steps or quote linkage
+load linked WADs for the project
+sum actual labor from time_clock_entries by productionWorkOrderId
+load project closing
+compute:
+quoted labor hours
+actual labor hours
+variance hours
+variance percent
+actual departments worked
+schedule variance if dates exist
+extract:
+risk summaries
+strengths
+opportunities
+next project recommendations
+create or upsert one feedback record for the project
+4. Define first-pass quoted labor source
+
+You need one stable rule for where quoted labor comes from.
+
+Recommended order:
+
+explicit labor hours on quote if they exist
+quote line items if labor is stored there
+project/WAD budget hours as fallback only if quote labor is unavailable
+
+Do not over-engineer this ticket. Pick one deterministic rule and document it clearly in code comments.
+
+5. Define actual labor source
+
+Actual labor should come from:
+
+time_clock_entries
+filtered by:
+productionWorkOrderId
+for all WADs linked to the project
+
+If some records are still legacy/unlinked, do not try to infer them in this ticket.
+
+6. Define actual departments used
+
+Build from:
+
+time_clock_entries.department
+for all time entries linked to WADs under the project
+
+Store as a unique list in actualDepartments.
+
+7. Define schedule variance
+
+Use the cleanest dates already available.
+
+Recommended:
+
+quoted lead time:
+from quote expected schedule fields if they exist
+actual lead time:
+project start to project close date
+or earliest WAD/time activity to closing date if project dates are weak
+
+Keep the first version simple and transparent.
+
+8. Add routes
+
+Create or extend a route module, for example:
+
+server/src/routes/quoteFeedback.ts
+
+Minimum endpoints:
+
+POST /api/projects/:projectId/quote-feedback/generate
+generates or regenerates the feedback snapshot
+GET /api/projects/:projectId/quote-feedback
+returns feedback by project
+GET /api/quotes/:quoteId/quote-feedback
+returns feedback by quote
+
+Validate UUID params and request bodies with Zod.
+
+9. Route registration
+
+Register the new route module in the main route index, or extend projects.ts and quotes.ts if you want to keep feedback close to those modules.
+
+10. Summary composition rule
+
+Generate a simple human-readable summary in the feedback record.
+
+Example style:
+
+“Quoted 120 labor hours; actual 148.5 labor hours; variance +28.5 hours (+23.8%). Main drivers were schedule disruption, layup rework, and supplier delay.”
+
+This should be generated server-side from real fields, not AI.
+
+Relevant files
+server/schema.ts
+server/storage.ts
+server/src/routes/index.ts
+server/src/routes/projects.ts
+server/src/routes/quotes.ts
+optional new file: server/src/routes/quoteFeedback.ts
+Recommended implementation notes
+Prefer snapshot over live recompute everywhere
+
+Store a generated feedback record rather than recomputing on every read. That gives you:
+
+auditability
+stable review data
+future approval flow support
+One record per project is enough
+
+Use one official feedback snapshot per completed project for now. You can add revision history later if needed.
+
+Be explicit about fallback logic
+
+If quote labor is missing, record that clearly in the summary or leave quoted fields null. Do not pretend precision where the source data does not support it.
+
+Keep lessons learned structured enough to reuse
+
+Use:
+
+keyRisks as jsonb list
+keyStrengths text
+keyOpportunities text
+recommendedQuotingNotes text
+
+That gives you enough structure to later feed future estimating.
+
+Acceptance checklist
+ quote_execution_feedback table exists
+ feedback can be generated for a real completed project
+ feedback can be fetched by project id
+ feedback can be fetched by quote id when quote exists
+ actual labor is summed from WAD-linked time entries
+ variance fields calculate correctly
+ closing lessons are included in feedback
+ no legacy quote/project flows break
+Suggested live tests
+Pick a completed project with:
+linked WADs
+linked time entries
+a closing record
+Generate quote feedback.
+Confirm:
+quoted labor hours populated or null by rule
+actual labor hours match summed time entries
+variance is correct
+actual departments list is correct
+summary is readable
+Fetch feedback by project id.
+Fetch feedback by quote id if the project came from a quote.
+Regenerate and confirm the record updates cleanly instead of duplicating.

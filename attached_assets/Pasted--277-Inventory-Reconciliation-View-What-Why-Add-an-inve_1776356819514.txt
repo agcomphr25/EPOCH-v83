@@ -1,0 +1,101 @@
+#277 — Inventory Reconciliation View
+What & Why
+
+Add an inventory reconciliation view so EPOCH can compare material lot quantities against inventory balance records and highlight mismatches before they become bigger control problems. By this point, the system has action-level inventory flows on Material Inventory, including move, split, status change, scrap, issue, return, and transaction history patterns, so the next need is a truth-check layer across inventory records rather than another single action.
+
+Done looks like
+A new inventory reconciliation page or admin view exists
+For each material part number, the page shows:
+material part number
+material name
+summed lot quantity
+inventory balance quantity on hand
+quantity allocated
+quantity available
+variance amount
+status: matched / mismatch
+Rows with mismatches are clearly highlighted
+Users can filter to show only mismatches
+Users can search by part number or material name
+Clicking a row opens or navigates to related lot detail context for investigation
+The view is read-only for now
+No quantities are auto-corrected
+No adjustments are posted from this page yet
+Why this is next
+
+Once you have receive, move, split, issue, return, consume, scrap, and adjust, the next control layer is checking whether the ERP agrees with itself. A reconciliation page gives you:
+
+early mismatch detection
+better cycle count prep
+a cleaner path to investigate balance drift
+stronger AS9100-style inventory control
+Out of scope
+Posting corrections automatically
+Full cycle count session workflow
+Approval routing
+Multi-step variance disposition workflow
+Bulk adjustment posting
+Reservation editing from the reconciliation page
+Backend tasks
+Add a reconciliation endpoint, for example:
+GET /api/inventory/reconciliation
+For each material part number:
+sum material_lots.remainingQty
+join or read inventory_balances.quantityOnHand
+include quantityAllocated
+include quantityAvailable
+compute variance:
+variance = lotQtyTotal - quantityOnHand
+Return a normalized response shape such as:
+agPartNumber
+materialName
+lotQtyTotal
+quantityOnHand
+quantityAllocated
+quantityAvailable
+variance
+isMismatch
+Optionally include lot count and affected lot IDs for drill-in support
+Keep the endpoint read-only
+Frontend tasks
+Add a new page, for example:
+client/src/pages/InventoryReconciliationPage.tsx
+Add a table with:
+part number
+material name
+lot total
+on hand
+allocated
+available
+variance
+status
+Add:
+search input
+mismatch-only filter
+Highlight mismatches visually
+Add row click behavior to inspect related lots
+Add empty/loading states
+Keep it read-only
+Suggested response shape
+type InventoryReconciliationRow = {
+  agPartNumber: string;
+  materialName: string;
+  lotQtyTotal: number;
+  quantityOnHand: number;
+  quantityAllocated: number;
+  quantityAvailable: number;
+  variance: number;
+  isMismatch: boolean;
+  lotCount: number;
+};
+Recommended rules
+isMismatch = variance !== 0
+show negative and positive variances clearly
+treat missing balance rows as mismatches
+treat parts with balances but no active lots as mismatches
+later, if you add location-aware reconciliation, compare by part + location rather than just part number
+Relevant files
+client/src/pages/MaterialInventoryPage.tsx — this already establishes the inventory UI pattern, lot query flow, action menu style, and transaction-history style the new view should feel consistent with.
+server/src/routes/... for the new reconciliation endpoint
+server/storage.ts
+server/schema.ts

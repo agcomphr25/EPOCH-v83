@@ -1,0 +1,588 @@
+Here is a clean outline you can use as the master build plan for EPOCH v8.
+
+EPOCH v8 Master Build Outline
+1. Program Goal
+
+Build EPOCH into a fully integrated manufacturing operating system that supports:
+
+quoting and project launch
+manufacturing execution
+inventory and traceability
+quality and compliance
+DCAA-ready labor charging
+CMMC-capable security and access control
+training enforcement
+project lessons learned and continuous improvement
+2. Core System Vision
+2.1 Business Flow
+
+Quote → Project/WAD → P2 Control Center → Work Orders → Travelers → Time Clock / Charge Codes → QC / Shipping → Project Closing → Lessons Applied to Next Quote
+
+2.2 Compliance Targets
+AS9100 process control and traceability
+DCAA labor charging and audit trails
+CMMC-aligned access control, logging, and document security
+3. Master Build Phases
+Phase 1 — Foundation and Control Backbone
+3.1 Define the system backbone
+
+Create the master relationship between:
+
+quote
+customer
+project
+WAD / charge code
+work order
+traveler
+time entry
+training eligibility
+closing record
+3.2 Standardize statuses
+
+Define controlled statuses for:
+
+quotes
+projects
+WADs
+work orders
+travelers
+time entries
+closings
+approvals
+3.3 Master data governance
+
+Define:
+
+departments
+sub-departments
+roles
+permission scopes
+training categories
+project types
+risk categories
+charge code types
+Phase 2 — Quote System
+4.1 Build quote creation flow
+
+Quote must support:
+
+customer data
+part or project scope
+materials
+labor by department
+tooling
+outside services
+schedule estimate
+risk notes
+assumptions
+exclusions
+revision history
+4.2 Quote approval flow
+
+Include:
+
+draft
+internal review
+approved
+sent
+customer accepted
+customer rejected
+converted to project
+4.3 Quote-to-project conversion
+
+When accepted, auto-create:
+
+project record
+WAD / charge code
+project budget
+linked parts or BOM references
+initial routing or routing templates
+initial schedule placeholder
+Phase 3 — Project Pipeline and P2 Integration
+5.1 Interlace project pipeline with P2
+
+Unify project pipeline and P2 control center so project records drive execution.
+
+5.2 Add project master dashboard
+
+Project should show:
+
+quote value
+budgeted hours
+actual hours
+progress
+status by department
+open risks
+open NCRs
+material shortages
+schedule issues
+linked documents
+5.3 Project stage structure
+
+Recommended stages:
+
+opportunity
+quoting
+awarded
+setup
+planning
+released to production
+in process
+qc/inspection
+shipped/completed
+closing
+archived
+5.4 Link P2 tabs to project
+
+Each project should connect directly to:
+
+BOM
+PO
+scheduling
+travelers
+documents
+changes
+certifications
+routing
+pending actions
+Phase 4 — WAD Integration and Charge Code Architecture
+6.1 Create WAD structure
+
+Each project should have:
+
+WAD ID
+project code
+customer
+charge code
+charge code status
+department budgets
+approval authority
+labor categories
+start/end dates
+6.2 Define charge code rules
+
+Support:
+
+direct project labor
+indirect labor
+rework
+training
+maintenance
+admin time
+6.3 Budget control
+
+Track:
+
+planned hours by department
+actual hours by department
+remaining hours
+overrun requests
+approvals for extra time
+6.4 Barcode-linked charge code switching
+
+When user scans:
+
+traveler barcode
+work order barcode
+WAD barcode
+
+System should auto-assign:
+
+correct project
+department
+operation
+charge code
+Phase 5 — Time Clock Completion for DCAA Readiness
+7.1 Finish time clock architecture
+
+Time clock must support:
+
+kiosk mode
+badge scan
+barcode scan
+job selection
+automatic job switching
+supervisor approval paths
+7.2 DCAA labor charging controls
+
+Implement:
+
+no work without charge code
+no manual edits without audit trail
+no backdating without approval
+no overlapping labor records
+required reason for adjustment
+daily review and approval workflow
+7.3 Audit log requirements
+
+Track:
+
+who clocked in
+who changed charge code
+when change happened
+original code
+new code
+why it changed
+approving authority
+7.4 Overrun control
+
+When budgeted time is exhausted:
+
+warn employee
+block or hold work
+require authorized approval
+log approval reason
+Phase 6 — Traveler Gates and Production Enforcement
+8.1 Hard gates in execution
+
+Prevent progress unless:
+
+material allocation is complete
+lot/ICN is assigned
+required training is current
+required approvals are complete
+prior department signoff is complete
+QC checks are passed
+8.2 Barcode-driven traveler execution
+
+Traveler scan should:
+
+identify project
+identify WAD
+identify department step
+identify operator authorization
+start production timer if needed
+8.3 Release-to-floor control
+
+Add controlled release states:
+
+blocked
+partial
+ready
+released
+in progress
+complete
+Phase 7 — Role Permission Matrix
+9.1 Build permission model
+
+Move from broad roles to:
+Role → Capability → Scope → Approval Authority
+
+9.2 Permission categories
+
+Examples:
+
+view project
+edit quote
+approve quote
+create WAD
+start traveler
+sign QC
+approve overtime
+modify time entries
+access CUI drawings
+close project
+9.3 Scope control
+
+Permissions should be scoped by:
+
+department
+site
+project
+function
+admin/global
+9.4 Approval hierarchy
+
+Add approval chains for:
+
+quote approval
+extra labor approval
+project closure approval
+document release
+access escalation
+Phase 8 — Training Capability Expansion
+10.1 Training structure
+
+Expand training to include:
+
+onboarding
+role-based training
+machine qualification
+process certification
+quality/compliance training
+refresher training
+cross-training
+re-certification
+10.2 Training enforcement
+
+Block work if:
+
+employee lacks required certification
+training is expired
+special process qualification is missing
+10.3 Skill matrix
+
+Track by employee:
+
+department
+machine
+process
+level
+trainer
+last completed date
+next due date
+10.4 Training linkage
+
+Training must connect to:
+
+role permissions
+traveler tasks
+machine usage
+project access
+quality signoff authority
+Phase 9 — Project Closing Module
+11.1 Build closing workflow
+
+Project cannot fully close until:
+
+hours reviewed
+quality issues reviewed
+late delivery causes reviewed
+lessons learned entered
+action items assigned
+11.2 Required closing sections
+
+Include:
+
+risks encountered
+strengths
+opportunities
+actions for next project
+similarities to previous projects
+supplier issues
+department bottlenecks
+training gaps
+documentation gaps
+process wins
+11.3 Risk categories
+
+Capture by:
+
+material
+supplier
+machine
+environment
+staffing
+training
+routing
+schedule
+quality
+design/change control
+project planning
+11.4 Action tracking
+
+Each closing action should include:
+
+owner
+due date
+linked department
+linked future project type
+closure status
+11.5 Knowledge reuse
+
+Use closing data to feed:
+
+future quote risk flags
+routing recommendations
+checklist improvements
+training needs
+supplier evaluations
+Phase 10 — CMMC-Capable Security Layer
+12.1 Identity and access
+
+Implement:
+
+MFA
+strong password policy
+session timeout
+device/session logging
+least-privilege access
+12.2 Data access segmentation
+
+Restrict by:
+
+project
+department
+role
+document type
+CUI sensitivity
+12.3 Secure document vault
+
+Protect:
+
+CAD
+drawings
+certs
+contracts
+customer documents
+controlled project files
+12.4 Audit logging
+
+Track:
+
+file access
+downloads
+edits
+permission changes
+record deletions
+project access attempts
+12.5 Data protection controls
+
+Add:
+
+encryption at rest
+encryption in transit
+restricted file download behavior
+watermarking if needed
+document retention rules
+backup and restore controls
+12.6 CMMC alignment roadmap
+
+Map EPOCH controls to:
+
+access control
+audit and accountability
+configuration management
+identification and authentication
+incident response
+media protection
+personnel security
+risk assessment
+system and communications protection
+system and information integrity
+Phase 11 — Supporting Operations Improvements
+13.1 Quote and project analytics
+
+Create dashboards for:
+
+quote hit rate
+estimated vs actual labor
+project profitability
+schedule adherence
+recurring risks
+rework trends
+13.2 Command center dashboard
+
+Show:
+
+blocked jobs
+projects over budget
+expired training
+time overrun requests
+late orders
+shortage risks
+open NCRs
+13.3 Notifications and escalations
+
+Automate alerts for:
+
+missing approval
+expired training
+time overrun
+blocked traveler
+risk escalation
+project closure due
+4. Recommended Build Order
+Stage 1 — Immediate Foundation
+WAD / charge code architecture
+time clock completion
+barcode-driven job charging
+traveler gates
+role permission framework
+Stage 2 — Project and Commercial Flow
+quote module
+quote-to-project conversion
+project pipeline integration with P2
+project dashboard
+Stage 3 — Capability and Compliance
+training expansion
+project closing module
+secure document vault
+audit logging expansion
+CMMC control mapping
+Stage 4 — Optimization
+analytics and reporting
+AI-assisted risk suggestions
+lessons learned reuse engine
+customer-facing or supplier-facing portals if desired
+5. Data Model Buckets to Add or Expand
+
+You will likely need tables or equivalent structures for:
+
+quotes
+quote line items
+quote assumptions/exclusions
+projects
+project stages
+WADs / charge codes
+project budgets by department
+project risk logs
+project closings
+closing actions
+lessons learned
+permission roles
+capabilities
+role-capability mappings
+training requirements by role/process/machine
+employee skill matrix
+time charge approvals
+audit events
+secure document access logs
+CUI document classifications
+6. Key Gates to Enforce
+
+These are the most important system gates:
+
+cannot start work without valid charge code
+cannot change charge code without logging it
+cannot exceed project labor budget without approval
+cannot start traveler without required material traceability
+cannot sign regulated steps without proper role and training
+cannot close project without closing review
+cannot access controlled files without authorization
+cannot bypass approvals silently
+7. Success Milestones
+Milestone 1
+
+EPOCH can create a quote, convert it into a project, create a WAD, and launch work.
+
+Milestone 2
+
+Employees can scan into work, auto-charge the correct code, and all changes are auditable.
+
+Milestone 3
+
+Traveler steps are enforced by material, training, and QC gates.
+
+Milestone 4
+
+Projects close with lessons learned, actions, and reusable risk intelligence.
+
+Milestone 5
+
+System has permission controls, secure vault behavior, and audit logs aligned for CMMC readiness.
+
+8. Final Strategic Priority
+
+If you want the smartest order, focus on this sequence:
+
+WAD → Time Clock → Gates → Quote → Project/P2 Integration → Training/Permissions → Project Closing → CMMC
+
+That order gives you:
+
+operational control first
+audit readiness second
+commercial scalability third
+security maturity fourth
+
+If you want, I can turn this next into a numbered implementation roadmap with epics, features, database tables, API routes, and UI pages.

@@ -2387,6 +2387,96 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
 });
 
 // ========================================
+// Inventory Restock Signals
+// ========================================
+
+// GET /api/inventory/restock-signals
+// Returns aggregated restock signal rows for all tracked materials (those with a reorderPoint set).
+// Rows are sorted: critical (available <= 0) first, then largest restockGap, then alphabetical part number.
+router.get('/restock-signals', async (req: Request, res: Response) => {
+  try {
+    const balances = await storage.getAllInventoryBalances();
+    const items = await storage.getAllInventoryItems();
+
+    const itemMap = new Map<string, string>();
+    for (const item of items) {
+      itemMap.set(item.agPartNumber, item.name);
+    }
+
+    // Aggregate across all locations per part number
+    const aggregated = new Map<string, {
+      agPartNumber: string;
+      materialName: string;
+      totalOnHand: number;
+      totalAllocated: number;
+      totalAvailable: number;
+      maxReorderPoint: number;
+    }>();
+
+    for (const b of balances) {
+      const existing = aggregated.get(b.agPartNumber);
+      if (existing) {
+        existing.totalOnHand += b.quantityOnHand;
+        existing.totalAllocated += b.quantityAllocated;
+        existing.totalAvailable += b.quantityAvailable;
+        if ((b.reorderPoint ?? 0) > existing.maxReorderPoint) {
+          existing.maxReorderPoint = b.reorderPoint ?? 0;
+        }
+      } else {
+        aggregated.set(b.agPartNumber, {
+          agPartNumber: b.agPartNumber,
+          materialName: itemMap.get(b.agPartNumber) ?? b.agPartNumber,
+          totalOnHand: b.quantityOnHand,
+          totalAllocated: b.quantityAllocated,
+          totalAvailable: b.quantityAvailable,
+          maxReorderPoint: b.reorderPoint ?? 0,
+        });
+      }
+    }
+
+    // Build signal rows — include all parts that have a reorderPoint configured
+    const rows = Array.from(aggregated.values())
+      .filter((p) => p.maxReorderPoint > 0)
+      .map((p) => {
+        const restockGap = Math.max(0, p.maxReorderPoint - p.totalAvailable);
+        let signalStatus: 'critical' | 'low' | 'healthy';
+        if (p.totalAvailable <= 0) {
+          signalStatus = 'critical';
+        } else if (p.totalAvailable < p.maxReorderPoint) {
+          signalStatus = 'low';
+        } else {
+          signalStatus = 'healthy';
+        }
+        return {
+          agPartNumber: p.agPartNumber,
+          materialName: p.materialName,
+          quantityOnHand: p.totalOnHand,
+          quantityAllocated: p.totalAllocated,
+          quantityAvailable: p.totalAvailable,
+          reorderPoint: p.maxReorderPoint,
+          restockGap,
+          signalStatus,
+        };
+      });
+
+    // Sort: critical → largest gap → alphabetical
+    rows.sort((a, b) => {
+      const statusOrder = { critical: 0, low: 1, healthy: 2 };
+      if (statusOrder[a.signalStatus] !== statusOrder[b.signalStatus]) {
+        return statusOrder[a.signalStatus] - statusOrder[b.signalStatus];
+      }
+      if (b.restockGap !== a.restockGap) return b.restockGap - a.restockGap;
+      return a.agPartNumber.localeCompare(b.agPartNumber);
+    });
+
+    res.json({ rows });
+  } catch (error) {
+    console.error('Get restock signals error:', error);
+    res.status(500).json({ error: 'Failed to fetch restock signals' });
+  }
+});
+
+// ========================================
 // Enhanced Inventory MRP - Inventory Balances Routes
 // ========================================
 

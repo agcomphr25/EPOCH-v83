@@ -282,6 +282,7 @@ import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
 import MaterialInventoryPage from './pages/MaterialInventoryPage';
+import InventoryRestockSignalsPage from './pages/InventoryRestockSignalsPage';
 import InventoryReconciliationPage from './pages/InventoryReconciliationPage';
 import CycleCountPage from './pages/CycleCountPage';
 import FilteredOrdersReport from './pages/FilteredOrdersReport';
@@ -952,6 +953,7 @@ function App() {
                   {/* Material Traceability System - AS9100 compliant material tracking */}
                   <Route path="/material-receiving" component={MaterialReceivingPage} />
                   <Route path="/material-inventory" component={MaterialInventoryPage} />
+                  <Route path="/inventory/restock-signals" component={InventoryRestockSignalsPage} />
                   <Route path="/inventory/cycle-count" component={CycleCountPage} />
                   <Route
                     path="/master-document-register"

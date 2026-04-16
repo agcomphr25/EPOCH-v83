@@ -149,6 +149,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/travelers',
   '/material-receiving',
   '/material-inventory',
+  '/inventory/restock-signals',
   '/inventory/cycle-count',
   '/filtered-orders-report',
   '/urgent-orders-report',

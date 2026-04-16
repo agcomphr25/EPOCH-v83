@@ -753,6 +753,12 @@ export default function Navigation() {
       description: 'Manage material lots with full traceability',
     },
     {
+      path: '/inventory/restock-signals',
+      label: 'Restock Signals',
+      icon: TrendingDown,
+      description: 'See which materials need purchasing attention',
+    },
+    {
       path: '/travelers',
       label: 'Traveler Management',
       icon: ClipboardList,

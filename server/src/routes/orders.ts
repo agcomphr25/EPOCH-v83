@@ -640,6 +640,19 @@ router.post('/finalized', async (req: Request, res: Response) => {
     // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
     const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
     
+    // Guard against double-submissions: if this orderId already exists, return a clear 409
+    const existingOrder = await db
+      .select({ orderId: allOrders.orderId })
+      .from(allOrders)
+      .where(eq(allOrders.orderId, orderData.orderId))
+      .limit(1);
+    if (existingOrder.length > 0) {
+      return res.status(409).json({
+        error: 'ORDER_ALREADY_FINALIZED',
+        message: 'This order has already been submitted. Refresh the page to see it in the orders list.',
+      });
+    }
+
     const order = await storage.createFinalizedOrder({
       ...orderData,
       dueDate: orderData.dueDate ? normalizeDueDateForStorage(orderData.dueDate) : orderData.dueDate,

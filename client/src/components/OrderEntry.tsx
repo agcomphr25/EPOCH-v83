@@ -64,6 +64,7 @@ import {
   ChevronsUpDown,
   Paperclip,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -2384,11 +2385,30 @@ export default function OrderEntry() {
 
     // Proceed with the pending submission
     if (pendingOrderSubmit) {
-      await executeOrderSubmit(pendingOrderSubmit.saveAsDraft, {
-        qdSameSideConfirmed: true,
-        qdSameSideConfirmedBy: confirmedBy,
-        qdSameSideConfirmedAt: confirmedAt,
-      });
+      setIsSubmitting(true);
+      try {
+        await executeOrderSubmit(pendingOrderSubmit.saveAsDraft, {
+          qdSameSideConfirmed: true,
+          qdSameSideConfirmedBy: confirmedBy,
+          qdSameSideConfirmedAt: confirmedAt,
+        });
+      } catch (error: any) {
+        console.error('Submit error (QD confirmed):', error);
+        if (error?.status === 409 || error?.responseData?.error === 'ORDER_ALREADY_FINALIZED') {
+          toast({
+            title: 'Order Already Submitted',
+            description: error.message || 'This order has already been submitted. Refresh the page to see it in the orders list.',
+          });
+        } else {
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to save order',
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
     }
     setPendingOrderSubmit(null);
   };
@@ -2407,6 +2427,8 @@ export default function OrderEntry() {
     if (e) {
       e.preventDefault();
     }
+
+    if (isSubmitting) return;
 
     setErrors({});
     setIsSubmitting(true);
@@ -2491,11 +2513,18 @@ export default function OrderEntry() {
       });
     } catch (error: any) {
       console.error('Submit error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to save order',
-        variant: 'destructive',
-      });
+      if (error?.status === 409 || error?.responseData?.error === 'ORDER_ALREADY_FINALIZED') {
+        toast({
+          title: 'Order Already Submitted',
+          description: error.message || 'This order has already been submitted. Refresh the page to see it in the orders list.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to save order',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -2741,11 +2770,18 @@ export default function OrderEntry() {
       }
     } catch (error: any) {
       console.error('Submit error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to save order',
-        variant: 'destructive',
-      });
+      if (error?.status === 409 || error?.responseData?.error === 'ORDER_ALREADY_FINALIZED') {
+        toast({
+          title: 'Order Already Submitted',
+          description: error.message || 'This order has already been submitted. Refresh the page to see it in the orders list.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to save order',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -6555,11 +6591,16 @@ export default function OrderEntry() {
                   disabled={isSubmitting}
                   onClick={() => handleSubmit(undefined, false)}
                 >
-                  {isSubmitting
-                    ? 'Processing...'
-                    : isEditMode
-                      ? 'Update Order'
-                      : 'Create Order'}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : isEditMode ? (
+                    'Update Order'
+                  ) : (
+                    'Create Order'
+                  )}
                 </Button>
               </div>
             </CardContent>

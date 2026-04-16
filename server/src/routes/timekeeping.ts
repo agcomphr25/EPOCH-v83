@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { storage } from '../../storage';
 import { pool } from '../../db';
-import { pairPunches, sumHours } from '../services/timekeepingPairing';
+import { pairPunches, sumHours, exportApprovedPunchesForGusto } from '../services/timekeepingPairing';
 import { getPayPeriod } from '../services/payPeriod';
 import { buildJobIntervals } from '../services/jobLabor';
 
@@ -1010,6 +1010,61 @@ router.get('/admin/job-allocations/:jobId', authenticateToken, requireRole('ADMI
     res.status(500).json({ error: 'Failed to fetch job allocations' });
   }
 });
+
+// GET /api/timekeeping/admin/export/gusto?periodStart=YYYY-MM-DD&periodEnd=YYYY-MM-DD
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Verify a YYYY-MM-DD string represents a real calendar date (round-trip check). */
+function isValidCalendarDate(s: string): boolean {
+  const [year, month, day] = s.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+function csvField(value: string | number): string {
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+router.get(
+  '/admin/export/gusto',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const { periodStart, periodEnd } = req.query as Record<string, string>;
+
+      if (!periodStart || !DATE_REGEX.test(periodStart) || !isValidCalendarDate(periodStart)) {
+        return res.status(400).json({ error: 'periodStart must be a valid date in YYYY-MM-DD format' });
+      }
+      if (!periodEnd || !DATE_REGEX.test(periodEnd) || !isValidCalendarDate(periodEnd)) {
+        return res.status(400).json({ error: 'periodEnd must be a valid date in YYYY-MM-DD format' });
+      }
+      if (periodStart > periodEnd) {
+        return res.status(400).json({ error: 'periodStart must not be after periodEnd' });
+      }
+
+      const exportRows = await exportApprovedPunchesForGusto(pool, periodStart, periodEnd);
+
+      const header = 'first_name,last_name,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours';
+      const csvRows = exportRows.map((r) =>
+        [r.first_name, r.last_name, r.regular_hours, r.overtime_hours, r.double_overtime_hours, r.sick_hours, r.vacation_hours]
+          .map(csvField)
+          .join(',')
+      );
+      const csv = [header, ...csvRows].join('\n');
+      const filename = `gusto-export-${periodStart}-to-${periodEnd}.csv`;
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (err: any) {
+      console.error('[Timekeeping] Gusto export error:', err);
+      res.status(500).json({ error: 'Failed to generate Gusto export' });
+    }
+  }
+);
 
 export default router;
 

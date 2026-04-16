@@ -1,0 +1,247 @@
+🚀 PHASE 1 API ROUTES
+
+We’ll break this into clean modules:
+
+/api/charge-codes
+/api/labor-authorizations
+/api/labor-requests
+/api/time-clock
+/api/work-sessions
+/api/timesheets
+🧱 1. CHARGE CODES ROUTES
+📁 server/routes/chargeCodes.ts
+import { Router } from "express";
+import { z } from "zod";
+import { storage } from "../storage";
+
+const router = Router();
+
+const createSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  chargeType: z.enum(["DIRECT","INDIRECT","UNALLOWABLE"]),
+  projectId: z.string().optional(),
+  workOrderId: z.string().optional(),
+  department: z.string().optional(),
+});
+
+router.post("/", async (req, res) => {
+  const data = createSchema.parse(req.body);
+
+  const cc = await storage.createChargeCode(data);
+  res.json(cc);
+});
+
+router.get("/", async (_req, res) => {
+  const list = await storage.getChargeCodes();
+  res.json(list);
+});
+
+export default router;
+🧱 2. LABOR AUTHORIZATIONS
+📁 server/routes/laborAuthorizations.ts
+const schema = z.object({
+  projectId: z.string(),
+  workOrderId: z.string().optional(),
+  travelerId: z.string().optional(),
+  chargeCodeId: z.string(),
+  department: z.string().optional(),
+  authorizedHours: z.number(),
+  hardStop: z.boolean().default(true),
+});
+
+router.post("/", async (req, res) => {
+  const data = schema.parse(req.body);
+
+  const auth = await storage.createLaborAuthorization(data);
+  res.json(auth);
+});
+
+router.get("/project/:projectId", async (req, res) => {
+  const list = await storage.getLaborAuthByProject(req.params.projectId);
+  res.json(list);
+});
+🧱 3. EXTRA HOURS REQUESTS
+📁 server/routes/laborRequests.ts
+const requestSchema = z.object({
+  laborAuthorizationId: z.string(),
+  requestedHours: z.number(),
+  justification: z.string(),
+});
+
+router.post("/", async (req, res) => {
+  const data = requestSchema.parse(req.body);
+
+  const reqRecord = await storage.createLaborRequest(data);
+  res.json(reqRecord);
+});
+
+router.post("/:id/approve", async (req, res) => {
+  const { approvedHours } = req.body;
+
+  const result = await storage.approveLaborRequest(
+    req.params.id,
+    approvedHours,
+    req.user.id
+  );
+
+  res.json(result);
+});
+
+router.post("/:id/deny", async (req, res) => {
+  const { reason } = req.body;
+
+  const result = await storage.denyLaborRequest(
+    req.params.id,
+    reason,
+    req.user.id
+  );
+
+  res.json(result);
+});
+🧱 4. TIME CLOCK (PUNCHES)
+📁 server/routes/timeClock.ts
+const punchSchema = z.object({
+  employeeId: z.string(),
+  punchType: z.enum(["IN","OUT","BREAK_START","BREAK_END"]),
+});
+
+router.post("/punch", async (req, res) => {
+  const data = punchSchema.parse(req.body);
+
+  const punch = await storage.createPunch(data);
+  res.json(punch);
+});
+🧱 5. WORK SESSIONS (CORE ENGINE)
+📁 server/routes/workSessions.ts
+🔹 START SESSION (AUTO CHARGE CODE + CHECK HOURS)
+router.post("/start", async (req, res) => {
+  const { employeeId, travelerId, workOrderId } = req.body;
+
+  // 🔥 Resolve context
+  const context = await storage.resolveWorkContext({
+    travelerId,
+    workOrderId,
+  });
+
+  const chargeCodeId = context.chargeCodeId;
+
+  // 🔥 Check labor authorization
+  const auth = await storage.getLaborAuthorization(chargeCodeId, context);
+
+  const remaining =
+    auth.authorizedHours +
+    auth.approvedExtraHours -
+    auth.consumedHours;
+
+  if (remaining <= 0 && auth.hardStop) {
+    return res.status(400).json({
+      error: "NO_HOURS_REMAINING",
+      message: "Request additional hours",
+    });
+  }
+
+  const session = await storage.startWorkSession({
+    employeeId,
+    ...context,
+    chargeCodeId,
+    startedAt: new Date(),
+  });
+
+  res.json(session);
+});
+🔹 STOP SESSION (UPDATE HOURS)
+router.post("/:id/stop", async (req, res) => {
+  const session = await storage.getSession(req.params.id);
+
+  const endedAt = new Date();
+
+  const hours =
+    (endedAt.getTime() - session.startedAt.getTime()) / 3600000;
+
+  await storage.stopSession(req.params.id, endedAt, hours);
+
+  // 🔥 Update consumed hours
+  await storage.incrementConsumedHours(
+    session.chargeCodeId,
+    session.projectId,
+    hours
+  );
+
+  res.json({ success: true });
+});
+🧱 6. TIMESHEETS (CERTIFICATION)
+📁 server/routes/timesheets.ts
+🔹 GET DAILY TIMESHEET
+router.get("/:employeeId/:date", async (req, res) => {
+  const ts = await storage.getTimesheet(
+    req.params.employeeId,
+    req.params.date
+  );
+
+  res.json(ts);
+});
+🔹 CERTIFY
+router.post("/:id/certify", async (req, res) => {
+  const ts = await storage.certifyTimesheet(
+    req.params.id,
+    req.user.id
+  );
+
+  res.json(ts);
+});
+🔹 APPROVE
+router.post("/:id/approve", async (req, res) => {
+  const ts = await storage.approveTimesheet(
+    req.params.id,
+    req.user.id
+  );
+
+  res.json(ts);
+});
+🧠 REQUIRED STORAGE METHODS
+
+You will need to implement:
+
+createChargeCode()
+getChargeCodes()
+
+createLaborAuthorization()
+getLaborAuthByProject()
+getLaborAuthorization()
+
+createLaborRequest()
+approveLaborRequest()
+denyLaborRequest()
+
+createPunch()
+
+resolveWorkContext()
+
+startWorkSession()
+stopSession()
+getSession()
+
+incrementConsumedHours()
+
+getTimesheet()
+certifyTimesheet()
+approveTimesheet()
+🔥 KEY LOGIC YOU NOW HAVE
+✅ Auto job code switching
+
+Triggered from:
+
+traveler
+work order
+✅ Hard stop on hours
+prevents uncontrolled labor overrun
+✅ Approval workflow
+controlled extension of hours
+✅ Real-time labor tracking
+session-based (accurate)
+✅ DCAA-ready structure
+certification
+approvals
+traceability

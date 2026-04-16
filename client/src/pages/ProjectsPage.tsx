@@ -11,8 +11,9 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid, Hash, ExternalLink, X } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid, Hash, ExternalLink, X, BarChart2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProjectStep {
   id: string;
@@ -109,10 +110,12 @@ const STEP_STATUS_COLORS: Record<string, string> = {
 
 export default function ProjectsPage() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('active_only');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [generatingFeedbackFor, setGeneratingFeedbackFor] = useState<string | null>(null);
 
   // Serial number search
   const [serialRawInput, setSerialRawInput] = useState('');
@@ -202,6 +205,23 @@ export default function ProjectsPage() {
         projectManagerId: '',
         reminderDays: 3,
       });
+    },
+  });
+
+  const generateFeedbackMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      setGeneratingFeedbackFor(projectId);
+      return apiRequest(`/api/projects/${projectId}/quote-feedback/generate`, { method: 'POST' });
+    },
+    onSuccess: (_data, projectId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'quote-feedback'] });
+      toast({ title: 'Quote feedback generated', description: 'Feedback has been calculated and saved.' });
+      setGeneratingFeedbackFor(null);
+    },
+    onError: () => {
+      toast({ title: 'Failed to generate feedback', description: 'Check that the project has quote and labor data.', variant: 'destructive' });
+      setGeneratingFeedbackFor(null);
     },
   });
 
@@ -480,7 +500,25 @@ export default function ProjectsPage() {
                   ) : (
                     <div />
                   )}
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex items-center gap-2">
+                    {project.status !== 'active' && project.status !== 'on_hold' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={generatingFeedbackFor === project.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateFeedbackMutation.mutate(project.id);
+                        }}
+                        data-testid={`btn-generate-feedback-${project.projectCode}`}
+                      >
+                        <BarChart2 className={`h-3.5 w-3.5 mr-1 ${generatingFeedbackFor === project.id ? 'animate-pulse' : ''}`} />
+                        {generatingFeedbackFor === project.id ? 'Generating…' : 'Generate Feedback'}
+                      </Button>
+                    )}
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </div>
                 </div>
               </CardContent>
             </Card>

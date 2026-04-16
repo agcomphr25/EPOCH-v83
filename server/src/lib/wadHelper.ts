@@ -10,6 +10,7 @@ export async function ensureProjectHasWAD(
   options: {
     projectName?: string;
     totalBudgetHours?: string | null;
+    partNumber?: string | null;
   } = {}
 ): Promise<void> {
   const existing = await storage.getWorkOrdersByProject(projectId);
@@ -22,7 +23,7 @@ export async function ensureProjectHasWAD(
   await storage.createProductionWorkOrder({
     workOrderNumber,
     projectId,
-    partNumber: 'TBD',
+    partNumber: options.partNumber || 'TBD',
     quantity: 1,
     status: 'PLANNED',
     description: options.projectName ? `Auto-created WAD for ${options.projectName}` : null,

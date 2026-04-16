@@ -316,8 +316,32 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
           console.log(`[WAD] Auto-created project ${project.projectCode} from accepted quote ${quote.quoteNumber}`);
         }
 
+        const lineItems = await db
+          .select()
+          .from(quoteLineItems)
+          .where(eq(quoteLineItems.quoteId, quoteId))
+          .orderBy(quoteLineItems.lineNumber);
+
+        const itemWithPartNumber = lineItems.find(
+          (li) => li.agPartNumber && li.agPartNumber.trim() !== ''
+        );
+
+        let firstPartNumber: string | null = itemWithPartNumber?.agPartNumber?.trim() ?? null;
+
+        if (!firstPartNumber && lineItems.length > 0) {
+          const firstDescription = lineItems[0].description?.trim() ?? '';
+          if (firstDescription) {
+            firstPartNumber = firstDescription
+              .replace(/[^a-zA-Z0-9\-_/. ]/g, '')
+              .trim()
+              .slice(0, 40)
+              .trim() || null;
+          }
+        }
+
         await ensureProjectHasWAD(projectId, {
           projectName: `${quote.customerName} — ${quote.quoteNumber}`,
+          partNumber: firstPartNumber,
         });
       } catch (err) {
         console.error('[WAD] Failed to auto-create project/WAD on quote acceptance:', err);

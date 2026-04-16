@@ -585,7 +585,15 @@ export default function AllOrdersPage() {
   const filteredOrders = React.useMemo(() => {
     if (!allOrders) return [];
 
-    return allOrders.filter((order) => {
+    // Deduplicate by orderId, keeping the first occurrence
+    const seen = new Set<string>();
+    const deduped = allOrders.filter((order) => {
+      if (!order.orderId || seen.has(order.orderId)) return false;
+      seen.add(order.orderId);
+      return true;
+    });
+
+    return deduped.filter((order) => {
       // Exclude cancelled orders from main list
       if (order.isCancelled || order.status === 'CANCELLED') {
         return false;

@@ -2,12 +2,17 @@
 -- Adds a unique constraint on all_orders.order_id, deduplicating first.
 -- Idempotent — safe to re-run.
 
--- Step 1: Remove duplicate rows, keeping the earliest record (lowest id) per order_id
-DELETE FROM all_orders
-WHERE id NOT IN (
-  SELECT MIN(id)
+-- Step 1: Remove duplicate rows using a CTE (keeps the latest record per order_id,
+-- i.e. the highest id). Uses ROW_NUMBER to avoid the NOT IN + NULL pitfall.
+WITH ranked AS (
+  SELECT id,
+         ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY id DESC) AS rn
   FROM all_orders
-  GROUP BY order_id
+  WHERE order_id IS NOT NULL
+)
+DELETE FROM all_orders
+WHERE id IN (
+  SELECT id FROM ranked WHERE rn > 1
 );
 
 -- Step 2: Add unique constraint on order_id (idempotent via IF NOT EXISTS on index)

@@ -670,7 +670,6 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
     const createdOrders = [];
 
     for (let i = 1; i <= poItem.quantity; i++) {
-      // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
       const orderQuery = `
         INSERT INTO all_orders (
           order_id,
@@ -687,6 +686,7 @@ router.post('/po-to-layup', async (req: Request, res: Response) => {
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
         )
+        ON CONFLICT (order_id) DO NOTHING
         RETURNING order_id, model_id, current_department
       `;
 
@@ -836,7 +836,6 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
 
       // Create individual orders for this week's quantity
       for (let i = 1; i <= unitsThisWeek; i++) {
-        // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
         const orderQuery = `
           INSERT INTO all_orders (
             order_id,
@@ -853,6 +852,7 @@ router.post('/po-weeks-to-layup', async (req: Request, res: Response) => {
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW()
           )
+          ON CONFLICT (order_id) DO NOTHING
           RETURNING order_id, model_id, current_department
         `;
 
@@ -1054,7 +1054,6 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
           const orderId = await storage.generateNextOrderId();
 
           // Create order in all_orders table
-          // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
           const orderQuery = `
             INSERT INTO all_orders (
               order_id,
@@ -1073,6 +1072,7 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
               po_item_id,
               features
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            ON CONFLICT (order_id) DO NOTHING
             RETURNING *
           `;
 
@@ -1099,32 +1099,38 @@ router.post('/move-selected-po-items', async (req: Request, res: Response) => {
             }),
           ]);
 
-          const createdOrder = orderResult.rows[0];
-          createdOrders.push(createdOrder);
-          totalItemsMoved++;
+          if (orderResult.rows.length > 0) {
+            const createdOrder = orderResult.rows[0];
+            createdOrders.push(createdOrder);
+            totalItemsMoved++;
 
-          console.log(
-            `✅ Created order ${orderId} for PO item ${item.itemname} (${i}/${quantity})`
-          );
+            console.log(
+              `✅ Created order ${orderId} for PO item ${item.itemname} (${i}/${quantity})`
+            );
 
-          await pool.query(
-            `INSERT INTO admin_audit_log
-               (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
-             VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
-            [
-              orderId,
-              'ORDER_CREATED',
-              'Order Created',
-              JSON.stringify(null),
-              JSON.stringify(orderResult[0] || { order_id: orderId, item: item.itemname }),
-              (req as any).user?.username || 'SYSTEM',
-              (req as any).user?.role || 'SYSTEM',
-              'ORDER_CREATE',
-              `Order created from PO item: ${item.itemname}`,
-              req.ip ?? null,
-              req.headers['user-agent'] ?? null,
-            ]
-          );
+            await pool.query(
+              `INSERT INTO admin_audit_log
+                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+              [
+                orderId,
+                'ORDER_CREATED',
+                'Order Created',
+                JSON.stringify(null),
+                JSON.stringify(createdOrder),
+                (req as any).user?.username || 'SYSTEM',
+                (req as any).user?.role || 'SYSTEM',
+                'ORDER_CREATE',
+                `Order created from PO item: ${item.itemname}`,
+                req.ip ?? null,
+                req.headers['user-agent'] ?? null,
+              ]
+            );
+          } else {
+            console.warn(
+              `⚠️ Order ${orderId} already exists in all_orders — skipping duplicate insert for PO item ${item.itemname} (${i}/${quantity})`
+            );
+          }
         } catch (orderError) {
           console.error(
             `❌ Failed to create order for ${item.itemname} (unit ${i}):`,

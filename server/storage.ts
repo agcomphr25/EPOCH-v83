@@ -18674,14 +18674,32 @@ export class DatabaseStorage implements IStorage {
       finalizedBy: finalizedBy || 'System',
     };
 
-    // Insert into all_orders table
-    // TEMPORARY FIX: Removed ON CONFLICT - table lacks unique constraint on order_id
-    const result = await db
+    // Insert into all_orders using ON CONFLICT DO NOTHING so the operation is fully
+    // atomic and race-safe. If a concurrent request already inserted this order_id
+    // (or a previous finalize call slipped through), the INSERT is a no-op and we
+    // fall back to fetching the existing row.
+    let finalizedOrder: AllOrder;
+
+    const insertResult = await db
       .insert(allOrders)
       .values(finalizedOrderData)
+      .onConflictDoNothing()
       .returning();
-    
-    const finalizedOrder = result[0];
+
+    if (insertResult.length === 0) {
+      // Conflict: row already exists — fetch and return it
+      console.warn(
+        `⚠️ FINALIZE SKIPPED: Order ${orderId} already exists in all_orders — returning existing row`
+      );
+      const existing = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderId))
+        .limit(1);
+      finalizedOrder = existing[0];
+    } else {
+      finalizedOrder = insertResult[0];
+    }
 
     // Remove from order_drafts table
     await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));

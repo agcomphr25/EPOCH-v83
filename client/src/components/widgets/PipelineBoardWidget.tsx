@@ -13,6 +13,7 @@ interface PipelineProject {
   status: string;
   targetShipDate: string | null;
   stageUpdatedAt: string | null;
+  closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
 }
 
 const PIPELINE_STAGES = [
@@ -54,12 +55,25 @@ function getDaysInStage(stageUpdatedAt: string | null): number {
 function ProjectCard({ project, onNavigate }: { project: PipelineProject; onNavigate: (path: string) => void }) {
   const daysInStage = getDaysInStage(project.stageUpdatedAt);
 
+  const closingDot =
+    project.closingStatus === 'COMPLETE'
+      ? 'bg-green-500'
+      : project.closingStatus === 'INCOMPLETE'
+      ? 'bg-yellow-400'
+      : 'bg-red-500';
+
   return (
     <div
       className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 cursor-pointer select-none hover:shadow-md hover:-translate-y-px hover:border-primary/40 hover:bg-primary/[0.02] active:scale-[0.98] active:translate-y-0 transition-all duration-150 ease-out"
       onClick={() => onNavigate(`/projects/${project.projectId}`)}
     >
-      <p className="font-semibold text-xs truncate text-gray-900 dark:text-gray-100">{project.projectCode}</p>
+      <div className="flex items-center gap-1.5">
+        <span
+          className={`flex-shrink-0 h-2 w-2 rounded-full ${closingDot}`}
+          title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
+        />
+        <p className="font-semibold text-xs truncate text-gray-900 dark:text-gray-100">{project.projectCode}</p>
+      </div>
       <p className="text-[11px] text-muted-foreground truncate">{project.projectName}</p>
       <div className="flex items-center justify-between mt-1 text-[11px]">
         {project.targetShipDate ? (

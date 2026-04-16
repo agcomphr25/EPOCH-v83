@@ -187,9 +187,10 @@ router.get('/pipeline', async (req, res) => {
 
     const results = await Promise.all(
       pipelineProjects.map(async (project) => {
-        const customer = project.customerId
-          ? await storage.getP2CustomerByCustomerId(project.customerId)
-          : null;
+        const [customer, closing] = await Promise.all([
+          project.customerId ? storage.getP2CustomerByCustomerId(project.customerId) : Promise.resolve(null),
+          storage.getProjectClosingByProjectId(project.id),
+        ]);
 
         const serialCounts = project.poId ? (serialCountsByPoId[project.poId] ?? { total: 0, completed: 0 }) : { total: 0, completed: 0 };
 
@@ -205,6 +206,7 @@ router.get('/pipeline', async (req, res) => {
           poId: project.poId,
           completedSerials: serialCounts.completed,
           totalSerials: serialCounts.total,
+          closingStatus: deriveClosingStatus(closing),
         };
       })
     );

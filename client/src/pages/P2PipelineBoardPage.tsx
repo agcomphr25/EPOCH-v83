@@ -40,6 +40,7 @@ interface PipelineProject {
   poId: number | null;
   completedSerials: number;
   totalSerials: number;
+  closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
 }
 
 const PIPELINE_STAGES = [
@@ -149,8 +150,21 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="truncate">{project.customerName}</span>
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs text-muted-foreground truncate">{project.customerName}</span>
+            <Badge
+              className={[
+                'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
+                project.closingStatus === 'COMPLETE'
+                  ? 'bg-green-100 text-green-800'
+                  : project.closingStatus === 'INCOMPLETE'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : 'bg-red-100 text-red-800',
+              ].join(' ')}
+              title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
+            >
+              {project.closingStatus ?? 'MISSING'}
+            </Badge>
           </div>
           {project.totalSerials > 0 && (
             <div className="space-y-1">
@@ -223,7 +237,21 @@ function OverlayCard({ project }: { project: PipelineProject }) {
           <p className="font-semibold text-sm">{project.projectCode}</p>
           <p className="text-xs text-muted-foreground truncate">{project.projectName}</p>
         </div>
-        <div className="text-xs text-muted-foreground truncate">{project.customerName}</div>
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="text-xs text-muted-foreground truncate">{project.customerName}</span>
+          <Badge
+            className={[
+              'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
+              project.closingStatus === 'COMPLETE'
+                ? 'bg-green-100 text-green-800'
+                : project.closingStatus === 'INCOMPLETE'
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'bg-red-100 text-red-800',
+            ].join(' ')}
+          >
+            {project.closingStatus ?? 'MISSING'}
+          </Badge>
+        </div>
         <div className="flex items-center justify-between text-xs">
           {project.targetShipDate && (
             <div className="flex items-center gap-1 text-muted-foreground">

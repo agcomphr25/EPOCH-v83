@@ -43,6 +43,7 @@ interface Project {
   currentStage?: string;
   stageUpdatedAt?: string;
   poId?: number;
+  closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
 }
 
 interface P2Customer {
@@ -114,6 +115,7 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('active_only');
+  const [closingFilter, setClosingFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [generatingFeedbackFor, setGeneratingFeedbackFor] = useState<string | null>(null);
 
@@ -236,8 +238,9 @@ export default function ProjectsPage() {
       || (statusFilter === 'active_only' && project.status !== 'cancelled')
       || project.status === statusFilter
       || project.currentStage === statusFilter;
+    const matchesClosing = closingFilter === 'all' || (project.closingStatus ?? 'MISSING') === closingFilter;
     
-    return matchesSearch && matchesCustomer && matchesStatus;
+    return matchesSearch && matchesCustomer && matchesStatus && matchesClosing;
   });
 
   const getProgress = (steps: ProjectStep[]) => {
@@ -387,6 +390,17 @@ export default function ProjectsPage() {
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={closingFilter} onValueChange={setClosingFilter}>
+          <SelectTrigger className="w-[160px]" data-testid="select-closing-filter">
+            <SelectValue placeholder="Closing Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Closing</SelectItem>
+            <SelectItem value="MISSING">Missing</SelectItem>
+            <SelectItem value="INCOMPLETE">Incomplete</SelectItem>
+            <SelectItem value="COMPLETE">Complete</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -409,11 +423,11 @@ export default function ProjectsPage() {
           <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No projects found</h3>
           <p className="text-muted-foreground mb-4">
-            {searchQuery || customerFilter !== 'all' || statusFilter !== 'all'
+            {searchQuery || customerFilter !== 'all' || statusFilter !== 'all' || closingFilter !== 'all'
               ? 'Try adjusting your search or filters'
               : 'Create your first project to get started'}
           </p>
-          {!searchQuery && customerFilter === 'all' && statusFilter === 'all' && (
+          {!searchQuery && customerFilter === 'all' && statusFilter === 'all' && closingFilter === 'all' && (
             <Button onClick={() => setIsCreateDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create Project
@@ -446,6 +460,18 @@ export default function ProjectsPage() {
                         {STAGE_LABELS[project.currentStage] || project.currentStage}
                       </Badge>
                     )}
+                    <Badge
+                      className={
+                        project.closingStatus === 'COMPLETE'
+                          ? 'bg-green-100 text-green-800 text-xs'
+                          : project.closingStatus === 'INCOMPLETE'
+                          ? 'bg-yellow-100 text-yellow-800 text-xs'
+                          : 'bg-red-100 text-red-800 text-xs'
+                      }
+                      title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
+                    >
+                      Closing: {project.closingStatus ?? 'MISSING'}
+                    </Badge>
                   </div>
                 </div>
               </CardHeader>

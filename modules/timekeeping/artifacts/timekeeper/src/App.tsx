@@ -26,6 +26,7 @@ import AdminSettings from "@/pages/admin/settings/index";
 import AdminLaborChargeCodes from "@/pages/admin/labor-charge-codes/index";
 import AdminLaborAuthorizations from "@/pages/admin/labor-authorizations/index";
 import AdminLaborAuthorizationRequests from "@/pages/admin/labor-authorization-requests/index";
+import AdminLaborTimesheets from "@/pages/admin/labor-timesheets/index";
 import EmployeeLaborSessions from "@/pages/employee/labor-sessions";
 import EmployeeLaborTimesheets from "@/pages/employee/labor-timesheets";
 
@@ -102,6 +103,9 @@ function Router() {
       </Route>
       <Route path="/admin/labor-authorization-requests">
         <AdminGuard><AdminLaborAuthorizationRequests /></AdminGuard>
+      </Route>
+      <Route path="/admin/labor-timesheets">
+        <AdminGuard><AdminLaborTimesheets /></AdminGuard>
       </Route>
 
       <Route path="/employee/:id/labor-sessions">

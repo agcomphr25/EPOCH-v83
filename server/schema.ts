@@ -1793,7 +1793,23 @@ export const timeClockEntries = pgTable('time_clock_entries', {
   operation: text('operation'),
   chargeCode: text('charge_code'),
   approvalStatus: text('approval_status').default('AUTO'),
+  laborApprovalId: integer('labor_approval_id').references((): AnyPgColumn => laborApprovals.id),
 });
+
+export const laborApprovals = pgTable('labor_approvals', {
+  id: serial('id').primaryKey(),
+  productionWorkOrderId: uuid('production_work_order_id').notNull(),
+  employeeId: text('employee_id').notNull(),
+  approvedBy: text('approved_by').notNull(),
+  department: text('department'),
+  reason: text('reason').notNull(),
+  approvedAt: timestamp('approved_at').defaultNow(),
+  hoursAtApproval: numeric('hours_at_approval'),
+});
+
+export const insertLaborApprovalSchema = createInsertSchema(laborApprovals).omit({ id: true, approvedAt: true });
+export type LaborApproval = typeof laborApprovals.$inferSelect;
+export type InsertLaborApproval = z.infer<typeof insertLaborApprovalSchema>;
 
 export const checklistItems = pgTable('checklist_items', {
   id: serial('id').primaryKey(),

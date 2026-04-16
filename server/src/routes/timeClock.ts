@@ -12,6 +12,19 @@ import {
 } from '../services/connectorHealthService';
 import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
 import { storage } from '../../storage';
+import { evaluateWorkOrderLaborStatus, type WorkOrderLaborStatusResult } from '../helpers/laborBudgetHelper';
+
+function laborBudgetConsumptionLabel(laborStatus: WorkOrderLaborStatusResult): string {
+  const deptPct = laborStatus.departmentPercentUsed;
+  const totalPct = laborStatus.percentUsed;
+  if (deptPct != null && totalPct != null && deptPct > totalPct) {
+    return `${deptPct}% of department budget consumed`;
+  }
+  if (totalPct != null) {
+    return `${totalPct}% of total budget consumed`;
+  }
+  return 'over budget';
+}
 
 const VALID_EVENT_TYPES = [
   'TIME_PUNCH_IN',
@@ -655,7 +668,7 @@ export function registerTimeClockRoutes(app: Express) {
 
   app.post('/api/time-clock/clock-in/traveler', async (req: Request, res: Response) => {
     try {
-      const { scanValue, employeeId } = req.body;
+      const { scanValue, employeeId, laborApprovalId } = req.body;
 
       if (!scanValue || typeof scanValue !== 'string' || !scanValue.trim()) {
         return res.status(400).json({
@@ -670,6 +683,11 @@ export function registerTimeClockRoutes(app: Express) {
           details: 'employeeId is required and must be a non-empty string',
         });
       }
+
+      const parsedApprovalId: number | null =
+        laborApprovalId != null && !isNaN(parseInt(String(laborApprovalId), 10))
+          ? parseInt(String(laborApprovalId), 10)
+          : null;
 
       const result = await resolveTravelerBarcode(scanValue);
 
@@ -693,8 +711,75 @@ export function registerTimeClockRoutes(app: Express) {
         });
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      let validatedApprovalId: number | null = null;
 
+      if (context.wadId) {
+        const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
+
+        if (laborStatus.status === 'BLOCKED') {
+          if (parsedApprovalId == null) {
+            return res.status(403).json({
+              error: 'LABOR_BUDGET_BLOCKED',
+              message: `Work order has exhausted its labor budget (${laborBudgetConsumptionLabel(laborStatus)}). A supervisor approval is required to proceed.`,
+              laborStatus,
+              approvalEndpoint: `/api/work-orders/${context.wadId}/approve-overrun`,
+            });
+          }
+          const approval = await storage.getLaborApprovalById(parsedApprovalId);
+          if (
+            !approval ||
+            approval.productionWorkOrderId !== context.wadId ||
+            approval.employeeId !== employeeId.trim()
+          ) {
+            return res.status(403).json({
+              error: 'INVALID_LABOR_APPROVAL',
+              message: 'The provided laborApprovalId is not valid for this employee and work order.',
+            });
+          }
+          validatedApprovalId = approval.id;
+
+          const today = new Date().toISOString().split('T')[0];
+          const entry = await storage.createTimeClockEntryWithChargeContext({
+            employeeId: employeeId.trim(),
+            date: new Date(today),
+            clockIn: new Date(),
+            clockOut: null,
+            productionWorkOrderId: context.wadId,
+            travelerId: context.travelerId,
+            chargeCode: context.chargeCode,
+            department: context.department,
+            operation: context.operation,
+            approvalStatus: 'APPROVED_OVERRUN',
+            laborApprovalId: validatedApprovalId,
+          });
+          return res.status(201).json({ entry, chargeContext: context, laborStatus });
+        }
+
+        if (laborStatus.status === 'WARNING') {
+          const today = new Date().toISOString().split('T')[0];
+          const entry = await storage.createTimeClockEntryWithChargeContext({
+            employeeId: employeeId.trim(),
+            date: new Date(today),
+            clockIn: new Date(),
+            clockOut: null,
+            productionWorkOrderId: context.wadId,
+            travelerId: context.travelerId,
+            chargeCode: context.chargeCode,
+            department: context.department,
+            operation: context.operation,
+            approvalStatus: 'AUTO',
+            laborApprovalId: null,
+          });
+          return res.status(201).json({
+            entry,
+            chargeContext: context,
+            warning: `Work order is approaching its labor budget limit (${laborBudgetConsumptionLabel(laborStatus)}).`,
+            laborStatus,
+          });
+        }
+      }
+
+      const today = new Date().toISOString().split('T')[0];
       const entry = await storage.createTimeClockEntryWithChargeContext({
         employeeId: employeeId.trim(),
         date: new Date(today),
@@ -706,6 +791,7 @@ export function registerTimeClockRoutes(app: Express) {
         department: context.department,
         operation: context.operation,
         approvalStatus: 'AUTO',
+        laborApprovalId: null,
       });
 
       return res.status(201).json({ entry, chargeContext: context });
@@ -717,7 +803,7 @@ export function registerTimeClockRoutes(app: Express) {
 
   app.post('/api/time-clock/switch-job/traveler', async (req: Request, res: Response) => {
     try {
-      const { scanValue, employeeId } = req.body;
+      const { scanValue, employeeId, laborApprovalId } = req.body;
 
       if (!scanValue || typeof scanValue !== 'string' || !scanValue.trim()) {
         return res.status(400).json({
@@ -733,6 +819,11 @@ export function registerTimeClockRoutes(app: Express) {
         });
       }
 
+      const parsedApprovalId: number | null =
+        laborApprovalId != null && !isNaN(parseInt(String(laborApprovalId), 10))
+          ? parseInt(String(laborApprovalId), 10)
+          : null;
+
       const result = await resolveTravelerBarcode(scanValue);
 
       if (!result.ok) {
@@ -745,6 +836,43 @@ export function registerTimeClockRoutes(app: Express) {
 
       const { context } = result;
 
+      let validatedApprovalId: number | null = null;
+      let warningMessage: string | null = null;
+      let laborStatusForResponse: WorkOrderLaborStatusResult | null = null;
+
+      if (context.wadId) {
+        const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
+
+        if (laborStatus.status === 'BLOCKED') {
+          if (parsedApprovalId == null) {
+            return res.status(403).json({
+              error: 'LABOR_BUDGET_BLOCKED',
+              message: `Work order has exhausted its labor budget (${laborBudgetConsumptionLabel(laborStatus)}). A supervisor approval is required to proceed.`,
+              laborStatus,
+              approvalEndpoint: `/api/work-orders/${context.wadId}/approve-overrun`,
+            });
+          }
+          const approval = await storage.getLaborApprovalById(parsedApprovalId);
+          if (
+            !approval ||
+            approval.productionWorkOrderId !== context.wadId ||
+            approval.employeeId !== employeeId.trim()
+          ) {
+            return res.status(403).json({
+              error: 'INVALID_LABOR_APPROVAL',
+              message: 'The provided laborApprovalId is not valid for this employee and work order.',
+            });
+          }
+          validatedApprovalId = approval.id;
+          laborStatusForResponse = laborStatus;
+        }
+
+        if (laborStatus.status === 'WARNING') {
+          warningMessage = `Work order is approaching its labor budget limit (${laborBudgetConsumptionLabel(laborStatus)}).`;
+          laborStatusForResponse = laborStatus;
+        }
+      }
+
       const { closed, created } = await storage.switchActiveTimeEntryToTraveler({
         employeeId: employeeId.trim(),
         productionWorkOrderId: context.wadId,
@@ -752,9 +880,25 @@ export function registerTimeClockRoutes(app: Express) {
         chargeCode: context.chargeCode,
         department: context.department,
         operation: context.operation,
+        laborApprovalId: validatedApprovalId,
       });
 
-      return res.status(201).json({ closed, created, chargeContext: context });
+      const response: {
+        closed: typeof closed;
+        created: typeof created;
+        chargeContext: typeof context;
+        warning?: string;
+        laborStatus?: WorkOrderLaborStatusResult;
+      } = { closed, created, chargeContext: context };
+
+      if (warningMessage) {
+        response.warning = warningMessage;
+      }
+      if (laborStatusForResponse) {
+        response.laborStatus = laborStatusForResponse;
+      }
+
+      return res.status(201).json(response);
     } catch (error) {
       console.error('[TimeClock] Error switching job via traveler barcode:', error);
       return res.status(500).json({ error: 'Internal server error', details: 'Failed to switch job via traveler barcode' });

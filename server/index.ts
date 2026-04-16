@@ -4421,6 +4421,40 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Labor GL posting engine migration:', laborGlErr?.message);
     }
 
+    // Labor budget overrun gate: labor_approvals table + approvalId column
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS labor_approvals (
+          id SERIAL PRIMARY KEY,
+          production_work_order_id UUID NOT NULL,
+          employee_id TEXT NOT NULL,
+          approved_by TEXT NOT NULL,
+          department TEXT,
+          reason TEXT NOT NULL,
+          approved_at TIMESTAMP DEFAULT NOW(),
+          hours_at_approval NUMERIC
+        )
+      `);
+      await pool.query(`ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS labor_approval_id INTEGER`);
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE constraint_name = 'time_clock_entries_labor_approval_id_fkey'
+              AND table_name = 'time_clock_entries'
+          ) THEN
+            ALTER TABLE time_clock_entries
+              ADD CONSTRAINT time_clock_entries_labor_approval_id_fkey
+              FOREIGN KEY (labor_approval_id) REFERENCES labor_approvals(id);
+          END IF;
+        END $$;
+      `);
+      console.log('✅ Ensured labor_approvals table and labor_approval_id column exist');
+    } catch (laborApprovalErr: any) {
+      console.warn('⚠️ Labor approvals migration:', laborApprovalErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

@@ -631,6 +631,10 @@ import {
   type JournalLine,
   type InsertJournalLine,
   type CostCenter,
+  // Labor budget overrun gate
+  laborApprovals,
+  type LaborApproval,
+  type InsertLaborApproval,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -1331,12 +1335,19 @@ export interface IStorage {
     chargeCode: string | null;
     department: string | null;
     operation: string | null;
+    laborApprovalId?: number | null;
   }): Promise<{ closed: TimeClockEntry | null; created: TimeClockEntry }>;
   updateTimeClockEntry(
     id: number,
     data: Partial<InsertTimeClockEntry>
   ): Promise<TimeClockEntry>;
   deleteTimeClockEntry(id: number): Promise<void>;
+
+  // Labor budget aggregation
+  getLaborHoursByWorkOrder(workOrderId: string): Promise<number>;
+  getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string): Promise<number>;
+  createLaborApproval(data: InsertLaborApproval): Promise<LaborApproval>;
+  getLaborApprovalById(id: number): Promise<LaborApproval | null>;
 
   // Checklist CRUD
   getChecklistItems(employeeId: string, date: string): Promise<ChecklistItem[]>;
@@ -15964,6 +15975,7 @@ export class DatabaseStorage implements IStorage {
     chargeCode: string | null;
     department: string | null;
     operation: string | null;
+    laborApprovalId?: number | null;
   }): Promise<{ closed: TimeClockEntry | null; created: TimeClockEntry }> {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -16005,12 +16017,52 @@ export class DatabaseStorage implements IStorage {
           chargeCode: params.chargeCode,
           department: params.department,
           operation: params.operation,
-          approvalStatus: 'AUTO',
+          approvalStatus: params.laborApprovalId != null ? 'APPROVED_OVERRUN' : 'AUTO',
+          laborApprovalId: params.laborApprovalId ?? null,
         })
         .returning();
 
       return { closed, created };
     });
+  }
+
+  async getLaborHoursByWorkOrder(workOrderId: string): Promise<number> {
+    const result = await db.execute(
+      sql`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (clock_out - clock_in)) / 3600.0), 0) AS total_hours
+          FROM time_clock_entries
+          WHERE production_work_order_id = ${workOrderId}::uuid
+            AND clock_in IS NOT NULL
+            AND clock_out IS NOT NULL`
+    );
+    const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+    return parseFloat(rows[0]?.total_hours ?? '0');
+  }
+
+  async getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string): Promise<number> {
+    const result = await db.execute(
+      sql`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (clock_out - clock_in)) / 3600.0), 0) AS total_hours
+          FROM time_clock_entries
+          WHERE production_work_order_id = ${workOrderId}::uuid
+            AND department = ${department}
+            AND clock_in IS NOT NULL
+            AND clock_out IS NOT NULL`
+    );
+    const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+    return parseFloat(rows[0]?.total_hours ?? '0');
+  }
+
+  async createLaborApproval(data: InsertLaborApproval): Promise<LaborApproval> {
+    const [approval] = await db.insert(laborApprovals).values(data).returning();
+    return approval;
+  }
+
+  async getLaborApprovalById(id: number): Promise<LaborApproval | null> {
+    const [approval] = await db
+      .select()
+      .from(laborApprovals)
+      .where(eq(laborApprovals.id, id))
+      .limit(1);
+    return approval ?? null;
   }
 
   async updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler> {

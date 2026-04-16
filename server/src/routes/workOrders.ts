@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db';
 import {
   workOrders,
@@ -17,13 +17,24 @@ import {
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { storage } from '../../storage';
+import { authenticateToken } from '../../middleware/auth';
+import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 
 const router = Router();
 
-function requireAdmin(req: Request, res: Response, next: Function) {
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const user = (req as any).user;
   if (!user || (user.role !== 'ADMIN' && user.role !== 'OWNER')) {
     return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
+function requireSupervisorOrAdmin(req: Request, res: Response, next: NextFunction) {
+  const user = (req as any).user;
+  const supervisorRoles = ['ADMIN', 'OWNER', 'SUPERVISOR', 'MANAGER'];
+  if (!user || !supervisorRoles.includes(user.role)) {
+    return res.status(403).json({ error: 'Supervisor or admin access required to approve labor overruns' });
   }
   next();
 }
@@ -586,6 +597,90 @@ router.delete('/:id/travelers/:travelerId/link', async (req: Request, res: Respo
   } catch (error: any) {
     console.error('Error unlinking traveler from production work order:', error);
     res.status(500).json({ error: 'Failed to unlink traveler', message: error.message });
+  }
+});
+
+// ==================== PRODUCTION WORK ORDER LABOR BUDGET ====================
+
+const approveOverrunBodySchema = z.object({
+  employeeId: z.string().min(1, 'employeeId is required'),
+  reason: z.string().min(1, 'reason is required'),
+  department: z.string().optional(),
+});
+
+router.post(
+  '/:id/approve-overrun',
+  authenticateToken,
+  requireSupervisorOrAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      if (!validateUuid(id)) {
+        return res.status(400).json({ error: 'Invalid production work order ID format', id });
+      }
+
+      const parsed = approveOverrunBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+      }
+
+      const [wad] = await db
+        .select()
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, id))
+        .limit(1);
+
+      if (!wad) {
+        return res.status(404).json({ error: 'Production work order not found' });
+      }
+
+      const authenticatedUser = (req as any).user;
+      const approvedBy: string =
+        authenticatedUser?.username ?? authenticatedUser?.email ?? authenticatedUser?.id ?? 'unknown';
+
+      const laborStatus = await evaluateWorkOrderLaborStatus(id, parsed.data.department);
+      const approval = await storage.createLaborApproval({
+        productionWorkOrderId: id,
+        employeeId: parsed.data.employeeId.trim(),
+        approvedBy,
+        department: parsed.data.department ?? null,
+        reason: parsed.data.reason,
+        hoursAtApproval: String(laborStatus.totalHours),
+      });
+
+      return res.status(201).json({ approval, laborStatus });
+    } catch (error: any) {
+      console.error('[WorkOrders] Error creating labor approval:', error);
+      return res.status(500).json({ error: 'Failed to create labor approval', message: error.message });
+    }
+  }
+);
+
+router.get('/:id/labor-status', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { department } = req.query;
+
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id))
+      .limit(1);
+
+    if (!wad) {
+      return res.status(404).json({ error: 'Production work order not found' });
+    }
+
+    const laborStatus = await evaluateWorkOrderLaborStatus(id, department ? String(department) : undefined);
+    return res.json({ workOrderId: id, ...laborStatus });
+  } catch (error: any) {
+    console.error('[WorkOrders] Error fetching labor status:', error);
+    return res.status(500).json({ error: 'Failed to fetch labor status', message: error.message });
   }
 });
 

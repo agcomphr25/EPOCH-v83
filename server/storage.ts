@@ -2560,6 +2560,9 @@ export interface IStorage {
   createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder>;
   getWorkOrdersByProject(projectId: string): Promise<ProductionWorkOrder[]>;
   getWorkOrderById(id: string): Promise<ProductionWorkOrder | undefined>;
+  checkWorkOrderMaterialAvailability(workOrderId: string): Promise<boolean>;
+  checkWorkOrderTrainingCoverage(workOrderId: string): Promise<boolean>;
+  updateWorkOrderStatus(workOrderId: string, status: string): Promise<ProductionWorkOrder>;
 
   // P2 Projects CRUD
   getAllProjects(): Promise<Project[]>;
@@ -22807,6 +22810,96 @@ export class DatabaseStorage implements IStorage {
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
     return row || undefined;
+  }
+
+  async checkWorkOrderMaterialAvailability(workOrderId: string): Promise<boolean> {
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, workOrderId))
+      .limit(1);
+    if (!wad || !wad.partNumber) return true;
+
+    const [bom] = await db
+      .select()
+      .from(boms)
+      .where(and(eq(boms.parentPartAgNumber, wad.partNumber), eq(boms.isActive, true)))
+      .limit(1);
+    if (!bom) return true;
+
+    const [revision] = await db
+      .select()
+      .from(bomRevisions)
+      .where(and(eq(bomRevisions.bomId, bom.id), eq(bomRevisions.isReleased, true)))
+      .orderBy(desc(bomRevisions.createdAt))
+      .limit(1);
+    if (!revision) return true;
+
+    const lines = await db
+      .select()
+      .from(bomLines)
+      .where(eq(bomLines.revisionId, revision.id));
+    if (!lines.length) return true;
+
+    const required = wad.quantity ?? 1;
+    for (const line of lines) {
+      const qtyPer = Number(line.qtyPer ?? 1);
+      const needed = qtyPer * required;
+      const [balance] = await db
+        .select({ quantityAvailable: inventoryBalances.quantityAvailable })
+        .from(inventoryBalances)
+        .where(eq(inventoryBalances.agPartNumber, line.childPartAgNumber))
+        .limit(1);
+      const available = balance ? Number(balance.quantityAvailable ?? 0) : 0;
+      if (available < needed) return false;
+    }
+    return true;
+  }
+
+  async checkWorkOrderTrainingCoverage(workOrderId: string): Promise<boolean> {
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, workOrderId))
+      .limit(1);
+    if (!wad || !wad.partNumber) return true;
+
+    const routing = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.partNumber, wad.partNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (!routing) return true;
+
+    // Check if any routing operations require certification
+    const [certRequired] = await db
+      .select({ id: routingOperations.id })
+      .from(routingOperations)
+      .where(and(
+        eq(routingOperations.partRoutingId, routing.id),
+        eq(routingOperations.requiresCertification, true)
+      ))
+      .limit(1);
+
+    if (!certRequired) return true;
+
+    // At least one operation requires certification — verify at least one active
+    // employee certification exists in the system (table is not in the ORM schema
+    // but is present in the database; use raw SQL to query it)
+    const result = await db.execute(
+      sql`SELECT id FROM employee_certifications WHERE is_active = true LIMIT 1`
+    );
+    return (result.rows ?? []).length > 0;
+  }
+
+  async updateWorkOrderStatus(workOrderId: string, status: string): Promise<ProductionWorkOrder> {
+    const [updated] = await db
+      .update(productionWorkOrders)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(productionWorkOrders.id, workOrderId))
+      .returning();
+    return updated;
   }
 
   // ── Estimating – RFQs ────────────────────────────────────────────────────────

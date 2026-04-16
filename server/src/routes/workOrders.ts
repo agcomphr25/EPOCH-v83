@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { authenticateToken } from '../../middleware/auth';
 import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
+import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
 
 const router = Router();
 
@@ -834,6 +835,53 @@ router.patch('/production/:id/labor-thresholds', authenticateToken, requireSuper
   } catch (error: any) {
     console.error('[WorkOrders] Error updating work order labor thresholds:', error);
     return res.status(500).json({ error: 'Failed to update labor thresholds', message: error.message });
+  }
+});
+
+// ==================== WAD RELEASE GATE ====================
+
+// POST /api/work-orders/:id/release — evaluate readiness and flip WAD to RELEASED
+router.post('/:id/release', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id))
+      .limit(1);
+
+    if (!wad) {
+      return res.status(404).json({ error: 'Production work order not found', id });
+    }
+
+    if (wad.status === 'RELEASED') {
+      return res.status(400).json({ error: 'Work order is already released to the floor' });
+    }
+
+    if (wad.status === 'IN_PROGRESS' || wad.status === 'COMPLETE' || wad.status === 'CLOSED') {
+      return res.status(400).json({ error: `Cannot release a work order with status: ${wad.status}` });
+    }
+
+    const readiness = await evaluateWorkOrderReadiness(id);
+
+    if (readiness.status !== 'READY') {
+      return res.status(400).json({
+        error: 'Work order not ready for release to floor',
+        readiness,
+      });
+    }
+
+    const updated = await storage.updateWorkOrderStatus(id, 'RELEASED');
+    console.log(`[WorkOrders] WAD ${id} released to floor`);
+    return res.json(updated);
+  } catch (err: any) {
+    console.error('[WorkOrders] Error releasing work order:', err);
+    return res.status(500).json({ error: 'Failed to release work order', message: err?.message });
   }
 });
 

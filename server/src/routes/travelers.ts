@@ -676,6 +676,27 @@ router.post('/:id/start', async (req: Request, res: Response) => {
       }
     }
 
+    // WAD gate: traveler's linked production work order must be RELEASED.
+    // Missing WAD is treated as a hard failure — no bypass path exists.
+    if (traveler.productionWorkOrderId) {
+      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+      if (!wad) {
+        return res.status(404).json({
+          error: 'Linked work order not found — cannot start traveler without a valid WAD',
+          workOrderId: traveler.productionWorkOrderId,
+        });
+      }
+      // Allow RELEASED or IN_PROGRESS: IN_PROGRESS means a prior traveler on this WAD already
+      // started (which auto-transitioned the WAD), so subsequent travelers are still authorized.
+      if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
+        return res.status(403).json({
+          error: 'Work order not released to floor',
+          workOrderId: traveler.productionWorkOrderId,
+          workOrderStatus: wad.status,
+        });
+      }
+    }
+
     const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
 
     await storage.createTravelerEvent({
@@ -684,6 +705,15 @@ router.post('/:id/start', async (req: Request, res: Response) => {
       action: 'STATUS_CHANGED',
       details: { from: 'DRAFT', to: 'IN_PROGRESS' },
     });
+
+    // Auto-transition the WAD to IN_PROGRESS when the first traveler step starts
+    if (traveler.productionWorkOrderId) {
+      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+      if (wad && wad.status === 'RELEASED') {
+        await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
+        console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
+      }
+    }
 
     res.json(updatedTraveler);
   } catch (error: any) {

@@ -611,6 +611,13 @@ import {
   productionWorkOrders,
   type ProductionWorkOrder,
   type InsertProductionWorkOrder,
+  // Labor costing tables
+  laborPostingRuns,
+  laborCostRecords,
+  type LaborPostingRun,
+  type InsertLaborPostingRun,
+  type LaborCostRecord,
+  type InsertLaborCostRecord,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2640,6 +2647,17 @@ export interface IStorage {
   // Estimating – Pricing Snapshots
   getEstimatingPricingSnapshots(rfqId: string): Promise<EstimatingPricingSnapshot[]>;
   replaceEstimatingPricingSnapshots(rfqId: string, rows: InsertEstimatingPricingSnapshot[]): Promise<EstimatingPricingSnapshot[]>;
+
+  // Labor Posting Runs
+  createLaborPostingRun(data: InsertLaborPostingRun): Promise<LaborPostingRun>;
+  getLaborPostingRunByPeriod(year: number, month: number): Promise<LaborPostingRun | undefined>;
+  getLaborPostingRun(id: number): Promise<LaborPostingRun | undefined>;
+
+  // Labor Cost Records
+  bulkCreateLaborCostRecords(records: InsertLaborCostRecord[]): Promise<LaborCostRecord[]>;
+  getLaborCostRecordsByPeriod(year: number, month: number): Promise<LaborCostRecord[]>;
+  deleteLaborCostRecordsByPeriod(year: number, month: number): Promise<void>;
+  updateLaborCostRecordJournalEntry(id: string, journalEntryId: number): Promise<LaborCostRecord | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -21994,6 +22012,55 @@ export class DatabaseStorage implements IStorage {
       .where(eq(estimatingPricingSnapshots.rfqId, rfqId));
     if (!rows.length) return [];
     return db.insert(estimatingPricingSnapshots).values(rows).returning();
+  }
+
+  // ── Labor Posting Runs ────────────────────────────────────────────────────────
+
+  async createLaborPostingRun(data: InsertLaborPostingRun): Promise<LaborPostingRun> {
+    const [row] = await db.insert(laborPostingRuns).values(data).returning();
+    return row;
+  }
+
+  async getLaborPostingRunByPeriod(year: number, month: number): Promise<LaborPostingRun | undefined> {
+    const [row] = await db
+      .select()
+      .from(laborPostingRuns)
+      .where(and(eq(laborPostingRuns.year, year), eq(laborPostingRuns.month, month)));
+    return row;
+  }
+
+  async getLaborPostingRun(id: number): Promise<LaborPostingRun | undefined> {
+    const [row] = await db.select().from(laborPostingRuns).where(eq(laborPostingRuns.id, id));
+    return row;
+  }
+
+  // ── Labor Cost Records ────────────────────────────────────────────────────────
+
+  async bulkCreateLaborCostRecords(records: InsertLaborCostRecord[]): Promise<LaborCostRecord[]> {
+    if (!records.length) return [];
+    return db.insert(laborCostRecords).values(records).returning();
+  }
+
+  async getLaborCostRecordsByPeriod(year: number, month: number): Promise<LaborCostRecord[]> {
+    return db
+      .select()
+      .from(laborCostRecords)
+      .where(and(eq(laborCostRecords.periodYear, year), eq(laborCostRecords.periodMonth, month)));
+  }
+
+  async deleteLaborCostRecordsByPeriod(year: number, month: number): Promise<void> {
+    await db
+      .delete(laborCostRecords)
+      .where(and(eq(laborCostRecords.periodYear, year), eq(laborCostRecords.periodMonth, month)));
+  }
+
+  async updateLaborCostRecordJournalEntry(id: string, journalEntryId: number): Promise<LaborCostRecord | undefined> {
+    const [row] = await db
+      .update(laborCostRecords)
+      .set({ journalEntryId })
+      .where(eq(laborCostRecords.id, id))
+      .returning();
+    return row;
   }
 }
 

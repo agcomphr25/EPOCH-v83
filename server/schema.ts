@@ -1061,6 +1061,8 @@ export const employees = pgTable('employees', {
   isToleranceAuthorizer: boolean('is_tolerance_authorizer').default(false), // Can approve tolerance deviations for P2 orders
   badgeScanCode: text('badge_scan_code').unique(), // Non-guessable UUID encoded in physical badge barcode - not printed visibly
   isActive: boolean('is_active').default(true),
+  hourlyRate: numeric('hourly_rate', { precision: 12, scale: 2 }),
+  salary: numeric('salary', { precision: 12, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -15336,3 +15338,49 @@ export const estimatingDefaults = pgTable('estimating_defaults', {
 export const insertEstimatingDefaultsSchema = createInsertSchema(estimatingDefaults).omit({ id: true, createdAt: true, updatedAt: true });
 export type EstimatingDefaults = typeof estimatingDefaults.$inferSelect;
 export type InsertEstimatingDefaults = z.infer<typeof insertEstimatingDefaultsSchema>;
+
+// ── Labor Posting Runs ────────────────────────────────────────────────────────
+export const laborPostingRuns = pgTable('labor_posting_runs', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  status: text('status').notNull().default('POSTED'),
+  postedBy: text('posted_by').notNull(),
+  totalDirectCost: numeric('total_direct_cost', { precision: 12, scale: 2 }).default('0'),
+  totalIndirectCost: numeric('total_indirect_cost', { precision: 12, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  unique('labor_posting_runs_year_month_unique').on(t.year, t.month),
+]);
+
+export const insertLaborPostingRunSchema = createInsertSchema(laborPostingRuns).omit({ id: true, createdAt: true });
+export type LaborPostingRun = typeof laborPostingRuns.$inferSelect;
+export type InsertLaborPostingRun = z.infer<typeof insertLaborPostingRunSchema>;
+
+// ── Labor Cost Records ────────────────────────────────────────────────────────
+export const laborCostRecords = pgTable('labor_cost_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id),
+  jobCode: text('job_code'),
+  jobVerified: boolean('job_verified').default(false),
+  hours: numeric('hours', { precision: 10, scale: 4 }).notNull(),
+  rate: numeric('rate', { precision: 12, scale: 2 }).notNull(),
+  rateSource: text('rate_source').notNull(), // HOURLY | SALARY | DEFAULT
+  totalCost: numeric('total_cost', { precision: 12, scale: 2 }).notNull(),
+  costType: text('cost_type').notNull(), // DIRECT | INDIRECT
+  periodDate: date('period_date').notNull(),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  sourcePunchId: uuid('source_punch_id'),
+  journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
+  postingRunId: integer('posting_run_id').references(() => laborPostingRuns.id),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  unique('labor_cost_records_source_punch_id_unique').on(t.sourcePunchId),
+  index('labor_cost_records_period_year_month_idx').on(t.periodYear, t.periodMonth),
+  index('labor_cost_records_employee_id_idx').on(t.employeeId),
+]);
+
+export const insertLaborCostRecordSchema = createInsertSchema(laborCostRecords).omit({ id: true, createdAt: true });
+export type LaborCostRecord = typeof laborCostRecords.$inferSelect;
+export type InsertLaborCostRecord = z.infer<typeof insertLaborCostRecordSchema>;

@@ -4342,6 +4342,51 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Estimating tables migration:', estimatingErr?.message);
     }
 
+    // Labor costing tables migration
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS labor_posting_runs (
+          id SERIAL PRIMARY KEY,
+          year INTEGER NOT NULL,
+          month INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'POSTED',
+          posted_by TEXT NOT NULL,
+          total_direct_cost NUMERIC(12,2) DEFAULT 0,
+          total_indirect_cost NUMERIC(12,2) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT labor_posting_runs_year_month_unique UNIQUE (year, month)
+        )
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS labor_cost_records (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          employee_id INTEGER REFERENCES employees(id),
+          job_code TEXT,
+          job_verified BOOLEAN DEFAULT false,
+          hours NUMERIC(10,4) NOT NULL,
+          rate NUMERIC(12,2) NOT NULL,
+          rate_source TEXT NOT NULL,
+          total_cost NUMERIC(12,2) NOT NULL,
+          cost_type TEXT NOT NULL,
+          period_date DATE NOT NULL,
+          period_year INTEGER NOT NULL,
+          period_month INTEGER NOT NULL,
+          source_punch_id UUID,
+          journal_entry_id INTEGER REFERENCES journal_entries(id),
+          posting_run_id INTEGER REFERENCES labor_posting_runs(id),
+          created_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT labor_cost_records_source_punch_id_unique UNIQUE (source_punch_id)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS labor_cost_records_period_year_month_idx ON labor_cost_records(period_year, period_month)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS labor_cost_records_employee_id_idx ON labor_cost_records(employee_id)`);
+      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(12,2)`);
+      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS salary NUMERIC(12,2)`);
+      console.log('✅ Ensured labor_posting_runs, labor_cost_records tables and employees columns exist');
+    } catch (laborErr: any) {
+      console.warn('⚠️ Labor costing tables migration:', laborErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

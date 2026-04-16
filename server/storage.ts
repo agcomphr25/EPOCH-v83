@@ -2561,6 +2561,8 @@ export interface IStorage {
 
   scrapMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
   returnMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; lotTransaction: MaterialLotTransaction }>;
+  issueMaterialLot(id: string, params: { performedBy: string; toLocation?: string; notes?: string }): Promise<MaterialLot>;
+  moveMaterialLot(id: string, params: { toLocation: string; performedBy: string; notes?: string }): Promise<MaterialLot>;
 
   adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
 
@@ -21568,6 +21570,118 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { lot: updatedLot, transaction: lotTx };
+  }
+
+  async issueMaterialLot(id: string, params: { performedBy: string; toLocation?: string; notes?: string }): Promise<MaterialLot> {
+    const { performedBy, toLocation, notes } = params;
+
+    const lot = await this.getMaterialLot(id);
+    if (!lot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+    if (lot.status !== 'ACCEPTED') {
+      throw Object.assign(new Error('Only ACCEPTED lots can be issued'), { statusCode: 400 });
+    }
+
+    const updatedLot = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(materialLots)
+        .set({
+          status: 'ISSUED',
+          currentlyOutOfStorage: true,
+          lastOutAt: new Date(),
+          storageLocation: toLocation || lot.storageLocation,
+          updatedAt: new Date(),
+        })
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      await tx.insert(materialLotTransactions).values({
+        materialLotId: id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: 'ISSUE',
+        qtyBefore: lot.remainingQty,
+        qtyChange: '0',
+        qtyAfter: lot.remainingQty,
+        fromLocation: lot.storageLocation ?? null,
+        toLocation: toLocation ?? null,
+        performedBy,
+        notes: notes ?? null,
+        wasOverride: false,
+      });
+
+      await tx.insert(materialLotTransactions).values({
+        materialLotId: id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: 'OUT_START',
+        performedBy,
+        notes: 'Material removed from controlled storage',
+        wasOverride: false,
+      });
+
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lot.materialPartNumber,
+        transactionType: 'issue',
+        quantity: 0,
+        unitOfMeasure: lot.unitOfMeasure ?? null,
+        fromLocation: lot.storageLocation ?? null,
+        toLocation: toLocation ?? null,
+        referenceType: 'ISSUE',
+        referenceId: id,
+        performedBy,
+        notes: notes ?? null,
+      });
+
+      return updated;
+    });
+
+    return updatedLot;
+  }
+
+  async moveMaterialLot(id: string, params: { toLocation: string; performedBy: string; notes?: string }): Promise<MaterialLot> {
+    const { toLocation, performedBy, notes } = params;
+
+    const lot = await this.getMaterialLot(id);
+    if (!lot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+
+    const fromLocation = lot.storageLocation;
+
+    const updatedLot = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(materialLots)
+        .set({ storageLocation: toLocation, updatedAt: new Date() })
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      await tx.insert(materialLotTransactions).values({
+        materialLotId: id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: 'MOVE',
+        qtyBefore: lot.remainingQty,
+        qtyChange: '0',
+        qtyAfter: lot.remainingQty,
+        fromLocation: fromLocation ?? null,
+        toLocation,
+        performedBy,
+        notes: notes ?? null,
+        wasOverride: false,
+      });
+
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lot.materialPartNumber,
+        transactionType: 'move',
+        quantity: 0,
+        unitOfMeasure: lot.unitOfMeasure ?? null,
+        fromLocation: fromLocation ?? null,
+        toLocation,
+        referenceType: 'MOVE',
+        referenceId: id,
+        performedBy,
+        notes: notes ?? null,
+      });
+
+      return updated;
+    });
+
+    return updatedLot;
   }
 
   async adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }> {

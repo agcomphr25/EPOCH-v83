@@ -575,30 +575,12 @@ router.post('/:id/move', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { toLocation, performedBy, notes } = req.body;
 
-    const lot = await storage.getMaterialLot(id);
-    if (!lot) {
-      return res.status(404).json({ error: 'Material lot not found' });
-    }
-
-    const fromLocation = lot.storageLocation;
-    const updatedLot = await storage.updateMaterialLot(id, { storageLocation: toLocation });
-
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'MOVE',
-      qtyBefore: lot.remainingQty,
-      qtyAfter: lot.remainingQty,
-      fromLocation: fromLocation || undefined,
-      toLocation,
-      performedBy,
-      notes,
-    }));
-
+    const updatedLot = await storage.moveMaterialLot(id, { toLocation, performedBy, notes });
     res.json(updatedLot);
   } catch (error: any) {
     console.error('Error moving material lot:', error);
-    res.status(500).json({ error: 'Failed to move material lot', message: error.message });
+    const statusCode = [400, 404].includes(error.statusCode) ? error.statusCode : 500;
+    res.status(statusCode).json({ error: 'Failed to move material lot', message: error.message });
   }
 });
 
@@ -608,47 +590,12 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { performedBy, toLocation, notes } = req.body;
 
-    const lot = await storage.getMaterialLot(id);
-    if (!lot) {
-      return res.status(404).json({ error: 'Material lot not found' });
-    }
-
-    if (lot.status !== 'ACCEPTED') {
-      return res.status(400).json({ error: 'Only ACCEPTED lots can be issued' });
-    }
-
-    const updatedLot = await storage.updateMaterialLot(id, {
-      status: 'ISSUED',
-      currentlyOutOfStorage: true,
-      lastOutAt: new Date(),
-      storageLocation: toLocation || lot.storageLocation,
-    });
-
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'ISSUE',
-      qtyBefore: lot.remainingQty,
-      qtyAfter: lot.remainingQty,
-      fromLocation: lot.storageLocation || undefined,
-      toLocation,
-      performedBy,
-      notes,
-    }));
-
-    // Also record OUT_START for out-time tracking
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'OUT_START',
-      performedBy,
-      notes: 'Material removed from controlled storage',
-    }));
-
+    const updatedLot = await storage.issueMaterialLot(id, { performedBy, toLocation, notes });
     res.json(updatedLot);
   } catch (error: any) {
     console.error('Error issuing material lot:', error);
-    res.status(500).json({ error: 'Failed to issue material lot', message: error.message });
+    const statusCode = [400, 404].includes(error.statusCode) ? error.statusCode : 500;
+    res.status(statusCode).json({ error: 'Failed to issue material lot', message: error.message });
   }
 });
 
@@ -876,6 +823,29 @@ router.post('/:id/split', async (req: Request, res: Response) => {
       performedBy,
       notes: `Split from parent lot ${parentLot.internalControlNumber}. ${notes || ''}`,
     }));
+
+    // Write inventory ledger entries for both sides of the split
+    await storage.createInventoryTransaction({
+      agPartNumber: parentLot.materialPartNumber,
+      transactionType: 'split',
+      quantity: -splitAmount,
+      unitOfMeasure: parentLot.unitOfMeasure ?? undefined,
+      referenceType: 'SPLIT',
+      referenceId: id,
+      performedBy,
+      notes: `Split ${splitAmount} ${parentLot.unitOfMeasure} to new lot ${newICN}. ${notes || ''}`,
+    });
+
+    await storage.createInventoryTransaction({
+      agPartNumber: parentLot.materialPartNumber,
+      transactionType: 'split',
+      quantity: splitAmount,
+      unitOfMeasure: parentLot.unitOfMeasure ?? undefined,
+      referenceType: 'SPLIT',
+      referenceId: childLot.id,
+      performedBy,
+      notes: `Split from parent lot ${parentLot.internalControlNumber}. ${notes || ''}`,
+    });
 
     res.status(201).json({
       parentLot: { ...parentLot, remainingQty: newRemaining },

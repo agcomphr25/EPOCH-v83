@@ -46,6 +46,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Package,
   Search,
@@ -65,6 +67,7 @@ import {
   ArrowRightLeft,
   Scissors,
   Trash2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 
@@ -129,7 +132,7 @@ export default function MaterialInventoryPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLot, setSelectedLot] = useState<MaterialLot | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
-  const [actionType, setActionType] = useState<'move' | 'split' | 'status' | 'scrap' | 'return' | null>(null);
+  const [actionType, setActionType] = useState<'move' | 'split' | 'status' | 'scrap' | 'return' | 'adjust' | null>(null);
   const [moveLocation, setMoveLocation] = useState('');
   const [splitQty, setSplitQty] = useState('');
   const [newStatus, setNewStatus] = useState('');
@@ -140,6 +143,11 @@ export default function MaterialInventoryPage() {
   const [returnQty, setReturnQty] = useState('');
   const [returnReason, setReturnReason] = useState('');
   const [returnPerformedBy, setReturnPerformedBy] = useState('');
+  const [adjustDelta, setAdjustDelta] = useState('');
+  const [adjustReasonCode, setAdjustReasonCode] = useState('');
+  const [adjustNotes, setAdjustNotes] = useState('');
+  const [adjustPerformedBy, setAdjustPerformedBy] = useState('');
+  const [adjustAllowNegative, setAdjustAllowNegative] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -263,6 +271,33 @@ export default function MaterialInventoryPage() {
     },
   });
 
+  const adjustMutation = useMutation({
+    mutationFn: async ({ id, delta, reasonCode, notes, performedBy, allowNegative }: {
+      id: string;
+      delta: number;
+      reasonCode: string;
+      notes?: string;
+      performedBy: string;
+      allowNegative: boolean;
+    }) => {
+      return apiRequest(`/api/material-lots/${id}/adjust`, {
+        method: 'POST',
+        body: JSON.stringify({ delta, reasonCode, notes, performedBy, allowNegative }),
+      });
+    },
+    onSuccess: (result: any) => {
+      const newQty = result?.lot?.remainingQty ?? result?.remainingQty;
+      const qtyMsg = newQty != null ? ` New quantity: ${newQty}` : '';
+      toast.success(`Quantity adjusted successfully.${qtyMsg}`);
+      queryClient.invalidateQueries({ queryKey: ['/api/material-lots'] });
+      closeActionDialog();
+    },
+    onError: (error: any) => {
+      const msg = error.responseData?.message || error.responseData?.error || error.message || 'Failed to adjust quantity';
+      toast.error(msg);
+    },
+  });
+
   const closeActionDialog = () => {
     setActionDialogOpen(false);
     setActionType(null);
@@ -277,9 +312,14 @@ export default function MaterialInventoryPage() {
     setReturnQty('');
     setReturnReason('');
     setReturnPerformedBy('');
+    setAdjustDelta('');
+    setAdjustReasonCode('');
+    setAdjustNotes('');
+    setAdjustPerformedBy('');
+    setAdjustAllowNegative(false);
   };
 
-  const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status' | 'scrap' | 'return') => {
+  const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status' | 'scrap' | 'return' | 'adjust') => {
     setSelectedLot(lot);
     setActionType(type);
     const displayName = currentUser
@@ -291,6 +331,9 @@ export default function MaterialInventoryPage() {
     if (type === 'return') {
       setReturnQty(lot.remainingQty);
       setReturnPerformedBy(displayName);
+    }
+    if (type === 'adjust') {
+      setAdjustPerformedBy(displayName);
     }
     setActionDialogOpen(true);
   };
@@ -351,6 +394,33 @@ export default function MaterialInventoryPage() {
         qty: parsed.data.qty,
         reason: parsed.data.reason,
         performedBy: parsed.data.performedBy,
+      });
+    } else if (actionType === 'adjust') {
+      const adjustSchema = z.object({
+        delta: z
+          .number({ invalid_type_error: 'Delta must be a number' })
+          .refine((v) => v !== 0, { message: 'Delta must be non-zero' }),
+        reasonCode: z.string().trim().min(1, 'Reason code is required'),
+        notes: z.string().optional(),
+        performedBy: z.string().trim().min(1, 'Performed by is required'),
+      });
+      const parsed = adjustSchema.safeParse({
+        delta: adjustDelta === '' ? undefined : Number(adjustDelta),
+        reasonCode: adjustReasonCode,
+        notes: adjustNotes || undefined,
+        performedBy: adjustPerformedBy,
+      });
+      if (!parsed.success) {
+        toast.error(parsed.error.errors[0].message);
+        return;
+      }
+      adjustMutation.mutate({
+        id: selectedLot.id,
+        delta: parsed.data.delta,
+        reasonCode: parsed.data.reasonCode,
+        notes: parsed.data.notes,
+        performedBy: parsed.data.performedBy,
+        allowNegative: adjustAllowNegative,
       });
     }
   };
@@ -620,6 +690,13 @@ export default function MaterialInventoryPage() {
                               Change Status
                             </DropdownMenuItem>
                             <DropdownMenuItem
+                              onClick={() => openActionDialog(lot, 'adjust')}
+                              disabled={['SCRAPPED', 'CONSUMED', 'REJECTED'].includes(lot.status)}
+                            >
+                              <SlidersHorizontal className="h-4 w-4 mr-2" />
+                              Adjust Quantity
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => openActionDialog(lot, 'scrap')}
                               disabled={lot.status === 'SCRAPPED' || Number(lot.remainingQty) <= 0}
                               className="text-destructive focus:text-destructive"
@@ -664,6 +741,7 @@ export default function MaterialInventoryPage() {
               {actionType === 'status' && 'Change Status'}
               {actionType === 'scrap' && 'Scrap Lot'}
               {actionType === 'return' && 'Return to Storage'}
+              {actionType === 'adjust' && 'Adjust Quantity'}
             </DialogTitle>
             <DialogDescription>
               {selectedLot?.internalControlNumber} - {selectedLot?.materialName}
@@ -831,6 +909,78 @@ export default function MaterialInventoryPage() {
             </div>
           )}
 
+          {actionType === 'adjust' && selectedLot && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="adjustDelta">
+                  Quantity Delta <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="adjustDelta"
+                  type="number"
+                  step="0.001"
+                  value={adjustDelta}
+                  onChange={(e) => setAdjustDelta(e.target.value)}
+                  placeholder="Positive = found/added, negative = removed/corrected"
+                  data-testid="input-adjust-delta"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Current remaining: {selectedLot.remainingQty} {selectedLot.unitOfMeasure}. Enter a positive number to increase or a negative number to decrease.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adjustReasonCode">
+                  Reason Code <span className="text-destructive">*</span>
+                </Label>
+                <Select value={adjustReasonCode} onValueChange={setAdjustReasonCode}>
+                  <SelectTrigger data-testid="select-adjust-reason-code">
+                    <SelectValue placeholder="Select a reason code" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cycle Count Correction">Cycle Count Correction</SelectItem>
+                    <SelectItem value="Admin Correction">Admin Correction</SelectItem>
+                    <SelectItem value="Found / Lost Material">Found / Lost Material</SelectItem>
+                    <SelectItem value="Data Repair">Data Repair</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adjustNotes">Notes</Label>
+                <Textarea
+                  id="adjustNotes"
+                  value={adjustNotes}
+                  onChange={(e) => setAdjustNotes(e.target.value)}
+                  placeholder="Optional additional notes"
+                  data-testid="input-adjust-notes"
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adjustPerformedBy">
+                  Performed By <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="adjustPerformedBy"
+                  value={adjustPerformedBy}
+                  onChange={(e) => setAdjustPerformedBy(e.target.value)}
+                  placeholder="Name of person performing adjustment"
+                  data-testid="input-adjust-performed-by"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="adjustAllowNegative"
+                  checked={adjustAllowNegative}
+                  onCheckedChange={(checked) => setAdjustAllowNegative(checked === true)}
+                  data-testid="checkbox-adjust-allow-negative"
+                />
+                <Label htmlFor="adjustAllowNegative" className="cursor-pointer font-normal">
+                  Allow negative balance (admin override)
+                </Label>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={closeActionDialog}>
               Cancel
@@ -842,15 +992,16 @@ export default function MaterialInventoryPage() {
                 splitMutation.isPending ||
                 statusMutation.isPending ||
                 scrapMutation.isPending ||
-                returnMutation.isPending
+                returnMutation.isPending ||
+                adjustMutation.isPending
               }
               variant={actionType === 'scrap' ? 'destructive' : 'default'}
               data-testid="button-confirm-action"
             >
-              {(moveMutation.isPending || splitMutation.isPending || statusMutation.isPending || scrapMutation.isPending || returnMutation.isPending) && (
+              {(moveMutation.isPending || splitMutation.isPending || statusMutation.isPending || scrapMutation.isPending || returnMutation.isPending || adjustMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {actionType === 'scrap' ? 'Scrap Lot' : actionType === 'return' ? 'Return to Storage' : 'Confirm'}
+              {actionType === 'scrap' ? 'Scrap Lot' : actionType === 'return' ? 'Return to Storage' : actionType === 'adjust' ? 'Apply Adjustment' : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>

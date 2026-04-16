@@ -1,0 +1,128 @@
+Perform a READ-ONLY audit of the timekeeping system inside EPOCH.
+
+DO NOT modify any code. DO NOT suggest changes yet. Only analyze and report.
+
+OBJECTIVE
+
+Build a complete, factual picture of how timekeeping currently works in EPOCH, including:
+
+data flow
+active vs unused systems
+integration points
+
+PART 1 — DATA FLOW (CRITICAL)
+
+Trace the full flow of time data:
+
+How punches are created
+API routes involved
+Tables written to
+Any integration with traveler scanning
+How punches become timesheets
+Where timesheets are created
+Where regularHours and overtimeHours are calculated
+Functions responsible (e.g. computeTimesheetHours)
+How timesheets are stored
+Table schema (fields, especially status, periodStart, periodEnd)
+How approval is tracked
+How export works
+What route(s) exist for export
+Whether export uses:
+raw punches OR
+stored timesheet hours
+
+PART 2 — UI SURFACES
+
+List ALL UI entry points related to timekeeping:
+
+/time-clock-admin
+What components are used
+What APIs it calls
+Whether it uses punches or timesheets
+Any other routes:
+/admin/timesheets
+module-based UIs
+hidden or unused routes
+Identify:
+which UI is actively used
+which UI is legacy or unused
+
+PART 3 — DUPLICATE / PARALLEL SYSTEMS
+
+Identify all timekeeping-related systems:
+
+Main EPOCH implementation
+modules/timekeeping/artifacts/api-server
+modules/timekeeping/artifacts/timekeeper (frontend)
+
+For each:
+
+Is it actively used?
+Does it share the same database?
+Does anything in EPOCH depend on it?
+
+Clearly label:
+
+ACTIVE SYSTEM
+LEGACY / UNUSED
+PARTIALLY INTEGRATED
+
+PART 4 — EXPORT LOGIC
+
+Identify all export-related logic:
+
+"Export Approved Punches"
+What it actually does
+Whether it produces a file or just UI output
+Gusto export logic
+Location of exportApprovedTimesheetsForGusto
+Whether it is currently wired into EPOCH
+Confirm:
+Are there multiple export paths?
+Which one is correct?
+
+PART 5 — PAY PERIOD LOGIC
+
+Identify how pay periods are handled:
+
+Where periodStart and periodEnd are defined
+Whether bi-weekly (Mon–Sun) is enforced anywhere
+Whether timesheets align cleanly to pay periods
+
+PART 6 — EMPLOYEE LINKING
+
+Identify how employees are tied to time:
+
+employeeId usage
+relationship between:
+punches
+timesheets
+employees table
+
+Confirm:
+
+whether names come from employees table
+whether any external IDs (e.g. Gusto) exist
+
+PART 7 — SUMMARY (IMPORTANT)
+
+Provide a clear summary:
+
+What is the TRUE system of record?
+punches OR timesheets
+What is the correct export path?
+What is currently broken or misleading?
+What should be considered legacy or deprecated?
+
+OUTPUT FORMAT
+
+Use clear sections for each part
+Include file paths and function names where relevant
+Be precise and factual (no assumptions)
+
+REMINDER
+
+This is a READ-ONLY audit.
+Do NOT modify code.
+Do NOT implement fixes.
+Only report what exists.

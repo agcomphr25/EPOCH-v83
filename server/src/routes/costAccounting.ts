@@ -10,7 +10,7 @@ import {
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
 import { processLaborCosts } from '../services/laborCostingService';
-import { postLaborToGL } from '../services/laborPostingService';
+import { postLaborToGL, voidLaborPosting } from '../services/laborPostingService';
 
 const router = Router();
 
@@ -482,6 +482,39 @@ router.post('/calculate-labor-costs', async (req: Request, res: Response) => {
       return res.status(409).json({ error: error.message });
     }
     res.status(500).json({ error: error.message || 'Failed to calculate labor costs' });
+  }
+});
+
+// POST /api/cost-accounting/void-labor-posting
+// Void a POSTED labor period: marks journal entries VOIDED and clears cost record back-links.
+router.post('/void-labor-posting', async (req: Request, res: Response) => {
+  try {
+    const { year, month } = req.body;
+
+    if (!year || !month || typeof year !== 'number' || typeof month !== 'number') {
+      return res.status(400).json({ error: 'year (number) and month (number) are required' });
+    }
+
+    if (month < 1 || month > 12) {
+      return res.status(400).json({ error: 'month must be between 1 and 12' });
+    }
+
+    const result = await voidLaborPosting(year, month);
+
+    res.json({
+      message: `Labor posting for ${year}-${String(month).padStart(2, '0')} voided successfully`,
+      runId: result.runId,
+      voidedEntryIds: result.voidedEntryIds,
+    });
+  } catch (error: any) {
+    console.error('Void labor posting error:', error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.statusCode === 409) {
+      return res.status(409).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message || 'Failed to void labor posting' });
   }
 });
 

@@ -4379,6 +4379,7 @@ async function initializeBackgroundServices() {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE labor_cost_records ADD COLUMN IF NOT EXISTS journal_entry_id INTEGER REFERENCES journal_entries(id)`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS labor_account_config (
           id SERIAL PRIMARY KEY,

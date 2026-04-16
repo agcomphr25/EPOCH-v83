@@ -1,7 +1,7 @@
 import { db } from '../../db';
 import { storage } from '../../storage';
-import { journalEntries, journalLines, laborPostingRuns } from '../../schema';
-import { eq } from 'drizzle-orm';
+import { journalEntries, journalLines, laborCostRecords, laborPostingRuns } from '../../schema';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { CostType } from './laborCostingService';
 
 /**
@@ -92,6 +92,17 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
         debitAmount: 0,
         creditAmount: totalAmount,
       });
+
+      // Stamp journal_entry_id on matching cost records for this run + costType
+      await tx
+        .update(laborCostRecords)
+        .set({ journalEntryId: entry.id })
+        .where(
+          and(
+            eq(laborCostRecords.postingRunId, run.id),
+            eq(laborCostRecords.costType, costType),
+          ),
+        );
     }
 
     // Mark the run as POSTED within the same transaction
@@ -101,4 +112,98 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
   });
 
   return { runId: run.id, journalEntryIds };
+}
+
+/**
+ * Void a POSTED labor period.
+ * - Marks all linked journal entries VOIDED
+ * - Clears journalEntryId and postingRunId back-links on cost records
+ * - Marks the posting run VOIDED
+ * - All changes are atomic (single DB transaction), including the run lookup and status checks
+ * - Returns 404 if no posting run found, 409 if already VOIDED
+ */
+export async function voidLaborPosting(year: number, month: number): Promise<{
+  runId: number;
+  voidedEntryIds: number[];
+}> {
+  let runId: number | null = null;
+  const voidedEntryIds: number[] = [];
+
+  await db.transaction(async (tx) => {
+    // Load the posting run inside the transaction so lookup and writes are atomic
+    const [run] = await tx
+      .select()
+      .from(laborPostingRuns)
+      .where(
+        and(
+          eq(laborPostingRuns.periodYear, year),
+          eq(laborPostingRuns.periodMonth, month),
+        ),
+      )
+      .limit(1);
+
+    if (!run) {
+      const err: any = new Error(`No labor posting run found for period ${year}-${month}.`);
+      err.statusCode = 404;
+      throw err;
+    }
+    if (run.status === 'VOIDED') {
+      const err: any = new Error(`Period ${year}-${month} has already been voided.`);
+      err.statusCode = 409;
+      throw err;
+    }
+    if (run.status !== 'POSTED') {
+      const err: any = new Error(`Period ${year}-${month} cannot be voided: run is in status '${run.status}', expected 'POSTED'.`);
+      err.statusCode = 409;
+      throw err;
+    }
+
+    runId = run.id;
+
+    // Collect distinct journal entry IDs linked to cost records for this run
+    const linkedRows = await tx
+      .select({ journalEntryId: laborCostRecords.journalEntryId })
+      .from(laborCostRecords)
+      .where(
+        and(
+          eq(laborCostRecords.postingRunId, run.id),
+          isNotNull(laborCostRecords.journalEntryId),
+        ),
+      );
+
+    const entryIds = [...new Set(
+      linkedRows
+        .map((r) => r.journalEntryId)
+        .filter((id): id is number => id !== null),
+    )];
+
+    if (entryIds.length > 0) {
+      // Mark all linked journal entries as VOIDED
+      await tx
+        .update(journalEntries)
+        .set({ status: 'VOIDED' })
+        .where(inArray(journalEntries.id, entryIds));
+
+      voidedEntryIds.push(...entryIds);
+    }
+
+    // Clear journalEntryId and postingRunId back-links on cost records for the period
+    await tx
+      .update(laborCostRecords)
+      .set({ journalEntryId: null, postingRunId: null })
+      .where(
+        and(
+          eq(laborCostRecords.periodYear, year),
+          eq(laborCostRecords.periodMonth, month),
+        ),
+      );
+
+    // Mark the posting run as VOIDED
+    await tx
+      .update(laborPostingRuns)
+      .set({ status: 'VOIDED' })
+      .where(eq(laborPostingRuns.id, run.id));
+  });
+
+  return { runId: runId!, voidedEntryIds };
 }

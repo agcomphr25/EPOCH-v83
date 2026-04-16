@@ -22193,7 +22193,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(laborCostRecords.periodYear, year), eq(laborCostRecords.periodMonth, month)));
   }
 
-  async updateLaborCostRecordJournalEntry(id: string, journalEntryId: number): Promise<LaborCostRecord | undefined> {
+  async updateLaborCostRecordJournalEntry(id: number, journalEntryId: number): Promise<LaborCostRecord | undefined> {
     const [row] = await db
       .update(laborCostRecords)
       .set({ journalEntryId })

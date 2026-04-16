@@ -15364,6 +15364,7 @@ export type InsertLaborPostingRun = z.infer<typeof insertLaborPostingRunSchema>;
 export const laborCostRecords = pgTable('labor_cost_records', {
   id: serial('id').primaryKey(),
   postingRunId: integer('posting_run_id').references(() => laborPostingRuns.id),
+  journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
   epochEmployeeId: integer('epoch_employee_id').references(() => employees.id),
   canonicalId: text('canonical_id'),
   jobCode: text('job_code'),

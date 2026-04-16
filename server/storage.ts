@@ -23686,6 +23686,104 @@ export class DatabaseStorage implements IStorage {
     return upserted;
   }
 
+  async getQuoteExecutionFeedbackSummary(opts: {
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<{
+    totalProjects: number;
+    overrunCount: number;
+    overrunPct: number | null;
+    avgLaborVariancePct: number | null;
+    topRisks: { risk: string; count: number }[];
+    topDepartments: { department: string; count: number }[];
+  }> {
+    const { startDate, endDate } = opts;
+
+    // Build date range WHERE clause fragments.
+    // For endDate, use the start of the *next* day so the entire selected day is included
+    // (records generated at any time on the end date qualify).
+    const dateConditions: string[] = [];
+    const params: unknown[] = [];
+    if (startDate) {
+      const startOfDay = new Date(startDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      params.push(startOfDay.toISOString());
+      dateConditions.push(`generated_at >= $${params.length}`);
+    }
+    if (endDate) {
+      const dayAfter = new Date(endDate);
+      dayAfter.setUTCHours(0, 0, 0, 0);
+      dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+      params.push(dayAfter.toISOString());
+      dateConditions.push(`generated_at < $${params.length}`);
+    }
+    const whereClause = dateConditions.length > 0 ? `WHERE ${dateConditions.join(' AND ')}` : '';
+
+    // Core aggregate query: total, overruns, avg labor variance
+    const coreQuery = `
+      SELECT
+        COUNT(*)::int AS total_projects,
+        COUNT(*) FILTER (WHERE is_overrun = true)::int AS overrun_count,
+        ROUND(AVG(labor_hours_variance_pct)::numeric, 2) AS avg_labor_variance_pct
+      FROM quote_execution_feedback
+      ${whereClause}
+    `;
+    const coreRows = await pool.query(coreQuery, params);
+    const coreRow = (coreRows as any[])[0] ?? {};
+    const totalProjects: number = coreRow.total_projects ?? 0;
+    const overrunCount: number = coreRow.overrun_count ?? 0;
+    const avgLaborVariancePct: number | null =
+      coreRow.avg_labor_variance_pct != null ? Number(coreRow.avg_labor_variance_pct) : null;
+    const overrunPct: number | null =
+      totalProjects > 0 ? Math.round((overrunCount / totalProjects) * 10000) / 100 : null;
+
+    // Top risks: unnest keyRisks JSONB array and rank by frequency
+    const risksWhere = whereClause
+      ? whereClause + ' AND key_risks IS NOT NULL AND jsonb_array_length(key_risks) > 0'
+      : 'WHERE key_risks IS NOT NULL AND jsonb_array_length(key_risks) > 0';
+    const risksQueryFixed = `
+      SELECT risk, COUNT(*)::int AS cnt
+      FROM (
+        SELECT jsonb_array_elements_text(key_risks) AS risk
+        FROM quote_execution_feedback
+        ${risksWhere}
+      ) AS r
+      WHERE trim(risk) <> ''
+      GROUP BY risk
+      ORDER BY cnt DESC
+      LIMIT 10
+    `;
+    const risksRows = await pool.query(risksQueryFixed, params);
+    const topRisks = (risksRows as any[]).map((row: { risk: string; cnt: number }) => ({
+      risk: row.risk,
+      count: row.cnt,
+    }));
+
+    // Top departments: unnest actualDepartments JSONB array and rank by frequency
+    const deptWhere = whereClause
+      ? whereClause + ' AND actual_departments IS NOT NULL AND jsonb_array_length(actual_departments) > 0'
+      : 'WHERE actual_departments IS NOT NULL AND jsonb_array_length(actual_departments) > 0';
+    const deptsQuery = `
+      SELECT dept, COUNT(*)::int AS cnt
+      FROM (
+        SELECT jsonb_array_elements_text(actual_departments) AS dept
+        FROM quote_execution_feedback
+        ${deptWhere}
+      ) AS d
+      WHERE trim(dept) <> ''
+      GROUP BY dept
+      ORDER BY cnt DESC
+      LIMIT 10
+    `;
+    const deptsRows = await pool.query(deptsQuery, params);
+    const topDepartments = (deptsRows as any[]).map((row: { dept: string; cnt: number }) => ({
+      department: row.dept,
+      count: row.cnt,
+    }));
+
+    return { totalProjects, overrunCount, overrunPct, avgLaborVariancePct, topRisks, topDepartments };
+  }
+
   async getQuoteExecutionFeedbackByProjectId(projectId: string): Promise<QuoteExecutionFeedback | undefined> {
     const [row] = await db
       .select()

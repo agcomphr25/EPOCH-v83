@@ -6,6 +6,29 @@ const router = Router();
 
 const uuidSchema = z.string().uuid('Must be a valid UUID');
 
+const summaryQuerySchema = z.object({
+  startDate: z.string().optional().refine((v) => !v || !isNaN(Date.parse(v)), { message: 'startDate must be a valid date string' }),
+  endDate: z.string().optional().refine((v) => !v || !isNaN(Date.parse(v)), { message: 'endDate must be a valid date string' }),
+});
+
+router.get('/quote-feedback/summary', async (req, res) => {
+  const parsed = summaryQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid query parameters', details: parsed.error.flatten() });
+  }
+  try {
+    const { startDate, endDate } = parsed.data;
+    const summary = await storage.getQuoteExecutionFeedbackSummary({
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
+    res.json(summary);
+  } catch (err: any) {
+    console.error('Error fetching quote feedback summary:', err);
+    res.status(500).json({ error: 'Failed to fetch quote feedback summary' });
+  }
+});
+
 router.post('/projects/:projectId/quote-feedback/generate', async (req, res) => {
   const parsed = uuidSchema.safeParse(req.params.projectId);
   if (!parsed.success) {

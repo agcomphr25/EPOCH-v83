@@ -138,6 +138,7 @@ import LocateOrder from './pages/LocateOrder';
 import LinkGroupsReport from './pages/LinkGroupsReport';
 import DueDateCapacityReport from './pages/DueDateCapacityReport';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import QuoteAccuracyDashboard from './pages/QuoteAccuracyDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
 import ProductionCommandCenter from './pages/ProductionCommandCenter';
@@ -497,6 +498,7 @@ function App() {
                   <Route path="/rfq-builder" component={RFQBuilderPage} />
                   <Route path="/rfq-builder/:id" component={RFQBuilderPage} />
                   <Route path="/analytics" component={AnalyticsDashboard} />
+                  <Route path="/quote-accuracy" component={QuoteAccuracyDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />
                   <Route path="/feature-manager" component={FeatureManager} />

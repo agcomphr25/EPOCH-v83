@@ -1,0 +1,242 @@
+I’ve got enough from the Material Inventory page to shape the next build cleanly. I’m focusing on upgrades that fit the current history dialog without changing the backend contract first.
+
+Thought for 14s
+
+Here’s the right next build for #275 — Transaction history improvements based on the current MaterialInventoryPage.tsx. The page already has a working history dialog and loads lot transactions by selected lot, so this should be an enhancement pass, not a rewrite.
+
+#275 — Transaction History Improvements
+What & Why
+
+Improve the Material Inventory transaction history dialog so operators and auditors can understand lot activity faster. The current dialog works, but it is still fairly raw: transaction type labels are generic, quantity context is limited, and important fields like before/after quantities and reasons are not emphasized. This build makes the history dialog more readable and audit-friendly without changing the existing backend endpoints.
+
+Done looks like
+Transaction type badges are visually distinct and human-readable
+Qty column clearly shows direction and unit
+Before / After quantity is displayed
+Reason is shown separately from notes when present
+Date/time remains sortable/readable
+Empty state remains intact
+No backend changes required
+No changes to move/split/status/scrap actions
+Out of scope
+New backend history endpoints
+Merging inventory transaction history with lot transaction history
+NCR linkage
+Filtering/exporting history
+Dedicated full-page transaction report
+Recommended UI improvements for the existing dialog
+1. Expand the Transaction interface
+
+Your current history dialog already has access to qtyBefore, qtyChange, qtyAfter, transactionType, reason, and notes, so we can use those directly.
+
+Keep or confirm this shape:
+
+interface Transaction {
+  id: string;
+  materialLotId: string;
+  internalControlNumber: string;
+  transactionType: string;
+  qtyBefore?: string;
+  qtyChange?: string;
+  qtyAfter?: string;
+  fromLocation?: string;
+  toLocation?: string;
+  performedBy: string;
+  performedAt: string;
+  reason?: string;
+  notes?: string;
+}
+2. Add a transaction badge helper
+
+Place this near getStatusBadge:
+
+const getTransactionBadge = (type: string) => {
+  const variants: Record<
+    string,
+    {
+      variant: 'default' | 'secondary' | 'destructive' | 'outline';
+      label: string;
+    }
+  > = {
+    RECEIVE: { variant: 'secondary', label: 'Receive' },
+    MOVE: { variant: 'outline', label: 'Move' },
+    ISSUE: { variant: 'default', label: 'Issue' },
+    RETURN: { variant: 'secondary', label: 'Return' },
+    SPLIT: { variant: 'outline', label: 'Split' },
+    SCRAP: { variant: 'destructive', label: 'Scrap' },
+    ADJUST: { variant: 'outline', label: 'Adjust' },
+    ACCEPT: { variant: 'default', label: 'Accept' },
+    REJECT: { variant: 'destructive', label: 'Reject' },
+    QUARANTINE: { variant: 'outline', label: 'Quarantine' },
+    OUT_START: { variant: 'outline', label: 'Out Start' },
+    OUT_END: { variant: 'outline', label: 'Returned to Storage' },
+  };
+
+  const config = variants[type] || {
+    variant: 'outline' as const,
+    label: type,
+  };
+
+  return <Badge variant={config.variant}>{config.label}</Badge>;
+};
+3. Add quantity formatting helpers
+
+Place these near the other helpers:
+
+const formatQty = (value?: string) => {
+  if (value === undefined || value === null || value === '') return '-';
+  const num = Number(value);
+  if (Number.isNaN(num)) return value;
+  return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+};
+
+const renderQtyChange = (value?: string, unit?: string) => {
+  if (!value) return '-';
+
+  const num = Number(value);
+  if (Number.isNaN(num)) return value;
+
+  const sign = num > 0 ? '+' : '';
+  const className =
+    num < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium';
+
+  return (
+    <span className={className}>
+      {sign}
+      {formatQty(value)}
+      {unit ? ` ${unit}` : ''}
+    </span>
+  );
+};
+4. Replace the current history table with a more readable one
+
+Replace the current history dialog table body/header block with this improved version:
+
+<Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Date / Time</TableHead>
+      <TableHead>Type</TableHead>
+      <TableHead>Qty Change</TableHead>
+      <TableHead>Before → After</TableHead>
+      <TableHead>Location</TableHead>
+      <TableHead>Performed By</TableHead>
+      <TableHead>Reason / Notes</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    {transactions.map((tx) => (
+      <TableRow key={tx.id}>
+        <TableCell className="text-sm whitespace-nowrap">
+          {format(new Date(tx.performedAt), 'MM/dd/yyyy HH:mm')}
+        </TableCell>
+
+        <TableCell>
+          {getTransactionBadge(tx.transactionType)}
+        </TableCell>
+
+        <TableCell>
+          {renderQtyChange(tx.qtyChange, selectedLot?.unitOfMeasure)}
+        </TableCell>
+
+        <TableCell className="text-sm whitespace-nowrap">
+          {tx.qtyBefore || tx.qtyAfter ? (
+            <span>
+              {formatQty(tx.qtyBefore)} → {formatQty(tx.qtyAfter)} {selectedLot?.unitOfMeasure}
+            </span>
+          ) : (
+            '-'
+          )}
+        </TableCell>
+
+        <TableCell className="text-sm">
+          {tx.fromLocation && tx.toLocation
+            ? `${tx.fromLocation} → ${tx.toLocation}`
+            : tx.toLocation || tx.fromLocation || '-'}
+        </TableCell>
+
+        <TableCell className="text-sm">
+          {tx.performedBy}
+        </TableCell>
+
+        <TableCell className="text-sm max-w-[260px]">
+          <div className="space-y-1">
+            {tx.reason && (
+              <div>
+                <span className="font-medium">Reason:</span> {tx.reason}
+              </div>
+            )}
+            {tx.notes && (
+              <div className="text-muted-foreground">
+                <span className="font-medium text-foreground">Notes:</span> {tx.notes}
+              </div>
+            )}
+            {!tx.reason && !tx.notes && <span className="text-muted-foreground">-</span>}
+          </div>
+        </TableCell>
+      </TableRow>
+    ))}
+  </TableBody>
+</Table>
+5. Improve the dialog width slightly
+
+Your current dialog already uses max-w-3xl. I would bump it to max-w-5xl so the before/after and reason columns have room:
+
+<DialogContent className="max-w-5xl">
+
+That will help readability on desktop.
+
+Why this fits the current page
+
+The existing page already:
+
+opens a history dialog from the row actions menu
+loads transactions per selected lot
+displays transaction fields in a table
+has all the needed imported UI components already in place.
+
+So this build is a clean enhancement to the exact structure you already have, rather than introducing a new pattern.
+
+Optional stretch improvement
+
+If you want one extra polish pass after this, add a small summary strip above the table inside the history dialog:
+
+<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+  <Card>
+    <CardContent className="p-3">
+      <p className="text-xs text-muted-foreground">Current Remaining</p>
+      <p className="font-semibold">
+        {selectedLot?.remainingQty} {selectedLot?.unitOfMeasure}
+      </p>
+    </CardContent>
+  </Card>
+  <Card>
+    <CardContent className="p-3">
+      <p className="text-xs text-muted-foreground">Status</p>
+      <div className="pt-1">{selectedLot && getStatusBadge(selectedLot.status)}</div>
+    </CardContent>
+  </Card>
+  <Card>
+    <CardContent className="p-3">
+      <p className="text-xs text-muted-foreground">Location</p>
+      <p className="font-semibold">{selectedLot?.storageLocation || '-'}</p>
+    </CardContent>
+  </Card>
+  <Card>
+    <CardContent className="p-3">
+      <p className="text-xs text-muted-foreground">Transactions</p>
+      <p className="font-semibold">{transactions.length}</p>
+    </CardContent>
+  </Card>
+</div>
+
+That is optional, but it would make the dialog feel more complete.
+
+Bottom line
+
+#275 should be a UI readability upgrade to the existing history dialog, not a new feature set. The page you pasted already has the right foundation for it.
+
+Paste this into Replit as the ticket spec:
+
+#275 - Transaction History Improvements
+Improve the Material Inventory transaction history dialog so lot activity is easier to interpret. Add distinct transaction badges, clearer quantity change formatting, before/after quantity display, and separate reason/notes presentation. Keep the existing backend endpoint and dialog workflow intact. Update only client/src/pages/MaterialInventoryPage.tsx.

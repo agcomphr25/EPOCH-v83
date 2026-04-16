@@ -10,13 +10,44 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
+
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getCurrentBiweeklyPeriod(): { start: string; end: string } {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  const thisMonday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysToMonday);
+
+  const refMonday = new Date(2026, 0, 5);
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const daysSinceRef = Math.round((thisMonday.getTime() - refMonday.getTime()) / msPerDay);
+  const weeksSinceRef = Math.floor(daysSinceRef / 7);
+  const periodWeekOffset = weeksSinceRef % 2 === 0 ? 0 : -7;
+
+  const periodStart = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() + periodWeekOffset);
+  const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate() + 13);
+
+  return {
+    start: toLocalDateString(periodStart),
+    end: toLocalDateString(periodEnd),
+  };
+}
 
 export default function AdminTimesheets() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [exportOpen, setExportOpen] = useState(false);
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const [periodStart, setPeriodStart] = useState(() => getCurrentBiweeklyPeriod().start);
+  const [periodEnd, setPeriodEnd] = useState(() => getCurrentBiweeklyPeriod().end);
 
   const getStatusParam = () => {
     if (statusFilter === "all") return undefined;
@@ -31,11 +62,29 @@ export default function AdminTimesheets() {
     return emp ? `${emp.firstName} ${emp.lastName}` : `ID: ${id}`;
   };
 
-  const handleExport = () => {
-    if (!periodStart || !periodEnd) return;
-    const url = `/api/timesheets/export/gusto?periodStart=${encodeURIComponent(periodStart)}&periodEnd=${encodeURIComponent(periodEnd)}`;
-    window.location.href = url;
-    setExportOpen(false);
+  const handleExport = async () => {
+    if (!periodStart || !periodEnd || isExporting) return;
+    setIsExporting(true);
+    try {
+      const url = `/api/timekeeping/admin/export/gusto?periodStart=${encodeURIComponent(periodStart)}&periodEnd=${encodeURIComponent(periodEnd)}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Export failed" }));
+        throw new Error(err.error ?? "Export failed");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `gusto-export-${periodStart}-to-${periodEnd}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      setExportOpen(false);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -144,10 +193,14 @@ export default function AdminTimesheets() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
-            <Button onClick={handleExport} disabled={!periodStart || !periodEnd}>
-              <Download className="w-4 h-4 mr-2" />
-              Download CSV
+            <Button variant="outline" onClick={() => setExportOpen(false)} disabled={isExporting}>Cancel</Button>
+            <Button onClick={handleExport} disabled={!periodStart || !periodEnd || isExporting}>
+              {isExporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              {isExporting ? "Exporting..." : "Download CSV"}
             </Button>
           </DialogFooter>
         </DialogContent>

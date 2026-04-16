@@ -660,6 +660,60 @@ router.post('/:id/return', async (req: Request, res: Response) => {
   }
 });
 
+// Scrap material lot (partial or full)
+const scrapBodySchema = z.object({
+  qty: z.number().positive('qty must be a positive number'),
+  reason: z.string().min(1, 'reason is required'),
+  performedBy: z.string().min(1, 'performedBy is required'),
+});
+
+router.post('/:id/scrap', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const parsed = scrapBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation error', details: parsed.error.errors });
+    }
+
+    const { qty, reason, performedBy } = parsed.data;
+
+    const lot = await storage.getMaterialLot(id);
+    if (!lot) {
+      return res.status(404).json({ error: 'Material lot not found' });
+    }
+
+    const remaining = parseFloat(lot.remainingQty);
+
+    if (lot.status === 'SCRAPPED' || remaining <= 0) {
+      return res.status(400).json({
+        error: 'LOT_NOT_SCRAPPABLE',
+        message: `Lot cannot be scrapped — current status is ${lot.status} with ${remaining} remaining`,
+      });
+    }
+
+    if (qty > remaining) {
+      return res.status(400).json({
+        error: 'EXCESS_SCRAP_QTY',
+        message: `Scrap quantity ${qty} exceeds remaining quantity ${remaining} ${lot.unitOfMeasure}`,
+        remaining,
+        requested: qty,
+      });
+    }
+
+    const result = await storage.scrapMaterialLot(id, { qty, reason, performedBy });
+
+    res.json({
+      lot: result.lot,
+      transaction: result.transaction,
+    });
+  } catch (error: any) {
+    console.error('Error scrapping material lot:', error);
+    const statusCode = [400, 404, 409].includes(error.statusCode) ? error.statusCode : 500;
+    res.status(statusCode).json({ error: 'Failed to scrap material lot', message: error.message });
+  }
+});
+
 // Split material lot
 router.post('/:id/split', async (req: Request, res: Response) => {
   try {

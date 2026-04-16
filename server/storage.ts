@@ -2541,6 +2541,8 @@ export interface IStorage {
   deleteMaterialLot(id: string): Promise<void>;
   generateNextICN(): Promise<string>;
 
+  scrapMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
+
   // Material Lot Transactions
   getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]>;
   getMaterialLotTransactionsByICN(icn: string): Promise<MaterialLotTransaction[]>;
@@ -21229,6 +21231,107 @@ export class DatabaseStorage implements IStorage {
     }
     
     return `${prefix}${nextNumber.toString().padStart(6, '0')}`;
+  }
+
+  async scrapMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }> {
+    const { qty, reason, performedBy } = params;
+
+    // Quick existence pre-check (no lock yet) so the caller gets a clean 404.
+    const [preCheck] = await db.select({ id: materialLots.id }).from(materialLots).where(eq(materialLots.id, id));
+    if (!preCheck) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+
+    const { updatedLot, lotTx } = await db.transaction(async (tx) => {
+      // Row-lock the lot for the duration of the transaction to prevent concurrent over-scrap.
+      const lockedRows = await tx.execute(
+        sql`SELECT id, remaining_qty, status, internal_control_number, material_part_number, unit_of_measure
+            FROM material_lots
+            WHERE id = ${id}
+            FOR UPDATE`
+      );
+      const rows = (lockedRows as any).rows ?? (lockedRows as any);
+      const lockedLot = Array.isArray(rows) ? rows[0] : null;
+
+      if (!lockedLot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+
+      const remaining = parseFloat(lockedLot.remaining_qty);
+
+      if (lockedLot.status === 'SCRAPPED' || remaining <= 0) {
+        throw Object.assign(
+          new Error(`Lot cannot be scrapped — status is ${lockedLot.status} with ${remaining} remaining`),
+          { statusCode: 400 }
+        );
+      }
+
+      if (qty > remaining) {
+        throw Object.assign(
+          new Error(`Scrap quantity ${qty} exceeds remaining quantity ${remaining} ${lockedLot.unit_of_measure}`),
+          { statusCode: 400 }
+        );
+      }
+
+      const newRemaining = (remaining - qty).toString();
+      const newStatus = parseFloat(newRemaining) <= 0 ? 'SCRAPPED' : lockedLot.status;
+
+      // 1. Decrement remaining qty and conditionally set status to SCRAPPED.
+      const [updatedLot] = await tx
+        .update(materialLots)
+        .set({ remainingQty: newRemaining, status: newStatus, updatedAt: new Date() })
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      // 2. Write material_lot_transactions audit record.
+      const [lotTx] = await tx
+        .insert(materialLotTransactions)
+        .values({
+          materialLotId: id,
+          internalControlNumber: lockedLot.internal_control_number,
+          transactionType: 'SCRAP',
+          qtyBefore: lockedLot.remaining_qty,
+          qtyChange: (-qty).toString(),
+          qtyAfter: newRemaining,
+          performedBy,
+          reason,
+          wasOverride: false,
+        })
+        .returning();
+
+      // 3. Write inventory_transactions record (negative qty for global ledger).
+      await tx.insert(inventoryTransactions).values({
+        agPartNumber: lockedLot.material_part_number,
+        transactionType: 'scrap',
+        quantity: -qty,
+        unitOfMeasure: lockedLot.unit_of_measure,
+        referenceType: 'SCRAP',
+        referenceId: id,
+        performedBy,
+        notes: reason,
+      });
+
+      // 4. Update inventory_balances — mandatory; rollback if no balance row exists.
+      const [balance] = await tx
+        .select()
+        .from(inventoryBalances)
+        .where(eq(inventoryBalances.agPartNumber, lockedLot.material_part_number))
+        .limit(1);
+
+      if (!balance) {
+        throw Object.assign(
+          new Error(`No inventory balance row found for part ${lockedLot.material_part_number}. Scrap aborted to preserve ledger integrity.`),
+          { statusCode: 409 }
+        );
+      }
+
+      const newOnHand = Math.max(0, balance.quantityOnHand - qty);
+      const newAvailable = Math.max(0, newOnHand - balance.quantityAllocated);
+      await tx
+        .update(inventoryBalances)
+        .set({ quantityOnHand: newOnHand, quantityAvailable: newAvailable, updatedAt: new Date() })
+        .where(eq(inventoryBalances.id, balance.id));
+
+      return { updatedLot, lotTx };
+    });
+
+    return { lot: updatedLot, transaction: lotTx };
   }
 
   // Material Lot Transactions

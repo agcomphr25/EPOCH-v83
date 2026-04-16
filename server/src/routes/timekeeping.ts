@@ -534,51 +534,6 @@ router.delete(
   }
 );
 
-// GET /api/timekeeping/admin/payroll
-router.get(
-  '/admin/payroll',
-  authenticateToken,
-  requireRole('ADMIN'),
-  async (req: Request, res: Response) => {
-    try {
-      const payPeriod = getPayPeriod();
-      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : payPeriod.start;
-      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : payPeriod.end;
-
-      const rows = await pool.query(
-        `SELECT
-           epoch_employee_id AS "epochEmployeeId",
-           punch_type AS "punchType",
-           punch_time AS "punchTime",
-           approved
-         FROM punch_events
-         WHERE approved = true AND punch_time BETWEEN $1 AND $2
-         ORDER BY epoch_employee_id, punch_time`,
-        [startDate, endDate]
-      );
-
-      const byEmployee: Record<number, any> = {};
-      for (const row of rows) {
-        const eid = row.epochEmployeeId;
-        if (!byEmployee[eid]) byEmployee[eid] = { epochEmployeeId: eid, punches: [], totalHours: 0, intervals: [] };
-        byEmployee[eid].punches.push(row);
-      }
-      for (const emp of Object.values(byEmployee)) {
-        emp.intervals = pairPunches(emp.punches);
-        emp.totalHours = sumHours(emp.intervals);
-      }
-
-      res.json({
-        payPeriod: { start: payPeriod.start, end: payPeriod.end, label: payPeriod.label },
-        employees: Object.values(byEmployee),
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (err: any) {
-      console.error('[Timekeeping] Payroll export error:', err);
-      res.status(500).json({ error: 'Failed to export payroll' });
-    }
-  }
-);
 
 // GET /api/timekeeping/admin/labor-by-bucket
 router.get(

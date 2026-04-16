@@ -143,7 +143,7 @@ export default function TimeClockAdminPage() {
     setIsExporting(true);
     try {
       const params = new URLSearchParams({ periodStart, periodEnd });
-      const response = await fetch(`/api/timekeeping/export/gusto?${params}`);
+      const response = await fetch(`/api/timekeeping/admin/export/gusto?${params}`);
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

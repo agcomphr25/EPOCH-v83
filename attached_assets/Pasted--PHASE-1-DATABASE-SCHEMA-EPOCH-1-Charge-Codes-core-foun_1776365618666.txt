@@ -1,0 +1,221 @@
+🧱 PHASE 1 DATABASE SCHEMA (EPOCH)
+1. Charge Codes (core foundation)
+CREATE TABLE charge_codes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  description text,
+
+  charge_type text NOT NULL CHECK (charge_type IN ('DIRECT','INDIRECT','UNALLOWABLE')),
+
+  project_id uuid,
+  work_order_id uuid,
+  department text,
+
+  requires_approval boolean DEFAULT false,
+  is_active boolean DEFAULT true,
+
+  created_by uuid,
+  created_at timestamp DEFAULT now()
+);
+
+👉 This drives EVERYTHING.
+👉 No labor without a charge code.
+
+2. Labor Authorizations (allocated hours)
+CREATE TABLE labor_authorizations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  project_id uuid NOT NULL,
+  work_order_id uuid,
+  traveler_id uuid,
+
+  charge_code_id uuid NOT NULL,
+
+  department text,
+
+  authorized_hours numeric DEFAULT 0,
+  consumed_hours numeric DEFAULT 0,
+
+  approved_extra_hours numeric DEFAULT 0,
+
+  hard_stop boolean DEFAULT true,
+
+  effective_start timestamp,
+  effective_end timestamp,
+
+  created_by uuid,
+  created_at timestamp DEFAULT now(),
+
+  approved_by uuid,
+  approved_at timestamp
+);
+
+👉 This is your budget control layer
+👉 Tracks planned vs actual
+
+3. Extra Hours Requests (approval workflow)
+CREATE TABLE labor_authorization_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  labor_authorization_id uuid NOT NULL,
+
+  project_id uuid,
+  work_order_id uuid,
+  traveler_id uuid,
+
+  requested_hours numeric NOT NULL,
+  justification text,
+
+  requested_by uuid,
+  requested_at timestamp DEFAULT now(),
+
+  status text NOT NULL DEFAULT 'PENDING'
+    CHECK (status IN ('PENDING','APPROVED','DENIED')),
+
+  approved_by uuid,
+  approved_at timestamp,
+
+  approved_hours numeric,
+  denial_reason text
+);
+
+👉 This is your controlled overrun system
+
+4. Time Clock Punches (attendance layer)
+CREATE TABLE time_clock_punches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  employee_id uuid NOT NULL,
+
+  punch_type text NOT NULL
+    CHECK (punch_type IN ('IN','OUT','BREAK_START','BREAK_END')),
+
+  punched_at timestamp NOT NULL DEFAULT now(),
+
+  device_id text,
+  created_at timestamp DEFAULT now()
+);
+
+👉 This answers: “Were you here?”
+
+5. Work Sessions (MOST IMPORTANT TABLE)
+CREATE TABLE labor_work_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  employee_id uuid NOT NULL,
+
+  project_id uuid,
+  work_order_id uuid,
+  traveler_id uuid,
+
+  charge_code_id uuid NOT NULL,
+
+  department text,
+
+  session_type text NOT NULL
+    CHECK (session_type IN ('DIRECT','INDIRECT','UNALLOWABLE')),
+
+  started_at timestamp NOT NULL,
+  ended_at timestamp,
+
+  total_hours numeric,
+
+  status text DEFAULT 'OPEN'
+    CHECK (status IN ('OPEN','CLOSED','CERTIFIED','APPROVED')),
+
+  created_at timestamp DEFAULT now()
+);
+
+👉 This is your true labor record
+
+6. Daily Timesheets (employee certification)
+CREATE TABLE daily_timesheets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  employee_id uuid NOT NULL,
+  work_date date NOT NULL,
+
+  total_hours numeric DEFAULT 0,
+
+  status text DEFAULT 'DRAFT'
+    CHECK (status IN ('DRAFT','CERTIFIED','APPROVED')),
+
+  certified_at timestamp,
+  approved_at timestamp,
+
+  created_at timestamp DEFAULT now()
+);
+
+👉 This satisfies:
+
+daily entry
+employee certification
+supervisor approval
+7. Labor Audit Log (DO NOT SKIP)
+CREATE TABLE labor_entry_audit (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  entity_type text, -- 'SESSION','TIMESHEET','AUTHORIZATION'
+
+  entity_id uuid,
+
+  field_changed text,
+  old_value text,
+  new_value text,
+
+  changed_by uuid,
+  changed_at timestamp DEFAULT now(),
+
+  reason text
+);
+
+👉 This is what saves you in audits.
+
+🔗 REQUIRED RELATIONSHIPS (IMPORTANT)
+
+You already have these tables — now link them:
+
+Add to existing tables:
+Projects
+ALTER TABLE projects ADD COLUMN default_charge_code_id uuid;
+Work Orders
+ALTER TABLE work_orders ADD COLUMN default_charge_code_id uuid;
+ALTER TABLE work_orders ADD COLUMN project_id uuid;
+Travelers
+ALTER TABLE travelers ADD COLUMN default_charge_code_id uuid;
+ALTER TABLE travelers ADD COLUMN project_id uuid;
+🧠 CORE LOGIC THIS SCHEMA ENABLES
+Auto charge-code assignment
+
+When starting work:
+
+IF traveler.default_charge_code_id EXISTS → use it
+ELSE IF work_order.default_charge_code_id EXISTS → use it
+ELSE IF project.default_charge_code_id EXISTS → use it
+ELSE → require manual authorized selection
+Hour control calculation
+remaining_hours =
+  authorized_hours
++ approved_extra_hours
+- consumed_hours
+Work start rule
+IF remaining_hours > 0 → allow
+IF remaining_hours <= 0 → block + require request
+Session close rule
+
+When session ends:
+
+total_hours = ended_at - started_at
+
+UPDATE labor_authorizations
+SET consumed_hours += total_hours
+🔥 WHAT THIS GIVES YOU (IMMEDIATELY)
+Auto job code assignment ✔
+Real-time labor tracking ✔
+Project/work-order hour control ✔
+Hard stop at budget ✔
+Approval workflow ✔
+Audit trail ✔
+Daily certification ready ✔

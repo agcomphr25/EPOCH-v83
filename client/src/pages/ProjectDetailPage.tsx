@@ -48,7 +48,12 @@ import {
   Layers,
   CheckSquare,
   Tag,
-  X
+  X,
+  BookOpen,
+  ShieldAlert,
+  ListChecks,
+  Plus,
+  Save
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -180,6 +185,45 @@ interface TraceabilityData {
   serials: TraceabilitySerial[];
 }
 
+interface ProjectClosing {
+  id: number;
+  projectId: string;
+  summary: string | null;
+  whatWentWrong: string | null;
+  strengths: string | null;
+  opportunities: string | null;
+  similaritiesToPriorProjects: string | null;
+  nextProjectRecommendations: string | null;
+  closedBy: number | null;
+  closedByDisplayName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ProjectClosingRisk {
+  id: number;
+  closingId: number;
+  projectId: string;
+  category: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+  department: string | null;
+  owner: string | null;
+  createdAt: string;
+}
+
+interface ProjectClosingAction {
+  id: number;
+  closingId: number;
+  projectId: string;
+  actionText: string;
+  owner: string | null;
+  department: string | null;
+  dueDate: string | null;
+  status: 'open' | 'in_progress' | 'completed' | 'cancelled';
+  createdAt: string;
+}
+
 const STEP_CONFIG: Record<string, { label: string; route: string; icon: typeof FileText }> = {
   rfq_risk_assessment: { label: 'RFQ Risk Assessment', route: '/rfq-risk-assessment', icon: FileText },
   quote: { label: 'Quote', route: '/p2-quote-form', icon: FileText },
@@ -247,6 +291,20 @@ export default function ProjectDetailPage() {
   const [isSkipDialogOpen, setIsSkipDialogOpen] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string } | null>(null);
   const [skipReason, setSkipReason] = useState('');
+  const [closingForm, setClosingForm] = useState({
+    summary: '',
+    whatWentWrong: '',
+    strengths: '',
+    opportunities: '',
+    similaritiesToPriorProjects: '',
+    nextProjectRecommendations: '',
+    closedByDisplayName: '',
+  });
+  const [isEditingClosing, setIsEditingClosing] = useState(false);
+  const [showRiskDialog, setShowRiskDialog] = useState(false);
+  const [showActionDialog, setShowActionDialog] = useState(false);
+  const [riskForm, setRiskForm] = useState({ category: '', severity: 'medium' as 'low' | 'medium' | 'high' | 'critical', description: '', department: '', owner: '' });
+  const [actionForm, setActionForm] = useState({ actionText: '', owner: '', department: '', dueDate: '', status: 'open' as 'open' | 'in_progress' | 'completed' | 'cancelled' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -433,6 +491,118 @@ export default function ProjectDetailPage() {
     },
     onError: (err: any) => toast({ title: 'Remove failed', description: err.message, variant: 'destructive' }),
   });
+
+  // ── Project Closing queries & mutations ──
+  const { data: projectClosing, isLoading: isLoadingClosing } = useQuery<ProjectClosing | null>({
+    queryKey: ['/api/projects', id, 'closing'],
+    queryFn: () => fetch(`/api/projects/${id}/closing`, { credentials: 'include' }).then(async r => {
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error('Failed to fetch closing');
+      return r.json();
+    }),
+    enabled: !!id,
+  });
+
+  const { data: closingRisks = [] } = useQuery<ProjectClosingRisk[]>({
+    queryKey: ['/api/projects', id, 'closing', 'risks'],
+    queryFn: () => fetch(`/api/projects/${id}/closing/risks`, { credentials: 'include' }).then(async r => {
+      if (!r.ok) throw new Error('Failed to fetch closing risks');
+      return r.json();
+    }),
+    enabled: !!id,
+  });
+
+  const { data: closingActions = [] } = useQuery<ProjectClosingAction[]>({
+    queryKey: ['/api/projects', id, 'closing', 'actions'],
+    queryFn: () => fetch(`/api/projects/${id}/closing/actions`, { credentials: 'include' }).then(async r => {
+      if (!r.ok) throw new Error('Failed to fetch closing actions');
+      return r.json();
+    }),
+    enabled: !!id,
+  });
+
+  const createClosingMutation = useMutation({
+    mutationFn: (data: typeof closingForm) =>
+      apiRequest(`/api/projects/${id}/closing`, { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'closing'] });
+      setIsEditingClosing(false);
+      toast({ title: 'Closing record created', description: 'Lessons learned have been saved.' });
+    },
+    onError: (err: any) => toast({ title: 'Save failed', description: err?.message || 'Could not save closing record.', variant: 'destructive' }),
+  });
+
+  const updateClosingMutation = useMutation({
+    mutationFn: ({ closingId, data }: { closingId: number; data: typeof closingForm }) =>
+      apiRequest(`/api/projects/${id}/closing/${closingId}`, { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'closing'] });
+      setIsEditingClosing(false);
+      toast({ title: 'Closing record updated', description: 'Lessons learned have been saved.' });
+    },
+    onError: (err: any) => toast({ title: 'Update failed', description: err?.message || 'Could not update closing record.', variant: 'destructive' }),
+  });
+
+  const addRiskMutation = useMutation({
+    mutationFn: (data: typeof riskForm) =>
+      apiRequest(`/api/projects/${id}/closing/risks`, { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'closing', 'risks'] });
+      setShowRiskDialog(false);
+      setRiskForm({ category: '', severity: 'medium', description: '', department: '', owner: '' });
+      toast({ title: 'Risk added' });
+    },
+    onError: (err: any) => toast({ title: 'Failed to add risk', description: err?.message, variant: 'destructive' }),
+  });
+
+  const addActionMutation = useMutation({
+    mutationFn: (data: typeof actionForm) =>
+      apiRequest(`/api/projects/${id}/closing/actions`, { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'closing', 'actions'] });
+      setShowActionDialog(false);
+      setActionForm({ actionText: '', owner: '', department: '', dueDate: '', status: 'open' });
+      toast({ title: 'Action added' });
+    },
+    onError: (err: any) => toast({ title: 'Failed to add action', description: err?.message, variant: 'destructive' }),
+  });
+
+  const handleSaveClosing = () => {
+    if (projectClosing) {
+      updateClosingMutation.mutate({ closingId: projectClosing.id, data: closingForm });
+    } else {
+      createClosingMutation.mutate(closingForm);
+    }
+  };
+
+  const handleStartEditClosing = () => {
+    if (projectClosing) {
+      setClosingForm({
+        summary: projectClosing.summary || '',
+        whatWentWrong: projectClosing.whatWentWrong || '',
+        strengths: projectClosing.strengths || '',
+        opportunities: projectClosing.opportunities || '',
+        similaritiesToPriorProjects: projectClosing.similaritiesToPriorProjects || '',
+        nextProjectRecommendations: projectClosing.nextProjectRecommendations || '',
+        closedByDisplayName: projectClosing.closedByDisplayName || '',
+      });
+    }
+    setIsEditingClosing(true);
+  };
+
+  const SEVERITY_COLORS: Record<string, string> = {
+    low: 'bg-blue-100 text-blue-800',
+    medium: 'bg-yellow-100 text-yellow-800',
+    high: 'bg-orange-100 text-orange-800',
+    critical: 'bg-red-100 text-red-800',
+  };
+
+  const ACTION_STATUS_COLORS: Record<string, string> = {
+    open: 'bg-gray-100 text-gray-800',
+    in_progress: 'bg-blue-100 text-blue-800',
+    completed: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800',
+  };
 
   const handleExternalPdfFileChange = (slipId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -813,6 +983,10 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
           <TabsTrigger value="traceability" data-testid="tab-traceability">Traceability</TabsTrigger>
+          <TabsTrigger value="closing" data-testid="tab-closing">
+            <BookOpen className="h-4 w-4 mr-1.5" />
+            Close Project
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="workflow" className="space-y-4">
@@ -1744,6 +1918,286 @@ export default function ProjectDetailPage() {
           )}
         </TabsContent>
 
+        {/* ── CLOSING TAB ── */}
+        <TabsContent value="closing" className="space-y-6">
+          {isLoadingClosing ? (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Loading closing record…</CardContent></Card>
+          ) : !projectClosing && !isEditingClosing ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  Project Closing
+                </CardTitle>
+                <CardDescription>Record lessons learned, risks, and follow-up actions to improve future projects.</CardDescription>
+              </CardHeader>
+              <CardContent className="py-8 text-center space-y-4">
+                <p className="text-muted-foreground">No closing record has been created for this project yet.</p>
+                <Button onClick={handleStartEditClosing} data-testid="button-create-closing">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Start Project Closing
+                </Button>
+              </CardContent>
+            </Card>
+          ) : isEditingClosing ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  {projectClosing ? 'Edit' : 'New'} Project Closing
+                </CardTitle>
+                <CardDescription>Fill in the lessons learned from this project.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="closing-closed-by">Closed By</Label>
+                  <Input
+                    id="closing-closed-by"
+                    placeholder="Name of person closing the project"
+                    value={closingForm.closedByDisplayName}
+                    onChange={e => setClosingForm(f => ({ ...f, closedByDisplayName: e.target.value }))}
+                    data-testid="input-closed-by"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="closing-summary">Summary</Label>
+                  <Textarea
+                    id="closing-summary"
+                    placeholder="Overall summary of the project…"
+                    rows={4}
+                    value={closingForm.summary}
+                    onChange={e => setClosingForm(f => ({ ...f, summary: e.target.value }))}
+                    data-testid="textarea-summary"
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="closing-strengths">Strengths</Label>
+                    <Textarea
+                      id="closing-strengths"
+                      placeholder="What went well?"
+                      rows={4}
+                      value={closingForm.strengths}
+                      onChange={e => setClosingForm(f => ({ ...f, strengths: e.target.value }))}
+                      data-testid="textarea-strengths"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="closing-what-went-wrong">Weaknesses / What Went Wrong</Label>
+                    <Textarea
+                      id="closing-what-went-wrong"
+                      placeholder="What could have been better?"
+                      rows={4}
+                      value={closingForm.whatWentWrong}
+                      onChange={e => setClosingForm(f => ({ ...f, whatWentWrong: e.target.value }))}
+                      data-testid="textarea-what-went-wrong"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="closing-opportunities">Opportunities for Improvement</Label>
+                  <Textarea
+                    id="closing-opportunities"
+                    placeholder="What opportunities for improvement were identified?"
+                    rows={3}
+                    value={closingForm.opportunities}
+                    onChange={e => setClosingForm(f => ({ ...f, opportunities: e.target.value }))}
+                    data-testid="textarea-opportunities"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="closing-similarities">Similarities to Prior Projects</Label>
+                  <Textarea
+                    id="closing-similarities"
+                    placeholder="How does this project compare to previous ones?"
+                    rows={3}
+                    value={closingForm.similaritiesToPriorProjects}
+                    onChange={e => setClosingForm(f => ({ ...f, similaritiesToPriorProjects: e.target.value }))}
+                    data-testid="textarea-similarities"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="closing-recommendations">Recommendations for Next Projects</Label>
+                  <Textarea
+                    id="closing-recommendations"
+                    placeholder="What would you recommend for future similar projects?"
+                    rows={3}
+                    value={closingForm.nextProjectRecommendations}
+                    onChange={e => setClosingForm(f => ({ ...f, nextProjectRecommendations: e.target.value }))}
+                    data-testid="textarea-recommendations"
+                  />
+                </div>
+              </CardContent>
+              <div className="flex justify-end gap-3 px-6 pb-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditingClosing(false)}
+                  disabled={createClosingMutation.isPending || updateClosingMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveClosing}
+                  disabled={createClosingMutation.isPending || updateClosingMutation.isPending}
+                  data-testid="button-save-closing"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {createClosingMutation.isPending || updateClosingMutation.isPending ? 'Saving…' : 'Save Closing Record'}
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5" />
+                      Project Closing
+                    </CardTitle>
+                    {projectClosing!.closedByDisplayName && (
+                      <CardDescription className="mt-1">
+                        Closed by {projectClosing!.closedByDisplayName} · {format(new Date(projectClosing!.createdAt), 'MMM d, yyyy')}
+                      </CardDescription>
+                    )}
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleStartEditClosing} data-testid="button-edit-closing">
+                    <Edit className="h-4 w-4 mr-1.5" />
+                    Edit
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {projectClosing!.summary && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
+                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.summary}</p>
+                  </div>
+                )}
+                <div className="grid gap-4 md:grid-cols-2">
+                  {projectClosing!.strengths && (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Strengths</p>
+                      <p className="text-sm whitespace-pre-wrap">{projectClosing!.strengths}</p>
+                    </div>
+                  )}
+                  {projectClosing!.whatWentWrong && (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-red-700 uppercase tracking-wide">Weaknesses / What Went Wrong</p>
+                      <p className="text-sm whitespace-pre-wrap">{projectClosing!.whatWentWrong}</p>
+                    </div>
+                  )}
+                </div>
+                {projectClosing!.opportunities && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Opportunities for Improvement</p>
+                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.opportunities}</p>
+                  </div>
+                )}
+                {projectClosing!.similaritiesToPriorProjects && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Similarities to Prior Projects</p>
+                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.similaritiesToPriorProjects}</p>
+                  </div>
+                )}
+                {projectClosing!.nextProjectRecommendations && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recommendations for Next Projects</p>
+                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.nextProjectRecommendations}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Risks Section ── */}
+          {(projectClosing || isEditingClosing) && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ShieldAlert className="h-4 w-4" />
+                    Risks Identified
+                  </CardTitle>
+                  {projectClosing && (
+                    <Button size="sm" variant="outline" onClick={() => setShowRiskDialog(true)} data-testid="button-add-risk">
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add Risk
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {closingRisks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {projectClosing ? 'No risks recorded yet. Add a risk above.' : 'Save the closing record first to add risks.'}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {closingRisks.map(risk => (
+                      <div key={risk.id} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className={SEVERITY_COLORS[risk.severity]}>{risk.severity}</Badge>
+                            <span className="text-sm font-medium">{risk.category}</span>
+                          </div>
+                          {(risk.owner || risk.department) && (
+                            <span className="text-xs text-muted-foreground">{[risk.owner, risk.department].filter(Boolean).join(' · ')}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{risk.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Actions Section ── */}
+          {(projectClosing || isEditingClosing) && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ListChecks className="h-4 w-4" />
+                    Follow-up Actions
+                  </CardTitle>
+                  {projectClosing && (
+                    <Button size="sm" variant="outline" onClick={() => setShowActionDialog(true)} data-testid="button-add-action">
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add Action
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {closingActions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {projectClosing ? 'No actions recorded yet. Add an action above.' : 'Save the closing record first to add actions.'}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {closingActions.map(action => (
+                      <div key={action.id} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium">{action.actionText}</p>
+                          <Badge className={ACTION_STATUS_COLORS[action.status]}>{action.status.replace('_', ' ')}</Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                          {action.owner && <span><User className="h-3 w-3 inline mr-1" />{action.owner}</span>}
+                          {action.department && <span><Building2 className="h-3 w-3 inline mr-1" />{action.department}</span>}
+                          {action.dueDate && <span><Calendar className="h-3 w-3 inline mr-1" />Due {format(new Date(action.dueDate), 'MMM d, yyyy')}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         {/* ── PDF Preview Dialog ── */}
         <Dialog open={!!pdfPreviewUrl} onOpenChange={(open) => { if (!open) setPdfPreviewUrl(null); }}>
           <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0">
@@ -2275,6 +2729,153 @@ export default function ProjectDetailPage() {
             </Button>
             <Button variant="outline" onClick={() => setPreviewAttachment(null)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ── Add Risk Dialog ── */}
+      <Dialog open={showRiskDialog} onOpenChange={setShowRiskDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Risk</DialogTitle>
+            <DialogDescription>Record a risk identified during the project closing review.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Category <span className="text-red-500">*</span></Label>
+              <Input
+                placeholder="e.g. Supply Chain, Technical, Process…"
+                value={riskForm.category}
+                onChange={e => setRiskForm(f => ({ ...f, category: e.target.value }))}
+                data-testid="input-risk-category"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Severity <span className="text-red-500">*</span></Label>
+              <Select value={riskForm.severity} onValueChange={(v) => setRiskForm(f => ({ ...f, severity: v as typeof riskForm.severity }))}>
+                <SelectTrigger data-testid="select-risk-severity">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Description <span className="text-red-500">*</span></Label>
+              <Textarea
+                placeholder="Describe the risk in detail…"
+                rows={3}
+                value={riskForm.description}
+                onChange={e => setRiskForm(f => ({ ...f, description: e.target.value }))}
+                data-testid="textarea-risk-description"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Owner</Label>
+                <Input
+                  placeholder="Responsible person"
+                  value={riskForm.owner}
+                  onChange={e => setRiskForm(f => ({ ...f, owner: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Input
+                  placeholder="Department"
+                  value={riskForm.department}
+                  onChange={e => setRiskForm(f => ({ ...f, department: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRiskDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => addRiskMutation.mutate(riskForm)}
+              disabled={!riskForm.category.trim() || !riskForm.description.trim() || addRiskMutation.isPending}
+              data-testid="button-save-risk"
+            >
+              {addRiskMutation.isPending ? 'Adding…' : 'Add Risk'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add Action Dialog ── */}
+      <Dialog open={showActionDialog} onOpenChange={setShowActionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Follow-up Action</DialogTitle>
+            <DialogDescription>Record a follow-up action item from the closing review.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Action <span className="text-red-500">*</span></Label>
+              <Textarea
+                placeholder="Describe what needs to be done…"
+                rows={3}
+                value={actionForm.actionText}
+                onChange={e => setActionForm(f => ({ ...f, actionText: e.target.value }))}
+                data-testid="textarea-action-text"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Owner</Label>
+                <Input
+                  placeholder="Responsible person"
+                  value={actionForm.owner}
+                  onChange={e => setActionForm(f => ({ ...f, owner: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Input
+                  placeholder="Department"
+                  value={actionForm.department}
+                  onChange={e => setActionForm(f => ({ ...f, department: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={actionForm.dueDate}
+                  onChange={e => setActionForm(f => ({ ...f, dueDate: e.target.value }))}
+                  data-testid="input-action-due-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={actionForm.status} onValueChange={(v) => setActionForm(f => ({ ...f, status: v as typeof actionForm.status }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowActionDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => addActionMutation.mutate(actionForm)}
+              disabled={!actionForm.actionText.trim() || addActionMutation.isPending}
+              data-testid="button-save-action"
+            >
+              {addActionMutation.isPending ? 'Adding…' : 'Add Action'}
             </Button>
           </DialogFooter>
         </DialogContent>

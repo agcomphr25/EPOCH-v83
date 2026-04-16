@@ -682,6 +682,17 @@ export function registerTimeClockRoutes(app: Express) {
       }
 
       const { context } = result;
+
+      const openEntry = await storage.getOpenTimeClockEntry(employeeId.trim());
+      if (openEntry) {
+        return res.status(409).json({
+          error: 'ALREADY_CLOCKED_IN',
+          message: `Employee ${employeeId.trim()} is already clocked in (entry #${openEntry.id}, clocked in at ${openEntry.clockIn?.toISOString()}). Use the switch-job endpoint to move to a different job.`,
+          openEntryId: openEntry.id,
+          switchJobEndpoint: '/api/time-clock/switch-job/traveler',
+        });
+      }
+
       const today = new Date().toISOString().split('T')[0];
 
       const entry = await storage.createTimeClockEntryWithChargeContext({

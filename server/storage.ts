@@ -1317,6 +1317,7 @@ export interface IStorage {
     clockIn: string | null;
     clockOut: string | null;
   }>;
+  getOpenTimeClockEntry(employeeId: string): Promise<TimeClockEntry | null>;
   getTimeClockEntries(
     employeeId?: string,
     date?: string
@@ -7617,6 +7618,22 @@ export class DatabaseStorage implements IStorage {
       clockIn: entry.clockIn?.toISOString() || null,
       clockOut: entry.clockOut?.toISOString() || null,
     };
+  }
+
+  async getOpenTimeClockEntry(employeeId: string): Promise<TimeClockEntry | null> {
+    const [entry] = await db
+      .select()
+      .from(timeClockEntries)
+      .where(
+        and(
+          eq(timeClockEntries.employeeId, employeeId),
+          isNotNull(timeClockEntries.clockIn),
+          isNull(timeClockEntries.clockOut)
+        )
+      )
+      .orderBy(desc(timeClockEntries.clockIn))
+      .limit(1);
+    return entry ?? null;
   }
 
   async getTimeClockEntries(

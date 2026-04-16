@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
@@ -63,6 +64,7 @@ import {
   Printer,
   ArrowRightLeft,
   Scissors,
+  Trash2,
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 
@@ -111,16 +113,30 @@ interface Transaction {
   notes?: string;
 }
 
+function buildScrapSchema(remainingQty: number) {
+  return z.object({
+    qty: z
+      .number({ invalid_type_error: 'Quantity must be a number' })
+      .positive('Quantity must be greater than 0')
+      .max(remainingQty, `Quantity cannot exceed remaining quantity (${remainingQty})`),
+    reason: z.string().trim().min(1, 'Reason is required'),
+    performedBy: z.string().trim().min(1, 'Performed by is required'),
+  });
+}
+
 export default function MaterialInventoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLot, setSelectedLot] = useState<MaterialLot | null>(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
-  const [actionType, setActionType] = useState<'move' | 'split' | 'status' | null>(null);
+  const [actionType, setActionType] = useState<'move' | 'split' | 'status' | 'scrap' | null>(null);
   const [moveLocation, setMoveLocation] = useState('');
   const [splitQty, setSplitQty] = useState('');
   const [newStatus, setNewStatus] = useState('');
   const [statusReason, setStatusReason] = useState('');
+  const [scrapQty, setScrapQty] = useState('');
+  const [scrapReason, setScrapReason] = useState('');
+  const [scrapPerformedBy, setScrapPerformedBy] = useState('');
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -216,6 +232,23 @@ export default function MaterialInventoryPage() {
     },
   });
 
+  const scrapMutation = useMutation({
+    mutationFn: async ({ id, qty, reason, performedBy }: { id: string; qty: number; reason: string; performedBy: string }) => {
+      return apiRequest(`/api/material-lots/${id}/scrap`, {
+        method: 'POST',
+        body: JSON.stringify({ qty, reason, performedBy }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Lot scrapped successfully');
+      queryClient.invalidateQueries({ queryKey: ['/api/material-lots'] });
+      closeActionDialog();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to scrap lot');
+    },
+  });
+
   const closeActionDialog = () => {
     setActionDialogOpen(false);
     setActionType(null);
@@ -224,9 +257,12 @@ export default function MaterialInventoryPage() {
     setSplitQty('');
     setNewStatus('');
     setStatusReason('');
+    setScrapQty('');
+    setScrapReason('');
+    setScrapPerformedBy('');
   };
 
-  const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status') => {
+  const openActionDialog = (lot: MaterialLot, type: 'move' | 'split' | 'status' | 'scrap') => {
     setSelectedLot(lot);
     setActionType(type);
     setActionDialogOpen(true);
@@ -246,6 +282,24 @@ export default function MaterialInventoryPage() {
       splitMutation.mutate({ id: selectedLot.id, splitQty });
     } else if (actionType === 'status' && newStatus) {
       statusMutation.mutate({ id: selectedLot.id, newStatus, reason: statusReason });
+    } else if (actionType === 'scrap') {
+      const remaining = parseFloat(selectedLot.remainingQty);
+      const schema = buildScrapSchema(remaining);
+      const parsed = schema.safeParse({
+        qty: scrapQty === '' ? undefined : Number(scrapQty),
+        reason: scrapReason,
+        performedBy: scrapPerformedBy,
+      });
+      if (!parsed.success) {
+        toast.error(parsed.error.errors[0].message);
+        return;
+      }
+      scrapMutation.mutate({
+        id: selectedLot.id,
+        qty: parsed.data.qty,
+        reason: parsed.data.reason,
+        performedBy: parsed.data.performedBy,
+      });
     }
   };
 
@@ -327,6 +381,7 @@ export default function MaterialInventoryPage() {
       REJECTED: { variant: 'destructive', label: 'Rejected', icon: XCircle },
       EXPIRED: { variant: 'destructive', label: 'Expired', icon: AlertTriangle },
       CONSUMED: { variant: 'secondary', label: 'Consumed', icon: CheckCircle },
+      SCRAPPED: { variant: 'destructive', label: 'Scrapped', icon: Trash2 },
     };
     const config = variants[status] || { variant: 'outline' as const, label: status, icon: Package };
     const Icon = config.icon;
@@ -411,6 +466,7 @@ export default function MaterialInventoryPage() {
                 <SelectItem value="REJECTED">Rejected</SelectItem>
                 <SelectItem value="EXPIRED">Expired</SelectItem>
                 <SelectItem value="CONSUMED">Consumed</SelectItem>
+                <SelectItem value="SCRAPPED">Scrapped</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -511,6 +567,14 @@ export default function MaterialInventoryPage() {
                               <ArrowRightLeft className="h-4 w-4 mr-2" />
                               Change Status
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openActionDialog(lot, 'scrap')}
+                              disabled={lot.status === 'SCRAPPED' || Number(lot.remainingQty) <= 0}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Scrap Lot
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {lot.status === 'ACCEPTED' && !lot.currentlyOutOfStorage && (
                               <DropdownMenuItem onClick={() => issueMutation.mutate(lot.id)}>
@@ -543,6 +607,7 @@ export default function MaterialInventoryPage() {
               {actionType === 'move' && 'Move Material'}
               {actionType === 'split' && 'Split Lot'}
               {actionType === 'status' && 'Change Status'}
+              {actionType === 'scrap' && 'Scrap Lot'}
             </DialogTitle>
             <DialogDescription>
               {selectedLot?.internalControlNumber} - {selectedLot?.materialName}
@@ -626,6 +691,48 @@ export default function MaterialInventoryPage() {
             </div>
           )}
 
+          {actionType === 'scrap' && selectedLot && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="scrapQty">Quantity to Scrap</Label>
+                <Input
+                  id="scrapQty"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  max={Number(selectedLot.remainingQty)}
+                  value={scrapQty}
+                  onChange={(e) => setScrapQty(e.target.value)}
+                  placeholder="Quantity to scrap"
+                  data-testid="input-scrap-qty"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Remaining: {selectedLot.remainingQty} {selectedLot.unitOfMeasure}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="scrapReason">Reason <span className="text-destructive">*</span></Label>
+                <Input
+                  id="scrapReason"
+                  value={scrapReason}
+                  onChange={(e) => setScrapReason(e.target.value)}
+                  placeholder="Reason for scrapping (e.g. damaged, contaminated)"
+                  data-testid="input-scrap-reason"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="scrapPerformedBy">Performed By <span className="text-destructive">*</span></Label>
+                <Input
+                  id="scrapPerformedBy"
+                  value={scrapPerformedBy}
+                  onChange={(e) => setScrapPerformedBy(e.target.value)}
+                  placeholder="Name of person performing scrap"
+                  data-testid="input-scrap-performed-by"
+                />
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={closeActionDialog}>
               Cancel
@@ -635,14 +742,16 @@ export default function MaterialInventoryPage() {
               disabled={
                 moveMutation.isPending ||
                 splitMutation.isPending ||
-                statusMutation.isPending
+                statusMutation.isPending ||
+                scrapMutation.isPending
               }
+              variant={actionType === 'scrap' ? 'destructive' : 'default'}
               data-testid="button-confirm-action"
             >
-              {(moveMutation.isPending || splitMutation.isPending || statusMutation.isPending) && (
+              {(moveMutation.isPending || splitMutation.isPending || statusMutation.isPending || scrapMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              Confirm
+              {actionType === 'scrap' ? 'Scrap Lot' : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>

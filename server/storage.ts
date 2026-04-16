@@ -646,6 +646,11 @@ import {
   type InsertLaborApproval,
   laborThresholdSettings,
   type LaborThresholdSettings,
+  // Cycle Count
+  cycleCountSessions,
+  cycleCountLines,
+  type CycleCountSession,
+  type CycleCountLine,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2614,6 +2619,14 @@ export interface IStorage {
   getTravelerStepMaterialConsumption(stepId: string): Promise<TravelerMaterialConsumption[]>;
   createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption>;
   deleteTravelerMaterialConsumption(id: string): Promise<void>;
+
+  // Cycle Count Sessions
+  createCycleCountSession(data: { location: string; partFilter?: string; createdBy: string }): Promise<CycleCountSession & { lines: CycleCountLine[] }>;
+  listCycleCountSessions(): Promise<CycleCountSession[]>;
+  getCycleCountSession(id: number): Promise<(CycleCountSession & { lines: CycleCountLine[] }) | null>;
+  updateCycleCountLines(sessionId: number, lines: Array<{ id: number; countedQty: string | null; notes?: string }>): Promise<CycleCountLine[]>;
+  submitCycleCountSession(id: number): Promise<CycleCountSession & { lines: CycleCountLine[] }>;
+  postCycleCountSession(id: number, performedBy: string): Promise<CycleCountSession & { lines: CycleCountLine[] }>;
 
   // Material Lot Reservations
   getLotReservations(lotId: string): Promise<MaterialLotReservation[]>;
@@ -21784,100 +21797,111 @@ export class DatabaseStorage implements IStorage {
     return updatedLot;
   }
 
-  async adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }> {
+  // Private helper: applies a single lot adjustment within a provided transaction (or db).
+  // Callers that need atomicity across multiple adjustments should open one db.transaction()
+  // and pass `tx` here for all adjustments, committing once all succeed.
+  private async _applyLotAdjustmentInTx(
+    id: string,
+    params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean },
+    // Accept either the global db handle or a Drizzle transaction object
+    txOrDb: { select: typeof db['select']; update: typeof db['update']; insert: typeof db['insert'] }
+  ): Promise<{ updatedLot: MaterialLot; lotTx: MaterialLotTransaction }> {
     const { delta, reasonCode, notes, performedBy, allowNegative = false } = params;
 
+    const [lockedLot] = await (txOrDb as typeof db)
+      .select({
+        id: materialLots.id,
+        remainingQty: materialLots.remainingQty,
+        status: materialLots.status,
+        internalControlNumber: materialLots.internalControlNumber,
+        materialPartNumber: materialLots.materialPartNumber,
+        unitOfMeasure: materialLots.unitOfMeasure,
+      })
+      .from(materialLots)
+      .where(eq(materialLots.id, id))
+      .for('update');
+
+    if (!lockedLot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+
+    const remaining = parseFloat(lockedLot.remainingQty);
+    const newRemaining = remaining + delta;
+    const wasOverride = allowNegative && newRemaining < 0;
+
+    if (newRemaining < 0 && !allowNegative) {
+      throw Object.assign(
+        new Error(`Adjustment of ${delta} would drive remainingQty to ${newRemaining} (below zero). Pass allowNegative: true to override.`),
+        { statusCode: 400 }
+      );
+    }
+
+    const newRemainingStr = newRemaining.toString();
+
+    // 1. Update material_lots.remainingQty
+    const [updatedLot] = await (txOrDb as typeof db)
+      .update(materialLots)
+      .set({ remainingQty: newRemainingStr, updatedAt: new Date() })
+      .where(eq(materialLots.id, id))
+      .returning();
+
+    // 2. Write material_lot_transactions audit record
+    const [lotTx] = await (txOrDb as typeof db)
+      .insert(materialLotTransactions)
+      .values({
+        materialLotId: id,
+        internalControlNumber: lockedLot.internalControlNumber,
+        transactionType: 'ADJUST',
+        qtyBefore: lockedLot.remainingQty,
+        qtyChange: delta.toString(),
+        qtyAfter: newRemainingStr,
+        performedBy,
+        reason: reasonCode,
+        notes: notes ?? null,
+        wasOverride,
+      })
+      .returning();
+
+    // 3. Write inventory_transactions record (signed delta for global ledger)
+    await (txOrDb as typeof db).insert(inventoryTransactions).values({
+      agPartNumber: lockedLot.materialPartNumber,
+      transactionType: 'adjustment',
+      quantity: delta,
+      unitOfMeasure: lockedLot.unitOfMeasure,
+      referenceType: 'ADJUST',
+      referenceId: id,
+      performedBy,
+      notes: notes ? `${reasonCode}: ${notes}` : reasonCode,
+    });
+
+    // 4. Update inventory_balances — mandatory; rollback if no balance row exists.
+    const [balance] = await (txOrDb as typeof db)
+      .select()
+      .from(inventoryBalances)
+      .where(eq(inventoryBalances.agPartNumber, lockedLot.materialPartNumber))
+      .limit(1);
+
+    if (!balance) {
+      throw Object.assign(
+        new Error(`No inventory balance row found for part ${lockedLot.materialPartNumber}. Adjustment aborted to preserve ledger integrity.`),
+        { statusCode: 409 }
+      );
+    }
+
+    const newOnHand = balance.quantityOnHand + delta;
+    const newAvailable = Math.max(0, newOnHand - balance.quantityAllocated);
+    await (txOrDb as typeof db)
+      .update(inventoryBalances)
+      .set({ quantityOnHand: newOnHand, quantityAvailable: newAvailable, updatedAt: new Date() })
+      .where(eq(inventoryBalances.id, balance.id));
+
+    return { updatedLot, lotTx };
+  }
+
+  async adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }> {
     const [preCheck] = await db.select({ id: materialLots.id }).from(materialLots).where(eq(materialLots.id, id));
     if (!preCheck) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
 
     const { updatedLot, lotTx } = await db.transaction(async (tx) => {
-      // Row-lock the lot for the duration of the transaction to prevent concurrent conflicts.
-      const [lockedLot] = await tx
-        .select({
-          id: materialLots.id,
-          remainingQty: materialLots.remainingQty,
-          status: materialLots.status,
-          internalControlNumber: materialLots.internalControlNumber,
-          materialPartNumber: materialLots.materialPartNumber,
-          unitOfMeasure: materialLots.unitOfMeasure,
-        })
-        .from(materialLots)
-        .where(eq(materialLots.id, id))
-        .for('update');
-
-      if (!lockedLot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
-
-      const remaining = parseFloat(lockedLot.remainingQty);
-      const newRemaining = remaining + delta;
-      const wasOverride = allowNegative && newRemaining < 0;
-
-      if (newRemaining < 0 && !allowNegative) {
-        throw Object.assign(
-          new Error(`Adjustment of ${delta} would drive remainingQty to ${newRemaining} (below zero). Pass allowNegative: true to override.`),
-          { statusCode: 400 }
-        );
-      }
-
-      const newRemainingStr = newRemaining.toString();
-
-      // 1. Update material_lots.remainingQty
-      const [updatedLot] = await tx
-        .update(materialLots)
-        .set({ remainingQty: newRemainingStr, updatedAt: new Date() })
-        .where(eq(materialLots.id, id))
-        .returning();
-
-      // 2. Write material_lot_transactions audit record
-      const [lotTx] = await tx
-        .insert(materialLotTransactions)
-        .values({
-          materialLotId: id,
-          internalControlNumber: lockedLot.internalControlNumber,
-          transactionType: 'ADJUST',
-          qtyBefore: lockedLot.remainingQty,
-          qtyChange: delta.toString(),
-          qtyAfter: newRemainingStr,
-          performedBy,
-          reason: reasonCode,
-          notes: notes ?? null,
-          wasOverride,
-        })
-        .returning();
-
-      // 3. Write inventory_transactions record (signed delta for global ledger)
-      await tx.insert(inventoryTransactions).values({
-        agPartNumber: lockedLot.materialPartNumber,
-        transactionType: 'adjustment',
-        quantity: delta,
-        unitOfMeasure: lockedLot.unitOfMeasure,
-        referenceType: 'ADJUST',
-        referenceId: id,
-        performedBy,
-        notes: notes ? `${reasonCode}: ${notes}` : reasonCode,
-      });
-
-      // 4. Update inventory_balances — mandatory; rollback if no balance row exists.
-      const [balance] = await tx
-        .select()
-        .from(inventoryBalances)
-        .where(eq(inventoryBalances.agPartNumber, lockedLot.materialPartNumber))
-        .limit(1);
-
-      if (!balance) {
-        throw Object.assign(
-          new Error(`No inventory balance row found for part ${lockedLot.materialPartNumber}. Adjustment aborted to preserve ledger integrity.`),
-          { statusCode: 409 }
-        );
-      }
-
-      const newOnHand = balance.quantityOnHand + delta;
-      const newAvailable = Math.max(0, newOnHand - balance.quantityAllocated);
-      await tx
-        .update(inventoryBalances)
-        .set({ quantityOnHand: newOnHand, quantityAvailable: newAvailable, updatedAt: new Date() })
-        .where(eq(inventoryBalances.id, balance.id));
-
-      return { updatedLot, lotTx };
+      return this._applyLotAdjustmentInTx(id, params, tx);
     });
 
     return { lot: updatedLot, transaction: lotTx };
@@ -22935,6 +22959,284 @@ export class DatabaseStorage implements IStorage {
       .where(eq(laborCostRecords.id, id))
       .returning();
     return row;
+  }
+
+  // ── Cycle Count Sessions ──────────────────────────────────────────────────────
+
+  async createCycleCountSession(data: { location: string; partFilter?: string; createdBy: string }): Promise<CycleCountSession & { lines: CycleCountLine[] }> {
+    const { location, partFilter, createdBy } = data;
+
+    // Query material_lots to get expected quantities grouped by part number
+    // Include active statuses: RECEIVED, ACCEPTED, ISSUED, QUARANTINE
+    const activeStatuses = ['RECEIVED', 'ACCEPTED', 'ISSUED', 'QUARANTINE'];
+
+    // Build SQL to aggregate lots by part number
+    const conditions = [
+      inArray(materialLots.status, activeStatuses),
+      ...(location && location !== 'ALL' ? [eq(materialLots.storageLocation, location)] : []),
+      ...(partFilter ? [eq(materialLots.materialPartNumber, partFilter)] : []),
+    ];
+
+    // Group strictly by part number only; take any one material name as the display label
+    const lotsQuery = db
+      .select({
+        agPartNumber: materialLots.materialPartNumber,
+        materialName: sql<string>`MAX(${materialLots.materialName})`,
+        totalQty: sql<string>`SUM(CAST(${materialLots.remainingQty} AS NUMERIC))`,
+      })
+      .from(materialLots)
+      .where(and(...conditions))
+      .groupBy(materialLots.materialPartNumber);
+
+    const lotGroups = await lotsQuery;
+
+    const session = await db.transaction(async (tx) => {
+      const [sess] = await tx
+        .insert(cycleCountSessions)
+        .values({ location, partFilter: partFilter ?? null, status: 'IN_PROGRESS', createdBy })
+        .returning();
+
+      const lines: CycleCountLine[] = [];
+      if (lotGroups.length > 0) {
+        const inserted = await tx
+          .insert(cycleCountLines)
+          .values(
+            lotGroups.map((g) => ({
+              sessionId: sess.id,
+              agPartNumber: g.agPartNumber,
+              materialName: g.materialName,
+              expectedQty: g.totalQty ?? '0',
+              countedQty: null,
+              varianceQty: null,
+              notes: null,
+            }))
+          )
+          .returning();
+        lines.push(...inserted);
+      }
+
+      return { ...sess, lines };
+    });
+
+    return session;
+  }
+
+  async listCycleCountSessions(): Promise<CycleCountSession[]> {
+    return db.select().from(cycleCountSessions).orderBy(desc(cycleCountSessions.createdAt));
+  }
+
+  async getCycleCountSession(id: number): Promise<(CycleCountSession & { lines: CycleCountLine[] }) | null> {
+    const [sess] = await db.select().from(cycleCountSessions).where(eq(cycleCountSessions.id, id));
+    if (!sess) return null;
+    const lines = await db.select().from(cycleCountLines).where(eq(cycleCountLines.sessionId, id));
+    return { ...sess, lines };
+  }
+
+  async updateCycleCountLines(sessionId: number, updates: Array<{ id: number; countedQty: string | null; notes?: string }>): Promise<CycleCountLine[]> {
+    const sess = await db.select().from(cycleCountSessions).where(eq(cycleCountSessions.id, sessionId)).then(r => r[0]);
+    if (!sess) throw Object.assign(new Error('Cycle count session not found'), { statusCode: 404 });
+    if (sess.status !== 'IN_PROGRESS') throw Object.assign(new Error('Cannot edit counts on a submitted or posted session'), { statusCode: 409 });
+
+    const results: CycleCountLine[] = [];
+    for (const u of updates) {
+      const expectedLine = await db.select().from(cycleCountLines)
+        .where(and(eq(cycleCountLines.id, u.id), eq(cycleCountLines.sessionId, sessionId)))
+        .then(r => r[0]);
+      if (!expectedLine) continue;
+
+      const expectedQty = parseFloat(expectedLine.expectedQty);
+      const countedQty = u.countedQty != null ? parseFloat(u.countedQty) : null;
+      // Defensive guard: physical counts must be non-negative (API layer validates too)
+      if (countedQty != null && (!isFinite(countedQty) || countedQty < 0)) {
+        throw Object.assign(new Error('countedQty must be a non-negative finite number'), { statusCode: 400 });
+      }
+      const varianceQty = countedQty != null ? (countedQty - expectedQty).toString() : null;
+
+      const [updated] = await db
+        .update(cycleCountLines)
+        .set({
+          countedQty: u.countedQty,
+          varianceQty,
+          notes: u.notes ?? expectedLine.notes,
+        })
+        .where(eq(cycleCountLines.id, u.id))
+        .returning();
+      results.push(updated);
+    }
+    return results;
+  }
+
+  async submitCycleCountSession(id: number): Promise<CycleCountSession & { lines: CycleCountLine[] }> {
+    const sess = await this.getCycleCountSession(id);
+    if (!sess) throw Object.assign(new Error('Cycle count session not found'), { statusCode: 404 });
+    if (sess.status === 'COMPLETED') throw Object.assign(new Error('Session is already submitted'), { statusCode: 409 });
+    if (sess.status === 'POSTED') throw Object.assign(new Error('Session is already posted'), { statusCode: 409 });
+
+    const entriedLines = sess.lines.filter(l => l.countedQty != null);
+    if (entriedLines.length === 0) {
+      throw Object.assign(new Error('Cannot submit: no counts have been entered'), { statusCode: 400 });
+    }
+
+    const [updated] = await db
+      .update(cycleCountSessions)
+      .set({ status: 'COMPLETED' })
+      .where(eq(cycleCountSessions.id, id))
+      .returning();
+
+    const lines = await db.select().from(cycleCountLines).where(eq(cycleCountLines.sessionId, id));
+    return { ...updated, lines };
+  }
+
+  async postCycleCountSession(id: number, performedBy: string): Promise<CycleCountSession & { lines: CycleCountLine[] }> {
+    // Fast pre-flight: existence check before entering the transaction
+    const [exists] = await db
+      .select({ id: cycleCountSessions.id })
+      .from(cycleCountSessions)
+      .where(eq(cycleCountSessions.id, id));
+    if (!exists) throw Object.assign(new Error('Cycle count session not found'), { statusCode: 404 });
+
+    // All eligibility checks, adjustments, and status update happen inside ONE transaction.
+    // The session row is locked with FOR UPDATE at the top of the transaction to prevent
+    // concurrent requests from both passing the status check and double-applying adjustments.
+    const result = await db.transaction(async (tx) => {
+      // Lock and re-read session row — no concurrent POST can proceed past this point
+      const [lockedSess] = await tx
+        .select()
+        .from(cycleCountSessions)
+        .where(eq(cycleCountSessions.id, id))
+        .for('update');
+
+      if (!lockedSess) throw Object.assign(new Error('Cycle count session not found'), { statusCode: 404 });
+
+      // Idempotent: if already POSTED, return session + lines without reapplying adjustments
+      if (lockedSess.status === 'POSTED') {
+        const lines = await tx.select().from(cycleCountLines).where(eq(cycleCountLines.sessionId, id));
+        return { ...lockedSess, lines };
+      }
+
+      if (lockedSess.status !== 'COMPLETED') {
+        throw Object.assign(
+          new Error('Session must be submitted (COMPLETED) before it can be posted. Use the Submit button first.'),
+          { statusCode: 400 }
+        );
+      }
+
+      // Read lines within the transaction for consistency
+      const sessLines = await tx
+        .select()
+        .from(cycleCountLines)
+        .where(eq(cycleCountLines.sessionId, id));
+
+      // Reject lines with NaN/Infinite variance (defensive guard; API layer validates too)
+      for (const line of sessLines) {
+        if (line.countedQty == null) continue;
+        const v = parseFloat(line.varianceQty ?? '0');
+        if (!isFinite(v)) {
+          throw Object.assign(
+            new Error(`Cannot post: invalid variance for part ${line.agPartNumber}. Re-enter the count and save before posting.`),
+            { statusCode: 400 }
+          );
+        }
+      }
+
+      // Collect non-zero finite variance lines
+      const varianceLines = sessLines.filter(l => {
+        if (l.countedQty == null) return false;
+        const v = parseFloat(l.varianceQty ?? '0');
+        return isFinite(v) && v !== 0;
+      });
+
+      const activeStatusesPost = ['RECEIVED', 'ACCEPTED', 'ISSUED', 'QUARANTINE'];
+      const locationCond = (lockedSess.location && lockedSess.location !== 'ALL')
+        ? [eq(materialLots.storageLocation, lockedSess.location)]
+        : [];
+
+      // Validate all lots exist inside the transaction (before applying any adjustment)
+      for (const line of varianceLines) {
+        const lots = await tx
+          .select({ id: materialLots.id, remainingQty: materialLots.remainingQty })
+          .from(materialLots)
+          .where(and(
+            eq(materialLots.materialPartNumber, line.agPartNumber),
+            inArray(materialLots.status, activeStatusesPost),
+            ...locationCond,
+          ))
+          .orderBy(desc(materialLots.remainingQty));
+
+        if (lots.length === 0) {
+          throw Object.assign(
+            new Error(`Cannot post: no active lot for part ${line.agPartNumber} at location "${lockedSess.location}". Resolve before posting.`),
+            { statusCode: 409 }
+          );
+        }
+
+        const variance = parseFloat(line.varianceQty!);
+        if (variance < 0) {
+          const totalAvail = lots.reduce((s, l) => s + parseFloat(l.remainingQty ?? '0'), 0);
+          if (totalAvail < Math.abs(variance)) {
+            throw Object.assign(
+              new Error(`Cannot post: insufficient quantity for part ${line.agPartNumber} — need ${Math.abs(variance)}, have ${totalAvail}.`),
+              { statusCode: 409 }
+            );
+          }
+        }
+      }
+
+      // Apply all adjustments using the canonical helper (all within this transaction)
+      for (const line of varianceLines) {
+        const variance = parseFloat(line.varianceQty!);
+        const adjustNote = `Cycle count session #${id}${line.notes ? ': ' + line.notes : ''}`;
+
+        const lots = await tx
+          .select({ id: materialLots.id, remainingQty: materialLots.remainingQty })
+          .from(materialLots)
+          .where(and(
+            eq(materialLots.materialPartNumber, line.agPartNumber),
+            inArray(materialLots.status, activeStatusesPost),
+            ...locationCond,
+          ))
+          .orderBy(desc(materialLots.remainingQty));
+
+        if (variance > 0) {
+          await this._applyLotAdjustmentInTx(lots[0].id, {
+            delta: variance,
+            reasonCode: 'CYCLE_COUNT',
+            notes: adjustNote,
+            performedBy,
+            allowNegative: false,
+          }, tx);
+        } else {
+          let remaining = Math.abs(variance);
+          for (const lot of lots) {
+            if (remaining <= 0) break;
+            const available = parseFloat(lot.remainingQty ?? '0');
+            const take = Math.min(available, remaining);
+            if (take > 0) {
+              await this._applyLotAdjustmentInTx(lot.id, {
+                delta: -take,
+                reasonCode: 'CYCLE_COUNT',
+                notes: adjustNote,
+                performedBy,
+                allowNegative: false,
+              }, tx);
+              remaining -= take;
+            }
+          }
+        }
+      }
+
+      // Mark session POSTED — only commits if all adjustments above succeed
+      const [posted] = await tx
+        .update(cycleCountSessions)
+        .set({ status: 'POSTED', postedAt: new Date() })
+        .where(eq(cycleCountSessions.id, id))
+        .returning();
+
+      const finalLines = await tx.select().from(cycleCountLines).where(eq(cycleCountLines.sessionId, id));
+      return { ...posted, lines: finalLines };
+    });
+
+    return result;
   }
 }
 

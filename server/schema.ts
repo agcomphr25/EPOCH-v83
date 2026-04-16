@@ -15535,3 +15535,37 @@ export const laborAccountConfig = pgTable('labor_account_config', {
 export const insertLaborAccountConfigSchema = createInsertSchema(laborAccountConfig).omit({ id: true, createdAt: true, updatedAt: true });
 export type LaborAccountConfig = typeof laborAccountConfig.$inferSelect;
 export type InsertLaborAccountConfig = z.infer<typeof insertLaborAccountConfigSchema>;
+
+// ============================================================================
+// CYCLE COUNT SESSIONS — AS9100 Physical Inventory Verification Workflow
+// ============================================================================
+
+export const cycleCountSessions = pgTable('cycle_count_sessions', {
+  id: serial('id').primaryKey(),
+  location: text('location').notNull(),
+  partFilter: text('part_filter'),
+  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | POSTED
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  postedAt: timestamp('posted_at'),
+  notes: text('notes'),
+});
+
+export const insertCycleCountSessionSchema = createInsertSchema(cycleCountSessions).omit({ id: true, createdAt: true, postedAt: true });
+export type CycleCountSession = typeof cycleCountSessions.$inferSelect;
+export type InsertCycleCountSession = z.infer<typeof insertCycleCountSessionSchema>;
+
+export const cycleCountLines = pgTable('cycle_count_lines', {
+  id: serial('id').primaryKey(),
+  sessionId: integer('session_id').references(() => cycleCountSessions.id, { onDelete: 'cascade' }).notNull(),
+  agPartNumber: text('ag_part_number').notNull(),
+  materialName: text('material_name'),
+  expectedQty: numeric('expected_qty').notNull(),
+  countedQty: numeric('counted_qty'),
+  varianceQty: numeric('variance_qty'),
+  notes: text('notes'),
+});
+
+export const insertCycleCountLineSchema = createInsertSchema(cycleCountLines).omit({ id: true });
+export type CycleCountLine = typeof cycleCountLines.$inferSelect;
+export type InsertCycleCountLine = z.infer<typeof insertCycleCountLineSchema>;

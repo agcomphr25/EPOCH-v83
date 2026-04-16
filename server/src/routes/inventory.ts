@@ -3367,4 +3367,116 @@ router.get('/reconciliation', async (req: Request, res: Response) => {
   }
 });
 
+// ── Cycle Count Session Routes ────────────────────────────────────────────────
+
+// List all sessions
+router.get('/cycle-count', async (req: Request, res: Response) => {
+  try {
+    const sessions = await storage.listCycleCountSessions();
+    res.json(sessions);
+  } catch (error) {
+    console.error('List cycle count sessions error:', error);
+    res.status(500).json({ error: 'Failed to list cycle count sessions' });
+  }
+});
+
+// Create a new session (auto-populates lines from material_lots)
+router.post('/cycle-count', async (req: Request, res: Response) => {
+  try {
+    const createdBy = req.user?.username;
+    if (!createdBy) return res.status(401).json({ error: 'Not authenticated' });
+    const { z } = await import('zod');
+    const schema = z.object({
+      location: z.string().min(1, 'Location is required'),
+      partFilter: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+    }
+    const session = await storage.createCycleCountSession({ ...parsed.data, createdBy });
+    res.status(201).json(session);
+  } catch (error) {
+    console.error('Create cycle count session error:', error);
+    const err = error instanceof Error ? (error as Error & { statusCode?: number }) : null;
+    res.status(err?.statusCode || 500).json({ error: err?.message || 'Failed to create cycle count session' });
+  }
+});
+
+// Get session detail with lines
+router.get('/cycle-count/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid session ID' });
+    const session = await storage.getCycleCountSession(id);
+    if (!session) return res.status(404).json({ error: 'Cycle count session not found' });
+    res.json(session);
+  } catch (error) {
+    console.error('Get cycle count session error:', error);
+    res.status(500).json({ error: 'Failed to get cycle count session' });
+  }
+});
+
+// Update counted quantities on lines (only allowed in IN_PROGRESS state)
+router.patch('/cycle-count/:id/lines', async (req: Request, res: Response) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    if (isNaN(sessionId)) return res.status(400).json({ error: 'Invalid session ID' });
+    const { z } = await import('zod');
+    // Non-negative finite-numeric string: physical counts cannot be negative.
+    // Rejects negative values, "12abc", "NaN", "Infinity", etc.
+    const numericString = z.string().regex(
+      /^\d+(\.\d+)?$/,
+      'countedQty must be a non-negative number (e.g. "0", "12" or "3.5")'
+    );
+    const schema = z.object({
+      lines: z.array(z.object({
+        id: z.number().int(),
+        countedQty: z.union([numericString, z.null()]),
+        notes: z.string().optional(),
+      })),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+    }
+    const lines = await storage.updateCycleCountLines(sessionId, parsed.data.lines);
+    res.json(lines);
+  } catch (error) {
+    console.error('Update cycle count lines error:', error);
+    const err = error instanceof Error ? (error as Error & { statusCode?: number }) : null;
+    res.status(err?.statusCode || 500).json({ error: err?.message || 'Failed to update cycle count lines' });
+  }
+});
+
+// Submit session — transitions IN_PROGRESS → COMPLETED, locking counts for review
+router.post('/cycle-count/:id/submit', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid session ID' });
+    const session = await storage.submitCycleCountSession(id);
+    res.json(session);
+  } catch (error) {
+    console.error('Submit cycle count session error:', error);
+    const err = error instanceof Error ? (error as Error & { statusCode?: number }) : null;
+    res.status(err?.statusCode || 500).json({ error: err?.message || 'Failed to submit cycle count session' });
+  }
+});
+
+// Post session — applies all non-zero variance adjustments and locks the session (must be COMPLETED first)
+router.post('/cycle-count/:id/post', async (req: Request, res: Response) => {
+  try {
+    const performedBy = req.user?.username;
+    if (!performedBy) return res.status(401).json({ error: 'Not authenticated' });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid session ID' });
+    const session = await storage.postCycleCountSession(id, performedBy);
+    res.json(session);
+  } catch (error) {
+    console.error('Post cycle count session error:', error);
+    const err = error instanceof Error ? (error as Error & { statusCode?: number }) : null;
+    res.status(err?.statusCode || 500).json({ error: err?.message || 'Failed to post cycle count session' });
+  }
+});
+
 export default router;

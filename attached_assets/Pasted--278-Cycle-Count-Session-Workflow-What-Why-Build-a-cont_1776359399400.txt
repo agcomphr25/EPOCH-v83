@@ -1,0 +1,169 @@
+#278 — Cycle Count Session Workflow
+What & Why
+
+Build a controlled cycle count workflow so inventory can be physically verified against the system and corrected through a structured, auditable process.
+
+Right now, you have:
+
+full transaction lifecycle (consume, scrap, return, adjust)
+reconciliation view (detects mismatches)
+
+What’s missing is the bridge between physical reality and system data:
+👉 a formal way to count → compare → approve → adjust
+
+This is critical for:
+
+AS9100 audit readiness
+preventing silent inventory drift
+enforcing controlled corrections (instead of ad hoc adjustments)
+Done looks like
+Core Flow
+User creates a cycle count session
+Selects:
+location (freezer, warehouse, rack, etc.)
+optional filters (part, material type)
+System loads expected quantities from:
+material_lots.remainingQty
+grouped by part / location
+User enters actual counted quantities
+System calculates:
+variance per item
+User:
+reviews variances
+adds notes if needed
+User submits session for posting
+System:
+generates adjustment transactions (from #276)
+updates:
+lot quantities
+inventory balances
+transaction history
+Session is locked and stored as an audit record
+Key Concepts
+Cycle Count Session
+
+New entity:
+
+cycle_count_sessions
+
+Fields:
+
+id
+location
+status: DRAFT | IN_PROGRESS | COMPLETED | POSTED
+createdBy
+createdAt
+postedAt
+Cycle Count Lines
+cycle_count_lines
+
+Fields:
+
+id
+sessionId
+agPartNumber
+materialName
+expectedQty
+countedQty
+varianceQty
+notes
+Backend Tasks
+1. Create session endpoints
+POST /api/inventory/cycle-count
+GET /api/inventory/cycle-count/:id
+POST /api/inventory/cycle-count/:id/submit
+POST /api/inventory/cycle-count/:id/post
+2. Generate expected quantities
+
+When session is created:
+
+pull from material_lots.remainingQty
+optionally filter by location
+group by:
+part number
+(later: location)
+3. Submit (calculate variance)
+
+For each line:
+
+variance = countedQty - expectedQty
+4. Post adjustments
+
+For each non-zero variance:
+
+call adjustment logic (from #276)
+write:
+material_lot_transactions (ADJUST)
+inventory_transactions
+update balances
+5. Lock session
+
+After posting:
+
+prevent edits
+mark as POSTED
+Frontend Tasks
+New page:
+/inventory/cycle-count
+Page sections
+1. Session list
+active sessions
+completed sessions
+2. Create session
+select location
+optional filters
+3. Count screen
+
+Table:
+
+part number
+material name
+expected qty
+counted qty (input)
+variance (auto-calculated)
+4. Review screen
+highlight variances:
+red = shortage
+green = overage
+5. Post button
+confirms adjustments
+triggers backend posting
+UI Rules
+Cannot post if:
+no counts entered
+Highlight large variances
+Show totals:
+total expected
+total counted
+total variance
+Out of scope
+approval workflow (supervisor sign-off)
+barcode scanning during count
+mobile optimization
+location hierarchy (phase 2)
+lot-level counting (start with part-level)
+Design Decision (important)
+
+Start with:
+👉 part-level counting
+
+NOT:
+👉 lot-level counting
+
+Why:
+
+faster to implement
+matches most initial cycle count processes
+avoids overcomplicating UI
+
+Later:
+
+you can expand to lot-level counting
+Recommended Rules
+Variance = counted - expected
+Positive variance → inventory gain
+Negative variance → inventory loss
+Always go through adjustment logic (never direct writes)
+Suggested DB additions
+cycle_count_sessions
+cycle_count_lines

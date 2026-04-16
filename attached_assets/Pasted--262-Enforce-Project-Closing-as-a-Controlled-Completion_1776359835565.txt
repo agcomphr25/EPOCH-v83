@@ -1,0 +1,178 @@
+#262 - Enforce Project Closing as a Controlled Completion Gate
+What & Why
+
+You now have:
+
+WAD backbone ✅
+Traveler execution ✅
+Time tracking + labor control ✅
+Project closing module ✅
+
+👉 But right now, a project can still be marked “complete” without a formal closeout
+
+That breaks:
+
+AS9100 intent (no formal review)
+DCAA traceability (no final labor validation)
+Continuous improvement (no lessons captured)
+🎯 Goal
+
+Enforce:
+
+Project CANNOT be completed unless:
+  → closing record exists
+  → required fields are filled
+  → approvals are complete
+🧱 Done Looks Like
+Project cannot move to COMPLETED or CLOSED without:
+a project_closings record
+required fields populated
+Optional:
+manager approval required before closing is valid
+P2 Control Center shows:
+🔴 Missing closing
+🟡 Incomplete closing
+🟢 Closing complete
+Attempting to complete project without closing:
+→ returns 400/403 with explanation
+🚀 Tasks
+1. Define Required Closing Fields
+
+Minimum required before project can close:
+
+summary
+whatWentWrong
+strengths
+opportunities
+nextProjectRecommendations
+
+👉 Do NOT overcomplicate yet
+
+2. Add Validation Helper
+
+📁 server/src/lib/projectClosingValidation.ts
+
+export function validateProjectClosing(closing) {
+  const missing = [];
+
+  if (!closing.summary) missing.push("summary");
+  if (!closing.whatWentWrong) missing.push("whatWentWrong");
+  if (!closing.strengths) missing.push("strengths");
+  if (!closing.opportunities) missing.push("opportunities");
+  if (!closing.nextProjectRecommendations) missing.push("nextProjectRecommendations");
+
+  return {
+    valid: missing.length === 0,
+    missing
+  };
+}
+3. Hook Into Project Status Change
+
+📁 server/src/routes/projects.ts
+
+Find where project status is updated.
+
+BEFORE allowing:
+status = "COMPLETED" or "CLOSED"
+ADD:
+const closing = await storage.getProjectClosingByProjectId(projectId);
+
+if (!closing) {
+  return res.status(400).json({
+    error: "Project cannot be completed without closing record"
+  });
+}
+
+const validation = validateProjectClosing(closing);
+
+if (!validation.valid) {
+  return res.status(400).json({
+    error: "Project closing incomplete",
+    missingFields: validation.missing
+  });
+}
+4. Optional: Add Approval Requirement
+Schema update:
+approvedBy: integer("approved_by").references(() => employees.id),
+approvedAt: timestamp("approved_at")
+Enforce:
+if (!closing.approvedBy) {
+  return res.status(403).json({
+    error: "Project closing must be approved before completion"
+  });
+}
+5. Add Approval Endpoint
+
+📁 server/src/routes/projectClosings.ts
+
+router.post("/:projectId/closing/approve", async (req, res) => {
+  const { approvedBy } = req.body;
+
+  const closing = await storage.getProjectClosingByProjectId(req.params.projectId);
+
+  if (!closing) {
+    return res.status(404).json({ error: "Closing not found" });
+  }
+
+  const updated = await storage.updateProjectClosing(closing.id, {
+    approvedBy,
+    approvedAt: new Date()
+  });
+
+  res.json(updated);
+});
+6. Add Status Indicator to Project Response
+
+When returning project:
+
+Add:
+
+closingStatus: "MISSING" | "INCOMPLETE" | "COMPLETE"
+
+Logic:
+
+if (!closing) → MISSING
+if exists but invalid → INCOMPLETE
+if valid → COMPLETE
+7. P2 Control Center Indicator
+
+You don’t need full UI yet—just ensure API supports:
+
+closingStatus
+missing fields (optional)
+⚠️ Safety Rules
+NEVER silently allow closing without validation
+NEVER auto-fill missing fields
+ALWAYS return what is missing
+DO NOT delete or overwrite closing records automatically
+🧪 Acceptance Tests
+1. Try to close project without closing
+
+→ ❌ blocked
+
+2. Add partial closing
+
+→ ❌ blocked with missing fields list
+
+3. Add full closing
+
+→ ✅ allowed
+
+4. Add approval requirement
+
+→ ❌ blocked until approved
+
+5. Approve closing
+
+→ ✅ allowed
+
+🔥 What This Unlocks
+
+After this:
+
+You now have:
+enforced project lifecycle
+formal closeout documentation
+audit-ready completion
+structured lessons learned
+traceability from quote → execution → closing

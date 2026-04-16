@@ -52,9 +52,10 @@ export async function createPunch(
     if (session.status !== "open") {
       return { error: `Session ${data.sessionId} is ${session.status} and cannot accept new punches`, errorCode: "session_not_open" };
     }
-    // Always enforce employee/session consistency regardless of admin status to
-    // prevent cross-employee data corruption when a sessionId is provided.
-    if (session.employeeId !== data.employeeId) {
+    // Non-admins may only create punches linked to their own session.
+    // Admins are permitted to link a punch to any session (e.g. correcting data on behalf of an employee).
+    const isAdmin = actor.role === "admin";
+    if (!isAdmin && session.employeeId !== data.employeeId) {
       return { error: "Session does not belong to this employee", errorCode: "session_access_denied" };
     }
   }

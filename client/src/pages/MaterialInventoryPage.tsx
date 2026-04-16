@@ -765,7 +765,32 @@ export default function MaterialInventoryPage() {
               {selectedLot?.internalControlNumber} - {selectedLot?.materialName}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto">
+          {!loadingTransactions && transactions.filter(tx => tx.transactionType === 'RETURN').length > 0 && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3">
+              <p className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                Returns ({transactions.filter(tx => tx.transactionType === 'RETURN').length})
+              </p>
+              <div className="space-y-1">
+                {transactions
+                  .filter(tx => tx.transactionType === 'RETURN')
+                  .map(tx => (
+                    <div key={tx.id} className="text-sm text-blue-700 dark:text-blue-400 flex flex-wrap gap-x-4 gap-y-0.5">
+                      <span className="font-medium">{format(new Date(tx.performedAt), 'MM/dd/yyyy HH:mm')}</span>
+                      {tx.qtyChange && (
+                        <span>
+                          Qty: <span className="font-medium text-green-700 dark:text-green-400">+{Math.abs(parseFloat(tx.qtyChange))}</span>
+                        </span>
+                      )}
+                      <span>By: <span className="font-medium">{tx.performedBy}</span></span>
+                      {(tx.reason || tx.notes) && (
+                        <span className="italic">{tx.reason || tx.notes}</span>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+          <div className="max-h-[360px] overflow-y-auto">
             {loadingTransactions ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -781,17 +806,26 @@ export default function MaterialInventoryPage() {
                     <TableHead>Qty Change</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Performed By</TableHead>
-                    <TableHead>Notes</TableHead>
+                    <TableHead>Notes / Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.map((tx) => (
-                    <TableRow key={tx.id}>
+                    <TableRow
+                      key={tx.id}
+                      className={tx.transactionType === 'RETURN' ? 'bg-blue-50 dark:bg-blue-950/20' : undefined}
+                    >
                       <TableCell className="text-sm">
                         {format(new Date(tx.performedAt), 'MM/dd/yyyy HH:mm')}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{tx.transactionType}</Badge>
+                        {tx.transactionType === 'RETURN' ? (
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700">
+                            RETURN
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">{tx.transactionType}</Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {tx.qtyChange && (

@@ -15606,3 +15606,66 @@ export const cycleCountLines = pgTable('cycle_count_lines', {
 export const insertCycleCountLineSchema = createInsertSchema(cycleCountLines).omit({ id: true });
 export type CycleCountLine = typeof cycleCountLines.$inferSelect;
 export type InsertCycleCountLine = z.infer<typeof insertCycleCountLineSchema>;
+
+// ============================================================================
+// QUOTE EXECUTION FEEDBACK — Quote vs Actual Feedback Loop
+// Stores a computed snapshot comparing quoted estimates to actual execution
+// outcomes for a completed project. Used to close the feedback loop between
+// estimating and production, enabling better future quoting decisions.
+// ============================================================================
+
+export const quoteExecutionFeedback = pgTable('quote_execution_feedback', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  // Nullable: not all projects originate from a quote
+  quoteId: uuid('quote_id').references(() => quotes.id, { onDelete: 'set null' }),
+  // Not null: every feedback record belongs to exactly one project
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  // Nullable: may not have a formal closing at generation time
+  projectClosingId: integer('project_closing_id').references(() => projectClosings.id, { onDelete: 'set null' }),
+  // When the feedback snapshot was last computed
+  generatedAt: timestamp('generated_at').notNull().defaultNow(),
+  // Labor hours comparison
+  // NOTE: The current quotes schema has no explicit laborHours field.
+  // Fallback to line items was evaluated but no unambiguous labor line-item
+  // heuristic exists. quotedLaborHours is stored as null until the quote
+  // schema adds an explicit field (e.g., estimatedLaborHours).
+  quotedLaborHours: real('quoted_labor_hours'),
+  actualLaborHours: real('actual_labor_hours'),
+  laborHoursVariance: real('labor_hours_variance'),
+  laborHoursVariancePct: real('labor_hours_variance_pct'),
+  // Departments (JSONB arrays of department name strings)
+  quotedDepartments: jsonb('quoted_departments').$type<string[]>(),
+  actualDepartments: jsonb('actual_departments').$type<string[]>(),
+  // Lead time comparison in calendar days
+  // NOTE: The quotes schema has no explicit lead-time field; quotedLeadTimeDays
+  // is left null until the quote schema exposes it.
+  quotedLeadTimeDays: integer('quoted_lead_time_days'),
+  actualLeadTimeDays: integer('actual_lead_time_days'),
+  scheduleVarianceDays: integer('schedule_variance_days'),
+  // True when actual hours OR actual lead time exceeds quoted values
+  isOverrun: boolean('is_overrun'),
+  // Human-readable summary generated at compute time
+  summary: text('summary'),
+  // Lessons from project closing (JSONB array of risk description strings)
+  keyRisks: jsonb('key_risks').$type<string[]>(),
+  keyStrengths: text('key_strengths'),
+  keyOpportunities: text('key_opportunities'),
+  // Forward-looking quoting guidance derived from this project
+  recommendedQuotingNotes: text('recommended_quoting_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  // Enforce one feedback record per project (upsert target)
+  projectIdUnique: unique('quote_execution_feedback_project_id_unique').on(table.projectId),
+  projectIdIdx: index('quote_execution_feedback_project_id_idx').on(table.projectId),
+  quoteIdIdx: index('quote_execution_feedback_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuoteExecutionFeedbackSchema = createInsertSchema(quoteExecutionFeedback).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type QuoteExecutionFeedback = typeof quoteExecutionFeedback.$inferSelect;
+export type InsertQuoteExecutionFeedback = z.infer<typeof insertQuoteExecutionFeedbackSchema>;

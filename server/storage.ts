@@ -653,7 +653,12 @@ import {
   type CycleCountLine,
   // Quote Execution Feedback
   quoteExecutionFeedback,
+  quotes,
+  quoteLineItems,
+  type Quote,
+  type QuoteLineItem,
   type QuoteExecutionFeedback,
+  type InsertQuoteExecutionFeedback,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2590,6 +2595,11 @@ export interface IStorage {
   getProjectClosingRisks(projectId: string): Promise<ProjectClosingRisk[]>;
   createProjectClosingAction(data: InsertProjectClosingAction): Promise<ProjectClosingAction>;
   getProjectClosingActions(projectId: string): Promise<ProjectClosingAction[]>;
+
+  // Quote Execution Feedback
+  generateQuoteExecutionFeedback(projectId: string): Promise<QuoteExecutionFeedback>;
+  getQuoteExecutionFeedbackByProjectId(projectId: string): Promise<QuoteExecutionFeedback | undefined>;
+  getQuoteExecutionFeedbackByQuoteId(quoteId: string): Promise<QuoteExecutionFeedback | undefined>;
 
   // Material Lot Management
   getAllMaterialLots(): Promise<MaterialLot[]>;
@@ -23245,19 +23255,284 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getQuoteSuggestions(input: { partNumber?: string; projectType?: string; customerId?: string }): Promise<QuoteExecutionFeedback[]> {
-    const { partNumber, projectType, customerId } = input;
-    if (!partNumber && !projectType && !customerId) return [];
-    return db
+  // ── Quote Execution Feedback ──────────────────────────────────────────────
+
+  async getQuoteSuggestions(_input: { partNumber?: string; projectType?: string; customerId?: string }): Promise<QuoteExecutionFeedback[]> {
+    // TODO: quoteExecutionFeedback does not currently store partNumber/projectType/customerId
+    // fields. Return all feedback records until the schema is extended.
+    return db.select().from(quoteExecutionFeedback);
+  }
+
+  async generateQuoteExecutionFeedback(projectId: string): Promise<QuoteExecutionFeedback> {
+    // 1. Load the project
+    const project = await this.getProject(projectId);
+    if (!project) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+
+    // 2. Find linked quote via project steps (step type = 'quote')
+    const steps = await db
+      .select()
+      .from(projectSteps)
+      .where(eq(projectSteps.projectId, projectId));
+
+    const quoteStep = steps.find((s) => s.stepType === 'quote');
+    const linkedQuoteId: string | null = quoteStep?.linkedQuoteId ?? null;
+
+    // 3. Load quote and line items if available (properly typed, no any)
+    let quoteRow: Quote | null = null;
+    let lineItemRows: QuoteLineItem[] = [];
+    if (linkedQuoteId) {
+      const [q] = await db.select().from(quotes).where(eq(quotes.id, linkedQuoteId));
+      quoteRow = q ?? null;
+      if (quoteRow) {
+        lineItemRows = await db
+          .select()
+          .from(quoteLineItems)
+          .where(eq(quoteLineItems.quoteId, linkedQuoteId));
+      }
+    }
+
+    // 4. Determine quoted labor hours
+    // Priority 1: explicit quote.laborHours field — the quotes table has no such column yet.
+    // Priority 2 (fallback): identify labor line items by description keyword matching.
+    //   Sum their `quantity` as hours when the description contains labor-related terms.
+    //   This is a deterministic, auditable heuristic; the source is noted in the summary.
+    // Priority 3: null with a code comment when no labor data is recoverable.
+    let quotedLaborHours: number | null = null;
+    let quotedLaborSource: 'line_items' | 'none' = 'none';
+    if (quoteRow && lineItemRows.length > 0) {
+      const LABOR_KEYWORDS = /\b(labor|labour|man.?hour|engineering|machining|fabrication|welding|assembly|finishing|setup)\b/i;
+      const laborItems = lineItemRows.filter(
+        (li) => li.description && LABOR_KEYWORDS.test(li.description)
+      );
+      if (laborItems.length > 0) {
+        const summedHours = laborItems.reduce((sum, li) => sum + (li.quantity ?? 0), 0);
+        if (summedHours > 0) {
+          quotedLaborHours = Math.round(summedHours * 100) / 100;
+          quotedLaborSource = 'line_items';
+        }
+      }
+      // If no labor-keyed line items matched, quotedLaborHours remains null.
+      // This is the correct behavior: leave null rather than silently misattribute hours.
+    }
+
+    // Quoted departments: not captured on the current quote schema; left null.
+    const quotedDepartments: string[] | null = null;
+
+    // 5. Load all WADs for this project
+    const wads = await this.getWorkOrdersByProject(projectId);
+
+    // 6. Sum actual labor hours from time clock entries linked to each WAD
+    let totalActualHours = 0;
+    const departmentSet = new Set<string>();
+
+    for (const wad of wads) {
+      const entries = await db
+        .select()
+        .from(timeClockEntries)
+        .where(eq(timeClockEntries.productionWorkOrderId, wad.id));
+
+      for (const entry of entries) {
+        // Only count entries where both clock-in and clock-out are present
+        if (entry.clockIn && entry.clockOut) {
+          const ms = new Date(entry.clockOut).getTime() - new Date(entry.clockIn).getTime();
+          const hours = ms / (1000 * 60 * 60);
+          if (hours > 0) {
+            totalActualHours += hours;
+          }
+        }
+        // Collect unique department names across all WADs
+        if (entry.department) {
+          departmentSet.add(entry.department);
+        }
+      }
+    }
+
+    const actualLaborHours: number | null = wads.length > 0 ? Math.round(totalActualHours * 100) / 100 : null;
+    const actualDepartments: string[] = Array.from(departmentSet).sort();
+
+    // 7. Labor variance (only when both sides are known)
+    let laborHoursVariance: number | null = null;
+    let laborHoursVariancePct: number | null = null;
+    if (quotedLaborHours !== null && actualLaborHours !== null) {
+      laborHoursVariance = Math.round((actualLaborHours - quotedLaborHours) * 100) / 100;
+      laborHoursVariancePct =
+        quotedLaborHours !== 0
+          ? Math.round((laborHoursVariance / quotedLaborHours) * 10000) / 100
+          : null;
+    }
+
+    // 8. Load project closing
+    const closing = await this.getProjectClosingByProjectId(projectId);
+    const projectClosingId: number | null = closing?.id ?? null;
+
+    // 9. Schedule variance
+    // Quoted lead time: not available from quote schema — left null until schema is extended.
+    const quotedLeadTimeDays: number | null = null;
+
+    // Actual lead time resolution priority:
+    //   1. project.createdAt → project.actualShipDate (most precise)
+    //   2. project.createdAt → closing.approvedAt (formal closing date)
+    //   3. Earliest WAD startDate → latest WAD dueDate (WAD-level span as proxy)
+    let actualLeadTimeDays: number | null = null;
+    const startAnchor = project.createdAt ? new Date(project.createdAt) : null;
+
+    if (startAnchor) {
+      if (project.actualShipDate) {
+        const msElapsed = new Date(project.actualShipDate).getTime() - startAnchor.getTime();
+        actualLeadTimeDays = Math.round(msElapsed / (1000 * 60 * 60 * 24));
+      } else if (closing?.approvedAt) {
+        const msElapsed = new Date(closing.approvedAt).getTime() - startAnchor.getTime();
+        actualLeadTimeDays = Math.round(msElapsed / (1000 * 60 * 60 * 24));
+      } else if (wads.length > 0) {
+        // Fallback: derive from WAD date spans (startDate → dueDate across all WADs)
+        const wadStarts = wads
+          .map((w) => (w.startDate ? new Date(w.startDate).getTime() : null))
+          .filter((d): d is number => d !== null);
+        const wadDues = wads
+          .map((w) => (w.dueDate ? new Date(w.dueDate).getTime() : null))
+          .filter((d): d is number => d !== null);
+        if (wadStarts.length > 0 && wadDues.length > 0) {
+          const earliestWadStart = Math.min(...wadStarts);
+          const latestWadDue = Math.max(...wadDues);
+          const msElapsed = latestWadDue - earliestWadStart;
+          actualLeadTimeDays = Math.round(msElapsed / (1000 * 60 * 60 * 24));
+        }
+      }
+    }
+
+    // Schedule variance: actual − quoted (positive = overrun, negative = ahead of schedule)
+    let scheduleVarianceDays: number | null = null;
+    if (quotedLeadTimeDays !== null && actualLeadTimeDays !== null) {
+      scheduleVarianceDays = actualLeadTimeDays - quotedLeadTimeDays;
+    } else if (project.targetShipDate && project.actualShipDate) {
+      // Fallback: compare target vs actual ship date when quoted lead time is unavailable
+      const targetMs = new Date(project.targetShipDate).getTime();
+      const actualMs = new Date(project.actualShipDate).getTime();
+      scheduleVarianceDays = Math.round((actualMs - targetMs) / (1000 * 60 * 60 * 24));
+    }
+
+    // 10. Overrun flag (true if either labor or schedule exceeded quoted/target values)
+    const laborOverrun = laborHoursVariance !== null && laborHoursVariance > 0;
+    const scheduleOverrun = scheduleVarianceDays !== null && scheduleVarianceDays > 0;
+    const isOverrun: boolean | null =
+      laborHoursVariance !== null || scheduleVarianceDays !== null
+        ? laborOverrun || scheduleOverrun
+        : null;
+
+    // 11. Extract closing lessons (risks from whatWentWrong, one line per risk)
+    const keyRisks: string[] | null = closing?.whatWentWrong
+      ? closing.whatWentWrong
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : null;
+    const keyStrengths: string | null = closing?.strengths ?? null;
+    const keyOpportunities: string | null = closing?.opportunities ?? null;
+    const recommendedQuotingNotes: string | null =
+      closing?.nextProjectRecommendations ?? null;
+
+    // 12. Build a human-readable summary
+    const summaryParts: string[] = [`Feedback for project ${project.projectCode} (${project.projectName}).`];
+    if (linkedQuoteId && quoteRow) {
+      summaryParts.push(`Linked to quote ${quoteRow.quoteNumber}.`);
+    } else {
+      summaryParts.push('No linked quote found.');
+    }
+    if (quotedLaborHours !== null) {
+      summaryParts.push(`Quoted labor: ${quotedLaborHours.toFixed(2)} hours (from ${quotedLaborSource}).`);
+    }
+    if (actualLaborHours !== null) {
+      summaryParts.push(`Actual labor: ${actualLaborHours.toFixed(2)} hours across ${wads.length} WAD(s).`);
+    } else {
+      summaryParts.push('No time clock entries recorded.');
+    }
+    if (laborHoursVariance !== null) {
+      const sign = laborHoursVariance >= 0 ? '+' : '';
+      summaryParts.push(`Labor variance: ${sign}${laborHoursVariance.toFixed(2)} hours.`);
+    }
+    if (actualDepartments.length > 0) {
+      summaryParts.push(`Departments involved: ${actualDepartments.join(', ')}.`);
+    }
+    if (scheduleVarianceDays !== null) {
+      const sign = scheduleVarianceDays >= 0 ? '+' : '';
+      summaryParts.push(`Schedule variance: ${sign}${scheduleVarianceDays} day(s).`);
+    }
+    if (isOverrun === true) {
+      summaryParts.push('Project is classified as an overrun.');
+    } else if (isOverrun === false) {
+      summaryParts.push('Project completed within quoted parameters.');
+    }
+    const summary = summaryParts.join(' ');
+
+    // 13. Upsert the feedback record (insert-or-update on projectId unique constraint)
+    const [upserted] = await db
+      .insert(quoteExecutionFeedback)
+      .values({
+        quoteId: linkedQuoteId,
+        projectId,
+        projectClosingId,
+        generatedAt: new Date(),
+        quotedLaborHours,
+        actualLaborHours,
+        laborHoursVariance,
+        laborHoursVariancePct,
+        quotedDepartments,
+        actualDepartments,
+        quotedLeadTimeDays,
+        actualLeadTimeDays,
+        scheduleVarianceDays,
+        isOverrun,
+        summary,
+        keyRisks,
+        keyStrengths,
+        keyOpportunities,
+        recommendedQuotingNotes,
+      })
+      .onConflictDoUpdate({
+        target: quoteExecutionFeedback.projectId,
+        set: {
+          quoteId: linkedQuoteId,
+          projectClosingId,
+          generatedAt: new Date(),
+          quotedLaborHours,
+          actualLaborHours,
+          laborHoursVariance,
+          laborHoursVariancePct,
+          quotedDepartments,
+          actualDepartments,
+          quotedLeadTimeDays,
+          actualLeadTimeDays,
+          scheduleVarianceDays,
+          isOverrun,
+          summary,
+          keyRisks,
+          keyStrengths,
+          keyOpportunities,
+          recommendedQuotingNotes,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return upserted;
+  }
+
+  async getQuoteExecutionFeedbackByProjectId(projectId: string): Promise<QuoteExecutionFeedback | undefined> {
+    const [row] = await db
       .select()
       .from(quoteExecutionFeedback)
-      .where(
-        or(
-          partNumber ? eq(quoteExecutionFeedback.partNumber, partNumber) : undefined,
-          projectType ? eq(quoteExecutionFeedback.projectType, projectType) : undefined,
-          customerId ? eq(quoteExecutionFeedback.customerId, customerId) : undefined,
-        ),
-      );
+      .where(eq(quoteExecutionFeedback.projectId, projectId));
+    return row ?? undefined;
+  }
+
+  async getQuoteExecutionFeedbackByQuoteId(quoteId: string): Promise<QuoteExecutionFeedback | undefined> {
+    const [row] = await db
+      .select()
+      .from(quoteExecutionFeedback)
+      .where(eq(quoteExecutionFeedback.quoteId, quoteId));
+    return row ?? undefined;
   }
 }
 

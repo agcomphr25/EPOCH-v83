@@ -4561,6 +4561,48 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ cycle_count tables migration skipped:', cycleCountErr?.message);
     }
 
+    // Ensure quote_execution_feedback table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quote_execution_feedback (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          quote_id UUID REFERENCES quotes(id) ON DELETE SET NULL,
+          project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          project_closing_id INTEGER REFERENCES project_closings(id) ON DELETE SET NULL,
+          generated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          quoted_labor_hours REAL,
+          actual_labor_hours REAL,
+          labor_hours_variance REAL,
+          labor_hours_variance_pct REAL,
+          quoted_departments JSONB,
+          actual_departments JSONB,
+          quoted_lead_time_days INTEGER,
+          actual_lead_time_days INTEGER,
+          schedule_variance_days INTEGER,
+          is_overrun BOOLEAN,
+          summary TEXT,
+          key_risks JSONB,
+          key_strengths TEXT,
+          key_opportunities TEXT,
+          recommended_quoting_notes TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT quote_execution_feedback_project_id_unique UNIQUE (project_id)
+        )
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS quote_execution_feedback_project_id_idx
+        ON quote_execution_feedback (project_id)
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS quote_execution_feedback_quote_id_idx
+        ON quote_execution_feedback (quote_id)
+      `);
+      console.log('✅ Ensured quote_execution_feedback table exists');
+    } catch (qefErr: any) {
+      console.warn('⚠️ quote_execution_feedback migration skipped:', qefErr?.message);
+    }
+
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');

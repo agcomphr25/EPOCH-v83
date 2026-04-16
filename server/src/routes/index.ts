@@ -124,6 +124,7 @@ import monitoredLinksRoutes from './monitoredLinks';
 import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
 import projectClosingsRoutes from './projectClosings';
+import quoteFeedbackRoutes from './quoteFeedback';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
@@ -934,6 +935,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Project Closing (Lessons Learned) routes
   app.use('/api/projects/:projectId/closing', projectClosingsRoutes);
+
+  // Quote Execution Feedback routes
+  app.use('/api', quoteFeedbackRoutes);
 
   // Project Step Attachments routes
   app.use('/api/project-step-attachments', projectStepAttachmentsRoutes);

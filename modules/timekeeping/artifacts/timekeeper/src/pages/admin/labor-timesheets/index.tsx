@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -53,9 +53,10 @@ export default function AdminLaborTimesheets() {
   if (statusFilter !== "all") queryParams.set("status", statusFilter);
   const qs = queryParams.toString();
 
-  const { data: timesheets = [], isLoading } = useQuery<DailyTimesheet[]>({
+  const { data: timesheets = [], isLoading, isFetching, dataUpdatedAt, refetch } = useQuery<DailyTimesheet[]>({
     queryKey: ["/api/labor/daily-timesheets", "admin", dateFilter, employeeFilter, statusFilter],
     queryFn: () => apiFetch(`/api/labor/daily-timesheets${qs ? `?${qs}` : ""}`),
+    refetchInterval: 30_000,
   });
 
   const approveMut = useMutation({
@@ -148,10 +149,31 @@ export default function AdminLaborTimesheets() {
 
         <Card>
           <CardHeader>
-            <CardTitle>All Timesheets</CardTitle>
-            <CardDescription>
-              {isLoading ? "Loading…" : `${timesheets.length} timesheet${timesheets.length === 1 ? "" : "s"} found`}
-            </CardDescription>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>All Timesheets</CardTitle>
+                <CardDescription>
+                  {isLoading
+                    ? "Loading…"
+                    : `${timesheets.length} timesheet${timesheets.length === 1 ? "" : "s"} found`}
+                  {!isLoading && dataUpdatedAt > 0 && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      · Updated {format(new Date(dataUpdatedAt), "h:mm:ss a")}
+                    </span>
+                  )}
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="shrink-0 gap-1.5"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>

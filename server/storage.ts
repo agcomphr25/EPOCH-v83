@@ -683,6 +683,7 @@ import {
 } from './utils/orderIdGenerator';
 import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
 import { normalizeKey } from './lib/customerKey';
+import { computeP1Queue } from './src/helpers/p1POQueueHelper';
 
 // Helper: Explicit column selection for production_orders table
 // Explicitly list all columns needed by getAllOrders() normalization logic.
@@ -10312,149 +10313,24 @@ export class DatabaseStorage implements IStorage {
         : queryResult.rows || [];
     }
     
-    // Map of po_id -> po_item_id -> fulfillment stats
-    const poFulfillmentMap = new Map<number, Map<number, { total: number; fulfilled: number }>>();
-    for (const prodOrder of productionOrdersResult) {
-      const poId = prodOrder.po_id;
-      const poItemId = prodOrder.po_item_id;
-      
-      if (!poFulfillmentMap.has(poId)) {
-        poFulfillmentMap.set(poId, new Map());
-      }
-      const itemMap = poFulfillmentMap.get(poId)!;
-      
-      if (!itemMap.has(poItemId)) {
-        itemMap.set(poItemId, { total: 0, fulfilled: 0 });
-      }
-      const stats = itemMap.get(poItemId)!;
-      stats.total++;
-      // Check if production_status indicates fulfillment (Shipped or Completed)
-      // Also treat orders currently in Shipping QC as fulfilled — they are done with production
-      if (
-        prodOrder.production_status === 'Shipped' ||
-        prodOrder.production_status === 'Completed' ||
-        prodOrder.current_department === 'Shipping QC'
-      ) {
-        stats.fulfilled++;
-      }
+    // Fetch all items for all open POs in one query
+    const allItems = poIds.length > 0
+      ? await db
+          .select()
+          .from(purchaseOrderItems)
+          .where(inArray(purchaseOrderItems.poId, poIds))
+          .orderBy(purchaseOrderItems.createdAt)
+      : [];
+
+    const itemsByPoId = new Map<number, typeof allItems>();
+    for (const item of allItems) {
+      const list = itemsByPoId.get(item.poId!) ?? [];
+      list.push(item);
+      itemsByPoId.set(item.poId!, list);
     }
 
-    // Group by customer
-    const customerMap = new Map<string, P1POQueueCustomer>();
-
-    for (const po of openPOs) {
-      const customerId = po.customerId?.toString() || po.customerName;
-      
-      let customer = customerMap.get(customerId);
-      if (!customer) {
-        customer = {
-          customerId,
-          customerName: po.customerName,
-          purchaseOrders: [],
-        };
-        customerMap.set(customerId, customer);
-      }
-
-      // Get all items for this PO (we'll filter by stockModel and scheduled quantity after)
-      const items = await db
-        .select()
-        .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.poId, po.id))
-        .orderBy(purchaseOrderItems.createdAt);
-
-      // Get the fulfillment map for this PO
-      const itemFulfillmentMap = poFulfillmentMap.get(po.id) || new Map();
-
-      const poItems: P1POQueueItem[] = items
-        .map((item) => {
-          // Parse specifications JSON
-          const specs = item.specifications as any || {};
-          
-          // Check both camelCase and snake_case for stockModel
-          const stockModel = specs.stockModel || specs.stock_model || null;
-          
-          // Calculate remaining quantity (not yet scheduled)
-          const orderCount = item.orderCount || 0;
-          const remainingQuantity = item.quantity - orderCount;
-          
-          return {
-            id: item.id,
-            poNumber: po.poNumber,
-            productName: item.itemName || '',
-            stockModel: stockModel,
-            specifications: specs && Object.keys(specs).length > 0 ? specs : null,
-            itemType: item.itemType || null,
-            actionLength: specs.actionLength || specs.action_length || null,
-            material: specs.material || null,
-            handedness: specs.handedness || null,
-            actionInlet: specs.actionInlet || specs.action_inlet || null,
-            bottomMetal: specs.bottomMetal || specs.bottom_metal || null,
-            barrelInlet: specs.barrelInlet || specs.barrel_inlet || null,
-            qds: specs.qds || null,
-            swivelStuds: specs.swivelStuds || specs.swivel_studs || null,
-            paintOptions: specs.paintOptions || specs.paint_options || null,
-            texture: specs.texture || null,
-            flatTop: specs.flatTop || specs.flat_top || null,
-            quantity: remainingQuantity, // Show only remaining quantity
-            status: item.stockStatus || 'pending',
-            notes: item.notes || item.productionNotes || null,
-            dueDate: item.dueDate?.toString() || null,
-            linkedOrderId: null,
-          };
-        })
-        .filter((item) => {
-          // Only include items with:
-          // 1. itemType === 'stock_model' (exclude metal accessories like 'custom_model')
-          // 2. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
-          // 3. Remaining quantity > 0 (not fully scheduled) OR has unfulfilled production orders
-          // 4. NOT all production orders are fulfilled
-          
-          // Filter out metal accessories - they don't need production
-          if (!item.itemType || item.itemType.toLowerCase() !== 'stock_model') {
-            return false;
-          }
-          
-          if (!item.stockModel || item.stockModel.trim() === '') {
-            return false;
-          }
-          const lowerStockModel = item.stockModel.toLowerCase().trim();
-          const hasValidStockModel = lowerStockModel !== 'no stock' && 
-                 lowerStockModel !== 'no_stock' && 
-                 lowerStockModel !== 'unknown';
-          
-          if (!hasValidStockModel) {
-            return false;
-          }
-          
-          // Check if this item has production orders and if all are fulfilled
-          const fulfillmentStats = itemFulfillmentMap.get(item.id);
-          if (fulfillmentStats && fulfillmentStats.total > 0) {
-            // If all production orders are fulfilled, exclude this item
-            if (fulfillmentStats.fulfilled === fulfillmentStats.total) {
-              return false;
-            }
-          }
-          
-          // Include if there's remaining quantity to schedule
-          return item.quantity > 0;
-        });
-
-      // Only add this PO if it has items remaining after filtering
-      if (poItems.length > 0) {
-        customer.purchaseOrders.push({
-          poNumber: po.poNumber,
-          poDate: po.poDate?.toString() || null,
-          expectedDelivery: po.expectedDelivery?.toString() || null,
-          totalItems: poItems.reduce((sum, item) => sum + item.quantity, 0),
-          items: poItems,
-        });
-      }
-    }
-
-    // Filter out customers with no purchase orders remaining
-    return Array.from(customerMap.values()).filter(
-      customer => customer.purchaseOrders.length > 0
-    );
+    // Delegate filtering / grouping to the pure helper (also tested independently)
+    return computeP1Queue(openPOs, itemsByPoId, productionOrdersResult);
   }
 
   async getPOOrdersInShippingQC(): Promise<{

@@ -1,0 +1,234 @@
+import { describe, it, expect } from 'vitest';
+import {
+  isProductionOrderFulfilled,
+  buildFulfillmentMap,
+  isPoItemFullyFulfilled,
+  computeP1Queue,
+  type ProductionOrderRow,
+  type RawPurchaseOrder,
+  type RawPurchaseOrderItem,
+} from '../src/helpers/p1POQueueHelper';
+
+// ---------------------------------------------------------------------------
+// Helpers for building minimal fixture objects
+// ---------------------------------------------------------------------------
+
+function makePO(overrides: Partial<RawPurchaseOrder> = {}): RawPurchaseOrder {
+  return {
+    id: 1,
+    poNumber: 'PO-001',
+    customerName: 'Acme Corp',
+    customerId: 100,
+    poDate: null,
+    expectedDelivery: null,
+    ...overrides,
+  };
+}
+
+function makeItem(overrides: Partial<RawPurchaseOrderItem> = {}): RawPurchaseOrderItem {
+  return {
+    id: 10,
+    itemName: 'Stock Rifle',
+    itemType: 'stock_model',
+    specifications: { stockModel: 'M700' },
+    quantity: 2,
+    orderCount: 0,
+    stockStatus: 'pending',
+    notes: null,
+    productionNotes: null,
+    dueDate: null,
+    ...overrides,
+  };
+}
+
+function makeProdRow(overrides: Partial<ProductionOrderRow> = {}): ProductionOrderRow {
+  return {
+    po_id: 1,
+    po_item_id: 10,
+    production_status: 'In Progress',
+    current_department: 'Assembly',
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// isProductionOrderFulfilled
+// ---------------------------------------------------------------------------
+
+describe('isProductionOrderFulfilled', () => {
+  it('returns true when production_status is Shipped', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'Shipped', current_department: null }))).toBe(true);
+  });
+
+  it('returns true when production_status is Completed', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'Completed', current_department: null }))).toBe(true);
+  });
+
+  it('returns true when current_department is Shipping QC', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }))).toBe(true);
+  });
+
+  it('returns false when order is still in a production department', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'In Progress', current_department: 'Machining' }))).toBe(false);
+  });
+
+  it('returns false when both fields are null', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: null, current_department: null }))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildFulfillmentMap
+// ---------------------------------------------------------------------------
+
+describe('buildFulfillmentMap', () => {
+  it('returns an empty map when given no rows', () => {
+    expect(buildFulfillmentMap([]).size).toBe(0);
+  });
+
+  it('correctly counts total and fulfilled orders for a single PO item', () => {
+    const rows: ProductionOrderRow[] = [
+      makeProdRow({ production_status: 'Shipped', current_department: null }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Machining' }),
+    ];
+    const stats = buildFulfillmentMap(rows).get(1)!.get(10)!;
+    expect(stats.total).toBe(2);
+    expect(stats.fulfilled).toBe(1);
+  });
+
+  it('treats orders in Shipping QC department as fulfilled', () => {
+    const rows: ProductionOrderRow[] = [
+      makeProdRow({ current_department: 'Shipping QC' }),
+      makeProdRow({ current_department: 'Shipping QC' }),
+    ];
+    const stats = buildFulfillmentMap(rows).get(1)!.get(10)!;
+    expect(stats.total).toBe(2);
+    expect(stats.fulfilled).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isPoItemFullyFulfilled
+// ---------------------------------------------------------------------------
+
+describe('isPoItemFullyFulfilled', () => {
+  it('returns true when all production orders are fulfilled', () => {
+    expect(isPoItemFullyFulfilled({ total: 3, fulfilled: 3 })).toBe(true);
+  });
+
+  it('returns false when some production orders remain unfulfilled', () => {
+    expect(isPoItemFullyFulfilled({ total: 3, fulfilled: 2 })).toBe(false);
+  });
+
+  it('returns false when there are no production orders', () => {
+    expect(isPoItemFullyFulfilled({ total: 0, fulfilled: 0 })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeP1Queue — Shipping QC fulfillment rule (queue inclusion / exclusion)
+// ---------------------------------------------------------------------------
+
+describe('computeP1Queue — Shipping QC fulfillment rule', () => {
+  it('excludes a PO from the queue when all its production orders are in Shipping QC', () => {
+    const po = makePO();
+    const item = makeItem();
+    const itemsByPoId = new Map([[po.id, [item]]]);
+    const prodRows: ProductionOrderRow[] = [
+      makeProdRow({ current_department: 'Shipping QC' }),
+      makeProdRow({ current_department: 'Shipping QC' }),
+    ];
+
+    const result = computeP1Queue([po], itemsByPoId, prodRows);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('still includes a PO in the queue when only some production orders are in Shipping QC', () => {
+    const po = makePO();
+    const item = makeItem();
+    const itemsByPoId = new Map([[po.id, [item]]]);
+    const prodRows: ProductionOrderRow[] = [
+      makeProdRow({ current_department: 'Shipping QC' }),
+      makeProdRow({ current_department: 'Assembly' }),
+    ];
+
+    const result = computeP1Queue([po], itemsByPoId, prodRows);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].customerName).toBe('Acme Corp');
+    expect(result[0].purchaseOrders[0].poNumber).toBe('PO-001');
+    expect(result[0].purchaseOrders[0].items).toHaveLength(1);
+  });
+
+  it('excludes a PO when all production orders are Shipped or Completed (baseline)', () => {
+    const po = makePO();
+    const item = makeItem();
+    const itemsByPoId = new Map([[po.id, [item]]]);
+    const prodRows: ProductionOrderRow[] = [
+      makeProdRow({ production_status: 'Shipped', current_department: null }),
+      makeProdRow({ production_status: 'Completed', current_department: null }),
+    ];
+
+    const result = computeP1Queue([po], itemsByPoId, prodRows);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('includes a PO when there are no production orders yet', () => {
+    const po = makePO();
+    const item = makeItem();
+    const itemsByPoId = new Map([[po.id, [item]]]);
+
+    const result = computeP1Queue([po], itemsByPoId, []);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].purchaseOrders[0].items[0].stockModel).toBe('M700');
+  });
+
+  it('handles multiple POs — excludes only the fully fulfilled one', () => {
+    const poA = makePO({ id: 1, poNumber: 'PO-001', customerName: 'Alpha' });
+    const poB = makePO({ id: 2, poNumber: 'PO-002', customerName: 'Beta', customerId: 200 });
+    const itemA = makeItem({ id: 10 });
+    const itemB = makeItem({ id: 20 });
+    const itemsByPoId = new Map([
+      [1, [itemA]],
+      [2, [itemB]],
+    ]);
+    const prodRows: ProductionOrderRow[] = [
+      { po_id: 1, po_item_id: 10, production_status: 'In Progress', current_department: 'Shipping QC' },
+      { po_id: 2, po_item_id: 20, production_status: 'In Progress', current_department: 'Assembly' },
+    ];
+
+    const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].customerName).toBe('Beta');
+    expect(result[0].purchaseOrders[0].poNumber).toBe('PO-002');
+  });
+
+  it('filters out items that are not stock_model type', () => {
+    const po = makePO();
+    const item = makeItem({ itemType: 'custom_model' });
+    const itemsByPoId = new Map([[po.id, [item]]]);
+
+    const result = computeP1Queue([po], itemsByPoId, []);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('filters out items with no remaining quantity', () => {
+    const po = makePO();
+    const item = makeItem({ quantity: 2, orderCount: 2 });
+    const itemsByPoId = new Map([[po.id, [item]]]);
+
+    const result = computeP1Queue([po], itemsByPoId, []);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty when given no POs', () => {
+    const result = computeP1Queue([], new Map(), []);
+    expect(result).toHaveLength(0);
+  });
+});

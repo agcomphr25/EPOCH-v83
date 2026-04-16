@@ -310,6 +310,12 @@ export default function Navigation() {
       description: 'Multi-panel shop floor display for monitors and meeting room screens',
     },
     {
+      path: '/time-clock-admin',
+      label: 'Timekeeping',
+      icon: Clock,
+      description: 'Manage time clock entries and employee time tracking',
+    },
+    {
       path: '/customers',
       label: 'Customer Management',
       icon: Users,

@@ -801,6 +801,15 @@ export interface ScanCreateResult {
   duplicate?: boolean;
 }
 
+export interface MaterialLotHistoryEvent {
+  transactionType: string;
+  qty: string | number | null;
+  performedBy: string;
+  reason: string | null;
+  timestamp: Date | string | null;
+  source: 'lot' | 'inventory';
+}
+
 export interface IStorage {
   // User authentication methods
   getUser(id: number): Promise<User | undefined>;
@@ -2557,6 +2566,7 @@ export interface IStorage {
   // Material Lot Transactions
   getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]>;
   getMaterialLotTransactionsByICN(icn: string): Promise<MaterialLotTransaction[]>;
+  getMaterialLotHistory(id: string): Promise<MaterialLotHistoryEvent[] | null>;
   createMaterialLotTransaction(data: InsertMaterialLotTransaction): Promise<MaterialLotTransaction>;
 
   // Traveler Material Consumption
@@ -21639,6 +21649,50 @@ export class DatabaseStorage implements IStorage {
       .from(materialLotTransactions)
       .where(eq(materialLotTransactions.internalControlNumber, icn))
       .orderBy(desc(materialLotTransactions.performedAt));
+  }
+
+  async getMaterialLotHistory(id: string): Promise<MaterialLotHistoryEvent[] | null> {
+    const lot = await this.getMaterialLot(id);
+    if (!lot) return null;
+
+    const lotTxns = await db
+      .select()
+      .from(materialLotTransactions)
+      .where(eq(materialLotTransactions.materialLotId, id));
+
+    // Query all inventory transactions referencing this lot by ID.
+    // material_lot UUIDs are globally unique, so collisions with other entity types are negligible.
+    const invTxns = await db
+      .select()
+      .from(inventoryTransactions)
+      .where(eq(inventoryTransactions.referenceId, id));
+
+    const lotEvents: MaterialLotHistoryEvent[] = lotTxns.map(t => ({
+      transactionType: t.transactionType,
+      qty: t.qtyChange ?? null,
+      performedBy: t.performedBy,
+      reason: t.reason ?? t.notes ?? null,
+      timestamp: t.performedAt ?? t.createdAt,
+      source: 'lot' as const,
+    }));
+
+    const invEvents: MaterialLotHistoryEvent[] = invTxns.map(t => ({
+      transactionType: t.transactionType,
+      qty: t.quantity,
+      performedBy: t.performedBy,
+      reason: t.notes ?? null,
+      timestamp: t.transactionDate ?? t.createdAt,
+      source: 'inventory' as const,
+    }));
+
+    const merged = [...lotEvents, ...invEvents];
+    merged.sort((a, b) => {
+      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return ta - tb;
+    });
+
+    return merged;
   }
 
   async createMaterialLotTransaction(data: InsertMaterialLotTransaction): Promise<MaterialLotTransaction> {

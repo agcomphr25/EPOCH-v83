@@ -399,6 +399,28 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
   }
 });
 
+// Get full transaction history for a material lot
+router.get('/:id/history', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const history = await storage.getMaterialLotHistory(id);
+
+    if (history === null) {
+      return res.status(404).json({ error: 'Material lot not found' });
+    }
+
+    const normalized = history.map(event => ({
+      ...event,
+      timestamp: event.timestamp != null ? new Date(event.timestamp).toISOString() : null,
+    }));
+
+    res.json(normalized);
+  } catch (error: any) {
+    console.error('Error fetching material lot history:', error);
+    res.status(500).json({ error: 'Failed to fetch material lot history', message: error.message });
+  }
+});
+
 // Get material lot by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {

@@ -1,5 +1,5 @@
-import { db, timesheetsTable, punchesTable } from "@workspace/db";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { db, timesheetsTable, punchesTable, employeesTable } from "@workspace/db";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { computeTimesheetHours } from "../lib/timekeeping";
 import { getOrCreateSettings } from "./settings.service";
 import { logAction, type AuditActor } from "./audit.service";
@@ -390,4 +390,65 @@ export async function isInApprovedTimesheetPeriod(
     );
 
   return rows.length > 0;
+}
+
+export interface GustoExportRow {
+  first_name: string;
+  last_name: string;
+  regular_hours: number;
+  overtime_hours: number;
+  double_overtime_hours: number;
+  sick_hours: number;
+  vacation_hours: number;
+}
+
+/**
+ * Export approved timesheets for a given date range in Gusto-compatible format.
+ * Only timesheets fully within the date range (periodStart >= start, periodEnd <= end) are included.
+ * Hours are summed per employee across all matching approved timesheets.
+ */
+export async function exportApprovedTimesheetsForGusto(
+  periodStart: string,
+  periodEnd: string
+): Promise<GustoExportRow[]> {
+  const timesheets = await db
+    .select()
+    .from(timesheetsTable)
+    .where(
+      and(
+        eq(timesheetsTable.status, "approved"),
+        gte(timesheetsTable.periodStart, periodStart),
+        lte(timesheetsTable.periodEnd, periodEnd)
+      )
+    );
+
+  if (timesheets.length === 0) return [];
+
+  const byEmployee = new Map<number, { regularHours: number; overtimeHours: number }>();
+  for (const ts of timesheets) {
+    const existing = byEmployee.get(ts.employeeId) ?? { regularHours: 0, overtimeHours: 0 };
+    byEmployee.set(ts.employeeId, {
+      regularHours: existing.regularHours + ts.regularHours,
+      overtimeHours: existing.overtimeHours + ts.overtimeHours,
+    });
+  }
+
+  const employeeIds = Array.from(byEmployee.keys());
+  const employees = await db
+    .select()
+    .from(employeesTable)
+    .where(inArray(employeesTable.id, employeeIds));
+
+  return employees.map((emp) => {
+    const hours = byEmployee.get(emp.id) ?? { regularHours: 0, overtimeHours: 0 };
+    return {
+      first_name: emp.firstName,
+      last_name: emp.lastName,
+      regular_hours: hours.regularHours,
+      overtime_hours: hours.overtimeHours,
+      double_overtime_hours: 0,
+      sick_hours: 0,
+      vacation_hours: 0,
+    };
+  });
 }

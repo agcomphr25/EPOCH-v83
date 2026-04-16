@@ -6,12 +6,18 @@ import { format } from "date-fns";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { Download } from "lucide-react";
 
 export default function AdminTimesheets() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  
-  // Need to pass appropriate param based on string
+  const [exportOpen, setExportOpen] = useState(false);
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+
   const getStatusParam = () => {
     if (statusFilter === "all") return undefined;
     return statusFilter as any;
@@ -23,6 +29,13 @@ export default function AdminTimesheets() {
   const getEmployeeName = (id: number) => {
     const emp = employees.find(e => e.id === id);
     return emp ? `${emp.firstName} ${emp.lastName}` : `ID: ${id}`;
+  };
+
+  const handleExport = () => {
+    if (!periodStart || !periodEnd) return;
+    const url = `/api/timesheets/export/gusto?periodStart=${encodeURIComponent(periodStart)}&periodEnd=${encodeURIComponent(periodEnd)}`;
+    window.location.href = url;
+    setExportOpen(false);
   };
 
   return (
@@ -42,6 +55,10 @@ export default function AdminTimesheets() {
               <SelectItem value="rejected">Rejected</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={() => setExportOpen(true)}>
+            <Download className="w-4 h-4 mr-2" />
+            Export Approved Hours (Gusto)
+          </Button>
         </div>
       </div>
       <Card>
@@ -95,6 +112,46 @@ export default function AdminTimesheets() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Approved Hours (Gusto)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Choose the pay period date range. Only approved timesheets fully within this range will be included.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="periodStart">Pay Period Start</Label>
+                <Input
+                  id="periodStart"
+                  type="date"
+                  value={periodStart}
+                  onChange={(e) => setPeriodStart(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="periodEnd">Pay Period End</Label>
+                <Input
+                  id="periodEnd"
+                  type="date"
+                  value={periodEnd}
+                  onChange={(e) => setPeriodEnd(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport} disabled={!periodStart || !periodEnd}>
+              <Download className="w-4 h-4 mr-2" />
+              Download CSV
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

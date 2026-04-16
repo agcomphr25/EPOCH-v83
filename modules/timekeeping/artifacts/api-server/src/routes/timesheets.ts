@@ -36,6 +36,41 @@ router.get("/timesheets", async (req, res): Promise<void> => {
   res.json(await svc.listTimesheets(q.data));
 });
 
+const GustoExportQuery = z.object({
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodStart must be YYYY-MM-DD"),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD"),
+});
+
+function csvField(value: string | number): string {
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+router.get("/timesheets/export/gusto", requireAdmin, async (req, res): Promise<void> => {
+  const q = GustoExportQuery.safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: q.error.errors.map((e) => e.message).join("; ") });
+    return;
+  }
+  if (q.data.periodStart > q.data.periodEnd) {
+    res.status(400).json({ error: "periodStart must not be after periodEnd" });
+    return;
+  }
+  const rows = await svc.exportApprovedTimesheetsForGusto(q.data.periodStart, q.data.periodEnd);
+  const header = "first_name,last_name,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours";
+  const csvRows = rows.map((r) =>
+    [r.first_name, r.last_name, r.regular_hours, r.overtime_hours, r.double_overtime_hours, r.sick_hours, r.vacation_hours]
+      .map(csvField)
+      .join(",")
+  );
+  const csv = [header, ...csvRows].join("\n");
+  const filename = `gusto-export-${q.data.periodStart}-to-${q.data.periodEnd}.csv`;
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(csv);
+});
+
 router.post("/timesheets", async (req, res): Promise<void> => {
   const body = CreateTimesheetBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }

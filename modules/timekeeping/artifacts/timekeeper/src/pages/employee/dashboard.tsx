@@ -3,7 +3,7 @@ import { EmployeeLayout } from "@/components/layout/employee-layout";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
-import { Clock, Calendar, FileText, CheckCircle } from "lucide-react";
+import { Clock, Calendar, FileText, CheckCircle, Play, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function EmployeeDashboard() {
@@ -54,6 +54,31 @@ export default function EmployeeDashboard() {
             <div className="text-2xl font-bold">{weeklyHours?.reduce((acc, curr) => acc + curr.hours, 0).toFixed(2) || "0.00"}h</div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 mb-6">
+        <Link href={`/employee/${empId}/labor-sessions`}>
+          <Card className="card-lift cursor-pointer hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Labor Work Sessions</CardTitle>
+              <Play className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Open or close a work session against a charge code or authorization</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={`/employee/${empId}/labor-timesheets`}>
+          <Card className="card-lift cursor-pointer hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Daily Labor Timesheets</CardTitle>
+              <ClipboardList className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">View, certify, and submit your daily labor time records</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="space-y-6">

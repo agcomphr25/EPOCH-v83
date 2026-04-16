@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Users, Clock, Settings, FileText, LayoutDashboard, Menu, LogOut, Tag, ClipboardCheck } from "lucide-react";
+import { Users, Clock, Settings, FileText, LayoutDashboard, Menu, LogOut, Tag, ClipboardCheck, Code2, ShieldCheck, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
@@ -12,6 +12,9 @@ const NAV_ITEMS = [
   { href: "/admin/punches", label: "Punches", icon: Clock },
   { href: "/admin/floor-check", label: "Floor Check", icon: ClipboardCheck },
   { href: "/admin/cost-codes", label: "Cost Codes", icon: Tag },
+  { href: "/admin/labor-charge-codes", label: "Labor Codes", icon: Code2 },
+  { href: "/admin/labor-authorizations", label: "Authorizations", icon: ShieldCheck },
+  { href: "/admin/labor-authorization-requests", label: "Extra-Hrs Requests", icon: ListTodo },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

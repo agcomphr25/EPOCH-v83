@@ -23,6 +23,11 @@ import AdminPunches from "@/pages/admin/punches/index";
 import AdminCostCodes from "@/pages/admin/cost-codes/index";
 import AdminFloorCheck from "@/pages/admin/floor-check/index";
 import AdminSettings from "@/pages/admin/settings/index";
+import AdminLaborChargeCodes from "@/pages/admin/labor-charge-codes/index";
+import AdminLaborAuthorizations from "@/pages/admin/labor-authorizations/index";
+import AdminLaborAuthorizationRequests from "@/pages/admin/labor-authorization-requests/index";
+import EmployeeLaborSessions from "@/pages/employee/labor-sessions";
+import EmployeeLaborTimesheets from "@/pages/employee/labor-timesheets";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +93,22 @@ function Router() {
       </Route>
       <Route path="/admin/settings">
         <AdminGuard><AdminSettings /></AdminGuard>
+      </Route>
+      <Route path="/admin/labor-charge-codes">
+        <AdminGuard><AdminLaborChargeCodes /></AdminGuard>
+      </Route>
+      <Route path="/admin/labor-authorizations">
+        <AdminGuard><AdminLaborAuthorizations /></AdminGuard>
+      </Route>
+      <Route path="/admin/labor-authorization-requests">
+        <AdminGuard><AdminLaborAuthorizationRequests /></AdminGuard>
+      </Route>
+
+      <Route path="/employee/:id/labor-sessions">
+        <Guard><EmployeeLaborSessions /></Guard>
+      </Route>
+      <Route path="/employee/:id/labor-timesheets">
+        <Guard><EmployeeLaborTimesheets /></Guard>
       </Route>
 
       <Route component={NotFound} />

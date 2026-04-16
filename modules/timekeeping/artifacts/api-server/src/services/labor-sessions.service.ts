@@ -3,6 +3,7 @@ import { eq, sql, and } from "drizzle-orm";
 import type { LaborWorkSession } from "@workspace/db";
 import { logLaborAction } from "./labor-audit.service";
 import { checkBudget, getLaborAuthorization, resolveChargeCodeForSession } from "./labor-authorizations.service";
+import { syncTimesheetHours } from "./labor-daily-timesheets.service";
 import type { AuditActor } from "./audit.service";
 
 export interface OpenSessionParams {
@@ -169,6 +170,9 @@ export async function closeSession(
       { tableName: "labor_work_sessions", recordId: sessionId, action: "UPDATE", oldValues: existing as Record<string, unknown>, newValues: closed[0] as Record<string, unknown>, actor },
       tx
     );
+
+    const sessionDate = new Date(existing.startedAt).toISOString().slice(0, 10);
+    await syncTimesheetHours(existing.employeeId, sessionDate, tx);
 
     return closed[0]!;
   });

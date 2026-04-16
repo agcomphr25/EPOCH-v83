@@ -1,0 +1,175 @@
+🔥 TICKET 2 — Release-to-Floor Control (FULL BUILD)
+🎯 Goal
+
+Prevent any production work from starting unless it is intentionally released
+
+BLOCKED → PARTIAL → READY → RELEASED → IN_PROGRESS → COMPLETE
+
+👉 Travelers cannot start unless:
+👉 WAD / Work Order = RELEASED
+
+🧠 What This Actually Does
+
+Right now:
+
+If traveler exists → someone can start it
+
+After this:
+
+Traveler exists ❌
+Materials ready ❌
+Training valid ❌
+➡️ STILL cannot start
+
+Until:
+👉 Planner / Manager hits “Release to Floor”
+
+🧱 1. ADD STATUS TO WAD
+
+📁 production_work_orders
+
+You already have status, now enforce it.
+
+Allowed statuses:
+PLANNED
+READY
+RELEASED
+IN_PROGRESS
+COMPLETE
+CLOSED
+🧩 2. CREATE READINESS ENGINE
+
+📁 server/src/lib/workOrderReadiness.ts
+
+export async function evaluateWorkOrderReadiness(storage, workOrderId) {
+  const travelers = await storage.getTravelersByProductionWorkOrderId(workOrderId);
+
+  // Check if travelers exist
+  if (!travelers.length) {
+    return { status: "BLOCKED", reason: "No travelers created" };
+  }
+
+  // Check materials
+  const materialsReady = await storage.checkWorkOrderMaterialAvailability(workOrderId);
+  if (!materialsReady) {
+    return { status: "PARTIAL", reason: "Materials not fully allocated" };
+  }
+
+  // Check training readiness (basic)
+  const trainingReady = await storage.checkWorkOrderTrainingCoverage(workOrderId);
+  if (!trainingReady) {
+    return { status: "PARTIAL", reason: "Training gaps exist" };
+  }
+
+  return { status: "READY" };
+}
+🧱 3. STORAGE METHODS
+
+Add:
+
+getTravelersByProductionWorkOrderId(workOrderId)
+checkWorkOrderMaterialAvailability(workOrderId)
+checkWorkOrderTrainingCoverage(workOrderId)
+updateWorkOrderStatus(workOrderId, status)
+🌐 4. RELEASE ROUTE
+
+📁 server/src/routes/workOrders.ts
+
+Add:
+router.post("/:id/release", async (req, res) => {
+  const readiness = await evaluateWorkOrderReadiness(storage, req.params.id);
+
+  if (readiness.status !== "READY") {
+    return res.status(400).json({
+      error: "Work order not ready for release",
+      details: readiness
+    });
+  }
+
+  const updated = await storage.updateWorkOrderStatus(
+    req.params.id,
+    "RELEASED"
+  );
+
+  res.json(updated);
+});
+🔴 5. ENFORCE IN TRAVELER START
+
+📁 server/src/routes/travelers.ts
+
+Modify START STEP logic
+
+Before gates:
+
+const traveler = await storage.getTravelerById(travelerId);
+const workOrder = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+
+if (workOrder.status !== "RELEASED") {
+  return res.status(403).json({
+    error: "Work order not released to floor"
+  });
+}
+🧠 6. AUTO TRANSITION TO IN_PROGRESS
+
+When first step starts:
+
+if (workOrder.status === "RELEASED") {
+  await storage.updateWorkOrderStatus(workOrder.id, "IN_PROGRESS");
+}
+🧪 TEST FLOW
+1. Try starting traveler before release
+
+→ ❌ BLOCKED
+
+2. Evaluate readiness
+Materials missing → PARTIAL  
+Training missing → PARTIAL  
+Everything ready → READY
+3. Try release
+NOT READY → ❌ blocked
+READY → ✅ allowed
+4. After release
+
+Start traveler:
+→ ✅ allowed
+→ status becomes IN_PROGRESS
+
+⚠️ RULES
+DO NOT allow bypass
+DO NOT auto-release
+ALWAYS return reason why not ready
+DO NOT tie to UI yet
+🔥 WHAT YOU JUST BUILT
+
+After this:
+
+👉 You now control:
+
+WHEN production starts
+WHAT is allowed to start
+WHO can release work
+🧭 NEXT STEP
+
+After this:
+
+👉 Ticket 3 — Auto WAD Creation from Project / Quote
+
+This will:
+
+remove manual setup
+fully connect sales → production
+💡 STRAIGHT TALK
+
+Now you have:
+
+Traveler gates (how work happens)
+Release control (when work happens)
+
+👉 That is real manufacturing execution control
+
+Most systems:
+❌ don’t enforce readiness
+❌ don’t enforce release
+❌ allow chaos
+
+You now prevent that.

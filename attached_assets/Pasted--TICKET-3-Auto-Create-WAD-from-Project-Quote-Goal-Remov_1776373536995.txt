@@ -1,0 +1,135 @@
+🔥 TICKET 3 — Auto Create WAD from Project / Quote
+🎯 Goal
+
+Remove manual WAD creation and enforce:
+
+Quote → Project → WAD (auto-created)
+🧠 What This Fixes
+
+Right now:
+
+You create project
+Then manually create WAD
+
+👉 That’s friction + risk
+
+After this:
+
+System creates WAD automatically
+Ensures every project has execution backbone
+🧱 BUILD PLAN
+1. Hook into Project Creation
+
+📁 server/src/routes/projects.ts
+
+Find:
+
+POST /api/projects
+ADD:
+const project = await storage.createProject(data);
+
+// AUTO CREATE WAD
+await storage.createProductionWorkOrder({
+  projectId: project.id,
+  workOrderNumber: `WAD-${Date.now()}`,
+  partNumber: data.partNumber || "UNDEFINED",
+  quantity: data.quantity || 1,
+  status: "PLANNED",
+  totalBudgetHours: data.estimatedHours || null
+});
+2. Hook into Quote Acceptance
+
+📁 server/src/routes/quotes.ts
+
+Find:
+
+status = "ACCEPTED"
+ADD:
+if (quote.status === "ACCEPTED") {
+  const project = await storage.createProject({
+    customerId: quote.customerId,
+    projectCode: `PRJ-${Date.now()}`
+  });
+
+  await storage.createProductionWorkOrder({
+    projectId: project.id,
+    workOrderNumber: `WAD-${Date.now()}`,
+    partNumber: "FROM_QUOTE",
+    quantity: 1,
+    status: "PLANNED"
+  });
+}
+3. Prevent Duplicate WADs
+
+Add safety:
+
+const existing = await storage.getWorkOrdersByProject(project.id);
+
+if (existing.length === 0) {
+  // create WAD
+}
+4. Optional — Multi-WAD Support (Later)
+
+Right now:
+👉 1 project → 1 WAD
+
+Later:
+👉 1 project → many WADs (per part / subassembly)
+
+🧪 TEST FLOW
+1. Create Project
+
+→ WAD auto-created
+
+2. Accept Quote
+
+→ Project created
+→ WAD created
+
+3. Check DB
+
+→ WAD linked to project
+
+4. No duplicates
+
+→ re-running does NOT create extra WADs
+
+⚠️ RULES
+DO NOT require UI changes yet
+DO NOT remove manual WAD creation
+DO NOT assume partNumber is perfect yet
+🔥 WHAT THIS UNLOCKS
+
+After this:
+
+👉 Every project has:
+
+execution backbone
+labor tracking path
+traveler destination
+🧭 NEXT AFTER THIS
+Ticket 4 — Traveler Creation FROM WAD
+
+This is where:
+
+WAD → Traveler (auto)
+
+And then:
+
+👉 The system becomes fully self-generating
+
+💡 STRAIGHT TALK
+
+You just completed:
+
+Control layer ✅
+Execution gating ✅
+
+Now you’re entering:
+
+👉 Automation layer
+
+This is where EPOCH starts feeling:
+➡️ fast
+➡️ clean
+➡️ scalable

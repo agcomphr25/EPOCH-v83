@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Card,
   CardContent,
@@ -30,6 +31,8 @@ import {
   ScanBarcode,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
   X,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -62,6 +65,22 @@ interface ChargeContext {
   chargeCode: string;
   department: string | null;
   operation: string | null;
+}
+
+interface LaborStatus {
+  totalHours: number;
+  departmentHours: number | null;
+  totalBudget: number | null;
+  departmentBudget: number | null;
+  percentUsed: number | null;
+  departmentPercentUsed: number | null;
+  status: 'OK' | 'WARNING' | 'BLOCKED';
+}
+
+interface LaborBlockedData {
+  message: string;
+  laborStatus: LaborStatus;
+  wadId: string;
 }
 
 interface TimeClockProps {
@@ -104,11 +123,17 @@ export default function TimeClock({
 
   // Traveler barcode scan state (clock-in flow)
   const [scanValue, setScanValue] = useState('');
-  // The barcode value that was actually submitted and resolved — locked when context is shown
   const [resolvedScanValue, setResolvedScanValue] = useState('');
   const [chargeContext, setChargeContext] = useState<ChargeContext | null>(null);
   const [scanError, setScanError] = useState<{ code: string; message: string } | null>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
+
+  // Labor budget states (clock-in flow)
+  const [laborWarning, setLaborWarning] = useState<string | null>(null);
+  const [laborBlockedData, setLaborBlockedData] = useState<LaborBlockedData | null>(null);
+  const [supervisorId, setSupervisorId] = useState('');
+  const [supervisorReason, setSupervisorReason] = useState('');
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   // Switch-job scan state (while clocked in)
   const [switchScanValue, setSwitchScanValue] = useState('');
@@ -116,6 +141,13 @@ export default function TimeClock({
   const [switchChargeContext, setSwitchChargeContext] = useState<ChargeContext | null>(null);
   const [switchScanError, setSwitchScanError] = useState<{ code: string; message: string } | null>(null);
   const switchScanInputRef = useRef<HTMLInputElement>(null);
+
+  // Labor budget states (switch-job flow)
+  const [switchLaborWarning, setSwitchLaborWarning] = useState<string | null>(null);
+  const [switchLaborBlockedData, setSwitchLaborBlockedData] = useState<LaborBlockedData | null>(null);
+  const [switchSupervisorId, setSwitchSupervisorId] = useState('');
+  const [switchSupervisorReason, setSwitchSupervisorReason] = useState('');
+  const [switchApprovalError, setSwitchApprovalError] = useState<string | null>(null);
 
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: ['/api/timekeeping/jobs'],
@@ -126,7 +158,6 @@ export default function TimeClock({
     refetchInterval: 60_000,
   });
 
-  // Phase 4 — auto-select the active job when clocked in and then clocking back in
   useEffect(() => {
     if (!loading && activeJobId && !clockedIn && !selectedJobId) {
       setSelectedJobId(String(activeJobId));
@@ -138,6 +169,11 @@ export default function TimeClock({
     setResolvedScanValue('');
     setChargeContext(null);
     setScanError(null);
+    setLaborBlockedData(null);
+    setLaborWarning(null);
+    setSupervisorId('');
+    setSupervisorReason('');
+    setApprovalError(null);
     setTimeout(() => scanInputRef.current?.focus(), 0);
   };
 
@@ -153,11 +189,10 @@ export default function TimeClock({
       setResolvedScanValue(submittedValue);
       setChargeContext(data.chargeContext);
       setScanError(null);
+      setLaborBlockedData(null);
+      setLaborWarning(null);
     },
     onError: (err: any) => {
-      // apiRequest builds the error object with:
-      //   err.message       = data?.message || data?.error || statusText
-      //   err.responseData  = full parsed JSON response body
       const code: string = err?.responseData?.error ?? 'UNKNOWN';
       const fallback: string = err?.message ?? 'Failed to read the barcode. Please try again.';
       setScanError({ code, message: SCAN_ERROR_MESSAGES[code] ?? fallback });
@@ -167,24 +202,78 @@ export default function TimeClock({
   });
 
   const clockInTravelerMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (params?: { laborApprovalId?: number }) => {
+      const body: Record<string, any> = { scanValue: resolvedScanValue, employeeId };
+      if (params?.laborApprovalId != null) {
+        body.laborApprovalId = params.laborApprovalId;
+      }
       const res = await apiRequest('/api/time-clock/clock-in/traveler', {
         method: 'POST',
-        // Use the locked resolved barcode — not the (possibly-edited) input value
-        body: { scanValue: resolvedScanValue, employeeId },
+        body,
       });
-      return res;
+      return res as {
+        entry: any;
+        chargeContext: ChargeContext;
+        warning?: string;
+        laborStatus?: LaborStatus;
+      };
     },
-    onSuccess: async () => {
-      resetScan();
-      // Refresh both time-clock status and hours so the UI transitions correctly
+    onSuccess: async (data) => {
+      if (data.warning) {
+        setLaborWarning(data.warning);
+      }
+      setLaborBlockedData(null);
+      setSupervisorId('');
+      setSupervisorReason('');
+      setScanValue('');
+      setResolvedScanValue('');
+      setChargeContext(null);
+      setScanError(null);
       await refreshStatus();
       refetchHours();
-      toast({ title: 'Clocked in via traveler!' });
+      if (data.warning) {
+        toast({ title: 'Clocked in via traveler — budget notice attached' });
+      } else {
+        toast({ title: 'Clocked in via traveler!' });
+      }
     },
     onError: (err: any) => {
-      const message: string = err?.message ?? 'Failed to clock in via traveler barcode. Please try again.';
-      toast({ title: message, variant: 'destructive' });
+      const errorCode: string = err?.responseData?.error ?? '';
+      if (errorCode === 'LABOR_BUDGET_BLOCKED' && chargeContext?.wadId) {
+        const laborStatus: LaborStatus = err?.responseData?.laborStatus;
+        const message: string = err?.responseData?.message ?? 'Labor budget exceeded. Supervisor approval required.';
+        setLaborBlockedData({ message, laborStatus, wadId: chargeContext.wadId });
+      } else {
+        const message: string = err?.message ?? 'Failed to clock in via traveler barcode. Please try again.';
+        toast({ title: message, variant: 'destructive' });
+      }
+    },
+  });
+
+  const approveOverrunMutation = useMutation({
+    mutationFn: async () => {
+      if (!chargeContext?.wadId) throw new Error('No work order context');
+      const body: Record<string, any> = {
+        employeeId,
+        supervisorEmployeeId: supervisorId.trim(),
+        reason: supervisorReason.trim(),
+      };
+      if (chargeContext.department) {
+        body.department = chargeContext.department;
+      }
+      const res = await apiRequest(`/api/work-orders/${chargeContext.wadId}/approve-overrun`, {
+        method: 'POST',
+        body,
+      });
+      return res as { approval: { id: number }; laborStatus: LaborStatus };
+    },
+    onSuccess: (data) => {
+      setApprovalError(null);
+      clockInTravelerMutation.mutate({ laborApprovalId: data.approval.id });
+    },
+    onError: (err: any) => {
+      const message: string = err?.responseData?.message ?? err?.message ?? 'Failed to submit approval. Please try again.';
+      setApprovalError(message);
     },
   });
 
@@ -193,6 +282,11 @@ export default function TimeClock({
     setSwitchResolvedScanValue('');
     setSwitchChargeContext(null);
     setSwitchScanError(null);
+    setSwitchLaborBlockedData(null);
+    setSwitchLaborWarning(null);
+    setSwitchSupervisorId('');
+    setSwitchSupervisorReason('');
+    setSwitchApprovalError(null);
     setTimeout(() => switchScanInputRef.current?.focus(), 0);
   };
 
@@ -208,6 +302,8 @@ export default function TimeClock({
       setSwitchResolvedScanValue(submittedValue);
       setSwitchChargeContext(data.chargeContext);
       setSwitchScanError(null);
+      setSwitchLaborBlockedData(null);
+      setSwitchLaborWarning(null);
     },
     onError: (err: any) => {
       const code: string = err?.responseData?.error ?? 'UNKNOWN';
@@ -219,22 +315,81 @@ export default function TimeClock({
   });
 
   const switchJobMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (params?: { laborApprovalId?: number }) => {
+      const body: Record<string, any> = { scanValue: switchResolvedScanValue, employeeId };
+      if (params?.laborApprovalId != null) {
+        body.laborApprovalId = params.laborApprovalId;
+      }
       const res = await apiRequest('/api/time-clock/switch-job/traveler', {
         method: 'POST',
-        body: { scanValue: switchResolvedScanValue, employeeId },
+        body,
       });
-      return res;
+      return res as {
+        closed: any;
+        created: any;
+        chargeContext: ChargeContext;
+        warning?: string;
+        laborStatus?: LaborStatus;
+      };
     },
-    onSuccess: async () => {
-      resetSwitchScan();
+    onSuccess: async (data) => {
+      if (data.warning) {
+        setSwitchLaborWarning(data.warning);
+      } else {
+        setSwitchLaborWarning(null);
+      }
+      setSwitchLaborBlockedData(null);
+      setSwitchSupervisorId('');
+      setSwitchSupervisorReason('');
+      setSwitchScanValue('');
+      setSwitchResolvedScanValue('');
+      setSwitchChargeContext(null);
+      setSwitchScanError(null);
       await refreshStatus();
       refetchHours();
-      toast({ title: 'Job switched successfully!' });
+      if (data.warning) {
+        toast({ title: 'Job switched — budget notice attached' });
+      } else {
+        toast({ title: 'Job switched successfully!' });
+      }
     },
     onError: (err: any) => {
-      const message: string = err?.message ?? 'Failed to switch job. Please try again.';
-      toast({ title: message, variant: 'destructive' });
+      const errorCode: string = err?.responseData?.error ?? '';
+      if (errorCode === 'LABOR_BUDGET_BLOCKED' && switchChargeContext?.wadId) {
+        const laborStatus: LaborStatus = err?.responseData?.laborStatus;
+        const message: string = err?.responseData?.message ?? 'Labor budget exceeded. Supervisor approval required.';
+        setSwitchLaborBlockedData({ message, laborStatus, wadId: switchChargeContext.wadId });
+      } else {
+        const message: string = err?.message ?? 'Failed to switch job. Please try again.';
+        toast({ title: message, variant: 'destructive' });
+      }
+    },
+  });
+
+  const switchApproveOverrunMutation = useMutation({
+    mutationFn: async () => {
+      if (!switchChargeContext?.wadId) throw new Error('No work order context');
+      const body: Record<string, any> = {
+        employeeId,
+        supervisorEmployeeId: switchSupervisorId.trim(),
+        reason: switchSupervisorReason.trim(),
+      };
+      if (switchChargeContext.department) {
+        body.department = switchChargeContext.department;
+      }
+      const res = await apiRequest(`/api/work-orders/${switchChargeContext.wadId}/approve-overrun`, {
+        method: 'POST',
+        body,
+      });
+      return res as { approval: { id: number }; laborStatus: LaborStatus };
+    },
+    onSuccess: (data) => {
+      setSwitchApprovalError(null);
+      switchJobMutation.mutate({ laborApprovalId: data.approval.id });
+    },
+    onError: (err: any) => {
+      const message: string = err?.responseData?.message ?? err?.message ?? 'Failed to submit approval. Please try again.';
+      setSwitchApprovalError(message);
     },
   });
 
@@ -244,6 +399,8 @@ export default function TimeClock({
     setSwitchChargeContext(null);
     setSwitchScanError(null);
     setSwitchResolvedScanValue('');
+    setSwitchLaborBlockedData(null);
+    setSwitchLaborWarning(null);
     switchJobScanMutation.mutate(trimmed);
   };
 
@@ -253,6 +410,8 @@ export default function TimeClock({
     setChargeContext(null);
     setScanError(null);
     setResolvedScanValue('');
+    setLaborBlockedData(null);
+    setLaborWarning(null);
     scanMutation.mutate(trimmed);
   };
 
@@ -360,6 +519,14 @@ export default function TimeClock({
     return `${h}h ${m}m`;
   };
 
+  const formatHours = (h: number | null) => {
+    if (h == null) return '—';
+    return `${h.toFixed(1)} hrs`;
+  };
+
+  const canSubmitApproval = supervisorId.trim().length > 0 && supervisorReason.trim().length > 0;
+  const canSubmitSwitchApproval = switchSupervisorId.trim().length > 0 && switchSupervisorReason.trim().length > 0;
+
   if (loading) {
     return (
       <Card className="w-full max-w-sm">
@@ -402,7 +569,7 @@ export default function TimeClock({
         </CardHeader>
 
         <CardContent className="space-y-3">
-          {/* Phase 9 — active job banner */}
+          {/* Active job banner */}
           {clockedIn && !onBreak && activeJobLabel && (
             <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg text-sm">
               <Briefcase className="h-4 w-4 text-blue-600 shrink-0" />
@@ -411,6 +578,40 @@ export default function TimeClock({
                 <p className="font-semibold text-blue-900 leading-tight">{activeJobLabel}</p>
               </div>
             </div>
+          )}
+
+          {/* Labor warning banner — shown when clocked in after a WARNING clock-in */}
+          {clockedIn && !onBreak && laborWarning && (
+            <Alert className="py-2 px-3 border-amber-300 bg-amber-50">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+              <AlertDescription className="text-xs ml-1 text-amber-800">
+                <span className="font-semibold">Budget Notice:</span> {laborWarning}
+                <button
+                  onClick={() => setLaborWarning(null)}
+                  className="ml-2 text-amber-500 hover:text-amber-700 align-middle"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3 w-3 inline" />
+                </button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Switch-job labor warning banner — shown after WARNING switch */}
+          {clockedIn && !onBreak && switchLaborWarning && (
+            <Alert className="py-2 px-3 border-amber-300 bg-amber-50">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+              <AlertDescription className="text-xs ml-1 text-amber-800">
+                <span className="font-semibold">Budget Notice:</span> {switchLaborWarning}
+                <button
+                  onClick={() => setSwitchLaborWarning(null)}
+                  className="ml-2 text-amber-500 hover:text-amber-700 align-middle"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3 w-3 inline" />
+                </button>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Switch Job (Scan Traveler) — shown when clocked in and not on break */}
@@ -457,8 +658,97 @@ export default function TimeClock({
                 </Alert>
               )}
 
-              {/* Resolved charge context — switch-job confirmation */}
-              {switchChargeContext && (
+              {/* Switch-job BLOCKED state */}
+              {switchLaborBlockedData && switchChargeContext && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <ShieldAlert className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-red-800 leading-snug">Labor Budget Exceeded</p>
+                      <p className="text-xs text-red-700 mt-0.5 leading-snug">{switchLaborBlockedData.message}</p>
+                    </div>
+                    <button
+                      onClick={resetSwitchScan}
+                      className="text-red-400 hover:text-red-600 shrink-0"
+                      aria-label="Clear"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs border-t border-red-200 pt-2">
+                    <div>
+                      <dt className="text-red-500 font-medium">WAD #</dt>
+                      <dd className="font-mono font-semibold text-red-900">{switchChargeContext.wadNumber}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-red-500 font-medium">Department</dt>
+                      <dd className="text-red-900">{switchChargeContext.department ?? '—'}</dd>
+                    </div>
+                    {switchLaborBlockedData.laborStatus && (
+                      <>
+                        <div>
+                          <dt className="text-red-500 font-medium">Hours Used</dt>
+                          <dd className="font-semibold text-red-900">{formatHours(switchLaborBlockedData.laborStatus.totalHours)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-red-500 font-medium">Budget</dt>
+                          <dd className="font-semibold text-red-900">{formatHours(switchLaborBlockedData.laborStatus.totalBudget)}</dd>
+                        </div>
+                      </>
+                    )}
+                  </dl>
+
+                  <div className="space-y-2 border-t border-red-200 pt-2">
+                    <p className="text-xs font-semibold text-red-800 flex items-center gap-1">
+                      <ShieldAlert className="h-3 w-3" />
+                      Supervisor Approval Required
+                    </p>
+                    <div className="space-y-1.5">
+                      <Input
+                        value={switchSupervisorId}
+                        onChange={(e) => { setSwitchSupervisorId(e.target.value); setSwitchApprovalError(null); }}
+                        placeholder="Supervisor Employee ID"
+                        className="text-xs h-7 border-red-200 bg-white"
+                        disabled={switchApproveOverrunMutation.isPending || switchJobMutation.isPending}
+                      />
+                      <Textarea
+                        value={switchSupervisorReason}
+                        onChange={(e) => { setSwitchSupervisorReason(e.target.value); setSwitchApprovalError(null); }}
+                        placeholder="Reason for approval…"
+                        className="text-xs min-h-[52px] border-red-200 bg-white resize-none"
+                        disabled={switchApproveOverrunMutation.isPending || switchJobMutation.isPending}
+                      />
+                    </div>
+                    {switchApprovalError && (
+                      <Alert variant="destructive" className="py-2 px-3">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <AlertDescription className="text-xs ml-1">{switchApprovalError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Button
+                      onClick={() => switchApproveOverrunMutation.mutate()}
+                      disabled={!canSubmitSwitchApproval || switchApproveOverrunMutation.isPending || switchJobMutation.isPending}
+                      className="w-full bg-red-600 hover:bg-red-700 h-8 text-sm"
+                    >
+                      {(switchApproveOverrunMutation.isPending || switchJobMutation.isPending) ? (
+                        <>
+                          <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
+                          {switchApproveOverrunMutation.isPending ? 'Approving…' : 'Switching job…'}
+                        </>
+                      ) : (
+                        <>
+                          <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
+                          Approve & Switch Job
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Resolved charge context — switch-job confirmation (not blocked) */}
+              {switchChargeContext && !switchLaborBlockedData && (
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
@@ -565,8 +855,97 @@ export default function TimeClock({
                 </Alert>
               )}
 
-              {/* Resolved charge context confirmation */}
-              {chargeContext && (
+              {/* BLOCKED state — replaces charge context confirmation */}
+              {laborBlockedData && chargeContext && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <ShieldAlert className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-red-800 leading-snug">Labor Budget Exceeded</p>
+                      <p className="text-xs text-red-700 mt-0.5 leading-snug">{laborBlockedData.message}</p>
+                    </div>
+                    <button
+                      onClick={resetScan}
+                      className="text-red-400 hover:text-red-600 shrink-0"
+                      aria-label="Clear"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs border-t border-red-200 pt-2">
+                    <div>
+                      <dt className="text-red-500 font-medium">WAD #</dt>
+                      <dd className="font-mono font-semibold text-red-900">{chargeContext.wadNumber}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-red-500 font-medium">Department</dt>
+                      <dd className="text-red-900">{chargeContext.department ?? '—'}</dd>
+                    </div>
+                    {laborBlockedData.laborStatus && (
+                      <>
+                        <div>
+                          <dt className="text-red-500 font-medium">Hours Used</dt>
+                          <dd className="font-semibold text-red-900">{formatHours(laborBlockedData.laborStatus.totalHours)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-red-500 font-medium">Budget</dt>
+                          <dd className="font-semibold text-red-900">{formatHours(laborBlockedData.laborStatus.totalBudget)}</dd>
+                        </div>
+                      </>
+                    )}
+                  </dl>
+
+                  <div className="space-y-2 border-t border-red-200 pt-2">
+                    <p className="text-xs font-semibold text-red-800 flex items-center gap-1">
+                      <ShieldAlert className="h-3 w-3" />
+                      Supervisor Approval Required
+                    </p>
+                    <div className="space-y-1.5">
+                      <Input
+                        value={supervisorId}
+                        onChange={(e) => { setSupervisorId(e.target.value); setApprovalError(null); }}
+                        placeholder="Supervisor Employee ID"
+                        className="text-xs h-7 border-red-200 bg-white"
+                        disabled={approveOverrunMutation.isPending || clockInTravelerMutation.isPending}
+                      />
+                      <Textarea
+                        value={supervisorReason}
+                        onChange={(e) => { setSupervisorReason(e.target.value); setApprovalError(null); }}
+                        placeholder="Reason for approval…"
+                        className="text-xs min-h-[52px] border-red-200 bg-white resize-none"
+                        disabled={approveOverrunMutation.isPending || clockInTravelerMutation.isPending}
+                      />
+                    </div>
+                    {approvalError && (
+                      <Alert variant="destructive" className="py-2 px-3">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <AlertDescription className="text-xs ml-1">{approvalError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Button
+                      onClick={() => approveOverrunMutation.mutate()}
+                      disabled={!canSubmitApproval || approveOverrunMutation.isPending || clockInTravelerMutation.isPending}
+                      className="w-full bg-red-600 hover:bg-red-700 h-8 text-sm"
+                    >
+                      {(approveOverrunMutation.isPending || clockInTravelerMutation.isPending) ? (
+                        <>
+                          <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
+                          {approveOverrunMutation.isPending ? 'Approving…' : 'Clocking in…'}
+                        </>
+                      ) : (
+                        <>
+                          <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
+                          Approve & Clock In
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Resolved charge context confirmation — shown when not blocked */}
+              {chargeContext && !laborBlockedData && (
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
@@ -638,7 +1017,7 @@ export default function TimeClock({
           {/* Job selection — only shown before clock-in */}
           {!clockedIn && jobs.length > 0 && (
             <div className="space-y-2">
-              {/* Phase 6 — Quick start buttons */}
+              {/* Quick start buttons */}
               <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                 <Zap className="h-3 w-3" />
                 Quick start

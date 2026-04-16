@@ -9,6 +9,7 @@ import {
   users,
   maintenanceSchedules,
   productionWorkOrders,
+  employees,
   insertWorkOrderSchema,
   insertWorkOrderPartSchema,
   insertWorkOrderAttachmentSchema,
@@ -605,14 +606,16 @@ router.delete('/:id/travelers/:travelerId/link', async (req: Request, res: Respo
 
 const approveOverrunBodySchema = z.object({
   employeeId: z.string().min(1, 'employeeId is required'),
+  supervisorEmployeeId: z.string().min(1, 'supervisorEmployeeId is required'),
   reason: z.string().min(1, 'reason is required'),
   department: z.string().optional(),
 });
 
+const SUPERVISOR_ROLES = ['ADMIN', 'OWNER'];
+
 router.post(
   '/:id/approve-overrun',
   authenticateToken,
-  requireSupervisorOrAdmin,
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -626,6 +629,37 @@ router.post(
         return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
       }
 
+      const supervisorIdRaw = parsed.data.supervisorEmployeeId.trim();
+
+      // Validate the supervisor by employee code or strict numeric ID.
+      // Use /^\d+$/ to require exact numeric format — prevents "12abc" from matching employee 12.
+      const isStrictNumericId = /^\d+$/.test(supervisorIdRaw);
+      const supervisorQuery = isStrictNumericId
+        ? db.select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode, userRole: employees.userRole })
+            .from(employees)
+            .where(eq(employees.id, parseInt(supervisorIdRaw, 10)))
+            .limit(1)
+        : db.select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode, userRole: employees.userRole })
+            .from(employees)
+            .where(eq(employees.employeeCode, supervisorIdRaw))
+            .limit(1);
+
+      const [supervisor] = await supervisorQuery;
+
+      if (!supervisor) {
+        return res.status(403).json({
+          error: 'SUPERVISOR_NOT_FOUND',
+          message: `No employee found with ID "${supervisorIdRaw}". Please enter a valid supervisor employee ID.`,
+        });
+      }
+
+      if (!SUPERVISOR_ROLES.includes(supervisor.userRole)) {
+        return res.status(403).json({
+          error: 'INSUFFICIENT_SUPERVISOR_ROLE',
+          message: `Employee "${supervisor.name}" does not have supervisor or admin privileges to approve labor overruns.`,
+        });
+      }
+
       const [wad] = await db
         .select()
         .from(productionWorkOrders)
@@ -636,9 +670,9 @@ router.post(
         return res.status(404).json({ error: 'Production work order not found' });
       }
 
-      const authenticatedUser = (req as any).user;
-      const approvedBy: string =
-        authenticatedUser?.username ?? authenticatedUser?.email ?? authenticatedUser?.id ?? 'unknown';
+      const approvedBy = supervisor.employeeCode
+        ? `${supervisor.name} (${supervisor.employeeCode})`
+        : supervisor.name;
 
       const laborStatus = await evaluateWorkOrderLaborStatus(id, parsed.data.department);
       const approval = await storage.createLaborApproval({

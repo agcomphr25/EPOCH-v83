@@ -501,6 +501,51 @@ function validateUuid(value: string): boolean {
   return UUID_REGEX.test(value);
 }
 
+// POST /api/work-orders/:id/travelers/create — create a traveler from a WAD using its part routing
+router.post('/:id/travelers/create', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!validateUuid(id)) {
+      return res.status(400).json({ error: 'Invalid production work order ID format', id });
+    }
+
+    const user = (req as any).user;
+    const createdBy = req.body?.createdBy ?? user?.username ?? user?.id ?? 'system';
+
+    let traveler: Awaited<ReturnType<typeof storage.createTravelerFromProductionWorkOrder>>;
+    try {
+      traveler = await storage.createTravelerFromProductionWorkOrder(id, String(createdBy));
+    } catch (err: any) {
+      if (err?.code === 'DUPLICATE_TRAVELER') {
+        return res.status(409).json({
+          error: 'A traveler already exists for this work order',
+          travelerId: err.travelerId,
+        });
+      }
+      if (err?.code === 'NO_ROUTING') {
+        return res.status(400).json({ error: err.message });
+      }
+      if (err?.message?.includes('not found')) {
+        return res.status(404).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    return res.status(201).json({
+      id: traveler.id,
+      travelerNumber: traveler.travelerNumber,
+      productionWorkOrderId: traveler.productionWorkOrderId,
+      partNumber: traveler.partNumber,
+      status: traveler.status,
+      partRoutingId: traveler.partRoutingId,
+    });
+  } catch (error: any) {
+    console.error('[WorkOrders] Error creating traveler from WAD:', error);
+    return res.status(500).json({ error: 'Failed to create traveler', message: error.message });
+  }
+});
+
 // GET /api/work-orders/:id/travelers — return all travelers linked to a production WAD (newest first)
 router.get('/:id/travelers', async (req: Request, res: Response) => {
   try {

@@ -1868,6 +1868,9 @@ export interface IStorage {
   getTravelersByProductionWorkOrderId(workOrderId: string): Promise<Traveler[]>;
   linkTravelerToProductionWorkOrder(travelerId: string, workOrderId: string): Promise<Traveler>;
   unlinkTravelerFromProductionWorkOrder(travelerId: string): Promise<Traveler>;
+  getProductionWorkOrderWithProject(id: string): Promise<ProductionWorkOrder | undefined>;
+  findRoutingForProductionWorkOrder(wadId: string): Promise<PartRouting | undefined>;
+  createTravelerFromProductionWorkOrder(wadId: string, createdBy: string): Promise<Traveler>;
 
   // P2 Serialized Item Traceability CRUD
   addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability>;
@@ -17276,6 +17279,69 @@ export class DatabaseStorage implements IStorage {
       .where(eq(travelers.id, travelerId))
       .returning();
     return updated;
+  }
+
+  async getProductionWorkOrderWithProject(id: string): Promise<ProductionWorkOrder | undefined> {
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id));
+    return wad ?? undefined;
+  }
+
+  async findRoutingForProductionWorkOrder(wadId: string): Promise<PartRouting | undefined> {
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, wadId));
+    if (!wad) return undefined;
+    return (await this.getPartRoutingByPartNumber(wad.partNumber)) ?? undefined;
+  }
+
+  async createTravelerFromProductionWorkOrder(wadId: string, createdBy: string): Promise<Traveler> {
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, wadId));
+    if (!wad) {
+      throw new Error(`Production work order ${wadId} not found`);
+    }
+
+    const existing = await this.getTravelersByProductionWorkOrderId(wadId);
+    if (existing.length > 0) {
+      const err = new Error('A traveler already exists for this work order') as any;
+      err.code = 'DUPLICATE_TRAVELER';
+      err.travelerId = existing[0].id;
+      throw err;
+    }
+
+    const routing = await this.getPartRoutingByPartNumber(wad.partNumber);
+    if (!routing) {
+      const err = new Error(`No active routing found for part number "${wad.partNumber}"`) as any;
+      err.code = 'NO_ROUTING';
+      throw err;
+    }
+
+    let traveler = await this.generateTravelerFromRouting(routing.id, {
+      quantity: wad.quantity,
+      createdBy,
+    });
+
+    traveler = await this.linkTravelerToProductionWorkOrder(traveler.id, wadId);
+
+    // Patch traveler to inherit part number, description, and quantity from the WAD
+    const [patched] = await db
+      .update(travelers)
+      .set({
+        partNumber: wad.partNumber,
+        partName: wad.description ?? traveler.partName,
+        quantity: wad.quantity,
+        updatedAt: new Date(),
+      })
+      .where(eq(travelers.id, traveler.id))
+      .returning();
+
+    return patched;
   }
 
   // Generate traveler from structured routing operations (new path)

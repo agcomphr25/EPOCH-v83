@@ -1350,6 +1350,7 @@ export interface IStorage {
   getLaborHoursByWorkOrderAndDepartment(workOrderId: string, department: string): Promise<number>;
   createLaborApproval(data: InsertLaborApproval): Promise<LaborApproval>;
   getLaborApprovalById(id: number): Promise<LaborApproval | null>;
+  getLatestLaborApprovalByWorkOrder(workOrderId: string): Promise<LaborApproval | null>;
 
   // Labor threshold settings (system-wide)
   getLaborThresholdSettings(): Promise<LaborThresholdSettings | null>;
@@ -16090,6 +16091,16 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  async getLatestLaborApprovalByWorkOrder(workOrderId: string): Promise<LaborApproval | null> {
+    const [approval] = await db
+      .select()
+      .from(laborApprovals)
+      .where(eq(laborApprovals.productionWorkOrderId, workOrderId))
+      .orderBy(desc(laborApprovals.approvedAt))
+      .limit(1);
+    return approval ?? null;
   }
 
   async updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler> {

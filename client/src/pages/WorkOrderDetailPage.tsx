@@ -1,25 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-
-function useIsAdmin() {
-  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
-  const role = session?.role;
-  return role === 'ADMIN' || role === 'OWNER';
-}
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +33,8 @@ import {
   Plus,
   FileText,
   Package,
+  TrendingUp,
+  ShieldCheck,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
@@ -92,6 +82,21 @@ type WorkOrderDetail = {
   }>;
 };
 
+type LaborStatus = 'OK' | 'WARNING' | 'BLOCKED';
+
+type LaborStatusResult = {
+  workOrderId: string;
+  totalHours: number;
+  departmentHours: number | null;
+  totalBudget: number | null;
+  departmentBudget: number | null;
+  percentUsed: number | null;
+  departmentPercentUsed: number | null;
+  status: LaborStatus;
+  latestApprovalId: number | null;
+  latestApprovalAt: string | null;
+};
+
 const statusColors: Record<string, string> = {
   open: 'bg-blue-100 text-blue-800',
   in_progress: 'bg-yellow-100 text-yellow-800',
@@ -106,6 +111,223 @@ const priorityColors: Record<string, string> = {
   medium: 'bg-yellow-100 text-yellow-800',
   low: 'bg-green-100 text-green-800',
 };
+
+const laborStatusConfig: Record<LaborStatus, { label: string; badgeClass: string }> = {
+  OK: { label: 'OK', badgeClass: 'bg-green-100 text-green-800' },
+  WARNING: { label: 'WARNING', badgeClass: 'bg-yellow-100 text-yellow-800' },
+  BLOCKED: { label: 'BLOCKED', badgeClass: 'bg-red-100 text-red-800' },
+};
+
+function useIsAdmin() {
+  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const role = session?.role;
+  return role === 'ADMIN' || role === 'OWNER';
+}
+
+function useIsSupervisorOrAdmin() {
+  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const role = session?.role;
+  return role === 'ADMIN' || role === 'OWNER' || role === 'SUPERVISOR';
+}
+
+function LaborBudgetSection({ woId }: { woId: string }) {
+  const isSupervisorOrAdmin = useIsSupervisorOrAdmin();
+  const { toast } = useToast();
+
+  const [showApprovalForm, setShowApprovalForm] = useState(false);
+  const [approvalForm, setApprovalForm] = useState({ employeeId: '', reason: '' });
+
+  const { data: laborData, isLoading, isError } = useQuery<LaborStatusResult | null>({
+    queryKey: ['/api/work-orders', woId, 'labor-status'],
+    queryFn: async (): Promise<LaborStatusResult | null> => {
+      const res = await fetch(`/api/work-orders/${woId}/labor-status`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error('Failed to fetch labor status');
+      return res.json() as Promise<LaborStatusResult>;
+    },
+    retry: false,
+  });
+
+  const approvalMutation = useMutation({
+    mutationFn: async (data: { employeeId: string; reason: string }) => {
+      const res = await apiRequest(`/api/work-orders/${woId}/approve-overrun`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return res.json();
+    },
+    onSuccess: (result) => {
+      const approvalId = result?.approval?.id ?? null;
+      setShowApprovalForm(false);
+      setApprovalForm({ employeeId: '', reason: '' });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders', woId, 'labor-status'] });
+      toast({ title: 'Overrun approved', description: approvalId ? `Approval ID: ${approvalId}` : undefined });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Approval failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Labor Budget
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-400">Loading budget data...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Labor Budget
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-red-500">Budget data unavailable — unable to load labor status.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!laborData || laborData.totalBudget == null) {
+    return null;
+  }
+
+  const config = laborStatusConfig[laborData.status] ?? laborStatusConfig.OK;
+  const pct = laborData.percentUsed;
+  const displayPct = pct != null ? Math.min(pct, 100) : 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="h-4 w-4" /> Labor Budget
+          <Badge className={`ml-2 ${config.badgeClass}`}>{config.label}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div>
+            <p className="text-gray-500 mb-1">Budget Hours</p>
+            <p className="text-lg font-bold">{laborData.totalBudget.toFixed(1)} h</p>
+          </div>
+          <div>
+            <p className="text-gray-500 mb-1">Hours Used</p>
+            <p className="text-lg font-bold">{laborData.totalHours.toFixed(1)} h</p>
+          </div>
+          <div>
+            <p className="text-gray-500 mb-1">Consumed</p>
+            <p className="text-lg font-bold">{pct != null ? `${pct.toFixed(1)}%` : '—'}</p>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>0 h</span>
+            <span>{laborData.totalBudget.toFixed(1)} h budget</span>
+          </div>
+          <Progress value={displayPct} className="h-3" />
+        </div>
+
+        {laborData.status === 'WARNING' && (
+          <div className="flex items-start gap-2 rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm text-yellow-800">
+            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>This work order is approaching its labor budget limit. Clock-in may be blocked once 100% is reached.</span>
+          </div>
+        )}
+
+        {laborData.status === 'BLOCKED' && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
+              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>Labor budget exceeded. Clock-in is blocked until a supervisor approves an overrun.</span>
+            </div>
+
+            {laborData.latestApprovalId != null && (
+              <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
+                <p className="font-medium flex items-center gap-1">
+                  <ShieldCheck className="h-4 w-4" /> Overrun approved
+                </p>
+                <p className="mt-1 font-mono text-xs break-all">
+                  Approval ID: <span className="font-bold">{laborData.latestApprovalId}</span>
+                </p>
+                {laborData.latestApprovalAt && (
+                  <p className="mt-0.5 text-xs text-green-700">
+                    Approved: {format(new Date(laborData.latestApprovalAt), 'MMM d, yyyy h:mm a')}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-green-700">Provide this approval ID when clocking in to bypass the budget gate.</p>
+              </div>
+            )}
+
+            {isSupervisorOrAdmin && !showApprovalForm && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowApprovalForm(true)}
+              >
+                <ShieldCheck className="h-4 w-4 mr-1" /> Approve Overrun
+              </Button>
+            )}
+
+            {isSupervisorOrAdmin && showApprovalForm && (
+              <div className="space-y-3 rounded-md border border-gray-200 p-3 bg-gray-50">
+                <p className="text-sm font-medium text-gray-700">Supervisor Approval</p>
+                <div>
+                  <Label className="text-xs">Supervisor Employee ID *</Label>
+                  <Input
+                    value={approvalForm.employeeId}
+                    onChange={(e) => setApprovalForm({ ...approvalForm, employeeId: e.target.value })}
+                    placeholder="e.g. EMP-001"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Reason for Approval *</Label>
+                  <Textarea
+                    value={approvalForm.reason}
+                    onChange={(e) => setApprovalForm({ ...approvalForm, reason: e.target.value })}
+                    placeholder="Explain why the overrun is authorized..."
+                    rows={3}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setShowApprovalForm(false); setApprovalForm({ employeeId: '', reason: '' }); }}
+                    disabled={approvalMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => approvalMutation.mutate({ employeeId: approvalForm.employeeId, reason: approvalForm.reason })}
+                    disabled={!approvalForm.employeeId || !approvalForm.reason || approvalMutation.isPending}
+                  >
+                    {approvalMutation.isPending ? 'Submitting...' : 'Submit Approval'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function WorkOrderDetailPage({ params }: { params: { id: string } }) {
   const isAdmin = useIsAdmin();
@@ -208,7 +430,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
   const canStart = wo.status === 'open' || wo.status === 'waiting_parts';
   const canComplete = wo.status === 'in_progress' || wo.status === 'open';
   const canClose = wo.status !== 'closed';
-  const isActive = wo.downtimeStart && !wo.downtimeEnd;
 
   function calcDowntimeHours() {
     if (!wo.downtimeStart) return null;
@@ -247,7 +468,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* Overview */}
         <Card className="col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Overview</CardTitle>
@@ -318,7 +538,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
           </CardContent>
         </Card>
 
-        {/* Downtime */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -354,8 +573,9 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         </Card>
       </div>
 
+      <LaborBudgetSection woId={woId} />
+
       <div className="grid grid-cols-2 gap-4">
-        {/* Parts */}
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
@@ -400,7 +620,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
           </CardContent>
         </Card>
 
-        {/* Attachments */}
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
@@ -433,7 +652,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         </Card>
       </div>
 
-      {/* Activity Timeline */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Activity Timeline</CardTitle>
@@ -458,7 +676,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         </CardContent>
       </Card>
 
-      {/* Edit Description Dialog */}
       <Dialog open={showEditDesc} onOpenChange={setShowEditDesc}>
         <DialogContent>
           <DialogHeader>
@@ -474,7 +691,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         </DialogContent>
       </Dialog>
 
-      {/* Add Part Dialog */}
       <Dialog open={showAddPart} onOpenChange={setShowAddPart}>
         <DialogContent>
           <DialogHeader>
@@ -508,7 +724,6 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         </DialogContent>
       </Dialog>
 
-      {/* Add Attachment Dialog */}
       <Dialog open={showAddAttachment} onOpenChange={setShowAddAttachment}>
         <DialogContent>
           <DialogHeader>

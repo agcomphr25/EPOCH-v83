@@ -678,7 +678,13 @@ router.get('/:id/labor-status', async (req: Request, res: Response) => {
     }
 
     const laborStatus = await evaluateWorkOrderLaborStatus(id, department ? String(department) : undefined);
-    return res.json({ workOrderId: id, ...laborStatus });
+    const latestApproval = await storage.getLatestLaborApprovalByWorkOrder(id);
+    return res.json({
+      workOrderId: id,
+      ...laborStatus,
+      latestApprovalId: latestApproval?.id ?? null,
+      latestApprovalAt: latestApproval?.approvedAt ?? null,
+    });
   } catch (error: any) {
     console.error('[WorkOrders] Error fetching labor status:', error);
     return res.status(500).json({ error: 'Failed to fetch labor status', message: error.message });

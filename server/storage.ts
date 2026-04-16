@@ -1314,6 +1314,14 @@ export interface IStorage {
   ): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
   createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
+  switchActiveTimeEntryToTraveler(params: {
+    employeeId: string;
+    productionWorkOrderId: string | null;
+    travelerId: string | null;
+    chargeCode: string | null;
+    department: string | null;
+    operation: string | null;
+  }): Promise<{ closed: TimeClockEntry | null; created: TimeClockEntry }>;
   updateTimeClockEntry(
     id: number,
     data: Partial<InsertTimeClockEntry>
@@ -15918,6 +15926,62 @@ export class DatabaseStorage implements IStorage {
 
   async createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
     return this.createTimeClockEntry(data);
+  }
+
+  async switchActiveTimeEntryToTraveler(params: {
+    employeeId: string;
+    productionWorkOrderId: string | null;
+    travelerId: string | null;
+    chargeCode: string | null;
+    department: string | null;
+    operation: string | null;
+  }): Promise<{ closed: TimeClockEntry | null; created: TimeClockEntry }> {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
+    return await db.transaction(async (tx) => {
+      const [activeEntry] = await tx
+        .select()
+        .from(timeClockEntries)
+        .where(
+          and(
+            eq(timeClockEntries.employeeId, params.employeeId),
+            isNotNull(timeClockEntries.clockIn),
+            isNull(timeClockEntries.clockOut)
+          )
+        )
+        .orderBy(desc(timeClockEntries.clockIn))
+        .limit(1);
+
+      let closed: TimeClockEntry | null = null;
+      if (activeEntry) {
+        const [closedEntry] = await tx
+          .update(timeClockEntries)
+          .set({ clockOut: now })
+          .where(eq(timeClockEntries.id, activeEntry.id))
+          .returning();
+        closed = closedEntry;
+      }
+
+      const normalizedDate = today;
+      const [created] = await tx
+        .insert(timeClockEntries)
+        .values({
+          employeeId: params.employeeId,
+          date: normalizedDate,
+          clockIn: now,
+          clockOut: null,
+          productionWorkOrderId: params.productionWorkOrderId,
+          travelerId: params.travelerId,
+          chargeCode: params.chargeCode,
+          department: params.department,
+          operation: params.operation,
+          approvalStatus: 'AUTO',
+        })
+        .returning();
+
+      return { closed, created };
+    });
   }
 
   async updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler> {

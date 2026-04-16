@@ -704,6 +704,52 @@ export function registerTimeClockRoutes(app: Express) {
     }
   });
 
+  app.post('/api/time-clock/switch-job/traveler', async (req: Request, res: Response) => {
+    try {
+      const { scanValue, employeeId } = req.body;
+
+      if (!scanValue || typeof scanValue !== 'string' || !scanValue.trim()) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: 'scanValue is required and must be a non-empty string',
+        });
+      }
+
+      if (!employeeId || typeof employeeId !== 'string' || !employeeId.trim()) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: 'employeeId is required and must be a non-empty string',
+        });
+      }
+
+      const result = await resolveTravelerBarcode(scanValue);
+
+      if (!result.ok) {
+        const statusCode = result.error.code === 'NOT_FOUND' ? 404 : 400;
+        return res.status(statusCode).json({
+          error: result.error.code,
+          message: result.error.message,
+        });
+      }
+
+      const { context } = result;
+
+      const { closed, created } = await storage.switchActiveTimeEntryToTraveler({
+        employeeId: employeeId.trim(),
+        productionWorkOrderId: context.wadId,
+        travelerId: context.travelerId,
+        chargeCode: context.chargeCode,
+        department: context.department,
+        operation: context.operation,
+      });
+
+      return res.status(201).json({ closed, created, chargeContext: context });
+    } catch (error) {
+      console.error('[TimeClock] Error switching job via traveler barcode:', error);
+      return res.status(500).json({ error: 'Internal server error', details: 'Failed to switch job via traveler barcode' });
+    }
+  });
+
   // Start the quiet health evaluator
   startConnectorHealthEvaluator();
 }

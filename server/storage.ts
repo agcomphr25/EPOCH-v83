@@ -2566,7 +2566,7 @@ export interface IStorage {
   // Material Lot Transactions
   getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]>;
   getMaterialLotTransactionsByICN(icn: string): Promise<MaterialLotTransaction[]>;
-  getMaterialLotHistory(id: string): Promise<MaterialLotHistoryEvent[] | null>;
+  getMaterialLotHistory(id: string, opts?: { limit?: number; offset?: number }): Promise<{ events: MaterialLotHistoryEvent[]; total: number } | null>;
   createMaterialLotTransaction(data: InsertMaterialLotTransaction): Promise<MaterialLotTransaction>;
 
   // Traveler Material Consumption
@@ -21669,9 +21669,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(materialLotTransactions.performedAt));
   }
 
-  async getMaterialLotHistory(id: string): Promise<MaterialLotHistoryEvent[] | null> {
+  async getMaterialLotHistory(id: string, opts?: { limit?: number; offset?: number }): Promise<{ events: MaterialLotHistoryEvent[]; total: number } | null> {
     const lot = await this.getMaterialLot(id);
     if (!lot) return null;
+
+    const limit = opts?.limit ?? 100;
+    const offset = opts?.offset ?? 0;
 
     const lotTxns = await db
       .select()
@@ -21710,7 +21713,10 @@ export class DatabaseStorage implements IStorage {
       return ta - tb;
     });
 
-    return merged;
+    const total = merged.length;
+    const events = merged.slice(offset, offset + limit);
+
+    return { events, total };
   }
 
   async createMaterialLotTransaction(data: InsertMaterialLotTransaction): Promise<MaterialLotTransaction> {

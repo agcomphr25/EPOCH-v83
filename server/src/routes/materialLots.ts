@@ -403,18 +403,47 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
 router.get('/:id/history', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const history = await storage.getMaterialLotHistory(id);
 
-    if (history === null) {
+    const MAX_LIMIT = 500;
+
+    const rawLimit = req.query.limit as string | undefined;
+    const rawOffset = req.query.offset as string | undefined;
+
+    const limitParam = rawLimit !== undefined ? Number(rawLimit) : 100;
+    const offsetParam = rawOffset !== undefined ? Number(rawOffset) : 0;
+
+    if (!Number.isInteger(limitParam) || limitParam < 1) {
+      return res.status(400).json({ error: 'Invalid limit parameter: must be a positive integer' });
+    }
+    if (limitParam > MAX_LIMIT) {
+      return res.status(400).json({ error: `Invalid limit parameter: must not exceed ${MAX_LIMIT}` });
+    }
+    if (!Number.isInteger(offsetParam) || offsetParam < 0) {
+      return res.status(400).json({ error: 'Invalid offset parameter: must be a non-negative integer' });
+    }
+
+    const result = await storage.getMaterialLotHistory(id, { limit: limitParam, offset: offsetParam });
+
+    if (result === null) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
 
-    const normalized = history.map(event => ({
+    const { events, total } = result;
+
+    const normalizedEvents = events.map(event => ({
       ...event,
       timestamp: event.timestamp != null ? new Date(event.timestamp).toISOString() : null,
     }));
 
-    res.json(normalized);
+    res.json({
+      data: normalizedEvents,
+      pagination: {
+        total,
+        limit: limitParam,
+        offset: offsetParam,
+        hasMore: offsetParam + limitParam < total,
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching material lot history:', error);
     res.status(500).json({ error: 'Failed to fetch material lot history', message: error.message });

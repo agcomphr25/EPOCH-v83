@@ -68,7 +68,9 @@ import {
   Scissors,
   Trash2,
   SlidersHorizontal,
+  Info,
 } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import JsBarcode from 'jsbarcode';
 
 interface MaterialLot {
@@ -127,6 +129,67 @@ function buildScrapSchema(remainingQty: number) {
     reason: z.string().trim().min(1, 'Reason is required'),
     performedBy: z.string().trim().min(1, 'Performed by is required'),
   });
+}
+
+interface Reservation {
+  id: number;
+  travelerId?: string;
+  workOrderId?: number;
+  quantityReserved: string;
+  unitOfMeasure: string;
+  status: string;
+}
+
+function ReservationBreakdownPopover({ lotId, reservedQty, unitOfMeasure }: { lotId: string; reservedQty: number; unitOfMeasure: string }) {
+  const [open, setOpen] = useState(false);
+
+  const { data, isLoading } = useQuery<{ reservations: Reservation[] }>({
+    queryKey: ['/api/material-lots', lotId, 'reservations'],
+    enabled: open,
+  });
+
+  const active = data?.reservations?.filter(r => r.status === 'active') ?? [];
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          onClick={e => e.stopPropagation()}
+        >
+          Reserved: {reservedQty.toLocaleString(undefined, { maximumFractionDigits: 4 })} {unitOfMeasure}
+          <Info className="h-3 w-3 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start" onClick={e => e.stopPropagation()}>
+        <p className="text-xs font-semibold mb-2">Reservation Breakdown</p>
+        {isLoading ? (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Loading…
+          </div>
+        ) : active.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No active reservations found.</p>
+        ) : (
+          <ul className="space-y-1">
+            {active.map(r => {
+              const label = [
+                r.travelerId ? `Traveler ${r.travelerId}` : null,
+                r.workOrderId ? `WO ${r.workOrderId}` : null,
+              ].filter(Boolean).join(' · ') || 'Unknown';
+              const qty = parseFloat(r.quantityReserved);
+              return (
+                <li key={r.id} className="text-xs flex justify-between gap-2">
+                  <span className="text-muted-foreground truncate">{label}</span>
+                  <span className="font-medium shrink-0">{isNaN(qty) ? r.quantityReserved : qty.toLocaleString(undefined, { maximumFractionDigits: 4 })} {r.unitOfMeasure}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function MaterialInventoryPage() {
@@ -687,10 +750,20 @@ export default function MaterialInventoryPage() {
                       <TableCell>
                         <div className="space-y-0.5 text-sm">
                           <div>{lot.remainingQty} / {lot.receivedQty} {lot.unitOfMeasure}</div>
-                          <div className="text-muted-foreground text-xs">
-                            Reserved: {(lot.reservedQty ?? 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} {lot.unitOfMeasure}
+                          <div className="text-xs">
+                            {(lot.reservedQty ?? 0) > 0 ? (
+                              <ReservationBreakdownPopover
+                                lotId={lot.id}
+                                reservedQty={lot.reservedQty ?? 0}
+                                unitOfMeasure={lot.unitOfMeasure}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">
+                                Reserved: 0 {lot.unitOfMeasure}
+                              </span>
+                            )}
                           </div>
-                          <div className="text-muted-foreground text-xs">
+                          <div className="text-xs font-medium">
                             Available: {(lot.availableQty ?? parseFloat(lot.remainingQty)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {lot.unitOfMeasure}
                           </div>
                         </div>

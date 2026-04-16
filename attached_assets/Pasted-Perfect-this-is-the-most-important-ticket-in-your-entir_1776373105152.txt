@@ -1,0 +1,219 @@
+Perfect—this is the most important ticket in your entire system.
+
+If you get this right, EPOCH becomes a controlled manufacturing system, not just tracking software.
+
+🔥 TICKET 1 — Traveler Hard Gates (FULL BUILD)
+🎯 Goal
+
+Enforce:
+
+NO WORK WITHOUT:
+- material traceability
+- valid training
+- prior step completion
+- required QC/signoff
+🧱 WHAT YOU ARE BUILDING
+
+You are turning travelers into:
+
+👉 controlled process checkpoints
+
+🧩 GATE TYPES (YOU WILL ENFORCE THESE)
+1. Material Gate
+must have:
+lot number
+ICN
+material assigned
+2. Training Gate
+employee must be certified for:
+process
+department
+part (optional later)
+3. Sequence Gate
+cannot start step unless:
+previous step is COMPLETE
+4. QC Gate
+cannot finish step unless:
+QC tasks completed
+required fields filled
+5. Signature Gate
+required role must sign:
+START
+FINISH
+🚀 IMPLEMENTATION
+🧠 1. CREATE GATE ENGINE
+
+📁 server/src/lib/travelerGates.ts
+
+export async function evaluateTravelerStartGates(storage, travelerId, employeeId, stepId) {
+  const step = await storage.getTravelerStepById(stepId);
+
+  // 1. Sequence Gate
+  const prevStep = await storage.getPreviousStep(step);
+  if (prevStep && prevStep.status !== "COMPLETE") {
+    return { allowed: false, reason: "Previous step not complete" };
+  }
+
+  // 2. Training Gate
+  const authorized = await storage.checkTravelerAuthorization(travelerId, employeeId);
+  if (!authorized) {
+    return { allowed: false, reason: "Training certification required" };
+  }
+
+  // 3. Material Gate
+  const materialsOk = await storage.checkMaterialTraceability(travelerId, step.department);
+  if (!materialsOk) {
+    return { allowed: false, reason: "Material not allocated or traceable" };
+  }
+
+  return { allowed: true };
+}
+🧠 Finish Gate
+export async function evaluateTravelerFinishGates(storage, travelerId, stepId) {
+  const tasks = await storage.getTasksByStep(stepId);
+
+  // QC Gate
+  const incompleteTasks = tasks.filter(t => t.required && !t.completed);
+  if (incompleteTasks.length > 0) {
+    return { allowed: false, reason: "Required QC tasks incomplete" };
+  }
+
+  return { allowed: true };
+}
+🧱 2. STORAGE METHODS (ADD)
+
+Add to IStorage:
+
+getTravelerStepById(stepId)
+getPreviousStep(step)
+getTasksByStep(stepId)
+checkTravelerAuthorization(travelerId, employeeId)
+checkMaterialTraceability(travelerId, department)
+Minimal Implementation Strategy
+
+You don’t need perfect logic yet—just enforce basics:
+
+Training:
+return traveler_authorizations exists
+Material:
+return traveler has any material entries
+
+👉 Tighten later
+
+🌐 3. ENFORCE IN ROUTES
+
+📁 server/src/routes/travelers.ts
+
+🔴 START STEP
+
+Find:
+
+POST /api/travelers/:id/steps/:stepId/start
+ADD:
+const gate = await evaluateTravelerStartGates(
+  storage,
+  travelerId,
+  employeeId,
+  stepId
+);
+
+if (!gate.allowed) {
+  return res.status(403).json({
+    error: "Traveler start blocked",
+    reason: gate.reason
+  });
+}
+🔴 FINISH STEP
+
+Find:
+
+POST /api/travelers/:id/steps/:stepId/finish
+ADD:
+const gate = await evaluateTravelerFinishGates(
+  storage,
+  travelerId,
+  stepId
+);
+
+if (!gate.allowed) {
+  return res.status(403).json({
+    error: "Traveler finish blocked",
+    reason: gate.reason
+  });
+}
+🔐 4. SIGNATURE GATE (OPTIONAL NOW, ADD SIMPLE)
+
+Inside finish:
+
+if (!req.body.signature) {
+  return res.status(403).json({
+    error: "Signature required to complete step"
+  });
+}
+🧪 TEST FLOW (DO THIS EXACTLY)
+1. Try starting step without previous step
+
+→ ❌ blocked
+
+2. Try without training
+
+→ ❌ blocked
+
+3. Try without material
+
+→ ❌ blocked
+
+4. Pass all gates
+
+→ ✅ allowed
+
+5. Try finishing without QC
+
+→ ❌ blocked
+
+6. Complete tasks
+
+→ ✅ allowed
+
+⚠️ RULES
+NEVER silently allow failure
+ALWAYS return reason
+DO NOT bypass for admin (yet)
+DO NOT auto-complete anything
+🔥 WHAT YOU JUST BUILT
+
+After this:
+
+👉 You now have:
+
+enforced process flow
+real manufacturing control
+audit-ready execution
+error prevention at source
+🧭 NEXT STEP
+
+After this is working:
+
+👉 Ticket 2 — Release-to-Floor Control
+
+That will:
+
+control WHEN work is allowed
+not just HOW
+💡 STRAIGHT TALK
+
+This is the moment EPOCH becomes:
+
+❌ not “track what happened”
+✅ “control what is allowed to happen”
+
+🚀 When Done
+
+Say:
+
+👉 “ticket 1 complete”
+
+and I’ll walk you through:
+👉 release-to-floor (next level control)
+
+You’re now building something most systems never reach.

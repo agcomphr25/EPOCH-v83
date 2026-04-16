@@ -1313,6 +1313,7 @@ export interface IStorage {
     date?: string
   ): Promise<TimeClockEntry[]>;
   createTimeClockEntry(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
+  createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry>;
   updateTimeClockEntry(
     id: number,
     data: Partial<InsertTimeClockEntry>
@@ -1728,6 +1729,8 @@ export interface IStorage {
   }): Promise<Traveler[]>;
   getTraveler(id: string): Promise<Traveler | undefined>;
   getTravelerByNumber(travelerNumber: string): Promise<Traveler | undefined>;
+  getTravelerByScanValue(scanValue: string): Promise<Traveler | undefined>;
+  getProductionWorkOrderByTravelerId(travelerId: string): Promise<ProductionWorkOrder | undefined>;
   updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler>;
   deleteTraveler(id: string): Promise<void>;
   generateTravelerNumber(): Promise<string>;
@@ -15858,6 +15861,36 @@ export class DatabaseStorage implements IStorage {
       .from(travelers)
       .where(eq(travelers.travelerNumber, travelerNumber));
     return traveler;
+  }
+
+  async getTravelerByScanValue(scanValue: string): Promise<Traveler | undefined> {
+    const trimmed = (scanValue || '').trim();
+    if (!trimmed) return undefined;
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.travelerNumber, trimmed))
+      .limit(1);
+    return traveler;
+  }
+
+  async getProductionWorkOrderByTravelerId(travelerId: string): Promise<ProductionWorkOrder | undefined> {
+    const [traveler] = await db
+      .select({ productionWorkOrderId: travelers.productionWorkOrderId })
+      .from(travelers)
+      .where(eq(travelers.id, travelerId))
+      .limit(1);
+    if (!traveler?.productionWorkOrderId) return undefined;
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
+      .limit(1);
+    return wad;
+  }
+
+  async createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
+    return this.createTimeClockEntry(data);
   }
 
   async updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler> {

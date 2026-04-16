@@ -10,6 +10,8 @@ import {
   getConnectorHealthHistory,
   startConnectorHealthEvaluator 
 } from '../services/connectorHealthService';
+import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
+import { storage } from '../../storage';
 
 const VALID_EVENT_TYPES = [
   'TIME_PUNCH_IN',
@@ -609,6 +611,96 @@ export function registerTimeClockRoutes(app: Express) {
     } catch (error) {
       console.error('[ConnectorHealth] Error fetching history:', error);
       return res.status(500).json({ error: 'Failed to fetch health history' });
+    }
+  });
+
+  // ============================================================
+  // BARCODE-DRIVEN TIME CHARGING — TRAVELER SCAN ENDPOINTS
+  // ============================================================
+
+  app.post('/api/time-clock/scan/traveler', async (req: Request, res: Response) => {
+    try {
+      const { scanValue, employeeId } = req.body;
+
+      if (!scanValue || typeof scanValue !== 'string' || !scanValue.trim()) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: 'scanValue is required and must be a non-empty string',
+        });
+      }
+
+      if (!employeeId || typeof employeeId !== 'string' || !employeeId.trim()) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: 'employeeId is required and must be a non-empty string',
+        });
+      }
+
+      const result = await resolveTravelerBarcode(scanValue);
+
+      if (!result.ok) {
+        const statusCode = result.error.code === 'NOT_FOUND' ? 404 : 400;
+        return res.status(statusCode).json({
+          error: result.error.code,
+          message: result.error.message,
+        });
+      }
+
+      return res.json({ chargeContext: result.context });
+    } catch (error) {
+      console.error('[TimeClock] Error scanning traveler barcode:', error);
+      return res.status(500).json({ error: 'Internal server error', details: 'Failed to resolve traveler barcode' });
+    }
+  });
+
+  app.post('/api/time-clock/clock-in/traveler', async (req: Request, res: Response) => {
+    try {
+      const { scanValue, employeeId } = req.body;
+
+      if (!scanValue || typeof scanValue !== 'string' || !scanValue.trim()) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: 'scanValue is required and must be a non-empty string',
+        });
+      }
+
+      if (!employeeId || typeof employeeId !== 'string' || !employeeId.trim()) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: 'employeeId is required and must be a non-empty string',
+        });
+      }
+
+      const result = await resolveTravelerBarcode(scanValue);
+
+      if (!result.ok) {
+        const statusCode = result.error.code === 'NOT_FOUND' ? 404 : 400;
+        return res.status(statusCode).json({
+          error: result.error.code,
+          message: result.error.message,
+        });
+      }
+
+      const { context } = result;
+      const today = new Date().toISOString().split('T')[0];
+
+      const entry = await storage.createTimeClockEntryWithChargeContext({
+        employeeId: employeeId.trim(),
+        date: new Date(today),
+        clockIn: new Date(),
+        clockOut: null,
+        productionWorkOrderId: context.wadId,
+        travelerId: context.travelerId,
+        chargeCode: context.chargeCode,
+        department: context.department,
+        operation: context.operation,
+        approvalStatus: 'AUTO',
+      });
+
+      return res.status(201).json({ entry, chargeContext: context });
+    } catch (error) {
+      console.error('[TimeClock] Error clocking in via traveler barcode:', error);
+      return res.status(500).json({ error: 'Internal server error', details: 'Failed to clock in via traveler barcode' });
     }
   });
 

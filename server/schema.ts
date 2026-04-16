@@ -1055,14 +1055,15 @@ export const employees = pgTable('employees', {
   buildingKeyAccess: boolean('building_key_access').default(false),
   tciAccess: boolean('tci_access').default(false),
   employmentType: text('employment_type').default('FULL_TIME'), // FULL_TIME, PART_TIME, CONTRACT
+  payType: text('pay_type'), // 'HOURLY' | 'SALARY'
+  hourlyRate: numeric('hourly_rate', { precision: 12, scale: 2 }),
+  salary: numeric('salary', { precision: 12, scale: 2 }),
   portalToken: text('portal_token'), // UUID for employee portal access
   portalTokenExpiry: timestamp('portal_token_expiry'),
   isFinishTechnician: boolean('is_finish_technician').default(false), // Mark employee as Finish technician for department assignments
   isToleranceAuthorizer: boolean('is_tolerance_authorizer').default(false), // Can approve tolerance deviations for P2 orders
   badgeScanCode: text('badge_scan_code').unique(), // Non-guessable UUID encoded in physical badge barcode - not printed visibly
   isActive: boolean('is_active').default(true),
-  hourlyRate: numeric('hourly_rate', { precision: 12, scale: 2 }),
-  salary: numeric('salary', { precision: 12, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -2363,6 +2364,7 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     address: z.string().optional().nullable(),
     emergencyContact: z.string().optional().nullable(),
     emergencyPhone: z.string().optional().nullable(),
+    payType: z.enum(['HOURLY', 'SALARY']).optional().nullable(),
     salary: z.number().min(0).optional().nullable(),
     hourlyRate: z.number().min(0).optional().nullable(),
     employmentType: z
@@ -15339,48 +15341,61 @@ export const insertEstimatingDefaultsSchema = createInsertSchema(estimatingDefau
 export type EstimatingDefaults = typeof estimatingDefaults.$inferSelect;
 export type InsertEstimatingDefaults = z.infer<typeof insertEstimatingDefaultsSchema>;
 
-// ── Labor Posting Runs ────────────────────────────────────────────────────────
+// ===========================
+// LABOR → GL POSTING ENGINE
+// ===========================
+
+// labor_posting_runs — one row per (year, month) calculation or posting run
 export const laborPostingRuns = pgTable('labor_posting_runs', {
   id: serial('id').primaryKey(),
-  year: integer('year').notNull(),
-  month: integer('month').notNull(),
-  status: text('status').notNull().default('POSTED'),
-  postedBy: text('posted_by').notNull(),
-  totalDirectCost: numeric('total_direct_cost', { precision: 12, scale: 2 }).default('0'),
-  totalIndirectCost: numeric('total_indirect_cost', { precision: 12, scale: 2 }).default('0'),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  status: text('status').notNull().default('CALCULATED'), // CALCULATED | POSTED
+  postedBy: text('posted_by'),
+  postedAt: timestamp('posted_at'),
   createdAt: timestamp('created_at').defaultNow(),
-}, (t) => [
-  unique('labor_posting_runs_year_month_unique').on(t.year, t.month),
-]);
+});
 
 export const insertLaborPostingRunSchema = createInsertSchema(laborPostingRuns).omit({ id: true, createdAt: true });
 export type LaborPostingRun = typeof laborPostingRuns.$inferSelect;
 export type InsertLaborPostingRun = z.infer<typeof insertLaborPostingRunSchema>;
 
-// ── Labor Cost Records ────────────────────────────────────────────────────────
+// labor_cost_records — individual cost lines per employee per interval
 export const laborCostRecords = pgTable('labor_cost_records', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  employeeId: integer('employee_id').references(() => employees.id),
+  id: serial('id').primaryKey(),
+  postingRunId: integer('posting_run_id').references(() => laborPostingRuns.id),
+  epochEmployeeId: integer('epoch_employee_id').references(() => employees.id),
+  canonicalId: text('canonical_id'),
   jobCode: text('job_code'),
-  jobVerified: boolean('job_verified').default(false),
-  hours: numeric('hours', { precision: 10, scale: 4 }).notNull(),
-  rate: numeric('rate', { precision: 12, scale: 2 }).notNull(),
-  rateSource: text('rate_source').notNull(), // HOURLY | SALARY | DEFAULT
-  totalCost: numeric('total_cost', { precision: 12, scale: 2 }).notNull(),
-  costType: text('cost_type').notNull(), // DIRECT | INDIRECT
-  periodDate: date('period_date').notNull(),
+  departmentCode: text('department_code'),
   periodYear: integer('period_year').notNull(),
   periodMonth: integer('period_month').notNull(),
-  sourcePunchId: uuid('source_punch_id'),
-  journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
-  postingRunId: integer('posting_run_id').references(() => laborPostingRuns.id),
+  sourcePunchCanonicalId: text('source_punch_canonical_id'),
+  clockIn: timestamp('clock_in').notNull(),
+  clockOut: timestamp('clock_out').notNull(),
+  hoursWorked: numeric('hours_worked', { precision: 10, scale: 4 }).notNull(),
+  rateUsed: numeric('rate_used', { precision: 12, scale: 2 }).notNull(),
+  dollarCost: numeric('dollar_cost', { precision: 12, scale: 2 }).notNull(),
+  costType: text('cost_type').notNull(), // DIRECT | OVERHEAD | G_AND_A
+  rateSource: text('rate_source').notNull(), // HOURLY_RATE | SALARY | DEFAULT_LABOR_RATE
   createdAt: timestamp('created_at').defaultNow(),
-}, (t) => [
-  unique('labor_cost_records_source_punch_id_unique').on(t.sourcePunchId),
-  index('labor_cost_records_period_year_month_idx').on(t.periodYear, t.periodMonth),
-  index('labor_cost_records_employee_id_idx').on(t.employeeId),
-]);
+});
 
 export const insertLaborCostRecordSchema = createInsertSchema(laborCostRecords).omit({ id: true, createdAt: true });
 export type LaborCostRecord = typeof laborCostRecords.$inferSelect;
 export type InsertLaborCostRecord = z.infer<typeof insertLaborCostRecordSchema>;
+
+// labor_account_config — singleton config mapping cost types to chart_of_accounts ids
+export const laborAccountConfig = pgTable('labor_account_config', {
+  id: serial('id').primaryKey(),
+  directLaborAccountId: integer('direct_labor_account_id').references(() => chartOfAccounts.id).notNull(),
+  overheadLaborAccountId: integer('overhead_labor_account_id').references(() => chartOfAccounts.id).notNull(),
+  gaLaborAccountId: integer('ga_labor_account_id').references(() => chartOfAccounts.id).notNull(),
+  accruedPayrollAccountId: integer('accrued_payroll_account_id').references(() => chartOfAccounts.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertLaborAccountConfigSchema = createInsertSchema(laborAccountConfig).omit({ id: true, createdAt: true, updatedAt: true });
+export type LaborAccountConfig = typeof laborAccountConfig.$inferSelect;
+export type InsertLaborAccountConfig = z.infer<typeof insertLaborAccountConfigSchema>;

@@ -611,13 +611,26 @@ import {
   productionWorkOrders,
   type ProductionWorkOrder,
   type InsertProductionWorkOrder,
-  // Labor costing tables
-  laborPostingRuns,
+  // Labor → GL Posting Engine
   laborCostRecords,
-  type LaborPostingRun,
-  type InsertLaborPostingRun,
+  laborPostingRuns,
+  laborAccountConfig,
+  chartOfAccounts,
+  journalEntries,
+  journalLines,
+  costCenters,
   type LaborCostRecord,
   type InsertLaborCostRecord,
+  type LaborPostingRun,
+  type InsertLaborPostingRun,
+  type LaborAccountConfig,
+  type InsertLaborAccountConfig,
+  type ChartOfAccount,
+  type JournalEntry,
+  type InsertJournalEntry,
+  type JournalLine,
+  type InsertJournalLine,
+  type CostCenter,
 } from './schema';
 import { db, pool, rawSql } from './db';
 import {
@@ -2456,6 +2469,21 @@ export interface IStorage {
   createAllocationResult(data: InsertAllocationResult): Promise<AllocationResult>;
   deleteAllocationResult(id: string): Promise<void>;
   calculateAllocations(year: number, month: number): Promise<void>;
+
+  // Labor → GL Posting Engine
+  bulkInsertLaborCostRecords(records: InsertLaborCostRecord[]): Promise<LaborCostRecord[]>;
+  deleteLaborCostRecordsByPeriod(year: number, month: number): Promise<void>;
+  getLaborCostRecordsByPeriod(year: number, month: number): Promise<LaborCostRecord[]>;
+  createLaborPostingRun(data: InsertLaborPostingRun): Promise<LaborPostingRun>;
+  getLaborPostingRunByPeriod(year: number, month: number): Promise<LaborPostingRun | undefined>;
+  updateLaborPostingRunStatus(id: number, status: string, postedBy: string, postedAt: Date): Promise<LaborPostingRun>;
+  getLaborAccountConfig(): Promise<LaborAccountConfig | undefined>;
+  upsertLaborAccountConfig(data: InsertLaborAccountConfig): Promise<LaborAccountConfig>;
+  seedLaborChartOfAccounts(): Promise<Record<string, number>>;
+  createJournalEntry(data: InsertJournalEntry): Promise<JournalEntry>;
+  createJournalLine(data: InsertJournalLine): Promise<JournalLine>;
+  getCostCenterByCode(code: string): Promise<CostCenter | undefined>;
+  getEstimatingDefaultsFirst(): Promise<{ defaultLaborRate: string } | undefined>;
 
   // Production Work Orders (WAD)
   createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder>;
@@ -20738,6 +20766,117 @@ export class DatabaseStorage implements IStorage {
         allocations,
       });
     }
+  }
+
+  // ============================================
+  // LABOR → GL POSTING ENGINE
+  // ============================================
+
+  async bulkInsertLaborCostRecords(records: InsertLaborCostRecord[]): Promise<LaborCostRecord[]> {
+    if (records.length === 0) return [];
+    return await db.insert(laborCostRecords).values(records).returning();
+  }
+
+  async deleteLaborCostRecordsByPeriod(year: number, month: number): Promise<void> {
+    await db.delete(laborCostRecords).where(
+      and(
+        eq(laborCostRecords.periodYear, year),
+        eq(laborCostRecords.periodMonth, month)
+      )
+    );
+  }
+
+  async getLaborCostRecordsByPeriod(year: number, month: number): Promise<LaborCostRecord[]> {
+    return await db.select().from(laborCostRecords).where(
+      and(
+        eq(laborCostRecords.periodYear, year),
+        eq(laborCostRecords.periodMonth, month)
+      )
+    );
+  }
+
+  async createLaborPostingRun(data: InsertLaborPostingRun): Promise<LaborPostingRun> {
+    const [run] = await db.insert(laborPostingRuns).values(data).returning();
+    return run;
+  }
+
+  async getLaborPostingRunByPeriod(year: number, month: number): Promise<LaborPostingRun | undefined> {
+    const [run] = await db.select().from(laborPostingRuns).where(
+      and(
+        eq(laborPostingRuns.periodYear, year),
+        eq(laborPostingRuns.periodMonth, month)
+      )
+    );
+    return run || undefined;
+  }
+
+  async updateLaborPostingRunStatus(id: number, status: string, postedBy: string, postedAt: Date): Promise<LaborPostingRun> {
+    const [run] = await db.update(laborPostingRuns)
+      .set({ status, postedBy, postedAt })
+      .where(eq(laborPostingRuns.id, id))
+      .returning();
+    return run;
+  }
+
+  async getLaborAccountConfig(): Promise<LaborAccountConfig | undefined> {
+    const [config] = await db.select().from(laborAccountConfig).limit(1);
+    return config || undefined;
+  }
+
+  async upsertLaborAccountConfig(data: InsertLaborAccountConfig): Promise<LaborAccountConfig> {
+    const existing = await this.getLaborAccountConfig();
+    if (existing) {
+      const [updated] = await db.update(laborAccountConfig)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(laborAccountConfig.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(laborAccountConfig).values(data).returning();
+    return created;
+  }
+
+  async seedLaborChartOfAccounts(): Promise<Record<string, number>> {
+    const seeds = [
+      { accountName: 'Direct Labor Expense', accountType: 'EXPENSE' },
+      { accountName: 'Overhead Labor', accountType: 'EXPENSE' },
+      { accountName: 'G&A Labor', accountType: 'EXPENSE' },
+      { accountName: 'Accrued Payroll', accountType: 'LIABILITY' },
+    ];
+
+    const result: Record<string, number> = {};
+    for (const seed of seeds) {
+      const [existing] = await db.select()
+        .from(chartOfAccounts)
+        .where(eq(chartOfAccounts.accountName, seed.accountName));
+      if (existing) {
+        result[seed.accountName] = existing.id;
+      } else {
+        const [created] = await db.insert(chartOfAccounts).values(seed).returning();
+        result[seed.accountName] = created.id;
+      }
+    }
+    return result;
+  }
+
+  async createJournalEntry(data: InsertJournalEntry): Promise<JournalEntry> {
+    const [entry] = await db.insert(journalEntries).values(data).returning();
+    return entry;
+  }
+
+  async createJournalLine(data: InsertJournalLine): Promise<JournalLine> {
+    const [line] = await db.insert(journalLines).values(data).returning();
+    return line;
+  }
+
+  async getCostCenterByCode(code: string): Promise<CostCenter | undefined> {
+    const [center] = await db.select().from(costCenters).where(eq(costCenters.code, code));
+    return center || undefined;
+  }
+
+  async getEstimatingDefaultsFirst(): Promise<{ defaultLaborRate: string } | undefined> {
+    const rows = await pool.query('SELECT default_labor_rate::text AS "defaultLaborRate" FROM estimating_defaults LIMIT 1');
+    return rows[0] || undefined;
   }
 
   // ============================================

@@ -4342,49 +4342,82 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ Estimating tables migration:', estimatingErr?.message);
     }
 
-    // Labor costing tables migration
+    // Ensure Labor → GL Posting Engine tables exist
     try {
+      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pay_type TEXT`);
+      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(12,2)`);
+      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS salary NUMERIC(12,2)`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS labor_posting_runs (
           id SERIAL PRIMARY KEY,
-          year INTEGER NOT NULL,
-          month INTEGER NOT NULL,
-          status TEXT NOT NULL DEFAULT 'POSTED',
-          posted_by TEXT NOT NULL,
-          total_direct_cost NUMERIC(12,2) DEFAULT 0,
-          total_indirect_cost NUMERIC(12,2) DEFAULT 0,
-          created_at TIMESTAMP DEFAULT NOW(),
-          CONSTRAINT labor_posting_runs_year_month_unique UNIQUE (year, month)
+          period_year INTEGER NOT NULL,
+          period_month INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'CALCULATED',
+          posted_by TEXT,
+          posted_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
         )
       `);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS labor_cost_records (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          employee_id INTEGER REFERENCES employees(id),
+          id SERIAL PRIMARY KEY,
+          posting_run_id INTEGER REFERENCES labor_posting_runs(id),
+          epoch_employee_id INTEGER REFERENCES employees(id),
+          canonical_id TEXT,
           job_code TEXT,
-          job_verified BOOLEAN DEFAULT false,
-          hours NUMERIC(10,4) NOT NULL,
-          rate NUMERIC(12,2) NOT NULL,
-          rate_source TEXT NOT NULL,
-          total_cost NUMERIC(12,2) NOT NULL,
-          cost_type TEXT NOT NULL,
-          period_date DATE NOT NULL,
+          department_code TEXT,
           period_year INTEGER NOT NULL,
           period_month INTEGER NOT NULL,
-          source_punch_id UUID,
-          journal_entry_id INTEGER REFERENCES journal_entries(id),
-          posting_run_id INTEGER REFERENCES labor_posting_runs(id),
-          created_at TIMESTAMP DEFAULT NOW(),
-          CONSTRAINT labor_cost_records_source_punch_id_unique UNIQUE (source_punch_id)
+          source_punch_canonical_id TEXT,
+          clock_in TIMESTAMP NOT NULL,
+          clock_out TIMESTAMP NOT NULL,
+          hours_worked NUMERIC(10,4) NOT NULL,
+          rate_used NUMERIC(12,2) NOT NULL,
+          dollar_cost NUMERIC(12,2) NOT NULL,
+          cost_type TEXT NOT NULL,
+          rate_source TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
         )
       `);
-      await pool.query(`CREATE INDEX IF NOT EXISTS labor_cost_records_period_year_month_idx ON labor_cost_records(period_year, period_month)`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS labor_cost_records_employee_id_idx ON labor_cost_records(employee_id)`);
-      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(12,2)`);
-      await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS salary NUMERIC(12,2)`);
-      console.log('✅ Ensured labor_posting_runs, labor_cost_records tables and employees columns exist');
-    } catch (laborErr: any) {
-      console.warn('⚠️ Labor costing tables migration:', laborErr?.message);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS labor_account_config (
+          id SERIAL PRIMARY KEY,
+          direct_labor_account_id INTEGER NOT NULL REFERENCES chart_of_accounts(id),
+          overhead_labor_account_id INTEGER NOT NULL REFERENCES chart_of_accounts(id),
+          ga_labor_account_id INTEGER NOT NULL REFERENCES chart_of_accounts(id),
+          accrued_payroll_account_id INTEGER NOT NULL REFERENCES chart_of_accounts(id),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      // Seed the four required chart_of_accounts entries if missing
+      await pool.query(`
+        INSERT INTO chart_of_accounts (account_name, account_type)
+        VALUES
+          ('Direct Labor Expense', 'EXPENSE'),
+          ('Overhead Labor', 'EXPENSE'),
+          ('G&A Labor', 'EXPENSE'),
+          ('Accrued Payroll', 'LIABILITY')
+        ON CONFLICT (account_name) DO NOTHING
+      `);
+      // Seed a default labor_account_config if none exists
+      await pool.query(`
+        INSERT INTO labor_account_config (
+          direct_labor_account_id,
+          overhead_labor_account_id,
+          ga_labor_account_id,
+          accrued_payroll_account_id
+        )
+        SELECT
+          (SELECT id FROM chart_of_accounts WHERE account_name = 'Direct Labor Expense'),
+          (SELECT id FROM chart_of_accounts WHERE account_name = 'Overhead Labor'),
+          (SELECT id FROM chart_of_accounts WHERE account_name = 'G&A Labor'),
+          (SELECT id FROM chart_of_accounts WHERE account_name = 'Accrued Payroll')
+        WHERE NOT EXISTS (SELECT 1 FROM labor_account_config)
+      `);
+      console.log('✅ Ensured Labor → GL Posting Engine tables exist with seeded config');
+    } catch (laborGlErr: any) {
+      console.warn('⚠️ Labor GL posting engine migration:', laborGlErr?.message);
     }
 
     // Pre-warm the production simulation cache so the first page load is instant

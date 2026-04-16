@@ -9,6 +9,8 @@ import {
 } from '../../schema';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { processLaborCosts } from '../services/laborCostingService';
+import { postLaborToGL } from '../services/laborPostingService';
 
 const router = Router();
 
@@ -444,6 +446,73 @@ router.post('/calculate-allocations', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Calculate allocations error:', error);
     res.status(500).json({ error: 'Failed to calculate allocations' });
+  }
+});
+
+// ========================================
+// LABOR → GL POSTING ENGINE ROUTES
+// ========================================
+
+// POST /api/cost-accounting/calculate-labor-costs
+// Compute labor_cost_records for all employees with punches in the period.
+// Returns record count and cost totals by type.
+router.post('/calculate-labor-costs', async (req: Request, res: Response) => {
+  try {
+    const { year, month } = req.body;
+
+    if (!year || !month || typeof year !== 'number' || typeof month !== 'number') {
+      return res.status(400).json({ error: 'year (number) and month (number) are required' });
+    }
+
+    if (month < 1 || month > 12) {
+      return res.status(400).json({ error: 'month must be between 1 and 12' });
+    }
+
+    const result = await processLaborCosts(year, month);
+
+    res.json({
+      message: 'Labor costs calculated successfully',
+      runId: result.runId,
+      recordCount: result.recordCount,
+      totalsByType: result.totalsByType,
+    });
+  } catch (error: any) {
+    console.error('Calculate labor costs error:', error);
+    if (error.statusCode === 409 || (error.message && error.message.includes('already posted'))) {
+      return res.status(409).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message || 'Failed to calculate labor costs' });
+  }
+});
+
+// POST /api/cost-accounting/post-labor-to-gl
+// Create balanced double-entry journal entries for a calculated period.
+// Returns the posting run ID and journal entry IDs.
+router.post('/post-labor-to-gl', async (req: Request, res: Response) => {
+  try {
+    const { year, month, postedBy } = req.body;
+
+    if (!year || !month || typeof year !== 'number' || typeof month !== 'number') {
+      return res.status(400).json({ error: 'year (number) and month (number) are required' });
+    }
+
+    if (month < 1 || month > 12) {
+      return res.status(400).json({ error: 'month must be between 1 and 12' });
+    }
+
+    const result = await postLaborToGL(year, month, postedBy ?? 'system');
+
+    res.json({
+      message: 'Labor costs posted to GL successfully',
+      runId: result.runId,
+      journalEntryIds: result.journalEntryIds,
+    });
+  } catch (error: any) {
+    console.error('Post labor to GL error:', error);
+    if (error.statusCode === 409 || (error.message && error.message.includes('already been posted'))) {
+      return res.status(409).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message || 'Failed to post labor costs to GL' });
   }
 });
 

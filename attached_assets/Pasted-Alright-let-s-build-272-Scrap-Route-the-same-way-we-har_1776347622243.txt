@@ -1,0 +1,131 @@
+Alright — let’s build #272 Scrap Route the same way we hardened consume: clean, atomic, and audit-safe.
+I’m going to give you a copy/paste-ready route that matches your current system (Drizzle + existing schema + transaction pattern).
+
+🧱 #272 — Scrap Route Backend (FINAL IMPLEMENTATION)
+📍 Route
+POST /api/material-lots/:id/scrap
+
+✅ COPY / PASTE — Scrap Route
+Add this to:
+server/src/routes/materialLots.ts
+// POST /api/material-lots/:id/scraprouter.post("/:id/scrap", async (req, res) => {  try {    const lotId = req.params.id;    const {      qty,      reason,      performedBy,      notes,    }: {      qty: number;      reason: string;      performedBy: string;      notes?: string;    } = req.body;    if (!qty || qty <= 0) {      return res.status(400).json({ error: "INVALID_QTY" });    }    if (!reason) {      return res.status(400).json({ error: "SCRAP_REASON_REQUIRED" });    }    if (!performedBy) {      return res.status(400).json({ error: "PERFORMED_BY_REQUIRED" });    }    const lot = await storage.getMaterialLot(lotId);    if (!lot) {      return res.status(404).json({ error: "LOT_NOT_FOUND" });    }    const remaining = parseFloat(String(lot.remainingQty));    // ❌ Cannot scrap more than exists    if (qty > remaining) {      return res.status(400).json({        error: "INSUFFICIENT_LOT_QTY",        remaining,        requested: qty,      });    }    // ❌ Cannot scrap fully consumed lot    if (remaining <= 0) {      return res.status(400).json({        error: "LOT_ALREADY_EMPTY",      });    }    const result = await db.transaction(async (tx) => {      const newRemaining = remaining - qty;      const newStatus =        newRemaining <= 0 ? "SCRAPPED" : lot.status;      // 1. Update lot quantity      await tx        .update(materialLots)        .set({          remainingQty: newRemaining.toString(),          status: newStatus,          updatedAt: new Date(),        })        .where(eq(materialLots.id, lotId));      // 2. Write material lot transaction      await tx.insert(materialLotTransactions).values({        materialLotId: lot.id,        internalControlNumber: lot.internalControlNumber,        transactionType: "SCRAP",        qtyBefore: lot.remainingQty,        qtyChange: (-qty).toString(),        qtyAfter: newRemaining.toString(),        referenceType: "SCRAP_REPORT",        referenceId: lotId,        performedBy,        reason,        notes,      });      // 3. Write inventory transaction      await tx.insert(inventoryTransactions).values({        agPartNumber: lot.materialPartNumber,        transactionType: "scrap",        quantity: -qty,        unitOfMeasure: lot.unitOfMeasure,        referenceType: "SCRAP",        referenceId: lotId,        performedBy,        notes: `Scrapped from ICN ${lot.internalControlNumber}`,        metadata: {          materialLotId: lot.id,          internalControlNumber: lot.internalControlNumber,          reason,        },      });      // 4. Update inventory balance      const balance = await tx.query.inventoryBalances.findFirst({        where: eq(inventoryBalances.agPartNumber, lot.materialPartNumber),      });      if (balance) {        const newOnHand = balance.quantityOnHand - qty;        // Scrap does NOT affect allocation        const newAllocated = balance.quantityAllocated;        const newAvailable = newOnHand - newAllocated;        await tx          .update(inventoryBalances)          .set({            quantityOnHand: newOnHand,            quantityAllocated: newAllocated,            quantityAvailable: newAvailable,            updatedAt: new Date(),          })          .where(eq(inventoryBalances.id, balance.id));      }      return {        lotId,        newRemaining,        newStatus,      };    });    return res.status(201).json({      success: true,      ...result,    });  } catch (error) {    console.error("Error scrapping material lot:", error);    return res.status(500).json({      error: "SCRAP_FAILED",    });  }});
+
+🧠 Key Design Decisions (Important)
+✅ Scrap DOES:
+
+
+reduce remainingQty
+
+
+reduce inventory_balances.quantityOnHand
+
+
+write both transaction tables
+
+
+keep full audit trace
+
+
+❌ Scrap does NOT:
+
+
+touch reservations
+
+
+touch quantityAllocated
+
+
+reopen lots
+
+
+allow negative inventory
+
+
+👉 This is correct behavior for your system.
+
+⚠️ One Important Note (Future Improvement)
+Right now:
+referenceType: "SCRAP_REPORT"
+Later, you may want a full SCRAP REPORT system:
+
+
+NCR linkage
+
+
+defect type
+
+
+department
+
+
+operator accountability
+
+
+But for now, this is perfect.
+
+🧪 Test Cases (Run These)
+1. Normal scrap
+
+
+remaining = 10
+
+
+scrap = 3
+→ remaining = 7
+
+
+2. Full scrap
+
+
+remaining = 5
+
+
+scrap = 5
+→ status = SCRAPPED
+
+
+3. Over scrap
+
+
+remaining = 5
+
+
+scrap = 6
+→ ❌ blocked
+
+
+4. Scrap on empty lot
+→ ❌ blocked
+5. Balance sync
+
+
+confirm inventory balance decreases exactly by scrap qty
+
+
+
+🚀 After this
+Next step is:
+#273 — Return Route
+Then:
+#274 — Adjustment Route
+Then:
+Inventory History UI
+
+👊 Bottom line
+You now have:
+
+
+✅ Receive
+
+
+✅ Consume (hardened)
+
+
+✅ Scrap
+
+
+That’s core material control.
+
+When you add this, tell me:
+👉 “scrap done”
+and we’ll immediately build return flow (this is where things get really powerful for your shop floor)

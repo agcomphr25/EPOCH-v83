@@ -1,0 +1,1655 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Timekeeper API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: employees
+    description: Employee management
+  - name: punches
+    description: Punch events (clock-in/out)
+  - name: timesheets
+    description: Timesheet management
+  - name: certifications
+    description: Employee certifications
+  - name: settings
+    description: Application settings
+  - name: dashboard
+    description: Dashboard and reporting aggregates
+  - name: cost-codes
+    description: Cost code / labor distribution management
+  - name: leave
+    description: Leave and absence tracking
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── EMPLOYEES ────────────────────────────────────────────────────────────
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [employees]
+      summary: List all employees
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, inactive, all]
+            default: active
+        - in: query
+          name: department
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create a new employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /employees/{id}:
+    get:
+      operationId: getEmployee
+      tags: [employees]
+      summary: Get employee by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update employee
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeBody"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Delete employee
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /employees/{id}/status:
+    patch:
+      operationId: updateEmployeeStatus
+      tags: [employees]
+      summary: Activate or deactivate an employee
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeStatusBody"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  # ─── PUNCHES ──────────────────────────────────────────────────────────────
+  /punches:
+    get:
+      operationId: listPunches
+      tags: [punches]
+      summary: List punch events
+      parameters:
+        - in: query
+          name: employeeId
+          schema:
+            type: ["integer", "null"]
+        - in: query
+          name: from
+          schema:
+            type: ["string", "null"]
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: ["string", "null"]
+            format: date
+        - in: query
+          name: type
+          schema:
+            type: ["string", "null"]
+            enum: [clock_in, clock_out, break_start, break_end]
+      responses:
+        "200":
+          description: List of punch events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Punch"
+    post:
+      operationId: createPunch
+      tags: [punches]
+      summary: Record a new punch event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePunchBody"
+      responses:
+        "201":
+          description: Punch recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Punch"
+
+  /punches/{id}:
+    get:
+      operationId: getPunch
+      tags: [punches]
+      summary: Get punch by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Punch event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Punch"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePunch
+      tags: [punches]
+      summary: Edit a punch (admin correction)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePunchBody"
+      responses:
+        "200":
+          description: Updated punch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Punch"
+    delete:
+      operationId: deletePunch
+      tags: [punches]
+      summary: Delete a punch event
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /punches/employee/{employeeId}/current:
+    get:
+      operationId: getCurrentPunchStatus
+      tags: [punches]
+      summary: Get the current punch status for an employee (clocked in, on break, etc.)
+      parameters:
+        - in: path
+          name: employeeId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Current punch status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentPunchStatus"
+
+  # ─── COST CODES ──────────────────────────────────────────────────────────
+  /cost-codes:
+    get:
+      operationId: listCostCodes
+      tags: [cost-codes]
+      summary: List cost codes
+      parameters:
+        - in: query
+          name: active
+          schema:
+            type: ["boolean", "null"]
+      responses:
+        "200":
+          description: List of cost codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostCode"
+    post:
+      operationId: createCostCode
+      tags: [cost-codes]
+      summary: Create a cost code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCostCodeBody"
+      responses:
+        "201":
+          description: Cost code created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostCode"
+
+  /cost-codes/{id}:
+    patch:
+      operationId: updateCostCode
+      tags: [cost-codes]
+      summary: Update a cost code
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCostCodeBody"
+      responses:
+        "200":
+          description: Updated cost code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostCode"
+    delete:
+      operationId: deleteCostCode
+      tags: [cost-codes]
+      summary: Delete a cost code
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /kiosk/cost-codes:
+    get:
+      operationId: listKioskCostCodes
+      tags: [cost-codes]
+      summary: List active cost codes for kiosk display
+      responses:
+        "200":
+          description: Active cost codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostCode"
+
+  # ─── LEAVE ENTRIES ──────────────────────────────────────────────────────
+  /leave-entries:
+    get:
+      operationId: listLeaveEntries
+      tags: [leave]
+      summary: List leave entries
+      parameters:
+        - in: query
+          name: employeeId
+          schema:
+            type: integer
+        - in: query
+          name: from
+          schema:
+            type: string
+        - in: query
+          name: to
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of leave entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaveEntry"
+    post:
+      operationId: createLeaveEntry
+      tags: [leave]
+      summary: Create a leave entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeaveEntryBody"
+      responses:
+        "201":
+          description: Leave entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveEntry"
+
+  /leave-entries/{id}:
+    get:
+      operationId: getLeaveEntry
+      tags: [leave]
+      summary: Get a leave entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Leave entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveEntry"
+    patch:
+      operationId: updateLeaveEntry
+      tags: [leave]
+      summary: Update a leave entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeaveEntryBody"
+      responses:
+        "200":
+          description: Updated leave entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveEntry"
+    delete:
+      operationId: deleteLeaveEntry
+      tags: [leave]
+      summary: Delete a leave entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /timesheets/{id}/leave-summary:
+    get:
+      operationId: getTimesheetLeaveSummary
+      tags: [timesheets]
+      summary: Get leave hours summary for a timesheet period
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Leave summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimesheetLeaveSummary"
+
+  # ─── KIOSK ────────────────────────────────────────────────────────────────
+  /kiosk/punch:
+    post:
+      operationId: kioskPunch
+      tags: [punches]
+      summary: Kiosk punch action (smart clock-in/out/break)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KioskPunchBody"
+      responses:
+        "201":
+          description: Punch recorded with resolved action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KioskPunchResponse"
+
+  # ─── TIMESHEETS ───────────────────────────────────────────────────────────
+  /timesheets:
+    get:
+      operationId: listTimesheets
+      tags: [timesheets]
+      summary: List timesheets
+      parameters:
+        - in: query
+          name: employeeId
+          schema:
+            type: ["integer", "null"]
+        - in: query
+          name: status
+          schema:
+            type: ["string", "null"]
+            enum: [draft, submitted, approved, rejected]
+        - in: query
+          name: from
+          schema:
+            type: ["string", "null"]
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: ["string", "null"]
+            format: date
+      responses:
+        "200":
+          description: List of timesheets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Timesheet"
+    post:
+      operationId: createTimesheet
+      tags: [timesheets]
+      summary: Create a timesheet for a period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTimesheetBody"
+      responses:
+        "201":
+          description: Created timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+
+  /timesheets/{id}:
+    get:
+      operationId: getTimesheet
+      tags: [timesheets]
+      summary: Get timesheet by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateTimesheet
+      tags: [timesheets]
+      summary: Update timesheet
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTimesheetBody"
+      responses:
+        "200":
+          description: Updated timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+
+  /timesheets/{id}/submit:
+    post:
+      operationId: submitTimesheet
+      tags: [timesheets]
+      summary: Submit a timesheet for approval
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Submitted timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+
+  /timesheets/{id}/approve:
+    post:
+      operationId: approveTimesheet
+      tags: [timesheets]
+      summary: Approve a submitted timesheet
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+
+  /timesheets/{id}/reject:
+    post:
+      operationId: rejectTimesheet
+      tags: [timesheets]
+      summary: Reject a submitted timesheet
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectTimesheetBody"
+      responses:
+        "200":
+          description: Rejected timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+
+  /timesheets/{id}/recalculate:
+    post:
+      operationId: recalculateTimesheetHours
+      tags: [timesheets]
+      summary: Recalculate hours for a draft timesheet from current punch data
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recalculated timesheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timesheet"
+        "409":
+          description: Timesheet is not in draft status
+
+  /timesheets/{id}/punches:
+    get:
+      operationId: listTimesheetPunches
+      tags: [timesheets]
+      summary: List punches for a specific timesheet period (owner or admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Array of punches within the timesheet period
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Punch"
+        "403":
+          description: Not authorized to view this timesheet's punches
+        "404":
+          description: Timesheet not found
+
+  # ─── CERTIFICATIONS ───────────────────────────────────────────────────────
+  /certifications:
+    get:
+      operationId: listCertifications
+      tags: [certifications]
+      summary: List certifications
+      parameters:
+        - in: query
+          name: employeeId
+          schema:
+            type: ["integer", "null"]
+        - in: query
+          name: status
+          schema:
+            type: ["string", "null"]
+            enum: [active, expiring_soon, expired]
+      responses:
+        "200":
+          description: List of certifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Certification"
+    post:
+      operationId: createCertification
+      tags: [certifications]
+      summary: Add a certification for an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCertificationBody"
+      responses:
+        "201":
+          description: Created certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certification"
+
+  /certifications/{id}:
+    get:
+      operationId: getCertification
+      tags: [certifications]
+      summary: Get certification by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certification"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateCertification
+      tags: [certifications]
+      summary: Update certification
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCertificationBody"
+      responses:
+        "200":
+          description: Updated certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certification"
+    delete:
+      operationId: deleteCertification
+      tags: [certifications]
+      summary: Delete certification
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── SETTINGS ─────────────────────────────────────────────────────────────
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get application settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update application settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
+  # ─── DASHBOARD ────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/clocked-in:
+    get:
+      operationId: getClockedInEmployees
+      tags: [dashboard]
+      summary: Get list of currently clocked-in employees
+      responses:
+        "200":
+          description: Currently clocked-in employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClockedInEmployee"
+
+  /dashboard/weekly-hours:
+    get:
+      operationId: getWeeklyHours
+      tags: [dashboard]
+      summary: Get hours worked per day for the current week
+      parameters:
+        - in: query
+          name: employeeId
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Weekly hours breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyHours"
+
+  /dashboard/pending-timesheets:
+    get:
+      operationId: getPendingTimesheets
+      tags: [dashboard]
+      summary: Get timesheets pending approval
+      responses:
+        "200":
+          description: Pending timesheets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Timesheet"
+
+  /dashboard/expiring-certifications:
+    get:
+      operationId: getExpiringCertifications
+      tags: [dashboard]
+      summary: Get certifications expiring within 30 days
+      responses:
+        "200":
+          description: Expiring certifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Certification"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    # ─── EMPLOYEE ────────────────────────────────────────────────────────────
+    Employee:
+      type: object
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        department:
+          type: ["string", "null"]
+        jobTitle:
+          type: ["string", "null"]
+        employeeNumber:
+          type: ["string", "null"]
+        pin:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive]
+        hireDate:
+          type: ["string", "null"]
+          format: date
+        hourlyRate:
+          type: ["number", "null"]
+        timezone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - firstName
+        - lastName
+        - email
+        - status
+        - timezone
+        - createdAt
+        - updatedAt
+
+    CreateEmployeeBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        department:
+          type: ["string", "null"]
+        jobTitle:
+          type: ["string", "null"]
+        employeeNumber:
+          type: ["string", "null"]
+        pin:
+          type: ["string", "null"]
+        hireDate:
+          type: ["string", "null"]
+          format: date
+        hourlyRate:
+          type: ["number", "null"]
+        timezone:
+          type: string
+      required:
+        - firstName
+        - lastName
+        - email
+        - timezone
+
+    UpdateEmployeeBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: ["string", "null"]
+        department:
+          type: ["string", "null"]
+        jobTitle:
+          type: ["string", "null"]
+        employeeNumber:
+          type: ["string", "null"]
+        pin:
+          type: ["string", "null"]
+        hireDate:
+          type: ["string", "null"]
+          format: date
+        hourlyRate:
+          type: ["number", "null"]
+        timezone:
+          type: string
+
+    UpdateEmployeeStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, inactive]
+      required:
+        - status
+
+    # ─── PUNCH ──────────────────────────────────────────────────────────────
+    Punch:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: integer
+        type:
+          type: string
+          enum: [clock_in, clock_out, break_start, break_end]
+        punchedAt:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        note:
+          type: ["string", "null"]
+        source:
+          type: string
+          enum: [kiosk, web, admin, api]
+        isEdited:
+          type: boolean
+        editNote:
+          type: ["string", "null"]
+        costCode:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - employeeId
+        - type
+        - punchedAt
+        - timezone
+        - source
+        - isEdited
+        - createdAt
+        - updatedAt
+
+    CreatePunchBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        type:
+          type: string
+          enum: [clock_in, clock_out, break_start, break_end]
+        punchedAt:
+          type: ["string", "null"]
+          format: date-time
+        timezone:
+          type: ["string", "null"]
+        note:
+          type: ["string", "null"]
+        source:
+          type: string
+          enum: [kiosk, web, admin, api]
+        costCode:
+          type: ["string", "null"]
+      required:
+        - employeeId
+        - type
+        - source
+
+    UpdatePunchBody:
+      type: object
+      properties:
+        punchedAt:
+          type: string
+          format: date-time
+        note:
+          type: ["string", "null"]
+        editNote:
+          type: ["string", "null"]
+        costCode:
+          type: ["string", "null"]
+
+    KioskPunchBody:
+      type: object
+      properties:
+        employeeId:
+          type: ["integer", "null"]
+        pin:
+          type: ["string", "null"]
+        timezone:
+          type: ["string", "null"]
+        requestedAction:
+          type: ["string", "null"]
+          enum: [clock_in, clock_out, break_start, break_end, null]
+          description: >
+            Explicit punch action override. When omitted the server resolves
+            the action automatically based on the employee's current status.
+            Use this when the kiosk UI presents explicit break/clock-out options.
+        costCode:
+          type: ["string", "null"]
+      description: At least one of employeeId or pin must be provided
+
+    KioskPunchResponse:
+      type: object
+      properties:
+        punch:
+          $ref: "#/components/schemas/Punch"
+        action:
+          type: string
+          enum: [clock_in, clock_out, break_start, break_end]
+        employee:
+          $ref: "#/components/schemas/Employee"
+        message:
+          type: string
+      required:
+        - punch
+        - action
+        - employee
+        - message
+
+    CurrentPunchStatus:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        status:
+          type: string
+          enum: [clocked_out, clocked_in, on_break]
+        lastPunch:
+          $ref: "#/components/schemas/Punch"
+        clockedInAt:
+          type: ["string", "null"]
+          format: date-time
+        hoursToday:
+          type: number
+      required:
+        - employeeId
+        - status
+        - hoursToday
+
+    # ─── TIMESHEET ──────────────────────────────────────────────────────────
+    Timesheet:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: integer
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, submitted, approved, rejected]
+        totalHours:
+          type: number
+        regularHours:
+          type: number
+        overtimeHours:
+          type: number
+        rejectionNote:
+          type: ["string", "null"]
+        submittedAt:
+          type: ["string", "null"]
+          format: date-time
+        reviewedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - employeeId
+        - periodStart
+        - periodEnd
+        - status
+        - totalHours
+        - regularHours
+        - overtimeHours
+        - createdAt
+        - updatedAt
+
+    CreateTimesheetBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+      required:
+        - employeeId
+        - periodStart
+        - periodEnd
+
+    UpdateTimesheetBody:
+      type: object
+      properties:
+        totalHours:
+          type: number
+        regularHours:
+          type: number
+        overtimeHours:
+          type: number
+
+    RejectTimesheetBody:
+      type: object
+      properties:
+        rejectionNote:
+          type: string
+      required:
+        - rejectionNote
+
+    # ─── CERTIFICATION ──────────────────────────────────────────────────────
+    Certification:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: integer
+        name:
+          type: string
+        issuedBy:
+          type: ["string", "null"]
+        issuedDate:
+          type: ["string", "null"]
+          format: date
+        expiresDate:
+          type: ["string", "null"]
+          format: date
+        certNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, expiring_soon, expired]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - employeeId
+        - name
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateCertificationBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        name:
+          type: string
+        issuedBy:
+          type: ["string", "null"]
+        issuedDate:
+          type: ["string", "null"]
+          format: date
+        expiresDate:
+          type: ["string", "null"]
+          format: date
+        certNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - employeeId
+        - name
+
+    UpdateCertificationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        issuedBy:
+          type: ["string", "null"]
+        issuedDate:
+          type: ["string", "null"]
+          format: date
+        expiresDate:
+          type: ["string", "null"]
+          format: date
+        certNumber:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    # ─── SETTINGS ───────────────────────────────────────────────────────────
+    Settings:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyName:
+          type: string
+        timezone:
+          type: string
+        overtimeThresholdDaily:
+          type: number
+        overtimeThresholdWeekly:
+          type: number
+        roundingRuleMinutes:
+          type: integer
+        breakDurationMinutes:
+          type: integer
+        requireBreakAfterHours:
+          type: number
+        workweekStartDay:
+          type: integer
+          description: 0=Sunday, 1=Monday
+        kioskRequirePin:
+          type: boolean
+        kioskTimeoutSeconds:
+          type: integer
+          description: Idle timeout in seconds before kiosk auto-resets (default 60)
+        standardWorkWeekHours:
+          type: number
+        kioskMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - companyName
+        - timezone
+        - overtimeThresholdDaily
+        - overtimeThresholdWeekly
+        - roundingRuleMinutes
+        - breakDurationMinutes
+        - requireBreakAfterHours
+        - workweekStartDay
+        - kioskRequirePin
+        - kioskTimeoutSeconds
+        - standardWorkWeekHours
+        - createdAt
+        - updatedAt
+
+    UpdateSettingsBody:
+      type: object
+      properties:
+        companyName:
+          type: string
+        timezone:
+          type: string
+        overtimeThresholdDaily:
+          type: number
+        overtimeThresholdWeekly:
+          type: number
+        roundingRuleMinutes:
+          type: integer
+        breakDurationMinutes:
+          type: integer
+        requireBreakAfterHours:
+          type: number
+        workweekStartDay:
+          type: integer
+        kioskRequirePin:
+          type: boolean
+        kioskTimeoutSeconds:
+          type: integer
+        standardWorkWeekHours:
+          type: number
+        kioskMessage:
+          type: ["string", "null"]
+
+    # ─── DASHBOARD ──────────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      properties:
+        totalEmployees:
+          type: integer
+        activeEmployees:
+          type: integer
+        clockedInNow:
+          type: integer
+        onBreakNow:
+          type: integer
+        pendingTimesheets:
+          type: integer
+        hoursThisWeek:
+          type: number
+        overtimeHoursThisWeek:
+          type: number
+        expiringCertifications:
+          type: integer
+      required:
+        - totalEmployees
+        - activeEmployees
+        - clockedInNow
+        - onBreakNow
+        - pendingTimesheets
+        - hoursThisWeek
+        - overtimeHoursThisWeek
+        - expiringCertifications
+
+    ClockedInEmployee:
+      type: object
+      properties:
+        employee:
+          $ref: "#/components/schemas/Employee"
+        clockedInAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [clocked_in, on_break]
+        hoursToday:
+          type: number
+      required:
+        - employee
+        - clockedInAt
+        - status
+        - hoursToday
+
+    DailyHours:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        hours:
+          type: number
+        regularHours:
+          type: number
+        overtimeHours:
+          type: number
+      required:
+        - date
+        - hours
+        - regularHours
+        - overtimeHours
+
+    CostCode:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - code
+        - active
+        - createdAt
+        - updatedAt
+
+    CreateCostCodeBody:
+      type: object
+      properties:
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        active:
+          type: boolean
+      required:
+        - code
+
+    UpdateCostCodeBody:
+      type: object
+      properties:
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        active:
+          type: boolean
+
+    LeaveEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: integer
+        date:
+          type: string
+          format: date
+        leaveType:
+          type: string
+          enum: [pto, sick, holiday, bereavement, other]
+        hours:
+          type: number
+        note:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - employeeId
+        - date
+        - leaveType
+        - hours
+        - createdAt
+        - updatedAt
+
+    CreateLeaveEntryBody:
+      type: object
+      properties:
+        employeeId:
+          type: integer
+        date:
+          type: string
+        leaveType:
+          type: string
+          enum: [pto, sick, holiday, bereavement, other]
+        hours:
+          type: number
+        note:
+          type: ["string", "null"]
+      required:
+        - employeeId
+        - date
+        - leaveType
+        - hours
+
+    UpdateLeaveEntryBody:
+      type: object
+      properties:
+        date:
+          type: string
+        leaveType:
+          type: string
+          enum: [pto, sick, holiday, bereavement, other]
+        hours:
+          type: number
+        note:
+          type: ["string", "null"]
+
+    TimesheetLeaveSummary:
+      type: object
+      properties:
+        workedHours:
+          type: number
+        leaveHours:
+          type: number
+        totalAccountedHours:
+          type: number
+        leaveEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaveEntry"
+      required:
+        - workedHours
+        - leaveHours
+        - totalAccountedHours
+        - leaveEntries

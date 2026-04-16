@@ -1,0 +1,407 @@
+You are working inside the EPOCH codebase.
+
+Your task is to build the FIRST FOUNDATION for a simple, DCAA-aware project costing engine without introducing Costpoint-style complexity.
+
+IMPORTANT RULES:
+- Do not invent a parallel architecture if similar tables or flows already exist.
+- First audit what already exists in the repo.
+- Reuse existing patterns, schema conventions, API conventions, UI conventions, and naming where possible.
+- Keep this implementation lean and production-safe.
+- Do not add overhead allocation, GL posting, charge string complexity, or cost center complexity in this prompt.
+- Do not break existing order, production, customer, or finance flows.
+- Do not remove existing functionality unless absolutely necessary and clearly documented.
+
+==================================================
+GOAL
+==================================================
+
+Build the minimum viable DCAA-aware project costing foundation using this structure:
+
+Customer
+  -> Contract (Prime PO)
+  -> CLIN (optional)
+  -> Line Items
+  -> Project
+  -> Work Steps
+  -> Time Entries
+  -> Material Transactions
+
+This prompt is only for:
+1. schema audit
+2. schema additions / extensions
+3. backend/API foundation
+4. minimal admin setup UI if needed
+5. no major styling detours
+
+==================================================
+PHASE 1 — AUDIT CURRENT REALITY
+==================================================
+
+Before changing anything, inspect and report on the CURRENT implementation for all of the following:
+
+1. Existing order-related tables
+   - all_orders
+   - sales_orders
+   - production_orders
+   - packing slips
+   - invoices
+   - any contract / PO related fields
+   - any existing line item tables
+
+2. Existing project/job tables
+   - project tables
+   - job tables
+   - traveler / routing / step tables
+   - any task / operation / work center / step models
+
+3. Existing labor/timekeeping tables
+   - employees
+   - time entries
+   - punches
+   - timesheets
+   - approvals
+   - audit trails
+
+4. Existing inventory/material issue tables
+   - inventory transactions
+   - material allocation
+   - job material usage
+   - scrap tracking
+
+5. Existing audit/logging patterns
+   - generic audit tables
+   - created_at / updated_at / updated_by / status history patterns
+
+6. Existing API and route conventions
+   - route organization
+   - service layer patterns
+   - validation patterns
+   - auth/role enforcement patterns
+
+7. Existing UI conventions
+   - admin setup pages
+   - tables/forms
+   - modal vs page patterns
+   - naming conventions already visible to end users
+
+Output a concise “REALITY AUDIT” before implementing:
+- what already exists
+- what can be reused
+- what must be added
+- what must NOT be duplicated
+
+==================================================
+PHASE 2 — TARGET DATA MODEL
+==================================================
+
+Implement the following structure, but adapt intelligently to the existing repo.
+
+A. contracts
+Purpose:
+- represent the customer-facing contract vehicle / prime PO
+
+Fields:
+- id
+- customer_id
+- prime_po_number
+- description
+- status
+- received_date
+- created_at
+- updated_at
+
+B. clins
+Purpose:
+- optional contract line item number / funding bucket
+
+Fields:
+- id
+- contract_id
+- clin_number
+- description
+- funded_amount (nullable)
+- created_at
+- updated_at
+
+C. contract_line_items
+Purpose:
+- actual PO line items for quantity/price tracking
+
+Fields:
+- id
+- contract_id
+- clin_id (nullable)
+- line_number
+- item_number / part_number (nullable if existing item relation is better)
+- description
+- quantity_ordered
+- unit_price
+- created_at
+- updated_at
+
+D. projects
+If a project table already exists, extend it instead of duplicating.
+Need ability to tie project to:
+- contract_id
+- clin_id (nullable)
+
+Target fields:
+- id
+- code
+- name
+- contract_id
+- clin_id
+- status
+- created_at
+- updated_at
+
+E. work_steps
+If an equivalent already exists (routing steps, production areas, operations, work centers, traveler steps), reuse or extend it.
+Need a simple operational work-step structure for:
+- Layup
+- CNC
+- Final Trim
+- QC
+- Shipping
+Do NOT build a complex WBS hierarchy yet unless the repo already has one.
+
+Target fields:
+- id
+- code (optional if consistent with current patterns)
+- name
+- is_active
+- created_at
+- updated_at
+
+F. time_entries
+If timekeeping tables already exist, extend carefully rather than duplicating.
+Need DCAA-aware labor entry structure:
+
+- id
+- employee_id
+- project_id
+- work_step_id
+- entry_date
+- hours
+- notes (nullable)
+- created_at
+- created_by
+- submitted_at (nullable)
+- approved_at (nullable)
+- approved_by (nullable)
+- locked boolean default false
+
+G. material_transactions
+If existing inventory/material transaction tables can support this, extend instead of duplicating.
+Need ability to associate material cost to project + work_step.
+
+Target fields:
+- id
+- project_id
+- work_step_id
+- inventory_item_id (nullable if no stable inventory table)
+- description
+- quantity (nullable)
+- unit_cost (nullable)
+- total_cost
+- transaction_date
+- created_at
+- created_by
+
+==================================================
+PHASE 3 — DCAA-SAFE RULES
+==================================================
+
+Implement these basic controls:
+
+1. Time entry must be tied to:
+- employee
+- project
+- work_step
+- date
+- hours
+
+2. Submitted time entries should not be silently editable.
+If edited after submission:
+- either require unlock/admin flow
+- or create a clear audit/history trail
+Use the codebase’s existing audit pattern if available.
+
+3. Approved + locked entries must not be editable by normal users.
+
+4. Do NOT auto-fill fake hours.
+No silent population of 8-hour days.
+
+5. Preserve created/updated timestamps and actor identity where patterns already exist.
+
+==================================================
+PHASE 4 — API / BACKEND
+==================================================
+
+Build or extend backend endpoints/services for:
+
+1. Contracts
+- list
+- create
+- update
+
+2. CLINs
+- list by contract
+- create
+- update
+
+3. Contract line items
+- list by contract
+- create
+- update
+
+4. Projects
+- list
+- create
+- update
+- include contract/CLIN linkage
+
+5. Work steps
+- list active
+- create/update if admin tooling exists
+
+6. Time entries
+- create
+- update (subject to locking rules)
+- list by date range / employee / project
+- submit daily or weekly batch if consistent with current UX
+
+7. Material transactions
+- create
+- list by project/date range
+
+Also add one foundational reporting endpoint:
+
+8. Project cost summary
+Given project_id, return:
+- total labor hours
+- total labor cost (if employee rates exist; if not, return hours only and flag missing rate model)
+- total material cost
+- combined direct cost
+
+IMPORTANT:
+If employee hourly rates already live somewhere stable, use them.
+If they do not, do not invent a bad payroll model—just surface labor hours now and document the gap clearly.
+
+==================================================
+PHASE 5 — UI FOUNDATION
+==================================================
+
+Add only the minimum UI needed to support setup and testing.
+
+Prefer existing admin/setup sections if they already exist.
+
+Need:
+
+1. Contract setup screen
+- basic list + create/edit
+- supports prime PO number and customer association
+
+2. CLIN setup inside contract detail
+- add/edit CLIN rows
+
+3. Contract line item setup inside contract detail
+- add/edit line items
+
+4. Project setup/update form
+- allow linking to contract and optional CLIN
+
+5. Work step management
+- only if no equivalent already exists
+
+6. Simple time entry screen or admin test screen
+Must allow:
+- employee
+- project
+- work step
+- date
+- hours
+- notes
+And visibly show:
+- submitted
+- approved
+- locked state
+
+No major visual redesign.
+Follow current component/style conventions exactly.
+
+==================================================
+PHASE 6 — REPORTING / VALIDATION
+==================================================
+
+Create a simple project detail / summary output that shows:
+
+Project
+- code
+- name
+- linked contract
+- linked CLIN
+
+Direct Cost Summary
+- labor hours
+- labor cost if available
+- material cost
+- total direct cost
+
+Related records
+- recent time entries
+- recent material transactions
+
+If possible, place this in an existing project detail page/tab rather than inventing a disconnected new dashboard.
+
+==================================================
+PHASE 7 — DELIVERABLE FORMAT
+==================================================
+
+When done, provide a structured implementation report with:
+
+1. REALITY AUDIT
+- what existed
+- what was reused
+- what was added
+
+2. SCHEMA CHANGES
+- each table added/extended
+- each important field
+- any migrations created
+
+3. API CHANGES
+- routes/endpoints/services added or modified
+
+4. UI CHANGES
+- pages/components added or modified
+
+5. DCAA CONTROL NOTES
+- how lock/submit/approve behavior works
+- what remains incomplete for stronger compliance later
+
+6. KNOWN GAPS / PHASE 2 RECOMMENDATIONS
+Examples:
+- employee labor rate source missing
+- no approval workflow yet
+- no overhead allocation yet
+- no GL posting yet
+- no charge code engine yet
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+This prompt is successful if EPOCH can now do the following:
+
+- store a customer-facing PO/contract
+- optionally store CLINs
+- store PO line items
+- link a project to a contract and optional CLIN
+- log labor time by employee/project/work step/date
+- lock/submit/approve time in a basic controlled way
+- log material cost by project/work step
+- show a simple project direct-cost summary
+
+Do not overbuild beyond this scope.
+Build a clean, extendable foundation.

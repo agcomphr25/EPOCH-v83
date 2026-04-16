@@ -699,6 +699,15 @@ import {
 import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
 import { normalizeKey } from './lib/customerKey';
 import { computeP1Queue } from './src/helpers/p1POQueueHelper';
+import {
+  sumLaborHoursFromEntries,
+  collectUniqueDepartments,
+  extractQuotedLaborFromLineItems,
+  computeLaborVariance,
+  computeActualLeadTimeDays,
+  computeScheduleVarianceDays,
+  determineOverrunFlag,
+} from './src/helpers/quoteFeedbackHelper';
 
 // Helper: Explicit column selection for production_orders table
 // Explicitly list all columns needed by getAllOrders() normalization logic.
@@ -23450,28 +23459,13 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // 4. Determine quoted labor hours
-    // Priority 1: explicit quote.laborHours field — the quotes table has no such column yet.
-    // Priority 2 (fallback): identify labor line items by description keyword matching.
-    //   Sum their `quantity` as hours when the description contains labor-related terms.
-    //   This is a deterministic, auditable heuristic; the source is noted in the summary.
-    // Priority 3: null with a code comment when no labor data is recoverable.
+    // 4. Determine quoted labor hours via keyword-matched line items
     let quotedLaborHours: number | null = null;
     let quotedLaborSource: 'line_items' | 'none' = 'none';
     if (quoteRow && lineItemRows.length > 0) {
-      const LABOR_KEYWORDS = /\b(labor|labour|man.?hour|engineering|machining|fabrication|welding|assembly|finishing|setup)\b/i;
-      const laborItems = lineItemRows.filter(
-        (li) => li.description && LABOR_KEYWORDS.test(li.description)
-      );
-      if (laborItems.length > 0) {
-        const summedHours = laborItems.reduce((sum, li) => sum + (li.quantity ?? 0), 0);
-        if (summedHours > 0) {
-          quotedLaborHours = Math.round(summedHours * 100) / 100;
-          quotedLaborSource = 'line_items';
-        }
-      }
-      // If no labor-keyed line items matched, quotedLaborHours remains null.
-      // This is the correct behavior: leave null rather than silently misattribute hours.
+      const extracted = extractQuotedLaborFromLineItems(lineItemRows);
+      quotedLaborHours = extracted.hours;
+      quotedLaborSource = extracted.source;
     }
 
     // Quoted departments: not captured on the current quote schema; left null.
@@ -23480,105 +23474,55 @@ export class DatabaseStorage implements IStorage {
     // 5. Load all WADs for this project
     const wads = await this.getWorkOrdersByProject(projectId);
 
-    // 6. Sum actual labor hours from time clock entries linked to each WAD
-    let totalActualHours = 0;
-    const departmentSet = new Set<string>();
-
+    // 6. Collect all time clock entries across every WAD
+    const allEntries: Array<{ clockIn: Date | null; clockOut: Date | null; department: string | null }> = [];
     for (const wad of wads) {
       const entries = await db
         .select()
         .from(timeClockEntries)
         .where(eq(timeClockEntries.productionWorkOrderId, wad.id));
-
-      for (const entry of entries) {
-        // Only count entries where both clock-in and clock-out are present
-        if (entry.clockIn && entry.clockOut) {
-          const ms = new Date(entry.clockOut).getTime() - new Date(entry.clockIn).getTime();
-          const hours = ms / (1000 * 60 * 60);
-          if (hours > 0) {
-            totalActualHours += hours;
-          }
-        }
-        // Collect unique department names across all WADs
-        if (entry.department) {
-          departmentSet.add(entry.department);
-        }
+      for (const e of entries) {
+        allEntries.push({ clockIn: e.clockIn, clockOut: e.clockOut, department: e.department ?? null });
       }
     }
 
-    const actualLaborHours: number | null = wads.length > 0 ? Math.round(totalActualHours * 100) / 100 : null;
-    const actualDepartments: string[] = Array.from(departmentSet).sort();
+    // 7. Sum labor hours and collect unique departments using pure helpers
+    const totalActualHours = sumLaborHoursFromEntries(allEntries);
+    const actualLaborHours: number | null = wads.length > 0 ? totalActualHours : null;
+    const actualDepartments: string[] = collectUniqueDepartments(allEntries);
 
-    // 7. Labor variance (only when both sides are known)
-    let laborHoursVariance: number | null = null;
-    let laborHoursVariancePct: number | null = null;
-    if (quotedLaborHours !== null && actualLaborHours !== null) {
-      laborHoursVariance = Math.round((actualLaborHours - quotedLaborHours) * 100) / 100;
-      laborHoursVariancePct =
-        quotedLaborHours !== 0
-          ? Math.round((laborHoursVariance / quotedLaborHours) * 10000) / 100
-          : null;
-    }
+    // 8. Labor variance (only when both sides are known)
+    const { laborHoursVariance, laborHoursVariancePct } = computeLaborVariance(
+      quotedLaborHours,
+      actualLaborHours
+    );
 
-    // 8. Load project closing
+    // 9. Load project closing
     const closing = await this.getProjectClosingByProjectId(projectId);
     const projectClosingId: number | null = closing?.id ?? null;
 
-    // 9. Schedule variance
+    // 10. Schedule variance
     // Quoted lead time: not available from quote schema — left null until schema is extended.
     const quotedLeadTimeDays: number | null = null;
 
-    // Actual lead time resolution priority:
-    //   1. project.createdAt → project.actualShipDate (most precise)
-    //   2. project.createdAt → closing.approvedAt (formal closing date)
-    //   3. Earliest WAD startDate → latest WAD dueDate (WAD-level span as proxy)
-    let actualLeadTimeDays: number | null = null;
-    const startAnchor = project.createdAt ? new Date(project.createdAt) : null;
+    const actualLeadTimeDays = computeActualLeadTimeDays(
+      project.createdAt,
+      project.actualShipDate,
+      closing?.approvedAt ?? null,
+      wads
+    );
 
-    if (startAnchor) {
-      if (project.actualShipDate) {
-        const msElapsed = new Date(project.actualShipDate).getTime() - startAnchor.getTime();
-        actualLeadTimeDays = Math.round(msElapsed / (1000 * 60 * 60 * 24));
-      } else if (closing?.approvedAt) {
-        const msElapsed = new Date(closing.approvedAt).getTime() - startAnchor.getTime();
-        actualLeadTimeDays = Math.round(msElapsed / (1000 * 60 * 60 * 24));
-      } else if (wads.length > 0) {
-        // Fallback: derive from WAD date spans (startDate → dueDate across all WADs)
-        const wadStarts = wads
-          .map((w) => (w.startDate ? new Date(w.startDate).getTime() : null))
-          .filter((d): d is number => d !== null);
-        const wadDues = wads
-          .map((w) => (w.dueDate ? new Date(w.dueDate).getTime() : null))
-          .filter((d): d is number => d !== null);
-        if (wadStarts.length > 0 && wadDues.length > 0) {
-          const earliestWadStart = Math.min(...wadStarts);
-          const latestWadDue = Math.max(...wadDues);
-          const msElapsed = latestWadDue - earliestWadStart;
-          actualLeadTimeDays = Math.round(msElapsed / (1000 * 60 * 60 * 24));
-        }
-      }
-    }
+    const scheduleVarianceDays = computeScheduleVarianceDays(
+      quotedLeadTimeDays,
+      actualLeadTimeDays,
+      project.targetShipDate ?? null,
+      project.actualShipDate ?? null
+    );
 
-    // Schedule variance: actual − quoted (positive = overrun, negative = ahead of schedule)
-    let scheduleVarianceDays: number | null = null;
-    if (quotedLeadTimeDays !== null && actualLeadTimeDays !== null) {
-      scheduleVarianceDays = actualLeadTimeDays - quotedLeadTimeDays;
-    } else if (project.targetShipDate && project.actualShipDate) {
-      // Fallback: compare target vs actual ship date when quoted lead time is unavailable
-      const targetMs = new Date(project.targetShipDate).getTime();
-      const actualMs = new Date(project.actualShipDate).getTime();
-      scheduleVarianceDays = Math.round((actualMs - targetMs) / (1000 * 60 * 60 * 24));
-    }
+    // 11. Overrun flag
+    const isOverrun = determineOverrunFlag(laborHoursVariance, scheduleVarianceDays);
 
-    // 10. Overrun flag (true if either labor or schedule exceeded quoted/target values)
-    const laborOverrun = laborHoursVariance !== null && laborHoursVariance > 0;
-    const scheduleOverrun = scheduleVarianceDays !== null && scheduleVarianceDays > 0;
-    const isOverrun: boolean | null =
-      laborHoursVariance !== null || scheduleVarianceDays !== null
-        ? laborOverrun || scheduleOverrun
-        : null;
-
-    // 11. Extract closing lessons (risks from whatWentWrong, one line per risk)
+    // 12. Extract closing lessons (risks from whatWentWrong, one line per risk)
     const keyRisks: string[] | null = closing?.whatWentWrong
       ? closing.whatWentWrong
           .split('\n')
@@ -23590,7 +23534,7 @@ export class DatabaseStorage implements IStorage {
     const recommendedQuotingNotes: string | null =
       closing?.nextProjectRecommendations ?? null;
 
-    // 12. Build a human-readable summary
+    // 13. Build a human-readable summary
     const summaryParts: string[] = [`Feedback for project ${project.projectCode} (${project.projectName}).`];
     if (linkedQuoteId && quoteRow) {
       summaryParts.push(`Linked to quote ${quoteRow.quoteNumber}.`);
@@ -23623,7 +23567,7 @@ export class DatabaseStorage implements IStorage {
     }
     const summary = summaryParts.join(' ');
 
-    // 13. Upsert the feedback record (insert-or-update on projectId unique constraint)
+    // 14. Upsert the feedback record (insert-or-update on projectId unique constraint)
     const [upserted] = await db
       .insert(quoteExecutionFeedback)
       .values({

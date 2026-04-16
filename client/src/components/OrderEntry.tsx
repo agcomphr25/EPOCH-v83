@@ -180,6 +180,10 @@ export default function OrderEntry() {
   const [orderId, setOrderId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Synchronous ref guard — prevents re-entrant handleSubmit calls that can slip
+  // through before React re-renders the disabled state (e.g. Enter key + button
+  // click arriving in the same tick, or rapid double-click).
+  const submitInFlightRef = useRef(false);
   const [hasCustomerPO, setHasCustomerPO] = useState(false);
   const [customerPO, setCustomerPO] = useState('');
   const [fbOrderNumber, setFbOrderNumber] = useState('');
@@ -2428,7 +2432,12 @@ export default function OrderEntry() {
       e.preventDefault();
     }
 
-    if (isSubmitting) return;
+    // Guard against re-entrant calls using a synchronous ref — React state updates
+    // are async, so `isSubmitting` may not reflect the latest value yet when a
+    // second invocation arrives in the same render cycle (e.g. Enter key + button
+    // click, or two rapid button taps).
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
 
     setErrors({});
     setIsSubmitting(true);
@@ -2526,6 +2535,7 @@ export default function OrderEntry() {
         });
       }
     } finally {
+      submitInFlightRef.current = false;
       setIsSubmitting(false);
     }
   };

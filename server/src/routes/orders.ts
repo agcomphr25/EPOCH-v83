@@ -621,10 +621,37 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Per-order in-flight guard: rejects concurrent duplicate finalize requests before
+// they reach the DB.  Trigger confirmed as UI double-submit (React state async gap);
+// each blocked attempt is written to order_activity_events for observability.
+const ordersBeingFinalized = new Set<string>();
+
 // Create order - with or without signature requirement based on whether stock is selected
 router.post('/finalized', async (req: Request, res: Response) => {
+  // Declare outside try so finally can release the guard reliably
+  let incomingOrderId: string | null = null;
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
+    incomingOrderId = orderData.orderId || null;
+
+    // Reject concurrent duplicate requests for the same order_id with HTTP 409
+    // and write an instrumentation event so patterns are observable over time.
+    if (incomingOrderId && ordersBeingFinalized.has(incomingOrderId)) {
+      console.warn(`⚠️ DUPLICATE FINALIZE BLOCKED: ${incomingOrderId} already in-flight`);
+      await db.insert(orderActivityEvents).values({
+        orderId: incomingOrderId,
+        eventType: 'finalize_duplicate_blocked',
+        eventCategory: 'order',
+        source: 'api',
+        sourceRoute: 'POST /api/orders/finalized',
+        actorDisplayName: (req as any).user?.username || 'unknown',
+        metadata: { reason: 'concurrent_request', guardType: 'in_flight_set' },
+      }).catch(() => {}); // non-blocking — don't fail the response on a log error
+      return res.status(409).json({
+        error: `Order ${incomingOrderId} is already being finalized`,
+      });
+    }
+    if (incomingOrderId) ordersBeingFinalized.add(incomingOrderId);
     
     // Determine if stock is selected (has modelId and it's not "no_stock" or similar)
     // Normalize the modelId for checking (trim whitespace and convert to lowercase)
@@ -1178,6 +1205,9 @@ router.post('/finalized', async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: 'Failed to create order' });
+  } finally {
+    // Release in-flight guard so retries after genuine failures are allowed
+    if (incomingOrderId) ordersBeingFinalized.delete(incomingOrderId);
   }
 });
 

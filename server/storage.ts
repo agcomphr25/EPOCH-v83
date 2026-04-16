@@ -18552,13 +18552,35 @@ export class DatabaseStorage implements IStorage {
       discountValueType: typeof finalizedOrderData.discountValue,
     });
 
-    // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    const result = await db
+    // Insert into all_orders using ON CONFLICT DO NOTHING so the operation is fully
+    // atomic and race-safe. The conflict target is the unique index on order_id
+    // (all_orders_order_id_unique). If a concurrent request already inserted this
+    // order_id, the INSERT is a no-op and we fall back to fetching the existing row.
+    const insertResult = await db
       .insert(allOrders)
       .values(finalizedOrderData)
+      .onConflictDoNothing({ target: allOrders.orderId })
       .returning();
-    
-    const finalizedOrder = result[0];
+
+    let finalizedOrder: AllOrder;
+    if (insertResult.length === 0) {
+      console.warn(
+        `⚠️ CREATE SKIPPED: Order ${orderData.orderId} already exists in all_orders — returning existing row`
+      );
+      const existing = await db
+        .select()
+        .from(allOrders)
+        .where(eq(allOrders.orderId, orderData.orderId!))
+        .limit(1);
+      if (!existing[0]) {
+        throw new Error(
+          `Order ${orderData.orderId} conflict detected but row not found — possible race condition`
+        );
+      }
+      finalizedOrder = existing[0];
+    } else {
+      finalizedOrder = insertResult[0];
+    }
 
     // Log the auto-addition to Production Queue
     console.log(
@@ -18702,7 +18724,7 @@ export class DatabaseStorage implements IStorage {
     const insertResult = await db
       .insert(allOrders)
       .values(finalizedOrderData)
-      .onConflictDoNothing()
+      .onConflictDoNothing({ target: allOrders.orderId })
       .returning();
 
     if (insertResult.length === 0) {
@@ -18715,6 +18737,11 @@ export class DatabaseStorage implements IStorage {
         .from(allOrders)
         .where(eq(allOrders.orderId, orderId))
         .limit(1);
+      if (!existing[0]) {
+        throw new Error(
+          `Order ${orderId} conflict detected but row not found — possible race condition`
+        );
+      }
       finalizedOrder = existing[0];
     } else {
       finalizedOrder = insertResult[0];

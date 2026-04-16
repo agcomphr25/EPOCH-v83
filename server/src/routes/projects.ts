@@ -65,6 +65,7 @@ const updateProjectRequestSchema = z.object({
   currentStage: z.enum(VALID_PIPELINE_STAGES).optional().nullable(),
   notes: z.string().optional().nullable(),
   updatedBy: z.number().optional(),
+  force: z.boolean().optional(),
 });
 
 const STEP_TO_STAGE_MAP: Record<string, string> = {
@@ -490,7 +491,29 @@ router.patch('/:id', async (req, res) => {
       });
     }
     
-    const validatedData = validationResult.data;
+    const { force, ...validatedData } = validationResult.data;
+
+    if (validatedData.status === 'completed') {
+      const existing = await storage.getProject(id);
+      const isTransitionToCompleted = existing && existing.status !== 'completed';
+      if (isTransitionToCompleted) {
+        const isAdmin = (req.user?.role || '').toUpperCase() === 'ADMIN';
+        if (force && !isAdmin) {
+          return res.status(403).json({
+            message: 'Only admins can bypass the closing record requirement.',
+          });
+        }
+        if (!force) {
+          const closing = await storage.getProjectClosingByProjectId(id);
+          if (!closing) {
+            return res.status(409).json({
+              message: 'Cannot mark project as completed without a closing record. Please create a closing/lessons-learned record first.',
+            });
+          }
+        }
+      }
+    }
+
     const updatePayload: any = { ...validatedData };
     if (validatedData.currentStage) {
       updatePayload.stageUpdatedAt = new Date();

@@ -1,0 +1,197 @@
+#264 - Use Quote Feedback to Suggest Labor and Risk Adjustments on New Quotes
+What & Why
+
+You now have:
+
+Quote data ✅
+Actual execution data (WAD + Time) ✅
+Closing data (risks, lessons) ✅
+Feedback snapshot (#263) ✅
+
+👉 Now we use it during quoting
+
+This ticket makes EPOCH:
+
+“When you quote something similar… it tells you what happened last time”
+
+🎯 Goal
+
+When creating or editing a quote:
+
+System finds similar past projects
+→ shows actual vs quoted labor
+→ highlights risks + overruns
+→ suggests adjustments
+🧱 Done Looks Like
+Quote creation flow can:
+fetch similar past projects
+display feedback summaries
+System returns:
+past quoted hours
+actual hours
+variance %
+departments used
+key risks
+recommendations
+Backend endpoint exists:
+/api/quotes/suggestions
+Suggestions include:
+labor adjustment recommendations
+risk flags
+No UI required beyond returning structured data
+No existing quote logic is broken
+🚀 Tasks
+1. Add Similarity Engine (Backend Logic)
+
+📁 server/src/lib/quoteSuggestions.ts
+
+export function findSimilarProjects(projects, input) {
+  return projects.filter(p => {
+    return (
+      p.partNumber === input.partNumber ||
+      p.projectType === input.projectType ||
+      p.customerId === input.customerId
+    );
+  });
+}
+
+👉 Keep it simple for now:
+
+partNumber match
+OR project type
+OR customer
+2. Storage Method
+
+Add to IStorage:
+
+getQuoteSuggestions(input: {
+  partNumber?: string;
+  projectType?: string;
+  customerId?: string;
+});
+Implementation
+async getQuoteSuggestions(input) {
+  const feedback = await db.select().from(quoteExecutionFeedback);
+
+  return feedback.filter(f => {
+    return (
+      (input.partNumber && f.partNumber === input.partNumber) ||
+      (input.projectType && f.projectType === input.projectType) ||
+      (input.customerId && f.customerId === input.customerId)
+    );
+  });
+}
+3. Build Suggestion Aggregator
+
+📁 server/src/lib/quoteSuggestionEngine.ts
+
+export function buildSuggestionSummary(feedbackList) {
+  if (!feedbackList.length) return null;
+
+  const avgVariance =
+    feedbackList.reduce((sum, f) => sum + Number(f.laborVariancePercent || 0), 0) /
+    feedbackList.length;
+
+  const avgActualHours =
+    feedbackList.reduce((sum, f) => sum + Number(f.actualLaborHours || 0), 0) /
+    feedbackList.length;
+
+  return {
+    avgVariancePercent: avgVariance,
+    avgActualLaborHours: avgActualHours,
+    overrunRisk: avgVariance > 10,
+    recommendedAdjustment:
+      avgVariance > 0 ? `Increase estimate by ${avgVariance.toFixed(1)}%` : "No increase needed"
+  };
+}
+4. Add Route
+
+📁 server/src/routes/quotes.ts
+
+router.post("/suggestions", async (req, res) => {
+  const { partNumber, projectType, customerId } = req.body;
+
+  const feedback = await storage.getQuoteSuggestions({
+    partNumber,
+    projectType,
+    customerId
+  });
+
+  const summary = buildSuggestionSummary(feedback);
+
+  res.json({
+    matches: feedback,
+    summary
+  });
+});
+5. Include Risk + Lessons
+
+Enhance response:
+
+res.json({
+  matches: feedback,
+  summary,
+  risks: feedback.flatMap(f => f.keyRisks || []),
+  strengths: feedback.map(f => f.keyStrengths),
+  opportunities: feedback.map(f => f.keyOpportunities),
+  recommendations: feedback.map(f => f.recommendedQuotingNotes)
+});
+6. Suggested Output Structure
+{
+  "summary": {
+    "avgVariancePercent": 22.5,
+    "avgActualLaborHours": 148,
+    "overrunRisk": true,
+    "recommendedAdjustment": "Increase estimate by 22.5%"
+  },
+  "risks": [
+    "Layup rework",
+    "Supplier delay"
+  ],
+  "recommendations": [
+    "Add 15% buffer for layup",
+    "Validate supplier lead time earlier"
+  ]
+}
+🧪 Acceptance Tests
+1. Create past projects with feedback
+some with overruns
+some without
+2. Call:
+POST /api/quotes/suggestions
+3. Confirm:
+similar projects returned
+avg variance correct
+recommendation makes sense
+risks included
+⚠️ Rules
+do NOT auto-modify quotes yet
+do NOT require suggestions
+do NOT overfit matching logic yet
+🔥 What This Unlocks
+
+After this:
+
+You now have:
+historical intelligence in quoting
+repeat issue detection
+labor estimation improvement
+real-world feedback loop
+🧭 What Comes Next
+#265 — Auto-Apply Suggestions to Quote Builder
+pre-fill labor estimates
+highlight high-risk quotes
+require justification for under-quoting
+💡 Straight Talk
+
+At this point:
+
+You now have:
+
+execution data
+cost tracking
+lessons learned
+feedback loop
+suggestion engine
+
+👉 That is the foundation of a self-improving ERP

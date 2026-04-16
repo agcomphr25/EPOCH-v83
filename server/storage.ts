@@ -10303,7 +10303,7 @@ export class DatabaseStorage implements IStorage {
       // Build IN clause manually (Neon SQL doesn't support array parameters well)
       const poIdsList = poIds.join(',');
       const queryResult = await pool.query(`
-        SELECT po_id, po_item_id, production_status
+        SELECT po_id, po_item_id, production_status, current_department
         FROM production_orders
         WHERE po_id IN (${poIdsList})
       `);
@@ -10329,7 +10329,12 @@ export class DatabaseStorage implements IStorage {
       const stats = itemMap.get(poItemId)!;
       stats.total++;
       // Check if production_status indicates fulfillment (Shipped or Completed)
-      if (prodOrder.production_status === 'Shipped' || prodOrder.production_status === 'Completed') {
+      // Also treat orders currently in Shipping QC as fulfilled — they are done with production
+      if (
+        prodOrder.production_status === 'Shipped' ||
+        prodOrder.production_status === 'Completed' ||
+        prodOrder.current_department === 'Shipping QC'
+      ) {
         stats.fulfilled++;
       }
     }

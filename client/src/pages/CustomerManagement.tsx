@@ -649,6 +649,8 @@ export default function CustomerManagement() {
   const [filterActive, setFilterActive] = useState<
     'all' | 'active' | 'inactive'
   >('all');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterState, setFilterState] = useState<string>('all');
   const [sortField, setSortField] = useState<null | 'type' | 'state'>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
@@ -775,21 +777,7 @@ export default function CustomerManagement() {
       apiRequest(`/api/addresses?customerId=${selectedCustomer?.id}`),
   });
 
-  // Filter customers based on search and status
-  const filteredCustomers = customers.filter((customer: Customer) => {
-    const matchesSearch =
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesFilter =
-      filterActive === 'all' ||
-      (filterActive === 'active' && customer.isActive) ||
-      (filterActive === 'inactive' && !customer.isActive);
-
-    return matchesSearch && matchesFilter;
-  });
-
-  // Precompute default state per customer for efficient sorting
+  // Precompute default state per customer for efficient sorting and filtering
   const customerDefaultStateMap = useMemo(() => {
     const map: Record<number, string> = {};
     if (addressesData) {
@@ -806,6 +794,37 @@ export default function CustomerManagement() {
     }
     return map;
   }, [addressesData]);
+
+  // Derive distinct states present in customer data for the state filter dropdown
+  const availableStates = useMemo(() => {
+    const stateSet = new Set<string>();
+    for (const state of Object.values(customerDefaultStateMap)) {
+      if (state) stateSet.add(state);
+    }
+    return Array.from(stateSet).sort();
+  }, [customerDefaultStateMap]);
+
+  // Filter customers based on search, status, type, and state
+  const filteredCustomers = customers.filter((customer: Customer) => {
+    const matchesSearch =
+      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.email?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter =
+      filterActive === 'all' ||
+      (filterActive === 'active' && customer.isActive) ||
+      (filterActive === 'inactive' && !customer.isActive);
+
+    const matchesType =
+      filterType === 'all' ||
+      (customer.customerType ?? '') === filterType;
+
+    const matchesState =
+      filterState === 'all' ||
+      (customerDefaultStateMap[customer.id] ?? '') === filterState.toLowerCase();
+
+    return matchesSearch && matchesFilter && matchesType && matchesState;
+  });
 
   // Sort customers by type or state
   const sortedCustomers = sortField
@@ -1911,6 +1930,36 @@ export default function CustomerManagement() {
                 <SelectItem value="all">All Customers</SelectItem>
                 <SelectItem value="active">Active Only</SelectItem>
                 <SelectItem value="inactive">Inactive Only</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filterType}
+              onValueChange={(value) => setFilterType(value)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {customerTypes.map((ct) => (
+                  <SelectItem key={ct.id} value={ct.name}>{ct.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filterState}
+              onValueChange={(value) => setFilterState(value)}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Filter by state" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All States</SelectItem>
+                {availableStates.map((state) => (
+                  <SelectItem key={state} value={state}>{state.toUpperCase()}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

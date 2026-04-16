@@ -324,6 +324,7 @@ async function initializeBackgroundServices() {
           '0032_canonical_customer_key.sql',
           '0033_v_all_shipments.sql',
           '0037_project_closing_approval_fields.sql',
+          '0039_routing_operation_certification_id.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {

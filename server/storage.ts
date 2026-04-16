@@ -22947,25 +22947,49 @@ export class DatabaseStorage implements IStorage {
     });
     if (!routing) return true;
 
-    // Check if any routing operations require certification
-    const [certRequired] = await db
-      .select({ id: routingOperations.id })
+    // Fetch all operations that require certification for this routing
+    const certOps = await db
+      .select({
+        certificationId: routingOperations.certificationId,
+        operationName: routingOperations.operationName,
+      })
       .from(routingOperations)
       .where(and(
         eq(routingOperations.partRoutingId, routing.id),
         eq(routingOperations.requiresCertification, true)
-      ))
-      .limit(1);
+      ));
 
-    if (!certRequired) return true;
+    if (certOps.length === 0) return true;
 
-    // At least one operation requires certification — verify at least one active
-    // employee certification exists in the system (table is not in the ORM schema
-    // but is present in the database; use raw SQL to query it)
-    const result = await db.execute(
-      sql`SELECT id FROM employee_certifications WHERE is_active = true LIMIT 1`
-    );
-    return (result.rows ?? []).length > 0;
+    // Any operation marked as requiring certification but with no specific cert
+    // assigned is an unmapped gap — block until it is resolved
+    const unmapped = certOps.find((op) => op.certificationId === null);
+    if (unmapped) return false;
+
+    // Collect unique certification IDs required across all operations
+    const requiredCertIds = [...new Set(certOps.map((op) => op.certificationId as number))];
+
+    // For each required certification, confirm at least one active employee holds
+    // an active, non-expired record for it. employee_certifications is not in the
+    // Drizzle ORM schema so we query via raw SQL; join employees to ensure the
+    // employee themselves is still active (not terminated/inactive).
+    for (const certId of requiredCertIds) {
+      const covered = await db.execute(
+        sql`SELECT ec.id
+            FROM employee_certifications ec
+            JOIN employees e ON e.id = ec.employee_id
+            WHERE ec.certification_id = ${certId}
+              AND ec.is_active = true
+              AND (ec.expiry_date IS NULL OR ec.expiry_date >= CURRENT_DATE)
+              AND e.is_active = true
+            LIMIT 1`
+      );
+      if ((covered.rows ?? []).length === 0) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   async updateWorkOrderStatus(workOrderId: string, status: string): Promise<ProductionWorkOrder> {

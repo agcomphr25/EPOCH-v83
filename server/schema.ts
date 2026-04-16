@@ -4707,6 +4707,7 @@ export const routingOperations = pgTable('routing_operations', {
 
   requiresSignature: boolean('requires_signature').default(false),
   requiresCertification: boolean('requires_certification').default(false),
+  certificationId: integer('certification_id').references(() => certifications.id),
 
   isOutsideProcess: boolean('is_outside_process').default(false),
   vendorId: integer('vendor_id'),

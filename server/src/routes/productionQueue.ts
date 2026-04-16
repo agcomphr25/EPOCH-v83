@@ -592,6 +592,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
         AND po.status != 'CANCELED'
         AND (po.is_cancelled IS NULL OR po.is_cancelled = false)
         AND (poi.order_count < poi.quantity OR poi.order_count IS NULL)
+        AND (poi.stock_status IS NULL OR poi.stock_status NOT IN ('SHIPPED', 'FULFILLED'))
       ORDER BY po.expected_delivery ASC, po.created_at ASC
     `;
 

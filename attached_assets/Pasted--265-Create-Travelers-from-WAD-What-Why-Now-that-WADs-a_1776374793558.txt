@@ -1,0 +1,126 @@
+#265 - Create Travelers from WAD
+
+What & Why
+Now that WADs are auto-created from Projects/Quotes, the next step is to make the execution layer generate from that WAD backbone instead of relying on loose manual traveler setup.
+
+Target flow:
+
+Quote → Project → WAD → Traveler
+
+This makes WAD the real execution parent and removes the gap between planning and shop-floor execution.
+
+Done looks like
+A traveler can be created directly from a production WAD
+Traveler is automatically linked with productionWorkOrderId
+Traveler inherits or is passed:
+part number
+part name/description when available
+quantity
+project linkage context
+If a routing exists for the WAD part, traveler generation uses it
+If no routing exists, creation fails cleanly with a clear error
+WAD can list and create its travelers through API
+Existing traveler creation routes are not removed
+Out of scope
+UI page changes
+auto-creating travelers immediately on WAD creation
+multi-traveler explosion logic for complex assemblies
+backfilling old WADs
+removing legacy traveler creation paths
+Tasks
+1. Storage methods
+
+Add to IStorage and implement in server/storage.ts:
+
+createTravelerFromProductionWorkOrder(workOrderId: string, createdBy?: string | number)
+getProductionWorkOrderWithProject(workOrderId: string)
+findRoutingForProductionWorkOrder(workOrderId: string)
+
+Behavior:
+
+load the WAD
+resolve routing by part number / inventory item / existing routing logic
+create traveler using your existing traveler-from-routing path if possible
+set productionWorkOrderId on the created traveler
+preserve legacy workOrderId behavior untouched
+2. Reuse existing traveler generation logic
+
+Your codebase already has traveler generation from routing. Reuse that path instead of building a second traveler builder.
+
+Preferred flow:
+
+WAD → resolve routing
+routing → existing traveler creation logic
+patch traveler with productionWorkOrderId
+3. Add WAD traveler creation route
+
+Extend server/src/routes/workOrders.ts:
+
+POST /api/work-orders/:id/travelers/create
+
+Behavior:
+
+validates WAD id
+creates traveler from WAD
+returns created traveler
+rejects if:
+WAD not found
+routing not found
+traveler already exists and you choose one-traveler-per-WAD for now
+4. Add WAD traveler list route if not already present
+
+If not already done or if current route is minimal:
+
+GET /api/work-orders/:id/travelers
+
+Should return all travelers linked to that WAD, newest first.
+
+5. Optional duplicate rule
+
+For first version, choose one of these and document it:
+
+allow many travelers per WAD
+or block duplicate creation if a traveler already exists for that WAD
+
+Recommended for now:
+
+allow many only if explicitly needed
+otherwise block duplicates to keep rollout simple
+6. Response payload
+
+Created traveler response should include:
+
+traveler id
+traveler number
+productionWorkOrderId
+part number
+status
+routing reference if available
+Relevant files
+server/storage.ts
+server/schema.ts
+server/src/routes/workOrders.ts
+server/src/routes/travelers.ts
+Acceptance checklist
+ WAD can create a traveler through API
+ created traveler has productionWorkOrderId
+ existing routing generation logic is reused
+ clean error when no routing exists
+ WAD traveler list works
+ legacy traveler creation still works
+Suggested live tests
+Create or use a real WAD with a valid part/routing.
+Call POST /api/work-orders/:id/travelers/create.
+Confirm traveler is created and linked to WAD.
+Call GET /api/work-orders/:id/travelers.
+Confirm linked traveler appears.
+Test a WAD with no routing and confirm clean rejection.
+Why this is the right next move
+
+This is the bridge from:
+
+planning data
+to
+actual executable floor work
+
+Once this is done, the next strongest move is the command center, because then you’ll have enough controlled data to show real readiness and blockage across the plant.

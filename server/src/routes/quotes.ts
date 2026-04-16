@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
-import { quotes, quoteLineItems, insertQuoteSchema, insertQuoteLineItemSchema, type QuoteExecutionFeedback } from '../../schema';
+import { quotes, quoteLineItems, projectSteps, insertQuoteSchema, insertQuoteLineItemSchema, type QuoteExecutionFeedback } from '../../schema';
 import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { randomUUID } from 'crypto';
@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { storage } from '../../storage';
+import { ensureProjectHasWAD } from '../lib/wadHelper';
 
 const router = Router();
 
@@ -262,6 +263,71 @@ router.post('/api/quotes/submit', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Submit quote error:', error);
     res.status(500).json({ error: 'Failed to submit quote' });
+  }
+});
+
+// Update quote status (e.g., ACCEPTED, REJECTED, EXPIRED)
+router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
+  try {
+    const quoteId = req.params.id;
+    const { status } = req.body;
+
+    const VALID_STATUSES = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+
+    const [quote] = await db.select().from(quotes).where(eq(quotes.id, quoteId));
+    if (!quote) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    const [updated] = await db
+      .update(quotes)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(quotes.id, quoteId))
+      .returning();
+
+    if (status === 'ACCEPTED' && quote.status !== 'ACCEPTED') {
+      try {
+        // Check if a project already exists that is linked to this quote via
+        // its project step (stepType = 'quote', linkedQuoteId = quoteId).
+        const existingSteps = await db
+          .select({ projectId: projectSteps.projectId })
+          .from(projectSteps)
+          .where(eq(projectSteps.linkedQuoteId, quoteId))
+          .limit(1);
+
+        let projectId: string;
+
+        if (existingSteps.length > 0) {
+          projectId = existingSteps[0].projectId;
+          console.log(`[WAD] Quote ${quote.quoteNumber} already linked to project ${projectId}, ensuring WAD exists`);
+        } else {
+          const nextCode = await storage.getNextProjectCode();
+          const project = await storage.createProject({
+            projectCode: nextCode,
+            projectName: `${quote.customerName} — ${quote.quoteNumber}`,
+            customerId: quote.customerId,
+            description: quote.description ?? null,
+            status: 'active',
+          });
+          projectId = project.id;
+          console.log(`[WAD] Auto-created project ${project.projectCode} from accepted quote ${quote.quoteNumber}`);
+        }
+
+        await ensureProjectHasWAD(projectId, {
+          projectName: `${quote.customerName} — ${quote.quoteNumber}`,
+        });
+      } catch (err) {
+        console.error('[WAD] Failed to auto-create project/WAD on quote acceptance:', err);
+      }
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Update quote status error:', error);
+    res.status(500).json({ error: 'Failed to update quote status' });
   }
 });
 

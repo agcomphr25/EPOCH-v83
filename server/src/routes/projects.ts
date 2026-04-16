@@ -5,6 +5,7 @@ import { db, pool } from '../../db';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
+import { ensureProjectHasWAD } from '../lib/wadHelper';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -457,7 +458,11 @@ router.post('/', async (req, res) => {
         startedAt: stepType.order === 1 ? new Date() : null,
       });
     }
-    
+
+    await ensureProjectHasWAD(project.id, { projectName: project.projectName }).catch((err) => {
+      console.error('[WAD] Failed to auto-create WAD on project creation:', err);
+    });
+
     const creatorSnapshot = req.body.createdBy
       ? await createEmployeeIdentitySnapshot(req.body.createdBy)
       : null;

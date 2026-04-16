@@ -53,7 +53,11 @@ import {
   ShieldAlert,
   ListChecks,
   Plus,
-  Save
+  Save,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Minus
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -224,6 +228,31 @@ interface ProjectClosingAction {
   dueDate: string | null;
   status: 'open' | 'in_progress' | 'completed' | 'cancelled';
   createdAt: string;
+}
+
+interface QuoteExecutionFeedback {
+  id: string;
+  quoteId: string | null;
+  projectId: string;
+  projectClosingId: number | null;
+  generatedAt: string;
+  quotedLaborHours: number | null;
+  actualLaborHours: number | null;
+  laborHoursVariance: number | null;
+  laborHoursVariancePct: number | null;
+  quotedDepartments: string[] | null;
+  actualDepartments: string[] | null;
+  quotedLeadTimeDays: number | null;
+  actualLeadTimeDays: number | null;
+  scheduleVarianceDays: number | null;
+  isOverrun: boolean | null;
+  summary: string | null;
+  keyRisks: string[] | null;
+  keyStrengths: string | null;
+  keyOpportunities: string | null;
+  recommendedQuotingNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const STEP_CONFIG: Record<string, { label: string; route: string; icon: typeof FileText }> = {
@@ -543,6 +572,27 @@ export default function ProjectDetailPage() {
       toast({ title: 'Closing record updated', description: 'Lessons learned have been saved.' });
     },
     onError: (err: any) => toast({ title: 'Update failed', description: err?.message || 'Could not update closing record.', variant: 'destructive' }),
+  });
+
+  const { data: quoteFeedback, isLoading: isLoadingFeedback } = useQuery<QuoteExecutionFeedback | null>({
+    queryKey: ['/api/projects', id, 'quote-feedback'],
+    queryFn: () =>
+      fetch(`/api/projects/${id}/quote-feedback`, { credentials: 'include' }).then(async r => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error('Failed to fetch quote feedback');
+        return r.json();
+      }),
+    enabled: !!id,
+  });
+
+  const regenerateFeedbackMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/projects/${id}/quote-feedback/generate`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'quote-feedback'] });
+      toast({ title: 'Quote comparison refreshed', description: 'The snapshot has been updated with the latest data.' });
+    },
+    onError: (err: any) => toast({ title: 'Regenerate failed', description: err?.message || 'Could not regenerate quote feedback.', variant: 'destructive' }),
   });
 
   const addRiskMutation = useMutation({
@@ -2258,6 +2308,200 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Quote vs Actual Comparison ── */}
+          {!isLoadingFeedback && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <TrendingUp className="h-4 w-4" />
+                      Quote vs Actual Comparison
+                    </CardTitle>
+                    {quoteFeedback && (
+                      <CardDescription className="mt-1">
+                        Generated {format(new Date(quoteFeedback.generatedAt), 'MMM d, yyyy')}
+                      </CardDescription>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => regenerateFeedbackMutation.mutate()}
+                    disabled={regenerateFeedbackMutation.isPending}
+                    data-testid="button-regenerate-feedback"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${regenerateFeedbackMutation.isPending ? 'animate-spin' : ''}`} />
+                    {regenerateFeedbackMutation.isPending ? 'Generating…' : 'Regenerate'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!quoteFeedback ? (
+                  <div className="text-center py-8 space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      No quote comparison snapshot yet. Click <strong>Regenerate</strong> to build one from the project's labor records and quote data.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Overrun Banner */}
+                    {quoteFeedback.isOverrun && (
+                      <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        <span className="text-sm font-medium">This project exceeded its quoted hours or schedule — review the figures below.</span>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    {quoteFeedback.summary && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
+                        <p className="text-sm whitespace-pre-wrap bg-muted/40 rounded-lg p-3">{quoteFeedback.summary}</p>
+                      </div>
+                    )}
+
+                    {/* Labor Hours */}
+                    {(quoteFeedback.quotedLaborHours != null || quoteFeedback.actualLaborHours != null) && (
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Labor Hours</p>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-lg border p-4 text-center">
+                            <p className="text-xs text-muted-foreground mb-1">Quoted</p>
+                            <p className="text-2xl font-bold">{quoteFeedback.quotedLaborHours?.toFixed(1) ?? '—'}</p>
+                            <p className="text-xs text-muted-foreground">hrs</p>
+                          </div>
+                          <div className="rounded-lg border p-4 text-center">
+                            <p className="text-xs text-muted-foreground mb-1">Actual</p>
+                            <p className="text-2xl font-bold">{quoteFeedback.actualLaborHours?.toFixed(1) ?? '—'}</p>
+                            <p className="text-xs text-muted-foreground">hrs</p>
+                          </div>
+                          <div className={`rounded-lg border p-4 text-center ${quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance > 0 ? 'border-red-300 bg-red-50 dark:bg-red-950' : quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance < 0 ? 'border-green-300 bg-green-50 dark:bg-green-950' : ''}`}>
+                            <p className="text-xs text-muted-foreground mb-1">Variance</p>
+                            <div className="flex items-center justify-center gap-1">
+                              {quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance > 0 && <TrendingUp className="h-4 w-4 text-red-600" />}
+                              {quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance < 0 && <TrendingDown className="h-4 w-4 text-green-600" />}
+                              {quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance === 0 && <Minus className="h-4 w-4 text-muted-foreground" />}
+                              <p className={`text-2xl font-bold ${quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance > 0 ? 'text-red-700 dark:text-red-300' : quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance < 0 ? 'text-green-700 dark:text-green-300' : ''}`}>
+                                {quoteFeedback.laborHoursVariance != null ? (quoteFeedback.laborHoursVariance > 0 ? '+' : '') + quoteFeedback.laborHoursVariance.toFixed(1) : '—'}
+                              </p>
+                            </div>
+                            {quoteFeedback.laborHoursVariancePct != null && (
+                              <p className="text-xs text-muted-foreground">
+                                ({quoteFeedback.laborHoursVariancePct > 0 ? '+' : ''}{quoteFeedback.laborHoursVariancePct.toFixed(1)}%)
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Schedule */}
+                    {(quoteFeedback.quotedLeadTimeDays != null || quoteFeedback.actualLeadTimeDays != null) && (
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Schedule (Lead Time)</p>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-lg border p-4 text-center">
+                            <p className="text-xs text-muted-foreground mb-1">Quoted Lead Time</p>
+                            <p className="text-2xl font-bold">{quoteFeedback.quotedLeadTimeDays ?? '—'}</p>
+                            <p className="text-xs text-muted-foreground">days</p>
+                          </div>
+                          <div className="rounded-lg border p-4 text-center">
+                            <p className="text-xs text-muted-foreground mb-1">Actual Lead Time</p>
+                            <p className="text-2xl font-bold">{quoteFeedback.actualLeadTimeDays ?? '—'}</p>
+                            <p className="text-xs text-muted-foreground">days</p>
+                          </div>
+                          {quoteFeedback.scheduleVarianceDays != null && (
+                            <div className={`rounded-lg border p-4 text-center ${quoteFeedback.scheduleVarianceDays > 0 ? 'border-red-300 bg-red-50 dark:bg-red-950' : quoteFeedback.scheduleVarianceDays < 0 ? 'border-green-300 bg-green-50 dark:bg-green-950' : ''}`}>
+                              <p className="text-xs text-muted-foreground mb-1">Variance</p>
+                              <div className="flex items-center justify-center gap-1">
+                                {quoteFeedback.scheduleVarianceDays > 0 && <TrendingUp className="h-4 w-4 text-red-600" />}
+                                {quoteFeedback.scheduleVarianceDays < 0 && <TrendingDown className="h-4 w-4 text-green-600" />}
+                                {quoteFeedback.scheduleVarianceDays === 0 && <Minus className="h-4 w-4 text-muted-foreground" />}
+                                <p className={`text-2xl font-bold ${quoteFeedback.scheduleVarianceDays > 0 ? 'text-red-700 dark:text-red-300' : quoteFeedback.scheduleVarianceDays < 0 ? 'text-green-700 dark:text-green-300' : ''}`}>
+                                  {quoteFeedback.scheduleVarianceDays > 0 ? '+' : ''}{quoteFeedback.scheduleVarianceDays}
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted-foreground">days</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Departments */}
+                    {(quoteFeedback.quotedDepartments?.length || quoteFeedback.actualDepartments?.length) ? (
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Departments Involved</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {quoteFeedback.quotedDepartments?.length ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Quoted</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {quoteFeedback.quotedDepartments.map(d => (
+                                  <Badge key={d} variant="outline">{d}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {quoteFeedback.actualDepartments?.length ? (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Actual</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {quoteFeedback.actualDepartments.map(d => (
+                                  <Badge key={d} variant="secondary">{d}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Key Risks / Lessons */}
+                    {quoteFeedback.keyRisks?.length ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Key Risks & Lessons</p>
+                        <ul className="space-y-1">
+                          {quoteFeedback.keyRisks.map((r, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <AlertCircle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                              {r}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {/* Strengths */}
+                    {quoteFeedback.keyStrengths && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Strengths</p>
+                        <p className="text-sm whitespace-pre-wrap">{quoteFeedback.keyStrengths}</p>
+                      </div>
+                    )}
+
+                    {/* Opportunities */}
+                    {quoteFeedback.keyOpportunities && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Opportunities for Future Quotes</p>
+                        <p className="text-sm whitespace-pre-wrap">{quoteFeedback.keyOpportunities}</p>
+                      </div>
+                    )}
+
+                    {/* Recommended Quoting Notes */}
+                    {quoteFeedback.recommendedQuotingNotes && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recommended Quoting Notes</p>
+                        <p className="text-sm whitespace-pre-wrap bg-muted/40 rounded-lg p-3">{quoteFeedback.recommendedQuotingNotes}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

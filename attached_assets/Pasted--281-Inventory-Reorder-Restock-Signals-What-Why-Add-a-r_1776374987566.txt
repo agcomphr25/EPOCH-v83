@@ -1,0 +1,167 @@
+#281 — Inventory Reorder / Restock Signals
+What & Why
+
+Add a reorder/restock signal layer so EPOCH can turn inventory visibility into purchasing and planning action. By this point, inventory has lot control, transaction history, adjustments, reconciliation, and a control-center direction. The next step is surfacing which materials need attention before they become shortages. Material Inventory already exposes lot status, quantity, alerts, and action patterns, so this build should feel like a planning-focused extension of that inventory workflow.
+
+Done looks like
+A reorder/restock view exists, either as:
+a new page such as /inventory/restock-signals, or
+a section inside the Inventory Control Center
+Each material row shows:
+part number
+material name
+quantity on hand
+quantity allocated
+quantity available
+reorder point
+shortage amount or restock gap
+status: healthy / low stock / below reorder / critical
+Users can:
+search by part number or material name
+filter to only low-stock / below-reorder items
+Rows are clearly prioritized
+Read-only in phase 1
+No PO is created yet
+No auto-buy logic yet
+Why this is next
+
+Up to now, most inventory work has been about control and correctness. The next operational value is prevention:
+
+catch shortages before they block production
+help purchasing know what needs attention
+help planners see which materials are constrained
+
+This is the logical bridge between inventory control and purchasing.
+
+Out of scope
+automatic PO creation
+vendor selection
+lead time forecasting
+min/max planning engine
+demand forecasting by work order
+buyer approvals
+ERP-to-supplier integrations
+Backend tasks
+1. Add a restock signals endpoint
+
+For example:
+
+GET /api/inventory/restock-signals
+2. Build rows from inventory balance data
+
+Use inventory_balances as the base, since it already tracks:
+
+quantityOnHand
+quantityAllocated
+quantityAvailable
+reorderPoint
+
+Join or enrich with material master data so each row includes:
+
+agPartNumber
+materialName
+3. Compute restock metrics
+
+For each row:
+
+restockGap = Math.max(0, reorderPoint - quantityAvailable)
+
+Suggested status rules:
+
+healthy → quantityAvailable > reorderPoint
+low_stock → quantityAvailable <= reorderPoint
+critical → quantityAvailable <= 0
+optional warning → within 10–20% above reorder point
+4. Suggested response shape
+type RestockSignalRow = {
+  agPartNumber: string;
+  materialName: string;
+  quantityOnHand: number;
+  quantityAllocated: number;
+  quantityAvailable: number;
+  reorderPoint: number;
+  restockGap: number;
+  signalStatus: 'healthy' | 'low_stock' | 'critical';
+  locationCount?: number;
+};
+5. Keep it read-only
+
+Do not create or modify inventory or POs in this ticket.
+
+Frontend tasks
+New page
+
+Create:
+
+client/src/pages/InventoryRestockSignalsPage.tsx
+1. Query the endpoint
+const { data = [], isLoading } = useQuery<RestockSignalRow[]>({
+  queryKey: ['/api/inventory/restock-signals'],
+});
+2. Add summary cards
+
+Top cards:
+
+below reorder
+critical
+total restock gap
+total tracked materials
+3. Add search + filter controls
+
+Filters:
+
+all
+low stock
+critical
+
+Search:
+
+part number
+material name
+4. Add table
+
+Columns:
+
+part number
+material name
+on hand
+allocated
+available
+reorder point
+restock gap
+status
+5. Add row highlighting
+critical → destructive styling
+low stock → warning styling
+healthy → neutral
+6. Optional link-back
+
+Each row should have a “View Inventory” action or row click that opens Material Inventory filtered by that part number. The current Material Inventory page already has search behavior and a clear table pattern, so linking back to it will feel natural.
+
+Suggested UI behavior
+Summary cards
+Critical
+Below Reorder
+Total Restock Gap
+Tracked Materials
+Table priority
+
+Sort by:
+
+critical
+largest restock gap
+alphabetical part number
+Suggested status helper
+const getRestockStatus = (row: RestockSignalRow) => {
+  if (row.quantityAvailable <= 0) return 'critical';
+  if (row.quantityAvailable <= row.reorderPoint) return 'low_stock';
+  return 'healthy';
+};
+Example page layout
+Inventory Restock Signals
+[summary cards]
+
+[search + filters]
+
+[restock signals table]
+Phase 1.1 follow-up

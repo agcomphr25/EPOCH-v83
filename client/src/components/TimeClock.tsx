@@ -102,13 +102,20 @@ export default function TimeClock({
   const [selectedJobId, setSelectedJobId] = useState('');
   const [showAllJobs, setShowAllJobs] = useState(false);
 
-  // Traveler barcode scan state
+  // Traveler barcode scan state (clock-in flow)
   const [scanValue, setScanValue] = useState('');
   // The barcode value that was actually submitted and resolved — locked when context is shown
   const [resolvedScanValue, setResolvedScanValue] = useState('');
   const [chargeContext, setChargeContext] = useState<ChargeContext | null>(null);
   const [scanError, setScanError] = useState<{ code: string; message: string } | null>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
+
+  // Switch-job scan state (while clocked in)
+  const [switchScanValue, setSwitchScanValue] = useState('');
+  const [switchResolvedScanValue, setSwitchResolvedScanValue] = useState('');
+  const [switchChargeContext, setSwitchChargeContext] = useState<ChargeContext | null>(null);
+  const [switchScanError, setSwitchScanError] = useState<{ code: string; message: string } | null>(null);
+  const switchScanInputRef = useRef<HTMLInputElement>(null);
 
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: ['/api/timekeeping/jobs'],
@@ -180,6 +187,65 @@ export default function TimeClock({
       toast({ title: message, variant: 'destructive' });
     },
   });
+
+  const resetSwitchScan = () => {
+    setSwitchScanValue('');
+    setSwitchResolvedScanValue('');
+    setSwitchChargeContext(null);
+    setSwitchScanError(null);
+    setTimeout(() => switchScanInputRef.current?.focus(), 0);
+  };
+
+  const switchJobScanMutation = useMutation({
+    mutationFn: async (value: string) => {
+      const res = await apiRequest('/api/time-clock/scan/traveler', {
+        method: 'POST',
+        body: { scanValue: value, employeeId },
+      });
+      return res as { chargeContext: ChargeContext };
+    },
+    onSuccess: (data, submittedValue) => {
+      setSwitchResolvedScanValue(submittedValue);
+      setSwitchChargeContext(data.chargeContext);
+      setSwitchScanError(null);
+    },
+    onError: (err: any) => {
+      const code: string = err?.responseData?.error ?? 'UNKNOWN';
+      const fallback: string = err?.message ?? 'Failed to read the barcode. Please try again.';
+      setSwitchScanError({ code, message: SCAN_ERROR_MESSAGES[code] ?? fallback });
+      setSwitchChargeContext(null);
+      setSwitchResolvedScanValue('');
+    },
+  });
+
+  const switchJobMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('/api/time-clock/switch-job/traveler', {
+        method: 'POST',
+        body: { scanValue: switchResolvedScanValue, employeeId },
+      });
+      return res;
+    },
+    onSuccess: async () => {
+      resetSwitchScan();
+      await refreshStatus();
+      refetchHours();
+      toast({ title: 'Job switched successfully!' });
+    },
+    onError: (err: any) => {
+      const message: string = err?.message ?? 'Failed to switch job. Please try again.';
+      toast({ title: message, variant: 'destructive' });
+    },
+  });
+
+  const handleSwitchScan = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setSwitchChargeContext(null);
+    setSwitchScanError(null);
+    setSwitchResolvedScanValue('');
+    switchJobScanMutation.mutate(trimmed);
+  };
 
   const handleScan = (value: string) => {
     const trimmed = value.trim();
@@ -344,6 +410,114 @@ export default function TimeClock({
                 <p className="text-xs text-blue-600 font-medium leading-none mb-0.5">Currently working on</p>
                 <p className="font-semibold text-blue-900 leading-tight">{activeJobLabel}</p>
               </div>
+            </div>
+          )}
+
+          {/* Switch Job (Scan Traveler) — shown when clocked in and not on break */}
+          {clockedIn && !onBreak && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                <ScanBarcode className="h-3 w-3" />
+                Switch Job (Scan Traveler)
+              </p>
+              <div className="flex gap-1.5">
+                <Input
+                  ref={switchScanInputRef}
+                  value={switchScanValue}
+                  onChange={(e) => setSwitchScanValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSwitchScan(switchScanValue);
+                  }}
+                  placeholder="Scan or type barcode…"
+                  className="text-sm h-8"
+                  disabled={!!switchChargeContext || switchJobScanMutation.isPending || switchJobMutation.isPending}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleSwitchScan(switchScanValue)}
+                  disabled={!!switchChargeContext || !switchScanValue.trim() || switchJobScanMutation.isPending || switchJobMutation.isPending}
+                  className="h-8 px-2.5 shrink-0"
+                >
+                  {switchJobScanMutation.isPending ? (
+                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-current" />
+                  ) : (
+                    <ScanBarcode className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+
+              {/* Switch scan error */}
+              {switchScanError && (
+                <Alert variant="destructive" className="py-2 px-3">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <AlertDescription className="text-xs ml-1">
+                    <span className="font-semibold">{switchScanError.code}:</span> {switchScanError.message}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Resolved charge context — switch-job confirmation */}
+              {switchChargeContext && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Traveler resolved — confirm job switch
+                    </p>
+                    <button
+                      onClick={resetSwitchScan}
+                      className="text-indigo-400 hover:text-indigo-600"
+                      aria-label="Clear scan"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div>
+                      <dt className="text-indigo-500 font-medium">WAD #</dt>
+                      <dd className="font-mono font-semibold text-indigo-900">{switchChargeContext.wadNumber}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-indigo-500 font-medium">Charge Code</dt>
+                      <dd className="font-mono font-semibold text-indigo-900">{switchChargeContext.chargeCode}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-indigo-500 font-medium">Department</dt>
+                      <dd className="text-indigo-900">{switchChargeContext.department ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-indigo-500 font-medium">Operation</dt>
+                      <dd className="text-indigo-900 truncate" title={switchChargeContext.operation ?? undefined}>
+                        {switchChargeContext.operation ?? '—'}
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-indigo-500 font-medium">Traveler</dt>
+                      <dd className="font-mono text-indigo-900">{switchChargeContext.travelerNumber}</dd>
+                    </div>
+                  </dl>
+
+                  <Button
+                    onClick={() => switchJobMutation.mutate()}
+                    disabled={switchJobMutation.isPending}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 h-8 text-sm"
+                  >
+                    {switchJobMutation.isPending ? (
+                      <>
+                        <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
+                        Switching job…
+                      </>
+                    ) : (
+                      <>
+                        <Briefcase className="h-3.5 w-3.5 mr-1.5" />
+                        Confirm Job Switch
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

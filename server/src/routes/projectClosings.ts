@@ -104,6 +104,43 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/projects/:projectId/closing/approve — approve a project closing record
+router.post('/approve', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const userRole = (req.user?.role || '').toUpperCase();
+    if (userRole !== 'MANAGER' && userRole !== 'ADMIN') {
+      return res.status(403).json({ message: 'Only managers or admins can approve a closing record.' });
+    }
+
+    const parsed = z.object({
+      approvedBy: z.number().int().positive({ message: 'approvedBy must be a positive employee id' }),
+    }).safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid request data', errors: parsed.error.errors });
+    }
+
+    const resolvedApproverId: number = req.user?.employeeId ?? parsed.data.approvedBy;
+
+    const closing = await storage.getProjectClosingByProjectId(projectId);
+    if (!closing) {
+      return res.status(404).json({ message: 'No closing record found for this project' });
+    }
+
+    const updated = await storage.updateProjectClosing(closing.id, {
+      approvedBy: resolvedApproverId,
+      approvedAt: new Date(),
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error approving project closing:', error);
+    res.status(500).json({ message: 'Failed to approve project closing' });
+  }
+});
+
 // POST /api/projects/:projectId/closing/risks — add a risk to the project closing
 router.post('/risks', async (req, res) => {
   try {

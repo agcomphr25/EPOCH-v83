@@ -4,6 +4,7 @@ import { storage } from '../../storage';
 import { db, pool } from '../../db';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
+import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -102,14 +103,13 @@ router.get('/', async (req, res) => {
     const projectsWithSteps = await Promise.all(
       projectsList.map(async (project) => {
         try {
-          const steps = await storage.getProjectSteps(project.id);
-          const customer = project.customerId
-            ? await storage.getP2CustomerByCustomerId(project.customerId)
-            : null;
-          const projectManager = project.projectManagerId 
-            ? await storage.getEmployee(project.projectManagerId)
-            : null;
-          const attachments = await storage.getProjectStepAttachmentsByProject(project.id);
+          const [steps, customer, projectManager, attachments, closing] = await Promise.all([
+            storage.getProjectSteps(project.id),
+            project.customerId ? storage.getP2CustomerByCustomerId(project.customerId) : Promise.resolve(null),
+            project.projectManagerId ? storage.getEmployee(project.projectManagerId) : Promise.resolve(null),
+            storage.getProjectStepAttachmentsByProject(project.id),
+            storage.getProjectClosingByProjectId(project.id),
+          ]);
           
           return {
             ...project,
@@ -119,6 +119,7 @@ router.get('/', async (req, res) => {
               : null,
             projectManager,
             attachmentCount: attachments.length,
+            closingStatus: deriveClosingStatus(closing),
           };
         } catch (enrichErr) {
           console.error(`Error enriching project ${project.id}:`, enrichErr);
@@ -128,6 +129,7 @@ router.get('/', async (req, res) => {
             customer: null,
             projectManager: null,
             attachmentCount: 0,
+            closingStatus: 'MISSING' as const,
           };
         }
       })
@@ -409,6 +411,7 @@ router.get('/:id', async (req, res) => {
       ? await storage.getEmployee(project.projectManagerId)
       : null;
     const activityLog = await storage.getProjectActivityLog(project.id);
+    const closing = await storage.getProjectClosingByProjectId(project.id);
     
     res.json({
       ...project,
@@ -418,6 +421,7 @@ router.get('/:id', async (req, res) => {
         : null,
       projectManager,
       activityLog,
+      closingStatus: deriveClosingStatus(closing),
     });
   } catch (error) {
     console.error('Error fetching project:', error);
@@ -506,8 +510,20 @@ router.patch('/:id', async (req, res) => {
         if (!force) {
           const closing = await storage.getProjectClosingByProjectId(id);
           if (!closing) {
-            return res.status(409).json({
+            return res.status(400).json({
               message: 'Cannot mark project as completed without a closing record. Please create a closing/lessons-learned record first.',
+            });
+          }
+          const { valid, missing } = validateProjectClosing(closing);
+          if (!valid) {
+            return res.status(400).json({
+              message: 'Cannot mark project as completed: closing record is incomplete.',
+              missingFields: missing,
+            });
+          }
+          if (!closing.approvedBy) {
+            return res.status(403).json({
+              message: 'Cannot mark project as completed: closing record has not been approved by a manager.',
             });
           }
         }

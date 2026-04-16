@@ -10600,6 +10600,8 @@ export const projectClosings = pgTable('project_closings', {
   nextProjectRecommendations: text('next_project_recommendations'),
   closedBy: integer('closed_by').references(() => employees.id),
   closedByDisplayName: text('closed_by_display_name'),
+  approvedBy: integer('approved_by').references(() => employees.id),
+  approvedAt: timestamp('approved_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

@@ -323,6 +323,7 @@ async function initializeBackgroundServices() {
           '0031_p2_replacement_shipment_linkage.sql',
           '0032_canonical_customer_key.sql',
           '0033_v_all_shipments.sql',
+          '0037_project_closing_approval_fields.sql',
         ];
         let appliedCount = 0;
         for (const f of safeFiles) {

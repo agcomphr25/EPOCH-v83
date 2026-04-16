@@ -325,58 +325,87 @@ export default function PaymentAnalytics() {
         </div>
       ) : data ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card data-testid="card-total">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  Total Revenue
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold" data-testid="text-total-amount">
-                  {formatCurrency(data.summary.totalAmount)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {data.summary.transactionCount} transactions
-                </p>
-              </CardContent>
-            </Card>
+          {(() => {
+            const startParts = data.startDate.slice(0, 10).split('-').map(Number);
+            const endParts = data.endDate.slice(0, 10).split('-').map(Number);
+            const startUtc = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
+            const endUtc = Date.UTC(endParts[0], endParts[1] - 1, endParts[2]);
+            const daysElapsed = Math.max(1, Math.floor((endUtc - startUtc) / (1000 * 60 * 60 * 24)) + 1);
+            const start = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+            const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+            const estFullMonth = (data.summary.totalAmount / daysElapsed) * daysInMonth;
+            const phoneDailyAvg = data.breakdown.phone.amount / daysElapsed;
+            const onlineDailyAvg = data.breakdown.online.amount / daysElapsed;
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card data-testid="card-total">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Total Revenue
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" data-testid="text-total-amount">
+                      {formatCurrency(data.summary.totalAmount)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {data.summary.transactionCount} transactions
+                    </p>
+                    {viewMode === 'mtd' && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Est. full month: {formatCurrency(estFullMonth)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
 
-            <Card data-testid="card-phone">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  Phone (Accept.Blue)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-blue-600" data-testid="text-phone-amount">
-                  {formatCurrency(data.breakdown.phone.amount)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {data.breakdown.phone.count} transactions | Avg: {formatCurrency(data.breakdown.phone.average)}
-                </p>
-              </CardContent>
-            </Card>
+                <Card data-testid="card-phone">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      Phone (Accept.Blue)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-blue-600" data-testid="text-phone-amount">
+                      {formatCurrency(data.breakdown.phone.amount)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {data.breakdown.phone.count} transactions | Avg: {formatCurrency(data.breakdown.phone.average)}
+                    </p>
+                    {viewMode === 'mtd' && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Daily avg: {formatCurrency(phoneDailyAvg)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
 
-            <Card data-testid="card-online">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Globe className="h-4 w-4" />
-                  Online
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-green-600" data-testid="text-online-amount">
-                  {formatCurrency(data.breakdown.online.amount)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {data.breakdown.online.count} transactions | Avg: {formatCurrency(data.breakdown.online.average)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+                <Card data-testid="card-online">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      Online
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600" data-testid="text-online-amount">
+                      {formatCurrency(data.breakdown.online.amount)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {data.breakdown.online.count} transactions | Avg: {formatCurrency(data.breakdown.online.average)}
+                    </p>
+                    {viewMode === 'mtd' && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Daily avg: {formatCurrency(onlineDailyAvg)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
 
           <Card>
             <CardContent className="pt-6">

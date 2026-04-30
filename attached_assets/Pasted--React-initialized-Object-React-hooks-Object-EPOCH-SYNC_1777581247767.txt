@@ -1,0 +1,108 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+travelers/016bdc30-9653-4de8-ab65-f252c02093d4/execute?badge=757ed306c66446f7871fac16bd141974:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/d1e11767-4b16-4d07-ad7a-b872c3891c0b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/d1e11767-4b16-4d07-ad7a-b872c3891c0b/complete: 200
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/83821055-3eb3-40f5-b93f-2fccf4eefad7/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/83821055-3eb3-40f5-b93f-2fccf4eefad7/sign: 200
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/6c011980-436d-423a-bcdd-041d9cd53e68/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/6c011980-436d-423a-bcdd-041d9cd53e68/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-11 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-11: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/302a18b7-16b1-44b0-af13-68beb07c1262/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/302a18b7-16b1-44b0-af13-68beb07c1262/complete: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/40fec5f8-d668-455b-bcd2-d4ba87a939a8/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/40fec5f8-d668-455b-bcd2-d4ba87a939a8/complete: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/2f781d14-0e4f-46d8-9ad7-d5233b6c64b0/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/2f781d14-0e4f-46d8-9ad7-d5233b6c64b0/complete: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/1b0d09b0-e5b3-418b-8180-0db8a5a2caa5/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/1b0d09b0-e5b3-418b-8180-0db8a5a2caa5/complete: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/3a95ac6e-6199-4dcf-8cca-e4d2ca7e372d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/3a95ac6e-6199-4dcf-8cca-e4d2ca7e372d/complete: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/6c011980-436d-423a-bcdd-041d9cd53e68/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/6c011980-436d-423a-bcdd-041d9cd53e68/sign: 200
+ 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/67124769-1bc3-46c1-8e95-94eb51431d0f/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/67124769-1bc3-46c1-8e95-94eb51431d0f/start: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/6935cea5-ea58-4492-8902-99bd57550f34/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/6935cea5-ea58-4492-8902-99bd57550f34/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/35f7a971-c0f5-4b93-b556-1e4b2c52d68c/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/35f7a971-c0f5-4b93-b556-1e4b2c52d68c/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/c0ca758b-2c4e-4696-bc55-bc594a44ac1b/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/c0ca758b-2c4e-4696-bc55-bc594a44ac1b/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/67124769-1bc3-46c1-8e95-94eb51431d0f/sign (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/67124769-1bc3-46c1-8e95-94eb51431d0f/sign: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/67124769-1bc3-46c1-8e95-94eb51431d0f/sign (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/67124769-1bc3-46c1-8e95-94eb51431d0f/sign: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/a6ce5a7f-95b3-4703-a1f2-cc2e64a07698/start (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/a6ce5a7f-95b3-4703-a1f2-cc2e64a07698/start: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/8d2d025d-474b-44a2-b07d-8a8bd0098bf8/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/8d2d025d-474b-44a2-b07d-8a8bd0098bf8/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/bf79d542-9063-4999-bc3b-f9f32b381eb0/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/bf79d542-9063-4999-bc3b-f9f32b381eb0/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/17496c69-e20b-48a4-848e-4f69bf60d08e/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/17496c69-e20b-48a4-848e-4f69bf60d08e/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/959d8dc6-dd61-4888-af47-08bdac817f7c/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/959d8dc6-dd61-4888-af47-08bdac817f7c/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/c242782a-dc6c-43b7-8e06-29f0fb066f16/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/c242782a-dc6c-43b7-8e06-29f0fb066f16/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/a6ce5a7f-95b3-4703-a1f2-cc2e64a07698/sign (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/a6ce5a7f-95b3-4703-a1f2-cc2e64a07698/sign: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/49371679-f699-4e6d-8b5d-af610996659c/start (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/49371679-f699-4e6d-8b5d-af610996659c/start: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/70d75977-f19e-476c-8f09-6f5215759db1/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/70d75977-f19e-476c-8f09-6f5215759db1/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/5ac30d4c-22df-4521-9487-507f386efbc5/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/5ac30d4c-22df-4521-9487-507f386efbc5/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/49371679-f699-4e6d-8b5d-af610996659c/sign (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/49371679-f699-4e6d-8b5d-af610996659c/sign: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/31fb2af0-5e6d-4e49-88e9-0325d4cc94ce/start (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/31fb2af0-5e6d-4e49-88e9-0325d4cc94ce/start: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/9aca5161-8aae-4be4-a541-b629283a7ad6/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/9aca5161-8aae-4be4-a541-b629283a7ad6/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/a3f4ca1d-824e-4c50-8fc9-72bdd16a1d90/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/a3f4ca1d-824e-4c50-8fc9-72bdd16a1d90/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/902ca427-2843-4312-86c5-5f6999ef777c/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/tasks/902ca427-2843-4312-86c5-5f6999ef777c/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/31fb2af0-5e6d-4e49-88e9-0325d4cc94ce/sign (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/steps/31fb2af0-5e6d-4e49-88e9-0325d4cc94ce/sign: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/016bdc30-9653-4de8-ab65-f252c02093d4/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/7a038558-5327-46e5-804a-1f2c1c7c124b/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/7a038558-5327-46e5-804a-1f2c1c7c124b/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/bc652fb2-912c-4b32-afe4-6d08b4038b10/complete (timeout: 15000ms, deployment: true)
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/bc652fb2-912c-4b32-afe4-6d08b4038b10/complete: 200
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/7a038558-5327-46e5-804a-1f2c1c7c124b/complete (timeout: 15000ms, deployment: true)
+api/travelers/7a038558-5327-46e5-804a-1f2c1c7c124b/complete:1  Failed to load resource: the server responded with a status of 400 ()
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/7a038558-5327-46e5-804a-1f2c1c7c124b/complete: 400
+index-CJ0Itkhe.js:5436 API error raw body: {"error":"Traveler must be IN_PROGRESS to complete","currentStatus":"COMPLETED"}
+console.error @ index-CJ0Itkhe.js:5436
+index-CJ0Itkhe.js:5436 💥 API Request failed for /api/travelers/7a038558-5327-46e5-804a-1f2c1c7c124b/complete: Error: Traveler must be IN_PROGRESS to complete
+    at Se (index-CJ0Itkhe.js:235:6500)
+console.error @ index-CJ0Itkhe.js:5436
+index-CJ0Itkhe.js:235 🌐 API Request to /api/travelers/bc652fb2-912c-4b32-afe4-6d08b4038b10/complete (timeout: 15000ms, deployment: true)
+api/travelers/bc652fb2-912c-4b32-afe4-6d08b4038b10/complete:1  Failed to load resource: the server responded with a status of 400 ()
+index-CJ0Itkhe.js:235 ✅ API Response from /api/travelers/bc652fb2-912c-4b32-afe4-6d08b4038b10/complete: 400
+index-CJ0Itkhe.js:5436 API error raw body: {"error":"Traveler must be IN_PROGRESS to complete","currentStatus":"COMPLETED"}
+console.error @ index-CJ0Itkhe.js:5436
+index-CJ0Itkhe.js:5436 💥 API Request failed for /api/travelers/bc652fb2-912c-4b32-afe4-6d08b4038b10/complete: Error: Traveler must be IN_PROGRESS to complete
+    at Se (index-CJ0Itkhe.js:235:6500)
+console.error @ index-CJ0Itkhe.js:5436

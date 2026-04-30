@@ -51,6 +51,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   // Orders
   'orders.create',
   'orders.cancel',
+  'orders.department_transfer',
 
   // Finance
   'finance.view',
@@ -82,6 +83,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
 
   // Admin
   'admin.manage_users',
+  'admin.order_lookup',
 
   // Scheduling
   'scheduling.manage',
@@ -199,6 +201,11 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
  *   Routes:     POST /api/orders/cancel/:orderId
  *   Seeded to:  ADMIN, OWNER, MANAGER
  *
+ * orders.department_transfer
+ *   Governance: Manually reassign an order to a different production department (corrections and emergency moves only)
+ *   Routes:     PATCH /api/orders/:orderId/department
+ *   Seeded to:  ADMIN, OWNER
+ *
  * finance.view
  *   Governance: Read AR invoices, payments, aging reports, and customer summaries
  *   Routes:     GET /api/ar-invoices/*
@@ -292,6 +299,11 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
  *   Routes:     POST /api/users/
  *               PUT /api/users/:id
  *               DELETE /api/users/:id
+ *   Seeded to:  ADMIN, OWNER
+ *
+ * admin.order_lookup
+ *   Governance: Look up a production order by ID to view its full status, department history, and item codes
+ *   Routes:     GET /api/admin/order-lookup
  *   Seeded to:  ADMIN, OWNER
  *
  * scheduling.manage

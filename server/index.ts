@@ -4014,6 +4014,10 @@ async function initializeBackgroundServices() {
           // Orders
           { key: 'orders.create', description: 'Create draft orders and finalize them into production', category: 'orders' },
           { key: 'orders.cancel', description: 'Cancel a finalized order', category: 'orders' },
+          { key: 'orders.department_transfer', description: 'Manually reassign an order to a different production department (corrections and emergency moves only)', category: 'orders' },
+
+          // Admin tools
+          { key: 'admin.order_lookup', description: 'Look up a production order by ID to view its full status, department history, and item codes', category: 'admin' },
 
           // Finance
           { key: 'finance.view', description: 'Read AR invoices, payments, aging reports, and customer summaries', category: 'finance' },
@@ -4294,6 +4298,32 @@ async function initializeBackgroundServices() {
              ON CONFLICT (role_id, capability_id) DO NOTHING`,
             [capKey]
           );
+        }
+
+        // User-level overrides for faleeshah
+        try {
+          const faleeshahRows = await pool.query(
+            `SELECT id FROM users WHERE username = 'faleeshah' LIMIT 1`
+          );
+          if (faleeshahRows.length > 0) {
+            const faleeshahId = faleeshahRows[0].id;
+            const faleeshahCaps = ['orders.department_transfer', 'admin.order_lookup'];
+            for (const capKey of faleeshahCaps) {
+              await pool.query(
+                `INSERT INTO perm_user_overrides (user_id, capability_id, effect)
+                 SELECT $1, pc.id, 'allow'
+                 FROM perm_capabilities pc
+                 WHERE pc.key = $2
+                 ON CONFLICT (user_id, capability_id) DO NOTHING`,
+                [faleeshahId, capKey]
+              );
+            }
+            console.log('✅ Granted orders.department_transfer + admin.order_lookup user-level overrides to faleeshah');
+          } else {
+            console.warn('⚠️ faleeshah user not found — user-level overrides not seeded');
+          }
+        } catch (overrideErr: any) {
+          console.warn('⚠️ faleeshah override seed skipped:', overrideErr.message);
         }
 
         console.log('✅ Seeded EPOCH capability keys and assigned to ADMIN/OWNER/FLOOR_OPERATOR/SUPERVISOR/MANAGER/DOCUMENT_MANAGER/HR/VP roles');

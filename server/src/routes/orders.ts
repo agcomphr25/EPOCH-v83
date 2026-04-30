@@ -22,6 +22,7 @@ import {
 import { normalizeDueDateForStorage } from '@shared/utils/dateNormalization';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { getUserPermissions } from '../services/permissionService';
 import { allocateForOrder } from '../services/productionOrderAllocationService';
 import { 
   adminFieldUpdateSchema, 
@@ -3445,32 +3446,41 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
 router.patch(
   '/:orderId/department',
   authenticateToken,
+  // Pre-handler: emit DEPARTMENT_TRANSFER_BLOCKED audit event when the user lacks the
+  // required capability before requirePermission() sends the 403 response.
   async (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
-    if (!user || !['ADMIN', 'OWNER'].includes(user.role)) {
+    if (user) {
       try {
-        await auditService.logEvent({
-          entityType: 'p1_order',
-          entityId: req.params.orderId,
-          action: 'DEPARTMENT_TRANSFER_BLOCKED',
-          actor: {
-            id: user?.id,
-            username: user?.username || 'anonymous',
-            role: user?.role || 'none',
-          },
-          meta: {
-            reason: 'Insufficient role — ADMIN or OWNER required',
-            userRole: user?.role || 'none',
-            requestedDepartment: req.body?.department,
-          },
-        });
-      } catch (auditErr) {
-        console.error('Failed to log blocked department transfer attempt:', auditErr);
+        const { permissionSet } = await getUserPermissions(user.id, user.role);
+        const hasPerm =
+          user.role === 'ADMIN' ||
+          user.role === 'OWNER' ||
+          permissionSet.has('orders.department_transfer');
+        if (!hasPerm) {
+          await auditService.logEvent({
+            entityType: 'p1_order',
+            entityId: req.params.orderId,
+            action: 'DEPARTMENT_TRANSFER_BLOCKED',
+            actor: {
+              id: user.id,
+              username: user.username || 'anonymous',
+              role: user.role || 'none',
+            },
+            meta: {
+              reason: 'Missing capability: orders.department_transfer',
+              userRole: user.role || 'none',
+              requestedDepartment: req.body?.department,
+            },
+          });
+        }
+      } catch (err) {
+        console.error('Failed to check/log department transfer permission:', err);
       }
-      return res.status(403).json({ error: 'Insufficient permissions' });
     }
     next();
   },
+  requirePermission('orders.department_transfer'),
   async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;

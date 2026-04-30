@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 import { seedOrderReferenceTables } from '../../seeds/orderReferenceTables';
 import { pool } from '../../db';
 import { DEPARTMENTS } from '../constants/departments';
@@ -1472,7 +1473,7 @@ router.get(
 );
 
 // Order → Item Code Lookup
-router.get('/order-lookup', async (req: Request, res: Response) => {
+router.get('/order-lookup', authenticateToken, requirePermission('admin.order_lookup'), async (req: Request, res: Response) => {
   try {
     const { orderId } = req.query as { orderId?: string };
     if (!orderId) return res.status(400).json({ error: 'orderId is required' });

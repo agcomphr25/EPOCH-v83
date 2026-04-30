@@ -17,11 +17,12 @@ interface ActiveSessionIdRow { id: number; session_token?: string }
 // Maximum concurrent active sessions per role.
 // Override per role via env vars: SESSION_MAX_ADMIN, SESSION_MAX_OWNER, SESSION_MAX_EMPLOYEE.
 // Override default (any unlisted role) via SESSION_MAX_DEFAULT.
-const DEFAULT_MAX_SESSIONS = parseInt(process.env.SESSION_MAX_DEFAULT ?? '1', 10) || 1;
+// Defaults to 5 to allow multiple tabs / devices without unexpected eviction.
+const DEFAULT_MAX_SESSIONS = parseInt(process.env.SESSION_MAX_DEFAULT ?? '5', 10) || 5;
 const MAX_SESSIONS_BY_ROLE: Record<string, number> = {
-  ADMIN:    parseInt(process.env.SESSION_MAX_ADMIN    ?? '1', 10) || 1,
-  OWNER:    parseInt(process.env.SESSION_MAX_OWNER    ?? '1', 10) || 1,
-  EMPLOYEE: parseInt(process.env.SESSION_MAX_EMPLOYEE ?? '1', 10) || 1,
+  ADMIN:    parseInt(process.env.SESSION_MAX_ADMIN    ?? '5', 10) || 5,
+  OWNER:    parseInt(process.env.SESSION_MAX_OWNER    ?? '5', 10) || 5,
+  EMPLOYEE: parseInt(process.env.SESSION_MAX_EMPLOYEE ?? '5', 10) || 5,
 };
 
 // Step-up re-auth threshold: credentials must be re-verified within this window for CUI access.
@@ -951,8 +952,9 @@ router.get('/validate', async (req, res) => {
   }
 });
 
-// Get current user session
-router.get('/session', async (req, res) => {
+// ─── Shared session-user handler ────────────────────────────────────────────
+// Single implementation used by both GET /session and GET /me to prevent drift.
+async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
   try {
     const isProduction = process.env.NODE_ENV === 'production';
     const bypassEnabled = process.env.DEV_AUTH_BYPASS === 'true';
@@ -975,7 +977,6 @@ router.get('/session', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    // Query database for session (include id for SESSION_EXPIRED audit)
     const result = await pool.query(
       'SELECT id, user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
       [sessionToken]
@@ -997,14 +998,13 @@ router.get('/session', async (req, res) => {
         session.user_id,
         session.username,
         expiredRole,
-        { reason: 'Session found expired during /session', expiresAt: session.expires_at }
+        { reason: `Session found expired during ${endpoint}`, expiresAt: session.expires_at }
       );
       await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    // FIXED: Use user_id as source of truth instead of username
-    // This eliminates username casing, rename, and drift issues
+    // Use user_id as source of truth to eliminate username casing / rename drift
     const dbUserResult = await pool.query(
       `SELECT u.id, u.username, u.first_name, u.last_name, u.role, u.employee_id,
               e.name as employee_name
@@ -1019,17 +1019,12 @@ router.get('/session', async (req, res) => {
     if (dbUserResult && dbUserResult.length > 0) {
       user = dbUserResult[0];
     } else {
-      // Fall back to hardcoded users only if user_id matches
       const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);
-      if (hardcodedUser) {
-        user = hardcodedUser;
-      }
+      if (hardcodedUser) user = hardcodedUser;
     }
 
     if (!user) {
-      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [
-        sessionToken,
-      ]);
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ error: 'User not found' });
     }
 
@@ -1054,10 +1049,21 @@ router.get('/session', async (req, res) => {
       employeeId: user.employee_id,
     });
   } catch (error) {
-    console.error('Get session error:', error);
+    console.error(`[AUTH] ${endpoint} error:`, error);
     res.status(500).json({ error: 'Failed to get session' });
   }
-});
+}
+
+// GET /api/auth/session — primary session endpoint
+router.get('/session', (req, res) => handleGetCurrentSession(req, res, '/session'));
+
+/**
+ * GET /api/auth/me
+ * Alias for /api/auth/session — returns the currently authenticated user.
+ * Eliminates 404s for any frontend code that calls /api/auth/me.
+ * Both routes share the same handler to prevent behavioural drift.
+ */
+router.get('/me', (req, res) => handleGetCurrentSession(req, res, '/me'));
 
 /**
  * POST /api/auth/validate-credentials

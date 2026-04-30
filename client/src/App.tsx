@@ -11,6 +11,7 @@ import { useWebSocketNotifications } from './hooks/useWebSocketNotifications';
 import NotFound from './pages/not-found';
 import AccessDenied from './pages/AccessDenied';
 import RouteGuard from './components/auth/RouteGuard';
+import SessionExpiryListener from './components/SessionExpiryListener';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagement';
 import OrdersManagementPage from './pages/OrdersManagementPage';
@@ -1295,6 +1296,7 @@ function App() {
             <HotToaster />
             <WebSocketNotifications />
             <SessionAwareMessageNotificationPopup />
+            <SessionExpiryListener />
           </Router>
         </DeploymentAuthWrapper>
       </QueryClientProvider>

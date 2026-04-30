@@ -1467,7 +1467,7 @@ router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res:
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { startedBy, badgeScan } = req.body;
+    const { startedBy, badgeScan, employeeId: bodyEmployeeId } = req.body;
 
     // Resolve badge scan code to employee name and ID if badge was scanned.
     // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
@@ -1484,15 +1484,26 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         resolvedName = emp[0].name;
         resolvedEmployeeId = emp[0].id;
       } else {
-        // Fallback: match by employeeCode (e.g. EMP003 typed/scanned directly)
+        // Fallback: match by employeeCode case-insensitively (e.g. EMP003 typed/scanned directly)
         const empByCode = await db.select({ id: employees.id, name: employees.name })
           .from(employees)
-          .where(eq(employees.employeeCode, badgeScan))
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${badgeScan})`)
           .limit(1);
         if (empByCode.length > 0) {
           resolvedName = empByCode[0].name;
           resolvedEmployeeId = empByCode[0].id;
         }
+      }
+    }
+    // When badge scan is absent or unrecognized, accept a client-resolved employeeId directly.
+    if (!resolvedEmployeeId && typeof bodyEmployeeId === 'number' && bodyEmployeeId > 0) {
+      const emp = await db.select({ id: employees.id, name: employees.name })
+        .from(employees)
+        .where(eq(employees.id, bodyEmployeeId))
+        .limit(1);
+      if (emp.length > 0) {
+        resolvedName = emp[0].name;
+        resolvedEmployeeId = emp[0].id;
       }
     }
 

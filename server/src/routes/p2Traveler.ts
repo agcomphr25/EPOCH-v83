@@ -78,6 +78,36 @@ router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) =>
   }
 });
 
+// GET /api/p2-traveler/employee-lookup?name=John+Smith
+// Public name-based employee lookup for manual fallback on the traveler execute page.
+// Returns 404 when not found, 409 when multiple employees share the same name.
+router.get('/employee-lookup', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.query;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'name parameter is required' });
+    }
+
+    const rows = await db
+      .select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode })
+      .from(employees)
+      .where(sql`LOWER(${employees.name}) = LOWER(${name.trim()})`)
+      .limit(2);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    if (rows.length > 1) {
+      return res.status(409).json({ error: 'Multiple employees found with that name' });
+    }
+
+    const emp = rows[0];
+    res.json({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Employee lookup failed' });
+  }
+});
+
 // GET /api/p2-traveler/verify-certification/:employeeCode/:barcode
 // Verify employee certification for part's next department
 router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, res: Response) => {

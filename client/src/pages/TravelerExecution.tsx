@@ -275,10 +275,12 @@ export default function TravelerExecution() {
   } | null>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
-  const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
+  const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found' | 'error'>('idle');
   const [stepNotes, setStepNotes] = useState('');
   const [resolvedEmployee, setResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
+  const [nameLookupPending, setNameLookupPending] = useState(false);
   const badgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [signBadgeLookupStatus, setSignBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
   const [signResolvedEmployee, setSignResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
   const signBadgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -398,6 +400,7 @@ export default function TravelerExecution() {
   const handleBadgeScanInput = (value: string) => {
     setSignatureData((prev) => ({ ...prev, badgeScan: value }));
     setResolvedEmployee(null);
+    setNameLookupPending(false);
     setBadgeLookupStatus('idle');
 
     if (badgeLookupTimerRef.current) {
@@ -414,11 +417,13 @@ export default function TravelerExecution() {
             setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
             setSignatureData((prev) => ({ ...prev, signedByName: emp.name }));
             setBadgeLookupStatus('found');
-          } else {
+          } else if (resp.status === 404) {
             setBadgeLookupStatus('not_found');
+          } else {
+            setBadgeLookupStatus('error');
           }
         } catch {
-          setBadgeLookupStatus('not_found');
+          setBadgeLookupStatus('error');
         }
       }, 300);
     }
@@ -805,10 +810,10 @@ export default function TravelerExecution() {
   }, [steps, currentStepId]);
 
   const startStepMutation = useMutation({
-    mutationFn: ({ stepId, badge, techName }: { stepId: string; badge: string; techName: string }) =>
+    mutationFn: ({ stepId, badge, techName, employeeId }: { stepId: string; badge: string; techName: string; employeeId?: number }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge }),
+        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge, employeeId }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: (data: any, variables) => {
@@ -2166,17 +2171,60 @@ export default function TravelerExecution() {
                                 name="tech-name-fallback"
                                 placeholder="Enter your full name..."
                                 value={signatureData.signedByName}
-                                onChange={(e) =>
-                                  setSignatureData({ ...signatureData, signedByName: e.target.value })
-                                }
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setSignatureData({ ...signatureData, signedByName: name });
+                                  setResolvedEmployee(null);
+                                  setNameLookupPending(false);
+                                  if (nameLookupTimerRef.current) clearTimeout(nameLookupTimerRef.current);
+                                  if (name.trim().length >= 2) {
+                                    setNameLookupPending(true);
+                                    nameLookupTimerRef.current = setTimeout(async () => {
+                                      try {
+                                        const resp = await fetch(`/api/p2-traveler/employee-lookup?name=${encodeURIComponent(name.trim())}`);
+                                        if (resp.ok) {
+                                          const emp = await resp.json();
+                                          setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
+                                        }
+                                      } catch {
+                                        // name lookup failure is non-fatal; operator continues with typed name only
+                                      } finally {
+                                        setNameLookupPending(false);
+                                      }
+                                    }, 400);
+                                  }
+                                }}
                                 data-testid="input-tech-name-fallback"
                               />
+                              {nameLookupPending && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Looking up employee...
+                                </div>
+                              )}
                             </div>
+                          </div>
+                        )}
+                        {badgeLookupStatus === 'error' && (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-xs text-amber-600">
+                              Could not reach the badge reader. Check your connection and try scanning again.
+                            </p>
+                            <button
+                              className="text-xs text-blue-600 underline"
+                              onClick={() => {
+                                setBadgeLookupStatus('idle');
+                                setNameLookupPending(false);
+                                setSignatureData((prev) => ({ ...prev, badgeScan: '' }));
+                              }}
+                            >
+                              Retry
+                            </button>
                           </div>
                         )}
                       </div>
 
-                      {badgeLookupStatus === 'found' && resolvedEmployee && (
+                      {(badgeLookupStatus === 'found' || (badgeLookupStatus === 'not_found' && resolvedEmployee)) && resolvedEmployee && (
                         <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                           <div className="flex items-center gap-2">
                             <User className="h-5 w-5 text-green-600" />
@@ -2208,11 +2256,14 @@ export default function TravelerExecution() {
                           stepId: currentStep.id,
                           badge: signatureData.badgeScan || activeBadge,
                           techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
+                          employeeId: resolvedEmployee?.id,
                         })}
                         disabled={
                           startStepMutation.isPending ||
                           !(signatureData.badgeScan || activeBadge) ||
                           (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
+                          badgeLookupStatus === 'error' ||
+                          nameLookupPending ||
                           // Require acknowledgment when budget is overrun (Task #1235)
                           (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||
                           // Require cert acknowledgment only when cert is EXPIRED or MISSING (Task #1235 WARN)

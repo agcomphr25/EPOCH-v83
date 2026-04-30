@@ -1,0 +1,230 @@
+Now fix dashboard.service.ts to use the legacy Employee API shape:
+
+
+5 actions
+Let me rebuild the timekeeping API server to verify everything compiles cleanly:
+
+
+4 actions
+Both servers built and started cleanly. Let me update the commit message with the fixes and mark complete:
+
+
+4 actions
+The 3 follow-up tasks (#812, #813, #814) were already proposed in the previous session. Since that work is already queued up, I don't need to re-propose them.
+
+
+Validation failed · 1 passed · 1 failed
+
+Planning issue resolution order (8 seconds)
+Four issues to fix. Let me tackle them in parallel:
+
+
+7 actions
+Now I can see all 4 issues clearly. Let me fix them all:
+
+Issue 3 fix — Dashboard route double-maps via stripPinHash on already-converted Employee objects:
+
+
+2 actions
+Now fix all 4 issues at once:
+
+
+2 actions
+Issue 1 fix — Backfill SQL: use two separate UPDATE statements so each column is only written when its own condition is met:
+
+
+2 actions
+Now fix the SSO route to confirm identity from public.employees after resolving the FK:
+
+
+4 actions
+Now add public.employees identity confirmation after finding the timekeeping employee:
+
+
+2 actions
+Fix the schema contract — add .notNull() to timezone and align the insert schema:
+
+
+6 actions
+Now let me also check the public-employees.ts schema to ensure the timezone column type is consistent:
+
+
+2 actions
+Update the public-employees schema to mark timezone as notNull, matching the actual DB constraint:
+
+
+2 actions
+Rebuild the API server to verify all 4 fixes compile:
+
+
+4 actions
+Both servers running cleanly. Let me update the commit message with all fixes:
+
+
+Deciding on task completion status
+All 4 issues are resolved. Let me mark the task complete:
+
+
+Validation failed · 1 passed · 1 failed
+
+Planning data resolver fallbacks (22 seconds)
+Let me re-read the task spec to understand whether Drizzle migrations were explicitly required:
+
+
+2 actions
+The task spec explicitly requires a Drizzle migration (Step 1). Let me check the migration setup and then fix the resolver's fallback behavior:
+
+
+6 actions
+There's a full Drizzle migrations folder. I need to create a proper migration file. Also need to remove the orphan fallback from the resolver. Let me do both:
+
+
+2 actions
+Now check the Drizzle meta journal to register the new migration:
+
+
+11 actions
+Now I understand the project pattern: SQL files are applied via the safeFiles array in server/index.ts. I need to:
+
+Add the new migration to safeFiles
+Remove the duplicate inline backfill SQL from startup (it's now in the migration file)
+Fix the resolver to fail closed for orphaned employees
+Let me first update the resolver to remove fallbacks and fail closed:
+
+
+2 actions
+Now add the migration to the safeFiles list and remove the duplicate inline backfill. Also update employees.service.ts to handle null from the resolver:
+
+
+2 actions
+Now remove the duplicate inline backfill SQL (since it's now properly in the migration file) and fix the resolver-null handling in employees.service.ts:
+
+
+9 actions
+The updateEmployee function is already fail-closed (returns null when resolver fails). Let me rebuild to verify:
+
+
+4 actions
+All 3 blockers resolved. Let me update the commit message:
+
+
+Marking task complete
+
+Validation failed · 1 passed · 1 failed
+
+Planning migration and endpoint fixes (19 seconds)
+Three more issues to fix. Let me tackle them all at once:
+
+Add orphan logging to the startup migration block
+Rewire status updates to also write public.employees.is_active
+Trim verbose comments to match repository style
+
+3 actions
+Now fix all three issues at once. Let me start with the simplest — trimming comments in resolve-epoch-employee.ts:
+
+
+2 actions
+Now fix the auth.ts comments and rewire the status update + add orphan logging:
+
+
+2 actions
+Now rewire the status update path and trim comments in employees.service.ts:
+
+
+2 actions
+Now add orphan logging to the server startup (after migration runs):
+
+
+2 actions
+Let me also trim the hash-pins.ts comments if they're verbose, then rebuild:
+
+
+7 actions
+Both servers running cleanly. Let me finalize the commit message and mark complete:
+
+
+Submitting for review
+
+Validation failed · 1 passed · 1 failed
+
+Planning SSO lookup logic adjustments (17 seconds)
+Two more issues to fix:
+
+createEmployee throws 500 for orphaned new employees (breaking the write path)
+SSO lookup still uses timekeeping.employees.email as an identity fallback
+Let me look at the current CreateEmployeeBody schema and fix both:
+
+
+3 actions
+I need to fix createEmployee to return null for orphaned creates (instead of throwing), update the route to handle it, and remove the email fallback from the SSO timekeeping lookup:
+
+
+2 actions
+Now update the route to handle null from createEmployee, and fix the SSO lookup to use only epochEmployeeId:
+
+
+2 actions
+Now fix the SSO route to look up timekeeping employee only via epochEmployeeId:
+
+
+2 actions
+The or import in auth.ts is no longer needed. Let me clean that up and rebuild:
+
+
+6 actions
+Clean builds on both servers. Let me mark complete:
+
+
+Validation failed · 1 passed · 1 failed
+
+Planning createEmployee response structure (22 seconds)
+Two final fixes: remove any casts from server/index.ts, and fix createEmployee to always return the id:
+
+
+2 actions
+Now fix createEmployee to always return the id and update the route:
+
+
+2 actions
+Now update the route to handle the new return type:
+
+
+6 actions
+Both servers running cleanly. Let me mark complete:
+
+
+Ran validation · 2 passed
+
+Planning code review response strategy (8 seconds)
+The code review approved the implementation. The non-blocking comments note two follow-up improvements (linkage path for orphaned rows, and log deduplication) that are out of scope for Phase 1. Let me mark complete:
+
+
+Ran validation · 1 passed
+
+Summarizing task completion decisions
+The task is complete. Here's a summary of what was delivered for Timekeeping Identity Phase 1:
+
+Schema changes
+
+Added timekeeperPin (nullable text) and timezone (NOT NULL, default 'UTC') to public.employees
+Migration (migrations/0047_timekeeper_pin_and_timezone.sql)
+
+Adds both columns and backfills them independently from timekeeping.employees via epoch_employee_id — each column only updated when its own condition is satisfied
+Resolver (resolve-epoch-employee.ts)
+
+Fail-closed: returns null for orphaned employees (no epochEmployeeId) and broken links, with explicit log warnings/errors
+No timekeeping.employees identity fallback for linked employees
+Service rewires
+
+employees.service.ts — all identity reads via resolver; toApiEmployee() adapter preserves legacy API shape; status updates also sync public.employees.is_active
+punches.service.ts — PIN/timezone/status from public.employees
+dashboard.service.ts — status/timezone from public.employees
+timesheets.service.ts — firstName/lastName derived from public.employees.name
+hash-pins.ts — reads/writes public.employees.timekeeper_pin
+Auth SSO (routes/auth.ts)
+
+Lookup uses only epochEmployeeId (not email) to find the timekeeping FK anchor
+Calls resolveEpochEmployee() to confirm active status from public.employees before granting session
+Startup logging (server/index.ts)
+
+Queries for orphaned timekeeping.employees rows and logs them at boot

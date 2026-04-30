@@ -1,0 +1,49 @@
+index-DMK5-Mkc.js:5376 React initialized: Object
+index-DMK5-Mkc.js:5376 React hooks: Object
+index-DMK5-Mkc.js:5376 [EPOCH SYNC] Sync engine starting
+index-DMK5-Mkc.js:5376 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-DMK5-Mkc.js:5373 App component is rendering...
+index-DMK5-Mkc.js:5373 Environment: production
+index-DMK5-Mkc.js:5373 Base URL: /
+index-DMK5-Mkc.js:1655 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/materials:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/fabric-inventory:1  Failed to load resource: the server responded with a status of 401 ()
+/api/inventory/items/fabric-items:1  Failed to load resource: the server responded with a status of 401 ()
+/api/cutting-table/production-lines:1  Failed to load resource: the server responded with a status of 401 ()
+index-DMK5-Mkc.js:1655 [EPOCH] Install prompt captured and ready
+/login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DMK5-Mkc.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/cutting-table/fabric-inventory/728cf4c9-dedd-43aa-826c-e23fc386b311/reactivate (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/cutting-table/fabric-inventory/728cf4c9-dedd-43aa-826c-e23fc386b311/reactivate: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/vendor-pos?status=Sent&pageSize=200 (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 🌐 API Request to /api/vendor-pos?status=Partially%20Received&pageSize=200 (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/vendor-pos?status=Partially%20Received&pageSize=200: 200
+index-DMK5-Mkc.js:235 ✅ API Response from /api/vendor-pos?status=Sent&pageSize=200: 200
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/inventory/items/by-part-number/505 (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/inventory/items/by-part-number/505: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-DMK5-Mkc.js:235 🌐 API Request to /api/receipts/5/lines/8/split (timeout: 15000ms, deployment: true)
+/api/receipts/5/lines/8/split:1  Failed to load resource: the server responded with a status of 500 ()
+index-DMK5-Mkc.js:235 ✅ API Response from /api/receipts/5/lines/8/split: 500
+index-DMK5-Mkc.js:5376 API error raw body: {"error":"Failed to split line"}
+console.error @ index-DMK5-Mkc.js:5376
+index-DMK5-Mkc.js:5376 💥 API Request failed for /api/receipts/5/lines/8/split: Error: Failed to split line
+    at Ee (index-DMK5-Mkc.js:235:6381)
+console.error @ index-DMK5-Mkc.js:5376

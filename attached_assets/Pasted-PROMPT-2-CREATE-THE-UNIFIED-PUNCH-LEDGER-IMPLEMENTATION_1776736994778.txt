@@ -1,0 +1,140 @@
+PROMPT 2 — CREATE THE UNIFIED PUNCH LEDGER
+IMPLEMENTATION MODE.
+MAKE CHANGES.
+
+GOAL:
+Create the true native EPOCH unified punch ledger.
+
+This is the permanent replacement for standalone:
+timekeeping.punches
+
+ARCHITECT RULE:
+
+ALL labor capture must originate from:
+
+1. Kiosk
+2. Traveler Scan
+3. Employee Portal
+
+and ALL must land in:
+
+ONE source of truth
+
+The Unified Punch Ledger
+
+NOT standalone timekeeping
+
+NEVER dual systems
+
+REQUIRED IMPLEMENTATION:
+
+1. Establish native ledger
+
+Use:
+time_clock_entries
+
+OR create:
+public.punch_ledger
+
+Choose the cleaner architecture.
+
+Requirements:
+- employeeId
+- clockIn
+- clockOut
+- source (KIOSK / TRAVELER / PORTAL)
+- travelerId nullable FK
+- productionWorkOrderId nullable FK
+- chargeCodeId FK
+- laborClass
+- overrideReason
+- approvalStatus
+- createdBy
+- updatedBy
+- audit trail compatibility
+
+NO free-text chargeCode
+NO free-text traveler references
+
+FK enforced relationships only
+
+2. Traveler behavior
+
+Critical requirement:
+
+scan traveler = labor session starts
+
+If employee is not clocked in:
+→ auto clock in
+
+If employee is already clocked in:
+→ switch labor assignment only
+
+This must be native behavior
+
+NOT delayed manual entry later
+
+3. Kiosk behavior
+
+Kiosk establishes attendance anchor
+
+Clock in / out
+
+Feeds same unified ledger
+
+4. Employee portal behavior
+
+Portal supports:
+- manual punch
+- missed punch correction
+- supervisor approval workflow
+
+Still writes to same ledger
+
+5. Replace current absorbed punch routes
+
+Rewire:
+server/src/routes/timekeeping/punches.ts
+
+and
+
+server/src/routes/timeClock.ts
+
+so all reads/writes target native ledger
+
+NOT timekeeping.punches
+
+6. Remove dependency on:
+
+timekeeping.employees bridge logic
+
+timekeepingId architecture must begin retirement
+
+7. Frontend rewiring
+
+Must update:
+- KioskPage
+- EmployeePortal
+- useTimeClock
+- ProductionOrderInspector
+- TravelerExecution
+- offline mutations
+
+to use native ledger endpoints
+
+OUTPUT REQUIRED:
+
+A)
+Files changed
+
+B)
+New source of truth identified
+
+C)
+Remaining dependencies on timekeeping.punches
+
+D)
+Anything blocking Prompt 3
+
+DO NOT DELETE tkDb.ts YET
+DO NOT DELETE timekeeping schema YET

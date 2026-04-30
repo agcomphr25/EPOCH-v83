@@ -1,0 +1,247 @@
+IMPLEMENTATION PROMPT — Rebuild Vendor PO Confirmation Links (GET-safe / POST-consume Architecture)
+
+We have completed a forensic audit of the Vendor PO confirmation link issue inside /vendor-pos.
+
+Root cause is confirmed:
+
+The current system consumes the vendor confirmation token on first GET request inside:
+
+GET /api/magic-link/verify
+
+which calls:
+
+validateMagicLink()
+→ markMagicLinkTokenAsUsed()
+
+This causes:
+- Microsoft Safe Links
+- Proofpoint
+- Mimecast
+- Barracuda
+- Outlook preview
+- Apple Mail prefetch
+- browser preloading
+
+to consume the token before the vendor ever clicks it.
+
+Vendors then receive:
+“Link Expired or Invalid”
+
+This is not acceptable.
+
+We must rebuild this architecture correctly.
+
+====================================================
+CRITICAL INSTRUCTIONS
+====================================================
+
+Implement carefully.
+
+DO NOT break:
+- existing vendor PO workflows
+- audit history
+- purchasing controls
+- vendor acknowledgement records
+- existing issued POs
+
+DO NOT create a standalone disconnected system.
+
+This must integrate into the existing /vendor-pos architecture cleanly.
+
+Maintain:
+- auditability
+- DCAA defensibility
+- full traceability
+
+====================================================
+GOAL
+====================================================
+
+Convert Vendor PO Confirmation from:
+
+BAD:
+single-use magic login link consumed on GET page open
+
+to
+
+GOOD:
+vendor action session token consumed ONLY on deliberate POST confirmation action
+
+====================================================
+REQUIRED ARCHITECTURE
+====================================================
+
+STEP 1 — Safe GET Page Load
+
+Email link should open safely without consuming token.
+
+Current bad behavior:
+
+GET /api/magic-link/verify?token=...
+
+→ validates token
+→ marks token used
+→ token dies immediately
+
+New correct behavior:
+
+GET /vendor-confirm?token=...&purpose=vendor_po_confirmation
+
+→ validate token only
+→ DO NOT mark token used
+→ render vendor confirmation page
+→ token remains valid
+
+This GET must be safe for:
+- email scanners
+- preview bots
+- accidental opens
+- browser refresh
+- vendor reopening email
+
+====================================================
+STEP 2 — POST Consumes Token
+
+ONLY when vendor deliberately clicks:
+
+- Confirm PO Receipt
+- Reject PO
+- Acknowledge Receipt
+
+should backend perform:
+
+POST /api/vendor-pos/confirm
+
+→ validate token
+→ verify still unused
+→ mark token used
+→ write vendor action
+→ write audit log
+→ update PO status
+→ success confirmation
+
+Single-use belongs ONLY here.
+
+====================================================
+REQUIRED CHANGES
+====================================================
+
+1. Create safe frontend confirmation page
+
+Example:
+ /vendor-confirm
+
+This page should:
+- accept token from URL
+- display PO/vendor confirmation UI
+- NOT consume token on load
+- provide explicit action buttons
+
+2. Split validation vs consumption
+
+Refactor current validateMagicLink()
+
+into something like:
+
+validateMagicLink()
+→ validation only
+
+consumeMagicLink()
+→ sets usedAt
+
+DO NOT mark used inside validation.
+
+3. Update backend POST action route
+
+New POST route must:
+- validate token
+- consume token
+- record confirmation
+- preserve audit trail
+
+4. Resend behavior must invalidate old tokens
+
+When PO is resent:
+
+- create new token
+- invalidate ALL prior unused tokens for same PO
+
+Only ONE active token should exist per PO.
+
+No multiple-active-token ambiguity allowed.
+
+5. Improve vendor-facing error states
+
+Replace generic:
+
+“Link Expired or Invalid”
+
+with specific states:
+
+A:
+This confirmation link has already been used
+
+B:
+This confirmation link has expired
+
+C:
+This confirmation link is invalid
+
+D:
+This PO has already been confirmed by your team
+
+These must be visually distinct and understandable.
+
+6. Add forensic logging
+
+Log:
+- invalid token
+- expired token
+- already used
+- successful confirmation
+- resend invalidation
+
+Future support should be able to diagnose root cause quickly.
+
+7. Verify APP_URL / PRODUCTION_DOMAIN handling
+
+Ensure production links generate correctly.
+
+Do NOT allow localhost fallback in production.
+
+Harden this logic if needed.
+
+====================================================
+IMPORTANT SAFETY RULES
+====================================================
+
+DO NOT:
+- remove audit history
+- delete prior records blindly
+- break existing issued PO links without safe migration
+- create orphan confirmations
+- lose vendor confirmation evidence
+
+Think like:
+procurement control + auditor + DCAA reviewer
+
+====================================================
+OUTPUT REQUIRED
+====================================================
+
+Return:
+
+1. Implementation plan by file
+2. Exact files changed
+3. Route changes
+4. Schema changes (if needed)
+5. Migration requirements
+6. Backward compatibility risks
+7. Safe rollout plan
+8. Rollback safety considerations
+
+Then implement.
+
+Do not shortcut architecture.
+
+This is a purchasing controls system, not just an email link.

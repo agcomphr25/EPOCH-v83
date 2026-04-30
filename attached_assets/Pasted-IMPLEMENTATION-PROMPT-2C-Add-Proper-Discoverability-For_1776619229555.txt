@@ -1,0 +1,124 @@
+IMPLEMENTATION PROMPT 2C — Add Proper Discoverability For Executive Matrix And DCAA Findings
+
+Objective:
+Improve navigation and discoverability for the newly added Executive Readiness Matrix and DCAA Findings pages without disrupting existing EDRI routing, permissions, or executive workflow clarity.
+
+Background:
+Audit confirms:
+
+routes work correctly
+permissions work correctly
+Executive Matrix exists at:
+/admin/edri/executive-matrix
+DCAA Findings exists at:
+/admin/dcaa-findings
+
+Current problem:
+
+These pages are only discoverable through buttons inside the EDRI Dashboard.
+
+There are:
+
+no direct sidebar/main navigation entries
+inconsistent sub-page cross-navigation
+weak discoverability for executives who should be using these pages regularly
+
+We need clean discoverability, not navigation clutter.
+
+IMPORTANT RULES:
+
+Do NOT redesign the main app navigation
+Do NOT weaken permissions
+Do NOT duplicate nav patterns unnecessarily
+Keep the solution aligned with existing EDRI UX patterns
+Preserve ADMIN + OWNER access only
+Avoid creating “orphan pages” that only exist through hidden links
+
+Implementation Requirements:
+
+Add explicit discoverability for:
+/admin/edri/executive-matrix
+/admin/dcaa-findings
+
+These should feel like first-class parts of the EDRI ecosystem.
+
+Evaluate best UX placement
+
+Implement the cleanest realistic option based on the current app architecture.
+
+Possible good options include:
+
+explicit EDRI submenu links
+consistent secondary nav inside all EDRI sub-pages
+sidebar entries under existing admin/compliance sections
+improved internal EDRI navigation system
+
+Do NOT clutter the main sidebar if a cleaner EDRI-local navigation pattern already exists.
+
+Choose the best architectural fit—not just the fastest shortcut.
+
+Make permissions explicit where appropriate
+
+Current audit shows:
+/admin/edri/executive-matrix is protected by prefix inheritance from /admin/edri
+
+This works technically.
+
+Evaluate whether adding explicit permission registration improves clarity and maintainability.
+
+Only do this if it fits the current permission architecture cleanly.
+
+Do not create redundant permission logic for no reason.
+
+Ensure all EDRI sub-pages feel like one connected system
+
+Pages such as:
+
+Dashboard
+Heatmap
+Remediation
+History
+Executive Readiness Matrix
+DCAA Findings
+Evidence
+Domain Detail
+Snapshot Detail
+
+should feel like one executive compliance ecosystem—not disconnected admin pages.
+
+Cross-navigation should be intentional and obvious.
+
+Preserve executive flow
+
+An EVP should be able to move naturally between:
+
+DCAA survivability
+→ Findings
+→ Executive Matrix
+→ Remediation priorities
+
+without hunting for hidden links.
+
+That workflow matters.
+
+Final Deliverable
+
+Return:
+
+SECTION A — Navigation Files Modified
+
+SECTION B — Discoverability Improvements Added
+
+SECTION C — Permission Clarity Changes
+
+SECTION D — Why This UX Is The Cleanest Fit
+
+SECTION E — Remaining Navigation Gaps
+
+SECTION F — Any Future Navigation Risks
+
+Be honest.
+
+Do not optimize for “it technically works.”
+
+Optimize for executive usability and trust.

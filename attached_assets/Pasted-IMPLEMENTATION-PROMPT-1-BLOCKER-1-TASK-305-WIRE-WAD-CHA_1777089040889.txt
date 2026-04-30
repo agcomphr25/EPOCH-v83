@@ -1,0 +1,175 @@
+IMPLEMENTATION PROMPT 1 — BLOCKER 1 (TASK #305)
+WIRE WAD + CHARGE CODE + DEPARTMENT INTO GL POSTING
+
+You are performing a HIGH-RISK accounting architecture implementation.
+
+This touches:
+- GL posting
+- labor cost allocation
+- DCAA audit integrity
+- charge code attribution
+- contract/WAD traceability
+
+Be extremely conservative.
+
+DO NOT refactor unrelated systems.
+DO NOT redesign architecture.
+DO NOT touch UI.
+DO NOT modify traveler flow.
+DO NOT modify payroll exports yet.
+
+Your ONLY job is:
+
+Fix Task #305
+
+Current problem:
+
+server/src/services/laborPostingService.ts aggregates labor by cost_type only and does NOT reference:
+
+- WAD (production_work_orders)
+- department
+- resolved charge code
+- contract cost objective
+
+This makes labor postings unattributable to the actual contract structure and creates a DCAA failure.
+
+We must change:
+
+BAD:
+DIRECT LABOR → GL
+
+TO:
+
+GOOD:
+Labor Session
+→ traveler
+→ traveler step
+→ production_work_order (WAD)
+→ department
+→ resolved charge code
+→ valid contract cost objective
+→ GL posting
+
+--------------------------------------------------
+REQUIRED AUDIT FIRST
+--------------------------------------------------
+
+Before changing code:
+
+Fully inspect:
+
+- server/src/services/laborPostingService.ts
+- server/src/services/laborCostingService.ts
+- server/src/lib/resolveChargeCode.ts
+- server/src/helpers/laborBudgetHelper.ts
+- server/schema.ts
+
+Map the exact current posting flow.
+
+Show:
+
+1. where labor cost records are created
+2. where journal entries are posted
+3. where cost_type is currently used
+4. where charge code is lost
+5. where department attribution disappears
+
+Do not code until verified.
+
+--------------------------------------------------
+IMPLEMENTATION REQUIREMENTS
+--------------------------------------------------
+
+Implement:
+
+1. laborPostingService must carry forward:
+
+- productionWorkOrderId
+- projectId
+- department
+- resolved chargeCodeId
+- chargeCode.type
+- chargeCode.code
+
+from punch_ledger / labor_cost_records into posting logic
+
+2. journal_entries must preserve traceability
+
+Each posting must be attributable back to:
+
+- employee
+- labor session
+- traveler
+- WAD
+- charge code
+- department
+
+3. fail closed
+
+If a valid WAD-linked charge code cannot be resolved:
+
+DO NOT POST
+
+Hard fail.
+Log explicit error.
+
+No silent fallback.
+
+4. preserve existing accounting mappings
+
+Continue using:
+
+labor_account_config
+
+for COA mapping
+
+but now based on verified charge code context
+
+—not generic cost_type only
+
+5. no duplicate posting
+
+Prevent accidental double-posting during migration
+
+--------------------------------------------------
+DCAA REQUIREMENTS
+--------------------------------------------------
+
+Must support audit answers for:
+
+“What contract was this labor charged to?”
+
+“Who worked it?”
+
+“Under what authorization?”
+
+“Which charge code was used?”
+
+“Which department incurred the labor?”
+
+“Which journal entry posted it?”
+
+If an auditor cannot answer these from the system:
+
+implementation is wrong
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/TASK_305_IMPLEMENTATION.md
+
+Include:
+
+- exact files changed
+- exact logic added
+- old flow vs new flow
+- failure protections added
+- audit integrity protections
+- migration risks
+
+Do not over-engineer.
+
+Fix only Task #305 correctly.

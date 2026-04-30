@@ -1,0 +1,484 @@
+This is a strong ticket. It fits your EPOCH architecture well, and the scope is tight enough to build without creating new core tables.
+
+I would tighten it just a little so the build stays safe against your current data model.
+
+#951 — Project Manager Control Center
+
+Build recommendation
+Overall fit
+
+This should be a project-level dashboard that reads from the systems already being built:
+
+Project → production_work_orders → travelers → labor_work_sessions / inventory allocations
+
+That matches your WAD direction and gives PMs one command page without duplicating logic from P2, travelers, timekeeping, or inventory.
+
+What I would keep exactly as written
+
+These are good and should stay:
+
+dedicated PM Control Center page
+project selector filtered to active/open projects
+PM-only filter toggle
+KPI cards
+three tabs:
+Production
+Direct Labor
+Material Budget
+no new core schema tables
+no editing from this page
+no approval workflows yet
+
+That is the right phase-1 scope.
+
+What I would tighten before build
+1. Be careful with “all three tabs read from existing data”
+
+That is mostly true, but the risky part is the Material Budget tab.
+
+Production and labor can likely read pretty cleanly from existing:
+
+production_work_orders
+travelers
+labor_work_sessions
+labor_charge_codes
+
+But materials depends on whether you already have:
+
+explicit project-linked allocations
+work-order-linked allocations
+issued quantities by traveler/work order
+cost data on the same path
+
+So I would slightly reword that section to:
+
+All tabs should prefer existing data sources. Production and Direct Labor must read fully from existing tables. Material Budget should use existing inventory allocation/issue/cost data where available and gracefully fall back to partial values if some project-linked material rollup paths are not yet fully normalized.
+
+That prevents the ticket from pretending the material side is easier than it may actually be.
+
+2. Clarify what “% production complete” means
+
+You need one rule or the KPI will drift.
+
+For phase 1, I would define it as:
+
+if work orders have quantity completion fields, use
+sum(quantityCompleted) / sum(quantityRequired)
+otherwise fall back to
+completed work orders / total work orders
+
+That should be written into the ticket.
+
+3. Clarify “days ahead/behind”
+
+You need a single calculation rule.
+
+Recommended phase-1 rule:
+
+if dueDate is null → value is null / show em dash
+if status is COMPLETE → compare completion date to due date if available
+otherwise
+today - dueDate
+positive = behind
+negative = ahead
+zero = due today
+
+Keep it simple.
+
+4. Clarify what counts as “open blockers”
+
+For the summary cards, define blockers as one or more of:
+
+work order status = BLOCKED
+traveler status/phase indicates blocked or hold
+missing active traveler when WO is in progress
+material shortage / hold if available
+certification invalid on active labor session only if you want labor compliance to affect blockers
+
+For phase 1, I would use only:
+
+blocked work orders
+blocked/open hold travelers
+
+Then expand later.
+
+Recommended endpoint structure
+
+Your proposed routes are good. I would shape them like this:
+
+1. GET /api/pm-dashboard/:projectId/summary
+
+Return:
+
+projectId
+projectName
+assignedPm
+targetShipDate
+totalWorkOrders
+completedWorkOrders
+productionPercent
+openTravelerCount
+blockedCount
+budgetedLaborHours
+actualLaborHours
+laborRemainingHours
+plannedMaterialCost
+committedMaterialCost
+consumedMaterialCost
+remainingMaterialBudget
+
+Even if some material numbers come back 0 or null, keep the shape stable.
+
+2. GET /api/pm-dashboard/:projectId/production
+
+Return rows like:
+
+productionWorkOrderId
+workOrderNumber
+partNumber
+partName
+quantityRequired
+quantityCompleted
+status
+dueDate
+currentDepartment
+currentTravelerStep
+activeTravelerId
+activeTravelerNumber
+daysScheduleVariance
+blockReason
+
+Then the drawer can call either:
+
+a nested detail endpoint, or
+reuse an existing traveler detail route
+
+Best phase-1 addition:
+
+GET /api/pm-dashboard/:projectId/production/:workOrderId
+
+That keeps the table query light.
+
+3. GET /api/pm-dashboard/:projectId/labor
+
+I would return one object with three sections:
+
+{
+  summary: {
+    budgetedHours: number,
+    actualHours: number,
+    remainingHours: number,
+    percentConsumed: number,
+    openSessionCount: number
+  },
+  chargeCodeRows: [...],
+  liveFeed: [...]
+}
+
+Charge code row fields:
+
+chargeCodeId
+chargeCode
+department
+taskName
+budgetedHours
+actualHours
+remainingHours
+percentConsumed
+isOverrun
+isNearLimit
+
+Live feed fields:
+
+sessionId
+employeeId
+employeeName
+travelerId
+travelerNumber
+department
+chargeCode
+startedAt
+elapsedMinutes
+certificationStatus
+
+That will make the frontend easier.
+
+4. GET /api/pm-dashboard/:projectId/materials
+
+Return:
+
+{
+  summary: {
+    plannedCost: number,
+    committedCost: number,
+    consumedCost: number,
+    remainingCost: number
+  },
+  rows: [...]
+}
+
+Material row fields:
+
+inventoryItemId
+itemCode
+itemName
+lotNumber
+internalControlNumber
+qtyRequired
+qtyAllocated
+qtyIssued
+unitCost
+committedCost
+consumedCost
+status
+
+Status enum for UI:
+
+FULLY_ALLOCATED
+PARTIAL
+SHORT
+ON_HOLD
+
+That matches your spec.
+
+Frontend structure recommendation
+New page
+
+client/src/pages/PMControlCenterPage.tsx
+
+I would mirror the clean layout style of P2ControlCenter.tsx, but not copy its business logic.
+
+Recommended page sections:
+
+page header
+project selector row
+KPI cards row
+tabs:
+Production
+Direct Labor
+Material Budget
+Query flow
+
+Use TanStack Query with:
+
+one query for active projects
+one query for summary
+one query per active tab
+labor live feed refresh every 30 seconds
+
+Recommended refresh behavior:
+
+Summary: 60 sec
+Production: 60 sec
+Labor: 30 sec
+Materials: 60–120 sec
+Project selector behavior
+
+Top controls:
+
+project dropdown
+“Only my projects” toggle
+
+Best default:
+
+if user is PM on one active project, auto-select it
+otherwise pick first active project
+if toggle is on and no projects remain, show empty state
+UI details by tab
+Production tab
+
+Table columns:
+
+WO #
+Part
+Qty
+Status
+Department
+Current Step
+Due Date
+Ahead/Behind
+
+Row click opens right-side drawer with:
+
+traveler number
+traveler phase
+current operator
+time logged
+open issues if available
+
+Status badges should match your existing EPOCH badge styling.
+
+Direct Labor tab
+
+Top summary cards:
+
+Budgeted Hours
+Actual Hours
+Remaining Hours
+% Consumed
+
+Charge code table:
+
+red if percentConsumed > 100
+yellow if percentConsumed >= 80
+
+Live labor cards:
+
+employee
+traveler
+department
+charge code
+elapsed time
+certification badge
+
+Certification badge states:
+
+Valid
+Missing
+Expired
+Unknown
+
+Use “Unknown” rather than assuming invalid if data is incomplete.
+
+Material Budget tab
+
+Top summary cards:
+
+Planned
+Committed
+Consumed
+Remaining
+
+Sortable table:
+
+Item
+Lot / ICN
+Required
+Allocated
+Issued
+Unit Cost
+Committed Cost
+Status
+
+Sort defaults:
+
+SHORT
+ON_HOLD
+PARTIAL
+FULLY_ALLOCATED
+
+That puts risk at the top.
+
+Biggest technical risks
+Risk 1: project linkage consistency
+
+This ticket assumes:
+
+production_work_orders.projectId is reliable
+travelers link back to work orders consistently
+labor sessions have projectId or can be resolved cleanly
+
+If some labor sessions only link through traveler/work order and not directly through projectId, backend aggregation must handle both.
+
+Risk 2: material linkage path
+
+This is the biggest uncertainty.
+You may have enough for:
+
+allocated qty
+issued qty
+unit cost
+
+But if project-level allocation is indirect, you may need to derive through:
+
+work order
+traveler
+requirement/reservation
+inventory transaction
+
+That is fine for phase 1, but the implementation should be honest about any missing links.
+
+Risk 3: certification matching
+
+You need a clean rule for how a labor session maps to a required certification.
+If not fully modeled yet, phase 1 can show:
+
+employee certification status generally
+or
+certification status for department/task if resolvable
+otherwise Unknown
+
+Do not fake precision here.
+
+Best backend implementation order
+Add summary endpoint
+Add production endpoint
+Add labor endpoint
+Add materials endpoint
+Build page shell + selector
+Add Production tab
+Add Direct Labor tab
+Add Material Budget tab
+
+That gives you a usable dashboard fastest.
+
+Suggested acceptance criteria cleanup
+
+I would revise your “Done looks like” slightly to this:
+
+A new PM Control Center page is accessible from main navigation
+A project selector at the top loads open/active projects and supports an Only My Projects toggle
+KPI cards display:
+production complete %
+labor hours used vs budgeted
+material budget consumed vs remaining
+open blockers
+target due date
+Production tab displays work orders with current execution state and opens a traveler detail drawer
+Direct Labor tab displays:
+labor summary cards
+charge code budget-vs-actual breakdown
+live open labor sessions for the project
+Material Budget tab displays:
+budget summary cards
+allocated/issued material lines with cost and status
+All data is read-only
+No new core schema tables are introduced
+
+That is cleaner and easier to test.
+
+My recommendation on ticket priority
+
+This is a good next ticket after WAD/traveler/work-order linkage because it makes that work visible to the PM in a way leadership will immediately understand.
+
+It is also a good bridge ticket because it exposes whether:
+
+project linkage is clean
+labor burn is trustworthy
+material allocation is mature enough
+
+So it is not just UI — it is a system health check.
+
+Best label for this in EPOCH nav
+
+I would call the page:
+
+PM Control Center
+
+Not “Project Manager Dashboard,” because “Control Center” fits the rest of your app language better.
+
+Final recommendation
+
+I would approve this ticket with one note:
+
+Build Production and Direct Labor as hard requirements for phase 1. Build Material Budget as best-effort from existing linked inventory/allocation data, with stable API shape even if some cost fields are partial in the first pass.
+
+That keeps the build moving and avoids stalling on the material side.
+
+Next, I can turn this into a copy/paste Replit implementation spec with:
+
+exact endpoint contracts
+frontend component breakdown
+query keys
+file-by-file change list
+phased backend and UI tasks.

@@ -1,0 +1,307 @@
+READ-ONLY PRODUCTION DATA VALIDATION — DAILY TUBE THROUGHPUT BOARD (PROMPT 3)
+
+STRICTLY READ-ONLY.
+DO NOT MODIFY CODE.
+DO NOT WRITE MIGRATIONS.
+DO NOT PATCH DATA.
+DO NOT IMPLEMENT ANYTHING.
+DO NOT CREATE FILES.
+
+Your job is to validate the production data assumptions required for the Daily Tube Throughput Board before implementation begins.
+
+This is the final truth-check before code.
+
+The architecture and implementation constitution are already approved.
+
+Now we must verify that the production data is trustworthy enough to support it.
+
+This validation determines whether implementation proceeds exactly as designed or whether fallback logic is required.
+
+NO GUESSING.
+ONLY PRODUCTION EVIDENCE.
+
+--------------------------------------------------
+PRIMARY VALIDATION TARGETS
+--------------------------------------------------
+
+You must validate:
+
+1. travelerBarcode linkage completeness
+
+2. p2_oven_cure_logs reliability for green-state trigger (slots 19–22)
+
+3. Daily slot sequencing integrity using startedAt
+
+4. Assemble/Disassembly completion reliability for slots 1–18 green state
+
+5. Real-world frequency of cancelled / blocked / hold states
+
+We need hard truth.
+
+Not theory.
+
+--------------------------------------------------
+SECTION A — travelerBarcode LINKAGE VALIDATION
+--------------------------------------------------
+
+This is the highest-priority validation.
+
+The board depends on this join path:
+
+p2_layup_schedules
+→ p2_serialized_items
+→ travelerBarcode
+→ travelers
+→ traveler_steps
+
+We must know if this works reliably in REAL production data.
+
+Validate:
+
+1. Of the last 60 real P2 tubes started,
+how many have:
+
+p2_serialized_items.travelerBarcode populated?
+
+2. Of those,
+how many successfully join to:
+
+travelers.id
+
+3. Of those,
+how many successfully join to:
+
+traveler_steps.departmentName = 'Assemble/Disassembly'
+
+4. Return exact percentages
+
+Example:
+
+60 started
+58 have travelerBarcode
+56 join to travelers
+54 join to Assemble/Disassembly step
+
+= 90% reliable
+
+We need exact numbers.
+
+Not estimates.
+
+Also identify:
+
+- null travelerBarcode records
+- malformed values
+- duplicate mappings
+- broken joins
+- legacy inconsistencies
+
+If reliability is below 95%,
+call it out as a major implementation risk.
+
+--------------------------------------------------
+SECTION B — OVEN CURE LOG RELIABILITY
+--------------------------------------------------
+
+For slots 19–22:
+
+GREEN = final required oven entry
+
+This depends on:
+
+p2_oven_cure_logs.startTime
+
+We must validate whether this is reliable enough.
+
+Check:
+
+For the last 30 recently completed P2 tubes:
+
+1. Does a p2_oven_cure_logs record exist?
+
+2. Does startTime exist and appear timely?
+
+3. Is startTime entered close to actual production time
+or obviously backfilled much later?
+
+4. Are there multiple logs for same serialized item?
+
+5. Is ovenId populated consistently?
+
+6. Is result populated reliably?
+
+Return:
+
+exact percentages
+
+and
+
+whether this is trustworthy enough for Phase 1
+
+OR
+
+whether fallback to universal Assemble/Disassembly green logic is safer.
+
+--------------------------------------------------
+SECTION C — DAILY SLOT SEQUENCING INTEGRITY
+--------------------------------------------------
+
+Validate:
+
+Using:
+
+p2_layup_schedules.startedAt
+
+does the slot model behave cleanly?
+
+Check recent days:
+
+1. Does startedAt reliably exist when status = IN_PROGRESS?
+
+2. Are there strange ordering issues?
+
+Examples:
+
+- identical timestamps
+- missing timestamps
+- startedAt after completedAt
+- retroactively edited starts
+- cancelled before started
+- delayed IN_PROGRESS transitions
+
+3. Are there real-world cases where
+startedAt would create misleading slot order?
+
+We need to know if:
+
+ROW_NUMBER(ORDER BY startedAt)
+
+is trustworthy enough.
+
+--------------------------------------------------
+SECTION D — GREEN STATE VALIDATION
+--------------------------------------------------
+
+For Slots 1–18:
+
+GREEN =
+Assemble/Disassembly Completed
+
+Validate:
+
+1. Is this step reliably completed in traveler_steps?
+
+2. Is department naming consistent?
+
+Exactly:
+“Assemble/Disassembly”
+
+or are there variants?
+
+3. Is completedAt consistently populated?
+
+4. Are there cases where real production finished
+but the step was not marked complete?
+
+5. Would operations likely trust this as the true green trigger?
+
+Return:
+
+whether this is safe as the primary green trigger.
+
+--------------------------------------------------
+SECTION E — BLOCK / HOLD REALITY CHECK
+--------------------------------------------------
+
+We know block states exist.
+
+We need to know how they behave in reality.
+
+Check:
+
+Recent blocked/held travelers:
+
+1. Are blocked reasons populated well?
+
+or mostly blank/useless?
+
+2. Are holds cleared properly?
+
+or do stale HOLD states linger?
+
+3. Is traveler.status = BLOCKED
+actually used consistently?
+
+or do people bypass it?
+
+4. Are p2_traveler_changes.blocksTraveler
+used meaningfully?
+
+Return:
+
+whether the board’s BLOCKED visibility
+will reflect reality
+
+or
+
+whether operator discipline is weak.
+
+--------------------------------------------------
+SECTION F — CANCELLED SLOT FREQUENCY
+--------------------------------------------------
+
+Validate:
+
+How often does:
+
+Started → Cancelled
+
+actually happen?
+
+If rare:
+
+fine
+
+If common:
+
+we must design VOID visibility carefully.
+
+Return:
+
+recent real examples and frequency.
+
+--------------------------------------------------
+REQUIRED OUTPUT FORMAT
+--------------------------------------------------
+
+Return ONLY:
+
+# DAILY TUBE THROUGHPUT BOARD — PRODUCTION DATA VALIDATION
+
+## Executive Validation Summary
+
+## travelerBarcode Reliability
+
+## Oven Cure Log Reliability
+
+## Slot Sequencing Integrity
+
+## Green-State Reliability
+
+## Block / Hold Reality
+
+## Cancelled Slot Frequency
+
+## Major Risks
+
+## Recommended Go / No-Go Decision
+
+## Required Fallback Logic (if needed)
+
+## Final Recommendation Before Implementation
+
+No code.
+No implementation.
+No assumptions.
+
+Only production evidence.

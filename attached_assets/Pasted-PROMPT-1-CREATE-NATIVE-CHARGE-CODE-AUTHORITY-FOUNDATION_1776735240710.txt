@@ -1,0 +1,115 @@
+PROMPT 1 — CREATE NATIVE CHARGE CODE AUTHORITY (FOUNDATION FIRST)
+IMPLEMENTATION MODE.
+NO READ-ONLY AUDIT.
+MAKE CHANGES.
+
+GOAL:
+Eliminate dependency on standalone timekeeping.labor_charge_codes by creating the native EPOCH charge code authority.
+
+This is Phase 1 of permanently removing the standalone Timekeeping module.
+
+ARCHITECTURAL RULE:
+There must be exactly ONE enterprise charge code registry.
+
+Current bad state:
+- timekeeping.labor_charge_codes is the only real registry
+- projects.defaultChargeCodeId exists but points nowhere
+- productionWorkOrders.defaultChargeCodeId exists but points nowhere
+- travelers.defaultChargeCodeId exists but points nowhere
+- validateActiveChargeCode() depends on tkDb.ts → laborChargeCodesTable
+
+This must end.
+
+REQUIRED IMPLEMENTATION:
+
+1. Create new native table:
+public.charge_codes
+
+Minimum required fields:
+- id
+- code (unique)
+- description
+- type (DIRECT / OVERHEAD / G_AND_A)
+- contractReference
+- billable
+- requiresApproval
+- active
+- departmentId (real FK if possible)
+- projectId nullable FK if needed
+- productionWorkOrderId nullable FK if needed
+- createdAt
+- updatedAt
+
+NO free-text fake linkage fields.
+
+2. Data migration
+
+Migrate all active rows from:
+timekeeping.labor_charge_codes
+
+into:
+public.charge_codes
+
+Preserve:
+- code
+- type
+- billable
+- requiresApproval
+- active
+- contract reference
+
+Create migration script.
+
+3. Repair broken FK columns
+
+Make these real FK relationships:
+
+projects.defaultChargeCodeId
+productionWorkOrders.defaultChargeCodeId
+travelers.defaultChargeCodeId
+
+→ public.charge_codes.id
+
+4. Rewire validation
+
+Refactor:
+server/src/routes/timeClock.ts
+
+Remove:
+tkDb.ts dependency
+laborChargeCodesTable dependency
+
+Replace:
+validateActiveChargeCode()
+
+with native public.charge_codes lookup
+
+5. Preserve PM dashboard compatibility
+
+Any current charge code lookups must resolve from native charge_codes
+
+not standalone timekeeping schema
+
+6. Constitutional enforcement
+
+Create rule:
+No new code may read from timekeeping.labor_charge_codes
+
+OUTPUT REQUIRED:
+
+A)
+Files changed
+
+B)
+Migration files created
+
+C)
+Remaining references to old labor_charge_codes
+
+D)
+Anything unsafe that must be addressed in Prompt 2
+
+DO NOT TOUCH tkDb.ts YET
+DO NOT DELETE STANDALONE MODULE YET
+
+FOUNDATION FIRST

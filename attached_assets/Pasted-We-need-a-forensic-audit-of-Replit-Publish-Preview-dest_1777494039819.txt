@@ -1,0 +1,176 @@
+We need a forensic audit of Replit Publish Preview destructive schema warnings.
+
+This is NOT primarily a migration-file cleanup task.
+
+The likely issue is schema drift between:
+
+1. schema.ts (Drizzle schema)
+2. boot-time ensureX() schema creation logic
+3. actual production database state
+
+This project uses handwritten SQL migrations plus boot-time ensureX() functions, not Drizzle push.
+
+Replit Publish Preview may be introspecting schema.ts against production DB and generating destructive warnings that do NOT reflect real migration risk.
+
+We must prove the source before publishing anything.
+
+==================================================
+CURRENT ISSUE
+==================================================
+
+Republish shows dangerous warnings including:
+
+- deleting barcode_printed from p2_serialized_items with live data
+- dropping unrelated tables
+- dropping indexes
+- altering unrelated ID types
+- disabling row-level security
+
+These are NOT part of the P1 OEM invoice_number task.
+
+Current handwritten SQL migrations appear clean.
+
+Migration safety tests are passing.
+
+This strongly suggests the destructive diff may be coming from publish preview schema comparison, not checked-in SQL migrations.
+
+==================================================
+TASK
+==================================================
+
+STEP 1 — Identify Source of Destructive Diff
+
+Determine whether the warnings come from:
+
+A) checked-in SQL migration files
+
+B) boot-time ensureX() schema creation/update logic
+
+C) Replit Publish Preview schema diff engine comparing schema.ts to production
+
+D) some combination of the above
+
+Be precise.
+Show exact evidence.
+
+==================================================
+STEP 2 — Production Truth (Read-Only, Production DB Only)
+
+Use the Replit deployment database skill to run READ-ONLY queries against the PRODUCTION database.
+
+Do NOT use development DB.
+Do NOT guess connection strings.
+Do NOT infer from local schema.
+
+Inspect:
+
+- shipment_records
+- shipment_items
+- p2_serialized_items
+- kiosk_pin_rate_limits
+- persistent_discounts
+- order_filter_presets
+- short_term_sales
+- linked_order_groups
+- linked_orders
+- and every table mentioned in the publish warning
+
+Determine:
+
+- which tables actually exist
+- which columns actually exist
+- which indexes actually exist
+- whether barcode_printed exists
+- whether barcode_printed_at exists
+- what production truth actually is
+
+Production DB is source of truth.
+
+==================================================
+STEP 3 — Audit ensureX() Boot-Time Schema Logic
+
+Inspect server startup ensureX() functions and identify:
+
+- which tables are created/modified at boot
+- which columns are added outside migrations
+- which indexes are created outside migrations
+- whether any of the warned objects are managed by ensureX()
+
+Specifically determine whether:
+
+production contains schema created by ensureX()
+that is missing or different inside schema.ts
+
+This is likely the core drift source.
+
+==================================================
+STEP 4 — Compare Against schema.ts + Publish Preview
+
+Determine:
+
+1. legitimate pending work
+
+2. schema drift
+
+3. false-positive destructive diffs
+
+4. publish preview auto-diff behavior
+
+Specifically answer:
+
+Is Publish Preview attempting to auto-reconcile schema drift
+even when SQL migrations are safe?
+
+==================================================
+STEP 5 — Safe Reconciliation Plan
+
+Recommend:
+
+- what must be fixed in schema.ts
+- what must be left alone
+- what should never be auto-published
+- whether warnings can be safely ignored
+- whether a schema reconciliation commit is required first
+- whether ensureX() ownership should be formalized
+
+==================================================
+STEP 6 — Safe Path for invoice_number Publish
+
+After drift diagnosis:
+
+Confirm safest production path for:
+
+ALTER TABLE shipment_records
+ADD COLUMN invoice_number text;
+
+while preserving:
+
+- invoice persistence
+- invoice reuse on reprint
+- OEM shipment search by invoice #
+- UI invoice display
+
+without publishing unrelated destructive changes
+
+==================================================
+IMPORTANT
+==================================================
+
+Do NOT publish yet.
+
+Do NOT delete migrations blindly.
+
+Do NOT trust Publish Preview warnings without proving their source.
+
+Protect production first.
+
+Return:
+
+1. Exact source of destructive diff
+2. Production truth
+3. ensureX() drift findings
+4. schema.ts drift diagnosis
+5. Whether warnings are real or false-positive
+6. Safe reconciliation plan
+7. Safe publish path for invoice_number
+8. Whether republish can proceed safely

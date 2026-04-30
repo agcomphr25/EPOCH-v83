@@ -1,0 +1,354 @@
+You are a senior software architect implementing Phase 1 of the EPOCH salaried timesheet system.
+
+IMPLEMENTATION TASK — PHASE 1 ONLY
+
+Follow this exactly. Do not jump ahead into later phases. Do not modify hourly punch behavior. Do not touch Gusto export logic yet except for safe read-only blocking preparation if absolutely required.
+
+Goal:
+Create the safe structural foundation for salaried employee timesheets inside EPOCH using isolated salaried-specific tables, feature flags, permissions, and UI placement—without changing the current hourly workflow.
+
+This phase must be production-safe and reversible.
+
+==================================================
+PHASE 1 SCOPE (ONLY)
+==================================================
+
+Implement:
+
+1. New database tables (timekeeping schema only)
+2. Initial indirect code seed data
+3. Feature flag support
+4. Permission capabilities
+5. Employee Portal “Timesheet” tab placeholder (SALARY only)
+6. Admin “Salaried Timesheets” review placeholder
+7. Weekly auto-created salaried timesheet shell records
+8. Auto-injected holiday + approved PTO locked placeholder lines
+9. Full audit-safe isolation from hourly system
+
+Do NOT implement:
+- line item editing
+- certification
+- approvals
+- payroll blocking enforcement
+- traveler import
+- comp balances
+- Gusto export wiring
+- In/Out Board presence changes
+- hourly workflow changes
+
+==================================================
+NON-NEGOTIABLE RULES
+==================================================
+
+1. DO NOT modify:
+- public.punch_ledger write paths
+- timeClock kiosk routes
+- hourly timesheet approval flow
+- current Gusto export behavior
+- existing hourly Employee Portal flow
+- In/Out Board logic
+
+2. All new tables must live in:
+timekeeping schema
+
+3. All new UI must be gated by:
+employees.payType = 'SALARY'
+
+4. Entire feature must be behind:
+salaried_timesheet_enabled feature flag
+
+5. Feature must be fully reversible by:
+turning the flag off
+
+6. Use existing AuditService patterns where needed
+
+7. Use existing permissionService patterns
+
+==================================================
+DATABASE WORK
+==================================================
+
+Create Drizzle migration(s) for:
+
+--------------------------------------------------
+timekeeping.salaried_timesheets
+--------------------------------------------------
+
+Fields:
+
+id
+employee_id
+period_start
+period_end
+status
+total_actual_hours
+certified_at
+certified_by
+supervisor_approved_at
+payroll_approved_at
+payroll_approved_by
+reopened_at
+reopen_reason
+created_at
+updated_at
+
+Notes:
+- weekly header record
+- no certification logic yet
+- status starts as OPEN
+
+--------------------------------------------------
+timekeeping.salaried_timesheet_lines
+--------------------------------------------------
+
+Fields:
+
+id
+timesheet_id
+date
+line_type
+charge_code_id
+indirect_code_id
+project_id
+traveler_id
+leave_entry_id
+hours
+source
+note
+created_by
+updated_by
+created_at
+updated_at
+is_locked
+
+Enums:
+line_type:
+DIRECT
+INDIRECT
+PTO
+HOLIDAY
+COMP
+
+source:
+MANUAL
+TRAVELER_IMPORT
+PTO_IMPORT
+HOLIDAY_AUTO
+HR_ADJUSTMENT
+
+Notes:
+- no editing UI yet
+- Phase 1 only needs placeholder insertion support
+
+--------------------------------------------------
+timekeeping.salaried_timesheet_audit
+--------------------------------------------------
+
+Fields:
+
+id
+timesheet_id
+line_id
+action
+actor_id
+actor_name
+actor_role
+before_state jsonb
+after_state jsonb
+reason
+source
+ip_address
+timestamp
+
+--------------------------------------------------
+timekeeping.indirect_codes
+--------------------------------------------------
+
+Fields:
+
+id
+code
+label
+description
+is_active
+sort_order
+created_at
+
+Seed these records:
+
+G&A/Admin
+Supervision/Management
+Machine Maintenance
+Safety Meeting
+Training
+Quality Review
+Proposal/Estimating Support
+Internal Engineering
+Facility/Shop Support
+PTO
+Holiday
+
+--------------------------------------------------
+Feature flag setting
+--------------------------------------------------
+
+Add:
+
+salaried_timesheet_enabled
+
+to existing settings pattern
+
+Default:
+FALSE
+
+==================================================
+BACKEND WORK
+==================================================
+
+Create:
+
+server/src/routes/timekeeping/salariedTimesheets.ts
+
+with placeholder safe endpoints:
+
+GET /api/salaried-timesheet/my/:weekStart
+GET /api/salaried-timesheet/my/list
+GET /api/salaried-timesheet/admin/review
+GET /api/indirect-codes
+
+Behavior:
+- read-only safe
+- auto-create weekly shell record if missing
+- inject approved PTO locked rows from leave_entries
+- inject holiday locked rows from holiday calendar
+- no edit endpoints yet
+
+Create service:
+
+server/src/services/timekeeping/salariedTimesheet.service.ts
+
+Responsibilities:
+
+- getOrCreateWeeklyTimesheet()
+- injectHolidayLines()
+- injectApprovedPTO()
+- getIndirectCodes()
+- getAdminReviewQueue()
+
+Use:
+server/src/services/payPeriod.ts
+
+for boundaries
+
+Use:
+timekeeping.leave_entries
+
+for approved PTO
+
+Use:
+existing holiday calendar integration
+
+for holidays
+
+==================================================
+PERMISSIONS
+==================================================
+
+Add capabilities:
+
+salaried_timesheet.view_own
+salaried_timesheet.review
+salaried_timesheet.adjust
+salaried_timesheet.approve
+
+Rules:
+
+All SALARY employees:
+view_own
+
+HR / Payroll / Upper Management:
+review
+adjust
+approve
+
+Executives:
+same as management
+
+Use existing permission patterns only
+
+==================================================
+FRONTEND WORK
+==================================================
+
+Employee Portal:
+
+Add feature-flagged
+“Timesheet” tab
+
+ONLY visible when:
+payType = SALARY
+
+Location:
+inside current Employee Portal tab structure
+
+Placeholder content:
+
+“Salaried Timesheet (Phase 1)
+Weekly timesheet structure initialized.
+Editing and certification will be enabled in Phase 2.”
+
+Also show:
+- current week range
+- existing locked PTO lines
+- existing holiday lines
+
+Read-only only
+
+--------------------------------------------------
+
+Admin Page:
+
+Add:
+“Salaried Timesheets”
+
+tab inside:
+TimeClockAdminPage
+
+Placeholder content:
+
+“Salaried Timesheet Admin Review (Phase 1)
+Review queue and approvals begin in Phase 2.”
+
+Show:
+basic review queue from GET admin endpoint
+
+Read-only only
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Return:
+
+A. Exact files created
+B. Exact files modified
+C. Migration summary
+D. Any blockers discovered
+E. Validation checklist proving:
+- hourly system untouched
+- feature flag works
+- SALARY-only visibility works
+- rollback path is safe
+
+==================================================
+IMPORTANT
+==================================================
+
+This must be safe enough that we can deploy it without risking hourly payroll.
+
+If something feels risky:
+STOP and isolate it further.
+
+Do not “improve” scope.
+Do not sneak in Phase 2.
+Stay disciplined.

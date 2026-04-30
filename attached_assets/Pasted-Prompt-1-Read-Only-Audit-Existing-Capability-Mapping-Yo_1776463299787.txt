@@ -1,0 +1,119 @@
+Prompt 1 — Read-Only Audit + Existing Capability Mapping
+You are performing a READ-ONLY forensic audit of the current EPOCH ERP codebase.
+
+DO NOT change code.
+DO NOT refactor.
+DO NOT create files.
+DO NOT make assumptions.
+
+Your job is to identify everything that already exists related to DCAA readiness and map it into a future “DCAA Reliability Dashboard.”
+
+We are building an internal DCAA Readiness Index (EDRI) that scores whether EPOCH could survive a DCAA audit.
+
+We need separate readiness scoring for:
+1. Subcontractor Readiness
+2. Prime Contractor Readiness
+
+Audit these exact domains:
+
+1. Timekeeping Controls
+2. Charge Code / Project Cost Allocation
+3. Accounting System Adequacy
+4. Procurement + Purchasing Controls
+5. Inventory + Material Traceability
+6. Policy + Evidence Governance
+7. Government Property (if exists)
+
+For each domain, identify:
+
+- existing modules
+- pages/routes
+- database tables
+- schema definitions
+- services
+- API endpoints
+- approval workflows
+- audit logs
+- permissions
+- validation rules
+- missing critical controls
+- dangerous false assumptions
+- “looks compliant but is not” areas
+
+Specifically verify:
+
+TIMEKEEPING
+- badge clock
+- labor assignment
+- supervisor approvals
+- edit history
+- immutable punch history
+- correction reasons
+- employee-only edits
+- approval timing
+- traveler-linked labor capture
+
+CHARGE CODE ENGINE
+- direct vs indirect
+- overhead / G&A / fringe
+- IR&D / B&P
+- project-level allocation
+- charge code restrictions
+- employee eligibility restrictions
+- supervisor overrides
+- FAR/DCAA-safe validation
+
+ACCOUNTING
+- GL posting
+- journal source tracking
+- labor → dollars conversion
+- burden application
+- indirect rate calculations
+- QuickBooks integration
+- reconciliation trail
+
+PROCUREMENT
+- requisitions
+- approvals
+- vendor justification
+- subcontract flowdowns
+- PO cradle-to-grave traceability
+
+INVENTORY
+- lot/serial traceability
+- issue to project
+- transfers
+- scrap
+- freezer/oven telemetry hooks
+- traveler linkage
+
+OUTPUT FORMAT REQUIRED:
+
+# EPOCH DCAA DOMAIN TRUTH AUDIT
+
+## DOMAIN SUMMARY TABLE
+
+| Domain | Exists | Reliable | Audit Safe | Major Risk |
+
+Then for each domain:
+
+## DOMAIN NAME
+
+### Existing Reality
+
+### What Is Missing
+
+### Immediate Audit Failure Risks
+
+### False Compliance Risks
+
+### Recommended Scoring Weight
+
+### Suggested Initial Score (0–100)
+
+Be brutally honest like a senior DCAA auditor.
+
+Do not protect feelings.
+Do not assume roadmap = compliance.
+
+Only score what actually exists.

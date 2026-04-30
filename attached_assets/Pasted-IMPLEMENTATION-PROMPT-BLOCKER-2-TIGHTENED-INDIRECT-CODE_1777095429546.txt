@@ -1,0 +1,286 @@
+IMPLEMENTATION PROMPT — BLOCKER 2 (TIGHTENED)
+INDIRECT CODE UNIFICATION
+timekeeping.indirect_codes → charge_codes
+
+This is a controlled accounting architecture change.
+
+STRICT SCOPE:
+Do NOT touch traveler direct labor.
+Do NOT change Task #305 logic.
+Do NOT modify GL posting architecture.
+Do NOT change payroll export yet.
+Do NOT remove legacy routes yet.
+Do NOT refactor unrelated timekeeping systems.
+
+Your ONLY job:
+
+Eliminate the dangerous dual-classification system between:
+
+1. public.charge_codes
+2. timekeeping.indirect_codes
+
+Indirect labor must not bypass the Charge Code Engine.
+
+We must establish ONE authoritative accounting path.
+
+--------------------------------------------------
+CURRENT PROBLEM
+--------------------------------------------------
+
+Today:
+
+timekeeping.indirect_codes handles:
+
+- PTO
+- Holiday
+- Sick
+- Training
+- Safety meetings
+- Admin work
+- Maintenance
+- Facility work
+- Engineering support
+- salaried indirect labor labels
+
+while
+
+public.charge_codes handles:
+
+- DIRECT
+- OVERHEAD
+- G_AND_A
+
+and now correctly drives WAD → GL posting.
+
+These systems are disconnected.
+
+That is dangerous.
+
+Employees can create indirect labor that does not flow through the same accounting engine.
+
+This must stop.
+
+--------------------------------------------------
+GOAL
+--------------------------------------------------
+
+Create a single authoritative accounting source:
+
+ALL labor
+→ valid charge code
+→ valid cost center
+→ valid GL path
+
+No parallel accounting universe.
+
+--------------------------------------------------
+REQUIRED AUDIT FIRST
+--------------------------------------------------
+
+Before changing anything:
+
+Fully inspect:
+
+- timekeeping.indirect_codes
+- salaried_timesheet_lines
+- salaried_timesheets
+- leave_entries
+- time_off_requests
+- leave.service.ts
+- salariedTimesheet service
+- PTO auto-injection logic
+- charge_codes
+- cost_centers
+- laborPostingService.ts
+- laborCostingService.ts
+- timekeeping settings flags
+
+Map exactly:
+
+1. where indirect_codes are created
+2. where they are referenced
+3. how PTO/Holiday/Sick lines are auto-generated
+4. how salaried lines store indirect classification
+5. whether hourly indirect labor exists at all
+6. whether a safe 1:1 mapping to charge_codes is possible
+
+DO NOT IMPLEMENT until verified.
+
+--------------------------------------------------
+ARCHITECTURE DECISION
+--------------------------------------------------
+
+Preferred solution:
+
+OPTION B (SAFER)
+
+Keep indirect_codes as operational labels only
+
+BUT
+
+Require every indirect_code to map 1:1 to a valid charge_code
+
+Example:
+
+"PTO"
+→ indirect_codes.label
+
+maps to
+
+charge_codes.code = PTO-OVERHEAD
+type = OVERHEAD
+
+This avoids breaking UI/workflows while creating accounting truth.
+
+Do NOT delete indirect_codes yet.
+
+Do NOT force dangerous destructive migration.
+
+Create explicit mapping.
+
+--------------------------------------------------
+REQUIRED IMPLEMENTATION
+--------------------------------------------------
+
+1. Add authoritative mapping layer
+
+Every indirect_code must resolve to:
+
+- chargeCodeId
+- charge_codes.type
+- valid cost center
+- valid GL posting path
+
+No null mappings allowed.
+
+No orphan categories allowed.
+
+--------------------------------------------------
+
+2. PTO / Holiday / Leave must map correctly
+
+Auto-injected lines must resolve to:
+
+- valid charge code
+- valid indirect pool
+- valid posting path
+
+No special bypass logic.
+
+No “PTO exception path.”
+
+--------------------------------------------------
+
+3. Salaried timesheets must become charge-code aware
+
+salaried_timesheet_lines must preserve:
+
+- indirect_code label (optional for UX)
+
+BUT accounting must use:
+
+- chargeCodeId
+
+as authoritative source
+
+not text labels alone
+
+--------------------------------------------------
+
+4. Preserve current approvals
+
+Do NOT break:
+
+- PTO approval workflow
+- supervisor approval
+- payroll approval
+- leave approval chain
+- salaried audit trail
+
+--------------------------------------------------
+
+5. Prepare for future hourly indirect labor
+
+Do NOT build hourly indirect entry yet
+
+BUT architecture must support it cleanly later
+
+without another rewrite
+
+--------------------------------------------------
+
+6. Fail closed
+
+If an indirect labor line has:
+
+- no valid mapped charge code
+- invalid chargeCodeId
+- missing cost center path
+
+DO NOT POST
+
+Hard fail.
+
+Visible error.
+
+No silent fallback.
+
+--------------------------------------------------
+SPECIAL DCAA REQUIREMENT
+--------------------------------------------------
+
+Auditor must be able to answer:
+
+Why was this PTO charged here?
+
+Why was this safety meeting overhead?
+
+Why was this engineering support G&A?
+
+Which charge code was used?
+
+Which cost pool received it?
+
+Which journal entry posted it?
+
+If that answer requires “because the UI label said so”
+
+implementation is wrong.
+
+--------------------------------------------------
+VALIDATION REQUIRED
+--------------------------------------------------
+
+Verify:
+
+1. PTO injection still works
+2. Holiday injection still works
+3. salaried certification still works
+4. supervisor approval still works
+5. payroll approval still works
+6. indirect labor reaches laborPostingService correctly
+7. no duplicate accounting path exists
+8. no legacy bypass path remains active
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/BLOCKER_2_INDIRECT_CODE_UNIFICATION.md
+
+Include:
+
+- exact files changed
+- mapping architecture chosen
+- exact indirect_code → charge_code mapping
+- fail-closed protections
+- validation results
+- rollback protection
+- future hourly indirect labor readiness
+
+This should be boring.
+Safe.
+Auditable.
+And impossible to misunderstand.

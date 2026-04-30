@@ -1,0 +1,222 @@
+#268 - Training Enforcement Hard Block
+
+What & Why
+EPOCH already has training content, employee training records, part certifications, and traveler authorization structures, but training is still only partially enforced. The next step is to make qualification a real execution gate so people cannot start regulated work unless they are actually authorized and current.
+
+This ticket makes EPOCH enforce:
+
+Authority + Qualification
+
+So the system blocks work when:
+
+required training is missing
+certification is expired
+special process qualification is not current
+machine/process authorization is not present
+
+This aligns directly with your training expansion and traveler enforcement phases, where training must connect to traveler tasks, machine usage, process certification, and quality signoff authority.
+
+Goal
+
+Turn training from informational records into a hard operational gate.
+
+That means:
+
+no traveler start without required qualification
+no restricted step completion without current certification
+no QC signoff by unqualified personnel
+no special process work by unauthorized employees
+Done looks like
+A reusable training enforcement helper exists
+Traveler step start checks required training before allowing work
+Traveler step finish or QC signoff checks required certification where applicable
+Expired training is treated as invalid
+Clear 403 responses explain what training/certification is missing
+Existing training tables are reused where possible
+Existing traveler flows still work for steps that have no training requirement
+No large UI rebuild is required
+Out of scope
+full training admin UI redesign
+automated recertification scheduling
+email reminders
+enterprise skill matrix UI
+machine dashboard changes
+bulk backfill of old training records
+Tasks
+1. Define enforcement sources
+
+Use the current training-related structures already in EPOCH as the source of truth where possible:
+
+employee_training_records
+training_modules
+traveler_authorizations
+p2_part_certifications
+p2_employee_part_certifications
+
+Use the existing tables first before inventing new ones.
+
+2. Define what can require training
+
+Build support for checking qualification based on one or more of:
+
+traveler step
+department
+process
+part / part certification
+QC signoff requirement
+
+For first version, the minimum required enforcement points are:
+
+traveler step start
+traveler step finish when QC or regulated process applies
+QC signoff
+3. Add reusable helper
+
+Create:
+
+server/src/lib/trainingEnforcement.ts
+
+Core functions:
+
+evaluateTravelerTrainingGate(travelerId, stepId, employeeId)
+evaluateQcTrainingGate(travelerId, stepId, employeeId)
+optional:
+evaluatePartCertificationGate(partNumber, employeeId)
+evaluateProcessCertificationGate(processName, employeeId)
+
+Return shape should be consistent:
+
+{
+  "allowed": false,
+  "reason": "Training certification required",
+  "missingRequirement": "LAYUP_LEVEL_2",
+  "requirementType": "training_module"
+}
+4. Add storage methods
+
+Add to IStorage and implement in server/storage.ts:
+
+getTravelerById(travelerId) if not already present
+getTravelerStepById(stepId) if not already present
+getTravelerRequiredTraining(stepId) or equivalent helper
+employeeHasCompletedTraining(employeeId, trainingModuleId)
+employeeTrainingIsCurrent(employeeId, trainingModuleId)
+employeeHasPartCertification(employeeId, partNumber | partCertificationId)
+getTravelerAuthorization(travelerId, employeeId)
+
+If your current model does not have one single “required training” source yet, implement the first pass with deterministic rules such as:
+
+traveler authorization exists
+required part certification exists and is current
+required training module exists for the step/process and is current
+5. Handle expiration
+
+Treat expired training as not qualified.
+
+If expiration is already tracked in existing records, use it.
+If expiration is not yet standardized everywhere, implement the first pass using the fields you already have and document the rule in code comments.
+
+6. Enforce in traveler routes
+
+In server/src/routes/travelers.ts, add training gate checks to the highest-impact actions:
+
+start traveler step
+finish traveler step when regulated/QC conditions apply
+QC signoff action
+
+Behavior:
+
+if qualification is missing → return 403
+include structured reason
+do not silently bypass
+7. Respect permission layering
+
+Training enforcement is separate from permission enforcement.
+
+That means a user may:
+
+have permission to start a traveler step
+but still be blocked for missing certification
+
+Both must pass:
+
+permission gate
+training gate
+8. Add optional capability/introspection endpoint support
+
+Optional but useful for UI:
+
+GET /api/travelers/:id/steps/:stepId/training-gate?employeeId=...
+
+This can return:
+
+pass/fail
+missing requirement
+expiration details
+
+Not required, but helpful if you want frontend previews later.
+
+Relevant files
+server/storage.ts
+server/schema.ts
+server/src/lib/trainingEnforcement.ts
+server/src/routes/travelers.ts
+server/src/routes/training.ts
+Recommended implementation notes
+Start simple, but enforce for real
+
+Do not wait for a perfect skill matrix. Use the structures you already have and enforce the most defensible rule set first.
+
+Recommended first-pass enforcement priority:
+
+traveler_authorizations
+part certification tables
+training module completion/currentness
+Use additive logic
+
+If no training requirement exists for a given step, the step can still proceed.
+This ticket should only block where a requirement exists and is unmet.
+
+Keep responses explicit
+
+Return structured errors like:
+
+{
+  "error": "Training gate failed",
+  "reason": "Required certification expired",
+  "missingRequirement": "QC_FINAL_INSPECTION_CERT",
+  "requirementType": "part_certification"
+}
+Do not hide missing data problems
+
+If a step is configured to require training but no requirement mapping can be resolved, fail clearly rather than allowing silent bypass for regulated work.
+
+Acceptance checklist
+ reusable training gate helper exists
+ traveler step start checks qualification
+ QC signoff checks qualification
+ expired training is blocked
+ clear 403 errors are returned for missing qualification
+ users with permission but without qualification are still blocked
+ steps with no training requirement still work normally
+Suggested live tests
+Employee with valid certification starts qualified traveler step → success
+Employee missing training tries same step → 403
+Employee with expired certification tries same step → 403
+Employee with permission but no qualification tries QC signoff → 403
+Traveler step with no configured training requirement still starts normally
+Why this is the right next task
+
+You already enforced:
+
+process control
+release control
+labor control
+permission control
+
+This ticket adds the other half of compliance:
+
+not just who is allowed
+but who is qualified
+
+That is a major jump toward AS9100-style controlled execution.

@@ -1,0 +1,88 @@
+SURGICAL EXECUTION — PHASE 1 TIMEKEEPING IDENTITY CONSOLIDATION
+
+Goal:
+Consolidate the standalone timekeeping module onto EPOCH employee truth so that timekeeping no longer relies on its own employee table.
+
+Critical context:
+- We are focusing exclusively on the timeclock/timekeeping domain right now.
+- The standalone timekeeping module is the intended source of truth for attendance/payroll time.
+- It is NOT supposed to remain separate from EPOCH.
+- EPOCH employees in public.employees are the true employee records.
+- Any employees in timekeeping.employees are transitional only and should be eliminated.
+- Traveler/WAD labor flows are a separate connected domain and must NOT be merged into attendance timekeeping.
+- We are NOT migrating legacy EPOCH punch_events data.
+- We are NOT building bridge views or dual-write logic.
+
+Locked decisions:
+1. Authentication / kiosk identity should support BOTH:
+   - public.employees.badge_scan_code
+   - a dedicated PIN field on public.employees
+2. We DO need per-employee timezone support on public.employees.
+
+Your task:
+Perform the minimum safe code changes required to move the standalone timekeeping employee identity onto public.employees and prepare for removal of timekeeping.employees.
+
+What to do:
+
+1. AUDIT BEFORE CHANGING
+- Reconfirm every place the standalone module reads from or writes to timekeeping.employees
+- Reconfirm every place public.employees is already available or referenced
+- List exact files/functions before modifying anything
+
+2. ADD REQUIRED FIELDS TO public.employees
+Implement the necessary schema changes so public.employees can fully support timekeeping identity.
+At minimum, support:
+- badge_scan_code (existing, preserve)
+- dedicated PIN field for kiosk/timeclock use
+- per-employee timezone
+Use names that fit the existing schema conventions.
+
+3. BACKFILL FROM timekeeping.employees INTO public.employees
+If timekeeping.employees contains values for PIN or timezone that are not yet in public.employees:
+- backfill by matching through epoch_employee_id
+- do not guess by email unless absolutely required and explicitly explain why
+- preserve existing good EPOCH values where appropriate
+- log any records that could not be matched cleanly
+
+4. REWIRE STANDALONE TIMEKEEPING CODE TO USE public.employees
+Update the standalone module service layer and any related code so that employee lookups no longer depend on timekeeping.employees.
+Focus specifically on:
+- employee identity lookup
+- kiosk authentication / PIN lookup
+- timezone resolution
+- employee display information
+- any user/employee joins
+- any rate lookup that still depends on timekeeping.employees
+
+Important:
+- Labor rate resolution must move to public.employees, not timekeeping.employees
+- If salary/pay_type logic is involved, preserve current behavior and explain it
+- Do not break the timekeeping.punches ledger
+
+5. KEEP THE CHANGE SURGICAL
+- Do not delete timekeeping.employees yet unless it is clearly safe at the end of this prompt
+- Prefer replacing reads first
+- Keep traveler/WAD/public.time_clock_entries logic untouched
+- Do not refactor unrelated modules
+
+6. OUTPUT REQUIREMENTS
+At the end, provide:
+A. files changed
+B. exact reason for each change
+C. whether timekeeping.employees is still referenced anywhere
+D. whether it is now safe to proceed to the next phase
+E. anything skipped and why
+
+Guardrails:
+- Do NOT touch traveler/WAD labor flows
+- Do NOT touch public.time_clock_entries except to verify separation
+- Do NOT merge traveler labor with attendance timekeeping
+- Do NOT remove punch_events yet
+- Do NOT perform generic cleanup outside this scope
+- Keep all changes tightly tied to employee identity consolidation
+
+Success criteria:
+- public.employees can fully support timekeeping identity
+- standalone timekeeping no longer needs its own employee truth
+- timekeeping.employees is either unused or nearly unused
+- we are ready for the next phase: fixing live endpoint dependencies and retiring legacy scaffolding

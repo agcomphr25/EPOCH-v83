@@ -1,0 +1,154 @@
+SURGICAL IMPLEMENTATION — RESTORE NATIVE EMPLOYEE CLOCK-IN FLOW
+
+Critical issue:
+
+We successfully removed stale standalone Timekeeper links and SSO bridges.
+
+However, normal employees now have no obvious operational path to:
+
+- clock in
+- clock out
+- start break
+- end break
+- see current punch status
+- choose project/job context when needed
+
+This created the appearance that Timekeeping was “destroyed” instead of absorbed.
+
+The backend exists.
+The admin UI exists.
+The employee-facing operational entry point is incomplete.
+
+We must fix that.
+
+==================================================
+ARCHITECTURAL TRUTH
+==================================================
+
+Correct architecture:
+
+Employee Portal → native EPOCH timekeeping flow
+
+NOT:
+Employee Portal → standalone Timekeeper app
+
+Existing valid systems:
+
+- /kiosk = native kiosk flow
+- /time-clock-admin = admin flow
+- timekeeping.punches = attendance/payroll ledger
+- public.time_clock_entries = traveler/WAD labor attribution
+- active-job / active-context endpoints already exist
+
+Do NOT merge attendance and WAD.
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform a READ-ONLY audit first, then implement the correct employee-facing punch flow.
+
+--------------------------------------------------
+1. AUDIT CURRENT EMPLOYEE FLOW
+--------------------------------------------------
+
+Audit:
+
+client/src/components/EmployeePortal.tsx
+
+Determine:
+
+- where employees should naturally initiate clock-in/out
+- what currently exists
+- what disappeared when the standalone link was removed
+- whether /kiosk should remain kiosk-only or if Employee Portal needs its own native punch card
+
+Be explicit.
+
+--------------------------------------------------
+2. IMPLEMENT NATIVE EMPLOYEE TIME CLOCK CARD
+--------------------------------------------------
+
+Create the correct employee-facing flow inside Employee Portal.
+
+Expected features:
+
+- current status:
+  clocked in / clocked out / on break
+
+- primary actions:
+  Clock In
+  Clock Out
+  Start Break
+  End Break
+
+- visible last punch info
+
+- active project / traveler context visibility
+(using existing active-job / active-context truth)
+
+- project/job selection when required
+WITHOUT breaking WAD separation
+
+Important:
+attendance punch ≠ labor charging
+
+Do NOT merge these.
+
+The UI should make this clear.
+
+--------------------------------------------------
+3. USE EXISTING NATIVE BACKEND
+--------------------------------------------------
+
+Do NOT rebuild standalone logic.
+
+Use:
+native absorbed EPOCH endpoints only
+
+Prefer:
+existing /api/timekeeping routes
+existing active-job endpoints
+
+Do NOT recreate standalone API assumptions.
+
+--------------------------------------------------
+4. PRESERVE KIOSK
+--------------------------------------------------
+
+/kiosk still remains for:
+shop-floor shared terminal usage
+
+Employee Portal flow is for:
+normal authenticated employee self-service
+
+These are different surfaces.
+
+Keep both.
+
+--------------------------------------------------
+5. OUTPUT REQUIRED
+--------------------------------------------------
+
+Provide:
+
+A. files changed
+
+B. exact employee clock flow restored
+
+C. how attendance vs WAD separation is preserved
+
+D. how job/project selection works
+
+E. confirmation employees can now naturally start/end their day again
+
+==================================================
+RULES
+==================================================
+
+- preserve absorbed architecture
+- do NOT reintroduce standalone app logic
+- do NOT touch traveler/WAD backend
+- do NOT destroy kiosk flow
+- preserve audit defensibility first
+- preserve operational usability first

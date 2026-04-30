@@ -1,0 +1,347 @@
+PRODUCTION IMPLEMENTATION — PTO REQUEST MECHANICS + WIRING
+
+Objective:
+Implement the mechanics and wiring for employee PTO requests in EPOCH based on Audit Report #1737.
+
+This is NOT an accrual/balance implementation.
+Do not build PTO balance tracking yet.
+
+Business Requirements:
+- All employees can submit PTO requests.
+- PTO is a single unified category called PTO.
+- PTO covers vacation, sick, personal, bereavement, and floating holiday operationally, but the system should store it as PTO.
+- Request types supported:
+  - full day
+  - half day
+  - hourly partial day
+  - multi-day range
+- Managers/admins can submit PTO on behalf of employees.
+- Approval chain:
+  1. Direct Supervisor
+  2. HR
+  3. VP
+- Denials require a reason.
+- Attachments are optional but not required for this implementation.
+- No blackout rules.
+- Approved PTO should affect:
+  - employee request status
+  - salaried timesheet PTO injection
+  - payroll export readiness
+  - company calendar visibility
+  - production/labor planning visibility where safely possible
+- Hourly PTO should be tracked clearly, but do not invent unsafe payroll behavior if the existing hourly timesheet system cannot support automatic PTO injection yet.
+
+Known Audit Findings:
+- Existing table: timekeeping.time_off_requests
+- Existing route: POST /api/timekeeping/time-off/portal/:portalId
+- Existing route: GET /api/timekeeping/time-off/portal/:portalId
+- Existing route: GET /api/timekeeping/time-off
+- Existing route: POST /api/timekeeping/time-off/:id/review
+- Existing salaried PTO injection: injectApprovedPTO in salariedTimesheet.service.ts
+- Existing Gusto export already has leave hour columns
+- Existing EmployeePortal PTO UI exists
+- Existing TimeClockAdminPage Time-Off tab exists
+- Existing Calendar.tsx exists but is not PTO-aware
+- Existing permission framework exists: perm_capabilities, perm_roles, perm_role_capabilities, perm_user_overrides
+- Existing issue: public.employees and timekeeping.employees are different tables
+- Existing issue: no supervisor_id or manager_id modeled
+- Existing issue: hourly employees do not currently receive automatic PTO injection
+
+Implementation Rules:
+- Make minimal, production-safe changes.
+- Preserve existing data.
+- Use migrations for schema changes.
+- Do not delete existing PTO history.
+- Do not break existing PTO approval behavior until replacement flow is working.
+- Prefer capability-based permissions over legacy role-only checks where feasible.
+- Add audit logging for all material PTO actions.
+- Avoid duplicate PTO injection.
+- Add defensive guards and validation.
+- After implementation, provide files changed, migrations added, and test plan.
+
+Phase 1 — Schema Migration
+
+Extend timekeeping.time_off_requests to support:
+
+Request shape:
+- requested_hours numeric/double precision nullable
+- request_unit text not null default 'full_day'
+  Allowed values:
+  - full_day
+  - half_day
+  - hourly
+  - multi_day
+- partial_day_date text nullable
+- submitted_by_user_id integer nullable
+- submitted_on_behalf boolean default false
+
+Approval routing:
+- supervisor_id integer nullable
+- supervisor_decision text nullable
+- supervisor_note text nullable
+- supervisor_reviewed_at timestamp nullable
+- supervisor_reviewed_by integer nullable
+
+- hr_decision text nullable
+- hr_note text nullable
+- hr_reviewed_at timestamp nullable
+- hr_reviewed_by integer nullable
+
+- vp_decision text nullable
+- vp_note text nullable
+- vp_reviewed_at timestamp nullable
+- vp_reviewed_by integer nullable
+
+Overall workflow:
+- status text default 'pending_supervisor'
+Supported status values:
+  - pending_supervisor
+  - pending_hr
+  - pending_vp
+  - approved
+  - rejected
+  - cancelled
+
+Compatibility:
+- Existing rows with status 'pending' should be migrated to 'pending_supervisor'
+- Existing rows with status 'approved' remain 'approved'
+- Existing rows with status 'rejected' remain 'rejected'
+- Existing leave_type values should not break the app, but new submissions should use 'pto'
+
+Supervisor modeling:
+If public.employees has no supervisor field, add:
+- supervisor_employee_id integer nullable referencing public.employees.id
+
+Do not force all employees to have supervisors yet.
+If no supervisor is assigned, allow ADMIN/OWNER/HR/VP override routing.
+
+Phase 2 — Permissions
+
+Add PTO-specific capabilities:
+- timekeeping.pto.submit_self
+- timekeeping.pto.submit_on_behalf
+- timekeeping.pto.approve_supervisor
+- timekeeping.pto.approve_hr
+- timekeeping.pto.approve_vp
+- timekeeping.pto.view_all
+- timekeeping.pto.cancel_request
+
+Seed sensible defaults:
+- Employee/self portal can submit own PTO through portal auth
+- SUPERVISOR: approve_supervisor
+- HR: approve_hr, view_all
+- OWNER/ADMIN: all PTO permissions
+- VP approval should be assignable by capability, not hardcoded only to role name if possible
+
+Phase 3 — API Changes
+
+Update employee portal submission:
+POST /api/timekeeping/time-off/portal/:portalId
+
+Must accept:
+- startDate
+- endDate
+- requestUnit
+- requestedHours
+- employeeNote
+
+Validation:
+- startDate required
+- endDate required
+- requestUnit required
+- hourly requests require requestedHours > 0
+- half_day requests should calculate reasonable default hours if policy is known, otherwise store requestedHours if provided
+- multi_day requests must have endDate >= startDate
+- new submissions must store leave_type as 'pto'
+- status should begin as pending_supervisor unless no supervisor is assigned, in which case use a safe fallback:
+  - pending_hr
+  - or pending_supervisor with admin-visible routing warning
+Choose the safest implementation based on existing code.
+
+Add manager/admin on-behalf submission route:
+POST /api/timekeeping/time-off
+
+Authenticated session route.
+Requires timekeeping.pto.submit_on_behalf.
+Accepts target employee ID and same PTO request fields.
+
+Replace or extend review endpoint:
+POST /api/timekeeping/time-off/:id/review
+
+Must support stage-specific decisions:
+- supervisor approve/deny
+- HR approve/deny
+- VP approve/deny
+
+Rules:
+- Denial requires a note/reason.
+- Supervisor approval moves status to pending_hr.
+- HR approval moves status to pending_vp.
+- VP approval moves status to approved.
+- Any denial moves status to rejected.
+- Final VP approval should trigger leave-entry creation and/or existing approved PTO injection pathway safely.
+- Do not create duplicate leave entries if already created.
+- Do not inject duplicate timesheet PTO lines.
+
+Add read endpoints as needed:
+- GET all PTO requests with filters: status, employeeId, date range
+- GET my PTO requests remains portal-compatible
+- GET pending approvals for current user based on capability/stage
+
+Phase 4 — Service Layer
+
+Refactor timeoff.service.ts to centralize:
+- submitPTORequest
+- submitPTOOnBehalf
+- reviewPTOStage
+- approveSupervisorStage
+- approveHRStage
+- approveVPStage
+- rejectPTORequest
+- createLeaveEntriesForApprovedPTO
+- syncApprovedPTOToCalendar
+- ensureNoDuplicateLeaveEntries
+- ensureNoDuplicateTimesheetLines
+
+Important:
+Respect the public.employees vs timekeeping.employees mismatch.
+Add explicit mapping/resolution logic before writing leave_entries.
+If no safe mapping exists, do not silently create broken leave entries.
+Return a clear operational warning instead.
+
+Phase 5 — Timesheet + Payroll Integration
+
+Salaried:
+- Preserve existing injectApprovedPTO behavior.
+- Ensure it only acts on final approved PTO.
+- Add idempotency guard to prevent duplicate locked leave lines.
+- If PTO is approved after timesheet generation, provide a safe recalculation/sync function or mark the timesheet as needing PTO refresh.
+
+Hourly:
+- Do not fake automatic payroll behavior.
+- Track approved hourly PTO clearly.
+- Surface it in admin/timekeeping views.
+- Add TODO or guarded service hook for future hourly PTO payroll injection.
+- If possible, add approved PTO hours to payroll export only where existing data model safely supports it.
+
+Payroll:
+- Ensure unified PTO maps to vacation_hours or PTO-equivalent existing Gusto column.
+- Do not use sick_hours unless the business later chooses subtypes.
+- Ensure approved PTO contributes to payable hours without appearing as worked production labor.
+
+Phase 6 — Calendar Integration
+
+Update Calendar.tsx or its data source so approved PTO appears as calendar events.
+
+Requirements:
+- Event title: "PTO — [Employee Name]"
+- Date range matches PTO request
+- Event type should be "pto" if event types are extensible, otherwise "other"
+- Calendar visibility should be admin/company-calendar visible
+- Do not sync to Google Calendar unless existing architecture clearly supports safe internal-to-Google event creation
+- Avoid duplicate PTO calendar events on repeated approval/sync
+
+Phase 7 — Production / Labor Planning Visibility
+
+Do not overbuild scheduler logic.
+
+Minimum acceptable implementation:
+- Approved PTO should be queryable by date range.
+- EnhancedLayupScheduler or relevant planning component should be able to display absent employees or reduced staffing warnings.
+- If exact capacity math is risky, add a visible PTO absence indicator instead of changing scheduling algorithms.
+
+Phase 8 — UI Updates
+
+EmployeePortal.tsx:
+- Update PTO request form:
+  - full day
+  - half day
+  - hourly partial day
+  - multi-day
+  - start date
+  - end date
+  - requested hours when relevant
+  - employee note
+- Show current approval status:
+  - Pending Supervisor
+  - Pending HR
+  - Pending VP
+  - Approved
+  - Rejected
+- Show denial reason if rejected.
+
+TimeClockAdminPage.tsx:
+- Replace single-stage approve/deny UX with staged approval view.
+- Show:
+  - employee
+  - dates
+  - hours
+  - request unit
+  - current stage
+  - supervisor decision
+  - HR decision
+  - VP decision
+  - notes
+- Only show action buttons appropriate to current user capability and current stage.
+- Deny action must require reason.
+
+Manager/Admin on-behalf UI:
+- Add ability to create PTO request for an employee.
+- Clearly mark request as submitted on behalf of employee.
+
+User/Employee Admin:
+- Add supervisor assignment field if schema added supervisor_employee_id.
+- Allow admin to set employee supervisor.
+
+Phase 9 — Audit Logging
+
+Log:
+- PTO submitted
+- PTO submitted on behalf
+- supervisor approved/rejected
+- HR approved/rejected
+- VP approved/rejected
+- PTO final approved
+- leave entries created
+- calendar event created
+- PTO sync warnings
+- cancellation if implemented
+
+Use existing audit_log or audit_events consistently with project conventions.
+
+Phase 10 — Validation + Test Plan
+
+After implementation, run:
+- typecheck
+- lint if available
+- tests if available
+- migration generation/check
+- route smoke tests if practical
+
+Manual test cases:
+1. Employee submits full-day PTO.
+2. Employee submits hourly PTO.
+3. Manager submits PTO on behalf of employee.
+4. Supervisor approves → status pending_hr.
+5. HR approves → status pending_vp.
+6. VP approves → status approved.
+7. Denial without reason fails.
+8. Denial with reason succeeds.
+9. Approved salaried PTO creates locked timesheet leave line.
+10. Re-running injection does not duplicate PTO line.
+11. PTO appears on company calendar.
+12. Payroll export includes approved PTO hours correctly.
+13. Hourly PTO does not create unsafe fake work punches.
+14. Employee with no supervisor routes safely and visibly.
+15. Existing historical PTO rows still load.
+
+Deliverable:
+Return:
+- Summary of what changed
+- Files changed
+- Migration name
+- New/updated routes
+- New/updated permissions
+- Known limitations
+- Exact testing performed
+- Any unresolved risks

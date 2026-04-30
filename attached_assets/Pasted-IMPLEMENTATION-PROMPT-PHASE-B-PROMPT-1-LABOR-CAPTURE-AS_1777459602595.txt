@@ -1,0 +1,303 @@
+IMPLEMENTATION PROMPT — PHASE B / PROMPT 1
+LABOR CAPTURE ASSISTANT BACKEND SUGGESTION ENGINE
+
+STRICT SCOPE:
+Backend only.
+No frontend.
+No accept/apply workflow.
+No posting to salaried_timesheet_lines.
+No DONNA.
+No voice.
+No autonomous labor entry.
+
+Core rule:
+AI Suggests
+Human Approves
+System Audits
+
+==================================================
+OBJECTIVE
+==================================================
+
+Implement backend-only natural language labor suggestion infrastructure.
+
+The system should accept an employee narrative, generate validated draft labor suggestions, persist those suggestions for audit, and allow rejection.
+
+It must NOT create actual timesheet lines yet.
+
+==================================================
+BUILD ONLY THESE ITEMS
+==================================================
+
+1. New table:
+timekeeping.labor_capture_suggestions
+
+2. New service:
+server/src/services/timekeeping/laborCaptureAI.service.ts
+
+3. New routes:
+POST /api/timekeeping/labor-capture/suggest
+GET /api/timekeeping/labor-capture/suggest/:id
+POST /api/timekeeping/labor-capture/reject/:id
+
+4. Validation engine:
+AI output must be validated before storage or return.
+
+==================================================
+NEW TABLE REQUIREMENTS
+==================================================
+
+Create formal migration.
+
+Table:
+timekeeping.labor_capture_suggestions
+
+Columns:
+- id
+- employee_id
+- timesheet_id
+- original_narrative TEXT NOT NULL
+- parsed_json JSONB
+- suggested_lines JSONB
+- overall_confidence NUMERIC(5,4)
+- low_confidence_flagged BOOLEAN DEFAULT FALSE
+- status TEXT NOT NULL DEFAULT 'DRAFT'
+- created_at TIMESTAMPTZ DEFAULT now()
+- rejected_at TIMESTAMPTZ NULL
+- expires_at TIMESTAMPTZ NOT NULL
+
+Allowed statuses:
+- DRAFT
+- REJECTED
+- EXPIRED
+
+Design for future statuses but do not implement accept yet:
+- ACCEPTED
+- PARTIALLY_ACCEPTED
+
+Original narrative must be immutable after insert.
+
+==================================================
+SERVICE REQUIREMENTS
+==================================================
+
+Create:
+
+server/src/services/timekeeping/laborCaptureAI.service.ts
+
+Methods:
+
+generateSuggestions(employeeId, timesheetId, narrative)
+
+rejectSuggestion(suggestionId, actorId)
+
+expireStaleDrafts()
+
+Do NOT implement acceptSuggestion yet.
+
+The service must never write to salaried_timesheet_lines.
+
+==================================================
+OPENAI RULES
+==================================================
+
+Reuse existing OpenAI infrastructure:
+- AI_INTEGRATIONS_OPENAI_API_KEY
+- AI_INTEGRATIONS_OPENAI_BASE_URL
+
+Do not create duplicate credential patterns.
+
+No streaming.
+Request/response only.
+Structured JSON output only.
+
+AI expected output:
+
+{
+  "suggestions": [
+    {
+      "type": "DIRECT" | "INDIRECT",
+      "hours": number,
+      "description": string,
+      "confidence": number,
+      "travelerHint": string | null,
+      "indirectCodeHint": string | null,
+      "ambiguityReason": string | null
+    }
+  ]
+}
+
+CRITICAL:
+AI returns hints only.
+
+AI must never return trusted final IDs.
+AI must never create traveler IDs.
+AI must never create charge codes.
+AI must never post labor.
+
+==================================================
+AI CONTEXT LIMITS
+==================================================
+
+Allowed prompt context only:
+
+- employee identity
+- employee department, if already available
+- employee’s likely travelers from existing logic
+- active indirect code catalog
+
+Do NOT include:
+- salary data
+- payroll rates
+- GL balances
+- other employees
+- unrestricted project database dump
+- company-wide financials
+
+Keep the context narrow.
+
+==================================================
+VALIDATION ENGINE
+==================================================
+
+Every AI suggestion must be validated server-side before being persisted.
+
+DIRECT LABOR validation:
+- match AI travelerHint only against allowed likely travelers / DB-confirmed candidates
+- traveler must exist
+- traveler must be active / valid for labor
+- resolveChargeCode() must succeed
+- resolvedFrom must not be "none"
+- project mapping must exist
+- if uncertain, mark ambiguous; do not assign random traveler
+
+INDIRECT LABOR validation:
+- indirectCodeHint must map to active indirect code
+- indirect code must have valid charge_code_id
+- no fallback to UNALLOC
+- if uncertain, mark ambiguous
+
+Hours validation:
+- individual line hours > 0
+- no negative hours
+- total suggested hours for a day <= 24
+
+Timesheet validation:
+- timesheet must belong to employee
+- timesheet must be editable
+- no suggestions for submitted / approved / locked timesheets
+
+Confidence rules:
+- green: confidence >= 0.85
+- amber: confidence >= 0.70 and < 0.85
+- red: confidence < 0.70
+
+Red suggestions:
+- must be marked manual clarification required
+- must not be considered ready-to-accept in future workflow
+
+==================================================
+SECURITY REQUIREMENTS
+==================================================
+
+Implement:
+- narrative length cap: 2,000 characters
+- strip / reject HTML and script-like content
+- prompt injection resistant system prompt
+- no raw prompt leakage in API responses
+- no unsafe logging of employee narrative
+- expire stale DRAFT suggestions
+- reject access to other employees’ suggestions
+- reject expired suggestions from retrieval or clearly mark them expired
+
+==================================================
+ROUTES
+==================================================
+
+Create route file if appropriate:
+
+server/src/routes/timekeeping/laborCapture.ts
+
+Mount under:
+
+/api/timekeeping/labor-capture
+
+Routes:
+
+POST /suggest
+Body:
+{
+  timesheetId,
+  narrative
+}
+
+Returns:
+{
+  suggestionId,
+  status,
+  originalNarrative,
+  suggestedLines,
+  overallConfidence,
+  lowConfidenceFlagged,
+  expiresAt
+}
+
+GET /suggest/:id
+Returns the suggestion only if owned by authenticated employee.
+
+POST /reject/:id
+Marks suggestion REJECTED only if owned by authenticated employee and still DRAFT.
+
+All routes:
+- require employee portal authentication
+- validate ownership
+- fail closed
+- do not expose other employee data
+
+==================================================
+AUDIT REQUIREMENTS
+==================================================
+
+Persist:
+- original narrative
+- raw parsed AI output
+- validated suggested lines
+- confidence scores
+- ambiguity reasons
+- status
+- timestamps
+
+Future auditors must be able to answer:
+- What did the employee say?
+- What did AI suggest?
+- What was rejected?
+- Was it low confidence?
+- Did it expire?
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Return:
+
+1. Implementation plan before coding
+2. Files modified
+3. Migration created
+4. Service created
+5. Routes created
+6. Validation rules implemented
+7. Security protections implemented
+8. Validation results
+9. Known risks remaining
+
+==================================================
+FINAL RULES
+==================================================
+
+Do not build frontend.
+Do not build accept/apply.
+Do not write to real timesheet lines.
+Do not bypass addLine.
+Do not drift into Phase B Prompt 2.
+
+Proceed carefully.

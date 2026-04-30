@@ -1,0 +1,95 @@
+I am continuing development on EPOCH (manufacturing ERP / MES / QMS system).
+
+I need you to reassess:
+
+% completion toward full integration
+What is structurally complete vs partially integrated vs missing
+The correct next build priorities (in order)
+Any architectural risks or bad patterns forming
+Whether I am still aligned with AS9100, DCAA, and CMMC goals
+1. What has been completed since last update
+
+(List new features, tickets, or changes — be specific)
+
+Examples:
+
+Added/modified database tables:
+New API routes:
+New UI pages:
+Changes to traveler system:
+Changes to time clock:
+Changes to WAD / work orders:
+Training updates:
+Permission/role updates:
+Security changes:
+2. Current system behavior (IMPORTANT)
+
+Describe how the system ACTUALLY works now:
+
+Quote → Project flow
+How is a quote created?
+What happens when it is accepted?
+Project / P2 flow
+How are projects created and advanced?
+How do they connect to production?
+Work Orders (WAD)
+How are they created?
+Are they automatic or manual?
+What do they link to?
+Travelers
+How are travelers created?
+Do they link to WADs?
+What gates exist (if any)?
+Time Clock
+How do employees clock in?
+Is barcode scanning live?
+What fields are populated automatically?
+Training
+Does training block work yet?
+Where is it enforced?
+Permissions
+Are roles enforced or just assigned?
+What approvals exist?
+Project Closing
+Does it exist yet?
+What data is captured?
+3. What is NOT working or incomplete
+
+(Be honest here — this is where the real value is)
+
+Examples:
+
+Manual steps that should be automatic
+Missing links between modules
+Weak enforcement (no blocking)
+Duplicate or conflicting logic
+Anything that “feels messy”
+4. Current priorities (what I THINK is next)
+
+(List what you are planning to build next)
+
+5. Constraints or goals
+
+Examples:
+
+Must be DCAA compliant
+Must support AS9100 workflows
+Must be CMMC capable
+Must remain usable on shop floor (speed matters)
+Must not break existing production use
+6. Optional (if helpful)
+Paste schema snippets
+Paste route logic
+Paste UI screenshots or descriptions
+What I want back from you
+
+Give me:
+
+% completion by module (honest assessment)
+What is actually integrated vs just built
+What I should STOP doing if anything
+Exact next 3–5 tickets I should build (in order)
+Any architectural corrections before I go further
+Whether I am still on track to build a sellable system
+
+Be direct. Do not sugarcoat anything.

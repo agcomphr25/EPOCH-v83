@@ -1,0 +1,274 @@
+Yes — #1235 is the right next ticket.
+
+It is tighter and better than the earlier generic version because it anchors the enforcement to the actual traveler-driven clock-in path and the actual punch_ledger session record.
+
+This is a strong ticket to run now.
+
+Why this is the correct next build
+
+#951 gives PMs visibility.
+
+#1235 makes the labor data behind that dashboard trustworthy by enforcing:
+
+correct charge code assignment
+full project/work order/traveler traceability
+certification status capture
+overrun detection at session start
+
+That is the right order.
+
+What is strong in this ticket already
+
+You got the important parts right:
+
+enforcement happens at session start
+no new core tables, just extending the session record
+WARN policy for phase 1
+traveler clock-in and traveler step start are both included
+override permission is explicitly limited
+UI reflects assigned charge code and warning state
+no more unlinked traveler-driven labor
+
+That is exactly the kind of ticket that moves EPOCH from “logging time” to “controlled labor charging.”
+
+The only changes I would make before building
+1. Be explicit about which record is authoritative
+
+You mention punch_ledger, but the surrounding architecture also references labor_work_sessions.
+
+Before build, lock this sentence into the ticket:
+
+The authoritative active-session record for traveler-driven labor in this ticket is punch_ledger (or the exact session table currently used by /api/time-clock/clock-in/traveler). Any mirrored or reporting tables must derive from that source, not compete with it.
+
+That prevents confusion during implementation.
+
+2. Clarify how projectId is resolved
+
+Do not let the route accept user-entered projectId.
+
+It should be derived like this:
+
+travelerStepId → traveler
+traveler → productionWorkOrderId
+productionWorkOrderId → projectId
+
+If there is a mismatch anywhere, fail closed unless override/admin logic explicitly says otherwise.
+
+Add this to the ticket:
+
+projectId must be derived server-side from the linked production work order / traveler relationship and must not be trusted from the client payload.
+
+3. Clarify charge code resolution priority
+
+Your resolver needs a deterministic search order.
+
+I would lock it to:
+
+exact WAD/project + operation/task + department match
+exact WAD/project + department-level fallback
+work-order-level fallback only if your data model already supports it
+otherwise error
+
+So add:
+
+Resolver priority: operation-level match first, department-level fallback second, no silent default charge code.
+
+That avoids bad labor drift.
+
+4. Clarify overrun calculation scope
+
+This matters a lot.
+
+Your current wording says:
+
+Compute total hours already charged to the charge code on this WAD
+
+Good, but make it exact:
+
+aggregate actual hours for that chargeCodeId
+scoped to the same project/WAD
+optionally same work order if the budget is work-order-specific
+
+If the budget lives at project WAD level, do not accidentally scope too narrowly.
+
+I would add:
+
+Budget comparison must use the same scope as the charge code budget definition. If the charge code budget is project/WAD-scoped, actuals must be aggregated at that same project/WAD scope.
+
+5. Clarify certification status meaning
+
+For phase 1, this should be simple and honest.
+
+Suggested rule:
+
+VALID = required cert found and not expired
+EXPIRED = required cert found but expired
+MISSING = no qualifying cert found
+if no certification is required for that step, either:
+store VALID, or
+store a separate NOT_REQUIRED
+
+Since your ticket already locks the enum to 3 values, I would say:
+
+If no certification is required for the traveler step, record VALID and do not warn.
+
+That keeps phase 1 small.
+
+6. Warning acknowledgment should be recorded
+
+You already require acknowledgment in UI. Good.
+
+Make sure the backend stores that this happened, or the warning becomes non-auditable.
+
+Even if you do not add a new field now, at minimum log it in the session event trail or audit log.
+
+Add this line:
+
+When a user proceeds under WARN policy for certification or overrun, the acknowledgment action must be audit logged.
+
+That is important for DCAA / AS9100 traceability.
+
+Recommended tightened ticket text
+
+Here is the cleaned-up version I would use.
+
+#1235 — Enforce WAD-Based Labor Charging at Session Start
+
+What & Why
+
+Labor sessions in the current traveler-driven timekeeping flow already carry chargeCodeId, department, productionWorkOrderId, and travelerId, but charge code selection is not yet fully enforced from WAD + traveler-step context. This ticket makes traveler-driven labor charging controlled and traceable: when a technician starts a traveler step, the server automatically resolves the correct charge code, derives the linked projectId, validates certification status, checks budget burn, and writes a fully linked session record. This is the enforcement layer that makes PM Control Center labor data trustworthy and moves EPOCH closer to DCAA-compliant labor control.
+
+Done looks like
+Starting a traveler step automatically assigns the correct charge code using server-side WAD/traveler-step resolution
+The session record stores projectId and travelerStepId in addition to existing productionWorkOrderId and travelerId
+projectId is derived server-side from the traveler/work-order relationship, not trusted from client input
+Certification status is recorded on the session as VALID, EXPIRED, or MISSING
+Budget overrun state is recorded on the session as isOverrun and overrunReason
+Phase 1 policy is WARN for both certification issues and budget overruns: allow session start, but flag and require user acknowledgment
+Traveler step start UI shows:
+assigned charge code
+certification badge
+inline warning for expired/missing certification
+inline warning for exhausted / near-exhausted budget
+Operators without override permission cannot manually change charge code
+No traveler-driven clock-in produces an unlinked session; every session is linked to project, work order, traveler, and traveler step
+Warning acknowledgments are audit logged
+Out of scope
+Full approval workflow UI for overruns
+GL posting changes
+Indirect labor / overhead policy
+Payroll processing
+Mobile UX optimization
+Steps
+1. Add projectId and travelerStepId to the active session schema
+
+Update the authoritative traveler-driven session table/schema used by /api/time-clock/clock-in/traveler to include:
+
+projectId
+travelerStepId
+
+Add migration and ensure new traveler-driven sessions populate both fields.
+
+2. Build resolveChargeCode
+
+Create a server-side utility:
+
+resolveChargeCode({ projectId, productionWorkOrderId, travelerStepId })
+
+Resolution order:
+
+exact WAD/project + operation/task + department match
+WAD/project + department-level fallback
+optional work-order-level fallback only if already supported by current schema
+otherwise return error
+
+No silent default charge code.
+
+3. Extend certification validation
+
+Reuse existing traveler/training gate logic to determine:
+
+VALID
+EXPIRED
+MISSING
+
+If the traveler step does not require a certification, treat it as VALID for phase 1.
+
+4. Extend budget enforcement
+
+At session start:
+
+aggregate actual charged hours for the resolved charge code at the same scope as its budget definition
+compare actual vs budgeted
+if budget exhausted or exceeded:
+allow under WARN policy
+set isOverrun = true
+populate overrunReason
+5. Update traveler clock-in endpoint
+
+Update POST /api/time-clock/clock-in/traveler and any shared traveler step start flow to:
+
+derive projectId server-side
+resolve charge code
+run certification validation
+run budget check
+write:
+projectId
+travelerStepId
+chargeCodeId
+certificationStatus
+isOverrun
+overrunReason
+6. Limit charge code override
+
+Only users with explicit override permission may manually change the charge code. All overrides must be audit logged.
+
+7. Update traveler step start UI
+
+In TravelerExecution.tsx, show:
+
+resolved charge code
+certification badge
+budget warning
+certification warning
+
+Under WARN policy, require acknowledgment before proceeding.
+
+Relevant files
+server/schema.ts
+server/src/routes/timeClock.ts
+server/src/routes/travelers.ts
+server/src/lib/travelerGates.ts
+server/storage.ts
+client/src/pages/TravelerExecution.tsx
+Build order I would use
+schema + migration
+resolver utility
+certification check hookup
+budget enforcement hookup
+update clock-in route
+update traveler start UI
+audit log for warnings/overrides
+verify PM Control Center labor feed now shows complete linkage
+One more thing to add before coding
+
+I would add a tiny acceptance test section to the ticket:
+
+Test cases
+traveler start with valid charge code + valid cert + budget remaining
+traveler start with valid charge code + expired cert
+traveler start with valid charge code + missing cert
+traveler start with budget exhausted
+traveler start with no resolvable charge code → error
+operator without override permission cannot change charge code
+operator with override permission can change charge code and action is audit logged
+
+That will save you pain later.
+
+Verdict
+
+This is a go ticket.
+
+It is specific enough to build, important enough to matter, and directly supports both PM Control Center and your WAD/DCAA direction.
+
+Your best ticket after this should probably be:

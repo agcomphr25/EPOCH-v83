@@ -1,0 +1,101 @@
+IMPLEMENTATION PROMPT — TIMEKEEPING CORRECTION APPROVAL CHAIN (DCAA COMPLIANT)
+
+STRICT COMPLIANCE-FIRST EXECUTION
+
+DO NOT allow direct edits after certification.
+DO NOT overwrite original time.
+DO NOT allow corrections without approval.
+DO NOT lose history of changes.
+
+Goal:
+Implement a controlled, auditable correction workflow for certified timesheets.
+
+==================================================
+PHASE 1 — READ-ONLY AUDIT
+=========================
+
+Identify:
+
+* How edits are currently handled post-certification
+* Where timesheet locks are enforced
+* Existing audit logs for changes
+
+Return findings first.
+
+==================================================
+PHASE 2 — REQUIRED MODEL
+========================
+
+State machine:
+
+Draft → Submitted → Certified → Locked
+Locked → Correction Requested → Correction Approved → Updated
+
+==================================================
+PHASE 3 — DATA MODEL
+====================
+
+Add:
+
+timesheet_corrections
+
+* id
+* timesheet_id
+* requested_by
+* requested_at
+* reason
+* original_snapshot
+* proposed_changes
+* status (pending, approved, rejected)
+* approved_by
+* approved_at
+
+==================================================
+PHASE 4 — UI
+============
+
+On locked timesheet:
+
+[ Request Correction ]
+
+Employee submits:
+
+* change details
+* required reason
+
+==================================================
+PHASE 5 — APPROVAL
+==================
+
+Manager/Admin:
+
+* reviews request
+* approves or rejects
+
+Approval applies change and logs full history.
+
+==================================================
+PHASE 6 — AUDIT
+===============
+
+Events:
+
+TIME_CORRECTION_REQUESTED
+TIME_CORRECTION_APPROVED
+TIME_CORRECTION_REJECTED
+
+Must preserve:
+
+* before
+* after
+* who
+* why
+
+==================================================
+VALIDATION
+==========
+
+* No direct edits after certification
+* All corrections require approval
+* Full history preserved
+* UI enforces workflow

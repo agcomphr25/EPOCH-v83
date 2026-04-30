@@ -1,0 +1,77 @@
+IMPLEMENTATION PROMPT 2A — Fix TK-005 Audit Trail Wiring In Native EPOCH Timekeeping
+
+Objective:
+Perform a surgical implementation to correctly wire punch edit audit logging into the NATIVE EPOCH timekeeping flow so TK-005 forensic findings are based on the real system, not the deprecated standalone timekeeper module.
+
+Background:
+A prior task applied the TK-005 fix to dead code in:
+modules/timekeeping/artifacts/api-server/src/services/punches.service.ts
+
+That is not the live EPOCH path.
+
+We need to locate the actual native EPOCH punch edit flow and ensure edited punches create the required audit trail entry in the correct table(s), especially labor_entry_audit if that is the intended forensic source.
+
+IMPORTANT RULES:
+
+Do NOT refactor unrelated timekeeping architecture
+Do NOT touch the deprecated standalone module unless needed only to confirm it is dead
+Do NOT change forensic scoring thresholds
+Do NOT change unrelated EDRI logic
+Keep this surgical and production-safe
+
+Tasks:
+
+Locate the true native EPOCH punch edit path
+Find:
+route(s)
+controller/service function(s)
+DB write path
+audit write path, if any
+
+Likely areas include:
+
+server/src/routes/timekeeping/
+server/src/services/timekeeping/
+But verify actual code, do not assume.
+Identify how TK-005 is currently evaluated
+Find exactly how forensic logic determines:
+“Edited punch with no corresponding audit trail entry”
+
+Identify:
+
+required event name(s)
+required table(s)
+required field structure
+join keys or reference IDs used by the forensic rule
+Add the missing native audit write
+When a native EPOCH punch edit occurs, create the proper audit entry required for TK-005 to clear.
+
+Audit entry should capture, if consistent with existing schema:
+
+employee/user id making the edit
+original punch id / labor entry id
+action type
+edit reason
+timestamp
+old vs new values if architecture supports it
+any approval/certification linkage if already used elsewhere
+Ensure the implementation uses the LIVE native tables/services
+Do not leave the fix in deprecated code only.
+If the old dead-code fix still exists, leave it alone unless trivial cleanup is safe and isolated.
+Validate no regression
+Confirm:
+native punch edits still work
+edit reason still works if already required
+TK-005 forensic rule can now find the audit linkage in native EPOCH flow
+
+Required Output Format:
+
+SECTION A — Native EPOCH Punch Edit Path Found
+SECTION B — Forensic TK-005 Dependency Confirmed
+SECTION C — Files Modified
+SECTION D — Audit Entry Structure Added
+SECTION E — Why This Fix Now Works In Live EPOCH
+SECTION F — Any Remaining Edge Cases
+
+Be brutally honest.
+If native punch editing has multiple code paths, say so clearly.

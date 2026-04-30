@@ -1,0 +1,192 @@
+READ-ONLY FORENSIC AUDIT — PRIOR-PERIOD DRAFT JOURNAL ENTRIES
+NO_PERIOD_LOCKING RESOLUTION
+
+Strict read-only audit.
+
+DO NOT modify code.
+DO NOT post entries.
+DO NOT void entries.
+DO NOT delete records.
+DO NOT change scorer logic.
+DO NOT create migrations.
+
+Goal:
+
+Resolve the remaining HIGH severity DCAA flag:
+
+NO_PERIOD_LOCKING
+
+Current DCAA score:
+82.38
+
+Root cause:
+
+5 journal_entries exist with:
+
+status = DRAFT
+
+and
+
+effective_date before the current accounting period
+
+This means prior accounting periods remain open and creates a real accounting control issue.
+
+We must determine the correct action for each entry.
+
+Not assumptions.
+Verified accounting truth only.
+
+--------------------------------------------------
+AUDIT SCOPE
+--------------------------------------------------
+
+Inspect:
+
+- journal_entries
+- journal_entry_lines (if present)
+- labor_cost_records
+- labor_account_config
+- posting runs / posting batches
+- GL posting service
+- cost accounting routes
+- journal approval/post/void logic
+- reversal logic
+- accounting period close logic
+- audit logs tied to journal entries
+- EDRI PERIOD_LOCKING scorer logic
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. Identify the exact 5 DRAFT entries
+
+For each:
+
+- journal_entry_id
+- effective_date
+- created_at
+- created_by
+- amount
+- source
+- description
+- status
+- related posting run
+- related labor_cost_records
+- related employee/project/WAD if applicable
+- number of journal lines
+- debit total
+- credit total
+- balanced or not
+
+Present in a table.
+
+--------------------------------------------------
+
+2. Determine root cause
+
+Why is each still DRAFT?
+
+Classify:
+
+- legitimate pending approval
+- failed posting
+- orphaned record
+- test/demo entry
+- manually created adjustment
+- historical leftover
+- migration artifact
+- missing workflow
+- duplicate
+- abandoned partial posting
+
+No guessing.
+
+--------------------------------------------------
+
+3. Determine safest action
+
+For each entry:
+
+POST
+VOID
+REVIEW
+LEAVE TEMPORARILY
+
+with exact reasoning.
+
+If unsure → REVIEW
+
+never guess POST.
+
+--------------------------------------------------
+
+4. Verify workflow support
+
+Does proper code already exist for:
+
+- posting journal entries
+- approving entries
+- voiding entries
+- reversing entries
+- closing periods
+- locking periods
+- preserving audit trail
+
+If missing, identify exact implementation gap.
+
+--------------------------------------------------
+
+5. Recommend the best implementation
+
+Choose safest next move:
+
+Option A:
+Admin review + Post/Void workflow
+
+Option B:
+Automatic void of orphan/test entries
+
+Option C:
+Accounting period close workflow
+
+Option D:
+Mixed approach
+
+Option E:
+Other
+
+Do NOT implement yet.
+
+--------------------------------------------------
+
+6. Score impact
+
+Estimate:
+
+If the correct action is taken,
+what will DCAA score become?
+
+Be realistic.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/PRIOR_PERIOD_DRAFT_JOURNAL_ENTRIES_AUDIT.md
+
+Include:
+
+- exact DB evidence
+- exact files inspected
+- table of all 5 entries
+- recommended action per entry
+- implementation recommendation
+- expected score movement
+- safest next implementation prompt
+
+Be conservative.
+
+Accounting correctness matters more than score.

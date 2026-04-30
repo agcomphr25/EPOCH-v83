@@ -1,0 +1,124 @@
+IMPLEMENTATION PROMPT 2D — Resolve Executive Trust Issues In EDRI Labels And Coverage Messaging
+
+Objective:
+Fix the leadership-trust problems already identified in EDRI before this system is used for executive decision-making against Deltek Costpoint comparisons.
+
+Background:
+The Executive Readiness Matrix is now live-backed and functioning correctly.
+
+However, the core EDRI dashboard still has trust-breaking issues:
+
+Threshold contradiction:
+green verdict threshold uses 70
+dashboard still displays 85.0 as “pass threshold”
+Forensic coverage perception problem:
+forensic rules are heavily TIMEKEEPING-centered
+leadership could incorrectly assume equal forensic maturity across all domains
+
+We are NOT rewriting the scoring engine here.
+We are fixing clarity, labels, and executive trust.
+
+IMPORTANT RULES:
+
+Do NOT casually change core scoring math
+Do NOT silently alter scoring thresholds without clear reason
+Do NOT hide known limitations
+Do NOT imply equal forensic coverage where it does not exist
+Favor operational truth over pretty dashboards
+
+Implementation Requirements:
+
+Resolve threshold messaging contradiction
+
+Current state:
+
+verdict failure threshold = compositeScore < 70
+displayed target = 85.0 labeled “pass threshold”
+
+This is misleading.
+
+Refactor the UI language so leadership instantly understands:
+
+Minimum Compliance Floor
+vs
+Audit-Defensible Target
+vs
+Executive Confidence Zone
+
+Suggested concept:
+
+70 = Minimum survivability floor
+85 = Audit-defensible / executive confidence target
+
+Examples of better wording:
+
+Minimum Compliance Threshold
+Executive Confidence Target
+Audit-Defensible Goal
+
+Do NOT leave:
+“85 pass threshold”
+
+if pass/fail still flips at 70.
+
+Make forensic coverage boundaries visible
+
+Current issue:
+Only TIMEKEEPING has deep forensic rule coverage.
+
+ACCOUNTING, PROCUREMENT, INVENTORY, POLICY do not yet have equivalent forensic depth.
+
+The UI should communicate this honestly.
+
+Examples:
+
+“Forensic coverage strongest in Timekeeping; additional domain rule sets in progress”
+domain-level coverage maturity badges
+small trust notes near the forensic panel
+
+Do not make it alarming.
+Make it accurate.
+
+Reduce false confidence in leadership-facing panels
+
+Where appropriate, distinguish:
+
+scoring coverage
+forensic coverage
+roadmap coverage
+
+Executives should know what is measured,
+what is forensically enforced,
+and what is still roadmap.
+
+If clean and safe, reduce duplicate remediation inflation
+
+If the APPROVAL_CHAIN vs HARDCODED_APPROVER overlap is easy to resolve cleanly without major scorer refactor, fix it.
+
+If not:
+document clearly why it remains.
+
+Do not create hidden complexity.
+
+Preserve consistency with Executive Matrix language
+
+The Executive Matrix now uses honest live-vs-editorial distinction.
+
+EDRI should feel equally trustworthy.
+
+No conflicting language between the two systems.
+
+Required Output Format:
+
+SECTION A — Labels Updated
+SECTION B — Threshold Messaging Clarified
+SECTION C — Forensic Coverage Messaging Added
+SECTION D — Any Light Cleanup Included
+SECTION E — Remaining Trust Limitations Still Present
+SECTION F — Anything Leadership Could Still Misinterpret
+
+Be brutally honest.
+
+The goal is not prettier wording.
+
+The goal is executive trust.

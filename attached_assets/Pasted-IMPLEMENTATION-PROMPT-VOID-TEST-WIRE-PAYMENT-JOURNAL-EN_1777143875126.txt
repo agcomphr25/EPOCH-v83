@@ -1,0 +1,190 @@
+IMPLEMENTATION PROMPT — VOID TEST WIRE PAYMENT JOURNAL ENTRIES
+NO_PERIOD_LOCKING RESOLUTION
+
+STRICT SCOPE
+
+Do NOT delete records.
+Do NOT hard-remove journal entries.
+Do NOT change scorer logic.
+Do NOT touch labor posting void logic.
+Do NOT modify traveler accounting.
+Do NOT change payroll exports.
+
+Goal:
+
+Safely resolve the remaining HIGH severity DCAA flag:
+
+NO_PERIOD_LOCKING
+
+by properly voiding the 5 confirmed test wire-payment journal entries from March 2, 2026.
+
+These are test artifacts, not valid accounting entries.
+
+They must be VOIDED with full audit trail,
+not deleted.
+
+--------------------------------------------------
+CONFIRMED ENTRIES
+--------------------------------------------------
+
+All 5 are test entries:
+
+- created same day
+- test memos ("test", "test2", "Test 3")
+- referenced payment notes also marked test
+- one entry has reference_id = 0
+- balanced
+- never exported
+- never audited
+
+All recommended action = VOID
+
+--------------------------------------------------
+REQUIRED IMPLEMENTATION
+--------------------------------------------------
+
+Build a safe WIRE_PAYMENT journal entry void workflow.
+
+Existing:
+
+void-labor-posting route exists
+
+Missing:
+
+void-wire-payment-entry route
+
+We need:
+
+admin-controlled,
+audited,
+reversible-safe voiding
+
+for non-labor GL entries.
+
+--------------------------------------------------
+IMPLEMENTATION REQUIREMENTS
+--------------------------------------------------
+
+1. Create dedicated void route
+
+Support:
+
+WIRE_PAYMENT journal entries
+
+Do NOT reuse labor posting void blindly.
+
+Separate workflow.
+
+--------------------------------------------------
+
+2. Void must preserve history
+
+Required behavior:
+
+- original journal entry remains
+- status changes to VOIDED (or equivalent existing status)
+- void timestamp
+- voided_by
+- mandatory void_reason
+- audit event written
+
+No hard deletes.
+
+No silent changes.
+
+--------------------------------------------------
+
+3. Protect against bad voids
+
+Must block:
+
+- already exported entries
+- already reconciled entries
+- already voided entries
+- entries tied to protected workflows if applicable
+
+Hard fail with clear message.
+
+--------------------------------------------------
+
+4. Reverse safely if required
+
+If system architecture requires:
+
+- reversal journal entry
+
+instead of
+
+- status-only void
+
+follow existing accounting standards already present in codebase.
+
+Do not invent accounting shortcuts.
+
+--------------------------------------------------
+
+5. UI/API minimum
+
+Implementation may be API-only if fastest/safest.
+
+No large UI build required.
+
+Admin endpoint is sufficient.
+
+--------------------------------------------------
+
+6. Apply only to the 5 confirmed entries
+
+After route exists:
+
+void the exact 5 entries safely.
+
+Do not bulk void unknown entries.
+
+--------------------------------------------------
+
+7. Preserve scorer correctness
+
+After void:
+
+NO_PERIOD_LOCKING should resolve honestly.
+
+No scorer hacks.
+
+Real accounting correction only.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. all 5 entries now safely voided
+2. audit trail exists
+3. no rows deleted
+4. no unrelated entries affected
+5. no exported/reconciled protections broken
+6. EDRI score improves
+7. PERIOD_LOCKING improves from 0.5 → 1.0
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/VOID_WIRE_PAYMENT_JOURNAL_ENTRIES.md
+
+Include:
+
+- files changed
+- route created
+- void protection logic
+- exact 5 entries voided
+- audit evidence
+- before/after score
+- remaining top score blockers
+
+This is accounting correction,
+not cleanup.
+Be conservative.

@@ -1,0 +1,212 @@
+Here’s the full next build:
+
+#301 — Scrap Summary on Lot Detail
+What & Why
+
+Add a scrap summary section to the lot detail view so users can immediately see whether a lot has ever been scrapped, how much was scrapped, and why. You already have lot history/event patterns in the inventory UI and transaction history surfaces, but scrap is still easier to miss than it should be. This build makes scrap visible at the lot level without forcing users to scan the full transaction list.
+
+Done looks like
+
+On the lot detail screen, users can see a dedicated Scrap Summary block that shows:
+
+total quantity scrapped for the lot
+current lot status
+most recent scrap date
+most recent scrap performed by
+most recent scrap reason
+scrap event count
+
+If the lot has never been scrapped:
+
+the section shows a clean empty state, or
+the section is hidden, depending on the page pattern you prefer
+
+If the lot is fully scrapped:
+
+the summary clearly indicates that the lot ended in SCRAPPED
+Why this is next
+
+After adding SCRAPPED as a real workflow state in #300, the next step is making that state visible in the detail view. That improves:
+
+operator understanding
+supervisor review
+audit clarity
+troubleshooting when a lot disappears from usable stock
+Out of scope
+editing scrap events
+NCR linkage
+approval workflow
+scrap analytics across all lots
+changing scrap backend behavior
+dedicated scrap report page
+Backend tasks
+1. Extend lot detail response
+
+Wherever the lot detail endpoint is returned, include a scrap summary object derived from material_lot_transactions where transactionType = 'SCRAP'. The schema already supports SCRAP transactions with quantity, reason, notes, performedBy, and timestamp fields.
+
+Suggested computed fields:
+
+type ScrapSummary = {
+  totalScrappedQty: number;
+  scrapEventCount: number;
+  lastScrappedAt: string | null;
+  lastScrappedBy: string | null;
+  lastScrapReason: string | null;
+};
+2. Query rules
+
+For the selected lot:
+
+filter material_lot_transactions to transactionType = 'SCRAP'
+sum absolute value of negative qtyChange
+count rows
+take latest performedAt
+take latest performedBy
+take latest reason
+3. Suggested response shape
+
+If your lot detail endpoint already returns the lot plus history, extend it like this:
+
+type MaterialLotDetailResponse = {
+  lot: MaterialLot;
+  transactions: Transaction[];
+  scrapSummary: {
+    totalScrappedQty: number;
+    scrapEventCount: number;
+    lastScrappedAt: string | null;
+    lastScrappedBy: string | null;
+    lastScrapReason: string | null;
+  };
+};
+
+If there are no scrap events, return:
+
+scrapSummary: {
+  totalScrappedQty: 0,
+  scrapEventCount: 0,
+  lastScrappedAt: null,
+  lastScrappedBy: null,
+  lastScrapReason: null,
+}
+Frontend tasks
+Relevant file
+
+Whatever page/component renders the lot detail view. From your current inventory UI direction, this should follow the same card-and-badge style already used in Material Inventory and history surfaces.
+
+1. Add a Scrap Summary card
+
+Add a dedicated card/section labeled:
+
+Scrap Summary
+
+Suggested contents:
+
+Total Scrapped
+Scrap Events
+Last Scrapped
+Last Performed By
+Last Reason
+2. Suggested UI layout
+<Card>
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2">
+      <Trash2 className="h-5 w-5 text-destructive" />
+      Scrap Summary
+    </CardTitle>
+    <CardDescription>
+      Scrap activity recorded against this lot
+    </CardDescription>
+  </CardHeader>
+  <CardContent>
+    {scrapSummary.scrapEventCount > 0 ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">Total Scrapped</p>
+          <p className="text-lg font-semibold">
+            {scrapSummary.totalScrappedQty} {lot.unitOfMeasure}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm text-muted-foreground">Scrap Events</p>
+          <p className="text-lg font-semibold">{scrapSummary.scrapEventCount}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-muted-foreground">Last Scrapped</p>
+          <p className="text-base font-medium">
+            {scrapSummary.lastScrappedAt
+              ? format(new Date(scrapSummary.lastScrappedAt), 'MM/dd/yyyy HH:mm')
+              : '-'}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm text-muted-foreground">Performed By</p>
+          <p className="text-base font-medium">
+            {scrapSummary.lastScrappedBy || '-'}
+          </p>
+        </div>
+
+        <div className="md:col-span-2">
+          <p className="text-sm text-muted-foreground">Last Reason</p>
+          <p className="text-base">
+            {scrapSummary.lastScrapReason || '-'}
+          </p>
+        </div>
+
+        {lot.status === 'SCRAPPED' && (
+          <div className="md:col-span-2">
+            <Badge variant="destructive">Lot Fully Scrapped</Badge>
+          </div>
+        )}
+      </div>
+    ) : (
+      <p className="text-sm text-muted-foreground">
+        No scrap activity recorded for this lot.
+      </p>
+    )}
+  </CardContent>
+</Card>
+3. Placement
+
+Place the card:
+
+near the lot status/details section, or
+above the full transaction history
+
+That way users get the summary first, then can inspect individual events if needed.
+
+4. Styling rules
+use destructive styling for totals/badges only where appropriate
+do not make the whole card red unless the lot is fully scrapped
+keep it readable and audit-focused, not alarm-heavy
+Optional enhancement
+
+If you want a stronger phase 1.1:
+
+show the latest 3 scrap transactions in a compact mini-table under the summary
+
+Suggested columns:
+
+date
+qty
+performed by
+reason
+
+That is optional, but it would save users from opening full history in common cases.
+
+Edge cases
+partial scrap: show scrap totals, but lot status may still be ACCEPTED or similar
+full scrap: show badge and final status clearly
+multiple scrap events: total should sum all scrap qty, latest fields should reflect most recent one
+no scrap events: show empty state, not blank fields
+Test cases
+lot with no scrap events
+→ empty summary state
+lot with one partial scrap
+→ total scrapped shown, event count = 1, latest fields populated
+lot with multiple scrap events
+→ total sums correctly, latest fields reflect newest event
+fully scrapped lot
+→ summary shows totals and Lot Fully Scrapped badge

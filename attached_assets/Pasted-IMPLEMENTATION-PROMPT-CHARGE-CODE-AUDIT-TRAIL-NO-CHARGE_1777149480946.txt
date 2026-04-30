@@ -1,0 +1,246 @@
+IMPLEMENTATION PROMPT — CHARGE CODE AUDIT TRAIL
+NO_CHARGE_CODE_AUDIT RESOLUTION
+
+STRICT SCOPE
+
+Do NOT modify storage interfaces.
+Do NOT change scorer logic.
+Do NOT seed fake audit rows.
+Do NOT add approval workflow.
+Do NOT change any other file.
+
+Only modify:
+
+server/src/routes/chargeCodes.ts
+
+Goal:
+
+Resolve:
+
+NO_CHARGE_CODE_AUDIT
+
+by creating real audit_events for charge code mutations.
+
+Current score:
+~85.38
+
+Expected score after:
+~89.38
+
+--------------------------------------------------
+CONFIRMED REQUIREMENT
+--------------------------------------------------
+
+Scorer checks:
+
+SELECT COUNT(*)
+FROM audit_events
+WHERE entity_type = 'charge_code'
+   OR entity_type LIKE '%charge%'
+
+Threshold:
+
+COUNT > 0
+→ score = 1.0
+
+Current:
+
+COUNT = 0
+
+We must create legitimate audit rows
+from real charge code mutations.
+
+--------------------------------------------------
+MUTATION PATHS
+--------------------------------------------------
+
+Only two mutation routes exist:
+
+1. POST /api/charge-codes
+→ createChargeCode()
+
+2. PATCH /api/charge-codes/:id
+→ updateChargeCode()
+
+Deactivation is:
+
+PATCH with:
+
+{ active: false }
+
+No DELETE route exists.
+
+--------------------------------------------------
+REQUIRED IMPLEMENTATION
+--------------------------------------------------
+
+Add audit hooks at the ROUTE layer.
+
+Do NOT modify storage.ts.
+
+Use:
+
+req.user
+
+for actor identity.
+
+--------------------------------------------------
+STEP 1 — IMPORTS
+--------------------------------------------------
+
+Add:
+
+import { eq } from 'drizzle-orm';
+import { db } from '../../db';
+import { auditEvents } from '../../schema';
+
+--------------------------------------------------
+STEP 2 — CREATE ROUTE AUDIT
+--------------------------------------------------
+
+After successful:
+
+storage.createChargeCode()
+
+insert:
+
+audit_events row
+
+with:
+
+entityType: 'charge_code'
+entityId: String(created.id)
+action: 'CHARGE_CODE_CREATED'
+
+actor:
+- actorId
+- actorName
+- actorRole
+
+from req.user
+
+fieldsChanged:
+
+{
+  code,
+  type,
+  active
+}
+
+meta:
+
+{
+  billable,
+  requiresApproval
+}
+
+Must only write after successful DB creation.
+
+--------------------------------------------------
+STEP 3 — UPDATE / DEACTIVATE AUDIT
+--------------------------------------------------
+
+Before update:
+
+fetch existing record using:
+
+storage.getChargeCodeById(id)
+
+This is required for:
+
+before/after diff
+and
+deactivation detection
+
+After successful update:
+
+insert:
+
+audit_events row
+
+with:
+
+entityType: 'charge_code'
+entityId: String(id)
+
+Action:
+
+if:
+
+existing.active === true
+and
+parsed.data.active === false
+
+→ action = 'CHARGE_CODE_DEACTIVATED'
+
+else
+
+→ action = 'CHARGE_CODE_UPDATED'
+
+fieldsChanged:
+
+must contain:
+
+{ field: { from, to } }
+
+for fields present in parsed.data
+
+reason:
+
+(req.body as any).reason ?? null
+
+Actor:
+
+from req.user
+
+--------------------------------------------------
+STEP 4 — SAFETY
+--------------------------------------------------
+
+Do NOT:
+
+- audit failed writes
+- create duplicate audit rows
+- use uppercase entity_type
+- change unrelated routes
+
+Must use:
+
+'charge_code'
+
+exact lowercase
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. create writes audit row
+2. update writes audit row
+3. deactivate writes audit row
+4. entity_type = 'charge_code'
+5. scorer clears NO_CHARGE_CODE_AUDIT
+6. CHARGE_CODE domain becomes 100
+7. composite score improves to ~89.38
+8. no regressions
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/CHARGE_CODE_AUDIT_TRAIL_IMPLEMENTATION.md
+
+Include:
+
+- exact lines changed
+- exact audit rows created
+- before/after score
+- validation results
+- remaining top score blockers
+
+This is real compliance,
+not score gaming.
+Be conservative.

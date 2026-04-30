@@ -1,0 +1,119 @@
+SURGICAL EXECUTION — PHASE 2 LIVE ENDPOINT REWIRE + LEGACY ROUTE RETIREMENT
+
+Goal:
+Complete the promotion of standalone timekeeping as the single active attendance/payroll system inside EPOCH by removing remaining live dependencies on public.punch_events and legacy timekeeping routes.
+
+Critical context:
+- Phase 1 is complete:
+  - public.employees is now the true employee source
+  - timekeeper_pin + timezone exist on public.employees
+  - standalone employee identity now resolves through epochEmployeeId
+  - standalone timekeeping is the intended source of truth
+- Traveler/WAD labor is a separate connected system and must remain untouched
+- We are NOT merging traveler labor with attendance timekeeping
+- We are NOT touching public.time_clock_entries
+- We are NOT touching manufacturing workflows
+
+Audit-confirmed remaining blockers:
+1. /api/timekeeping/active-job still reads public.punch_events
+2. /api/timekeeping/active-context still reads public.punch_events
+3. main-server Gusto export still reads public.punch_events
+4. EDRI timekeeping scorer still reads public.punch_events
+5. legacy -legacy timekeeping endpoints still exist
+6. public.punch_events should ultimately be retired
+
+Your task:
+Perform the minimum safe code changes required to eliminate active operational dependence on public.punch_events for attendance/payroll timekeeping.
+
+What to do:
+
+1. AUDIT BEFORE CHANGING
+Reconfirm:
+- exact files/functions still reading public.punch_events
+- exact frontend pages calling active-job / active-context
+- which Gusto export route is actually the operational path
+- whether any hidden dependencies still exist
+
+Do not assume.
+
+2. REWIRE ACTIVE-JOB + ACTIVE-CONTEXT
+Update:
+- GET /api/timekeeping/active-job
+- GET /api/timekeeping/active-context
+
+These must read from:
+timekeeping.punches
+
+NOT:
+public.punch_events
+
+Preserve existing frontend behavior.
+Do not break ProductionOrderInspector or employee production UI.
+
+3. RESOLVE DUPLICATE GUSTO EXPORT
+Determine which route is the real payroll export path.
+
+Expected:
+- standalone export using timekeeping.punches should remain
+- main-server export using public.punch_events should be retired
+
+Remove stale logic safely.
+
+4. REWIRE EDRI TIMEKEEPING SCORER
+Update:
+server/src/services/edriDomainScorers.ts
+
+Timekeeping domain health must read from:
+timekeeping.punches
+
+NOT:
+public.punch_events
+
+Preserve scoring behavior where possible.
+
+5. CLEAN LEGACY ENDPOINTS
+Remove or safely retire:
+- punch-legacy
+- status-legacy
+- hours-legacy
+- admin/employee/:id-legacy
+and other stale attendance endpoints tied to punch_events
+
+Do NOT remove traveler/WAD routes.
+
+6. VERIFY WHETHER timekeeping.employees STILL EXISTS AS A DEPENDENCY
+Explicitly confirm:
+- is it still referenced anywhere?
+- if yes, exactly where
+- if no, confirm it is safe for final removal in next phase
+
+7. OUTPUT REQUIREMENTS
+
+Provide:
+
+A. files changed
+
+B. exact reason for each change
+
+C. whether public.punch_events is still operationally required
+
+D. whether timekeeping.employees is still referenced anywhere
+
+E. whether we are safe to proceed to final table retirement
+
+F. anything skipped and why
+
+Guardrails:
+- Do NOT touch traveler/WAD flows
+- Do NOT touch public.time_clock_entries
+- Do NOT merge attendance + traveler domains
+- Keep changes surgical
+- No broad refactors
+- No generic cleanup
+
+Success criteria:
+- active operational attendance/payroll timekeeping no longer depends on public.punch_events
+- only one real Gusto export path exists
+- EDRI no longer depends on punch_events
+- legacy attendance scaffolding is effectively dead
+- we are ready for final retirement of old tables

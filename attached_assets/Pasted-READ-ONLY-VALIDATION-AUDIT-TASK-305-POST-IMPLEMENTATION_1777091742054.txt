@@ -1,0 +1,261 @@
+READ-ONLY VALIDATION AUDIT — TASK #305 POST-IMPLEMENTATION FORENSIC REVIEW
+
+STRICT READ-ONLY AUDIT
+
+DO NOT modify code.
+DO NOT create fixes yet.
+DO NOT refactor.
+DO NOT “improve” implementation.
+
+Your only job is to verify whether Task #305 was implemented correctly, safely, and without hidden accounting risks.
+
+This is a forensic validation audit of the completed implementation.
+
+We are validating:
+
+WAD + Charge Code + Department → GL Posting
+
+This is DCAA-sensitive and financially critical.
+
+We must confirm:
+
+1. the implementation is real
+2. the implementation is complete
+3. no dangerous regressions were introduced
+4. duplicate posting protection is safe
+5. audit traceability is truly preserved
+
+No assumptions.
+Only verified findings.
+
+--------------------------------------------------
+IMPLEMENTATION CLAIMS TO VERIFY
+--------------------------------------------------
+
+The implementation claims:
+
+1. laborPostingService.ts now:
+   - prevents duplicate posting
+   - fail-closes missing WAD attribution
+   - groups WAD labor by:
+     costType
+     + chargeCodeId
+     + productionWorkOrderId
+     + projectId
+     + departmentCode
+   - keeps non-WAD indirect grouping unchanged
+
+2. laborCostingService.ts now copies:
+   - productionWorkOrderId
+   - projectId
+   - travelerId
+   - chargeCodeId
+
+from punch session → labor_cost_records
+
+3. server/schema.ts now includes:
+   - productionWorkOrderId
+   - projectId
+   - travelerId
+   - chargeCodeId
+
+on labor_cost_records
+
+4. costAccounting API exposes:
+   skippedAlreadyPosted
+
+We must verify these are actually correct.
+
+--------------------------------------------------
+SECTION 1 — SCHEMA VALIDATION
+--------------------------------------------------
+
+Inspect:
+
+server/schema.ts
+
+Confirm:
+
+- exact column definitions
+- nullable vs required
+- FK relationships
+- migration safety
+- whether indexes should exist for grouping performance
+
+Answer:
+
+Did schema changes introduce accounting risk?
+
+Any missing FK/index protection?
+
+--------------------------------------------------
+SECTION 2 — COST RECORD ATTRIBUTION FLOW
+--------------------------------------------------
+
+Inspect:
+
+server/src/services/laborCostingService.ts
+
+Confirm:
+
+- fields are copied correctly
+- values originate from trusted source
+- no client-controlled values bypass validation
+- no fallback silently drops attribution
+
+Answer:
+
+Can bad attribution still enter labor_cost_records?
+
+Show exact risk if yes.
+
+--------------------------------------------------
+SECTION 3 — GL POSTING GROUPING VALIDATION
+--------------------------------------------------
+
+Inspect:
+
+server/src/services/laborPostingService.ts
+
+Confirm:
+
+- exact grouping key
+- journal entry creation logic
+- stamp/update logic
+- whether NULL department handling is correct
+- whether group splitting is deterministic
+
+Answer:
+
+Can two different WAD cost objectives still collapse into one journal entry?
+
+If yes, implementation is wrong.
+
+--------------------------------------------------
+SECTION 4 — DUPLICATE POSTING SAFETY
+--------------------------------------------------
+
+Inspect:
+
+duplicate prevention logic
+
+Confirm:
+
+- journalEntryId protection
+- partial failure handling
+- retry safety
+- race condition risks
+- concurrent posting risks
+
+Critical question:
+
+Can partial posting create orphaned or double-posted records?
+
+This must be brutally analyzed.
+
+--------------------------------------------------
+SECTION 5 — FAIL-CLOSED VALIDATION
+--------------------------------------------------
+
+Inspect:
+
+missing attribution handling
+
+Confirm:
+
+- WAD-linked records cannot silently post
+- chargeCodeId missing → hard fail
+- projectId missing → hard fail
+- productionWorkOrderId inconsistencies handled
+- logging visibility is sufficient
+
+Critical question:
+
+Can bad labor still reach GL?
+
+--------------------------------------------------
+SECTION 6 — AUDIT TRACEABILITY
+--------------------------------------------------
+
+Verify we can answer:
+
+“What contract was this labor charged to?”
+
+“Who worked it?”
+
+“Which traveler created it?”
+
+“Which WAD authorized it?”
+
+“Which charge code was used?”
+
+“Which department incurred it?”
+
+“Which journal entry posted it?”
+
+Follow actual DB path:
+
+punch_ledger
+→ labor_cost_records
+→ journal_entries
+
+Confirm true traceability exists.
+
+No theoretical answers.
+
+--------------------------------------------------
+SECTION 7 — REGRESSION RISK
+--------------------------------------------------
+
+Confirm implementation did NOT accidentally break:
+
+- indirect labor posting
+- overhead posting
+- payroll exports
+- labor approval flow
+- traveler clock-in behavior
+- legacy reconciliation behavior
+
+Find hidden side effects.
+
+--------------------------------------------------
+SECTION 8 — FINAL JUDGMENT
+--------------------------------------------------
+
+Give hard answer:
+
+Is Task #305 now truly complete?
+
+YES
+PARTIAL
+NO
+
+If PARTIAL:
+
+list exact remaining risks in severity order
+
+If YES:
+
+state whether Charge Code Engine Phase 1 can safely begin
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/TASK_305_POST_IMPLEMENTATION_AUDIT.md
+
+Must include:
+
+- exact verified findings
+- exact file paths
+- exact risks
+- exact severity levels
+- go/no-go recommendation
+
+No optimism bias.
+
+Be brutal.
+
+If implementation is wrong, say so.

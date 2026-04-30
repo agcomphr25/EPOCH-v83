@@ -1,0 +1,279 @@
+READ-ONLY FORENSIC AUDIT — CHARGE CODE ENGINE READINESS + TIMEKEEPING ABSORPTION
+
+You are performing a STRICT READ-ONLY forensic architecture audit.
+
+DO NOT modify code.
+DO NOT create files.
+DO NOT implement fixes.
+DO NOT refactor.
+DO NOT propose hypothetical architecture without verifying the actual codebase.
+
+Your job is to inspect the REAL current EPOCH codebase and determine:
+
+1. Are we structurally ready to build the Charge Code Engine correctly?
+2. Is the old standalone timekeeping system still partially alive in the codebase?
+3. What must be completed first before Charge Code Engine implementation begins?
+
+This is a manufacturing ERP system with DCAA-sensitive labor tracking requirements.
+
+Critical architectural rule:
+
+Traveler → WAD/WBS → Charge Code Engine → Cost Allocation
+
+NOT
+
+Standalone Timekeeping App → Charge Codes
+
+We must confirm the codebase matches this architecture.
+
+--------------------------------------------------
+SECTION 1 — TRAVELER + DIRECT LABOR FOUNDATION
+--------------------------------------------------
+
+Audit all traveler-related systems and determine:
+
+- where direct labor is captured
+- how traveler scans create labor records
+- operation completion flow
+- routing steps tied to departments
+- production movement events
+- operation timestamps
+- labor source attribution
+
+Identify:
+
+- routes
+- services
+- DB tables
+- UI components
+- triggers
+- automation logic
+
+Answer:
+
+Can traveler activity currently serve as the primary source of direct labor capture?
+
+Or is manual entry still required for production labor?
+
+Show exact files.
+
+--------------------------------------------------
+SECTION 2 — WAD / WBS STRUCTURE READINESS
+--------------------------------------------------
+
+Audit all WAD / WBS / contract structure systems.
+
+Determine:
+
+- where WAD structure exists
+- how jobs tie to WAD elements
+- project hierarchy
+- labor charging boundaries
+- contract/project mappings
+- whether labor is constrained by valid WAD relationships
+
+Answer:
+
+Can labor currently be validated against WAD structure?
+
+Or are labor entries still disconnected from contract structure?
+
+Show exact files + tables.
+
+--------------------------------------------------
+SECTION 3 — EXISTING CHARGE CODE LOGIC
+--------------------------------------------------
+
+Search entire codebase for:
+
+- charge codes
+- labor categories
+- labor class
+- direct / indirect labor
+- project charging
+- indirect pools
+- overhead
+- G&A
+- PTO codes
+- holiday codes
+- admin charging
+- salaried reconciliation logic
+
+Identify:
+
+- existing tables
+- existing routes
+- hidden partial implementations
+- abandoned features
+- duplicate systems
+
+Answer:
+
+Do we already have a partial charge code engine?
+
+Or are we starting from scratch?
+
+Show exact findings.
+
+--------------------------------------------------
+SECTION 4 — STANDALONE TIMEKEEPING APP REMNANTS
+--------------------------------------------------
+
+This is critical.
+
+Search for remnants of the old standalone timekeeping architecture:
+
+- old routes
+- old services
+- old tables
+- old UI pages
+- orphaned APIs
+- duplicate punch systems
+- parallel timesheet logic
+- old certification workflows
+- legacy payroll exports
+- anything NOT tied to traveler-driven labor
+
+Identify:
+
+- what still exists
+- what is still active
+- what is dead code
+- what still affects production behavior
+
+Answer:
+
+Why does the system still behave like a standalone timekeeping app?
+
+What must be removed or absorbed?
+
+Show exact files.
+
+--------------------------------------------------
+SECTION 5 — INDIRECT LABOR ENTRY READINESS
+--------------------------------------------------
+
+Audit how indirect labor is currently handled for:
+
+- maintenance
+- safety meetings
+- engineering support
+- admin work
+- facility maintenance
+- training
+- PTO
+- holidays
+- leave
+- salaried reconciliation
+
+Determine:
+
+- how users enter this now
+- whether it exists at all
+- whether approval workflows exist
+- supervisor certification
+- HR review
+- payroll export
+
+Answer:
+
+Can indirect labor be safely layered now?
+
+Or does prerequisite infrastructure still need to be built?
+
+--------------------------------------------------
+SECTION 6 — SALARIED EMPLOYEE RECONCILIATION
+--------------------------------------------------
+
+Audit salaried employee handling.
+
+Determine:
+
+- where salaried labor is reconciled
+- whether traveler labor offsets required hours
+- how PTO is handled
+- partial-day PTO support
+- borrowed PTO handling
+- certification workflow
+- supervisor approval
+- audit trail for DCAA readiness
+
+Answer:
+
+Can salaried reconciliation support compliant labor charging?
+
+Or is this still missing?
+
+--------------------------------------------------
+SECTION 7 — DCAA AUDIT TRAIL READINESS
+--------------------------------------------------
+
+Audit:
+
+- immutable labor history
+- correction logging
+- who changed what
+- supervisor certification
+- employee certification
+- approval chains
+- timestamp integrity
+- payroll export traceability
+
+Answer:
+
+Would current labor architecture survive a DCAA-style audit?
+
+Where are the major risks?
+
+--------------------------------------------------
+SECTION 8 — GO / NO-GO DECISION
+--------------------------------------------------
+
+Final executive decision:
+
+Are we ready for:
+
+CHARGE CODE ENGINE — PHASE 1
+
+which means:
+
+- rules engine
+- labor classification
+- charge validation
+- indirect code assignment
+- direct labor auto-assignment framework
+
+YES or NO
+
+If NO:
+
+List exact blockers in required order.
+
+If YES:
+
+List safest implementation order.
+
+Do NOT be vague.
+
+Be brutally honest.
+
+--------------------------------------------------
+DELIVERABLE FORMAT
+--------------------------------------------------
+
+Produce:
+
+attached_assets/CHARGE_CODE_ENGINE_READINESS_AUDIT.md
+
+Must include:
+
+- exact file paths
+- exact table names
+- exact route names
+- exact blockers
+- architectural risks
+- recommended implementation sequence
+
+No guessing.
+No assumptions.
+Only verified findings from the actual codebase.

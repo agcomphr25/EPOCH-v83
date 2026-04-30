@@ -1,0 +1,155 @@
+READ-ONLY AUDIT — Executive Readiness Matrix Current State Verification
+
+Objective:
+Perform a full READ-ONLY forensic audit of the current EDRI + Executive Readiness Matrix implementation AFTER Prompt 1 changes and any merged follow-up suggestions.
+
+We must determine exactly what was actually built, what was partially built, what was changed unexpectedly, and what still needs to happen before Prompt 2.
+
+IMPORTANT RULES:
+
+DO NOT modify code
+DO NOT create files
+DO NOT delete files
+DO NOT refactor
+DO NOT “fix while reading”
+DO NOT continue implementation
+READ ONLY
+REPORT EXACT REALITY
+
+We need architectural truth before proceeding.
+
+Audit Scope:
+
+Verify Executive Readiness Matrix existence
+
+Check whether the following actually exists:
+
+EdriExecutiveMatrix.tsx
+route wiring
+sidebar/menu navigation entry
+/admin/edri integration
+permission enforcement (ADMIN + OWNER)
+
+Confirm:
+exact file paths
+exact route names
+exact component names
+
+Do not assume based on plan—verify actual code.
+
+Identify what was truly implemented
+
+Determine whether the Matrix includes:
+
+page shell
+executive summary card
+matrix table
+scoring legend
+recommendation panel
+placeholder mock data
+reusable EDRI cards/badges
+severity chips
+existing color system reuse
+
+Identify:
+fully implemented
+partially implemented
+missing entirely
+
+Check for accidental architectural damage
+
+Audit whether Prompt 1 or follow-up suggestions changed:
+
+existing EDRI dashboard behavior
+existing scoring engine
+forensic logic
+domain scorers
+API routes
+permissions
+existing EDRI navigation
+tab system behavior
+
+We must verify no hidden regressions were introduced.
+
+Identify any agent-created overreach
+
+Check whether Replit agent improperly:
+
+started backend scoring early
+created duplicate scoring logic
+added duplicate APIs
+created duplicate tables
+modified scoring thresholds
+altered pass/fail logic
+changed forensic rule behavior
+created redundant services
+
+This is common and must be explicitly checked.
+
+Validate threshold contradiction status
+
+Previously:
+
+Target Score = 85
+Pass threshold = 70
+
+Check whether this was changed.
+
+If yes:
+what changed
+
+If no:
+confirm still unresolved
+
+Evaluate code quality
+
+Determine:
+
+clean architecture
+rushed patching
+duplicated logic
+unnecessary abstractions
+dangerous future technical debt
+
+Be honest.
+
+Prepare for Prompt 2 readiness
+
+We need to know:
+
+Are we safe to proceed with:
+“Connect Executive Matrix to real EDRI data”
+
+OR
+
+Do we need cleanup first?
+
+Required Output Format:
+
+SECTION A — Exact Current Implementation State
+(files + routes + components + permissions)
+
+SECTION B — What Was Actually Built
+(full / partial / missing)
+
+SECTION C — Hidden Regressions or Damage Found
+
+SECTION D — Agent Overreach Detected
+
+SECTION E — Threshold Contradiction Status
+
+SECTION F — Prompt 2 Readiness Assessment
+
+SECTION G — Required Cleanup Before Proceeding (if any)
+
+Final instruction:
+
+Be brutally honest.
+
+Do not report what SHOULD exist.
+
+Report only what ACTUALLY exists in code.
+
+If the agent made bad decisions, say so clearly.
+
+We need architectural truth, not optimism.

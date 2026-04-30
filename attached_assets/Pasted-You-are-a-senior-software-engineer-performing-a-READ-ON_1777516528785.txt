@@ -1,0 +1,268 @@
+You are a senior software engineer performing a READ-ONLY audit of the EPOCH codebase.
+
+🚨 CRITICAL CONTEXT:
+We are changing vendor evaluation frequency from QUARTERLY to ANNUAL.
+
+This is NOT just a UI change. This is a COMPLIANCE-SENSITIVE SYSTEM CHANGE.
+
+Your job is to:
+1) Locate ALL logic tied to vendor evaluation frequency
+2) Determine whether it is HARD-CODED vs CONFIGURABLE
+3) Identify ALL downstream impacts
+4) Propose a SAFE migration plan that preserves audit integrity
+
+DO NOT modify code.
+DO NOT assume behavior.
+TRACE EVERYTHING.
+
+---
+
+## 🔍 STEP 1 — Locate Vendor Evaluation System
+
+Find ALL files, routes, schemas, and services related to:
+
+- vendor evaluation
+- vendor qualification
+- supplier review
+- vendor approval status
+- vendor scoring / rating
+- vendor compliance
+- procurement vendor logic
+
+Search terms:
+"vendorEvaluation"
+"evaluationInterval"
+"reviewFrequency"
+"quarter"
+"90 day"
+"reviewDue"
+"nextReviewDate"
+"lastEvaluatedAt"
+
+RETURN:
+- File paths
+- Functions/services responsible
+- API routes involved
+- UI components involved
+
+---
+
+## 🔍 STEP 2 — Identify Frequency Logic (CRITICAL)
+
+Find EXACTLY where "quarterly" behavior is defined.
+
+Look for:
+- Hardcoded values:
+  - 90 days
+  - 3 months
+  - "quarterly"
+- Date calculations:
+  - nextReviewDate = lastReview + X
+- Cron jobs / scheduled jobs
+- DB fields controlling interval
+
+RETURN:
+For EACH occurrence:
+- File path
+- Code snippet (with line numbers)
+- Type:
+  - HARD-CODED
+  - CONFIG-DRIVEN
+  - DERIVED (calculated)
+- Risk level:
+  - LOW (UI only)
+  - MEDIUM (business logic)
+  - HIGH (compliance / blocking behavior)
+
+---
+
+## 🔍 STEP 3 — Database Schema Analysis
+
+Inspect schema for vendor-related tables.
+
+Look for fields like:
+- lastEvaluatedAt
+- nextEvaluationDue
+- evaluationFrequency
+- reviewCycle
+- status (approved / expired / needs review)
+
+ANSWER:
+- Is frequency stored per vendor OR globally assumed?
+- Is "next evaluation date" persisted OR calculated on the fly?
+- Are there constraints tied to overdue evaluations?
+
+RETURN:
+- Table definitions
+- Field meanings
+- Whether migration requires DATA BACKFILL
+
+---
+
+## 🔍 STEP 4 — Workflow & Enforcement Mapping
+
+Trace how evaluation affects behavior:
+
+- Does system BLOCK purchases if vendor is overdue?
+- Does it WARN only?
+- Does it auto-change vendor status?
+- Does it trigger notifications?
+
+Trace:
+UI → API → service → DB → downstream effects
+
+RETURN:
+- Full workflow chain
+- Where enforcement happens
+- Whether frequency impacts:
+  - purchasing
+  - PO creation
+  - requisitions
+  - approvals
+
+---
+
+## 🔍 STEP 5 — Automation / Jobs
+
+Check for:
+- cron jobs
+- scheduled tasks
+- background workers
+
+Specifically:
+- overdue vendor checks
+- auto-flagging vendors
+- notification triggers
+
+RETURN:
+- Job definitions
+- Frequency assumptions
+- Whether they rely on 90-day logic
+
+---
+
+## 🔍 STEP 6 — UI/UX Surface Area
+
+Find ALL UI components that reference:
+- "Quarterly Review"
+- "Due every 90 days"
+- Vendor status badges
+- Alerts / banners
+
+RETURN:
+- Component paths
+- User-visible text
+- Whether wording is hardcoded or dynamic
+
+---
+
+## 🔍 STEP 7 — Audit & Compliance Considerations
+
+Determine:
+- Is evaluation history stored?
+- Are past evaluations immutable?
+- Is there an audit log?
+
+CRITICAL:
+We must NOT rewrite history when moving to annual.
+
+ANSWER:
+- Does system preserve historical evaluation cadence?
+- Will changing logic affect past records?
+
+---
+
+## 🧠 STEP 8 — Migration Strategy (DESIGN REQUIRED)
+
+Design a SAFE migration plan to move from quarterly → annual.
+
+Constraints:
+- NO loss of audit history
+- NO silent logic changes
+- SYSTEM must remain explainable to auditors
+
+Your plan MUST include:
+
+### 1) Architecture Decision
+Choose one:
+A) Global evaluation interval (config-driven)
+B) Per-vendor evaluation interval
+C) Hybrid (default + override)
+
+Explain WHY.
+
+---
+
+### 2) Data Migration Plan
+- Do we update existing nextReviewDate?
+- Do we leave existing vendors on quarterly until next cycle?
+- Do we recalculate?
+
+Provide EXACT logic.
+
+---
+
+### 3) Code Changes Required
+List:
+- Files to modify
+- Logic to replace
+- New abstractions (if needed)
+
+---
+
+### 4) Backward Compatibility Strategy
+- How do we avoid breaking existing workflows?
+- How do we handle vendors already overdue?
+
+---
+
+### 5) Risk Assessment
+Identify:
+- Compliance risks
+- Hidden dependencies
+- Potential regressions
+
+---
+
+### 6) Recommended Future-State Design (IMPORTANT)
+
+Propose a robust system:
+
+- evaluationFrequency as ENUM:
+  - quarterly
+  - annual
+  - conditional
+
+- trigger-based evaluations:
+  - new vendor
+  - high spend
+  - quality issue
+
+- soft vs hard enforcement:
+  - warn vs block
+
+- full audit trail:
+  - who evaluated
+  - when
+  - why
+
+---
+
+## 📦 FINAL OUTPUT FORMAT
+
+Return:
+
+1) SYSTEM MAP
+2) FREQUENCY LOGIC LOCATIONS
+3) SCHEMA ANALYSIS
+4) WORKFLOW TRACE
+5) AUTOMATION FINDINGS
+6) UI IMPACT
+7) COMPLIANCE NOTES
+8) MIGRATION PLAN (STEP-BY-STEP)
+9) RISK REGISTER
+10) RECOMMENDED FINAL ARCHITECTURE
+
+Be precise.
+No assumptions.
+Trace everything to actual code.

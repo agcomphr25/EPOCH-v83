@@ -1,0 +1,61 @@
+SURGICAL EXECUTION — PHASE 2.5 REMOVE REMAINING timekeeping.employees DEPENDENCY
+
+Goal:
+Finish the Timekeeping identity consolidation so that runtime attendance/payroll flows no longer depend on timekeeping.employees.
+
+Critical context:
+- public.employees is the only true employee source
+- Phase 1 moved PIN/timezone/identity onto public.employees
+- Phase 2 removed active dependence on public.punch_events
+- However, Phase 2 output confirms active-job and active-context still read timekeeping.punches via timekeeping.employees
+- That is transitional only and not acceptable as the final architecture
+- We want runtime attendance/payroll flows to resolve directly from public.employees
+
+Guardrails:
+- Do NOT touch traveler/WAD logic
+- Do NOT touch public.time_clock_entries
+- Do NOT merge traveler labor with attendance timekeeping
+- Do NOT drop any tables yet unless explicitly proven safe at the end
+- Keep changes surgical
+
+Your task:
+
+1. AUDIT BEFORE CHANGING
+- find every remaining runtime read/write dependency on timekeeping.employees
+- separate true runtime dependencies from comments, stubs, migrations, or boot logging
+- list exact files/functions still depending on it
+
+2. REWIRE ACTIVE RUNTIME PATHS
+Update all active attendance/payroll runtime paths so they resolve through public.employees instead of timekeeping.employees.
+Focus especially on:
+- active-job
+- active-context
+- punch/status/dashboard lookups
+- auth/session lookups
+- any punch-to-employee joins
+- any employee display/name/timezone/PIN lookups
+
+3. PRESERVE BEHAVIOR
+- keep current frontend/API behavior intact
+- if active-job/context need job context but timekeeping.punches does not carry job_id, explain exactly how the current route should behave and preserve that behavior cleanly
+- do not invent fake job context
+
+4. VERIFY REMAINING DEPENDENCY SURFACE
+At the end, explicitly classify remaining timekeeping.employees references into:
+- active runtime dependency
+- admin/maintenance-only
+- migration/backfill-only
+- comments/dead code only
+
+5. OUTPUT REQUIREMENTS
+Provide:
+A. files changed
+B. exact reason for each change
+C. whether any ACTIVE runtime dependency on timekeeping.employees still exists
+D. whether timekeeping.employees is now safe to retire in the next phase
+E. anything intentionally left in place and why
+
+Success criteria:
+- runtime attendance/payroll flows no longer depend on timekeeping.employees
+- public.employees is the only active employee truth
+- we are ready for final retirement planning

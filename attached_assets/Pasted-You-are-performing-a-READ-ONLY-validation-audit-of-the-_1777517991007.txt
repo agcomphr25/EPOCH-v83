@@ -1,0 +1,249 @@
+You are performing a READ-ONLY validation audit of the newly introduced `labor_allocations` table in EPOCH.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any code
+- DO NOT write to the database
+- DO NOT create or update records
+- DO NOT assume correctness — VERIFY using queries
+- All conclusions must be backed by actual query results
+
+---
+
+## 🎯 OBJECTIVE
+
+Validate that Phase A/B (schema + backfill) is:
+
+1) Complete
+2) Accurate
+3) Safe to proceed to dual-write (Phase C)
+
+---
+
+## 🔍 STEP 1 — TOTAL COVERAGE
+
+Query:
+
+- Total rows in `punch_ledger`
+- Total rows in `labor_allocations`
+
+Then:
+
+- Count punch_ledger rows with ZERO allocations
+- Count punch_ledger rows with MORE THAN ONE allocation (should be 1 for backfill phase)
+
+Return:
+
+- total sessions
+- total allocations
+- sessions missing allocations
+- sessions with multiple allocations
+
+---
+
+## 🔍 STEP 2 — OPEN SESSION INTEGRITY
+
+Query:
+
+- All punch_ledger rows where clock_out IS NULL
+
+For each:
+
+- Count matching allocations where:
+  - punch_ledger_id matches
+  - status = 'OPEN'
+
+Return:
+
+- number of open sessions
+- number of open allocations
+- sessions with:
+  - zero OPEN allocations ❌
+  - more than one OPEN allocation ❌
+
+---
+
+## 🔍 STEP 3 — DURATION VALIDATION
+
+For ALL CLOSED sessions:
+
+Compute:
+
+- session_duration = clock_out - clock_in
+- allocation_duration = SUM(allocation_end - allocation_start)
+
+Compare with tolerance of 1 second.
+
+Return:
+
+- total sessions checked
+- number of mismatches
+- max deviation
+- sample 5 mismatches (if any)
+
+---
+
+## 🔍 STEP 4 — ATTRIBUTION CONSISTENCY
+
+For each punch_ledger row:
+
+Compare these fields against its allocation:
+
+- charge_code_id
+- traveler_id
+- traveler_step_id
+- production_work_order_id
+- project_id
+- department
+- operation
+- certification_status
+
+Return:
+
+- % exact matches
+- number of mismatches
+- sample rows where mismatch occurs
+
+---
+
+## 🔍 STEP 5 — NULL ATTRIBUTION ANALYSIS
+
+Query:
+
+- allocations where charge_code_id IS NULL
+
+Return:
+
+- count
+- % of total allocations
+
+Also break down:
+
+- how many also have NULL traveler_id
+- how many are fully unattributed
+
+---
+
+## 🔍 STEP 6 — ORPHAN DETECTION
+
+Check BOTH directions:
+
+A) Allocations with no matching punch_ledger
+B) Punch ledger rows with no allocations
+
+Return counts for both.
+
+---
+
+## 🔍 STEP 7 — DUPLICATE / OVERLAP PRE-CHECK
+
+Even though we don’t enforce overlap yet:
+
+Check:
+
+- Any allocations for same punch_ledger_id where:
+  - allocation_start < other.allocation_end
+  AND
+  - allocation_end > other.allocation_start
+
+Return:
+
+- count of overlaps (should be 0 in Phase B)
+- sample rows if any
+
+---
+
+## 🔍 STEP 8 — DISTRIBUTION INSIGHT (IMPORTANT)
+
+Return:
+
+- total allocations
+- allocations with:
+  - charge_code_id NOT NULL
+  - traveler_id NOT NULL
+  - production_work_order_id NOT NULL
+
+Also:
+
+- top 10 charge codes by allocation count
+- top 10 employees by allocation count
+
+---
+
+## 🔍 STEP 9 — RANDOM SPOT CHECK
+
+Select 5 random punch_ledger rows:
+
+For each, return:
+
+- punch_ledger row
+- corresponding allocation row
+
+Confirm visually:
+
+- timestamps match
+- attribution matches
+- no anomalies
+
+---
+
+## 🔍 STEP 10 — FINAL VERDICT
+
+Return:
+
+### ✅ READY FOR PHASE C if:
+- 0 missing allocations
+- 0 multiple allocations (Phase B)
+- 0 open session issues
+- duration mismatches = 0 (or extremely small rounding only)
+- attribution matches ≈ 100%
+- no orphan records
+
+### ⚠️ NEEDS FIX if:
+- any structural inconsistency found
+
+---
+
+## 📊 RETURN FORMAT
+
+# EPOCH Labor Allocation Validation Report
+
+## 1. Coverage Summary
+(numbers)
+
+## 2. Open Session Integrity
+(results)
+
+## 3. Duration Validation
+(results)
+
+## 4. Attribution Consistency
+(results)
+
+## 5. NULL Attribution Analysis
+(results)
+
+## 6. Orphan Records
+(results)
+
+## 7. Overlap Check
+(results)
+
+## 8. Distribution Insights
+(results)
+
+## 9. Spot Check Samples
+(data)
+
+## 10. Final Verdict
+(READY / NOT READY)
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+Do NOT say “looks good” or “appears correct.”
+
+You must:
+- show actual counts
+- show actual mismatches (if any)
+- prove correctness with data

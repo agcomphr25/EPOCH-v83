@@ -1,0 +1,109 @@
+PRODUCTION CONFIG IMPLEMENTATION — CHARGE_CODE DOMAIN FAST PATH
+
+STRICT SCOPE
+
+Do NOT change code.
+Do NOT change scorer logic.
+Do NOT run migrations.
+Do NOT modify WAD or GL posting logic.
+Do NOT insert charge codes directly with SQL.
+
+Goal:
+
+Move production CHARGE_CODE domain from 40% → 100% by fixing the three confirmed production data gaps:
+
+1. IRD_BP_CATEGORIES
+2. SUPERVISOR_OVERRIDE_TRAIL
+3. FRINGE_POOL
+
+Use production only.
+
+--------------------------------------------------
+STEP 1 — CREATE IR&D CHARGE CODE VIA API
+--------------------------------------------------
+
+Use authenticated ADMIN API:
+
+POST /api/charge-codes
+
+Body:
+
+{
+  "code": "IND-IRD",
+  "description": "Internal Research & Development — IR&D Pool",
+  "type": "IR_AND_D",
+  "requiresApproval": false,
+  "billable": false,
+  "active": true
+}
+
+Must be created through the API so audit_events receives entity_type='charge_code'.
+
+--------------------------------------------------
+STEP 2 — CREATE B&P CHARGE CODE VIA API
+--------------------------------------------------
+
+Use authenticated ADMIN API:
+
+POST /api/charge-codes
+
+Body:
+
+{
+  "code": "IND-BP",
+  "description": "Bid & Proposal — B&P Pool",
+  "type": "B_AND_P",
+  "requiresApproval": false,
+  "billable": false,
+  "active": true
+}
+
+Must be created through the API so audit_events receives entity_type='charge_code'.
+
+--------------------------------------------------
+STEP 3 — INSERT FRINGE COST CENTER
+--------------------------------------------------
+
+Use idempotent production SQL:
+
+INSERT INTO cost_centers (code, name, type, status)
+SELECT 'FRINGE', 'Fringe Benefits Pool', 'FRINGE', 'ACTIVE'
+WHERE NOT EXISTS (
+  SELECT 1 FROM cost_centers WHERE type = 'FRINGE'
+);
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify production:
+
+1. charge_codes has type='IR_AND_D'
+2. charge_codes has type='B_AND_P'
+3. audit_events has at least one row where entity_type='charge_code'
+4. cost_centers has type='FRINGE'
+5. CHARGE_CODE checks become:
+   - FRINGE_POOL = PASS
+   - WAD_GL_LINK = PASS
+   - IRD_BP_CATEGORIES = PASS
+   - CODE_TYPE_RESTRICTIONS = PASS
+   - SUPERVISOR_OVERRIDE_TRAIL = PASS
+6. CHARGE_CODE raw score becomes 100
+7. manual EDRI recompute moves production score by approximately +12
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/PROD_CHARGE_CODE_FAST_PATH_IMPLEMENTATION.md
+
+Include:
+
+- exact API calls made
+- exact SQL applied
+- audit_events rows created
+- before/after CHARGE_CODE score
+- before/after composite score
+- remaining largest production gaps

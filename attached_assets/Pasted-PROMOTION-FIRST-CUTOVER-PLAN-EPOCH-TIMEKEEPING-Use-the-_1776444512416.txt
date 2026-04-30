@@ -1,0 +1,88 @@
+PROMOTION-FIRST CUTOVER PLAN — EPOCH TIMEKEEPING
+
+Use the completed audit findings to create the exact implementation plan required to promote the standalone timekeeping module into EPOCH before retiring the legacy timekeeping path.
+
+Important context:
+- Legacy EPOCH timekeeping contains no meaningful production labor data and will ultimately be retired.
+- However, the audit shows the standalone replacement is NOT yet promotable because:
+  - its api-server workflow is failing
+  - auth is separate from EPOCH
+  - employee identity is separate from EPOCH
+  - payroll export still reads punch_events
+  - labor costing still reads punch_events
+  - navigation still points to legacy /time-clock-admin
+  - employee-facing and admin-facing legacy components are still live
+- We do NOT want a migration from old EPOCH punch data.
+- We do NOT want sync logic or dual-write.
+- We DO want a promotion-first sequence where the standalone module becomes operationally ready, then legacy is retired.
+
+Your task:
+Create a grounded, surgical implementation plan tied to the audited files/functions/tables.
+
+Output format:
+
+1. PROMOTION GATE CHECKLIST
+List the exact conditions that must be true before legacy timekeeping can be retired.
+Use only concrete items found in the audit.
+
+2. PHASE 1 — MAKE STANDALONE OPERATIONAL
+Identify the exact work required to:
+- fix the failing standalone api-server
+- verify it can accept punches
+- verify it can serve its frontend
+- verify auth endpoints function
+
+3. PHASE 2 — EMPLOYEE IDENTITY BRIDGE
+Design the exact bridge between EPOCH employees and standalone employees.
+Be specific:
+- whether to add canonicalId / employeeCode / epochEmployeeId to standalone schema
+- how users should be seeded or linked
+- what file(s)/schema(s) must change
+- what risks exist if matching by email or employeeNumber
+
+4. PHASE 3 — AUTH + ACCESS INTEGRATION
+Provide the best implementation strategy to eliminate double-login friction.
+Choose a recommended path and justify it:
+- full auth integration into EPOCH
+- token handoff / SSO bridge
+- temporary embedded/iframe approach
+Tie this to the audited auth files and route structure.
+
+5. PHASE 4 — REWIRE LIVE DEPENDENCIES
+Provide the exact plan to rewire:
+- Gusto payroll export
+- labor costing
+- any labor summaries or admin views that still read punch_events
+For each dependency:
+- file name
+- current source
+- target source
+- whether rewrite / adapter / replacement is best
+
+6. PHASE 5 — UI / NAVIGATION CUTOVER
+Provide the exact sequence to:
+- add native navigation to the standalone module
+- replace /time-clock-admin
+- replace or retire TimeClock.tsx, TimeClockAdmin.tsx, TimeClockKiosk.tsx, TimeClockModal.tsx
+- avoid breaking employee and admin workflows during the switch
+
+7. PHASE 6 — LEGACY RETIREMENT
+Only after all previous phases:
+- list exact files/routes/endpoints safe to disable
+- list exact files/routes/endpoints safe to remove
+- list what should remain because it belongs to traveler/WAD manufacturing workflows rather than employee punch time
+
+8. REGRESSION TEST PLAN
+Include exact pre-cutover and post-cutover tests for:
+- operator clock in/out
+- admin review
+- payroll export
+- labor costing / journal impact
+- navigation
+- auth/session continuity
+
+Rules:
+- no code changes yet
+- no generic architecture talk
+- tie everything to actual audited files/functions/tables
+- where there is uncertainty, call it out explicitly

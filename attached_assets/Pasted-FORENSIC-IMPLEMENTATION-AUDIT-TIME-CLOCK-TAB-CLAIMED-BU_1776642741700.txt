@@ -1,0 +1,151 @@
+FORENSIC IMPLEMENTATION AUDIT — TIME CLOCK TAB CLAIMED BUT NOT LIVE
+
+Critical issue:
+
+The implementation report says Employee Portal now includes a native Time Clock tab with:
+
+- clock in
+- clock out
+- break handling
+- current status
+- last punch visibility
+
+But production clearly does NOT show it.
+
+Real production for Darlene shows only:
+
+- Daily Checklist
+- Certifications
+- Onboarding Docs
+- Work Sessions
+
+No Time Clock tab exists.
+
+This means the claimed implementation is either:
+not deployed,
+not merged,
+conditionally hidden,
+or never actually completed.
+
+We need exact truth.
+
+READ ONLY.
+No code changes.
+
+==================================================
+YOUR TASK
+==================================================
+
+Audit exactly why the Time Clock tab is missing.
+
+--------------------------------------------------
+1. VERIFY CODE REALITY
+--------------------------------------------------
+
+Inspect:
+
+client/src/components/EmployeePortal.tsx
+
+Confirm:
+
+- does a Time Clock tab actually exist in current code
+- does validTabs include time-clock
+- does TabsList include the trigger
+- does TabsContent exist
+- is the code real or only partially implemented
+
+Show exact lines.
+
+--------------------------------------------------
+2. VERIFY CONDITIONAL RENDERING
+--------------------------------------------------
+
+Determine whether the tab is hidden behind:
+
+- feature flags
+- employee linkage
+- timekeeping enrollment
+- auth/session state
+- employee role
+- employee status
+- timekeeping employee resolution
+- failed API query
+- loading state
+- hidden conditional JSX
+
+Be exact.
+
+--------------------------------------------------
+3. VERIFY DEPLOYMENT TRUTH
+--------------------------------------------------
+
+Determine:
+
+- was the Time Clock implementation actually merged to main
+- was it deployed to production
+- is production running older code
+- was work done in a fork and never promoted
+
+No guessing.
+
+--------------------------------------------------
+4. VERIFY EMPLOYEE LINKAGE
+--------------------------------------------------
+
+Check Darlene specifically:
+
+- public.employees
+- timekeeping.employees
+- employee portal identity resolution
+- whether the UI hides the tab for missing linkage
+
+--------------------------------------------------
+5. ROOT CAUSE
+--------------------------------------------------
+
+Answer clearly:
+
+Why does Darlene not see Time Clock?
+
+Choose exact cause:
+
+A. code never deployed
+B. conditional render bug
+C. employee linkage issue
+D. auth/session mismatch
+E. wrong branch / wrong repl
+F. multiple issues
+
+--------------------------------------------------
+6. SAFEST FIX PATH
+--------------------------------------------------
+
+Provide the exact safest correction path.
+
+Do NOT implement yet.
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+1. exact root cause
+
+2. exact files involved
+
+3. deployment issue vs code issue
+
+4. exact next implementation step
+
+5. whether Employee Portal Time Clock was actually completed
+
+==================================================
+RULES
+==================================================
+
+- READ ONLY
+- no code changes
+- trust production over summaries
+- no assumptions
+- cite exact files and conditions
+- preserve absorbed architecture
+- do NOT reintroduce standalone logic

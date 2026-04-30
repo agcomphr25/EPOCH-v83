@@ -1,0 +1,135 @@
+IMPLEMENTATION PROMPT — DCAA / EDRI SCORE REMEDIATION PASS 1
+
+Proceed based on:
+
+attached_assets/DCAA_SCORE_NO_CHANGE_AUDIT.md
+
+STRICT SCOPE:
+Do NOT change traveler clock-in behavior.
+Do NOT change Task #305 GL posting behavior.
+Do NOT enable salariedTimesheetEnabled.
+Do NOT build new UI.
+Do NOT alter payroll export.
+Do NOT refactor unrelated scorer logic.
+
+Goal:
+
+Fix the exact score blockers identified in the audit, separating real missing accounting configuration from scorer SQL bugs.
+
+--------------------------------------------------
+PART A — REAL ACCOUNTING CONFIGURATION
+--------------------------------------------------
+
+Implement only the minimum required configuration:
+
+1. Create labor_burden_rates table if it does not exist.
+
+Use conservative fields needed for future burden calculation, but do not invent full burden accounting yet.
+
+Include:
+- id
+- name
+- rateType
+- rate
+- effectiveDate
+- isActive
+- createdAt
+- updatedAt
+
+Seed one active placeholder burden rate clearly marked as preliminary/configuration-only.
+
+2. Add charge codes:
+
+- IR_AND_D
+- B_AND_P
+
+They must be:
+- billable = false
+- requires_approval = true
+- clearly categorized
+- idempotently seeded
+
+3. Add cost center:
+
+- FRINGE
+
+Must be:
+- active
+- idempotently seeded
+- clearly marked as preliminary/configuration-only
+
+--------------------------------------------------
+PART B — SCORER BUG FIXES
+--------------------------------------------------
+
+Fix only the scorer checks identified as wrong:
+
+1. NO_PERIOD_LOCKING
+
+Correct scorer SQL from wrong column:
+
+posting_date
+
+to actual column:
+
+effective_date
+
+2. NO_DELETION_PROTECTION
+
+Correct scorer SQL from wrong column:
+
+admin_audit_log.action
+
+to actual column:
+
+change_type
+
+3. NO_GA_OVERHEAD_POOL
+
+Correct logic so it checks the actual source of seeded G&A / Overhead classification.
+
+The audit found that G&A and Overhead live in charge_codes, not cost_centers.
+
+Do not force bad data into cost_centers just to satisfy a broken scorer.
+
+Fix the scorer.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+After implementation, run the readiness score again.
+
+Verify:
+
+1. labor_burden_rates exists
+2. one active burden rate exists
+3. IR_AND_D charge code exists
+4. B_AND_P charge code exists
+5. FRINGE cost center exists
+6. NO_PERIOD_LOCKING no longer silently fails
+7. NO_DELETION_PROTECTION no longer silently fails
+8. NO_GA_OVERHEAD_POOL checks the correct data source
+9. DCAA / EDRI score improves materially
+10. no unrelated systems changed
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/DCAA_SCORE_REMEDIATION_PASS_1.md
+
+Include:
+
+- exact files changed
+- exact DB objects added
+- exact scorer fixes
+- before/after score
+- remaining failing checks
+- next recommended score movers
+
+Be conservative.
+Do not chase the score by creating fake compliance.
+Only fix legitimate missing config and broken scorer logic.

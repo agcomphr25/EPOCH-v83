@@ -1,0 +1,239 @@
+You are acting as a senior software engineer implementing Phase A and Phase B of the EPOCH Labor Allocation Engine.
+
+🚨 CRITICAL RULES:
+- This is a LOW-RISK, NON-BEHAVIORAL change
+- DO NOT modify any existing routes, services, or business logic
+- DO NOT change punch_ledger behavior
+- DO NOT affect payroll, timesheets, kiosk, or traveler flows
+- DO NOT remove or alter existing columns
+- DO NOT introduce breaking migrations
+- All work must be additive and reversible
+
+---
+
+## 🎯 OBJECTIVE
+
+Implement:
+1) New `labor_allocations` table (schema only)
+2) Drizzle ORM schema definition
+3) Idempotent backfill script
+4) Validation queries
+
+NO dual-write yet.
+NO traveler logic changes.
+NO clock-in/out changes.
+
+---
+
+## 🔍 STEP 1 — CREATE MIGRATION FILE
+
+Create a new SQL migration:
+
+migrations/0090_labor_allocations.sql
+
+The migration must:
+
+1) Create table `labor_allocations` with:
+
+- id (PK)
+- punch_ledger_id (FK → punch_ledger.id, ON DELETE CASCADE)
+- employee_id (FK → employees.id)
+
+-- Time boundaries
+- allocation_start (timestamptz, NOT NULL)
+- allocation_end (timestamptz, nullable)
+
+-- Attribution
+- charge_code_id (FK → charge_codes.id)
+- traveler_id
+- traveler_step_id
+- production_work_order_id
+- project_id
+- department
+- operation
+
+-- Classification
+- labor_class (default 'REGULAR')
+
+-- State
+- source (NOT NULL)
+- status (default 'OPEN')
+
+-- Certification snapshot
+- certification_status
+- is_overrun (default false)
+- overrun_reason
+
+-- Budget linkage
+- labor_approval_id
+- labor_budget_override_id
+
+-- Amendment chain
+- amended_from_id
+- amendment_reason
+
+-- Audit
+- created_by
+- updated_by
+- locked_at
+- locked_by
+- notes
+
+-- Metadata
+- sequence_order (integer)
+- created_at (default now())
+- updated_at (default now())
+
+2) Add indexes:
+
+- punch_ledger_id
+- employee_id
+- allocation_start
+- charge_code_id
+- traveler_id
+- production_work_order_id
+- partial index for OPEN allocations:
+  WHERE status = 'OPEN'
+
+3) DO NOT add GIST exclusion constraint yet
+
+---
+
+## 🔍 STEP 2 — UPDATE DRIZZLE SCHEMA
+
+Update server/schema.ts:
+
+- Add laborAllocations table definition
+- Include all columns and relations
+- Ensure type safety matches existing conventions
+- DO NOT modify punch_ledger schema
+
+---
+
+## 🔍 STEP 3 — CREATE BACKFILL SCRIPT
+
+Create:
+
+scripts/backfillLaborAllocations.ts
+
+Requirements:
+
+- Must be idempotent
+- Must NOT create duplicates if run multiple times
+- Must skip punch_ledger rows that already have allocations
+
+Logic:
+
+FOR each punch_ledger row:
+
+IF allocations already exist for this punch_ledger_id:
+  skip
+
+ELSE:
+
+INSERT one allocation:
+
+- punch_ledger_id
+- employee_id
+- allocation_start = clock_in
+- allocation_end = clock_out (or NULL if open)
+
+- copy:
+  charge_code_id
+  traveler_id
+  traveler_step_id
+  production_work_order_id
+  project_id
+  department
+  operation
+  certification_status
+  is_overrun
+  overrun_reason
+  labor_approval_id
+  labor_budget_override_id
+
+- labor_class
+- source = 'BACKFILL'
+- status:
+    'OPEN' if clock_out is NULL
+    'CLOSED' otherwise
+
+- sequence_order = 1
+
+---
+
+## 🔍 STEP 4 — VALIDATION SCRIPT
+
+Create:
+
+scripts/validateLaborAllocations.ts
+
+Must output:
+
+1) Missing allocations
+   - punch_ledger rows with zero allocations
+
+2) Duration mismatches
+   For each punch:
+     allocation duration vs session duration
+
+3) Orphan allocations
+   - allocation with no matching punch_ledger
+
+4) Multiple OPEN allocations per session (should be zero)
+
+5) Summary:
+   - total sessions
+   - total allocations
+   - % coverage
+
+---
+
+## 🔍 STEP 5 — SAFETY CHECKS
+
+Before finishing:
+
+- Ensure migration runs cleanly on dev DB
+- Run backfill script
+- Run validation script
+- Confirm:
+  - 100% coverage of punch_ledger rows
+  - no duplicate allocations
+  - durations match
+
+---
+
+## 🔍 STEP 6 — RETURN FORMAT
+
+Return:
+
+# Phase A/B Implementation Report
+
+## Migration File
+(full SQL)
+
+## Drizzle Schema
+(code snippet)
+
+## Backfill Script
+(code)
+
+## Validation Script
+(code)
+
+## Results Summary
+- total rows processed
+- mismatches (if any)
+- anomalies
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+Do NOT proceed to:
+- dual-write
+- traveler updates
+- clock-out logic
+- labor costing changes
+
+Stop after schema + backfill + validation.

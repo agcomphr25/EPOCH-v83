@@ -1,0 +1,227 @@
+IMPLEMENTATION PROMPT — PROCUREMENT COMPLIANCE SUMMARY + REVALIDATION ENGINE
+
+STRICT COMPLIANCE-FIRST EXECUTION
+
+DO NOT redesign Procurement.
+DO NOT build the full automatic FAR/DFARS rule engine yet.
+DO NOT add AI logic.
+DO NOT weaken the existing PO issue gate.
+DO NOT remove the blocked-review audit behavior.
+
+This phase strengthens the newly implemented Procurement Compliance Review Gate by adding:
+
+1. Permanent compliance summary visibility
+2. Automatic compliance revalidation when material PO data changes
+
+==================================================
+OBJECTIVE
+==================================================
+
+Make compliance status understandable, visible, and safe after review.
+
+Current improvement already built:
+
+- compliance review modal
+- compliance review persistence
+- audit trail
+- issue blocking
+- optional statement auto-selection
+- compliance badges
+
+Now add:
+
+A) PO Detail Compliance Summary Card  
+B) Material-change invalidation / re-review requirement
+
+==================================================
+PART A — COMPLIANCE SUMMARY CARD
+==================================================
+
+Add a visible card to Vendor PO detail view:
+
+PROCUREMENT COMPLIANCE SUMMARY
+
+Display:
+
+- Compliance Status
+- Government Contract: Yes/No
+- FAR/DFARS Required: Required/Not Required
+- DPAS Required: Required/Not Required
+- Certificate of Conformance Required: Required/Not Required
+- MTR / Traceability Required: Required/Not Required
+- Source Inspection Required: Required/Not Required
+- Second-Party Approval Complete: Yes/No
+- Vendor Approved: Yes/No
+- Reviewed By
+- Reviewed At
+- Compliance Review Notes
+
+If no review exists, show:
+
+Status: Pending Review
+
+and a clear CTA:
+
+Complete Compliance Review
+
+==================================================
+PART B — REVALIDATION / INVALIDATION ENGINE
+==================================================
+
+Problem:
+
+A PO may be compliance-reviewed and then materially changed.
+
+That should invalidate the review.
+
+The system must require re-review before issue if material PO data changes after a successful review.
+
+Material changes include:
+
+- vendor changed
+- PO line items changed
+- quantity changed
+- price changed materially
+- PO linked order/source changed
+- optional statements manually changed after review
+- DPAS/compliance-related statement removed
+- compliance review answers changed to blocked state
+- second-party approval status changed
+- vendor approval status changed
+
+Implement a safe invalidation model.
+
+==================================================
+REQUIRED BEHAVIOR
+==================================================
+
+If PO is Reviewed and a material change occurs:
+
+1. Set compliance review status to:
+
+requires_attention
+
+or equivalent existing allowed value.
+
+2. Preserve prior review data.
+
+3. Write audit event:
+
+COMPLIANCE_REVIEW_INVALIDATED
+
+Include:
+
+- PO id
+- user id
+- timestamp
+- reason
+- changed field/action
+- previous compliance status
+- new compliance status
+
+4. Show badge:
+
+Requires Attention
+
+5. Block PO issue until compliance review is completed again.
+
+==================================================
+IMPORTANT DESIGN REQUIREMENT
+==================================================
+
+Do NOT delete old review content.
+
+Do NOT silently overwrite previous review evidence.
+
+For now, if the existing schema supports only one row per PO, update status to requires_attention while preserving existing answers and notes.
+
+If better architecture already supports history/snapshots, use it.
+
+If not, do not overbuild history tables in this phase unless necessary.
+
+The audit event must preserve the invalidation reason.
+
+==================================================
+BACKEND REQUIREMENTS
+==================================================
+
+Update server-side issue gate so reviewed-but-invalidated POs are blocked.
+
+Issue allowed only if:
+
+- compliance review exists
+- review_status = reviewed
+- second_party_complete = true
+- vendor_approved = true
+
+If review_status = requires_attention:
+
+return HTTP 422 with specific reason:
+
+“Compliance review requires attention because PO changed after review.”
+
+Add helper/service:
+
+invalidateVendorPoComplianceReview(poId, reason, actorId, metadata)
+
+Use it wherever material PO changes occur.
+
+==================================================
+FRONTEND REQUIREMENTS
+==================================================
+
+Add Compliance Summary Card to Vendor PO detail.
+
+Badge states:
+
+- Pending Review
+- Reviewed
+- Blocked
+- Requires Attention
+
+If Requires Attention:
+
+show explanation:
+
+“This PO changed after compliance review. Re-review is required before issue.”
+
+Add CTA:
+
+Reopen Compliance Review
+
+==================================================
+OPTIONAL STATEMENT SAFETY
+==================================================
+
+If compliance review says FAR/DPAS/COC/MTR is required and the corresponding optional statement is removed after review:
+
+invalidate compliance review.
+
+Reason example:
+
+“Required FAR/DFARS statement was removed after compliance review.”
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Return:
+
+1. Implementation plan before coding
+2. Exact files modified
+3. Exact schema/migration changes, if any
+4. Backend validation changes
+5. Frontend UI changes
+6. Audit events added
+7. Testing performed
+8. Known remaining risks
+
+==================================================
+FINAL RULE
+==================================================
+
+This is not a full rule engine.
+
+This is a visibility + safety phase.
+
+Proceed.

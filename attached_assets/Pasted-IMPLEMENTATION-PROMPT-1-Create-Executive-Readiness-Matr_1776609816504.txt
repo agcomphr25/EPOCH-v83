@@ -1,0 +1,143 @@
+IMPLEMENTATION PROMPT 1 — Create Executive Readiness Matrix Tab (UI + Safe Wiring Only)
+
+Objective:
+Add a NEW separate tab/page inside the existing EDRI system called:
+
+Executive Readiness Matrix
+
+This must be a parallel executive layer beside the current DCAA readiness views—not inside the current score cards.
+
+IMPORTANT RULES:
+
+Preserve all existing EDRI behavior
+Do NOT break scoring engine
+Do NOT modify current forensic logic
+Do NOT alter existing domain scorers yet
+No destructive refactors
+Reuse existing layout patterns wherever possible
+
+Conceptual Difference:
+
+EDRI answers:
+“Would we survive a DCAA audit today?”
+
+Executive Readiness Matrix answers:
+“Should leadership trust EPOCH over Costpoint for operational control, PM execution, and audit defensibility?”
+
+This is NOT a replacement for EDRI.
+This is a separate executive decision layer.
+
+Implementation Requirements:
+
+Add new navigation entry inside /admin/edri
+
+New tab/page:
+Executive Readiness Matrix
+
+It should visually match:
+
+EDRI Dashboard
+Heatmap
+Red Flags
+Remediation
+Evidence
+History
+
+Use the same permissions:
+ADMIN + OWNER only
+
+Build page shell only first
+
+Create:
+EdriExecutiveMatrix.tsx
+
+Include:
+
+page title
+executive summary card
+placeholder matrix table
+scoring legend
+recommendation panel
+
+NO backend scoring yet.
+Use clean mock structured data only for v1.
+
+Matrix Columns
+
+Create columns:
+
+Requirement
+Why It Matters
+Costpoint Native
+Costpoint With Integration
+EPOCH Native
+Current EPOCH State
+Gap Severity
+Fix Effort
+Executive Advantage
+
+Rows should initially include:
+
+Labor Charging Controls
+Direct vs Indirect Segregation
+Supervisor Approval Integrity
+Time Correction Auditability
+Traveler Enforcement
+Inventory Traceability
+Material Genealogy
+Purchasing Controls
+Vendor Justification
+Subcontract Flowdown
+Project Cost Visibility
+PM Schedule Risk Visibility
+Machine Telemetry
+Cert Validation
+Operator Authorization Controls
+Quality Gate Enforcement
+Freezer/Oven Telemetry
+Customer Audit Defensibility
+Visual Rules
+
+Use:
+
+existing badge styles
+existing score colors
+existing severity chips
+existing card layouts
+
+Avoid:
+new visual systems
+
+This should feel native to EDRI.
+
+Executive Summary Card
+
+Top summary should explain:
+
+EDRI = audit survivability
+Executive Matrix = leadership trust + operational superiority
+
+This must be visually obvious.
+
+Recommendation Panel
+
+Bottom panel should include:
+
+Current Recommendation:
+“EPOCH can exceed Costpoint in operational truth if identified control gaps are closed.”
+
+Use placeholder summary only for now.
+
+Final Deliverable
+
+Return:
+
+SECTION A — Files Created
+SECTION B — Files Modified
+SECTION C — Route Wiring Added
+SECTION D — Permission Verification
+SECTION E — Reused Existing Components
+SECTION F — Any Risks Found
+
+Do not begin backend scoring yet.
+UI shell first only.

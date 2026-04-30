@@ -1,0 +1,146 @@
+FORENSIC READ-ONLY AUDIT — WHY “OPEN TIMEKEEPER” STILL EXISTS
+
+Critical problem:
+
+We completed backend absorption.
+We completed frontend absorption.
+We completed kiosk + admin absorption.
+We intentionally decided Timekeeping is a native EPOCH module, not a standalone sidecar.
+
+Yet the Employee Portal still shows:
+
+“Open Timekeeper”
+
+This strongly suggests stale standalone architecture still exists in production.
+
+We need absolute truth.
+
+No assumptions.
+No cleanup guesses.
+Full forensic audit.
+
+==================================================
+ARCHITECTURAL TRUTH (INTENDED)
+==================================================
+
+Correct target architecture:
+
+Frontend → native EPOCH routes → native EPOCH backend
+
+NOT:
+
+Frontend → standalone Timekeeper app/API
+
+Correct truth:
+
+public.employees = employee truth
+
+timekeeping.punches = attendance/payroll ledger
+
+timekeeping.timesheets = approval workflow
+
+timekeeping.employees = thin anchor only
+
+Traveler/WAD remains separate
+
+The standalone module should be:
+archived only
+not active production infrastructure
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform a READ-ONLY forensic audit to determine exactly why the Employee Portal still links to “Open Timekeeper” and whether standalone architecture is still active.
+
+Audit ALL of the following:
+
+1. Employee Portal page
+- exact file powering:
+  /employee-portal
+- where the “Open Timekeeper” link/button is rendered
+- what route/URL it points to
+- whether it points to:
+  A. native /kiosk
+  B. TimekeepingHandoffPage
+  C. standalone port
+  D. standalone frontend artifact
+  E. hidden redirect path
+
+2. TimekeepingHandoffPage.tsx
+- does it still exist
+- where it is still referenced
+- whether it is still part of production routing
+
+3. App.tsx + route registration
+- all routes related to:
+  /kiosk
+  /time-clock-admin
+  /timekeeping
+  /employee-portal
+  /timekeeper
+  handoff pages
+  redirect pages
+
+4. Navigation + Employee Portal cards
+- all places that still surface standalone Timekeeper navigation
+
+5. Standalone frontend references
+Audit for any remaining references to:
+- modules/timekeeping/artifacts/timekeeper
+- standalone frontend ports
+- standalone base URLs
+- standalone API URLs
+- standalone redirects
+- SSO bridge paths
+
+6. Auth bridges
+Audit for any remaining usage of:
+- TIMEKEEPING_SSO_SECRET
+- TIMEKEEPER_SERVICE_KEY
+- Timekeeping SSO redirects
+- session handoff pages
+
+7. Production truth
+Answer clearly:
+
+Is the standalone frontend still functionally active?
+
+If yes:
+exactly how
+
+If no:
+what stale UI path is creating the illusion
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+1. Exact root cause of “Open Timekeeper”
+
+2. Exact files causing it
+
+3. Whether this is:
+A. stale UI link only
+B. active standalone runtime dependency
+C. hidden redirect/handoff path
+D. multiple problems
+
+4. Exact safest fix path
+
+5. What should be deleted vs preserved
+
+6. Whether standalone shutdown has actually happened or not
+
+==================================================
+RULES
+==================================================
+
+- READ ONLY
+- no code changes
+- no assumptions
+- no “probably”
+- cite exact files/routes/components
+- do not drift into unrelated cleanup
+- preserve traveler/WAD boundaries
+- preserve absorbed architecture truth

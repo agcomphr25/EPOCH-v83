@@ -1,0 +1,142 @@
+STRICT READ-ONLY VERIFICATION AUDIT — EPOCH LABOR CAPTURE PHASE A
+
+DO NOT MODIFY CODE.
+DO NOT PATCH.
+DO NOT FIX.
+DO NOT WRITE MIGRATIONS.
+DO NOT CREATE FILES.
+DO NOT CHANGE DATABASES.
+
+Read-only verification only.
+
+Your job is to verify whether Labor Capture Assistant Phase A was implemented correctly and safely.
+
+==================================================
+VERIFY THESE CLAIMS
+==================================================
+
+1. Schema
+Confirm salaried_timesheet_lines now includes:
+- original_narrative TEXT NULL
+- confidence_score NUMERIC NULL
+- ai_source BOOLEAN DEFAULT FALSE
+- traveler_id type is correct for UUID traveler references
+
+2. Salaried Timesheet Phase 2 UI
+Confirm EmployeePortal now supports:
+- view current salaried timesheet
+- add line
+- edit OPEN lines
+- delete OPEN lines
+- locked PTO/Holiday visibility
+- indirect line entry
+- direct labor traveler selection
+- certify/submit confirmation
+- no editing after submission
+
+3. Portal Security
+Confirm:
+- portal token auth protects all new routes
+- portalId is included in route path
+- line ownership is checked before PATCH/DELETE
+- service layer also enforces employee ownership
+- no IDOR risk remains
+
+4. Payroll Completeness Blocker
+Confirm:
+- payroll approval is blocked for incomplete salaried accountability
+- partial weeks are handled correctly
+- PTO/holiday/approved leave counts correctly
+- >40 hours is allowed
+- weekends are allowed
+- owners follow same rules
+- error messages identify missing workday ranges clearly
+- UTC-safe date arithmetic is used
+
+5. Indirect Codes
+Confirm current indirect code coverage for:
+- admin
+- training
+- meetings
+- quoting / proposal
+- vendor management
+- customer service
+- quality review
+- maintenance
+- PTO
+
+Specifically answer:
+Does QUOTING exist as its own user-facing option, or is PROPOSAL being used as the accounting-safe equivalent?
+
+6. Audit Preservation
+Confirm:
+- original_narrative is stored when lines are created
+- original_narrative is preserved during edits
+- salaried audit logs include relevant line changes
+- submitted/approved lines cannot be silently edited
+- correction path is still required after submission
+
+7. Existing Compliance Rules
+Confirm Phase A did not break:
+- TK-001 post-approval edit controls
+- TK-003 self-approval guardrails
+- TK-004 mandatory edit reasons
+- TK-005 atomic audit writes
+- existing DCAA forensic scheduler
+- existing payroll export flow
+
+8. Migration Safety
+Confirm:
+- migration is idempotent
+- boot migration does not corrupt existing records
+- seed data does not duplicate indirect codes
+- existing salaried timesheets remain valid
+
+9. UI/UX Risk Review
+Inspect the actual user flow and identify:
+- confusing labels
+- missing validation
+- places users could make accounting mistakes
+- traveler picker usability problems
+- indirect code naming issues
+- whether “likely travelers first / show more” actually exists or was only partially implemented
+
+==================================================
+MANDATORY DELIVERABLE FORMAT
+==================================================
+
+Return exactly:
+
+1. Executive Verification Summary
+
+2. Verified Working
+
+3. Partially Working / Needs Adjustment
+
+4. Not Working / Missing
+
+5. Compliance Risks Remaining
+
+6. Security Risks Remaining
+
+7. UX Risks Remaining
+
+8. Exact Files / Routes / Services Reviewed
+
+9. Recommendation:
+   - Safe to proceed to Phase B?
+   - Or fix Phase A issues first?
+
+10. Final Verdict
+
+==================================================
+RULES
+==================================================
+
+No implementation.
+No fixes.
+No optimistic assumptions.
+Cite exact files and functions.
+Be brutally honest.
+
+Proceed.

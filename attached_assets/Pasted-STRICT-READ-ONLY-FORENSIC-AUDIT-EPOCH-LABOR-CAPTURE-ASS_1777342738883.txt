@@ -1,0 +1,295 @@
+STRICT READ-ONLY FORENSIC AUDIT — EPOCH LABOR CAPTURE ASSISTANT + TIMEKEEPING GOVERNANCE
+
+DO NOT MODIFY CODE.
+DO NOT PATCH.
+DO NOT FIX.
+DO NOT WRITE MIGRATIONS.
+DO NOT CREATE FILES.
+DO NOT CHANGE DATABASES.
+DO NOT IMPLEMENT ANYTHING.
+
+THIS IS A FORENSIC READ-ONLY ARCHITECTURAL AUDIT ONLY.
+
+Your job is to fully inspect the current EPOCH codebase and production architecture to determine exactly what already exists, what is partially built, what is broken, and what must be created for the Labor Capture Assistant system.
+
+You must behave like a senior principal engineer performing a compliance-critical audit for a government contractor ERP.
+
+Assume:
+- labor compliance matters
+- accounting integrity matters
+- payroll integrity matters
+- audit defensibility matters
+- DCAA/FAR expectations matter
+- no assumptions allowed
+
+You are auditing against this target system:
+
+==================================================
+TARGET SYSTEM: LABOR CAPTURE ASSISTANT
+==================================================
+
+Purpose:
+Natural language labor capture for salaried employees + owners only.
+
+Core Rule:
+AI Suggests
+Human Approves
+System Audits
+
+Never autonomous posting.
+
+Users:
+- 5 salaried employees
+- 2 owners
+
+Labor Types:
+- direct labor
+- indirect labor
+
+Direct labor mapping authority:
+Traveler → Charge Code → Project
+
+Indirect categories:
+- admin
+- training
+- meetings
+- quoting
+- vendor management
+- customer service
+- quality review
+- maintenance
+- PTO
+
+System requirements:
+- natural language labor intake
+- parser / suggestion engine
+- confidence scoring
+- employee confirmation required
+- accounting/payroll final approval
+- correction request workflow
+- preserved original human narrative
+- audit trail
+- low confidence review flags
+- reminder engine for missing time
+- payroll block for incomplete labor
+- PTO + Holiday + OOO calendar-assisted suggestions
+- DONNA-compatible architecture
+- future voice-ready architecture
+- dashboard widget + timesheet page + DONNA entry points
+- only likely travelers first + show more option
+- system learns from corrections
+
+==================================================
+AUDIT OBJECTIVES
+==================================================
+
+You must determine:
+
+1. What timekeeping system currently exists
+2. What labor posting architecture already exists
+3. Whether labor approval flows already exist
+4. Whether correction workflows already exist
+5. Whether DONNA hooks already exist
+6. Whether calendar integration paths already exist
+7. Whether confidence scoring or parser infrastructure exists
+8. Whether traveler → charge code → project mapping is already reliable
+9. Where payroll enforcement currently happens
+10. Whether this can be layered onto current architecture safely
+
+We do NOT want guesses.
+We want proof.
+
+==================================================
+REQUIRED AUDIT AREAS
+==================================================
+
+AREA 1 — CURRENT TIMEKEEPING SYSTEM
+
+Find:
+- timesheet UI
+- time entry services
+- labor posting services
+- payroll approval flows
+- time track admin
+- clock-in / clock-out architecture
+- salaried vs hourly distinctions
+- missing time enforcement
+- payroll blocking logic
+
+Show:
+- files
+- services
+- routes
+- database tables
+- exact flow
+
+Explain:
+What is source of truth today?
+
+--------------------------------------------------
+
+AREA 2 — LABOR POSTING + ACCOUNTING FLOW
+
+Find:
+- labor charge code system
+- charge code assignment logic
+- labor posting APIs
+- GL / accounting posting integration
+- burden handling
+- payroll integration
+- approval checkpoints
+
+Determine:
+Where accounting actually trusts labor from.
+
+Show exact evidence.
+
+--------------------------------------------------
+
+AREA 3 — TRAVELER → CHARGE CODE → PROJECT MAPPING
+
+Audit:
+- traveler tables
+- production order links
+- labor charge relationships
+- project ownership
+- sales order relationships
+
+Determine:
+Can narrative labor reliably resolve into valid direct labor postings?
+
+Or is mapping broken / incomplete?
+
+This is critical.
+
+--------------------------------------------------
+
+AREA 4 — CORRECTION + AUDIT TRAIL SYSTEMS
+
+Find:
+- labor edit flows
+- approval locks
+- correction request systems
+- audit trail tables
+- change history
+- approval metadata
+- timestamp history
+
+Determine:
+Can compliant correction workflows already be reused?
+
+--------------------------------------------------
+
+AREA 5 — DONNA / AI / NATURAL LANGUAGE INFRASTRUCTURE
+
+Find:
+- DONNA architecture
+- assistant inbox systems
+- message intake systems
+- parser systems
+- AI routing
+- LLM integrations
+- prompt execution systems
+- any existing natural language structured parsing
+
+Determine:
+What can be reused vs what must be built.
+
+--------------------------------------------------
+
+AREA 6 — CALENDAR + PTO + HOLIDAY INTEGRATION
+
+Find:
+- PTO workflow
+- leave approval systems
+- holiday handling
+- calendar integrations
+- Google Calendar / internal calendar integrations
+- company-wide calendar systems
+
+Determine:
+Can approved PTO automatically suggest timesheet entries?
+
+--------------------------------------------------
+
+AREA 7 — NOTIFICATION + REMINDER ENGINE
+
+Find:
+- reminder systems
+- scheduled jobs
+- missing data detection
+- payroll warning systems
+- dashboard alerts
+
+Determine:
+Can missing labor reminders be safely implemented using existing systems?
+
+--------------------------------------------------
+
+AREA 8 — SECURITY + COMPLIANCE RISK REVIEW
+
+Identify:
+- dangerous shortcuts
+- audit gaps
+- approval bypass risks
+- silent edit risks
+- payroll posting risks
+- compliance failure points
+- DCAA red flags
+
+Be brutally honest.
+
+==================================================
+DELIVERABLE FORMAT (MANDATORY)
+==================================================
+
+Return findings in this exact structure:
+
+1. Executive Summary
+
+2. What Already Exists (Reusable)
+
+3. What Partially Exists (Needs Repair)
+
+4. What Does Not Exist (Must Be Built)
+
+5. Critical Compliance Risks
+
+6. Recommended Implementation Path
+
+7. Exact Files + Tables + Services Reviewed
+
+8. Architectural Red Flags
+
+9. Fastest Safe Path to Production
+
+10. Final Verdict:
+Can Labor Capture Assistant be layered safely into current EPOCH architecture?
+
+==================================================
+CRITICAL RULES
+==================================================
+
+- Read-only only
+- No implementation
+- No optimistic assumptions
+- No generic advice
+- No vague statements
+- Cite exact files
+- Cite exact services
+- Cite exact DB tables
+- Explain real architecture
+- Explain production truth
+
+If something is unclear:
+say unclear
+
+If something is broken:
+say broken
+
+If architecture is dangerous:
+say dangerous
+
+Accuracy over optimism.
+
+Proceed.

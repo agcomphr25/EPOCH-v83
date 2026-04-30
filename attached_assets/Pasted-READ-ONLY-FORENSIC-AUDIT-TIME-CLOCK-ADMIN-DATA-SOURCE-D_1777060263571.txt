@@ -1,0 +1,220 @@
+READ-ONLY FORENSIC AUDIT — TIME CLOCK ADMIN DATA SOURCE DISCONNECT
+(EPOCH /time-clock-admin)
+
+You are performing a STRICTLY READ-ONLY forensic audit.
+DO NOT modify code.
+DO NOT write migrations.
+DO NOT patch files.
+DO NOT propose “quick fixes” until root cause is proven.
+
+We have a disconnect inside the Time Clock Admin page where these areas do not agree:
+
+1. Active Employees card
+2. Clocked In Now card
+3. In / Out Board
+4. Recent Punches
+5. Pay Period Hours by Employee grid
+6. Missing Punches warning banner
+
+Example symptom:
+- “Clocked In Now” shows 1
+- “In / Out Board” says no active employees found
+- “Active Employees” count does not align with expected active workforce
+- Punch visibility appears inconsistent across widgets
+
+This strongly suggests multiple queries, mismatched filters, stale sessions, timezone logic issues, soft-delete filtering issues, OR different source tables being used.
+
+Your job is to determine EXACTLY why.
+
+====================================================
+PHASE 1 — TRACE ALL DATA SOURCES
+====================================================
+
+Locate and document:
+
+A) Route(s)
+- /time-clock-admin page route
+- API endpoints used by this page
+- loaders
+- server actions
+- fetch functions
+- service layers
+
+B) Components
+- dashboard cards
+- in/out board
+- recent punches
+- missing punch warning
+- pay period hours grid
+
+C) Database Sources
+Identify exactly which tables power each widget:
+
+Examples may include:
+- employee_profiles
+- users
+- employees
+- time_entries
+- time_punches
+- punch_sessions
+- attendance_logs
+- shifts
+- timesheets
+- approvals
+- pto tables
+- archived employees
+- disabled users
+- terminated employees
+
+For EACH widget, produce:
+
+WIDGET NAME
+→ file path
+→ function name
+→ API endpoint
+→ query used
+→ table(s) used
+→ filters applied
+
+I need exact truth.
+
+====================================================
+PHASE 2 — FIND LOGIC DIVERGENCE
+====================================================
+
+Compare logic between:
+
+A) Active Employees count
+vs
+B) Clocked In Now count
+vs
+C) In/Out Board list
+
+Specifically identify:
+
+1. Different “active employee” definitions
+- isActive
+- employmentStatus
+- archived
+- deletedAt
+- terminatedAt
+- disabled login
+- missing user account
+- role restrictions
+
+2. Different “currently clocked in” definitions
+- last punch = IN
+- open session exists
+- session.closedAt null
+- today only
+- pay period only
+- stale sessions ignored
+- timezone comparisons
+
+3. Different date filtering
+- UTC vs local
+- server timezone vs browser timezone
+- pay period boundaries
+- midnight crossover problems
+
+4. Missing joins
+- employee exists but user missing
+- user exists but employee disabled
+- orphaned punch rows
+
+5. Cached/stale state
+- client cache
+- stale React Query cache
+- stale loader response
+- server-side memoization
+
+6. Silent filtering
+- department filter
+- hidden role filter
+- permission-based filtering
+
+====================================================
+PHASE 3 — PROVE ROOT CAUSE
+====================================================
+
+Do NOT guess.
+
+Find:
+THE exact reason why:
+
+Clocked In Now = 1
+but
+In/Out Board = empty
+
+Examples:
+- stale open punch session
+- one widget reads sessions table while another reads latest punch event table
+- one excludes archived employees and the other doesn’t
+- timezone causes employee to appear yesterday
+- employee is missing profile join
+- orphaned stale punch row
+
+I want proof with:
+- code location
+- exact conditional
+- exact query mismatch
+
+====================================================
+PHASE 4 — SAFE FIX PLAN
+====================================================
+
+After root cause is proven, propose:
+
+A) Correct architectural fix
+
+NOT:
+“just patch this count”
+
+BUT:
+single source of truth design for:
+Current Employee Status Engine
+
+Should define:
+- active employee
+- currently clocked in
+- stale open session
+- missing punch
+- payroll-ready session
+
+B) Recommended normalization:
+Should all widgets use:
+shared service like:
+
+getCurrentAttendanceState()
+
+or equivalent
+
+C) Backfill cleanup needed
+Example:
+stale orphaned sessions
+invalid open punches
+terminated employees still active
+
+====================================================
+DELIVERABLE FORMAT
+====================================================
+
+Return:
+
+1. Current architecture map
+2. Exact divergence found
+3. Proven root cause
+4. Files responsible
+5. Safe fix recommendation
+6. Whether historical data cleanup is required
+7. Whether this impacts payroll exports / Gusto export / PTO calculations
+
+IMPORTANT:
+This is not a “maybe” audit.
+
+I want definitive evidence.
+
+Read deeply.
+Trace everything.
+Assume previous attempts failed because the wrong layer was patched.
+Find the real source of truth problem.

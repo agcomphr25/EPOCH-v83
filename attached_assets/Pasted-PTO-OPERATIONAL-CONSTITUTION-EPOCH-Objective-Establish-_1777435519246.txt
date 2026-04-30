@@ -1,0 +1,274 @@
+PTO OPERATIONAL CONSTITUTION — EPOCH
+
+Objective:
+Establish the official operational policy, ownership model, approval authority, payroll governance, audit expectations, and exception handling standards for PTO inside EPOCH.
+
+This document defines how PTO must function operationally across the company.
+
+This is not a software task.
+
+This is the business + compliance constitution that the software must enforce.
+
+This should be written as a formal internal operational standard suitable for:
+- ownership review
+- HR enforcement
+- payroll enforcement
+- supervisor accountability
+- DCAA audit defensibility
+- employee handbook alignment
+
+Business Context:
+EPOCH is the system of record for PTO requests, approvals, payroll readiness, and leave auditability.
+
+PTO must be:
+- operationally simple
+- payroll-safe
+- supervisor-accountable
+- audit-defensible
+- government contractor compliant
+- resistant to informal “just handle it” exceptions
+
+Historical behavior included:
+- owners verbally approving leave
+- receipts, texts, hallway approvals
+- post-it note requests
+- after-the-fact payroll adjustments
+- undocumented exceptions
+
+This is no longer acceptable.
+
+EPOCH is now the required workflow.
+
+Required Constitution Sections:
+
+==================================================
+SECTION 1 — POLICY STATEMENT
+==================================================
+
+Define:
+
+- PTO requests must be submitted in EPOCH
+- verbal approval is not approval
+- text message approval is not approval
+- handwritten note approval is not approval
+- payroll cannot process undocumented PTO
+- EPOCH is the authoritative source of truth
+
+Clear executive statement required.
+
+==================================================
+SECTION 2 — PTO OWNERSHIP MODEL
+==================================================
+
+Define ownership responsibilities for:
+
+Employee
+Supervisor
+HR
+VP
+Payroll
+Admin/Owner override authority
+
+Clarify:
+who owns:
+- request submission
+- approval timing
+- denial documentation
+- payroll verification
+- corrections
+- reversals
+- emergency exceptions
+
+==================================================
+SECTION 3 — APPROVAL CHAIN STANDARD
+==================================================
+
+Formalize:
+
+Stage 1:
+Direct Supervisor
+
+Stage 2:
+HR
+
+Stage 3:
+VP Final Approval
+
+Define:
+- required review expectations
+- approval deadlines
+- escalation if approver does not act
+- denial reason requirements
+- temporary delegate handling
+- supervisor reassignment handling
+
+==================================================
+SECTION 4 — PTO REQUEST RULES
+==================================================
+
+Define:
+
+Allowed request types:
+- full day
+- half day
+- hourly partial day
+- multi-day
+
+Clarify:
+- advance notice expectations
+- same-day illness handling
+- bereavement handling
+- floating holiday handling
+- emergency leave handling
+- manager-submitted requests on behalf of employees
+
+Define:
+what requires documentation
+and what does not
+
+==================================================
+SECTION 5 — TIMESHEET + PAYROLL GOVERNANCE
+==================================================
+
+Define:
+
+How approved PTO affects:
+- salaried employees
+- hourly employees
+- payroll export
+- payable hours
+- indirect labor classification
+- labor costing
+- DCAA defensibility
+
+Clarify:
+employees may not:
+- work + receive PTO for same hours
+- bypass PTO workflow using manual payroll edits
+
+Define:
+payroll freeze cutoff rules
+
+Example:
+“No PTO approvals after payroll lock without formal correction workflow”
+
+==================================================
+SECTION 6 — CANCELLATION + REVERSAL POLICY
+==================================================
+
+Define:
+
+Employee self-cancel:
+when allowed
+
+Admin cancellation:
+when allowed
+
+Post-approval reversal:
+required reason standards
+
+Clarify:
+who can reverse approved PTO
+and under what authority
+
+Require:
+full audit trail
+
+No silent reversals allowed
+
+==================================================
+SECTION 7 — EXCEPTION HANDLING
+==================================================
+
+This is critical.
+
+Define:
+
+How to handle:
+- owner requests bypassing workflow
+- urgent travel
+- emergency family situations
+- military leave
+- jury duty
+- post-payroll corrections
+- legacy pre-cutover exceptions
+
+Clarify:
+exceptions must still be documented
+
+No undocumented exception allowed
+
+==================================================
+SECTION 8 — AUDIT + COMPLIANCE STANDARD
+==================================================
+
+Define:
+
+Required audit standards for:
+- approvals
+- denials
+- overrides
+- cancellations
+- payroll adjustments
+- leave entry reversals
+
+Clarify:
+what must be reconstructable for:
+DCAA audits
+government contract reviews
+internal ownership review
+
+==================================================
+SECTION 9 — ENFORCEMENT + DISCIPLINE
+==================================================
+
+Define:
+
+What happens when:
+- employees bypass PTO workflow
+- supervisors fail to review requests
+- payroll attempts manual corrections without documentation
+- owners request undocumented exceptions
+
+Clarify:
+process discipline expectations
+
+System integrity > convenience
+
+==================================================
+SECTION 10 — FUTURE STATE
+==================================================
+
+Define:
+
+Future module planned:
+PTO accrual + balances
+
+Clarify:
+Current state:
+request/approval/payroll workflow first
+
+Accrual engine later
+
+Avoid false assumptions that PTO balances are already automated
+
+==================================================
+DELIVERABLE REQUIREMENTS
+==================================================
+
+Return:
+
+1. Formal PTO Operational Constitution
+2. Executive Summary
+3. Leadership Policy Statement
+4. Department Ownership Matrix
+5. Approval SLA Recommendations
+6. Payroll Freeze Recommendation
+7. Exception Governance Rules
+8. DCAA Compliance Notes
+9. Immediate Leadership Decisions Required
+
+Write this like a real internal constitution,
+not a casual recommendation.
+
+This should feel like policy.

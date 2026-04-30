@@ -1,0 +1,301 @@
+IMPLEMENTATION PROMPT — PHASE A FOUNDATION
+EPOCH LABOR CAPTURE ASSISTANT
+STRICT COMPLIANCE-FIRST EXECUTION
+
+You are implementing Phase A ONLY.
+
+DO NOT build AI parsing.
+DO NOT build DONNA labor intake.
+DO NOT build voice capture.
+DO NOT build natural language suggestions.
+DO NOT redesign unrelated timekeeping systems.
+
+This phase is FOUNDATION ONLY.
+
+Your goal is to safely prepare EPOCH for the future Labor Capture Assistant by completing the salaried timesheet infrastructure required for compliant deployment.
+
+You must behave like a senior principal engineer working inside a DCAA-sensitive government contractor ERP.
+
+Accuracy > speed.
+
+Compliance > convenience.
+
+No shortcuts.
+
+==================================================
+PHASE A OBJECTIVES
+==================================================
+
+Implement ONLY these five items:
+
+1. Salaried Timesheet Entry UI (Phase 2)
+2. original_narrative field preservation
+3. minimum-hours payroll approval blocker
+4. missing indirect code completion
+5. confidence-ready architecture preparation (schema only, no AI)
+
+Nothing else.
+
+==================================================
+ITEM 1 — SALARIED TIMESHEET ENTRY UI (PHASE 2)
+==================================================
+
+Current state:
+client/src/pages/EmployeePortal.tsx
+shows salaried timesheet section around lines 681–774
+
+It is currently read-only and explicitly marked:
+"Phase 2 coming soon"
+
+This must be completed.
+
+REQUIREMENTS:
+
+Build employee self-service ability to:
+
+- view current weekly salaried timesheet
+- manually add labor lines
+- edit OPEN lines only
+- delete OPEN lines only
+- submit timesheet for approval
+- view locked PTO / Holiday auto-injected lines
+- view approval status
+- view correction request status if applicable
+
+Support both:
+
+DIRECT LABOR:
+- traveler selection
+- likely travelers first
+- show more option
+- resolved charge code visibility
+
+INDIRECT LABOR:
+approved categories:
+- admin
+- training
+- meetings
+- quoting
+- vendor management
+- customer service
+- quality review
+- maintenance
+- PTO
+
+REQUIRED RULES:
+
+- once SUBMITTED → no direct edits
+- correction workflow required after submission
+- payroll approval remains final authority
+- no bypass of approval state machine
+
+Do not redesign the entire page.
+Enhance existing architecture cleanly.
+
+==================================================
+ITEM 2 — original_narrative FIELD
+==================================================
+
+Problem:
+Audit requires preservation of original employee human language.
+
+Current gap:
+No field exists on salaried_timesheet_lines.
+
+Implement:
+
+Add column:
+
+original_narrative TEXT NULL
+
+to:
+
+timekeeping.salaried_timesheet_lines
+
+REQUIREMENTS:
+
+- preserve exact employee-entered text
+- never overwrite historical values silently
+- visible to payroll reviewers
+- preserved in audit trail
+- available for future AI suggestion workflow
+
+This is mandatory for DCAA defensibility.
+
+==================================================
+ITEM 3 — MINIMUM HOURS PAYROLL BLOCKER
+==================================================
+
+Current problem:
+Payroll blocks:
+- missing charge codes
+- zero-hour totals
+
+BUT DOES NOT BLOCK:
+incomplete salaried labor accountability
+
+Example:
+8 hours PTO + no other labor can still pass
+
+This is not acceptable.
+
+Implement:
+
+minimum expected weekly labor completeness validation
+
+REQUIREMENTS:
+
+- supports >40 hours allowed
+- partial weeks allowed when legitimate:
+  - approved PTO
+  - holiday
+  - approved leave
+- owners follow same rules
+- weekends allowed
+- fail closed for missing labor
+- payroll approval blocked if incomplete
+
+System must determine:
+expected minimum accountable hours
+
+NOT simply:
+hardcoded 40 always
+
+Use real business logic.
+
+This must be DCAA-defensible.
+
+==================================================
+ITEM 4 — INDIRECT CODE COMPLETION
+==================================================
+
+Current audit found likely missing:
+
+- meetings
+- quoting (or validate PROPOSAL equivalency)
+- vendor management
+- customer service
+
+Audit existing indirect_codes first.
+
+Then:
+
+EITHER
+
+A) prove existing mappings are sufficient
+
+OR
+
+B) add missing indirect codes correctly
+
+REQUIREMENTS:
+
+- proper charge_code mapping
+- proper DCAA classification
+- no fallback to UNALLOC
+- accounting-safe naming
+
+Do not create duplicate bad accounting categories.
+
+Precision matters.
+
+==================================================
+ITEM 5 — CONFIDENCE-READY ARCHITECTURE
+==================================================
+
+DO NOT BUILD AI.
+
+But prepare schema for future AI review workflow.
+
+Add:
+
+confidence_score NUMERIC NULL
+ai_source BOOLEAN DEFAULT FALSE
+
+to:
+
+timekeeping.salaried_timesheet_lines
+
+Purpose:
+
+future:
+- low confidence review flags
+- payroll reviewer visibility
+- parser confidence tracking
+
+NO AI LOGIC NOW
+
+Schema preparation only.
+
+==================================================
+CRITICAL COMPLIANCE RULES
+==================================================
+
+NON-NEGOTIABLE:
+
+AI Suggests
+Human Approves
+System Audits
+
+Even though AI is not built yet,
+you must preserve architecture for this rule.
+
+Never create any architecture that allows:
+
+silent posting
+self-approval
+approval bypass
+audit loss
+charge code guessing
+untracked corrections
+
+Respect:
+
+TK-001
+TK-003
+TK-004
+TK-005
+
+and existing DCAA forensic engine architecture.
+
+==================================================
+DELIVERABLE FORMAT (MANDATORY)
+==================================================
+
+Return:
+
+1. Exact implementation plan before coding
+
+2. Exact files to be modified
+
+3. Exact migrations required
+
+4. Services impacted
+
+5. Compliance risk checks before execution
+
+6. Implementation completed summary
+
+7. Known risks remaining
+
+Do NOT skip analysis.
+
+Do NOT blindly code first.
+
+Think first.
+
+Then execute safely.
+
+==================================================
+FINAL RULE
+==================================================
+
+Do not drift into Phase B.
+
+No parser.
+No OpenAI labor suggestions.
+No DONNA labor intake.
+
+Foundation only.
+
+Proceed.

@@ -1,0 +1,233 @@
+IMPLEMENTATION PROMPT — BLOCKER 2 PHASE B
+SALARIED INDIRECT LABOR → GL POSTING PATH
+
+STRICT SCOPE
+
+Do NOT enable salariedTimesheetEnabled yet.
+Do NOT build hourly indirect labor entry yet.
+Do NOT modify traveler direct labor.
+Do NOT change Task #305 WAD posting behavior.
+Do NOT touch payroll export.
+Do NOT remove legacy routes.
+Do NOT refactor unrelated accounting systems.
+
+Your ONLY job:
+
+Create the real accounting path for salaried indirect labor.
+
+Today:
+
+salaried_timesheet_lines tracks hours
+
+BUT
+
+zero dollars flow to:
+
+labor_cost_records
+→ journal_entries
+→ GL
+
+This means salaried indirect labor exists operationally but not financially.
+
+That must be fixed.
+
+--------------------------------------------------
+GOAL
+--------------------------------------------------
+
+Create:
+
+salaried_timesheet_lines
+→ labor cost records
+→ laborPostingService
+→ journal_entries
+
+using the same accounting discipline as traveler labor.
+
+No side accounting path.
+
+No bypass.
+
+Same auditability.
+
+--------------------------------------------------
+REQUIRED AUDIT FIRST
+--------------------------------------------------
+
+Before implementation:
+
+Fully inspect:
+
+- salaried_timesheet_lines
+- salaried_timesheets
+- salariedTimesheet service
+- laborCostingService.ts
+- laborPostingService.ts
+- labor_cost_records
+- journal_entries
+- labor_account_config
+- cost_centers
+- approval workflow
+- certification workflow
+
+Map:
+
+1. where salaried lines are finalized
+2. where approval completes
+3. where labor cost records should be created
+4. safest trigger point for posting eligibility
+5. how duplicate posting prevention should work
+6. how audit traceability should be preserved
+
+Do NOT implement until verified.
+
+--------------------------------------------------
+REQUIRED IMPLEMENTATION
+--------------------------------------------------
+
+1. Approved salaried lines must generate labor_cost_records
+
+Each eligible line must preserve:
+
+- employeeId
+- timesheetId
+- timesheetLineId
+- chargeCodeId
+- indirectCodeId
+- hours
+- costType
+- department (if applicable)
+- leaveEntryId (if applicable)
+- source
+- approval references
+
+No text-only accounting.
+
+--------------------------------------------------
+
+2. Cost classification must use charge_codes.type
+
+Never use indirect label text for accounting.
+
+Use:
+
+chargeCodeId
+→ charge_codes.type
+
+as authoritative source.
+
+Same standard as Task #305.
+
+--------------------------------------------------
+
+3. Duplicate prevention required
+
+Reopening/reapproving a timesheet must not create duplicate labor_cost_records.
+
+One accounting record per valid approved line.
+
+Deterministic.
+
+Auditable.
+
+--------------------------------------------------
+
+4. Fail closed
+
+If approved line has:
+
+- invalid chargeCodeId
+- missing mapping
+- invalid cost center path
+
+DO NOT POST
+
+Hard fail.
+
+Visible error.
+
+No fallback.
+
+--------------------------------------------------
+
+5. Preserve approvals
+
+Do NOT break:
+
+- employee certification
+- supervisor approval
+- payroll approval
+- reopen workflow
+- salaried audit trail
+
+Accounting should follow approval—not replace it.
+
+--------------------------------------------------
+
+6. Keep feature flag OFF
+
+System must be implementation-ready
+
+but not production-enabled yet.
+
+--------------------------------------------------
+SPECIAL DCAA REQUIREMENT
+--------------------------------------------------
+
+Auditor must be able to answer:
+
+Why was this PTO posted?
+
+Which employee?
+
+Which week?
+
+Which approved timesheet?
+
+Which charge code?
+
+Which cost pool?
+
+Which journal entry?
+
+If this cannot be answered instantly:
+
+implementation is wrong.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. approved salaried lines create labor_cost_records
+2. reopening does not duplicate records
+3. reapproval behaves safely
+4. PTO/Holiday/Sick route correctly
+5. supervisor approval still works
+6. payroll approval still works
+7. Task #305 traveler flow unchanged
+8. no duplicate accounting path created
+9. feature flag remains false
+10. tests pass
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/BLOCKER_2_PHASE_B_IMPLEMENTATION.md
+
+Include:
+
+- exact files changed
+- trigger point chosen
+- duplicate prevention method
+- approval → accounting flow
+- validation results
+- remaining risks
+- whether Charge Code Engine Phase 1 can begin after this
+
+This must be safe enough for auditors,
+not just developers.

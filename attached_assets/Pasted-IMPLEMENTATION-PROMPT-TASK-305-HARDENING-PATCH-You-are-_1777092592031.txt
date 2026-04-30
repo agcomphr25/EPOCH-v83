@@ -1,0 +1,90 @@
+IMPLEMENTATION PROMPT — TASK #305 HARDENING PATCH
+
+You are applying a narrow, high-risk accounting hardening patch.
+
+DO NOT refactor unrelated systems.
+DO NOT change UI.
+DO NOT change traveler clock-in behavior.
+DO NOT start Charge Code Engine Phase 1 yet.
+
+Fix only the two CRITICAL findings from TASK_305_POST_IMPLEMENTATION_AUDIT.md.
+
+--------------------------------------------------
+CRITICAL FIX 1 — PREVENT CONCURRENT DOUBLE POSTING
+--------------------------------------------------
+
+Problem:
+The period posting status check happens outside the DB transaction.
+
+Risk:
+Two admins can post the same labor period at the same time and create duplicate journal entries.
+
+Required fix:
+Move posting-period/run-status validation inside the same DB transaction that creates journal entries and stamps labor_cost_records.
+
+Use the safest available approach in this codebase:
+
+Preferred:
+- SELECT ... FOR UPDATE on the posting/run/status row
+
+Acceptable if no status row exists:
+- create/use a period-scoped posting lock row
+- or use a Postgres advisory lock scoped to the labor period
+
+Requirements:
+- second concurrent request must fail or wait safely
+- no duplicate journal entries
+- no partial double-stamping
+- transaction must remain atomic
+
+--------------------------------------------------
+CRITICAL FIX 2 — FIX CHARGECODE TEXT VS CHARGECODEID MISCLASSIFICATION
+--------------------------------------------------
+
+Problem:
+classifyLaborCost uses chargeCode text snapshot to classify DIRECT vs OVERHEAD.
+
+Risk:
+A labor session with chargeCodeId present but chargeCode text null can pass fail-closed validation and post to the wrong GL account.
+
+Required fix:
+Classification must use authoritative chargeCodeId / charge_codes.type, not nullable chargeCode text.
+
+Requirements:
+- WAD-linked labor must classify from charge_codes.type
+- chargeCode text may remain a display snapshot only
+- missing or invalid chargeCodeId must fail closed
+- no silent fallback to OVERHEAD for WAD labor
+- preserve non-WAD indirect behavior only where explicitly safe
+
+--------------------------------------------------
+VALIDATION REQUIRED
+--------------------------------------------------
+
+After patching, verify:
+
+1. two concurrent posting calls cannot double-post
+2. WAD labor with chargeCodeId but null chargeCode text posts correctly
+3. WAD labor with invalid/missing chargeCodeId fails closed
+4. normal direct traveler labor still posts
+5. non-WAD indirect/overhead posting still works
+6. already-posted records remain skipped safely
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/TASK_305_HARDENING_PATCH.md
+
+Include:
+
+- files changed
+- exact locking strategy used
+- transaction boundary explanation
+- classification before/after
+- validation results
+- remaining non-critical risks
+
+Do not address indexes, FK constraints, or canonical_id uniqueness in this prompt unless required for the two critical fixes.

@@ -1,0 +1,173 @@
+IMPLEMENTATION CONSTITUTION — DAILY TUBE THROUGHPUT BOARD
+
+Create a formal implementation constitution for the Daily Tube Throughput Board.
+
+STRICTLY DESIGN / ARCHITECTURE ONLY.
+DO NOT IMPLEMENT CODE YET.
+DO NOT MODIFY FILES.
+DO NOT WRITE MIGRATIONS.
+
+Use the prior forensic audit findings as source truth.
+
+Purpose:
+Build a visibility-only production dashboard that shows the day’s tube throughput using traveler activity as the sole source of truth.
+
+Core concept:
+- The board is NOT a schedule.
+- The board is NOT manually updated.
+- The board does NOT preselect today’s 22 tubes.
+- The board creates slots automatically based on actual Layup Started events.
+- Slot #1 = first tube started in Layup today.
+- Slot #2 = second tube started in Layup today.
+- Continue through fixed daily slots, currently 22.
+
+Required rules:
+
+1. Fixed Slot Layout
+- Slots must remain visually fixed.
+- Slot 1 stays Slot 1.
+- Slot 22 stays Slot 22.
+- Completed/cancelled/blocked slots do not disappear or compress upward.
+
+2. Slot Creation
+- Use p2_layup_schedules.startedAt as the slot creation timestamp.
+- Use status IN ('IN_PROGRESS', 'COMPLETED', 'CANCELLED').
+- Sort ascending by startedAt.
+- Assign ROW_NUMBER as slotNumber.
+- Do not use scheduledDate for slot creation.
+
+3. Daily Reset
+- Board resets daily based on production business date.
+- Use existing business timezone/date normalization utilities.
+- Historical mode should accept ?date=YYYY-MM-DD.
+
+4. Green-State Logic
+Use tiered green-state rules:
+
+Slots 1–18:
+GREEN = Assemble/Disassembly step completed.
+
+Slots 19–22:
+GREEN = final required oven entry / cure start milestone reached.
+
+Do not use one universal green trigger unless explicitly configured.
+
+The constitution must identify:
+- exact data source for Assemble/Disassembly completion
+- exact data source candidate for oven entry / cure start
+- fallback behavior if oven-entry event is not reliable
+- whether this should be configurable later
+
+5. Status Priority
+The board should show the most operationally important status first.
+
+Recommended priority:
+- CANCELLED / SCRAPPED
+- BLOCKED / HOLD / REWORK / APPROVAL WAITING
+- GREEN
+- LATE / AT RISK
+- IN PROCESS
+- NOT STARTED
+
+6. Board Is Visibility Only
+- No approvals from the board.
+- No traveler step completion from the board.
+- No block clearing from the board.
+- No production reassignment from the board.
+- Clicking a slot may show detail only.
+
+7. Slot Detail Drawer
+Each slot should have hidden drill-down detail for supervisors:
+- underlying traveler / serialized item
+- current department
+- current stage
+- mandrel if available
+- oven if available
+- startedAt
+- current status
+- block / hold reason if available
+- green milestone timestamp if reached
+- current elapsed time
+
+But the main TV board should not show SKU/customer/serial clutter.
+
+8. Main TV Board
+Main board should show:
+- Slot number
+- simplified current stage
+- visual status color
+- optional short label such as LAYUP / WRAP / OVEN / COOL / BLOCKED / GREEN
+
+Do not show full SKU, customer, or serial number on TV view.
+
+9. Summary Bar
+Top summary should include:
+- Target slots: 22
+- Started today
+- Green count
+- In process count
+- Blocked/hold count
+- Cancelled/scrapped count
+- Remaining unstarted slots
+- Optional projected EOD if derivable without speculation
+
+10. Historical Mode
+Historical view should reconstruct prior dates from persisted timestamps.
+It is operational review, not audit certification.
+It should answer:
+- how many slots were started
+- how many reached green
+- how many blocked/held
+- which slots failed or stalled
+- what stage each slot ended in
+
+11. Auto Refresh
+TV/live mode should refresh automatically using existing query/refetch patterns.
+Recommended: 30–60 seconds.
+No manual refresh required.
+
+12. No New Workflow Unless Required
+The preferred implementation should avoid new workflow, new user actions, and new schema.
+If any new field or event is required, identify it as a gap and justify it.
+
+Required output:
+
+# DAILY TUBE THROUGHPUT BOARD IMPLEMENTATION CONSTITUTION
+
+## Purpose
+
+## Non-Negotiable Principles
+
+## Slot Model
+
+## Daily Reset Rules
+
+## Tiered Green-State Logic
+
+## Status Priority Model
+
+## Data Sources
+
+## API Contract Recommendation
+
+## UI Contract Recommendation
+
+## TV Mode Behavior
+
+## Supervisor Drill-Down Behavior
+
+## Historical Mode Behavior
+
+## Edge Cases
+
+## Risks / Gaps
+
+## Minimum Build Scope
+
+## Explicit Non-Scope
+
+## Final Recommendation
+
+Do not write code.
+Do not modify files.
+Return the constitution only.

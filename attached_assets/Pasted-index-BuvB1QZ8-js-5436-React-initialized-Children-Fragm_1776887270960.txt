@@ -1,0 +1,910 @@
+index-BuvB1QZ8.js:5436 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-BuvB1QZ8.js:5436 React hooks: {useState: ƒ, useEffect: ƒ}
+index-BuvB1QZ8.js:5436 [EPOCH SYNC] Sync engine starting
+index-BuvB1QZ8.js:5436 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-BuvB1QZ8.js:5433 App component is rendering...
+index-BuvB1QZ8.js:5433 Environment: production
+index-BuvB1QZ8.js:5433 Base URL: /
+index-BuvB1QZ8.js:1670 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-BuvB1QZ8.js:1670 [EPOCH] Install prompt captured and ready
+execute:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-BuvB1QZ8.js:1679  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-BuvB1QZ8.js:1679
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+Hyt @ index-BuvB1QZ8.js:40
+j @ index-BuvB1QZ8.js:25
+k @ index-BuvB1QZ8.js:25
+postMessage
+D @ index-BuvB1QZ8.js:25
+k @ index-BuvB1QZ8.js:25
+postMessage
+D @ index-BuvB1QZ8.js:25
+M @ index-BuvB1QZ8.js:25
+t.unstable_scheduleCallback @ index-BuvB1QZ8.js:25
+Jyt @ index-BuvB1QZ8.js:40
+Rb @ index-BuvB1QZ8.js:40
+W2 @ index-BuvB1QZ8.js:40
+zpe @ index-BuvB1QZ8.js:40
+Hpe.render.ETe.render @ index-BuvB1QZ8.js:40
+(anonymous) @ index-BuvB1QZ8.js:5436
+index-BuvB1QZ8.js:235  GET https://agcompepoch.xyz/api/employees/recertification-count 401 (Unauthorized)
+(anonymous) @ index-BuvB1QZ8.js:235
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+Hyt @ index-BuvB1QZ8.js:40
+j @ index-BuvB1QZ8.js:25
+k @ index-BuvB1QZ8.js:25
+postMessage
+D @ index-BuvB1QZ8.js:25
+k @ index-BuvB1QZ8.js:25
+postMessage
+D @ index-BuvB1QZ8.js:25
+M @ index-BuvB1QZ8.js:25
+t.unstable_scheduleCallback @ index-BuvB1QZ8.js:25
+Jyt @ index-BuvB1QZ8.js:40
+Rb @ index-BuvB1QZ8.js:40
+W2 @ index-BuvB1QZ8.js:40
+zpe @ index-BuvB1QZ8.js:40
+Hpe.render.ETe.render @ index-BuvB1QZ8.js:40
+(anonymous) @ index-BuvB1QZ8.js:5436
+index-BuvB1QZ8.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-BuvB1QZ8.js:235
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+Hyt @ index-BuvB1QZ8.js:40
+j @ index-BuvB1QZ8.js:25
+k @ index-BuvB1QZ8.js:25
+postMessage
+D @ index-BuvB1QZ8.js:25
+k @ index-BuvB1QZ8.js:25
+postMessage
+D @ index-BuvB1QZ8.js:25
+M @ index-BuvB1QZ8.js:25
+t.unstable_scheduleCallback @ index-BuvB1QZ8.js:25
+Jyt @ index-BuvB1QZ8.js:40
+Rb @ index-BuvB1QZ8.js:40
+W2 @ index-BuvB1QZ8.js:40
+zpe @ index-BuvB1QZ8.js:40
+Hpe.render.ETe.render @ index-BuvB1QZ8.js:40
+(anonymous) @ index-BuvB1QZ8.js:5436
+execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235  POST https://agcompepoch.xyz/api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign 401 (Unauthorized)
+Se @ index-BuvB1QZ8.js:235
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign: 401
+index-BuvB1QZ8.js:5436 API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 💥 API Request failed for /api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign: Error: Badge not recognised
+    at Se (index-BuvB1QZ8.js:235:6501)
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235  POST https://agcompepoch.xyz/api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign 401 (Unauthorized)
+Se @ index-BuvB1QZ8.js:235
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign: 401
+index-BuvB1QZ8.js:5436 API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 💥 API Request failed for /api/travelers/6978276c-71a1-4070-9c17-b342fc2f545a/steps/bc9abda1-b866-4c01-afec-fa027c7c71c3/sign: Error: Badge not recognised
+    at Se (index-BuvB1QZ8.js:235:6501)
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 [EPOCH SYNC] Connection restored — triggering sync
+index-BuvB1QZ8.js:5436 [EPOCH SYNC] Already processing — skipping
+index-BuvB1QZ8.js:2116 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-BuvB1QZ8.js:235  GET https://agcompepoch.xyz/api/employees/recertification-count 401 (Unauthorized)
+(anonymous) @ index-BuvB1QZ8.js:235
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+index-BuvB1QZ8.js:1679  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-BuvB1QZ8.js:1679
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+index-BuvB1QZ8.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/18fd62b23f614f15b732ded20c41df7e (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/18fd62b23f614f15b732ded20c41df7e: 200
+index-BuvB1QZ8.js:235 🌐 API Request to /api/p2-traveler/verify-certification/18fd62b23f614f15b732ded20c41df7e/str2600287 (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235 ✅ API Response from /api/p2-traveler/verify-certification/18fd62b23f614f15b732ded20c41df7e/str2600287: 200
+index-BuvB1QZ8.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+index-BuvB1QZ8.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-BuvB1QZ8.js:235
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+index-BuvB1QZ8.js:1679  GET https://agcompepoch.xyz/api/internal-messages/unread/count/19 401 (Unauthorized)
+queryFn @ index-BuvB1QZ8.js:1679
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+setTimeout
+Wrr @ index-BuvB1QZ8.js:51
+o @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+refetch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+await in (anonymous)
+(anonymous) @ index-BuvB1QZ8.js:51
+setOnline @ index-BuvB1QZ8.js:51
+s @ index-BuvB1QZ8.js:51
+index-BuvB1QZ8.js:1679  GET https://agcompepoch.xyz/api/internal-messages/unread/count/19 401 (Unauthorized)
+queryFn @ index-BuvB1QZ8.js:1679
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+Promise.then
+(anonymous) @ index-BuvB1QZ8.js:51
+Promise.catch
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+setTimeout
+Wrr @ index-BuvB1QZ8.js:51
+o @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+refetch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+await in (anonymous)
+(anonymous) @ index-BuvB1QZ8.js:51
+setOnline @ index-BuvB1QZ8.js:51
+s @ index-BuvB1QZ8.js:51
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/tasks/329d7255-87ca-4e6f-a176-bdd98cb58fc3/complete (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/tasks/329d7255-87ca-4e6f-a176-bdd98cb58fc3/complete: 200
+/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235  POST https://agcompepoch.xyz/api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign 403 (Forbidden)
+Se @ index-BuvB1QZ8.js:235
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: 403
+index-BuvB1QZ8.js:5436 API error raw body: {"error":"Forbidden","requiredCapability":"travelers.sign_qc","context":{"department":"Mold Prep"}}
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 💥 API Request failed for /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: Error: Forbidden
+    at Se (index-BuvB1QZ8.js:235:6501)
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235  POST https://agcompepoch.xyz/api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign 403 (Forbidden)
+Se @ index-BuvB1QZ8.js:235
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: 403
+index-BuvB1QZ8.js:5436 API error raw body: {"error":"Forbidden","requiredCapability":"travelers.sign_qc","context":{"department":"Mold Prep"}}
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 💥 API Request failed for /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: Error: Forbidden
+    at Se (index-BuvB1QZ8.js:235:6501)
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:1679  GET https://agcompepoch.xyz/api/internal-messages/unread/count/19 401 (Unauthorized)
+queryFn @ index-BuvB1QZ8.js:1679
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+setTimeout
+Wrr @ index-BuvB1QZ8.js:51
+o @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+refetch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+await in (anonymous)
+(anonymous) @ index-BuvB1QZ8.js:51
+setOnline @ index-BuvB1QZ8.js:51
+s @ index-BuvB1QZ8.js:51
+index-BuvB1QZ8.js:1679  GET https://agcompepoch.xyz/api/internal-messages/unread/count/19 401 (Unauthorized)
+queryFn @ index-BuvB1QZ8.js:1679
+o @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+Promise.then
+(anonymous) @ index-BuvB1QZ8.js:51
+Promise.catch
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+setInterval
+qSe @ index-BuvB1QZ8.js:51
+$Se @ index-BuvB1QZ8.js:51
+onQueryUpdate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+onSubscribe @ index-BuvB1QZ8.js:51
+subscribe @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+myt @ index-BuvB1QZ8.js:38
+Qpe @ index-BuvB1QZ8.js:40
+YL @ index-BuvB1QZ8.js:40
+ltr @ index-BuvB1QZ8.js:40
+VT @ index-BuvB1QZ8.js:40
+VQe @ index-BuvB1QZ8.js:40
+WD @ index-BuvB1QZ8.js:38
+(anonymous) @ index-BuvB1QZ8.js:40
+setTimeout
+Wrr @ index-BuvB1QZ8.js:51
+o @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+tk @ index-BuvB1QZ8.js:51
+setData @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+await in fetch
+MH @ index-BuvB1QZ8.js:51
+fetch @ index-BuvB1QZ8.js:51
+refetch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+batch @ index-BuvB1QZ8.js:51
+onOnline @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+await in (anonymous)
+(anonymous) @ index-BuvB1QZ8.js:51
+setOnline @ index-BuvB1QZ8.js:51
+s @ index-BuvB1QZ8.js:51
+index-BuvB1QZ8.js:5436 [EPOCH SYNC] Connection restored — triggering sync
+/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235  POST https://agcompepoch.xyz/api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign 403 (Forbidden)
+Se @ index-BuvB1QZ8.js:235
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: 403
+index-BuvB1QZ8.js:5436 API error raw body: {"gate":"qc_training","message":"Step signoff blocked by training requirement","detail":"Employee identity is required to verify training certification for part 4002P0001 Rev P on this regulated step. Scan a valid badge before signing off.","error":"Step signoff blocked by training requirement","reason":"Employee identity is required to verify training certification for part 4002P0001 Rev P on this regulated step. Scan a valid badge before signing off.","missingRequirement":"4002P0001 Rev P","requirementType":"traveler_authorization"}
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 💥 API Request failed for /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: Error: Step signoff blocked by training requirement
+    at Se (index-BuvB1QZ8.js:235:6501)
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 🌐 API Request to /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign (timeout: 15000ms, deployment: true)
+index-BuvB1QZ8.js:235  POST https://agcompepoch.xyz/api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign 403 (Forbidden)
+Se @ index-BuvB1QZ8.js:235
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:235 ✅ API Response from /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: 403
+index-BuvB1QZ8.js:5436 API error raw body: {"gate":"qc_training","message":"Step signoff blocked by training requirement","detail":"Employee identity is required to verify training certification for part 4002P0001 Rev P on this regulated step. Scan a valid badge before signing off.","error":"Step signoff blocked by training requirement","reason":"Employee identity is required to verify training certification for part 4002P0001 Rev P on this regulated step. Scan a valid badge before signing off.","missingRequirement":"4002P0001 Rev P","requirementType":"traveler_authorization"}
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37
+index-BuvB1QZ8.js:5436 💥 API Request failed for /api/travelers/d384b393-6ca4-414f-b65a-5ad5d6ff11b5/steps/823f5745-240a-453f-8952-192285edcc39/sign: Error: Step signoff blocked by training requirement
+    at Se (index-BuvB1QZ8.js:235:6501)
+console.error @ index-BuvB1QZ8.js:5436
+Se @ index-BuvB1QZ8.js:235
+await in Se
+mutationFn @ index-BuvB1QZ8.js:5239
+fn @ index-BuvB1QZ8.js:51
+f @ index-BuvB1QZ8.js:51
+start @ index-BuvB1QZ8.js:51
+execute @ index-BuvB1QZ8.js:51
+await in execute
+mutate @ index-BuvB1QZ8.js:51
+(anonymous) @ index-BuvB1QZ8.js:51
+onClick @ index-BuvB1QZ8.js:5239
+kZt @ index-BuvB1QZ8.js:37
+_Zt @ index-BuvB1QZ8.js:37
+IZt @ index-BuvB1QZ8.js:37
+xQe @ index-BuvB1QZ8.js:37
+Xvt @ index-BuvB1QZ8.js:37
+(anonymous) @ index-BuvB1QZ8.js:37
+jTe @ index-BuvB1QZ8.js:40
+bvt @ index-BuvB1QZ8.js:37
+$ye @ index-BuvB1QZ8.js:37
+YDe @ index-BuvB1QZ8.js:37
+VZt @ index-BuvB1QZ8.js:37

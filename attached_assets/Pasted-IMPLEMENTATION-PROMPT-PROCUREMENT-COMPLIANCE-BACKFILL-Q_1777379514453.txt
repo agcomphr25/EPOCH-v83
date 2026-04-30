@@ -1,0 +1,296 @@
+IMPLEMENTATION PROMPT — PROCUREMENT COMPLIANCE BACKFILL QUEUE
+ERDI RECOVERY + HISTORICAL PO REVIEW WORKFLOW
+
+STRICT COMPLIANCE-FIRST EXECUTION
+
+DO NOT weaken the ERDI scorer.
+DO NOT relax FAR_FLOWDOWN standards.
+DO NOT silently grandfather bad historical POs.
+DO NOT fake compliance.
+DO NOT auto-mark old POs as reviewed.
+
+Goal:
+
+Create an operational workflow so Procurement can systematically review historical Vendor POs that are now causing ERDI failures after the scorer rewrite.
+
+This is a real remediation queue.
+
+Not score manipulation.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Current state:
+
+The Procurement ERDI scorer is now truthful.
+
+This means historical issued Vendor POs that were issued before the Compliance Review Gate existed may now fail:
+
+- no compliance review exists
+- FAR applicability undocumented
+- FAR statement missing
+- second-party approval unknown
+- vendor approval unknown
+- stale reviews
+- missing justification notes
+
+This is correct.
+
+We now need a controlled way for Inventory / Procurement to work through those historical records.
+
+Build:
+
+PROCUREMENT COMPLIANCE BACKFILL QUEUE
+
+==================================================
+PRIMARY UX GOAL
+==================================================
+
+Allow inventory manager to answer:
+
+“Which POs are hurting our ERDI score right now, and what exactly must be fixed?”
+
+This must be obvious.
+
+Actionable.
+
+Not detective work.
+
+==================================================
+PART A — BACKFILL QUEUE PAGE
+==================================================
+
+Create:
+
+Procurement → Compliance Backfill Queue
+
+or appropriate admin/compliance location.
+
+Display a queue/table of Vendor POs requiring compliance remediation.
+
+Include:
+
+- PO Number
+- Vendor
+- Issue Date
+- Current Status
+- Compliance Status
+- FAR Status
+- Missing Review?
+- Missing FAR Statement?
+- Missing Second-Party Approval?
+- Missing Vendor Approval?
+- Missing Justification Notes?
+- Requires Attention?
+- Review Age / Stale Review
+- Priority Score
+- Recommended Action
+
+This should be sortable/filterable.
+
+==================================================
+PART B — PRIORITY SCORING
+==================================================
+
+Prioritize work intelligently.
+
+Suggested priority:
+
+CRITICAL:
+- issued PO
+- no compliance review exists
+- FAR likely required but missing
+- vendor_approved false on issued PO
+
+HIGH:
+- requires_attention
+- stale reviewed PO
+- FAR required but statement missing
+
+MEDIUM:
+- FAR marked not required but notes missing
+- second-party incomplete on pending PO
+
+LOW:
+- older closed PO with partial documentation gaps
+
+Do not over-engineer.
+A simple deterministic priority score is enough.
+
+==================================================
+PART C — “WHY THIS IS FAILING” PANEL
+==================================================
+
+Each queue row must clearly show:
+
+WHY this PO is hurting compliance.
+
+Example:
+
+PO-1042
+
+Failing Because:
+- No compliance review exists
+- Government contract likely indicated by prior FAR statement usage
+- FAR/DFARS statement missing
+- No second-party approval captured
+
+Recommended Fix:
+→ Complete Compliance Review
+→ Confirm FAR applicability
+→ Attach FAR/DFARS statement
+→ Re-issue if required by policy
+
+This is critical.
+
+No mystery.
+
+==================================================
+PART D — DIRECT ACTIONS
+==================================================
+
+Allow:
+
+Open PO
+
+Reopen Compliance Review
+
+directly from queue
+
+Do NOT allow silent “Mark Complete”
+
+Real review only.
+
+==================================================
+PART E — ERDI LINKAGE
+==================================================
+
+Add visible linkage from Procurement ERDI domain:
+
+Example:
+
+FAR_FLOWDOWN
+
+“12 issued POs require remediation”
+
+with CTA:
+
+Open Backfill Queue
+
+This closes the loop between score and operations.
+
+==================================================
+PART F — SAFE HISTORICAL REVIEW RULES
+==================================================
+
+Backfilling old POs must preserve audit integrity.
+
+Rules:
+
+1. Review created after issuance must be visible
+
+Do NOT pretend it happened historically.
+
+Store:
+
+reviewed_at
+review_notes
+
+and optionally:
+
+historical_backfill = true
+
+if helpful
+
+2. Require explicit note:
+
+Example:
+
+“Historical compliance review completed during ERDI remediation. Original PO issued prior to compliance gate implementation.”
+
+This matters.
+
+3. No automatic score inflation without documented review
+
+==================================================
+BACKEND REQUIREMENTS
+==================================================
+
+Add helper query/service:
+
+getProcurementComplianceBackfillQueue()
+
+Should identify:
+
+- issued/sent POs
+- missing review
+- incomplete review
+- stale review
+- missing FAR statement
+- missing required notes
+- compliance exceptions
+
+Prefer query consistency with the rewritten scorer.
+
+The queue and scorer should agree.
+
+Same truth source.
+
+==================================================
+FRONTEND REQUIREMENTS
+==================================================
+
+Build a clean operational page.
+
+This is for real users.
+
+Not an auditor-only report.
+
+Inventory manager should be able to work from this daily.
+
+Prefer:
+
+status badges
+priority badges
+clear action buttons
+
+==================================================
+VALIDATION REQUIREMENTS
+==================================================
+
+After implementation verify:
+
+1. Queue correctly identifies issued POs with no review
+2. Queue matches FAR_FLOWDOWN failures from scorer
+3. Re-review completion removes PO from queue appropriately
+4. Requires_attention POs appear correctly
+5. Stale reviews appear correctly
+6. Direct actions route correctly
+7. No TypeScript errors
+8. ERDI → Queue linkage works
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Return:
+
+1. Implementation plan first
+2. Exact files modified
+3. Queries/helpers added
+4. Priority scoring model
+5. UI flow
+6. ERDI linkage added
+7. Validation performed
+8. Remaining limitations
+
+==================================================
+FINAL RULE
+==================================================
+
+This queue must improve real compliance.
+
+Not just the score.
+
+Proceed.

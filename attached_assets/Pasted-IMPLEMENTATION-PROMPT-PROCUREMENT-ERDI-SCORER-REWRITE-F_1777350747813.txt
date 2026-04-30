@@ -1,0 +1,295 @@
+IMPLEMENTATION PROMPT — PROCUREMENT ERDI SCORER REWRITE
+FAR_FLOWDOWN + PROCUREMENT COMPLIANCE EVIDENCE INTEGRITY
+
+STRICT READ-FIRST / COMPLIANCE-FIRST EXECUTION
+
+DO NOT blindly patch scoring.
+DO NOT inflate scores.
+DO NOT create fake compliance.
+DO NOT remove existing ERDI checks unless proven obsolete.
+DO NOT rely on vendor notes / free-text keyword matching as compliance evidence.
+
+Goal:
+
+Rewrite the Procurement ERDI scorer so FAR_FLOWDOWN and related procurement controls reflect actual system evidence created by the new Procurement Compliance Review Gate.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Current problem:
+
+FAR_FLOWDOWN appears to score from weak text evidence such as vendor terms/notes containing “FAR” or “flowdown.”
+
+That is not valid compliance proof.
+
+The scorer should use actual procurement evidence:
+
+- vendor_po_compliance_reviews
+- review_status
+- far_required
+- dpas_required
+- coc_required
+- mtr_required
+- source_inspection_required
+- second_party_complete
+- vendor_approved
+- reviewed_by
+- reviewed_at
+- review_notes
+- po_optional_settings
+- optional_settings
+- audit_events where relevant
+- issued/sent PO status
+
+The ERDI dashboard must reflect operational truth.
+
+==================================================
+PHASE 1 — READ-ONLY FORENSIC TRACE
+==================================================
+
+First, audit the current Procurement ERDI scorer.
+
+Find:
+
+- exact scorer file(s)
+- exact FAR_FLOWDOWN logic
+- exact VENDOR_EVALUATION logic
+- exact REQUISITION_WORKFLOW logic
+- exact SECOND_PARTY_APPROVAL logic
+- exact VENDOR_APPROVAL_BLOCKING logic
+- exact scoring thresholds
+- exact evidence messages returned to UI
+- exact API routes serving /admin/edri/domain/PROCUREMENT
+- exact frontend components displaying checks/evidence
+
+Return findings before coding.
+
+==================================================
+PHASE 2 — SCORING MODEL DESIGN
+==================================================
+
+Design a scoring model based on real evidence.
+
+Required principles:
+
+1. Score only what the system can prove.
+2. Distinguish “not applicable” from “missing.”
+3. Do not punish non-government POs for not having FAR.
+4. Do not reward POs where FAR is selected but no compliance review exists.
+5. Do not reward stale reviews marked requires_attention.
+6. Do not rely on free-text vendor terms/notes.
+7. Prefer issued/sent POs as primary evidence.
+8. Include pending/open POs as risk indicators where appropriate.
+
+==================================================
+FAR_FLOWDOWN SCORING REQUIREMENTS
+==================================================
+
+Rewrite FAR_FLOWDOWN to evaluate actual PO compliance.
+
+Suggested logic:
+
+Population:
+
+Vendor POs that are issued/sent/active within the scorer’s intended scope.
+
+Evidence fields:
+
+- compliance review exists
+- review_status = reviewed
+- far_required = true/false
+- review_notes present
+- reviewed_at present
+- if far_required = true:
+  - FAR/DFARS optional statement is attached to PO
+  - issue gate was satisfied
+- if far_required = false:
+  - review exists with documented notes explaining decision
+
+Scoring:
+
+FULL if:
+
+- reviewed issued POs have documented FAR applicability decisions
+- all FAR-required POs have FAR/DFARS statement attached
+- no issued PO has stale/requires_attention compliance review
+
+PARTIAL if:
+
+- some issued POs have compliance reviews
+- but some are missing review, missing notes, missing FAR statement, or stale
+
+FAIL if:
+
+- issued POs exist but no compliance review evidence exists
+- FAR-required POs lack FAR statement
+- issued POs are requires_attention or blocked
+
+N/A if:
+
+- no issued vendor POs exist in scope
+
+Evidence output must include:
+
+- total issued POs reviewed
+- number with compliance review
+- number FAR required
+- number FAR required with statement attached
+- number FAR marked not required with notes
+- number stale/requires_attention
+- sample failing PO ids/numbers
+
+==================================================
+SECOND_PARTY_APPROVAL SCORING REQUIREMENTS
+==================================================
+
+Update scoring to use compliance review evidence where applicable.
+
+Score based on:
+
+- second_party_complete = true on reviewed POs
+- issue gate blocks POs where second_party_complete = false
+- audit/event evidence if available
+
+Do not rely only on old approval flags if the new review gate is now authoritative.
+
+If old approval system exists separately, reconcile it:
+
+- identify old source
+- explain whether it remains primary or secondary
+- avoid double-counting
+
+==================================================
+VENDOR_APPROVAL_BLOCKING SCORING REQUIREMENTS
+==================================================
+
+Score based on actual blocking behavior and evidence:
+
+- vendor_approved = true on reviewed POs
+- issue endpoint blocks vendor_approved = false
+- vendor approval state from vendor master if available
+- compliance review captured vendor approval decision
+
+Evidence should show:
+
+- issued POs with vendor_approved true
+- blocked/pending POs with vendor_approved false
+- any issued PO with vendor_approved false should be critical fail
+
+==================================================
+REQUISITION_WORKFLOW SCORING REQUIREMENTS
+==================================================
+
+Audit current logic.
+
+Do not fabricate.
+
+If no true requisition workflow exists, keep it partial/fail honestly.
+
+If vendor PO source linkage exists, use it.
+
+Potential evidence:
+
+- linked purchase request
+- linked source order
+- approval chain
+- created_by / requested_by / approved_by
+- PO source traceability
+
+Return exact finding.
+
+==================================================
+VENDOR_EVALUATION SCORING REQUIREMENTS
+==================================================
+
+Audit current logic.
+
+Do not conflate vendor approval with vendor performance evaluation.
+
+If there is no recurring vendor evaluation/scorecard system, do not over-score.
+
+Potential evidence:
+
+- vendor approval state
+- vendor reviews
+- scorecards
+- performance ratings
+- quality/delivery history
+- last_reviewed_at
+
+Return exact finding.
+
+==================================================
+BACKEND REQUIREMENTS
+==================================================
+
+Update scorer code so Procurement ERDI uses the new evidence model.
+
+Add helper queries if needed.
+
+Preferred helper outputs:
+
+- procurementComplianceStats
+- farFlowdownEvidenceStats
+- complianceReviewCoverage
+- issuedPOComplianceExceptions
+
+Avoid copy-paste query mess if a small helper improves clarity.
+
+Use safe SQL.
+No brittle text matching except maybe as legacy fallback clearly marked as such.
+
+==================================================
+FRONTEND / EVIDENCE DISPLAY REQUIREMENTS
+==================================================
+
+If the ERDI UI currently displays evidence strings, update them to show useful evidence:
+
+Example:
+
+“42 issued POs evaluated. 39 have completed compliance review. 8 marked FAR/DFARS required; 8 have FAR/DFARS statement attached. 3 issued POs lack compliance review.”
+
+Include failing samples if current pattern supports it:
+
+“Failing examples: PO-1042 missing review; PO-1077 requires attention.”
+
+Do not expose sensitive text unnecessarily.
+
+==================================================
+VALIDATION REQUIREMENTS
+==================================================
+
+After implementation, validate:
+
+1. FAR_FLOWDOWN no longer uses vendors.terms/notes keyword matching as primary evidence.
+2. FAR-required reviewed POs without FAR optional statement reduce score / fail.
+3. Reviewed POs with FAR not required and notes count as valid documented decisions.
+4. Requires_attention reviews block/full-score prevention.
+5. Issue gate and scorer agree conceptually.
+6. No TypeScript errors.
+7. Existing ERDI domain endpoint still loads.
+8. Procurement domain score changes are explainable.
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Return:
+
+1. Read-only findings first
+2. Proposed scoring model
+3. Exact files modified
+4. Exact queries/helpers added
+5. Before/after scoring behavior
+6. Validation performed
+7. Known limitations
+8. Recommended next controls after scorer rewrite
+
+==================================================
+FINAL RULE
+==================================================
+
+The ERDI scorer must become more truthful, not more flattering.
+
+Proceed.

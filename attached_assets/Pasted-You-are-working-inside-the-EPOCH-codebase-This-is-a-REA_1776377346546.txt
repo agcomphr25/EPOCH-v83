@@ -1,0 +1,199 @@
+You are working inside the EPOCH codebase.
+
+This is a READ-ONLY forensic audit.
+DO NOT modify code.
+DO NOT create files.
+DO NOT refactor anything.
+
+Your job is to build a COMPLETE and ACCURATE understanding of the current system so we can design a clean cost and compliance layer on top of it.
+
+==================================================
+GOAL
+==================================================
+
+Produce a structured "DOMAIN TRUTH AUDIT" of the system focusing on:
+
+- Orders / Customers / Contracts
+- Production / Travelers / Work Steps
+- Time Tracking / Labor
+- Inventory / Materials
+- Accounting / Costing (if any)
+- Audit / History / Logging
+
+We are specifically trying to understand:
+1. What already exists
+2. What overlaps with what we want to build
+3. Where the gaps are
+4. Where duplication would be dangerous
+
+==================================================
+PHASE 1 — SCHEMA INVENTORY
+==================================================
+
+List ALL tables (or models) grouped by domain:
+
+A. Sales / Orders
+- all_orders
+- sales_orders
+- quotes
+- customers
+- packing slips
+- invoices
+- any PO-related fields
+
+For each table:
+- list fields
+- identify primary keys
+- identify relationships (FKs)
+- note duplicate concepts (e.g. multiple "status" fields)
+
+---
+
+B. Production / Travelers
+- production_orders
+- travelers
+- routing / steps / operations
+- work centers / departments
+
+For each:
+- what identifies a job?
+- how are steps defined?
+- how does a traveler relate to orders?
+
+---
+
+C. Time Tracking / Labor
+- time_entries
+- punches
+- timeclock
+- employee tables
+- approvals
+
+For each:
+- how is time recorded?
+- is it start/stop or duration?
+- how is it tied to work (if at all)?
+- what audit fields exist?
+
+---
+
+D. Inventory / Materials
+- inventory items
+- inventory transactions
+- material issues
+- scrap tracking
+
+For each:
+- how are materials tied to jobs (if they are)?
+- how are costs stored?
+
+---
+
+E. Accounting / Costing
+- any GL-related tables
+- cost tables
+- journal entries
+- AR/AP structures
+
+For each:
+- what cost logic exists (if any)?
+- is anything tied to projects/jobs?
+
+---
+
+F. Audit / Logging
+- audit tables
+- history tables
+- triggers
+- soft delete patterns
+
+For each:
+- what fields exist (created_at, updated_by, etc.)?
+- is there a centralized audit log?
+
+==================================================
+PHASE 2 — DOMAIN TRUTH MAP
+==================================================
+
+Build a clean mapping of how the system actually works today:
+
+Example format:
+
+Order → Production Order → Traveler → Step → (Time?) → (Material?)
+
+Call out:
+- where relationships are strong
+- where they are missing
+- where data is duplicated or can drift
+
+==================================================
+PHASE 3 — CRITICAL RISKS
+==================================================
+
+Identify:
+
+1. Duplicate sources of truth
+   Example:
+   - multiple status fields
+   - multiple order tables
+
+2. Missing links
+   Example:
+   - time not tied to traveler
+   - material not tied to job
+
+3. Data integrity risks
+   Example:
+   - nullable fields that shouldn't be
+   - silent overrides
+
+4. Areas where adding a cost system could BREAK things
+
+==================================================
+PHASE 4 — GAP ANALYSIS (vs TARGET SYSTEM)
+==================================================
+
+Compare current system to desired capabilities:
+
+We want:
+- project-level cost tracking
+- traveler-based labor tracking
+- material cost tracking
+- DCAA-compliant audit trail
+
+For each, answer:
+
+1. Already supported
+2. Partially supported
+3. Missing entirely
+
+==================================================
+PHASE 5 — RECOMMENDED STRATEGY (NO CODE)
+==================================================
+
+Based on the audit, recommend:
+
+- What we should REUSE as-is
+- What we should EXTEND
+- What we should AVOID duplicating
+- What minimal new tables are actually required
+
+DO NOT propose a full rebuild.
+DO NOT introduce unnecessary complexity.
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return a structured document:
+
+1. SCHEMA INVENTORY
+2. DOMAIN TRUTH MAP
+3. CRITICAL RISKS
+4. GAP ANALYSIS
+5. RECOMMENDED STRATEGY
+
+Be precise.
+Be grounded in actual code.
+Do not guess.
+Call out uncertainty explicitly if something is unclear.

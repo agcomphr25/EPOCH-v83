@@ -1,0 +1,235 @@
+You are implementing Phase D of the EPOCH Labor Allocation Engine.
+
+This phase introduces allocation segmentation when jobs/travelers change.
+
+🚨 CRITICAL RULES:
+- DO NOT break existing punch_ledger behavior
+- DO NOT remove or alter punch_ledger assignment updates
+- DO NOT affect payroll or timesheets
+- DO NOT change API contracts
+- All allocation logic must be ADDITIVE
+- Feature flag laborAllocationsEnabled MUST gate all behavior
+- If allocation logic fails, DO NOT fail the request — log only
+
+---
+
+## 🎯 OBJECTIVE
+
+Implement allocation switching so that:
+
+- When a traveler starts OR a job switch occurs:
+  → current allocation is CLOSED
+  → new allocation is OPENED
+
+This preserves full job history within a single punch session.
+
+---
+
+## 🔍 STEP 1 — IMPLEMENT switchAllocation
+
+In:
+
+server/src/services/laborAllocationService.ts
+
+Replace the stub with real logic:
+
+### switchAllocation(punchLedgerRow, newAssignment)
+
+Steps:
+
+1) Find current OPEN allocation:
+   - punch_ledger_id = row.id
+   - status = 'OPEN'
+
+2) IF no open allocation:
+   - log warning
+   - call openAllocation() with newAssignment
+   - return
+
+3) IF open allocation exists:
+
+   a) Close current allocation:
+      - allocation_end = now()
+      - status = 'CLOSED'
+
+   b) Determine next sequence_order:
+      - count existing allocations for this punch_ledger_id
+      - next = count + 1
+
+   c) Create new allocation:
+      - punch_ledger_id
+      - employee_id
+      - allocation_start = now()
+      - allocation_end = NULL
+      - charge_code_id (from newAssignment)
+      - traveler_id
+      - traveler_step_id
+      - production_work_order_id
+      - project_id
+      - department
+      - operation
+      - labor_class (carry forward or from assignment)
+      - source = 'TRAVELER'
+      - status = 'OPEN'
+      - sequence_order = next
+
+4) Wrap entire operation in try/catch:
+   - log errors
+   - NEVER throw
+
+---
+
+## 🔍 STEP 2 — HOOK INTO TRAVELER STEP START
+
+Find in:
+
+server/src/routes/travelers.ts
+
+Where this currently happens:
+- performStepStart()
+- updatePunchLedgerEntry() stamping traveler fields
+
+AFTER punch_ledger is updated:
+
+IF laborAllocationsEnabled:
+  call allocationService.switchAllocation(
+    punchLedgerRow,
+    {
+      charge_code_id,
+      traveler_id,
+      traveler_step_id,
+      production_work_order_id,
+      project_id,
+      department,
+      operation
+    }
+  )
+
+---
+
+## 🔍 STEP 3 — HOOK INTO JOB SWITCH
+
+Find in:
+
+server/src/routes/timeClock.ts
+
+Where:
+- executeJobSwitch()
+- switchPunchLedgerAssignment()
+
+AFTER punch_ledger overwrite:
+
+IF laborAllocationsEnabled:
+  call allocationService.switchAllocation(...) with new assignment
+
+---
+
+## 🔍 STEP 4 — PRESERVE EXISTING BEHAVIOR
+
+DO NOT remove or change:
+
+- storage.switchPunchLedgerAssignment()
+- storage.updatePunchLedgerEntry()
+
+These MUST continue to:
+- overwrite punch_ledger fields
+- represent "current state"
+
+Allocations represent history only.
+
+---
+
+## 🔍 STEP 5 — LOGGING
+
+Add structured logs:
+
+- allocation_switch_started
+- allocation_closed
+- allocation_opened
+
+Include:
+- punch_ledger_id
+- employee_id
+- sequence_order
+- traveler_id
+
+---
+
+## 🔍 STEP 6 — SAFETY CHECKS
+
+Ensure:
+
+- No more than 1 OPEN allocation per punch session
+- sequence_order increments correctly
+- allocation_start < allocation_end for closed rows
+- No overlapping allocations within same punch
+
+---
+
+## 🔍 STEP 7 — TEST PLAN
+
+Add integration test:
+
+Scenario:
+
+clock in
+→ traveler A start
+→ job switch to traveler B
+→ job switch to traveler C
+→ clock out
+
+Assert:
+
+- 3 allocation rows
+- sequence_order = 1, 2, 3
+- each allocation has correct traveler_id
+- no overlaps
+- total duration ≈ session duration
+
+---
+
+## 🔍 STEP 8 — VALIDATION QUERY
+
+After implementation:
+
+Return:
+
+- allocations per punch session (should be >1 for switched jobs)
+- count of OPEN allocations (should equal open sessions)
+- any overlapping allocations (should be 0)
+
+---
+
+## 🔍 STEP 9 — RETURN FORMAT
+
+# Phase D Allocation Switching Report
+
+## Files Modified
+(list)
+
+## switchAllocation Implementation
+(code snippet)
+
+## Integration Points
+(where it was hooked in)
+
+## Behavior Summary
+(explain lifecycle)
+
+## Test Results
+(summary)
+
+## Validation Results
+(data)
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+DO NOT:
+- change payroll logic
+- change timesheet generation
+- remove punch_ledger fields
+- enforce DB constraints yet
+
+This phase ONLY introduces allocation segmentation on job change.

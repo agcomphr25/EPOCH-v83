@@ -1,0 +1,97 @@
+IMPLEMENTATION PROMPT — EPOCH LABOR APPROVAL ROUTE + REVIEW QUEUE
+
+You are implementing the missing supervisor labor approval workflow identified in the AUTO_APPROVAL_BYPASS forensic audit.
+
+Goal:
+Fix APPROVAL_ROUTE_NOT_EXPOSED without changing the existing scoring logic, schema, or labor costing architecture.
+
+Implement only the following:
+
+1. POST /api/timekeeping/labor-approvals
+2. GET /api/timekeeping/labor-approvals/unapproved
+3. Minimal frontend/admin integration only if an obvious existing timekeeping supervisor/admin page exists
+4. Tests or validation notes proving the scorer can now find labor_approvals rows
+
+Do NOT refactor unrelated timekeeping systems.
+Do NOT modify the DCAA scorer.
+Do NOT auto-create approvals.
+Do NOT approve labor on clock-out.
+Do NOT change salaried timesheet approval logic.
+
+Context from audit:
+- labor_approvals table already exists.
+- storage.createLaborApproval() already exists.
+- Scorer checks for labor_approvals matched by employee_id + production_work_order_id.
+- One approval row per employee + work order covers the relevant punch_ledger sessions.
+- The current gap is that no HTTP route exposes createLaborApproval for regular WAD-linked sessions.
+
+Required endpoint 1:
+
+POST /api/timekeeping/labor-approvals
+
+Accept body:
+{
+  productionWorkOrderId: string,
+  employeeId: string,
+  reason: string,
+  hoursAtApproval?: number
+}
+
+Server should:
+- require authentication
+- require supervisor/admin/management-level permission using the existing project permission pattern
+- validate productionWorkOrderId exists
+- validate employeeId exists
+- calculate hoursAtApproval if not supplied by summing closed REGULAR punch_ledger rows for that employee + productionWorkOrderId
+- call storage.createLaborApproval()
+- set approvedBy from the authenticated user
+- set approvedAt server-side
+- return the created approval row
+
+Important:
+Do not accept approvedBy from the client as trusted input.
+
+Required endpoint 2:
+
+GET /api/timekeeping/labor-approvals/unapproved
+
+Return WAD-linked closed REGULAR punch_ledger sessions where:
+- clock_out IS NOT NULL
+- labor_class = 'REGULAR'
+- production_work_order_id IS NOT NULL
+- no matching labor_approvals row exists for employee_id + production_work_order_id
+
+Group the response by:
+- employeeId
+- productionWorkOrderId
+
+Include:
+- employee name if available
+- work order / traveler identifier if available
+- total unapproved sessions
+- total unapproved hours
+- earliest clockIn
+- latest clockOut
+- punchLedgerIds included
+
+This route powers the supervisor review queue.
+
+Frontend:
+If there is already a supervisor/admin timekeeping page, add a small "Labor Approval Review" panel there.
+If there is not an obvious existing page, do not create a major new UI. Instead expose the route and document the expected UI follow-up.
+
+Validation:
+After implementation, provide:
+1. files changed
+2. routes added
+3. permission guard used
+4. example request/response
+5. how to verify with SQL that labor_approvals now satisfies the NO_AUTO_APPROVAL scorer
+6. any risks or follow-up work
+
+Acceptance criteria:
+- A supervisor can create a labor_approvals row for a normal WAD-linked employee/work-order labor group.
+- The GET route lists only groups that still lack approval.
+- The POST route removes the approved group from the GET unapproved list.
+- No approval is auto-generated.
+- No labor costing/posting behavior is changed yet.

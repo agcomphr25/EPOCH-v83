@@ -1,0 +1,374 @@
+UI/UX REFACTOR — DAILY TUBE THROUGHPUT BOARD (STEP-PROGRESS VERSION)
+
+Refactor the existing Daily Tube Throughput Board UI.
+
+Do NOT change backend logic.
+Do NOT change slot creation logic.
+Do NOT change data source architecture.
+Do NOT create new workflow.
+Do NOT add write actions.
+
+This is a frontend UX refactor only.
+
+The current board works functionally but does NOT visually represent production flow well enough.
+
+It feels like a generic dashboard.
+
+It must feel like a live production traveler board.
+
+We are replacing:
+
+ONE STATUS PER SLOT
+
+with
+
+STEP-BY-STEP VISUAL PROGRESSION PER SLOT
+
+--------------------------------------------------
+PRIMARY GOAL
+--------------------------------------------------
+
+Each slot must visually show:
+
+where that tube is in the actual manufacturing process
+
+using stage completion blocks.
+
+Not just:
+
+“Oven”
+or
+“Green”
+
+but:
+
+LAYUP ✓
+WRAP ✓
+OVEN [progress blocks]
+QC pending
+FINAL QC pending
+
+This must visually resemble the production flow logic from the original daily layup schedule reference.
+
+It should feel like a hybrid of:
+
+- production traveler
+- airport operations board
+- kanban progress visualization
+
+NOT like a generic admin dashboard.
+
+--------------------------------------------------
+PRODUCTION STEP MODEL
+--------------------------------------------------
+
+Use actual production sequence:
+
+1. Mold Prep
+2. Layup
+3. Cello Wrap
+4. Oven/Cure
+5. Quality Control
+6. Final QC
+
+TV display labels should simplify to:
+
+PREP
+LAYUP
+WRAP
+OVEN
+QC
+FINAL
+
+--------------------------------------------------
+SLOT CARD REFACTOR
+--------------------------------------------------
+
+Each slot card must show:
+
+TOP:
+- Slot number (#1–22)
+- high-level status label
+- elapsed time
+
+MIDDLE:
+Visual progress tracker
+
+Example:
+
+PREP   ✓
+LAYUP  ✓
+WRAP   ✓
+OVEN   [■■■■□□]
+QC     □
+FINAL  □
+
+OR as horizontal compact progress bars if visually better.
+
+BOTTOM:
+Minimal identity only:
+- traveler number OR short part reference only if needed
+(not full clutter)
+
+Do NOT show:
+- customer
+- large verbose metadata
+- unnecessary empty black space
+
+The card must feel dense, useful, and operational.
+
+--------------------------------------------------
+OVEN PROGRESS VISUALIZATION
+--------------------------------------------------
+
+This is critical.
+
+Oven/Cure must NOT be a simple label.
+
+It must visually show progress.
+
+Use:
+
+6 cure blocks
+
+Example:
+
+[■][■][■][□][□][□]
+
+Each block represents approximately 30 minutes
+(or derived proportional segments based on expected cure duration).
+
+Logic:
+
+If Oven/Cure started exists:
+
+calculate:
+
+elapsed oven time
+÷
+expected cure duration
+
+and fill progress blocks accordingly.
+
+If exact duration metadata exists:
+use it.
+
+If not:
+use safe operational default duration constant.
+
+Do NOT fake completion.
+
+This must be honest.
+
+When Oven/Cure starts:
+slot becomes GREEN operationally,
+but the visual oven progress must still continue.
+
+Meaning:
+
+GREEN = entered oven
+
+while
+
+Oven blocks = how far through cure we are
+
+This distinction is mandatory.
+
+--------------------------------------------------
+GREEN STATUS RULE
+--------------------------------------------------
+
+Keep existing backend truth:
+
+GREEN =
+Oven/Cure started
+
+But visually:
+
+GREEN should not replace step progression.
+
+Instead:
+
+GREEN is a status indicator
+
+while
+
+step blocks continue showing actual process progression.
+
+Example:
+
+Status = GREEN
+Visual = Oven block 3 of 6
+
+This is required.
+
+--------------------------------------------------
+STATUS COLORS
+--------------------------------------------------
+
+Improve visual clarity.
+
+Use stronger operational colors:
+
+GREEN:
+entered oven / success milestone
+
+BLUE:
+active in-process
+
+AMBER:
+prep / wrap / transitional
+
+RED:
+blocked / hold / NCR
+
+GRAY:
+void / cancelled
+
+MUTED DARK:
+not started
+
+Do NOT let the entire board feel visually dead.
+
+More signal.
+Less empty black.
+
+--------------------------------------------------
+TOP SUMMARY BAR REFACTOR
+--------------------------------------------------
+
+Current summary is too sparse.
+
+Improve:
+
+TARGET
+STARTED
+GREEN
+IN PROCESS
+BLOCKED
+VOID
+REMAINING
+
+Optional:
+simple percentage ring or progress bar if clean
+
+Make this feel like a control center header.
+
+Still clean.
+Not cluttered.
+
+--------------------------------------------------
+GRID IMPROVEMENTS
+--------------------------------------------------
+
+Improve spacing and density:
+
+- tighter layout
+- less wasted dead space
+- stronger visual hierarchy
+- easier scan across all 22 slots
+
+Fixed slots remain mandatory.
+
+Ghost slots remain mandatory.
+
+Do NOT compress.
+
+--------------------------------------------------
+TV MODE PRIORITY
+--------------------------------------------------
+
+TV mode must optimize for:
+
+instant understanding from across the room
+
+Meaning:
+
+big readable progress
+not tiny text
+
+Visual progression > metadata
+
+Production truth > pretty UI
+
+--------------------------------------------------
+SUPERVISOR MODE
+--------------------------------------------------
+
+Keep detail drawer behavior.
+
+Do NOT remove it.
+
+But the main grid should still be much stronger visually.
+
+The drawer is diagnosis.
+
+The board is awareness.
+
+--------------------------------------------------
+DESIGN LANGUAGE
+--------------------------------------------------
+
+Stay inside EPOCH design language.
+
+Do NOT introduce random consumer-app styling.
+
+Keep:
+
+industrial
+high-contrast
+production-control-center feel
+
+Think:
+
+Deltek meets SpaceX manufacturing board
+
+NOT:
+
+modern SaaS marketing page
+
+--------------------------------------------------
+FILES TO UPDATE
+--------------------------------------------------
+
+Likely:
+
+client/src/pages/DailyThroughputBoard.tsx
+
+and supporting UI components if needed.
+
+Refactor cleanly.
+
+Avoid unnecessary component sprawl.
+
+--------------------------------------------------
+REQUIRED OUTPUT
+--------------------------------------------------
+
+Return:
+
+# DAILY TUBE THROUGHPUT BOARD — UI/UX REFACTOR REPORT
+
+## Visual Changes Made
+
+## Step Progress Logic Added
+
+## Oven Progress Logic Added
+
+## Card Layout Improvements
+
+## Summary Bar Improvements
+
+## TV Mode Improvements
+
+## Supervisor Mode Impact
+
+## Files Modified
+
+## Remaining UX Recommendations
+
+## Compile / UI Validation Results
+
+Do not summarize vaguely.
+
+Give exact implementation details.

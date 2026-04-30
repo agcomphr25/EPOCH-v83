@@ -1,0 +1,245 @@
+You are a senior software architect and DCAA-conscious ERP/timekeeping systems auditor.
+
+READ-ONLY AUDIT ONLY. Do not modify files, do not run migrations, do not install packages, and do not make code changes.
+
+Goal:
+Audit the current EPOCH codebase to design a salaried employee timesheet/reconciliation system inside the Employee Portal while preserving the existing hourly punch/timeclock system untouched.
+
+Business intent:
+We need a salaried timesheet system separate from the hourly punch workflow. Salaried employees should enter/certify 100% of actual total hours worked each week, including direct labor, indirect labor, PTO/leave, holidays, and comp-time-related overtime. The system should ingest traveler/punch-style direct labor capture where available, but employees must be able to reconcile gaps, split time freely across codes, edit imported/captured time with audit trail, and certify weekly.
+
+Key requirements to audit for:
+
+1. Current timekeeping architecture
+- Locate all existing timekeeping, punch, employee portal, payroll, PTO, traveler labor, work order, and attendance/presence-board code.
+- Identify frontend routes/components, backend routes/services, database tables, schemas, API endpoints, permissions, and shared utilities.
+- Determine how hourly punch in/out currently works.
+- Determine how current In/Out Board, Clocked In Now, and Active Employees cards derive their data.
+- Preserve current hourly behavior.
+
+2. Employee Portal fit
+- Find where salaried users currently access employee-facing features.
+- Identify the safest place to add a salaried “Timesheet” module.
+- Determine whether user roles/employment type already distinguish hourly vs salaried.
+- Identify permission/capability patterns for HR, Payroll, Upper Management, supervisors, and executives.
+
+3. Traveler/direct labor ingestion
+- Find all traveler/work order/labor capture logic.
+- Determine whether travelers already create punch-like records, labor events, job transactions, operation start/stop events, or employee activity logs.
+- Identify how these can become imported salaried timesheet source entries.
+- Determine whether source entries can be linked to traveler, work order, contract, project, customer, operation, and employee.
+- Identify any risks where traveler labor is currently tightly coupled to hourly punches.
+
+4. Salaried timesheet model
+Evaluate what schema/API/frontend changes would be needed for:
+- Weekly timesheet periods.
+- Daily line items.
+- Actual total hours worked, not fixed 8-hour assumptions.
+- 100% weekly accounting requirement.
+- Direct labor lines.
+- Indirect labor dropdown lines.
+- PTO/leave lines imported from existing PTO workflow.
+- Automatic holiday lines from company holiday calendar.
+- Comp time earned/used/borrowed balances.
+- Manual direct labor against approved parent project/contract when no traveler exists.
+- Free splitting of days across many direct and indirect codes.
+- Optional notes.
+- Weekly employee certification.
+- Executive lighter exception path.
+- Supervisor/HR/Payroll/Upper Management review capabilities.
+- HR/Payroll/Upper Management adjustment authority.
+- Formal reopen/correction workflow.
+- Audit log for every change.
+
+5. Controlled charge-code design
+Audit whether EPOCH already has charge codes, projects, contracts, departments, cost centers, indirect labor types, PTO types, holiday calendars, or accounting categories.
+Recommend how to support an initial fixed company-wide indirect code set, with future expansion.
+Initial indirect codes should likely include:
+- G&A/Admin
+- Supervision/Management
+- Machine Maintenance
+- Safety Meeting
+- Training
+- Quality Review
+- Proposal/Estimating Support
+- Internal Engineering
+- Facility/Shop Support
+- PTO
+- Holiday
+- Sick/Leave
+But verify against existing code and naming conventions.
+
+6. Certification and blocking rules
+Audit how to enforce:
+- Weekly submission only for phase 1.
+- Block certification until 100% of the week is accounted for.
+- Approved PTO/holiday counts toward total.
+- Missing time prevents certification.
+- Payroll run should be blocked if unresolved salaried timesheets exist.
+- In-app reminders for missing/unsubmitted time.
+- Escalation to HR/Payroll after 3 days.
+- If payroll run is attempted before 3 days, unresolved required timesheets still block payroll.
+
+7. Presence/In-Out behavior
+We want salaried employees to appear on the unified In/Out Board if captured traveler/presence/punch-style activity supports it, but we may remove this later.
+Audit:
+- How the unified board currently identifies who is “in.”
+- Whether salaried presence can be derived without making salaried users use hourly punches.
+- Whether traveler-derived active activity can safely surface as presence.
+- How to avoid corrupting hourly punch logic.
+
+8. Comp time
+Audit existing PTO/accrual logic and determine how to add:
+- Formal comp accrual balance for salaried overtime.
+- Overtime recorded for labor distribution/audit, not automatic pay impact.
+- Borrowing against comp/PTO only through normal PTO approval process.
+- Balance reporting and audit trail.
+
+9. PTO/holiday integration
+PTO requests should remain separate.
+Approved PTO should flow into the weekly salaried timesheet.
+Company holidays should auto-inject into the week.
+Audit:
+- Existing PTO request/approval models.
+- Existing PTO balance models.
+- Existing holiday calendar or company calendar logic.
+- How approved leave should become locked/reference-backed timesheet lines.
+
+10. Approval flow
+Desired phase 1 flow:
+- Employee reconciles weekly time.
+- System blocks until 100% accounted.
+- Employee certifies weekly.
+- Supervisor can review/approve where applicable.
+- HR, Payroll, and Upper Management can intervene, adjust, reopen, approve, or resolve without always requiring supervisor.
+- Executives/owners may have a lighter exception path.
+Audit current permissions and recommend safest workflow.
+
+11. Audit trail and correction controls
+Audit existing audit log patterns.
+Recommend how to capture:
+- Original source: manual, traveler import, PTO import, holiday auto, HR adjustment, payroll adjustment.
+- Created by / modified by.
+- Before/after values.
+- Reason for change.
+- Reopen reason.
+- Certification timestamp.
+- Approval timestamp.
+- Payroll lock/export timestamp.
+Only final certified values need to be shown in normal reports as long as audit log preserves changes.
+
+12. Downstream reporting
+Evaluate how the system should feed:
+- Labor distribution reports.
+- Payroll export.
+- PTO balances.
+- Comp balances.
+- Job/project/contract costing.
+- DCAA audit support.
+- Timesheet-to-traveler-to-contract traceability.
+- Payroll blocking dashboard.
+Identify current reports and exports that may be impacted.
+
+13. Legacy standalone timekeeping risk
+Specifically search for remnants of the old standalone/defunct timekeeping app.
+Find:
+- Old routes.
+- Old tables.
+- Old migrations.
+- Old components.
+- Old services.
+- Old env vars.
+- Old imports.
+- Old naming references.
+- Dead code that still influences current EPOCH punch logic.
+Explain whether any legacy code could be accidentally reawakened by this project.
+
+14. Mobile and desktop
+Audit whether the employee portal is responsive/mobile-friendly enough for:
+- Review.
+- Corrections.
+- Weekly certification.
+- PTO/leave visibility.
+Recommend any mobile-first constraints.
+
+Deliverables:
+Return a structured read-only audit with:
+
+A. Executive summary
+- What exists today.
+- What is safe to reuse.
+- What is risky.
+- What should not be touched.
+
+B. Current architecture map
+- Frontend files/routes/components.
+- Backend files/routes/services.
+- Database tables/schemas.
+- Permissions/roles.
+- Traveler/labor capture touchpoints.
+- Payroll/PTO/reporting touchpoints.
+Include exact file paths and relevant function/table names.
+
+C. Data flow diagrams in text form
+1. Current hourly punch flow.
+2. Current traveler/labor capture flow.
+3. Current PTO flow.
+4. Proposed salaried timesheet flow.
+5. Proposed payroll blocking/reporting flow.
+
+D. Gap analysis
+Compare current system against desired salaried workflow:
+- Already exists.
+- Partially exists.
+- Missing.
+- Conflicting/risky.
+
+E. Recommended phase plan
+Phase 1: read-only schema/design alignment and safe UI placement.
+Phase 2: salaried timesheet core with manual entries, imported PTO/holiday, weekly certification.
+Phase 3: traveler import/reconciliation and audit trail.
+Phase 4: approval, payroll blocking, reporting, reminders/escalations.
+Phase 5: comp balance accrual/borrowing and executive exception path.
+Adjust phases based on codebase findings.
+
+F. Risk register
+Include risks to:
+- Hourly punch system.
+- In/Out board.
+- Payroll export.
+- PTO balances.
+- Traveler labor costing.
+- Legacy timekeeping code.
+- DCAA audit defensibility.
+- User confusion.
+
+G. Implementation recommendations
+Do not implement yet.
+Give precise recommendations for:
+- Tables needed.
+- APIs needed.
+- UI screens needed.
+- Permissions needed.
+- Audit logging approach.
+- Feature flags needed.
+- Test cases needed.
+- Migration strategy.
+- Rollback strategy.
+
+H. Questions for owner
+List only questions that block implementation.
+Do not ask questions already answered here.
+
+Important constraints:
+- Preserve hourly punch system untouched.
+- Do not collapse salaried and hourly workflows in phase 1.
+- Do not assume fixed 8-hour salaried days.
+- Use actual total hours worked.
+- Require 100% weekly accounting.
+- Weekly certification only for phase 1.
+- Controlled dropdowns preferred over free text.
+- Traveler-captured time should be editable with audit trail.
+- Salaried time can be charged directly to parent project/contract when no traveler exists.
+- HR/Payroll/Upper Management can intervene.
+- Payroll must not process with unresolved required salaried timesheets.
+- Do not make code changes in this audit.

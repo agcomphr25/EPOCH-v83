@@ -1,0 +1,361 @@
+IMPLEMENT DAILY TUBE THROUGHPUT BOARD — BUILD PHASE
+
+You are now authorized to implement the Daily Tube Throughput Board.
+
+Use the corrected Production Data Validation findings as source truth.
+
+DO NOT use:
+- p2_layup_schedules
+- p2_serialized_items
+- p2_oven_cure_logs
+- Assemble/Disassembly
+- tiered green logic
+
+Those assumptions were invalidated by production data.
+
+Correct architecture:
+
+Slot Creation:
+traveler_steps.started_at
+WHERE department_name = 'Layup'
+AND started_at IS NOT NULL
+
+Green Trigger:
+traveler_steps.started_at
+WHERE department_name = 'Oven/Cure'
+AND started_at IS NOT NULL
+
+Universal rule:
+A slot is GREEN when that tube has entered Oven/Cure.
+
+Business meaning:
+GREEN = tube successfully completed pre-cure operations and entered the oven today.
+
+Production sequence:
+1. Mold Prep
+2. Layup
+3. Cello Wrap
+4. Oven/Cure
+5. Quality Control
+6. Final QC
+
+--------------------------------------------------
+CORE REQUIREMENTS
+--------------------------------------------------
+
+Build a visibility-only board.
+
+The board must:
+- create fixed slots from actual Layup started events
+- show 22 fixed daily slots
+- keep Slot 1 as Slot 1, Slot 22 as Slot 22
+- never compress or reorder slots
+- show ghost slots for unstarted capacity
+- show GREEN when Oven/Cure has started
+- show BLOCKED / HOLD / VOID when applicable
+- support TV mode and supervisor mode
+- support historical date review
+- auto-refresh in live mode
+- perform no writes
+
+The board must NOT:
+- update travelers
+- start or complete steps
+- clear blocks
+- approve anything
+- reassign work
+- mutate production data
+- show customer/serial/SKU clutter on TV mode
+
+--------------------------------------------------
+BACKEND IMPLEMENTATION
+--------------------------------------------------
+
+Create a read-only endpoint:
+
+GET /api/p2/daily-throughput-board?date=YYYY-MM-DD
+
+If date is omitted:
+use today in America/New_York business date.
+
+Endpoint must return:
+
+{
+  businessDate,
+  targetSlots: 22,
+  summary,
+  slots
+}
+
+Slot creation logic:
+
+1. Find all traveler_steps where:
+   department_name = 'Layup'
+   started_at IS NOT NULL
+   started_at falls within the selected business date
+   using America/New_York timezone handling
+
+2. Join to travelers.
+
+3. Sort by Layup started_at ascending.
+
+4. Assign slotNumber using sequence order.
+
+5. Return slots 1–22 fixed.
+
+6. If more than 22 were started, return overflow records with:
+   isOverflow: true
+
+Green logic:
+
+For each traveler:
+find traveler_steps where:
+department_name = 'Oven/Cure'
+AND started_at IS NOT NULL
+
+If Oven/Cure started_at exists:
+isGreen = true
+greenAt = Oven/Cure started_at
+
+Status priority:
+
+Use this order:
+
+1. CANCELLED / VOID
+   - traveler.status = 'CANCELED' or equivalent
+
+2. BLOCKED
+   - travelers.status = 'BLOCKED'
+   - OR current/relevant traveler_steps.status = 'BLOCKED'
+
+3. HOLD
+   - if a hold state exists in current traveler model
+
+4. REWORK
+   - if existing rework/NCR state is detectable without new workflow
+
+5. GREEN
+   - Oven/Cure started
+
+6. LATE
+   - only if simple threshold exists safely
+   - if not, omit LATE from Phase 1
+
+7. IN_PROCESS
+
+8. NOT_STARTED
+
+Do not invent new data.
+
+If hold/rework sources are unclear, include null-safe placeholders and document them.
+
+Summary counts:
+- targetSlots
+- started
+- green
+- inProcess
+- blocked
+- cancelled
+- notStarted
+- overflowCount
+
+No projected EOD in Phase 1.
+
+--------------------------------------------------
+SLOT RESPONSE SHAPE
+--------------------------------------------------
+
+Each slot should return:
+
+{
+  slotNumber,
+  isEmpty,
+  isOverflow,
+  status,
+  displayLabel,
+  isGreen,
+  greenAt,
+  startedAt,
+  elapsedMinutes,
+  currentDepartment,
+  currentStepStatus,
+  blockedReason,
+  detail: {
+    travelerId,
+    travelerNumber,
+    partNumber,
+    partName,
+    currentStep,
+    currentStepStartedAt,
+    currentStepCompletedAt,
+    ovenCureStartedAt,
+    assignedTo,
+    recentEvents
+  }
+}
+
+TV mode should not display sensitive clutter,
+but API may return detail for supervisor drawer.
+
+recentEvents:
+Return last 5 traveler events if available.
+Null-safe if not available.
+
+--------------------------------------------------
+DISPLAY LABEL LOGIC
+--------------------------------------------------
+
+Create a clean mapping:
+
+If isEmpty:
+—
+
+If blocked:
+BLOCKED
+
+If cancelled:
+VOID
+
+If green:
+GREEN
+
+Otherwise based on current traveler step:
+
+Mold Prep → PREP
+Layup → LAYUP
+Cello Wrap → WRAP
+Oven/Cure → OVEN
+Quality Control → QC
+Final QC → FINAL QC
+
+If unknown:
+IN PROCESS
+
+--------------------------------------------------
+FRONTEND IMPLEMENTATION
+--------------------------------------------------
+
+Create:
+
+client/src/pages/DailyThroughputBoard.tsx
+
+Route:
+/daily-throughput-board
+
+Historical:
+/daily-throughput-board?date=YYYY-MM-DD
+
+Modes:
+- TV Mode
+- Supervisor Mode
+
+TV Mode:
+- full-screen style
+- dark production-control aesthetic
+- fixed 22-slot grid
+- big readable cards
+- no customer
+- no serial
+- no SKU
+- no dense details
+- summary bar at top
+- auto-refresh every 45 seconds
+
+Supervisor Mode:
+- same board
+- date picker
+- click slot to open detail drawer
+- auto-refresh only for current date
+- historical dates do not auto-refresh
+
+Slot Card:
+Show only:
+- slot number
+- displayLabel
+- elapsed time if populated
+- status color
+
+Colors:
+- GREEN: green
+- BLOCKED: red
+- VOID/CANCELLED: gray
+- IN_PROCESS: blue/slate
+- NOT_STARTED: dark muted
+- WRAP/OVEN/LAYUP: amber/orange family if existing design system supports it
+
+Use existing EPOCH styling conventions.
+Do not introduce a new design language.
+
+--------------------------------------------------
+DETAIL DRAWER
+--------------------------------------------------
+
+Clicking a populated slot in supervisor mode opens read-only drawer.
+
+Show:
+- Slot #
+- Traveler number / ID
+- Part number / part name
+- Current step
+- Layup started time
+- Oven/Cure started time
+- Green status
+- Elapsed time
+- Block reason if present
+- Last 5 traveler events
+
+No action buttons.
+
+No writes.
+
+--------------------------------------------------
+VALIDATION / SAFETY REQUIREMENTS
+--------------------------------------------------
+
+Before final response:
+
+1. Confirm endpoint is read-only.
+2. Confirm no schema migrations were created.
+3. Confirm no workflow changes were added.
+4. Confirm no writes originate from dashboard.
+5. Confirm p2_layup_schedules is not used.
+6. Confirm p2_oven_cure_logs is not used.
+7. Confirm Assemble/Disassembly is not referenced.
+8. Confirm Green = Oven/Cure started.
+9. Confirm route is registered.
+10. Confirm TypeScript compiles or report exact remaining compile issues.
+
+--------------------------------------------------
+EXPECTED OUTPUT
+--------------------------------------------------
+
+After implementation, return:
+
+# DAILY TUBE THROUGHPUT BOARD IMPLEMENTATION REPORT
+
+## Files Created
+
+## Files Modified
+
+## Backend Endpoint Summary
+
+## Frontend Page Summary
+
+## Slot Logic Implemented
+
+## Green Trigger Implemented
+
+## TV Mode Behavior
+
+## Supervisor Mode Behavior
+
+## Historical Mode Behavior
+
+## Safety Confirmation
+
+## Known Limitations
+
+## Test / Compile Results
+
+Do not summarize vaguely.
+Give exact files and exact behavior.

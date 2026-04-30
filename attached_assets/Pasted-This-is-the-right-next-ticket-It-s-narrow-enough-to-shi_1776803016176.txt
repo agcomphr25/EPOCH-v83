@@ -1,0 +1,119 @@
+This is the right next ticket.
+
+It’s narrow enough to ship safely, and important enough that it should come before more feature work.
+
+Why this ticket is the right move
+
+It fixes the biggest trust/compliance problem without forcing a full RBAC rebuild:
+
+removes username-based access hacks
+stops production debug exposure
+keeps current authorized users working
+gives you a cleaner base for every later approval/audit feature
+Recommended implementation order
+1. Audit all hardcoded auth paths
+
+Search for:
+
+AUTHORIZED_USERS
+requireExecutiveAccess
+req.user.username ===
+hasFullAccess
+any username-keyed permission maps
+
+Output a short list:
+
+file
+route/middleware
+current auth behavior
+replacement target
+
+Do this first so you do not miss a hidden bypass.
+
+2. Choose the smallest authorization fix
+
+Do not redesign all permissions yet.
+
+Best path:
+
+use existing role checks where they already fit
+add one lightweight capability only if role is not enough
+
+For this ticket, something like EXECUTIVE_ACCESS is reasonable only if ADMIN or OWNER would be too broad.
+
+3. Replace requireExecutiveAccess
+
+Change it from username-based to:
+
+role check, or
+role + capability check
+
+Also add denied-access logging there so all routes using it inherit the same behavior.
+
+4. Replace AUTHORIZED_USERS in accountingPrep.ts
+
+Remove the local allowlist completely.
+Use the same shared auth logic as step 3 so you do not create two parallel permission systems again.
+
+5. Kill or gate debug routes
+
+Best outcome:
+
+not mounted in production at all
+
+If you need them for dev:
+
+mount only when process.env.NODE_ENV !== 'production'
+
+That is better than “authenticated but still live.”
+
+6. Verify current users keep access
+
+Before removing the old checks:
+
+identify who currently depends on them
+ensure those users already have the needed role/capability
+test their actual flows
+7. Verify clean denial behavior
+
+All denied requests should return:
+
+403
+consistent message
+warning log with user, route, action, timestamp
+Small implementation advice
+
+Use one shared guard pattern, not custom logic per file.
+
+Example shape:
+
+requireExecutiveAccess
+requireAccountingPrepAccess
+
+But both should call the same underlying capability/role helper.
+
+That keeps this ticket small and prevents drift.
+
+Main risk
+
+The biggest risk is not code breakage.
+It is accidentally locking out a real user like glennj before the replacement role/capability is assigned.
+
+So the safe rollout is:
+
+assign capability/role
+test access
+remove username checks
+remove debug mounts
+What I would check before marking done
+no username allowlists left in active auth paths
+no /api/debug/* mounted in production
+current authorized users still pass
+unauthorized users get 403
+denied access logs appear consistently
+My call
+
+Ship this exactly as written.
+
+After this, the immediate next ticket should be:
+Replace hardcoded audit actor strings with real authenticated user context

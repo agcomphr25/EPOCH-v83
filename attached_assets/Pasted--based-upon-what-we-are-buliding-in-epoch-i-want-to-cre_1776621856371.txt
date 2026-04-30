@@ -1,0 +1,800 @@
+
+based upon what we are buliding in epoch, i want to create a project manager dashboard, where the assigned pm for said project has a dashboard, with a dropdown of open projects, there are tabs with production tab to veiw where items are in produciton, direct labor tab where there pm is able to view time tank made in WAD and certified employees for that task and live feed of how the time is being allocated through the traveler. also there is a material budget tab to view what is available in inventory allocated to project and the budget used and remaining. 
+
+Thought for 7s
+Yes — this fits EPOCH very well, and it should sit above WAD + Work Orders + Travelers + Time Clock as the project-level command view.
+
+What you are describing is essentially a Project Manager Control Center where the PM can see, in one place, the health of a project across:
+
+production status
+
+direct labor / WAD burn
+
+material allocation and budget usage
+
+certified labor coverage
+
+live traveler progress
+
+The cleanest structure is this:
+
+Core idea
+Use this relationship as the backbone:
+
+Project → WAD / Budget → Work Orders → Travelers → Time Entries / Material Consumption
+
+That gives the PM one dashboard, but the data comes from systems you are already building instead of inventing a separate tracking tool.
+
+Recommended dashboard layout
+At the top:
+
+Project dropdown
+
+only open/active projects
+
+filter by PM = current user
+
+summary cards:
+
+Project status
+
+% production complete
+
+Direct labor budget used
+
+Material budget used
+
+Open blockers
+
+Due date health
+
+At-risk work orders
+
+Then tabs:
+
+Overview
+
+Production
+
+Direct Labor
+
+Material Budget
+
+Risks / Issues
+
+Documents / Change Log
+
+For what you asked, the most important are Production, Direct Labor, and Material Budget.
+
+1) Production tab
+This should answer:
+
+What parts/subassemblies are in production?
+
+What department are they in right now?
+
+What is blocked?
+
+What is late?
+
+What is complete?
+
+What the PM should see
+A table by work order or major deliverable:
+
+Work Order #
+
+Part / Assembly name
+
+Qty required
+
+Qty complete
+
+Current department
+
+Current traveler step
+
+Status
+
+NOT_STARTED
+
+IN_PROGRESS
+
+WAITING_MATERIAL
+
+WAITING_QC
+
+COMPLETE
+
+BLOCKED
+
+Due date
+
+Days ahead/behind
+
+Readiness %
+
+Blocking reason
+
+Useful PM drill-down
+Clicking a row opens:
+
+linked travelers
+
+current phase: START / WORK / FINISH
+
+who is signed into it
+
+time logged so far
+
+material traceability tied to that traveler
+
+open NCR / hold / missing cert / missing material / pending inspection
+
+Best visual blocks
+I would add 4 production widgets:
+
+Department progress lane
+
+Cutting → Layup → Cure → CNC → Finish → QC/Shipping
+
+Late work orders
+
+Blocked work orders
+
+Live traveler activity
+
+who is currently working
+
+what traveler
+
+when started
+
+This gives the PM a real-time floor view without going into every traveler.
+
+2) Direct Labor tab
+This is where your idea becomes powerful.
+
+The PM needs to see how labor is performing against WAD-planned hours, and also whether the labor being used is compliant and certified.
+
+What this tab should answer
+How many direct labor hours were budgeted in WAD?
+
+How many have been used?
+
+Where are hours being charged?
+
+Are hours being logged to the correct charge code?
+
+Are certified employees performing the required tasks?
+
+What labor budget remains?
+
+Recommended sections
+A. WAD labor summary cards
+Show:
+
+Budgeted direct labor hours
+
+Actual direct labor hours
+
+Remaining hours
+
+% consumed
+
+Overrun / underrun
+
+Pending approval hours
+
+Indirect labor charged to project
+
+Unallowable mischarge flags
+
+B. Charge code / task breakdown
+A table like:
+
+Department
+
+Task / operation
+
+Charge code
+
+Budgeted hours
+
+Actual hours
+
+Remaining hours
+
+% used
+
+Variance
+
+Certified personnel required?
+
+Certified personnel assigned?
+
+Status
+
+Example:
+
+Layup / Wing Skin Layup / DL-LAYUP-001 / 40 hrs / 28.5 hrs / 11.5 hrs / 71% / OK
+
+Cure / Oven Cycle / DL-CURE-003 / 12 hrs / 14 hrs / -2 hrs / 117% / Overrun
+
+C. Live labor feed from travelers
+This is important.
+
+Since your travelers already represent actual execution, the PM tab should show live allocations coming from:
+
+active traveler
+
+active department step
+
+operator badge/user
+
+work order
+
+WAD charge code
+
+time started
+
+elapsed time
+
+estimated vs actual
+
+This makes the PM dashboard a live labor monitor, not just a historical report.
+
+D. Certified employee coverage
+This should show whether the people charging time are authorized for the task.
+
+Table example:
+
+Employee
+
+Department
+
+Certification required
+
+Certification status
+
+Expiration / retrain due
+
+Traveler assigned
+
+Labor currently charging?
+
+This lets the PM see:
+
+compliant staffing
+
+certification gaps
+
+tasks being worked by non-certified users
+
+retraining risk
+
+That is a very strong AS9100 / audit-ready feature.
+
+3) Material Budget tab
+This tab should connect inventory + allocation + project budget.
+
+The PM needs to know both:
+
+what material has been reserved/allocated to the project
+
+how much budget is consumed vs remaining
+
+What the PM should see
+A. Material budget summary cards
+Planned material budget
+
+Committed material value
+
+Issued / consumed value
+
+Remaining budget
+
+Scrap value
+
+Variance to budget
+
+OSP / outside processing committed
+
+Open PO value
+
+B. Allocated material table
+Item / material
+
+Type
+
+Lot / ICN
+
+Qty required
+
+Qty allocated
+
+Qty issued
+
+Qty consumed
+
+Qty remaining
+
+Unit cost
+
+Total committed cost
+
+Total consumed cost
+
+Status
+
+Status examples:
+
+FULLY_ALLOCATED
+
+PARTIAL
+
+SHORT
+
+CONSUMED
+
+EXPIRED_HOLD
+
+QC_HOLD
+
+C. By project structure
+If this is a real aerospace/drone project, material should also roll up by:
+
+raw materials
+
+consumables
+
+machined parts
+
+kits
+
+subassemblies
+
+purchased components
+
+OSP
+
+D. Budget consumption logic
+Best practice:
+
+Allocated = committed against project budget
+
+Issued to traveler = moved from available to in-use
+
+Consumed = actual cost burned
+
+Scrapped = separate bucket visible to PM
+
+Returned to stock = reverses unused issue
+
+That way PM sees real budget movement, not just inventory on hand.
+
+Recommended tabs beyond what you asked
+You only asked for 3 main ideas, but I would strongly add these:
+
+Risks / Issues tab
+open blockers
+
+late deliverables
+
+certification gaps
+
+material shortages
+
+open NCRs
+
+pending change requests
+
+budget overruns
+
+due-soon milestones
+
+Change / Document tab
+WAD revisions
+
+traveler revisions
+
+drawing rev changes
+
+PO change orders
+
+project notes
+
+uploaded certs / customer documents / milestone evidence
+
+This would make the PM dashboard the true project control point.
+
+Suggested database/data model additions
+To support this cleanly, I would add a few project-centered tables or fields.
+
+A. projects
+You likely already have or need:
+
+id
+
+projectCode
+
+projectName
+
+customerId
+
+assignedPmUserId
+
+status
+
+startDate
+
+dueDate
+
+contractValue
+
+notes
+
+B. project_wads
+A WAD/project budget table:
+
+id
+
+projectId
+
+wadNumber
+
+revision
+
+approvedBy
+
+approvedAt
+
+laborBudgetHours
+
+laborBudgetDollars
+
+materialBudgetDollars
+
+ospBudgetDollars
+
+totalBudgetDollars
+
+status
+
+C. project_labor_budgets
+Optional detail by charge code/task:
+
+id
+
+projectWadId
+
+workOrderId nullable
+
+department
+
+taskCode
+
+chargeCode
+
+certificationRequired
+
+budgetHours
+
+budgetRate
+
+budgetCost
+
+D. project_material_budgets
+id
+
+projectWadId
+
+inventoryItemId
+
+category
+
+budgetQty
+
+budgetUnitCost
+
+budgetTotal
+
+allocatedQty
+
+consumedQty
+
+scrapQty
+
+E. link work orders to project
+Every production work order should link to project:
+
+workOrders.projectId
+
+workOrders.projectWadId maybe nullable
+
+F. traveler-time linkage
+Each live time entry should trace to:
+
+projectId
+
+workOrderId
+
+travelerId
+
+travelerStepId
+
+chargeCode
+
+laborType
+
+certifiedTaskFlag
+
+This is what makes the direct labor tab reliable.
+
+How live time allocation should work
+You said:
+
+live feed of how the time is being allocated through the traveler
+
+That is exactly right.
+
+The cleanest method is:
+
+When an employee starts work on a traveler step:
+
+traveler step knows department/task
+
+work order knows project
+
+WAD rule resolves correct charge code
+
+time clock entry begins automatically or is linked
+
+PM dashboard updates live
+
+So the feed row becomes:
+
+Employee: John Smith
+
+Project: Drone Wing Program
+
+Work Order: WO-1028
+
+Traveler: TRV-4401
+
+Department: Layup
+
+Task: Skin layup
+
+Charge Code: DL-LAYUP-001
+
+Started: 8:14 AM
+
+Elapsed: 01:27
+
+Certification: Valid
+
+That is far better than manual PM entry.
+
+Best UI structure for the page
+I would build it like this:
+
+Header
+Project dropdown
+
+PM ownership filter
+
+date range
+
+export button
+
+Top KPI cards
+Production complete %
+
+Labor hours used / budget
+
+Material used / budget
+
+Open blockers
+
+Late work orders
+
+Due date confidence
+
+Tabs
+Overview
+
+Production
+
+Direct Labor
+
+Material Budget
+
+Risks
+
+Documents
+
+Right side panel or drawer
+When user clicks anything:
+
+work order details
+
+traveler details
+
+budget line detail
+
+employee cert detail
+
+This keeps the main page clean.
+
+Recommended “Overview” tab
+This is what I would put there:
+
+project status banner
+
+milestone progress
+
+budget burn bar
+
+labor burn vs earned progress
+
+material burn vs plan
+
+recent activity feed
+
+top blockers
+
+open approvals
+
+upcoming deadlines
+
+This gives the PM a one-glance decision screen.
+
+Strong business rules to define now
+Before building, lock these rules:
+
+Labor
+can labor exceed WAD hours automatically or require approval?
+
+are employees blocked from charging if no hours remain?
+
+can PM see pending overrun requests?
+
+are only certified employees allowed, or do you allow warning-only mode?
+
+Material
+does allocation reserve material against the project budget immediately?
+
+is budget consumed at allocation, issue, or actual consumption?
+
+how is scrap treated?
+
+do returned materials restore budget?
+
+Production
+is progress based on traveler completion, work order completion, or quantity complete?
+
+what counts as “blocked”?
+
+what triggers “at risk”?
+
+These rules will make or break the dashboard usefulness.
+
+Best phased build plan
+Phase 1 — PM dashboard shell
+Build:
+
+project dropdown
+
+overview cards
+
+Production tab
+
+basic work order/traveler rollup
+
+Phase 2 — direct labor integration
+Add:
+
+WAD labor budget rollup
+
+charge code summary
+
+live traveler labor feed
+
+certification visibility
+
+Phase 3 — material budget integration
+Add:
+
+project material allocation view
+
+consumed vs allocated vs remaining
+
+budget rollup
+
+shortages / hold flags
+
+Phase 4 — risk and compliance
+Add:
+
+open NCRs
+
+cert gaps
+
+late milestones
+
+budget overruns
+
+audit log / approvals
+
+My recommendation for EPOCH specifically
+For your system, I would name it:
+
+Project Manager Dashboard
+or
+Project Control Center
+
+And I would make it the project-level equivalent of your P2 Control Center.
+
+So:
+
+P2 Control Center = production planning / execution control
+
+Project Control Center = PM view of scope, time, labor, material, risk, and budget
+
+That separation makes sense.
+
+What I think is the smartest build order
+For your app, I would start with these exact deliverables:
+
+Step 1
+Create a new Project Control Center page with:
+
+project dropdown
+
+PM filter
+
+Overview tab
+
+Production tab
+
+Step 2
+Link projects to:
+
+work orders
+
+travelers
+
+WAD
+
+Step 3
+Add Direct Labor tab with:
+
+WAD labor budget summary
+
+live traveler labor feed
+
+certified employee check
+
+Step 4
+Add Material Budget tab with:
+
+allocated inventory
+
+issued/consumed material
+
+budget remaining
+
+That gives you value quickly without waiting for every accounting detail to be perfect.
+
+If you want, I can turn this into a copy-paste build spec for Replit with:
+
+page layout
+
+schema additions
+
+API endpoints
+
+React component structure
+
+rollout phases tied to EPOCH.

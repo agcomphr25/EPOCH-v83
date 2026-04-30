@@ -1,0 +1,168 @@
+FORENSIC AUDIT — Vendor PO Confirmation Link Expiration / Immediate Expired Link Issue
+
+We are seeing a critical issue inside /vendor-pos where vendors report that the confirmation link in the emailed Vendor PO appears “expired” immediately after receiving it.
+
+Current known findings:
+- The token is configured to expire after 7 days
+- Both initial send and resend use the same expiration window (60 * 24 * 7 minutes)
+- Vendors often report immediate expiration, not after days
+- Strong suspicion is that the token is being consumed by email security scanners (Microsoft Safe Links, Mimecast, Barracuda, Proofpoint, etc.)
+- Another possibility is token misuse during GET page load instead of actual vendor action
+- Another possibility is bad APP_URL / PRODUCTION_DOMAIN generation
+- Another possibility is resend token hash mismatch
+
+I need a READ-ONLY forensic audit first.
+DO NOT MODIFY CODE.
+DO NOT PATCH ANYTHING.
+DO NOT REFACTOR.
+DO NOT WRITE NEW LOGIC.
+
+Your job is to trace the exact lifecycle of the Vendor PO confirmation token from creation to invalidation and identify the true root cause.
+
+====================================================
+AUDIT SCOPE
+====================================================
+
+Focus on:
+- /vendor-pos
+- vendor PO email sending flow
+- magic link generation
+- token storage
+- token hashing
+- token validation
+- token invalidation
+- resend logic
+- vendor-facing expired/invalid page
+- environment URL generation
+
+Likely files include:
+- server/routes/vendorPOs.ts
+- vendor email services
+- token utilities
+- auth helpers
+- vendor confirmation routes
+- frontend vendor confirmation page(s)
+
+====================================================
+REQUIRED OUTPUT
+====================================================
+
+I want exact findings with:
+- file names
+- function names
+- line numbers
+- route paths
+- execution order
+
+DO NOT summarize vaguely.
+
+====================================================
+QUESTIONS TO ANSWER
+====================================================
+
+1. EXACTLY where is the token created?
+- function name
+- file
+- line number
+
+2. EXACTLY how is expiration stored?
+- DB column
+- minutes vs timestamp
+- how expiration is calculated
+
+3. EXACTLY where is the token marked as “used”?
+This is the highest priority.
+
+I need:
+- exact route
+- exact line
+- whether it happens on:
+  A) GET page open
+  B) POST confirm action
+  C) both
+
+Show the exact code path.
+
+4. Is the link currently SINGLE-USE on first page visit?
+
+I need a definitive answer.
+
+5. What exact response causes the vendor-facing page to show:
+“Link Expired or Invalid”
+
+Trace:
+backend → frontend → rendered message
+
+6. On resend:
+- is a new token created?
+- is old token invalidated?
+- can multiple active tokens exist for one PO?
+- could hash mismatch occur?
+
+7. Verify getAppBaseUrl()
+
+Show:
+- APP_URL
+- PRODUCTION_DOMAIN
+- REPLIT_DOMAINS
+- localhost fallback
+
+Could production generate bad links?
+
+8. Are there logs proving:
+“already used”
+vs
+“expired”
+vs
+“invalid token”
+
+Or do they all collapse into one generic error?
+
+9. Is there any evidence that corporate email scanners could consume the token automatically?
+
+Specifically:
+Would a security scanner opening the email link trigger token consumption today?
+
+I need a yes/no answer based on actual code.
+
+10. Recommend the correct architecture
+
+Should token consumption happen:
+- on GET page load
+or
+- only after vendor submits Confirm / Reject / Acknowledge
+
+Explain why.
+
+====================================================
+EXPECTED FINAL SECTION
+====================================================
+
+End with:
+
+ROOT CAUSE RANKING
+
+Rank:
+#1 most likely
+#2 likely
+#3 possible
+#4 unlikely
+
+with justification based on actual code.
+
+Then include:
+
+SAFE FIX STRATEGY
+
+But still DO NOT IMPLEMENT.
+
+I only want the forensic truth first.
+
+This issue directly affects:
+- vendor trust
+- PO acknowledgements
+- purchasing controls
+- audit trail integrity
+- future DCAA defensibility
+
+Accuracy matters more than speed.

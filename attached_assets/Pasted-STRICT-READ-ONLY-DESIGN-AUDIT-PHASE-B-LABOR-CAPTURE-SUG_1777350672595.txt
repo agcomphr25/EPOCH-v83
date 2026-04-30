@@ -1,0 +1,245 @@
+STRICT READ-ONLY DESIGN AUDIT — PHASE B LABOR CAPTURE SUGGESTION ENGINE
+
+DO NOT MODIFY CODE.
+DO NOT PATCH.
+DO NOT WRITE MIGRATIONS.
+DO NOT IMPLEMENT ANYTHING.
+
+Read-only architecture audit only.
+
+Goal:
+Determine the safest way to add Phase B: Labor Capture Suggestion Engine on top of the completed Phase A foundation.
+
+==================================================
+PHASE B TARGET
+==================================================
+
+Build a controlled natural-language labor suggestion engine for salaried employees and owners.
+
+Core rule:
+AI Suggests
+Human Approves
+System Audits
+
+The system should accept employee narrative like:
+
+“Today I worked on AEVEX helping QC in the morning and had vendor meetings after lunch.”
+
+Then return suggested draft lines such as:
+
+- 4.0 hrs direct labor → likely traveler / charge code / project
+- 4.0 hrs indirect → Vendor Management or Meetings
+
+Nothing should post automatically.
+
+==================================================
+AUDIT OBJECTIVES
+==================================================
+
+Determine exactly:
+
+1. Where Phase B should plug into the existing backend
+2. Whether OpenAI integration can be reused safely
+3. Whether a new service should be created
+4. Whether suggestion results should be stored before employee confirmation
+5. How original_narrative should be handled
+6. How confidence_score and ai_source should be populated
+7. How low-confidence suggestions should be flagged
+8. How likely travelers should be resolved
+9. How indirect code matching should work
+10. How to prevent hallucinated charge codes or invalid travelers
+11. How the UI should present suggestions for employee review
+12. Whether payroll/admin needs a review queue in Phase B or later
+
+==================================================
+REQUIRED AREAS TO INSPECT
+==================================================
+
+AREA 1 — Current OpenAI / AI Infrastructure
+
+Inspect:
+- existing OpenAI integration
+- codebase chat routes
+- DONNA-related AI services
+- prompt routing patterns
+- streaming infrastructure
+- environment variables
+- logging patterns
+- error handling
+
+Determine:
+Should Phase B reuse this infrastructure or create a separate labor-specific AI service?
+
+--------------------------------------------------
+
+AREA 2 — Salaried Timesheet Service
+
+Inspect:
+- addLine
+- updateLine
+- deleteLine
+- submit/certify route
+- original_narrative handling
+- confidence_score and ai_source fields
+- audit logging
+
+Determine:
+Where should AI-suggested lines enter the system?
+
+Important:
+They should remain unposted draft suggestions until employee confirmation.
+
+--------------------------------------------------
+
+AREA 3 — Traveler / Charge Code Resolution
+
+Inspect:
+- traveler suggestion logic
+- resolveChargeCode
+- production work order mapping
+- charge code validation
+- project mapping
+- traveler picker search
+
+Determine:
+How should AI map vague terms like:
+- AEVEX
+- Falcon
+- Blackwater
+- QC
+- layup
+- customer order
+to valid traveler/charge/project options?
+
+Also determine:
+What validation must run before any suggestion is shown?
+
+--------------------------------------------------
+
+AREA 4 — Indirect Code Matching
+
+Inspect:
+- indirect_codes
+- labels
+- charge code mappings
+- DCAA classifications
+
+Determine:
+How to safely map phrases like:
+- vendor meetings
+- quoting
+- admin
+- customer calls
+- quality review
+- training
+- maintenance
+- PTO
+
+to valid indirect codes.
+
+No fallback to UNALLOC unless explicitly reviewed.
+
+--------------------------------------------------
+
+AREA 5 — Suggestion Persistence Strategy
+
+Answer:
+Should suggestions be stored in a new table before confirmation?
+
+Possible table:
+timekeeping.labor_capture_suggestions
+
+Possible fields:
+- id
+- employee_id
+- timesheet_id
+- original_narrative
+- parsed_json
+- suggested_lines
+- confidence_score
+- status: DRAFT / ACCEPTED / EDITED / REJECTED / EXPIRED
+- created_at
+- accepted_at
+- rejected_at
+
+Determine if this is necessary for audit and UX.
+
+--------------------------------------------------
+
+AREA 6 — UI Entry Point
+
+Inspect EmployeePortal Phase A UI.
+
+Determine best Phase B UI:
+- textbox above timesheet
+- “Generate Suggestions” button
+- suggestion review cards
+- accept/edit/reject per suggestion
+- confidence indicator
+- ambiguity clarification prompts
+- preserve manual add line path
+
+Do not replace manual entry.
+
+Phase B should enhance it.
+
+--------------------------------------------------
+
+AREA 7 — Compliance / Security
+
+Identify risks:
+- hallucinated travelers
+- invalid charge codes
+- AI directly posting labor
+- missing narrative preservation
+- self-approval confusion
+- low-confidence suggestions being treated as approved truth
+- prompt injection from employee text
+- sensitive payroll data leakage
+- overbroad AI context
+
+Define fail-closed rules.
+
+==================================================
+MANDATORY DELIVERABLE FORMAT
+==================================================
+
+Return exactly:
+
+1. Executive Design Summary
+
+2. Recommended Phase B Architecture
+
+3. Reuse Existing Infrastructure vs Build New
+
+4. Proposed New Tables / Columns
+
+5. Proposed New Services
+
+6. Proposed New Routes
+
+7. Proposed UI Flow
+
+8. Validation Rules
+
+9. Compliance Guardrails
+
+10. Security Risks
+
+11. Implementation Sequence
+
+12. Final Verdict:
+   Is EPOCH ready to implement Phase B now?
+
+==================================================
+RULES
+==================================================
+
+No implementation.
+No code changes.
+No migrations.
+No optimistic assumptions.
+Cite exact files, services, routes, and tables.
+Be brutally honest.
+
+Proceed.

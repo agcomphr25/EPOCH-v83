@@ -60,7 +60,6 @@ const MATERIAL_PREFIX_MAP: Record<string, string> = {
   fg_: 'Fiberglass',
   m1a_: 'M1A',
   apr_: 'APR',
-  mesa_: 'Fiberglass',
 };
 
 function deriveMaterial(order: any, debugReasons: string[]): string {
@@ -99,6 +98,11 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
   }
 
   const lowerModelId = modelId.toLowerCase();
+
+  if (lowerModelId === 'mesa_universal' || lowerModelId === 'mesa_tikka' || lowerModelId === 'mesa_adjustable') {
+    debugReasons.push(`material inferred from specific mesa model → Carbon Fiber: "${modelId}"`);
+    return 'Carbon Fiber';
+  }
 
   // Tikka variants: FG ones end with _fg, all others (non-Mesa) are Carbon Fiber
   if (lowerModelId.includes('tikka')) {

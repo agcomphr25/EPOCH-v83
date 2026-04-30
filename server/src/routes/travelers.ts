@@ -1,8 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, and, asc, desc, ilike, notInArray } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, notInArray, sql } from 'drizzle-orm';
+import { auditService } from '../services/auditService';
+import { requirePermission } from '../../middleware/requirePermission';
+import { validateActionToken } from '../../middleware/actionToken';
+import { requireScopedCapability, ScopedForbiddenError } from '../permissions';
 import { storage } from '../../storage';
-import { evaluateTravelerStartGates, evaluateTravelerFinishGates, evaluateStartGatesDetailed } from '../lib/travelerGates';
+import { evaluateTravelerStartGates, evaluateTravelerFinishGates, evaluateStartGatesDetailed, evaluateWadReleaseGate, buildGateErrorBody, buildTrainingGateErrorBody } from '../lib/travelerGates';
+import { evaluateTravelerTrainingGate, evaluateQcTrainingGate } from '../lib/trainingEnforcement';
+import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolveBudgetOverrunState } from '../lib/resolveChargeCode';
+import { laborAllocationsEnabled } from '../lib/featureFlags';
+import * as allocationService from '../services/laborAllocationService';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -23,8 +31,6 @@ import {
   productionWorkOrders,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
-  capabilities,
-  employeeCapabilities,
 } from '../../schema';
 import type { ManufacturedCategory } from '../../schema';
 
@@ -185,6 +191,8 @@ router.use((req: Request, res: Response, next: NextFunction) => {
   console.log(`[Travelers] ${req.method} ${req.path}`);
   next();
 });
+
+router.use(validateActionToken);
 
 // Get all travelers with optional filters
 router.get('/', async (req: Request, res: Response) => {
@@ -604,7 +612,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // Start traveler (DRAFT -> IN_PROGRESS)
-router.post('/:id/start', async (req: Request, res: Response) => {
+router.post('/:id/start', requirePermission('travelers.start'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { startedBy } = req.body;
@@ -708,6 +716,22 @@ router.post('/:id/start', async (req: Request, res: Response) => {
       details: { from: 'DRAFT', to: 'IN_PROGRESS' },
     });
 
+    const startActorUser = (req as any).user;
+    auditService.logEvent({
+      entityType: 'traveler',
+      entityId: id,
+      action: 'TRAVELER_STARTED',
+      actor: {
+        id: startActorUser?.employeeId ?? startActorUser?.id ?? undefined,
+        username: startedBy || startActorUser?.username || 'system',
+      },
+      meta: {
+        workOrderId: traveler.productionWorkOrderId ?? undefined,
+        partNumber: traveler.partNumber ?? undefined,
+        travelerNumber: traveler.travelerNumber ?? undefined,
+      },
+    }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
+
     // Auto-transition the WAD to IN_PROGRESS when the first traveler step starts
     if (traveler.productionWorkOrderId) {
       const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
@@ -725,7 +749,7 @@ router.post('/:id/start', async (req: Request, res: Response) => {
 });
 
 // Complete traveler (requires all steps completed and signed)
-router.post('/:id/complete', async (req: Request, res: Response) => {
+router.post('/:id/complete', requirePermission('travelers.finish'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { completedBy } = req.body;
@@ -775,6 +799,22 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
       action: 'STATUS_CHANGED',
       details: { from: 'IN_PROGRESS', to: 'COMPLETED' },
     });
+
+    const completeActorUser = (req as any).user;
+    auditService.logEvent({
+      entityType: 'traveler',
+      entityId: id,
+      action: 'TRAVELER_COMPLETED',
+      actor: {
+        id: completeActorUser?.employeeId ?? completeActorUser?.id ?? undefined,
+        username: completedBy || completeActorUser?.username || 'system',
+      },
+      meta: {
+        workOrderId: traveler.productionWorkOrderId ?? undefined,
+        partNumber: traveler.partNumber ?? undefined,
+        travelerNumber: traveler.travelerNumber ?? undefined,
+      },
+    }).catch(err => console.warn('[Audit] TRAVELER_COMPLETED log failed:', err?.message));
 
     const lastStep = steps
       .slice()
@@ -972,10 +1012,13 @@ router.get('/:travelerId/steps/:stepId/gates', async (req: Request, res: Respons
     let resolvedEmployeeId: number | undefined;
     let resolvedEmployeeName: string | undefined;
     if (badge) {
+      // Normalize: strip dashes so UUID badges work whether or not they include hyphens.
+      // Matches the same REPLACE() strategy used in badgeAuth middleware.
+      const normalizedBadge = badge.replace(/-/g, '');
       const byBadge = await db
         .select({ id: employees.id, name: employees.name })
         .from(employees)
-        .where(eq(employees.badgeScanCode, badge))
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedBadge}`)
         .limit(1);
       if (byBadge.length > 0) {
         resolvedEmployeeId = byBadge[0].id;
@@ -984,7 +1027,7 @@ router.get('/:travelerId/steps/:stepId/gates', async (req: Request, res: Respons
         const byCode = await db
           .select({ id: employees.id, name: employees.name })
           .from(employees)
-          .where(eq(employees.employeeCode, badge))
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${badge})`)
           .limit(1);
         if (byCode.length > 0) {
           resolvedEmployeeId = byCode[0].id;
@@ -1023,7 +1066,8 @@ async function performStepStart(
   traveler: Awaited<ReturnType<typeof storage.getTraveler>>,
   step: Awaited<ReturnType<typeof storage.getTravelerStep>>,
   operatorName: string,
-  badgeScan?: string
+  badgeScan?: string,
+  operatorId?: number
 ): Promise<Awaited<ReturnType<typeof storage.updateTravelerStep>>> {
   const updatedStep = await storage.updateTravelerStep(stepId, {
     status: 'IN_PROGRESS',
@@ -1076,6 +1120,19 @@ async function performStepStart(
       autoCompletedGateChecks,
     },
   });
+
+  auditService.logEvent({
+    entityType: 'traveler_step',
+    entityId: stepId,
+    action: 'TRAVELER_STEP_STARTED',
+    actor: { id: operatorId, username: operatorName },
+    meta: {
+      travelerId,
+      stepNumber: step!.stepNumber,
+      departmentName: step!.departmentName,
+      workOrderId: traveler?.productionWorkOrderId ?? undefined,
+    },
+  }).catch(err => console.warn('[Audit] TRAVELER_STEP_STARTED log failed:', err?.message));
 
   // ── Auto-create CNC job when a CNC department step is started ──────────
   if (/cnc/i.test(step!.departmentName)) {
@@ -1146,7 +1203,7 @@ async function performStepStart(
 }
 // Supervisor gate override — bypasses all hard start gates when the supervisor has the
 // 'traveler_gate_override' capability.  Every bypass is recorded in traveler_events.
-router.post('/:travelerId/steps/:stepId/start/override', async (req: Request, res: Response) => {
+router.post('/:travelerId/steps/:stepId/start/override', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
     // operatorBadge: the badge/code of the employee who will actually do the work.
@@ -1160,12 +1217,15 @@ router.post('/:travelerId/steps/:stepId/start/override', async (req: Request, re
       return res.status(400).json({ error: 'overrideReason is required' });
     }
 
-    // Helper: resolve an employee record by badgeScanCode then employeeCode fallback
+    // Helper: resolve an employee record by badgeScanCode then employeeCode fallback.
+    // Normalises dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
+    // stored without dashes (or vice-versa).
     async function resolveEmployee(badge: string): Promise<{ id: number; name: string } | null> {
+      const normalizedBadge = badge.replace(/-/g, '');
       const byBadge = await db
         .select({ id: employees.id, name: employees.name })
         .from(employees)
-        .where(eq(employees.badgeScanCode, badge))
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedBadge}`)
         .limit(1);
       if (byBadge.length > 0) return byBadge[0];
       const byCode = await db
@@ -1182,26 +1242,10 @@ router.post('/:travelerId/steps/:stepId/start/override', async (req: Request, re
       return res.status(403).json({ error: 'Supervisor badge not recognised. Scan a valid supervisor badge to override.' });
     }
 
-    // Verify the supervisor has the traveler_gate_override capability
-    const capRows = await db
-      .select({ capName: capabilities.name })
-      .from(employeeCapabilities)
-      .innerJoin(capabilities, eq(employeeCapabilities.capabilityId, capabilities.id))
-      .where(
-        and(
-          eq(employeeCapabilities.employeeId, supervisor.id),
-          eq(capabilities.name, 'traveler_gate_override'),
-          eq(capabilities.isActive, true)
-        )
-      )
-      .limit(1);
-
-    if (capRows.length === 0) {
-      return res.status(403).json({
-        error: 'Supervisor not authorised to override traveler gates.',
-        reason: `${supervisor.name} does not have the traveler_gate_override capability. Contact an administrator to grant this permission.`,
-      });
-    }
+    // Authorization is enforced by requirePermission('work_orders.override_charges') on the route.
+    // The badge-scanned supervisor identity is used for audit attribution only.
+    // (Legacy traveler_gate_override employeeCapabilities check has been replaced by the
+    //  route-level capability guard in the EPOCH permission system.)
 
     // Resolve the operator identity server-side (improves audit attribution integrity).
     // If an operatorBadge is provided, resolve it from the DB; otherwise fall back to
@@ -1256,8 +1300,39 @@ router.post('/:travelerId/steps/:stepId/start/override', async (req: Request, re
       traveler,
       step,
       operatorName,
-      operatorBadgeScan
+      operatorBadgeScan,
+      (resolvedOperator as any).id ?? undefined
     );
+
+    // Phase D: switch allocation for the operator's open punch session.
+    const overrideOperatorId: number | undefined = (resolvedOperator as any).id;
+    if (laborAllocationsEnabled && overrideOperatorId != null) {
+      try {
+        const overrideOpenEntry = await storage.getOpenPunchLedgerEntry(overrideOperatorId);
+        if (overrideOpenEntry) {
+          const [overrideCcResult, overrideProjectId] = await Promise.all([
+            resolveChargeCode({
+              productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+              travelerId,
+              travelerStepId: stepId,
+              department: step.departmentName ?? null,
+            }),
+            deriveProjectId(traveler.productionWorkOrderId ?? null),
+          ]);
+          await allocationService.switchAllocation(overrideOpenEntry, {
+            chargeCodeId: 'error' in overrideCcResult ? null : overrideCcResult.chargeCodeId,
+            travelerId,
+            travelerStepId: stepId,
+            productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+            projectId: overrideProjectId ?? null,
+            department: step.departmentName ?? null,
+            operation: null,
+          });
+        }
+      } catch (allocErr: unknown) {
+        console.warn('[travelers/override] switchAllocation failed (non-fatal):', (allocErr as Error)?.message);
+      }
+    }
 
     // Record the gate bypass in traveler_events (in addition to the STEP_STARTED event
     // emitted by performStepStart above)
@@ -1290,18 +1365,120 @@ router.post('/:travelerId/steps/:stepId/start/override', async (req: Request, re
   }
 });
 
+/**
+ * GET /api/travelers/:travelerId/steps/:stepId/labor-context
+ *
+ * Returns WAD-resolved charge code, certification status, and budget state
+ * for display in the UI before a step is started. (Task #1235, Phase 1)
+ */
+router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res: Response) => {
+  try {
+    const { travelerId, stepId } = req.params;
+    // Optional: resolve actual cert status when employeeId is known (post-badge-scan pre-start)
+    const { employeeId: employeeIdQp } = req.query;
+
+    const traveler = await storage.getTraveler(travelerId);
+    if (!traveler) return res.status(404).json({ error: 'Traveler not found' });
+
+    const step = await storage.getTravelerStep(stepId);
+    if (!step || step.travelerId !== travelerId) return res.status(404).json({ error: 'Step not found' });
+
+    // Resolve cert requirement for this step from the routing operation (no employee ID needed)
+    let requiresCertification = false;
+    let certificationName: string | null = null;
+    let certificationId: number | null = null;
+    if (traveler.partRoutingId) {
+      const routingOp = await storage.getRoutingOperationForTravelerStep(
+        traveler.partRoutingId,
+        step.stepNumber
+      );
+      if (routingOp?.certificationId) {
+        requiresCertification = true;
+        certificationId = routingOp.certificationId;
+        const cert = await storage.getCertificationById(routingOp.certificationId);
+        certificationName = cert?.name ?? `Certification #${routingOp.certificationId}`;
+      }
+    }
+
+    // When employeeId is provided, resolve the employee's actual cert status
+    // so the UI can show VALID/EXPIRED/MISSING pre-start (post-badge-scan)
+    let certificationStatus: string | null = null;
+    let certReason: string | null = null;
+    if (employeeIdQp && requiresCertification && certificationId != null) {
+      // Resolve the employee ID (numeric pk or employee code)
+      const rawId = String(employeeIdQp).trim();
+      const isNumeric = /^\d+$/.test(rawId);
+      const [empRow] = await (isNumeric
+        ? db.select({ id: employees.id }).from(employees).where(eq(employees.id, parseInt(rawId, 10))).limit(1)
+        : db.select({ id: employees.id }).from(employees).where(eq(employees.employeeCode, rawId)).limit(1)
+      );
+      if (empRow) {
+        const certResult = await resolveCertificationStatus({
+          travelerId,
+          stepId,
+          employeeId: empRow.id,
+        });
+        certificationStatus = certResult.status;
+        certReason = certResult.reason;
+      }
+    } else if (requiresCertification) {
+      // No employee yet — cert status unknown until badge scan
+      certificationStatus = 'UNKNOWN';
+    }
+
+    const [ccResult, budgetResult, projectId] = await Promise.all([
+      resolveChargeCode({
+        productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+        travelerId,
+        travelerStepId: stepId,
+        department: step.departmentName ?? null,
+      }),
+      resolveBudgetOverrunState({
+        productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+        department: step.departmentName ?? null,
+      }),
+      deriveProjectId(traveler.productionWorkOrderId ?? null),
+    ]);
+
+    return res.json({
+      chargeCode: 'error' in ccResult ? null : ccResult.chargeCode,
+      chargeCodeResolvedFrom: 'error' in ccResult ? null : ccResult.resolvedFrom,
+      chargeCodeError: 'error' in ccResult ? ccResult.error : null,
+      isOverrun: budgetResult.isOverrun,
+      nearlyExhausted: budgetResult.nearlyExhausted,
+      overrunReason: budgetResult.overrunReason,
+      percentUsed: budgetResult.percentUsed,
+      projectId,
+      wadId: traveler.productionWorkOrderId ?? null,
+      department: step.departmentName ?? null,
+      // Cert requirement info (resolved from routing op)
+      requiresCertification,
+      certificationName,
+      // Cert status — populated when employeeId query param is provided
+      certificationStatus,
+      certReason,
+    });
+  } catch (err: any) {
+    console.error('[labor-context] Error:', err);
+    return res.status(500).json({ error: 'Failed to compute labor context' });
+  }
+});
+
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
     const { startedBy, badgeScan } = req.body;
 
-    // Resolve badge scan code to employee name and ID if badge was scanned
+    // Resolve badge scan code to employee name and ID if badge was scanned.
+    // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
+    // stored without dashes (or vice-versa).
     let resolvedName = startedBy || 'unknown';
     let resolvedEmployeeId: number | undefined;
     if (badgeScan) {
+      const normalizedScanCode = badgeScan.replace(/-/g, '');
       const emp = await db.select({ id: employees.id, name: employees.name })
         .from(employees)
-        .where(eq(employees.badgeScanCode, badgeScan))
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedScanCode}`)
         .limit(1);
       if (emp.length > 0) {
         resolvedName = emp[0].name;
@@ -1343,17 +1520,82 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
-    // Hard gate checks: sequence, training, material
+    // WAD release gate: the linked production work order must be RELEASED or IN_PROGRESS.
+    // IN_PROGRESS is permitted because the WAD auto-transitions when the first traveler starts;
+    // subsequent travelers on the same WAD would otherwise be incorrectly blocked.
+    if (traveler.productionWorkOrderId) {
+      const wadGate = await evaluateWadReleaseGate(traveler.productionWorkOrderId);
+      if (!wadGate.allowed) {
+        return res.status(403).json(
+          buildGateErrorBody('wad_release', 'Work order not released to floor', wadGate.reason ?? 'The linked work order is not in RELEASED or IN_PROGRESS status.')
+        );
+      }
+    }
+
+    // Training enforcement gate runs BEFORE the combined process gate so that training
+    // failures always surface as gate:'training' (with missing-requirement metadata) rather
+    // than being absorbed into the generic process_gate response when evaluateTravelerStartGates
+    // reaches its own authorization check.
+    //
+    // Phase 1 WARN policy (Task #1235): operation-cert failures (requirementType === 'training_module')
+    // are allowed through — the cert status is stamped on punch_ledger and surfaced to the UI,
+    // but the employee is NOT blocked. Identity, traveler-authorization, and P2 part-certification
+    // failures remain HARD BLOCKS (these require explicit supervisor remediation, not just a flag).
+    const trainingGate = await evaluateTravelerTrainingGate(travelerId, stepId, resolvedEmployeeId, resolvedName);
+    const isOperationCertFailure =
+      !trainingGate.allowed &&
+      trainingGate.requirementType === 'training_module' &&
+      (trainingGate.missingRequirement?.startsWith('operation_cert:') ?? false);
+
+    if (!trainingGate.allowed && !isOperationCertFailure) {
+      // Hard block — identity, traveler-authorization, or P2 part-cert failure
+      return res.status(403).json(
+        buildTrainingGateErrorBody(
+          'Step start blocked by training requirement',
+          trainingGate.reason ?? 'A training or certification requirement was not met.',
+          trainingGate.missingRequirement,
+          trainingGate.requirementType,
+        )
+      );
+    }
+    // isOperationCertFailure === true → falls through (WARN: stamp status, allow start)
+
+    // Sequence and material gates: previous step must be COMPLETED; lot/ICN must be allocated.
+    // Training authorization is already confirmed above; evaluateTravelerStartGates is kept
+    // for sequence + material checks only (it also runs a secondary training check that will
+    // pass since we already verified training above).
     const startGate = await evaluateTravelerStartGates(travelerId, stepId, {
       employeeId: resolvedEmployeeId,
       employeeName: resolvedName,
+      // Phase 1 WARN: if the training gate already recorded a cert failure and allowed through,
+      // skip the duplicate cert block in evaluateTravelerStartGates so the step is not double-blocked.
+      skipOperationCertCheck: isOperationCertFailure,
     });
     if (!startGate.allowed) {
-      return res.status(403).json({
-        error: 'Step start blocked by process gate',
-        reason: startGate.reason,
+      return res.status(403).json(
+        buildGateErrorBody('process_gate', 'Step start blocked by process gate', startGate.reason ?? 'A process gate check did not pass.')
+      );
+    }
+
+    // ── WAD-based labor context (Task #1235) — PRE-MUTATION CHECKS ─────────
+    // Resolve charge code BEFORE performStepStart so we can fail-closed without
+    // leaving the step in an inconsistent IN_PROGRESS state.
+    const ccResult = await resolveChargeCode({
+      productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+      travelerId,
+      travelerStepId: step.id,
+      department: step.departmentName ?? null,
+    });
+
+    // Fail-closed: if WAD is linked and charge code resolution failed, abort NOW (step NOT yet started).
+    if ('error' in ccResult && traveler.productionWorkOrderId) {
+      return res.status(400).json({
+        error: 'CHARGE_CODE_UNRESOLVED',
+        message: ccResult.error,
+        hint: 'Set a default charge code on the production work order or the traveler.',
       });
     }
+    // ──────────────────────────────────────────────────────────────────────
 
     const updatedStep = await performStepStart(
       travelerId,
@@ -1361,10 +1603,74 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       traveler,
       step,
       resolvedName,
-      badgeScan
+      badgeScan,
+      resolvedEmployeeId ?? undefined
     );
 
-    res.json(updatedStep);
+    // ── WAD-based labor context stamping (Task #1235) — POST-MUTATION ──────
+    // Cert + budget checks are observational (WARN only — never block). Run after step start.
+    // Traceability stamping is critical-path — errors propagate as 500.
+    const [certResult, budgetResult, projectId] = await Promise.all([
+      resolveCertificationStatus({
+        travelerId,
+        stepId,
+        employeeId: resolvedEmployeeId ?? null,
+      }),
+      resolveBudgetOverrunState({
+        productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+        department: step.departmentName ?? null,
+      }),
+      deriveProjectId(traveler.productionWorkOrderId ?? null),
+    ]);
+
+    const wadLaborContext = {
+      chargeCode: 'error' in ccResult ? null : ccResult.chargeCode,
+      chargeCodeResolvedFrom: 'error' in ccResult ? null : ccResult.resolvedFrom,
+      certificationStatus: certResult.status,
+      certificationName: certResult.certificationName,
+      certReason: certResult.reason ?? (isOperationCertFailure ? trainingGate.reason : null),
+      isOverrun: budgetResult.isOverrun,
+      nearlyExhausted: budgetResult.nearlyExhausted,
+      overrunReason: budgetResult.overrunReason,
+      projectId,
+      warnedOnCert: isOperationCertFailure,
+    };
+
+    // Stamp the open punch entry for this employee with step-level traceability.
+    if (resolvedEmployeeId != null) {
+      const openEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
+      if (openEntry) {
+        await storage.updatePunchLedgerEntry(openEntry.id, {
+          travelerStepId: stepId,
+          chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+          certificationStatus: certResult.status,
+          isOverrun: budgetResult.isOverrun,
+          overrunReason: budgetResult.overrunReason,
+          projectId,
+        });
+
+        // Phase D: close current allocation and open a new segment for the new traveler step.
+        if (laborAllocationsEnabled) {
+          const updatedOpenEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
+          if (updatedOpenEntry) {
+            allocationService.switchAllocation(updatedOpenEntry, {
+              chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+              travelerId,
+              travelerStepId: stepId,
+              productionWorkOrderId: traveler.productionWorkOrderId ?? null,
+              projectId: projectId ?? null,
+              department: step.departmentName ?? null,
+              operation: null,
+            }).catch((e: unknown) =>
+              console.warn('[travelers/step-start] switchAllocation failed (non-fatal):', (e as Error)?.message)
+            );
+          }
+        }
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
+    res.json({ ...updatedStep, wadLaborContext });
   } catch (error: any) {
     console.error('Error starting step:', error);
     res.status(500).json({ error: 'Failed to start step', message: error.message });
@@ -1372,7 +1678,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
 });
 
 // Sign and complete a step (or a specific signature task within a step)
-router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Response) => {
+router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign_qc'), async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
     const { signedBy, signedByName, badgeScan, meaning, notes, signatureRole, taskId, signatureData: sigData } = req.body;
@@ -1382,10 +1688,9 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     }
 
     if (!sigData) {
-      return res.status(403).json({
-        error: 'Step finish blocked by process gate',
-        reason: 'A drawn signature is required before signing off this step.',
-      });
+      return res.status(403).json(
+        buildGateErrorBody('signature_required', 'Signature required', 'A drawn signature is required before signing off this step.')
+      );
     }
 
     const traveler = await storage.getTraveler(travelerId);
@@ -1398,6 +1703,9 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       return res.status(404).json({ error: 'Step not found' });
     }
 
+    const signingUser = (req as any).user as { id: number; role?: string } | undefined;
+    await requireScopedCapability(signingUser, 'travelers.sign_qc', { department: step.departmentName });
+
     if (step.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Step must be IN_PROGRESS to sign',
@@ -1408,10 +1716,51 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     // Hard gate check: required QC tasks must be complete before signing
     const finishGate = await evaluateTravelerFinishGates(stepId);
     if (!finishGate.allowed) {
-      return res.status(403).json({
-        error: 'Step finish blocked by process gate',
-        reason: finishGate.reason,
-      });
+      return res.status(403).json(
+        buildGateErrorBody('qc_completion', 'Step finish blocked by QC gate', finishGate.reason ?? 'Required QC tasks must be completed before signing off.')
+      );
+    }
+
+    // Resolve signing employee identity for training gate (badge scan preferred).
+    // Normalize by stripping dashes so UUID badges match whether or not they include
+    // hyphens — mirrors the REPLACE() strategy used in badgeAuth middleware.
+    let signingEmployeeId: number | undefined;
+    let signingEmployeeName: string = signedByName || signedBy || 'unknown';
+    if (badgeScan) {
+      const normalizedSignBadge = badgeScan.replace(/-/g, '');
+      const signerByBadge = await db
+        .select({ id: employees.id, name: employees.name })
+        .from(employees)
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedSignBadge}`)
+        .limit(1);
+      if (signerByBadge.length > 0) {
+        signingEmployeeId = signerByBadge[0].id;
+        signingEmployeeName = signerByBadge[0].name;
+      } else {
+        const signerByCode = await db
+          .select({ id: employees.id, name: employees.name })
+          .from(employees)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${badgeScan})`)
+          .limit(1);
+        if (signerByCode.length > 0) {
+          signingEmployeeId = signerByCode[0].id;
+          signingEmployeeName = signerByCode[0].name;
+        }
+      }
+    }
+
+    // QC training enforcement gate — independent of permission gate; both must pass
+    const qcTrainingGate = await evaluateQcTrainingGate(travelerId, stepId, signingEmployeeId, signingEmployeeName);
+    if (!qcTrainingGate.allowed) {
+      return res.status(403).json(
+        buildTrainingGateErrorBody(
+          'Step signoff blocked by training requirement',
+          qcTrainingGate.reason ?? 'A training or certification requirement was not met for signing off.',
+          qcTrainingGate.missingRequirement,
+          qcTrainingGate.requirementType,
+          'qc_training',
+        )
+      );
     }
 
     const tasks = await storage.getTravelerTasks(stepId);
@@ -1422,7 +1771,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     );
     if (failedQCTasks.length > 0) {
       return res.status(400).json({
-        error: 'Cannot sign step with failed QC tasks. NCR required.',
+        ...buildGateErrorBody('qc_failed_tasks', 'Cannot sign step with failed QC tasks', 'One or more QC tasks have failed. An NCR must be raised before the step can be signed off.'),
         failedTasks: failedQCTasks.map((t) => ({
           id: t.id,
           title: t.title,
@@ -1443,7 +1792,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     );
     if (incompleteFinishTasks.length > 0) {
       return res.status(400).json({
-        error: 'All required FINISH tasks must be completed before signing',
+        ...buildGateErrorBody('incomplete_finish_tasks', 'Required FINISH tasks must be completed before signing', 'One or more required FINISH-phase tasks have not been completed.'),
         incompleteTasks: incompleteFinishTasks.map((t) => ({
           id: t.id,
           title: t.title,
@@ -1463,7 +1812,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     );
     if (incompleteOtherTasks.length > 0) {
       return res.status(400).json({
-        error: 'All required tasks must be completed before signing',
+        ...buildGateErrorBody('incomplete_tasks', 'All required tasks must be completed before signing', 'One or more required tasks have not been completed.'),
         incompleteTasks: incompleteOtherTasks.map((t) => ({
           id: t.id,
           title: t.title,
@@ -1484,7 +1833,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     );
     if (unsignedSigTasks.length > 0) {
       return res.status(400).json({
-        error: 'All tasks requiring signatures must be signed before completing the step',
+        ...buildGateErrorBody('unsigned_tasks', 'Signature tasks must be signed before completing the step', 'One or more tasks that require a signature have not been signed.'),
         unsignedTasks: unsignedSigTasks.map((t) => ({
           id: t.id,
           title: t.title,
@@ -1580,10 +1929,98 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
       },
     });
 
+    auditService.logEvent({
+      entityType: 'traveler_step',
+      entityId: stepId,
+      action: 'QC_SIGNOFF',
+      actor: { username: signedBy, id: signingEmployeeId },
+      meta: {
+        travelerId,
+        stepNumber: step.stepNumber,
+        departmentName: step.departmentName,
+        signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
+        meaning,
+        workOrderId: traveler.productionWorkOrderId ?? undefined,
+      },
+    }).catch(err => console.warn('[Audit] QC_SIGNOFF log failed:', err?.message));
+
+    if (stepCompleted) {
+      auditService.logEvent({
+        entityType: 'traveler_step',
+        entityId: stepId,
+        action: 'TRAVELER_STEP_FINISHED',
+        actor: { username: signedBy, id: signingEmployeeId },
+        meta: {
+          travelerId,
+          stepNumber: step.stepNumber,
+          departmentName: step.departmentName,
+          workOrderId: traveler.productionWorkOrderId ?? undefined,
+        },
+      }).catch(err => console.warn('[Audit] TRAVELER_STEP_FINISHED log failed:', err?.message));
+    }
+
     res.json({ step: updatedStep, signature, stepCompleted });
   } catch (error: any) {
+    if (error instanceof ScopedForbiddenError) return res.status(403).json(error.payload);
     console.error('Error signing step:', error);
     res.status(500).json({ error: 'Failed to sign step', message: error.message });
+  }
+});
+
+// ============================================================================
+// TRAINING GATE INTROSPECTION
+// ============================================================================
+
+// Read-only training gate evaluation — returns pass/fail status with requirement details.
+// Useful for future UI previews before an operator attempts to start or sign a step.
+// GET /api/travelers/:id/steps/:stepId/training-gate?employeeId=<integer>&gate=start|qc
+router.get('/:id/steps/:stepId/training-gate', async (req: Request, res: Response) => {
+  try {
+    const { id: travelerId, stepId } = req.params;
+    const { employeeId, gate = 'start' } = req.query;
+
+    let resolvedEmployeeId: number | undefined;
+    let resolvedEmployeeName: string | undefined;
+
+    if (employeeId) {
+      const parsedId = parseInt(String(employeeId), 10);
+      if (!isNaN(parsedId)) {
+        const emp = await db
+          .select({ id: employees.id, name: employees.name })
+          .from(employees)
+          .where(eq(employees.id, parsedId))
+          .limit(1);
+        if (emp.length > 0) {
+          resolvedEmployeeId = emp[0].id;
+          resolvedEmployeeName = emp[0].name;
+        }
+      }
+    }
+
+    if (gate === 'qc') {
+      const result = await evaluateQcTrainingGate(travelerId, stepId, resolvedEmployeeId, resolvedEmployeeName);
+      return res.json({
+        gate: 'qc',
+        travelerId,
+        stepId,
+        employeeId: resolvedEmployeeId ?? null,
+        employeeName: resolvedEmployeeName ?? null,
+        ...result,
+      });
+    }
+
+    const result = await evaluateTravelerTrainingGate(travelerId, stepId, resolvedEmployeeId, resolvedEmployeeName);
+    return res.json({
+      gate: 'start',
+      travelerId,
+      stepId,
+      employeeId: resolvedEmployeeId ?? null,
+      employeeName: resolvedEmployeeName ?? null,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error('Error evaluating training gate:', error);
+    res.status(500).json({ error: 'Failed to evaluate training gate', message: error.message });
   }
 });
 

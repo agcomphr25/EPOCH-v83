@@ -61,12 +61,21 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     `🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`
   );
 
+  // Attach localStorage session token as Authorization header (for deployed environments
+  // where cross-site cookie restrictions prevent the session cookie from being sent)
+  const storedToken =
+    localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+  const authHeader: HeadersInit = storedToken
+    ? { Authorization: `Bearer ${storedToken}` }
+    : {};
+
   // Don't set Content-Type for FormData - browser will set it automatically with correct boundary
   const isFormData = options.body instanceof FormData;
   const defaultHeaders: HeadersInit = isFormData
-    ? { ...options.headers }
+    ? { ...authHeader, ...options.headers }
     : {
         'Content-Type': 'application/json',
+        ...authHeader,
         ...options.headers,
       };
   
@@ -210,9 +219,19 @@ export const getQueryFn: <T>(options: {
     }, timeoutDuration);
 
     try {
+      const storedToken =
+        typeof window !== 'undefined'
+          ? (localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken'))
+          : null;
+
+      const headers: HeadersInit = storedToken
+        ? { Authorization: `Bearer ${storedToken}` }
+        : {};
+
       const res = await fetch(queryKey.join('/') as string, {
         credentials: 'include',
         signal: controller.signal,
+        headers,
       });
       clearTimeout(timeoutId);
 

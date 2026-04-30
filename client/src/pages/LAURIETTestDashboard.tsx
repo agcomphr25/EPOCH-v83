@@ -1,3 +1,4 @@
+import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import { Link } from 'wouter';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function LAURIETTestDashboard() {
+  const [, setLocation] = useLocation();
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
@@ -30,7 +32,7 @@ export default function LAURIETTestDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('jwtToken');
-    window.location.href = '/login';
+    setLocation('/login');
   };
 
   return (

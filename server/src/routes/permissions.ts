@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import { pool } from '../../db';
-import { getUserPermissions, getAllCapabilities, getAllRoles, getUserOverrides } from '../services/permissionService';
+import {
+  getUserPermissions,
+  getAllCapabilities,
+  getAllRoles,
+  getUserOverrides,
+  getUserScopedGrants,
+  getAllScopedGrants,
+} from '../services/permissionService';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
 
 const router = Router();
@@ -27,8 +34,13 @@ router.get('/capabilities', requireAdminAccess, async (_req, res) => {
 
 /** GET /api/permissions/roles */
 router.get('/roles', requireAdminAccess, async (_req, res) => {
-  const roles = await getAllRoles();
-  res.json(roles);
+  try {
+    const roles = await getAllRoles();
+    res.json(roles);
+  } catch (err) {
+    console.error('[GET /api/permissions/roles] Failed to fetch roles:', err);
+    res.status(500).json({ error: 'Failed to fetch roles' });
+  }
 });
 
 /** POST /api/permissions/roles */
@@ -146,6 +158,76 @@ router.get('/all-user-overrides', requireAdminAccess, async (_req, res) => {
       ORDER BY u.username, pc.key`
   ) as any[];
   res.json(rows);
+});
+
+// ─── Scoped grants (admin only) ───────────────────────────────────────────────
+
+/** GET /api/permissions/scoped-grants?userId=X — scoped grants for a single user */
+router.get('/scoped-grants', requireAdminAccess, async (req, res) => {
+  const userId = parseInt(req.query.userId as string);
+  if (!userId) return res.status(400).json({ error: 'userId query param required' });
+  const grants = await getUserScopedGrants(userId);
+  res.json(grants);
+});
+
+/** GET /api/permissions/all-scoped-grants — all scoped grants across all users */
+router.get('/all-scoped-grants', requireAdminAccess, async (_req, res) => {
+  const grants = await getAllScopedGrants();
+  res.json(grants);
+});
+
+/** POST /api/permissions/scoped-grants — create a scoped grant */
+router.post('/scoped-grants', requireAdminAccess, async (req, res) => {
+  const { userId, capabilityKey, scopeType, department, projectId } = req.body;
+  if (!userId || !capabilityKey || !scopeType) {
+    return res.status(400).json({ error: 'userId, capabilityKey, scopeType required' });
+  }
+  if (!['GLOBAL', 'DEPARTMENT', 'PROJECT'].includes(scopeType)) {
+    return res.status(400).json({ error: 'scopeType must be GLOBAL, DEPARTMENT, or PROJECT' });
+  }
+  if (scopeType === 'DEPARTMENT' && !department) {
+    return res.status(400).json({ error: 'department required for DEPARTMENT scope' });
+  }
+  if (scopeType === 'PROJECT' && !projectId) {
+    return res.status(400).json({ error: 'projectId required for PROJECT scope' });
+  }
+
+  const userRows = await pool.query('SELECT id FROM users WHERE id = $1', [userId]) as any[];
+  if (!userRows.length) return res.status(404).json({ error: 'User not found' });
+
+  const capRows = await pool.query('SELECT id FROM perm_capabilities WHERE key = $1', [capabilityKey]) as any[];
+  if (!capRows.length) return res.status(404).json({ error: 'Capability not found' });
+  const capabilityId = capRows[0].id;
+
+  // Enforce strict scope invariants: only store fields relevant to the scope type.
+  // Trim and reject whitespace-only values so malformed grants can't be created.
+  const canonicalDepartment = scopeType === 'DEPARTMENT' ? (department?.trim() || null) : null;
+  const canonicalProjectId  = scopeType === 'PROJECT'    ? (projectId?.trim()  || null) : null;
+  if (scopeType === 'DEPARTMENT' && !canonicalDepartment) {
+    return res.status(400).json({ error: 'department must be a non-empty string' });
+  }
+  if (scopeType === 'PROJECT' && !canonicalProjectId) {
+    return res.status(400).json({ error: 'projectId must be a non-empty string' });
+  }
+
+  try {
+    const rows = await pool.query(
+      `INSERT INTO perm_user_capability_scopes (user_id, capability_id, scope_type, department, project_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [userId, capabilityId, scopeType, canonicalDepartment, canonicalProjectId]
+    ) as any[];
+    res.status(201).json({ id: rows[0].id });
+  } catch (err: any) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Scoped grant already exists' });
+    throw err;
+  }
+});
+
+/** DELETE /api/permissions/scoped-grants/:id */
+router.delete('/scoped-grants/:id', requireAdminAccess, async (req, res) => {
+  await pool.query('DELETE FROM perm_user_capability_scopes WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
 });
 
 export default router;

@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { DEFAULT_ORDERS_LIMIT, MAX_ORDERS_LIMIT } from '../constants/orders';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
@@ -20,6 +21,7 @@ import {
 } from '@shared/schema';
 import { normalizeDueDateForStorage } from '@shared/utils/dateNormalization';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 import { allocateForOrder } from '../services/productionOrderAllocationService';
 import { 
   adminFieldUpdateSchema, 
@@ -243,9 +245,17 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
     });
 
     const search = (req.query.search as string) || '';
-    const limit = parseInt(req.query.limit as string) || 99999; // Return ALL orders by default
+    const departmentFilter = (req.query.department as string) || undefined;
+    // When filtering by a specific department, bypass the limit cap so all matching
+    // orders are returned regardless of how many total orders exist in the database.
+    const requestedLimit = parseInt(req.query.limit as string) || DEFAULT_ORDERS_LIMIT;
+    const limit = departmentFilter ? 999999 : Math.min(requestedLimit, MAX_ORDERS_LIMIT);
 
-    const orders = await storage.getAllOrdersWithPaymentStatus(search, limit);
+    if (departmentFilter) {
+      console.log(`[ShippingQueue] Fetching all orders for department="${departmentFilter}" (no row cap)`);
+    }
+
+    const orders = await storage.getAllOrdersWithPaymentStatus(search, limit, departmentFilter);
     res.json(orders);
   } catch (error) {
     console.error('Error retrieving orders with payment status:', error);
@@ -258,23 +268,59 @@ router.get('/with-payment-status', async (req: Request, res: Response) => {
   }
 });
 
+// Get fulfilled + shipped orders for the shipping tracker
+// Queries by shippedDate DESC so recent shipments are always included regardless of order creation date
+router.get('/fulfilled-shipped', async (req: Request, res: Response) => {
+  try {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+    });
+
+    const orders = await storage.getFulfilledShippedOrdersWithPaymentStatus(2000);
+    res.json(orders);
+  } catch (error) {
+    console.error('Error retrieving fulfilled shipped orders:', error);
+    res
+      .status(500)
+      .json({
+        error: 'Failed to fetch fulfilled shipped orders',
+        details: (error as any).message,
+      });
+  }
+});
+
 // Get paginated orders with payment status for improved performance
 router.get(
   '/with-payment-status/paginated',
   async (req: Request, res: Response) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
-      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100 per page
+      const limit = Math.min(parseInt(req.query.limit as string) || 25, 100); // Max 100 per page
 
-      // Add basic caching headers
+      const search = (req.query.search as string) || undefined;
+      const department = (req.query.department as string) || undefined;
+      const departmentMode = (req.query.departmentMode as string) === 'exclude' ? 'exclude' : 'include';
+      const status = (req.query.status as string) || undefined;
+      const statusMode = (req.query.statusMode as string) === 'exclude' ? 'exclude' : 'include';
+      const excludeStatusesRaw = (req.query.excludeStatuses as string) || '';
+      const excludeStatuses = excludeStatusesRaw
+        ? excludeStatusesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined;
+      const sortBy = (req.query.sortBy as string) || 'orderDate';
+      const sortOrder = (req.query.sortOrder as string) === 'asc' ? 'asc' : 'desc';
+      const customerId = (req.query.customerId as string) || undefined;
+
+      // Disable caching so filter changes always return fresh results
       res.set({
-        'Cache-Control': 'public, max-age=30, stale-while-revalidate=60',
-        ETag: `"orders-paginated-${page}-${limit}-${Date.now()}"`,
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
       });
 
       const result = await storage.getAllOrdersWithPaymentStatusPaginated(
         page,
-        limit
+        limit,
+        { search, department, departmentMode, status, statusMode, excludeStatuses, sortBy, sortOrder, customerId }
       );
       res.json(result);
     } catch (error) {
@@ -540,6 +586,56 @@ router.get('/search', async (req: Request, res: Response) => {
     res.json(results);
   } catch (error) {
     console.error('Error searching orders:', error);
+    res.status(500).json({ error: 'Failed to search orders' });
+  }
+});
+
+// Search all orders across all tables (for the department transfer tool)
+// Returns partial matches on orderId, fbOrderNumber, or customerPO with no source/status exclusions
+router.get('/search-all', async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+    if (!query || typeof query !== 'string' || query.trim().length < 1) {
+      return res.json([]);
+    }
+    const q = query.trim();
+    const { pool } = await import('../../db');
+    const rows = await pool.query(
+      `SELECT order_id, fb_order_number, customer_po, current_department, 'all_orders' AS source
+         FROM all_orders
+        WHERE order_id ILIKE $1 OR fb_order_number ILIKE $1 OR customer_po ILIKE $1
+       UNION
+       SELECT order_id, fb_order_number, customer_po, current_department, 'order_drafts' AS source
+         FROM order_drafts
+        WHERE order_id ILIKE $1 OR fb_order_number ILIKE $1 OR customer_po ILIKE $1
+       UNION
+       SELECT order_id, NULL AS fb_order_number, po_number AS customer_po, current_department, 'production_orders' AS source
+         FROM production_orders
+        WHERE order_id ILIKE $1 OR po_number ILIKE $1
+       ORDER BY 1
+       LIMIT 30`,
+      [`%${q}%`]
+    );
+    // Deduplicate by order_id — prefer production_orders
+    const seen = new Map<string, any>();
+    for (const row of rows) {
+      const key = row.order_id;
+      if (!key) continue;
+      const priority: Record<string, number> = { production_orders: 2, order_drafts: 1, all_orders: 0 };
+      const existing = seen.get(key);
+      if (!existing || (priority[row.source] ?? 0) > (priority[existing.source] ?? 0)) {
+        seen.set(key, {
+          orderId: row.order_id,
+          fbOrderNumber: row.fb_order_number || null,
+          customerPO: row.customer_po || null,
+          currentDepartment: row.current_department || 'Unknown',
+          source: row.source,
+        });
+      }
+    }
+    res.json(Array.from(seen.values()));
+  } catch (error) {
+    console.error('Error in search-all:', error);
     res.status(500).json({ error: 'Failed to search orders' });
   }
 });
@@ -1264,7 +1360,7 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
 });
 
 // Create draft order (legacy method - now creates PENDING_SIGNATURE orders)
-router.post('/draft', async (req: Request, res: Response) => {
+router.post('/draft', requirePermission('orders.create'), async (req: Request, res: Response) => {
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
 
@@ -1498,7 +1594,7 @@ router.get('/finalized', async (req: Request, res: Response) => {
 });
 
 // Finalize an order (move from draft to production)
-router.post('/draft/:id/finalize', async (req: Request, res: Response) => {
+router.post('/draft/:id/finalize', requirePermission('orders.create'), async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
     const { finalizedBy } = req.body;
@@ -2482,6 +2578,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     if (shouldMarkFulfilled) {
       updateData.status = 'FULFILLED';
+      updateData.shippedDate = now;
       updateData.currentDepartment = undefined; // Clear department when fulfilled
       console.log(`📦 Marking order as FULFILLED with no department`);
     } else {
@@ -2804,7 +2901,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
 });
 
 // Cancel an order
-router.post('/cancel/:orderId', async (req: Request, res: Response) => {
+router.post('/cancel/:orderId', requirePermission('orders.cancel'), async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const { reason, sendToRts = true } = req.body;
@@ -3345,12 +3442,41 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
 });
 
 // Specific endpoint for department transfers with validation
-router.patch('/:orderId/department', async (req: Request, res: Response) => {
+router.patch(
+  '/:orderId/department',
+  authenticateToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user;
+    if (!user || !['ADMIN', 'OWNER'].includes(user.role)) {
+      try {
+        await auditService.logEvent({
+          entityType: 'p1_order',
+          entityId: req.params.orderId,
+          action: 'DEPARTMENT_TRANSFER_BLOCKED',
+          actor: {
+            id: user?.id,
+            username: user?.username || 'anonymous',
+            role: user?.role || 'none',
+          },
+          meta: {
+            reason: 'Insufficient role — ADMIN or OWNER required',
+            userRole: user?.role || 'none',
+            requestedDepartment: req.body?.department,
+          },
+        });
+      } catch (auditErr) {
+        console.error('Failed to log blocked department transfer attempt:', auditErr);
+      }
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  },
+  async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { department } = req.body;
+    const { department, reason } = req.body;
 
-    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}`);
+    console.log(`🔄 Department Transfer Request: ${orderId} → ${department}${reason ? ` (reason: ${reason})` : ''}`);
 
     if (!department) {
       return res.status(400).json({ error: 'Department is required' });
@@ -3457,6 +3583,10 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
         source: 'department_transfer_tool',
         transferType: 'manual',
         orderType,
+        reason: reason || null,
+        oldDepartment: previousDepartment,
+        newDepartment: department,
+        changeType: 'MANUAL_TRANSFER',
       }
     );
 

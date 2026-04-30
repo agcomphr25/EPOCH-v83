@@ -91,6 +91,9 @@ type BuiltPacket = {
   createdBy: string | null;
   allocatedToOrder: string | null;
   categoryName: string | null;
+  sku: string | null;
+  queueId: string | null;
+  quantityOrdered: number | null;
   fabricSources: BuiltPacketFabricSource[];
 };
 
@@ -181,6 +184,28 @@ const getFabricStatus = (
 };
 
 type SessionUser = { id: number; username: string; role: string };
+
+type MfgBarcodeSegments = {
+  raw: string;
+  wo: string | null;
+  sku: string | null;
+  sequence: string | null;
+  isMfgFormat: boolean;
+};
+
+function parseMfgBarcode(barcode: string): MfgBarcodeSegments {
+  if (!barcode) return { raw: barcode, wo: null, sku: null, sequence: null, isMfgFormat: false };
+  const match = barcode.match(/^MFG-(\d+)-([^-]+)-(\d+)$/);
+  if (match) {
+    return { raw: barcode, wo: match[1], sku: match[2], sequence: match[3], isMfgFormat: true };
+  }
+  return { raw: barcode, wo: null, sku: null, sequence: null, isMfgFormat: false };
+}
+
+function buildMfgBarcode(queueId: string | null, sku: string | null, packetNumber: number): string | null {
+  if (!queueId || !sku) return null;
+  return `MFG-${queueId}-${sku}-${packetNumber}`;
+}
 
 function useIsAdmin() {
   const { data: session } = useQuery<SessionUser>({ queryKey: ['/api/auth/session'] });
@@ -2296,9 +2321,37 @@ export default function CuttingOperatorDashboard() {
           ) : builtPackets.length === 0 ? (
             <div className="text-sm text-muted-foreground py-6 text-center">No built packets found.</div>
           ) : (
-            <div className="space-y-1">
-              {builtPackets.map((packet) => (
-                <div key={packet.id} className={`border rounded-lg overflow-hidden${packet.status === 'CONSUMED' ? ' opacity-60 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : ''}`}>
+            (() => {
+              const packetsByDate = builtPackets.reduce<Record<string, typeof builtPackets>>((acc, packet) => {
+                const d = new Date(packet.buildDate);
+                const isoKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                if (!acc[isoKey]) acc[isoKey] = [];
+                acc[isoKey].push(packet);
+                return acc;
+              }, {});
+              const sortedDates = Object.keys(packetsByDate).sort((a, b) => b.localeCompare(a));
+              const todayKey = (() => {
+                const t = new Date();
+                return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+              })();
+              const defaultOpen = sortedDates.includes(todayKey) ? [todayKey] : [];
+              return (
+                <Accordion type="multiple" defaultValue={defaultOpen} className="space-y-2">
+                  {sortedDates.map((isoKey) => {
+                    const packets = packetsByDate[isoKey];
+                    const displayDate = new Date(isoKey + 'T00:00:00').toLocaleDateString();
+                    return (
+                      <AccordionItem key={isoKey} value={isoKey} className="border rounded-lg overflow-hidden">
+                        <AccordionTrigger className="px-4 py-3 hover:bg-muted/50 hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{displayDate}</span>
+                            <Badge variant="secondary" className="text-xs">{packets.length} {packets.length === 1 ? 'packet' : 'packets'}</Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-0">
+                          <div className="space-y-1 px-2 pb-2">
+                            {packets.map((packet) => (
+                              <div key={packet.id} className={`border rounded-lg overflow-hidden${packet.status === 'CONSUMED' ? ' opacity-60 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : ''}`}>
                   <button
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-left"
                     onClick={() => setExpandedPacketId(expandedPacketId === packet.id ? null : packet.id)}
@@ -2310,19 +2363,67 @@ export default function CuttingOperatorDashboard() {
                         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                       )}
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-medium text-sm${packet.status === 'CONSUMED' ? ' line-through text-muted-foreground' : ''}`}>{packet.categoryName || 'Packet'} #{packet.packetNumber}</span>
-                          <Badge variant={packet.status === 'AVAILABLE' ? 'secondary' : packet.status === 'CONSUMED' ? 'destructive' : 'default'} className="text-xs">
-                            {packet.status}
-                          </Badge>
-                          {packet.isMixedFabric && (
-                            <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">Mixed Fabric</Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {packet.barcode} · Built {new Date(packet.buildDate).toLocaleDateString()} by {packet.createdBy || 'unknown'}
-                          {packet.allocatedToOrder && ` · Order: ${packet.allocatedToOrder}`}
-                        </div>
+                        {(() => {
+                          const mfgParsed = parseMfgBarcode(packet.barcode);
+                          const mfgBarcode = mfgParsed.isMfgFormat
+                            ? mfgParsed.raw
+                            : buildMfgBarcode(packet.queueId, packet.sku, packet.packetNumber);
+                          const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
+                          const isInternalBarcode = !mfgParsed.isMfgFormat;
+
+                          const totalPackets = packet.quantityOrdered
+                            ?? builtPackets.filter((p) => p.queueId && p.queueId === packet.queueId).length;
+
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {mfgBarcode && (
+                                  <span className={`font-mono font-semibold text-sm tracking-wide${packet.status === 'CONSUMED' ? ' line-through text-muted-foreground' : ''}`}>
+                                    {mfgBarcode}
+                                  </span>
+                                )}
+                                <Badge variant={packet.status === 'AVAILABLE' ? 'secondary' : packet.status === 'CONSUMED' ? 'destructive' : 'default'} className="text-xs">
+                                  {packet.status}
+                                </Badge>
+                                {packet.isMixedFabric && (
+                                  <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">Mixed Fabric</Badge>
+                                )}
+                              </div>
+                              {segments?.isMfgFormat && (
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">MFG</span>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <span className="text-xs font-medium text-foreground">{segments.wo}</span>
+                                  <span className="text-xs text-muted-foreground">(WO)</span>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <span className="text-xs font-medium text-foreground">{segments.sku}</span>
+                                  <span className="text-xs text-muted-foreground">(SKU)</span>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <span className="text-xs font-medium text-foreground">{segments.sequence}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                                {totalPackets > 0 && (
+                                  <span className="text-xs font-medium text-foreground">
+                                    Packet {packet.packetNumber} of {totalPackets}
+                                  </span>
+                                )}
+                                {packet.categoryName && (
+                                  <span className="text-xs text-muted-foreground">{packet.categoryName}</span>
+                                )}
+                                {packet.allocatedToOrder && (
+                                  <span className="text-xs text-muted-foreground">Order: {packet.allocatedToOrder}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {isInternalBarcode && (
+                                  <span className="mr-2">Internal ID: <span className="font-mono">{packet.barcode}</span> ·</span>
+                                )}
+                                Built {new Date(packet.buildDate).toLocaleDateString()} by {packet.createdBy || 'unknown'}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground shrink-0">
@@ -2412,9 +2513,16 @@ export default function CuttingOperatorDashboard() {
                       )}
                     </div>
                   )}
-                </div>
-              ))}
-            </div>
+                            </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              );
+            })()
           )}
         </CardContent>
       </Card>
@@ -2553,7 +2661,11 @@ export default function CuttingOperatorDashboard() {
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-xs">Cuts Needed</Label>
-                    <p className="font-bold text-lg">{selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}</p>
+                    <p className="font-bold text-lg">{
+                      matchingBOM
+                        ? Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM.yieldPerCut || 4))
+                        : (selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / 4))
+                    }</p>
                   </div>
                   <div>
                     <Label className="text-muted-foreground text-xs">Sq Meters/Cut</Label>
@@ -2570,96 +2682,159 @@ export default function CuttingOperatorDashboard() {
                 <p className="text-sm text-muted-foreground mb-3">Retrieve fabric from these locations (FIFO - oldest expiration first):</p>
                 <div className="space-y-2">
                   {(() => {
-                    // Get specific fabric types from BOM if available
-                    const bomMaterialNames: string[] = [];
+                    const hasBOM = matchingBOM !== null;
+
+                    // Step 1: Collect ALL material identifiers from every cut + ply entry in the BOM
+                    const bomMaterialIds: string[] = [];
                     if (matchingBOM?.cuts && matchingBOM.cuts.length > 0) {
-                      matchingBOM.cuts.forEach(cut => {
-                        if (cut.materialName && !bomMaterialNames.includes(cut.materialName.toLowerCase())) {
-                          bomMaterialNames.push(cut.materialName.toLowerCase());
+                      const addIfNew = (val: string | undefined | null) => {
+                        if (val) {
+                          const lower = val.toLowerCase().trim();
+                          if (lower && !bomMaterialIds.includes(lower)) bomMaterialIds.push(lower);
                         }
+                      };
+                      matchingBOM.cuts.forEach(cut => {
+                        addIfNew(cut.materialName);
+                        addIfNew(cut.materialPartNumber);
+                        cut.plySchedule?.forEach(ply => addIfNew(ply.materialType));
                       });
                     }
-                    
-                    // Fallback to generic material type if no BOM materials
-                    const materialType = (() => {
-                      try {
-                        const notes = selectedMfgItem?.notes ? JSON.parse(selectedMfgItem.notes) : {};
-                        return notes.materialType || 'carbon_fiber';
-                      } catch { return 'carbon_fiber'; }
-                    })();
-                    
-                    const relevantFabrics = fabricInventory
-                      .filter(f => f.squareMeters > 0 && f.status !== 'expired' && f.status !== 'depleted')
-                      .filter(f => {
-                        const ft = (f.fabricType || '').toLowerCase();
-                        const commonName = (f.commonName || '').toLowerCase();
-                        
-                        // If BOM specifies materials, match against those
-                        if (bomMaterialNames.length > 0) {
-                          return bomMaterialNames.some(bomMat => 
-                            ft.includes(bomMat) || commonName.includes(bomMat) || 
-                            bomMat.includes(ft) || bomMat.includes(commonName)
+
+                    const bomHasMaterials = bomMaterialIds.length > 0;
+
+                    // Step 2: Build filtered fabric list using priority-ordered matching
+                    const baseFabrics = fabricInventory.filter(
+                      f => f.squareMeters > 0 && f.status !== 'expired' && f.status !== 'depleted'
+                    );
+
+                    let relevantFabrics: typeof baseFabrics = [];
+                    let isFallback = false;
+
+                    if (hasBOM && bomHasMaterials) {
+                      // Priority 1: exact match on fabricType or commonName
+                      const exactMatches = baseFabrics.filter(f => {
+                        const ft = (f.fabricType || '').toLowerCase().trim();
+                        const cn = (f.commonName || '').toLowerCase().trim();
+                        return bomMaterialIds.some(id => id === ft || id === cn);
+                      });
+
+                      if (exactMatches.length > 0) {
+                        relevantFabrics = exactMatches;
+                      } else {
+                        // Priority 2: substring match — never fall through to generic keywords when BOM was matched
+                        relevantFabrics = baseFabrics.filter(f => {
+                          const ft = (f.fabricType || '').toLowerCase();
+                          const cn = (f.commonName || '').toLowerCase();
+                          return bomMaterialIds.some(id =>
+                            ft.includes(id) || cn.includes(id) || id.includes(ft) || id.includes(cn)
                           );
-                        }
-                        
-                        // Fallback to generic material type matching
+                        });
+                      }
+                    } else if (!hasBOM) {
+                      // No BOM on file: generic keyword fallback, clearly labelled
+                      isFallback = true;
+                      const materialType = (() => {
+                        try {
+                          const notes = selectedMfgItem?.notes ? JSON.parse(selectedMfgItem.notes) : {};
+                          return notes.materialType || 'carbon_fiber';
+                        } catch { return 'carbon_fiber'; }
+                      })();
+                      relevantFabrics = baseFabrics.filter(f => {
+                        const ft = (f.fabricType || '').toLowerCase();
                         if (materialType === 'carbon_fiber') return ft.includes('carbon') || ft.includes('cf');
                         if (materialType === 'fiberglass') return ft.includes('fiber') || ft.includes('fg');
                         if (materialType === 'mesa') return ft.includes('mesa');
                         if (materialType === 'p2_disruptor') return ft.includes('disruptor');
                         if (materialType === 'p2_antenna') return ft.includes('antenna');
                         return true;
-                      })
+                      });
+                    }
+                    // if hasBOM && !bomHasMaterials: relevantFabrics stays [] — caught below
+
+                    relevantFabrics = relevantFabrics
                       .sort((a, b) => {
                         if (!a.expirationDate) return 1;
                         if (!b.expirationDate) return -1;
                         return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
                       })
                       .slice(0, 3);
-                    
+
+                    // Step 3: BOM matched but has no material specs at all
+                    if (hasBOM && !bomHasMaterials) {
+                      return (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700 p-3 flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                          <p className="text-sm text-amber-800 dark:text-amber-300">
+                            BOM has no material specifications — contact engineering before retrieving fabric.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    // Step 3b: BOM matched and materials extracted but nothing in inventory matches
+                    if (hasBOM && bomHasMaterials && relevantFabrics.length === 0) {
+                      return (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700 p-3 flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                          <p className="text-sm text-amber-800 dark:text-amber-300">
+                            BOM specifies required materials but none are currently in inventory. Check stock levels or contact engineering.
+                          </p>
+                        </div>
+                      );
+                    }
+
                     if (relevantFabrics.length === 0) {
                       return <p className="text-sm text-amber-600">No matching fabric in inventory. Check stock levels.</p>;
                     }
-                    
-                    return relevantFabrics.map((fabric, idx) => (
-                      <div key={fabric.id} className={cn(
-                        "flex items-center justify-between p-3 rounded border",
-                        retrievedFabrics.find(f => f.id === fabric.id) ? "bg-green-100 border-green-300 dark:bg-green-900 dark:border-green-700" : "bg-background"
-                      )}>
-                        <div className="flex items-center gap-3">
-                          {idx === 0 && <Badge className="bg-green-600">FIFO</Badge>}
-                          <div>
-                            <p className="font-medium">{fabric.fabricType} - Roll {fabric.rollNumber}</p>
-                            {fabric.internalControlNumber && (
-                              <p className="text-xs font-mono text-blue-600 dark:text-blue-400">ICN: {fabric.internalControlNumber}</p>
-                            )}
-                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                              Freezer {fabric.freezerLocation || fabric.location || 'Unknown'}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {fabric.squareMeters.toFixed(2)} m² available
-                              {fabric.expirationDate && ` • Expires: ${new Date(fabric.expirationDate).toLocaleDateString()}`}
-                            </p>
+
+                    return (
+                      <>
+                        {relevantFabrics.map((fabric, idx) => (
+                          <div key={fabric.id} className={cn(
+                            "flex items-center justify-between p-3 rounded border",
+                            retrievedFabrics.find(f => f.id === fabric.id) ? "bg-green-100 border-green-300 dark:bg-green-900 dark:border-green-700" : "bg-background"
+                          )}>
+                            <div className="flex items-center gap-3">
+                              {idx === 0 && <Badge className="bg-green-600">FIFO</Badge>}
+                              <div>
+                                <p className="font-medium">{fabric.fabricType} - Roll {fabric.rollNumber}</p>
+                                {fabric.internalControlNumber && (
+                                  <p className="text-xs font-mono text-blue-600 dark:text-blue-400">ICN: {fabric.internalControlNumber}</p>
+                                )}
+                                <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                  Freezer {fabric.freezerLocation || fabric.location || 'Unknown'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {fabric.squareMeters.toFixed(2)} m² available
+                                  {fabric.expirationDate && ` • Expires: ${new Date(fabric.expirationDate).toLocaleDateString()}`}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={retrievedFabrics.find(f => f.id === fabric.id) ? "secondary" : "default"}
+                              onClick={() => handleFabricRetrieved(fabric)}
+                              disabled={!!retrievedFabrics.find(f => f.id === fabric.id)}
+                              data-testid={`button-retrieve-fabric-${fabric.id}`}
+                            >
+                              {retrievedFabrics.find(f => f.id === fabric.id) ? (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                                  Retrieved
+                                </>
+                              ) : (
+                                'Retrieved'
+                              )}
+                            </Button>
                           </div>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant={retrievedFabrics.find(f => f.id === fabric.id) ? "secondary" : "default"}
-                          onClick={() => handleFabricRetrieved(fabric)}
-                          disabled={!!retrievedFabrics.find(f => f.id === fabric.id)}
-                          data-testid={`button-retrieve-fabric-${fabric.id}`}
-                        >
-                          {retrievedFabrics.find(f => f.id === fabric.id) ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              Retrieved
-                            </>
-                          ) : (
-                            'Retrieved'
-                          )}
-                        </Button>
-                      </div>
-                    ));
+                        ))}
+                        {isFallback && (
+                          <p className="text-xs text-muted-foreground mt-2 italic">
+                            No BOM on file — showing fabric by generic material type.
+                          </p>
+                        )}
+                      </>
+                    );
                   })()}
                 </div>
               </div>

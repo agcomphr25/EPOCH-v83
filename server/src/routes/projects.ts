@@ -6,6 +6,7 @@ import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogS
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
+import { resolveCustomersIntegerId } from '../lib/customerResolver';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -104,23 +105,45 @@ router.get('/', async (req, res) => {
     const projectsWithSteps = await Promise.all(
       projectsList.map(async (project) => {
         try {
-          const [steps, customer, projectManager, attachments, closing] = await Promise.all([
+          const [steps, p2Customer, projectManager, attachments, closing] = await Promise.all([
             storage.getProjectSteps(project.id),
             project.customerId ? storage.getP2CustomerByCustomerId(project.customerId) : Promise.resolve(null),
             project.projectManagerId ? storage.getEmployee(project.projectManagerId) : Promise.resolve(null),
             storage.getProjectStepAttachmentsByProject(project.id),
             storage.getProjectClosingByProjectId(project.id),
           ]);
+
+          // Resolve customer with bridge FK fallback
+          let customer: { id: number | string; customerId: string; name: string } | null = null;
+          if (p2Customer) {
+            customer = { id: p2Customer.id, customerId: p2Customer.customerId, name: p2Customer.customerName };
+          } else if (project.customersIntegerId) {
+            const masterCustomer = await storage.getCustomer(project.customersIntegerId);
+            if (masterCustomer) {
+              customer = {
+                id: masterCustomer.id,
+                customerId: String(masterCustomer.id),
+                name: masterCustomer.company || masterCustomer.name,
+              };
+            }
+          }
+
+          // Resolve linkedRfqNumber from the rfq_risk_assessment step
+          let linkedRfqNumber: string | null = null;
+          const rfqStep = steps.find(s => s.stepType === 'rfq_risk_assessment');
+          if (rfqStep?.linkedRfqId) {
+            const rfq = await storage.getRFQRiskAssessmentById(rfqStep.linkedRfqId);
+            if (rfq) linkedRfqNumber = rfq.rfqNumber;
+          }
           
           return {
             ...project,
             steps,
-            customer: customer
-              ? { id: customer.id, customerId: customer.customerId, name: customer.customerName }
-              : null,
+            customer,
             projectManager,
             attachmentCount: attachments.length,
             closingStatus: deriveClosingStatus(closing),
+            linkedRfqNumber,
           };
         } catch (enrichErr) {
           console.error(`Error enriching project ${project.id}:`, enrichErr);
@@ -157,12 +180,65 @@ router.get('/step-types', async (req, res) => {
   res.json(PROJECT_STEP_TYPES);
 });
 
+// GET /api/projects/closings/similar — find similar approved closings by customer or keyword
+router.get('/closings/similar', async (req, res) => {
+  try {
+    const customerId = req.query.customerId ? String(req.query.customerId) : undefined;
+    const partFamily = req.query.partFamily ? String(req.query.partFamily) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(String(req.query.limit), 10) || 5, 20) : 5;
+
+    if (!customerId && !partFamily) {
+      return res.status(400).json({ message: 'At least one of customerId or partFamily is required' });
+    }
+
+    const results = await storage.getSimilarProjectClosings({ customerId, partFamily, limit });
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching similar project closings:', error);
+    res.status(500).json({ message: 'Failed to fetch similar project closings' });
+  }
+});
+
+// Pipeline stage ordering used for drag-gate enforcement
+const PIPELINE_STAGE_ORDER = [
+  'rfq_received',
+  'quote_preparing',
+  'quote_submitted',
+  'purchase_review',
+  'po_received',
+  'production',
+  'completed',
+] as const;
+
+// Maps max completed step_order → max allowed stage index in PIPELINE_STAGE_ORDER
+// Step orders: 1=rfq_risk_assessment, 2=quote, 3=purchase_review_checklist,
+//              4=preproduction_checklist, 5=p2_order
+function computeMaxAllowedStageKey(maxCompletedOrder: number): string {
+  if (maxCompletedOrder >= 5) return 'completed';
+  if (maxCompletedOrder >= 4) return 'production';
+  if (maxCompletedOrder >= 3) return 'po_received';
+  if (maxCompletedOrder >= 2) return 'purchase_review';
+  if (maxCompletedOrder >= 1) return 'quote_submitted';
+  return 'quote_preparing';
+}
+
+// For each gated stage, which step label must be completed to unlock it
+const STAGE_GATE_LABELS: Record<string, string> = {
+  quote_submitted: 'RFQ Risk Assessment',
+  purchase_review: 'Quote',
+  po_received: 'Purchase Review Checklist',
+  production: 'Pre-production Checklist',
+  completed: 'P2 Order',
+};
+
 router.get('/pipeline', async (req, res) => {
   try {
     const allProjects = await storage.getAllProjects();
     const pipelineProjects = allProjects.filter(
       p => p.status === 'active' || p.status === 'won'
     );
+
+    const projectIds = pipelineProjects.map(p => p.id);
 
     // Batch aggregate serial counts for all relevant PO ids in one query
     const poIds = pipelineProjects.map(p => p.poId).filter((id): id is number => id != null);
@@ -185,20 +261,80 @@ router.get('/pipeline', async (req, res) => {
       }
     }
 
+    // Batch query max completed/skipped step_order per project
+    const maxStepOrderByProjectId: Record<string, number> = {};
+    if (projectIds.length > 0) {
+      const stepRows = await pool.query<{ project_id: string; max_order: string | null }>(
+        `SELECT project_id::text,
+                MAX(step_order) FILTER (WHERE status IN ('completed', 'skipped', 'not_applicable'))::text AS max_order
+         FROM project_steps
+         WHERE project_id = ANY($1::uuid[])
+         GROUP BY project_id`,
+        [projectIds]
+      );
+      for (const row of stepRows) {
+        maxStepOrderByProjectId[row.project_id] = row.max_order ? parseInt(row.max_order, 10) : 0;
+      }
+    }
+
+    // Batch fetch linked RFQ numbers for all pipeline projects
+    const rfqStepRows = projectIds.length > 0
+      ? await pool.query<{ project_id: string; linked_rfq_id: string | null }>(
+          `SELECT project_id::text, linked_rfq_id::text
+           FROM project_steps
+           WHERE project_id = ANY($1::uuid[]) AND step_type = 'rfq_risk_assessment' AND linked_rfq_id IS NOT NULL`,
+          [projectIds]
+        )
+      : [];
+    const linkedRfqIdByProjectId: Record<string, number> = {};
+    for (const row of rfqStepRows) {
+      if (row.linked_rfq_id) linkedRfqIdByProjectId[row.project_id] = parseInt(row.linked_rfq_id, 10);
+    }
+
+    // Fetch RFQ numbers for all unique linked RFQ IDs
+    const uniqueRfqIds = [...new Set(Object.values(linkedRfqIdByProjectId))];
+    const rfqNumberById: Record<number, string> = {};
+    if (uniqueRfqIds.length > 0) {
+      const rfqRows = await pool.query<{ id: string; rfq_number: string }>(
+        `SELECT id::text, rfq_number FROM rfq_risk_assessments WHERE id = ANY($1::int[])`,
+        [uniqueRfqIds]
+      );
+      for (const row of rfqRows) {
+        rfqNumberById[parseInt(row.id, 10)] = row.rfq_number;
+      }
+    }
+
     const results = await Promise.all(
       pipelineProjects.map(async (project) => {
-        const [customer, closing] = await Promise.all([
+        const [p2Customer, closing] = await Promise.all([
           project.customerId ? storage.getP2CustomerByCustomerId(project.customerId) : Promise.resolve(null),
           storage.getProjectClosingByProjectId(project.id),
         ]);
 
+        // Resolve customer name: p2 lookup first, then bridge FK fallback
+        let customerName = 'Unknown';
+        if (p2Customer) {
+          customerName = p2Customer.customerName;
+        } else if (project.customersIntegerId) {
+          const masterCustomer = await storage.getCustomer(project.customersIntegerId);
+          if (masterCustomer) {
+            customerName = masterCustomer.company || masterCustomer.name;
+          }
+        }
+
         const serialCounts = project.poId ? (serialCountsByPoId[project.poId] ?? { total: 0, completed: 0 }) : { total: 0, completed: 0 };
+        const maxCompletedOrder = maxStepOrderByProjectId[project.id] ?? 0;
+        const maxAllowedStageKey = computeMaxAllowedStageKey(maxCompletedOrder);
+        const closingStatus = deriveClosingStatus(closing);
+
+        const rfqId = linkedRfqIdByProjectId[project.id];
+        const linkedRfqNumber = rfqId ? (rfqNumberById[rfqId] ?? null) : null;
 
         return {
           projectId: project.id,
           projectCode: project.projectCode,
           projectName: project.projectName,
-          customerName: customer?.customerName || 'Unknown',
+          customerName,
           currentStage: project.currentStage || 'rfq_received',
           status: project.status,
           targetShipDate: project.targetShipDate,
@@ -206,7 +342,9 @@ router.get('/pipeline', async (req, res) => {
           poId: project.poId,
           completedSerials: serialCounts.completed,
           totalSerials: serialCounts.total,
-          closingStatus: deriveClosingStatus(closing),
+          closingStatus,
+          maxAllowedStageKey,
+          linkedRfqNumber,
         };
       })
     );
@@ -217,6 +355,7 @@ router.get('/pipeline', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch project pipeline' });
   }
 });
+
 
 router.get('/unlinked-submissions/:stepType', async (req, res) => {
   try {
@@ -409,19 +548,33 @@ router.get('/:id', async (req, res) => {
     }
     
     const steps = await storage.getProjectSteps(project.id);
-    const customer = await storage.getP2CustomerByCustomerId(project.customerId);
+    const p2Customer = await storage.getP2CustomerByCustomerId(project.customerId);
     const projectManager = project.projectManagerId 
       ? await storage.getEmployee(project.projectManagerId)
       : null;
     const activityLog = await storage.getProjectActivityLog(project.id);
     const closing = await storage.getProjectClosingByProjectId(project.id);
+
+    // Resolve customer: prefer p2 customer lookup, then fall back to the master
+    // customers table via the bridge FK so the name is never "Unknown".
+    let customer: { id: number | string; customerId: string; name: string } | null = null;
+    if (p2Customer) {
+      customer = { id: p2Customer.id, customerId: p2Customer.customerId, name: p2Customer.customerName };
+    } else if (project.customersIntegerId) {
+      const masterCustomer = await storage.getCustomer(project.customersIntegerId);
+      if (masterCustomer) {
+        customer = {
+          id: masterCustomer.id,
+          customerId: String(masterCustomer.id),
+          name: masterCustomer.company || masterCustomer.name,
+        };
+      }
+    }
     
     res.json({
       ...project,
       steps,
-      customer: customer
-        ? { id: customer.id, customerId: customer.customerId, name: customer.customerName }
-        : null,
+      customer,
       projectManager,
       activityLog,
       closingStatus: deriveClosingStatus(closing),
@@ -444,9 +597,14 @@ router.post('/', async (req, res) => {
     
     const validatedData = validationResult.data;
     const nextCode = await storage.getNextProjectCode();
+
+    // Resolve the integer FK to the master customers table from the text customerId.
+    const customersIntegerId = await resolveCustomersIntegerId(validatedData.customerId);
+
     const projectData = {
       ...validatedData,
       projectCode: nextCode,
+      customersIntegerId,
     };
     
     const project = await storage.createProject(projectData);
@@ -531,6 +689,34 @@ router.patch('/:id', async (req, res) => {
           if (!closing.approvedBy) {
             return res.status(403).json({
               message: 'Cannot mark project as completed: closing record has not been approved by a manager.',
+            });
+          }
+        }
+      }
+    }
+
+    // Stage-gate enforcement: forward stage moves must be permitted by project_steps
+    if (validatedData.currentStage) {
+      const existing = await storage.getProject(id);
+      if (existing && existing.currentStage) {
+        const existingIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(existing.currentStage);
+        const newIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(validatedData.currentStage);
+        if (newIdx > existingIdx) {
+          // Forward move — validate against project_steps completion
+          const steps = await storage.getProjectSteps(id);
+          const maxCompletedOrder = steps.reduce((max, s) => {
+            if (s.status === 'completed' || s.status === 'skipped' || s.status === 'not_applicable') {
+              return Math.max(max, s.stepOrder);
+            }
+            return max;
+          }, 0);
+          const maxAllowedKey = computeMaxAllowedStageKey(maxCompletedOrder);
+          const maxAllowedIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(maxAllowedKey);
+          if (newIdx > maxAllowedIdx) {
+            const prerequisite = STAGE_GATE_LABELS[validatedData.currentStage] || 'required steps';
+            return res.status(422).json({
+              message: `Cannot advance to "${validatedData.currentStage}": complete "${prerequisite}" first.`,
+              maxAllowedStageKey: maxAllowedKey,
             });
           }
         }

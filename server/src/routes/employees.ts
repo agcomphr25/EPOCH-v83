@@ -1,7 +1,12 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { storage } from '../../storage';
-import { pool } from '../../db';
+import { pool, pgPool } from '../../db';
+import {
+  fetchRecertificationRecords,
+  countRecertificationRecords,
+  getAlertDays,
+} from '../../utils/trainingAlertReminder';
 import { emitHumanUpserted } from '../events/humanEvents';
 import {
   uploadMiddleware,
@@ -56,7 +61,30 @@ async function generateNextEmployeeCode(): Promise<string> {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const employees = await storage.getAllEmployees();
-    res.json(employees);
+    // Enrich each employee with the linked auth user's integer ID so that
+    // callers can map ownerUserId (auth user ID) → employee name.
+    let userIdByEmployeeId: Record<number, number> = {};
+    try {
+      const rows = await pool.query(
+        `SELECT id AS "userId", employee_id AS "employeeId" FROM users WHERE employee_id IS NOT NULL AND is_active = true`
+      );
+      for (const row of rows) {
+        if (row.employeeId) {
+          userIdByEmployeeId[row.employeeId] = row.userId;
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching user-employee links:', e);
+    }
+    const enriched = employees.map((emp) => {
+      const { timekeeperPin, ...rest } = emp;
+      return {
+        ...rest,
+        userId: userIdByEmployeeId[emp.id] ?? null,
+        hasPin: timekeeperPin !== null && timekeeperPin !== undefined,
+      };
+    });
+    res.json(enriched);
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
@@ -488,6 +516,162 @@ router.post('/certifications', async (req: Request, res: Response) => {
   }
 });
 
+// Renew a training/certification record — archives old record (is_legacy=true) and creates a new one
+// POST /certifications/:id/renew  (MUST be before PATCH /certifications/:id)
+router.post('/certifications/:id/renew', async (req: Request, res: Response) => {
+  try {
+    const recordId = parseInt(req.params.id, 10);
+    const { expiryDate, notes, renewedBy } = req.body;
+
+    if (!expiryDate) {
+      return res.status(400).json({ error: 'expiryDate is required' });
+    }
+
+    const existing = await pool.query(
+      `SELECT * FROM training_matrix WHERE id = $1`,
+      [recordId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Training record not found' });
+    }
+
+    const old = existing[0];
+
+    // Use a DB transaction so archive + insert succeed or fail together
+    const client = await pgPool.connect();
+    let created: any;
+    try {
+      await client.query('BEGIN');
+
+      // Archive the old record
+      await client.query(
+        `UPDATE training_matrix SET is_legacy = true, updated_at = NOW() WHERE id = $1`,
+        [recordId]
+      );
+
+      // Create a successor record with the new completion/expiry dates
+      const insertResult = await client.query(
+        `INSERT INTO training_matrix
+           (employee_id, employee_name, job_title, department,
+            training_name, required_by, frequency,
+            last_completed, next_due, status, notes, is_legacy, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE, $8, 'COMPLETED', $9, false, NOW(), NOW())
+         RETURNING *`,
+        [
+          old.employee_id,
+          old.employee_name,
+          old.job_title,
+          old.department,
+          old.training_name,
+          old.required_by,
+          old.frequency,
+          expiryDate,
+          notes || old.notes,
+        ]
+      );
+      created = insertResult.rows[0];
+
+      // Audit log is inside the transaction — renew cannot succeed without an audit record
+      const nextIdResult = await client.query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM employee_audit_log`);
+      await client.query(
+        `INSERT INTO employee_audit_log
+           (id, employee_id, action, resource_type, resource_id, details, timestamp)
+         VALUES ($1, $2, 'TRAINING_RENEWED', 'TRAINING_MATRIX', $3::text, $4, NOW())`,
+        [
+          nextIdResult.rows[0].next_id,
+          old.employee_id,
+          created.id,
+          JSON.stringify({
+            trainingName: old.training_name,
+            previousRecordId: recordId,
+            newRecordId: created.id,
+            previousNextDue: old.next_due,
+            newNextDue: expiryDate,
+            renewedBy: renewedBy || 'system',
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Renew certification error:', error);
+    res.status(500).json({ error: 'Failed to renew certification' });
+  }
+});
+
+// Revoke a training/certification record — resets status to PENDING and logs reason
+// PATCH /certifications/:id/revoke  (MUST be before PATCH /certifications/:id)
+router.patch('/certifications/:id/revoke', async (req: Request, res: Response) => {
+  try {
+    const recordId = parseInt(req.params.id, 10);
+    const { reason, revokedBy } = req.body;
+
+    const existing = await pool.query(
+      `SELECT * FROM training_matrix WHERE id = $1`,
+      [recordId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Training record not found' });
+    }
+
+    const old = existing[0];
+
+    // Revoke update and audit log are atomic — both succeed or neither does
+    const revokeClient = await pgPool.connect();
+    try {
+      await revokeClient.query('BEGIN');
+
+      await revokeClient.query(
+        `UPDATE training_matrix
+         SET status = 'PENDING',
+             notes = COALESCE($1, notes),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [reason ? `Revoked: ${reason}` : null, recordId]
+      );
+
+      const nextIdResult = await revokeClient.query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM employee_audit_log`);
+      await revokeClient.query(
+        `INSERT INTO employee_audit_log
+           (id, employee_id, action, resource_type, resource_id, details, timestamp)
+         VALUES ($1, $2, 'TRAINING_REVOKED', 'TRAINING_MATRIX', $3::text, $4, NOW())`,
+        [
+          nextIdResult.rows[0].next_id,
+          old.employee_id,
+          recordId,
+          JSON.stringify({
+            trainingName: old.training_name,
+            reason: reason || null,
+            revokedBy: revokedBy || 'system',
+          }),
+        ]
+      );
+
+      await revokeClient.query('COMMIT');
+    } catch (txErr) {
+      await revokeClient.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      revokeClient.release();
+    }
+
+    res.json({ success: true, recordId });
+  } catch (error) {
+    console.error('Revoke certification error:', error);
+    res.status(500).json({ error: 'Failed to revoke certification' });
+  }
+});
+
 // Update employee certification (MUST be before /:id)
 router.patch('/certifications/:id', async (req: Request, res: Response) => {
   try {
@@ -632,14 +816,360 @@ router.get('/:id/employment-periods', async (req: Request, res: Response) => {
   }
 });
 
+// ─── Skill Matrix & Recertification Endpoints ────────────────────────────────
+// These MUST be before the parametric /:id route to avoid being swallowed by it.
+
+// GET /api/employees/skill-matrix
+// Returns a full cross-product of active employees × distinct training names (qualifications),
+// sourced from training_matrix. Each cell carries a computed status.
+// Supports: ?department, ?certType (training name filter), ?machineClass (same as certType),
+// ?search (employee name), ?days (expiry window, default 30).
+router.get('/skill-matrix', async (req: Request, res: Response) => {
+  try {
+    const { department, certType, machineClass } = req.query;
+    const days = parseInt((req.query.days as string) || '30', 10);
+
+    // Build employee filter conditions
+    const empConditions: string[] = ['e.is_active = true'];
+    const trainingNameFilter =
+      (certType && typeof certType === 'string' && certType !== 'all' ? certType : null) ||
+      (machineClass && typeof machineClass === 'string' && machineClass !== 'all' ? machineClass : null);
+
+    const params: any[] = [];
+
+    if (department && typeof department === 'string' && department !== 'all') {
+      params.push(department);
+      empConditions.push(`COALESCE(e.department, '') = $${params.length}`);
+    }
+
+    let trainingNameCond = '';
+    if (trainingNameFilter) {
+      params.push(trainingNameFilter);
+      trainingNameCond = `AND training_name = $${params.length}`;
+    }
+
+    params.push(days);
+    const daysParam = `$${params.length}`;
+
+    const sql = `
+      WITH distinct_trainings AS (
+        SELECT DISTINCT training_name
+        FROM training_matrix
+        WHERE is_legacy = false
+        ${trainingNameCond}
+        ORDER BY training_name
+      ),
+      cross_product AS (
+        SELECT
+          e.id            AS employee_id,
+          e.name          AS employee_name,
+          e.job_title,
+          e.department    AS emp_department,
+          dt.training_name
+        FROM employees e
+        CROSS JOIN distinct_trainings dt
+        WHERE ${empConditions.join(' AND ')}
+      )
+      SELECT
+        cp.employee_id                                    AS "employeeId",
+        cp.employee_name                                  AS "employeeName",
+        COALESCE(cp.job_title, '')                        AS "jobTitle",
+        COALESCE(cp.emp_department, '')                   AS "department",
+        DENSE_RANK() OVER (ORDER BY cp.training_name)     AS "certificationId",
+        cp.training_name                                  AS "certificationName",
+        'General'                                         AS "certType",
+        NULL::integer                                     AS "validityPeriodMonths",
+        tm.id                                             AS "recordId",
+        tm.last_completed                                 AS "dateObtained",
+        tm.next_due                                       AS "expiryDate",
+        COALESCE(tm.status = 'COMPLETED', false)          AS "isActive",
+        tm.notes,
+        CASE
+          WHEN tm.id IS NULL                                THEN 'NOT_QUALIFIED'
+          WHEN tm.status IS DISTINCT FROM 'COMPLETED'       THEN 'NOT_QUALIFIED'
+          WHEN tm.next_due IS NULL                          THEN 'CERTIFIED'
+          WHEN tm.next_due < CURRENT_DATE                   THEN 'EXPIRED'
+          WHEN tm.next_due < CURRENT_DATE + (${daysParam}::text || ' days')::interval THEN 'EXPIRING_SOON'
+          ELSE 'CERTIFIED'
+        END AS "status"
+      FROM cross_product cp
+      LEFT JOIN LATERAL (
+        SELECT *
+        FROM training_matrix tm2
+        WHERE tm2.employee_id = cp.employee_id
+          AND tm2.training_name = cp.training_name
+          AND tm2.is_legacy = false
+        ORDER BY tm2.created_at DESC
+        LIMIT 1
+      ) tm ON true
+      ORDER BY cp.employee_name ASC, cp.training_name ASC
+    `;
+
+    const rows = await pool.query(sql, params);
+    res.json(rows || []);
+  } catch (error) {
+    console.error('Skill matrix fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch skill matrix' });
+  }
+});
+
+// GET /api/employees/recertification-count
+// Returns the count of expiring/expired training records for nav badge display.
+router.get('/recertification-count', async (req: Request, res: Response) => {
+  try {
+    const rawDays = req.query.days as string | undefined;
+    const parsedDays = rawDays !== undefined ? parseInt(rawDays, 10) : NaN;
+    const days = !isNaN(parsedDays) && parsedDays >= 1 ? parsedDays : getAlertDays();
+
+    const count = await countRecertificationRecords(days);
+    res.json({ count, days });
+  } catch (error) {
+    console.error('Recertification count fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch recertification count' });
+  }
+});
+
+// GET /api/employees/recertification-due
+// Returns training_matrix rows where next_due is within N days (or already past).
+router.get('/recertification-due', async (req: Request, res: Response) => {
+  try {
+    const rawDays = req.query.days as string | undefined;
+    const parsedDays = rawDays !== undefined ? parseInt(rawDays, 10) : NaN;
+    const days = !isNaN(parsedDays) && parsedDays >= 1 ? parsedDays : getAlertDays();
+
+    const records = await fetchRecertificationRecords(days);
+    res.json(records);
+  } catch (error) {
+    console.error('Recertification due fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch recertification due list' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/employees/training-matrix — create a new training record for an employee
+router.post('/training-matrix', async (req: Request, res: Response) => {
+  try {
+    const { employeeId, trainingName, lastCompleted, nextDue, notes, frequency, requiredBy } = req.body;
+
+    if (!employeeId || !trainingName) {
+      return res.status(400).json({ error: 'employeeId and trainingName are required' });
+    }
+    if (!lastCompleted) {
+      return res.status(400).json({ error: 'lastCompleted (completion date) is required' });
+    }
+
+    // Fetch the employee to populate denormalised fields
+    const empRows = await pool.query(
+      `SELECT id, name, job_title, department FROM employees WHERE id = $1 AND is_active = true`,
+      [employeeId]
+    );
+    if (!empRows || empRows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    const emp = empRows[0];
+
+    const client = await pgPool.connect();
+    let created: any;
+    try {
+      await client.query('BEGIN');
+
+      // Archive any existing non-legacy record for this employee + training
+      await client.query(
+        `UPDATE training_matrix SET is_legacy = true, updated_at = NOW()
+         WHERE employee_id = $1 AND training_name = $2 AND is_legacy = false`,
+        [employeeId, trainingName]
+      );
+
+      const insertResult = await client.query(
+        `INSERT INTO training_matrix
+           (employee_id, employee_name, job_title, department,
+            training_name, required_by, frequency,
+            last_completed, next_due, status, notes, is_legacy, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'COMPLETED', $10, false, NOW(), NOW())
+         RETURNING *`,
+        [
+          emp.id,
+          emp.name,
+          emp.job_title,
+          emp.department,
+          trainingName,
+          requiredBy || null,
+          frequency || null,
+          lastCompleted,
+          nextDue || null,
+          notes || null,
+        ]
+      );
+      created = insertResult.rows[0];
+
+      const nextIdResult = await client.query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM employee_audit_log`);
+      await client.query(
+        `INSERT INTO employee_audit_log
+           (id, employee_id, action, resource_type, resource_id, details, timestamp)
+         VALUES ($1, $2, 'TRAINING_ADDED', 'TRAINING_MATRIX', $3::text, $4, NOW())`,
+        [
+          nextIdResult.rows[0].next_id,
+          emp.id,
+          created.id,
+          JSON.stringify({
+            trainingName,
+            lastCompleted,
+            nextDue: nextDue || null,
+            addedBy: req.body.addedBy || 'supervisor',
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Create training record error:', error);
+    res.status(500).json({ error: 'Failed to create training record' });
+  }
+});
+
+// PATCH /api/employees/training-matrix/:id — edit an existing training record
+router.patch('/training-matrix/:id', async (req: Request, res: Response) => {
+  try {
+    const recordId = parseInt(req.params.id, 10);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    const { lastCompleted, nextDue, notes, updatedBy } = req.body;
+
+    const existing = await pool.query(
+      `SELECT * FROM training_matrix WHERE id = $1`,
+      [recordId]
+    );
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'Training record not found' });
+    }
+    const old = existing[0];
+
+    const client = await pgPool.connect();
+    let updated: any;
+    try {
+      await client.query('BEGIN');
+
+      const updateResult = await client.query(
+        `UPDATE training_matrix
+         SET last_completed = COALESCE($1, last_completed),
+             next_due       = $2,
+             notes          = $3,
+             status         = 'COMPLETED',
+             updated_at     = NOW()
+         WHERE id = $4
+         RETURNING *`,
+        [lastCompleted || null, nextDue || null, notes !== undefined ? (notes || null) : null, recordId]
+      );
+      updated = updateResult.rows[0];
+
+      const nextIdResult = await client.query(`SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM employee_audit_log`);
+      await client.query(
+        `INSERT INTO employee_audit_log
+           (id, employee_id, action, resource_type, resource_id, details, timestamp)
+         VALUES ($1, $2, 'TRAINING_EDITED', 'TRAINING_MATRIX', $3::text, $4, NOW())`,
+        [
+          nextIdResult.rows[0].next_id,
+          old.employee_id,
+          recordId,
+          JSON.stringify({
+            trainingName: old.training_name,
+            previousLastCompleted: old.last_completed,
+            previousNextDue: old.next_due,
+            newLastCompleted: lastCompleted || old.last_completed,
+            newNextDue: nextDue || null,
+            updatedBy: updatedBy || 'supervisor',
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Edit training record error:', error);
+    res.status(500).json({ error: 'Failed to update training record' });
+  }
+});
+
+// GET /api/employees/:id/training-matrix
+// Returns all non-legacy training_matrix rows for a single employee,
+// with a computed display status that accounts for expiry.
+router.get('/:id/training-matrix', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id, 10);
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employee id' });
+    }
+
+    const rows = await pool.query(
+      `SELECT
+        tm.id                AS "id",
+        tm.employee_id       AS "employeeId",
+        tm.training_name     AS "trainingName",
+        tm.frequency,
+        tm.last_completed    AS "lastCompleted",
+        tm.next_due          AS "nextDue",
+        tm.notes,
+        CASE
+          WHEN tm.status = 'COMPLETED' AND tm.next_due IS NOT NULL AND tm.next_due < CURRENT_DATE
+            THEN 'OVERDUE'
+          WHEN tm.status = 'COMPLETED' AND tm.next_due IS NOT NULL
+            AND tm.next_due <= CURRENT_DATE + INTERVAL '30 days'
+            THEN 'EXPIRING_SOON'
+          ELSE tm.status
+        END AS "status"
+      FROM training_matrix tm
+      WHERE tm.employee_id = $1
+        AND tm.is_legacy = false
+      ORDER BY
+        CASE
+          WHEN tm.status = 'COMPLETED' AND tm.next_due IS NOT NULL AND tm.next_due < CURRENT_DATE
+            THEN 0
+          WHEN tm.status != 'COMPLETED'
+            THEN 1
+          WHEN tm.status = 'COMPLETED' AND tm.next_due IS NOT NULL
+            AND tm.next_due <= CURRENT_DATE + INTERVAL '30 days'
+            THEN 2
+          ELSE 3
+        END,
+        tm.training_name ASC`,
+      [employeeId]
+    );
+
+    res.json(rows || []);
+  } catch (error) {
+    console.error('Employee training matrix fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee training matrix' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Parametric routes MUST come after all specific routes
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const employee = await storage.getEmployee(parseInt(req.params.id));
-    if (!employee) {
+    const raw = await storage.getEmployee(parseInt(req.params.id));
+    if (!raw) {
       return res.status(404).json({ error: 'Employee not found' });
     }
-    res.json(employee);
+    const { timekeeperPin, ...employee } = raw;
+    res.json({ ...employee, hasPin: timekeeperPin !== null && timekeeperPin !== undefined });
   } catch (error) {
     console.error('Get employee error:', error);
     res.status(500).json({ error: 'Failed to fetch employee' });
@@ -649,10 +1179,19 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     let employeeData = insertEmployeeSchema.parse(req.body);
+
+    // Normalize employeeCode — trim whitespace, treat blank as absent
+    if (typeof employeeData.employeeCode === 'string') {
+      employeeData.employeeCode = employeeData.employeeCode.trim() || undefined;
+    }
     
     // Auto-generate employee code if not provided
     if (!employeeData.employeeCode) {
-      employeeData.employeeCode = await generateNextEmployeeCode();
+      const generated = await generateNextEmployeeCode();
+      console.warn(
+        `[Employees] No employee_code provided when creating employee "${employeeData.name}" — auto-generating ${generated}`
+      );
+      employeeData.employeeCode = generated;
     }
     
     // IC-2: Canonical Identity matching/creation
@@ -687,8 +1226,23 @@ router.post('/', async (req: Request, res: Response) => {
       console.log(`[IC-2] Created canonical identity ${canonicalId} for ${employeeData.name} (no email)`);
     }
     
+    // Handle timekeeperPin — hash before persisting
+    let finalTimekeeperPin: string | undefined | null = employeeData.timekeeperPin ?? undefined;
+    if (finalTimekeeperPin) {
+      if (!/^\d{4}$/.test(finalTimekeeperPin)) {
+        return res.status(400).json({ error: 'timekeeperPin must be exactly 4 digits' });
+      }
+      finalTimekeeperPin = await bcrypt.hash(finalTimekeeperPin, 10);
+    } else {
+      finalTimekeeperPin = undefined;
+    }
+
     // Attach canonical_id to employee data
-    const employeeWithCanonical = { ...employeeData, canonicalId };
+    const employeeWithCanonical = {
+      ...employeeData,
+      canonicalId,
+      ...(finalTimekeeperPin !== undefined ? { timekeeperPin: finalTimekeeperPin } : {}),
+    };
     
     const newEmployee = await storage.createEmployee(employeeWithCanonical);
     
@@ -703,7 +1257,8 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(201).json(newEmployee);
+    const { timekeeperPin: _pin2, ...safeNew } = newEmployee;
+    res.status(201).json({ ...safeNew, hasPin: _pin2 !== null && _pin2 !== undefined });
   } catch (error) {
     console.error('Create employee error:', error);
     if (error instanceof Error) {
@@ -729,14 +1284,27 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
     
-    // Auto-generate employee code if missing/empty and employee doesn't have one
-    if (!updates.employeeCode || updates.employeeCode === '') {
-      if (!currentEmployee?.employeeCode) {
-        updates.employeeCode = await generateNextEmployeeCode();
-      } else {
-        // Keep existing code if available
-        delete updates.employeeCode;
+    // Validate / resolve employee code on update
+    const incomingCode = updates.employeeCode;
+    const existingCode = currentEmployee.employeeCode;
+
+    if (incomingCode === null || incomingCode === '') {
+      if (existingCode) {
+        // Reject attempts to clear a code that is already set
+        return res.status(400).json({
+          error:
+            'Employee code is required and cannot be removed once assigned. Update with a new code value or omit the field to keep the existing one.',
+        });
       }
+      // Employee has no code yet — auto-generate one
+      const generated = await generateNextEmployeeCode();
+      console.warn(
+        `[Employees] Employee ${employeeId} has no employee_code and none was provided in the update — auto-generating ${generated}`
+      );
+      updates.employeeCode = generated;
+    } else if (incomingCode === undefined) {
+      // Field not included in update payload — leave it alone
+      delete updates.employeeCode;
     }
     
     // IC-2: Check if key fields changed that require canonical identity upsert
@@ -775,7 +1343,30 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
     
+    // Handle timekeeperPin — hash before persisting, skip if not provided
+    if (updates.timekeeperPin !== undefined) {
+      const rawPin = updates.timekeeperPin;
+      if (rawPin === null || rawPin === '') {
+        // Allow clearing the PIN by setting to null
+        updates.timekeeperPin = null;
+      } else {
+        if (typeof rawPin !== 'string' || !/^\d{4}$/.test(rawPin)) {
+          return res.status(400).json({ error: 'timekeeperPin must be exactly 4 digits' });
+        }
+        updates.timekeeperPin = await bcrypt.hash(rawPin, 10);
+      }
+    }
+
     const updatedEmployee = await storage.updateEmployee(employeeId, updates);
+
+    // Sync userRole change to the linked user account so the enforcement layer picks it up
+    if (updates.userRole && updates.userRole !== currentEmployee.userRole) {
+      await pool.query(
+        `UPDATE users SET role = $1, updated_at = NOW() WHERE employee_id = $2`,
+        [updates.userRole, employeeId]
+      );
+      console.log(`[Employees] Synced role ${updates.userRole} to user account for employee ${employeeId}`);
+    }
     
     // IC-3: Emit HUMAN_UPSERTED event (non-blocking)
     const finalCanonicalId = updatedEmployee.canonicalId || updates.canonicalId;
@@ -789,7 +1380,8 @@ router.put('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    res.json(updatedEmployee);
+    const { timekeeperPin: _pin, ...safeEmployee } = updatedEmployee;
+    res.json({ ...safeEmployee, hasPin: _pin !== null && _pin !== undefined });
   } catch (error) {
     console.error('Update employee error:', error);
     res.status(500).json({ error: 'Failed to update employee' });
@@ -829,10 +1421,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // Employee Portal Token Generation
+// Uses the HMAC-signed stateless token system (generatePortalToken / validatePortalToken).
+// Tokens are self-contained signed payloads — no DB lookup is needed at validation time.
 router.post('/:id/portal-token', async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
-    const token = await storage.generateEmployeePortalToken(employeeId);
+    const token = await storage.generatePortalToken(employeeId);
     res.json({ 
       token, 
       portalUrl: `${req.protocol}://${req.get('host')}/employee-portal/${token}` 

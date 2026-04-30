@@ -8,7 +8,7 @@
  * KEY DESIGN DECISIONS:
  * - All amounts stored as positive semantic values (no debit/credit signs in DB)
  * - Debit/Credit presentation is handled at display time in the frontend
- * - Access restricted to authorized users only (currently: glennj)
+ * - Access restricted to users with ADMIN or OWNER role (via requireExecutiveAccess)
  * - One immutable snapshot per sales order (see shipping.ts for capture logic)
  * 
  * NET TOTAL HANDLING:
@@ -20,7 +20,7 @@
  * - All field changes recorded in shipment_accounting_adjustments table
  * - Each adjustment includes: old value, new value, reason, user, timestamp
  */
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { eq, desc, and, gte, lte, isNotNull, sql } from 'drizzle-orm';
 import {
@@ -29,22 +29,11 @@ import {
   insertShipmentAccountingSnapshotSchema,
   insertShipmentAccountingAdjustmentSchema,
 } from '../../schema';
+import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
 
 const router = Router();
 
-const AUTHORIZED_USERS = ['glennj'];
-
-function checkAccountingPrepAccess(req: Request, res: Response, next: NextFunction) {
-  const user = (req as any).user;
-  const username = user?.username?.toLowerCase() || '';
-  
-  if (!AUTHORIZED_USERS.includes(username)) {
-    return res.status(403).json({ error: 'Access denied. This feature is restricted to authorized personnel.' });
-  }
-  next();
-}
-
-router.get('/', checkAccountingPrepAccess, async (req: Request, res: Response) => {
+router.get('/', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const { startDate, endDate, customerId, adjustedOnly } = req.query;
     
@@ -76,7 +65,7 @@ router.get('/', checkAccountingPrepAccess, async (req: Request, res: Response) =
   }
 });
 
-router.get('/:id', checkAccountingPrepAccess, async (req: Request, res: Response) => {
+router.get('/:id', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
@@ -96,7 +85,7 @@ router.get('/:id', checkAccountingPrepAccess, async (req: Request, res: Response
   }
 });
 
-router.get('/:id/adjustments', checkAccountingPrepAccess, async (req: Request, res: Response) => {
+router.get('/:id/adjustments', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
@@ -113,7 +102,7 @@ router.get('/:id/adjustments', checkAccountingPrepAccess, async (req: Request, r
   }
 });
 
-router.patch('/:id', checkAccountingPrepAccess, async (req: Request, res: Response) => {
+router.patch('/:id', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { arAmount, stockRevenueAmount, shippingIncomeAmount, discountAmount, reason } = req.body;
@@ -204,7 +193,7 @@ router.patch('/:id', checkAccountingPrepAccess, async (req: Request, res: Respon
   }
 });
 
-router.post('/capture', checkAccountingPrepAccess, async (req: Request, res: Response) => {
+router.post('/capture', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const {
       shipmentId,
@@ -258,7 +247,7 @@ router.post('/capture', checkAccountingPrepAccess, async (req: Request, res: Res
   }
 });
 
-router.get('/summary/monthly', checkAccountingPrepAccess, async (req: Request, res: Response) => {
+router.get('/summary/monthly', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const { year, month } = req.query;
     

@@ -8,6 +8,36 @@ import { eq, sql } from 'drizzle-orm';
 import { auditService } from '../services/auditService';
 import { notificationManager } from '../services/notificationManager';
 
+interface ActiveUser {
+  id: number;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+}
+
+async function resolveActiveUser(userId: number): Promise<ActiveUser | null> {
+  const result = await pool.query(
+    `SELECT id, username, first_name, last_name FROM users WHERE id = $1 AND is_active = true`,
+    [userId]
+  );
+  return result.rows.length > 0 ? (result.rows[0] as ActiveUser) : null;
+}
+
+async function resolveUserDisplayName(userId: number): Promise<string | null> {
+  try {
+    const result = await pool.query(
+      `SELECT username, first_name, last_name FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (result.rows.length === 0) return null;
+    const u = result.rows[0] as Pick<ActiveUser, 'username' | 'first_name' | 'last_name'>;
+    return u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.username;
+  } catch (e) {
+    console.error('Error resolving user display name — falling back to ID:', e);
+    return null;
+  }
+}
+
 // In-memory session-based deduplication for TICKET_VIEWED events
 // Key: `${userId}-${ticketId}`, Value: timestamp of last view in this session
 const ticketViewCache = new Map<string, number>();
@@ -22,7 +52,7 @@ const TICKET_WRITE_USERS = ['darleneb', 'staciw'];
 const updateTicketSchema = z.object({
   status: z.enum(['new', 'in_progress', 'waiting_on_customer', 'waiting_on_production', 'resolved', 'closed']).optional(),
   priority: z.enum(['low', 'normal', 'high']).optional(),
-  ownerUserId: z.number().optional(),
+  ownerUserId: z.number().int().positive().optional(),
   assignedUserId: z.number().nullable().optional(),
   assignedUserIds: z.array(z.number()).optional(),
   title: z.string().optional(),
@@ -389,11 +419,28 @@ router.patch('/:id', sessionAwareAuth, async (req, res) => {
       });
     }
 
-    if (ownerUserId && ownerUserId !== existingTicket.ownerUserId) {
+    if (ownerUserId !== undefined && ownerUserId !== existingTicket.ownerUserId) {
+      // Validate the new owner resolves to an active user
+      const newOwnerUser = await resolveActiveUser(ownerUserId);
+      if (!newOwnerUser) {
+        return res.status(400).json({ error: 'ownerUserId does not resolve to an active user' });
+      }
+
+      // Resolve display names for both old and new owner
+      const newOwnerName = newOwnerUser.first_name && newOwnerUser.last_name
+        ? `${newOwnerUser.first_name} ${newOwnerUser.last_name}`
+        : newOwnerUser.username;
+
+      let previousOwnerName = String(existingTicket.ownerUserId);
+      const prevDisplayName = await resolveUserDisplayName(existingTicket.ownerUserId ?? 0);
+      if (prevDisplayName) {
+        previousOwnerName = prevDisplayName;
+      }
+
       await storage.createTicketActivity({
         ticketId: req.params.id,
         activityType: 'assignment',
-        message: `Ticket reassigned`,
+        message: `Ticket owner changed from ${previousOwnerName} to ${newOwnerName}`,
         previousValue: String(existingTicket.ownerUserId),
         newValue: String(ownerUserId),
         createdBy: user.id,

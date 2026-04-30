@@ -36,6 +36,7 @@ interface P2ProductItem {
   description: string;
   unitPrice: string;
   internalName: string | null;
+  inventoryItemId?: number | null;
 }
 
 interface P2InternalName {
@@ -77,6 +78,7 @@ interface LineItem {
   quantity: number;
   unitPrice: number;
   internalName: string;
+  inventoryItemId?: number | null;
 }
 
 export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreationWizardProps) {
@@ -183,7 +185,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       });
       onComplete(data.id);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to create P2 order',
@@ -221,6 +223,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       quantity: newItem.quantity || 1,
       unitPrice: newItem.unitPrice || 0,
       internalName: newItem.internalName || '',
+      inventoryItemId: newItem.inventoryItemId ?? null,
     };
 
     setLineItems([...lineItems, item]);
@@ -239,6 +242,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
           description: product.description,
           unitPrice: parseFloat(product.unitPrice),
           internalName: product.internalName || '',
+          inventoryItemId: product.inventoryItemId ?? null,
         });
       }
     }
@@ -301,6 +305,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
         description: item.description,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        inventoryItemId: item.inventoryItemId ?? null,
       })),
     };
 

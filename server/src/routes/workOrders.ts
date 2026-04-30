@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { auditService } from '../services/auditService';
 import { db } from '../../db';
 import {
   workOrders,
@@ -15,11 +16,15 @@ import {
   insertWorkOrderAttachmentSchema,
   insertProductionWorkOrderSchema,
   insertLaborThresholdSettingsSchema,
+  insertLaborBudgetOverrideSchema,
+  type LaborBudgetOverride,
 } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { authenticateToken } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
+import { requireScopedCapability, ScopedForbiddenError } from '../permissions';
 import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
 
@@ -502,7 +507,7 @@ function validateUuid(value: string): boolean {
 }
 
 // POST /api/work-orders/:id/travelers/create — create a traveler from a WAD using its part routing
-router.post('/:id/travelers/create', async (req: Request, res: Response) => {
+router.post('/:id/travelers/create', requirePermission('work_orders.release'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -657,11 +662,12 @@ const approveOverrunBodySchema = z.object({
   department: z.string().optional(),
 });
 
-const SUPERVISOR_ROLES = ['ADMIN', 'OWNER'];
+const SUPERVISOR_ROLES = ['ADMIN', 'OWNER', 'SUPERVISOR'];
 
 router.post(
   '/:id/approve-overrun',
   authenticateToken,
+  requirePermission('work_orders.override_charges'),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -716,22 +722,83 @@ router.post(
         return res.status(404).json({ error: 'Production work order not found' });
       }
 
+      // Build overrun set from server data so scope context is never taken raw from req.body.
+      const departmentBudgets = (wad.departmentBudgets as Record<string, number>) ?? {};
+      const overrunDepts: string[] = [];
+      for (const dept of Object.keys(departmentBudgets)) {
+        const deptCheck = await evaluateWorkOrderLaborStatus(id, dept);
+        if (deptCheck.status !== 'OK') overrunDepts.push(dept);
+      }
+
+      // Also evaluate overall WAD-level labor (null dept = total hours vs total budget)
+      const overallLaborStatus = await evaluateWorkOrderLaborStatus(id, undefined);
+      const wadHasGlobalOverrun = overallLaborStatus.status !== 'OK';
+
+      // Derive the canonical department and final labor status from server data
+      let canonicalDept: string | null;
+      let laborStatus: typeof overallLaborStatus;
+
+      if (parsed.data.department != null) {
+        // Client named a specific department. Confirm it is in the server-computed overrun set.
+        canonicalDept = overrunDepts.find(d => d === parsed.data.department) ?? null;
+        if (canonicalDept === null) {
+          return res.status(409).json({
+            error: 'NO_OVERRUN_DETECTED',
+            message: `No labor overrun detected for department "${parsed.data.department}" on this work order.`,
+            overrunDepartments: overrunDepts,
+          });
+        }
+        laborStatus = await evaluateWorkOrderLaborStatus(id, canonicalDept);
+      } else {
+        // No department specified — approve the overall WAD-level overrun.
+        if (!wadHasGlobalOverrun && overrunDepts.length === 0) {
+          return res.status(409).json({
+            error: 'NO_OVERRUN_DETECTED',
+            message: 'No labor overrun has been detected for this work order. Approval is not required.',
+          });
+        }
+        canonicalDept = null;
+        laborStatus = overallLaborStatus;
+      }
+
+      const requestingUser = (req as any).user as { id: number; role?: string } | undefined;
+      await requireScopedCapability(
+        requestingUser,
+        'work_orders.override_charges',
+        { department: canonicalDept, projectId: wad.projectId }
+      );
+
       const approvedBy = supervisor.employeeCode
         ? `${supervisor.name} (${supervisor.employeeCode})`
         : supervisor.name;
-
-      const laborStatus = await evaluateWorkOrderLaborStatus(id, parsed.data.department);
       const approval = await storage.createLaborApproval({
         productionWorkOrderId: id,
         employeeId: parsed.data.employeeId.trim(),
         approvedBy,
-        department: parsed.data.department ?? null,
+        department: canonicalDept,
         reason: parsed.data.reason,
         hoursAtApproval: String(laborStatus.totalHours),
       });
 
+      auditService.logEvent({
+        entityType: 'work_order',
+        entityId: id,
+        action: 'LABOR_OVERRUN_APPROVED',
+        actor: { id: supervisor.id, username: supervisor.name },
+        reason: parsed.data.reason,
+        meta: {
+          supervisorEmployeeId: supervisor.id,
+          supervisorName: supervisor.name,
+          supervisorEmployeeCode: supervisor.employeeCode ?? undefined,
+          department: canonicalDept ?? undefined,
+          hoursAtApproval: laborStatus.totalHours,
+          projectId: (wad as any).projectId ?? undefined,
+        },
+      }).catch(err => console.warn('[Audit] LABOR_OVERRUN_APPROVED log failed:', err?.message));
+
       return res.status(201).json({ approval, laborStatus });
     } catch (error: any) {
+      if (error instanceof ScopedForbiddenError) return res.status(403).json(error.payload);
       console.error('[WorkOrders] Error creating labor approval:', error);
       return res.status(500).json({ error: 'Failed to create labor approval', message: error.message });
     }
@@ -886,7 +953,7 @@ router.patch('/production/:id/labor-thresholds', authenticateToken, requireSuper
 // ==================== WAD RELEASE GATE ====================
 
 // POST /api/work-orders/:id/release — evaluate readiness and flip WAD to RELEASED
-router.post('/:id/release', authenticateToken, async (req: Request, res: Response) => {
+router.post('/:id/release', authenticateToken, requirePermission('work_orders.release'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -903,6 +970,9 @@ router.post('/:id/release', authenticateToken, async (req: Request, res: Respons
     if (!wad) {
       return res.status(404).json({ error: 'Production work order not found', id });
     }
+
+    const releasingUser = (req as any).user as { id: number; role?: string } | undefined;
+    await requireScopedCapability(releasingUser, 'work_orders.release', { projectId: wad.projectId });
 
     if (wad.status === 'RELEASED') {
       return res.status(400).json({ error: 'Work order is already released to the floor' });
@@ -923,12 +993,344 @@ router.post('/:id/release', authenticateToken, async (req: Request, res: Respons
 
     const updated = await storage.updateWorkOrderStatus(id, 'RELEASED');
     console.log(`[WorkOrders] WAD ${id} released to floor`);
+
+    const releasingActor = (req as any).user;
+    auditService.logEvent({
+      entityType: 'work_order',
+      entityId: id,
+      action: 'WORK_ORDER_RELEASED',
+      actor: releasingActor
+        ? { id: releasingActor.id, username: releasingActor.username, role: releasingActor.role }
+        : undefined,
+      fieldsChanged: {
+        status: { before: wad.status, after: 'RELEASED' },
+      },
+      meta: {
+        workOrderNumber: (wad as any).workOrderNumber ?? undefined,
+        projectId: (wad as any).projectId ?? undefined,
+      },
+    }).catch(err => console.warn('[Audit] WORK_ORDER_RELEASED log failed:', err?.message));
+
     return res.json(updated);
   } catch (err: any) {
+    if (err instanceof ScopedForbiddenError) return res.status(403).json(err.payload);
     console.error('[WorkOrders] Error releasing work order:', err);
     return res.status(500).json({ error: 'Failed to release work order', message: err?.message });
   }
 });
+
+// ==================== LABOR BUDGET OVERRIDE REQUEST WORKFLOW ====================
+
+const SHIFT_UNLOCK_HOURS = 8; // approved override expires after one 8-hour shift
+
+function validateProductionWadId(id: string, res: Response): boolean {
+  if (!validateUuid(id)) {
+    res.status(400).json({ error: 'Invalid production work order ID format', id });
+    return false;
+  }
+  return true;
+}
+
+// POST /api/work-orders/production/:id/budget-overrides
+// Operator creates a PENDING override request when blocked by budget exhaustion.
+// Kiosk-mode: no session required, but operatorEmployeeId is validated against DB.
+router.post('/production/:id/budget-overrides', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!validateProductionWadId(id, res)) return;
+
+    const [wad] = await db
+      .select()
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, id))
+      .limit(1);
+
+    if (!wad) {
+      return res.status(404).json({ error: 'Production work order not found' });
+    }
+
+    const parsed = insertLaborBudgetOverrideSchema.safeParse({ ...req.body, productionWorkOrderId: id });
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+
+    const { operatorEmployeeId, operatorDisplayName, requestedHours, note } = parsed.data;
+
+    // Validate operator identity against employees table to prevent fabricated requests
+    const idRaw = operatorEmployeeId.trim();
+    const isNumericId = /^\d+$/.test(idRaw);
+    const [operatorRow] = await (isNumericId
+      ? db.select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode })
+          .from(employees)
+          .where(eq(employees.id, parseInt(idRaw, 10)))
+          .limit(1)
+      : db.select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode })
+          .from(employees)
+          .where(eq(employees.employeeCode, idRaw))
+          .limit(1));
+
+    if (!operatorRow) {
+      return res.status(403).json({
+        error: 'OPERATOR_NOT_FOUND',
+        message: `No employee found with ID "${idRaw}". Cannot submit override request.`,
+      });
+    }
+
+    // Canonical display name comes from DB, not client-supplied value
+    const canonicalDisplayName = operatorRow.employeeCode
+      ? `${operatorRow.name} (${operatorRow.employeeCode})`
+      : operatorRow.name;
+
+    // Only one PENDING request allowed per operator per WAD
+    const existing = await storage.getPendingLaborBudgetOverrideByOperator(id, String(operatorRow.id));
+    if (existing) {
+      return res.status(409).json({
+        error: 'OVERRIDE_REQUEST_ALREADY_PENDING',
+        message: 'You already have a pending override request for this work order.',
+        existingOverride: existing,
+      });
+    }
+
+    const override = await storage.createLaborBudgetOverride({
+      productionWorkOrderId: id,
+      operatorEmployeeId: String(operatorRow.id),
+      operatorDisplayName: canonicalDisplayName,
+      requestedHours,
+      note: note ?? null,
+    });
+
+    auditService.logEvent({
+      entityType: 'work_order',
+      entityId: id,
+      action: 'LABOR_BUDGET_OVERRIDE_REQUESTED',
+      actor: { id: operatorRow.id, username: operatorRow.name },
+      meta: {
+        overrideId: override.id,
+        operatorEmployeeId: String(operatorRow.id),
+        requestedHours,
+        note: note ?? null,
+      },
+    }).catch(err => console.warn('[Audit] LABOR_BUDGET_OVERRIDE_REQUESTED log failed:', err?.message));
+
+    return res.status(201).json({ override });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[WorkOrders] Error creating budget override request:', err);
+    return res.status(500).json({ error: 'Failed to create override request', message: msg });
+  }
+});
+
+// GET /api/work-orders/production/:id/budget-overrides
+// Supervisor (authenticated) fetches all requests.
+// Authenticated operator may self-poll by providing operatorEmployeeId query param.
+// Requires authentication — unauthenticated access is not permitted.
+router.get('/production/:id/budget-overrides', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!validateProductionWadId(id, res)) return;
+
+    const { operatorEmployeeId } = req.query;
+    const authUser = req.user!;
+    const SUPERVISOR_ROLES = ['ADMIN', 'OWNER', 'SUPERVISOR', 'MANAGER'];
+    const isSupervisor = SUPERVISOR_ROLES.includes(authUser.role);
+    const overrides = await storage.getLaborBudgetOverridesByWorkOrder(id);
+
+    if (operatorEmployeeId && typeof operatorEmployeeId === 'string') {
+      // Non-supervisors: verify the requested filter resolves to the caller's own employee record
+      if (!isSupervisor) {
+        const callerEmpId = authUser.employeeId;
+        if (callerEmpId == null) {
+          return res.status(403).json({ error: 'IDENTITY_NOT_LINKED', message: 'Session is not linked to an employee record.' });
+        }
+        const paramTrimmed = operatorEmployeeId.trim();
+        const isNumericParam = /^\d+$/.test(paramTrimmed);
+        const paramNumericId = isNumericParam ? parseInt(paramTrimmed, 10) : null;
+        // Allow if the param is the caller's own numeric ID; otherwise resolve by employee code
+        if (paramNumericId !== callerEmpId) {
+          const [empRow] = await db.select({ id: employees.id }).from(employees)
+            .where(eq(employees.employeeCode, paramTrimmed)).limit(1);
+          if (!empRow || empRow.id !== callerEmpId) {
+            return res.status(403).json({ error: 'UNAUTHORIZED_FILTER', message: 'You may only query your own override requests.' });
+          }
+        }
+      }
+      return res.json(overrides.filter(o => o.operatorEmployeeId === operatorEmployeeId.trim()));
+    }
+
+    // Full list with no filter: supervisor-only
+    if (!isSupervisor) {
+      return res.status(403).json({
+        error: 'INSUFFICIENT_PERMISSIONS',
+        message: 'Only supervisors and administrators may view all override requests.',
+      });
+    }
+    return res.json(overrides);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[WorkOrders] Error fetching budget overrides:', msg);
+    return res.status(500).json({ error: 'Failed to fetch budget overrides', message: msg });
+  }
+});
+
+// PATCH /api/work-orders/production/:id/budget-overrides/:overrideId
+// Supervisor approves or denies an override request.
+// supervisorEmployeeId is optional when the authenticated session can provide identity
+const resolveOverrideBodySchema = z.object({
+  action: z.enum(['APPROVED', 'DENIED']),
+  // Only required if req.user.employeeId is null (e.g. in kiosk/dev-bypass scenarios)
+  supervisorEmployeeId: z.string().min(1).optional(),
+  supervisorNote: z.string().optional(),
+  additionalHours: z.number().positive().optional(), // for approval, defaults to SHIFT_UNLOCK_HOURS
+});
+
+router.patch(
+  '/production/:id/budget-overrides/:overrideId',
+  authenticateToken,
+  requirePermission('work_orders.approve_overrun'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id, overrideId } = req.params;
+      if (!validateProductionWadId(id, res)) return;
+
+      const overrideIdNum = parseInt(overrideId, 10);
+      if (isNaN(overrideIdNum)) {
+        return res.status(400).json({ error: 'Invalid overrideId' });
+      }
+
+      const parsed = resolveOverrideBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+      }
+
+      const override = await storage.getLaborBudgetOverrideById(overrideIdNum);
+      if (!override) {
+        return res.status(404).json({ error: 'Override request not found' });
+      }
+      if (override.productionWorkOrderId !== id) {
+        return res.status(400).json({ error: 'Override request does not belong to this work order' });
+      }
+      if (override.status !== 'PENDING') {
+        return res.status(409).json({
+          error: 'OVERRIDE_ALREADY_RESOLVED',
+          message: `Override request has already been ${override.status.toLowerCase()}.`,
+        });
+      }
+
+      // ── Supervisor identity resolution ───────────────────────────────────
+      // Primary source: authenticated session (req.user.employeeId).
+      // Fallback (dev-bypass only, where employeeId is null): body supervisorEmployeeId.
+      const authUser = req.user!;
+      let supervisor: { id: number; name: string; employeeCode: string | null; userRole: string | null } | undefined;
+
+      if (authUser.employeeId != null) {
+        // Authenticated user has a linked employee record — use it directly
+        const [emp] = await db
+          .select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode, userRole: employees.userRole })
+          .from(employees)
+          .where(eq(employees.id, authUser.employeeId))
+          .limit(1);
+        supervisor = emp;
+        if (!supervisor) {
+          return res.status(403).json({
+            error: 'SUPERVISOR_NOT_FOUND',
+            message: 'Authenticated user has no linked employee record.',
+          });
+        }
+        // If caller also supplied a body supervisorEmployeeId, cross-check it matches
+        if (parsed.data.supervisorEmployeeId) {
+          const bodyIdRaw = parsed.data.supervisorEmployeeId.trim();
+          const isNum = /^\d+$/.test(bodyIdRaw);
+          const bodyMatchesAuth = isNum
+            ? parseInt(bodyIdRaw, 10) === supervisor.id
+            : bodyIdRaw === (supervisor.employeeCode ?? '');
+          if (!bodyMatchesAuth) {
+            return res.status(403).json({
+              error: 'IDENTITY_MISMATCH',
+              message: 'supervisorEmployeeId does not match the authenticated user. Omit it or provide your own ID.',
+            });
+          }
+        }
+      } else {
+        // Dev-bypass or session without linked employee: fall back to body supervisorEmployeeId
+        if (!parsed.data.supervisorEmployeeId) {
+          return res.status(400).json({
+            error: 'SUPERVISOR_ID_REQUIRED',
+            message: 'supervisorEmployeeId is required when the session has no linked employee record.',
+          });
+        }
+        const supervisorIdRaw = parsed.data.supervisorEmployeeId.trim();
+        const isStrictNumericId = /^\d+$/.test(supervisorIdRaw);
+        const [emp] = await (isStrictNumericId
+          ? db.select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode, userRole: employees.userRole })
+              .from(employees)
+              .where(eq(employees.id, parseInt(supervisorIdRaw, 10)))
+              .limit(1)
+          : db.select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode, userRole: employees.userRole })
+              .from(employees)
+              .where(eq(employees.employeeCode, supervisorIdRaw))
+              .limit(1));
+        supervisor = emp;
+        if (!supervisor) {
+          return res.status(403).json({
+            error: 'SUPERVISOR_NOT_FOUND',
+            message: `No employee found with ID "${supervisorIdRaw}".`,
+          });
+        }
+      }
+
+      const SUPERVISOR_ROLES_LIST = ['ADMIN', 'OWNER', 'SUPERVISOR', 'MANAGER'];
+      if (!SUPERVISOR_ROLES_LIST.includes(supervisor.userRole ?? '')) {
+        return res.status(403).json({
+          error: 'INSUFFICIENT_SUPERVISOR_ROLE',
+          message: `Employee "${supervisor.name}" does not have supervisor privileges.`,
+        });
+      }
+
+      const { action, supervisorNote, additionalHours } = parsed.data;
+      const supervisorDisplayName = supervisor.employeeCode
+        ? `${supervisor.name} (${supervisor.employeeCode})`
+        : supervisor.name;
+
+      // Time-box the unlock: approved overrides expire at end of current shift
+      let expiresAt: Date | null = null;
+      if (action === 'APPROVED') {
+        const unlockHours = additionalHours ?? SHIFT_UNLOCK_HOURS;
+        expiresAt = new Date(Date.now() + unlockHours * 60 * 60 * 1000);
+      }
+
+      const resolved = await storage.resolveLaborBudgetOverride(
+        overrideIdNum,
+        action,
+        String(supervisor.id),
+        supervisorDisplayName,
+        supervisorNote ?? null,
+        expiresAt
+      );
+
+      auditService.logEvent({
+        entityType: 'work_order',
+        entityId: id,
+        action: action === 'APPROVED' ? 'LABOR_BUDGET_OVERRIDE_APPROVED' : 'LABOR_BUDGET_OVERRIDE_DENIED',
+        actor: { id: supervisor.id, username: supervisor.name },
+        reason: supervisorNote,
+        meta: {
+          overrideId: overrideIdNum,
+          operatorEmployeeId: override.operatorEmployeeId,
+          operatorDisplayName: override.operatorDisplayName,
+          requestedHours: override.requestedHours,
+          expiresAt: expiresAt?.toISOString() ?? null,
+        },
+      }).catch(err => console.warn('[Audit] LABOR_BUDGET_OVERRIDE resolution log failed:', err?.message));
+
+      return res.json({ override: resolved });
+    } catch (err) {
+      if (err instanceof ScopedForbiddenError) return res.status(403).json(err.payload);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[WorkOrders] Error resolving budget override:', err);
+      return res.status(500).json({ error: 'Failed to resolve override request', message: msg });
+    }
+  }
+);
 
 async function generateWorkOrderFromPM(scheduleId: number, assetId?: string, userId?: number): Promise<any> {
   try {

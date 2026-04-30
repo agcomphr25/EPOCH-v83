@@ -4,11 +4,14 @@ import {
   insertVendorPOItemSchema, 
   insertVendorPOSettingsSchema,
   insertOptionalSettingSchema,
-  insertPOOptionalSettingSchema
+  insertPOOptionalSettingSchema,
+  procurementComplianceEffectiveDates,
+  auditEvents,
 } from '@shared/schema';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { generateMagicLink } from '../../utils/magicLink';
+import { requirePermission } from '../../middleware/requirePermission';
+import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfirmFrontendUrl } from '../../utils/magicLink';
 import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
@@ -83,51 +86,157 @@ function deriveToAndCc(
 // Query params schema for list vendor POs
 const listVendorPOsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(200).default(20),
+  pageSize: z.coerce.number().int().min(1).max(200).default(200),
   search: z.string().optional(),
-  status: z.enum(['Draft', 'RFQ Sent', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled', 'any']).default('any'),
+  status: z.enum(['Draft', 'RFQ Sent', 'Quote Received', 'Declined', 'Expired', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled', 'any']).default('any'),
   vendorId: z.coerce.number().int().positive().optional(),
   sort: z.string().default('createdAt:desc'),
+  archived: z.enum(['true', 'false', 'any']).default('false'),
 });
 
 // GET /api/vendor-pos - List all vendor POs with filtering and pagination
 router.get('/', async (req: Request, res: Response) => {
   try {
     const params = listVendorPOsQuerySchema.parse(req.query);
-    const result = await storage.getAllVendorPOs(params);
+    const archivedFilter = params.archived === 'any' ? undefined : params.archived === 'true';
+    const result = await storage.getAllVendorPOs({ ...params, archived: archivedFilter });
 
     // Augment each PO with pendingReceiptCount (in-progress receipts tied to that PO)
-    try {
-      const countRows = await db.execute(
+    // and confirmationBadge (confirmed | awaiting | expired | no_link | null) in a single pass.
+    //
+    // Schema reference (magic_link_tokens): purpose text, metadata jsonb,
+    // used_at timestamp, expires_at timestamp NOT NULL, created_at timestamp DEFAULT now()
+    // — all columns confirmed present in migration 0000_shiny_amazoness.sql.
+    //
+    // Queries run independently via Promise.allSettled so a failure in one
+    // (e.g. receipts or magic_link_tokens) does not suppress the other field.
+
+    type ConfirmBadge = 'confirmed' | 'awaiting' | 'expired' | 'no_link' | null;
+    type ComplianceStatusBadge = 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention';
+    type POShape = { id: number; status?: string };
+
+    const [countResult, confirmResult, complianceResult] = await Promise.allSettled([
+      db.execute(
         sql`SELECT vendor_po_id, COUNT(*)::int AS cnt
             FROM receipts
             WHERE vendor_po_id IS NOT NULL AND status = 'in_progress'
             GROUP BY vendor_po_id`
-      );
-      type CountRow = { vendor_po_id: number; cnt: number };
+      ),
+      db.execute(
+        sql`SELECT DISTINCT ON ((metadata->>'vendorPoId')::int)
+                  (metadata->>'vendorPoId')::int AS vendor_po_id,
+                  used_at AS "usedAt",
+                  expires_at AS "expiresAt"
+            FROM magic_link_tokens
+            WHERE purpose = 'vendor_po_confirmation'
+              AND metadata->>'vendorPoId' ~ '^\d+$'
+            ORDER BY (metadata->>'vendorPoId')::int, created_at DESC`
+      ),
+      db.execute(
+        sql`SELECT vendor_po_id, review_status, second_party_complete, vendor_approved, review_notes
+            FROM vendor_po_compliance_reviews`
+      ),
+    ]);
+
+    // Build receipt-count map (defaults to 0 on query failure)
+    type CountRow = { vendor_po_id: number; cnt: number };
+    const countMap: Record<number, number> = {};
+    if (countResult.status === 'fulfilled') {
+      const countRows = countResult.value;
       const rows: CountRow[] = (
         countRows && typeof countRows === 'object' && 'rows' in countRows
           ? (countRows as { rows: CountRow[] }).rows
           : countRows
       ) as CountRow[];
-      const countMap: Record<number, number> = {};
       for (const row of rows) {
         countMap[row.vendor_po_id] = Number(row.cnt);
       }
-      // result is either an array of POs or a paginated { data: PO[], total: number } object
-      const resultObj = result as { data?: { id: number }[] } | { id: number }[];
-      if (Array.isArray(resultObj)) {
-        return res.json(resultObj.map(po => ({ ...po, pendingReceiptCount: countMap[po.id] ?? 0 })));
-      }
-      const paginated = resultObj as { data: { id: number }[]; [key: string]: unknown };
-      if (Array.isArray(paginated.data)) {
-        return res.json({ ...paginated, data: paginated.data.map(po => ({ ...po, pendingReceiptCount: countMap[po.id] ?? 0 })) });
-      }
-      return res.json(result);
-    } catch (_) {
-      // Non-fatal: return result without pendingReceiptCount if count query fails
-      return res.json(result);
+    } else {
+      console.error('[VendorPO] Receipt count query failed:', countResult.reason);
     }
+
+    // Build confirmation map (defaults to no_link for issued POs on query failure)
+    type ConfirmRow = { vendor_po_id: number; usedAt: string | null; expiresAt: string };
+    const confirmMap: Record<number, ConfirmBadge> = {};
+    const confirmUsedAtMap: Record<number, string | null> = {};
+    const confirmExpiresAtMap: Record<number, string | null> = {};
+    if (confirmResult.status === 'fulfilled') {
+      const confirmRows = confirmResult.value;
+      const cRows: ConfirmRow[] = (
+        confirmRows && typeof confirmRows === 'object' && 'rows' in confirmRows
+          ? (confirmRows as { rows: ConfirmRow[] }).rows
+          : confirmRows
+      ) as ConfirmRow[];
+      const now = new Date();
+      for (const cr of cRows) {
+        if (cr.vendor_po_id == null) continue;
+        if (cr.usedAt) {
+          confirmMap[cr.vendor_po_id] = 'confirmed';
+          confirmUsedAtMap[cr.vendor_po_id] = cr.usedAt;
+        } else if (cr.expiresAt && new Date(cr.expiresAt) < now) {
+          confirmMap[cr.vendor_po_id] = 'expired';
+        } else {
+          confirmMap[cr.vendor_po_id] = 'awaiting';
+        }
+        if (cr.expiresAt) {
+          confirmExpiresAtMap[cr.vendor_po_id] = cr.expiresAt;
+        }
+      }
+    } else {
+      console.error('[VendorPO] magic_link_tokens confirmation query failed:', confirmResult.reason);
+    }
+
+    // Build compliance status map
+    type ComplianceRow = { vendor_po_id: number; review_status: string; second_party_complete: boolean; vendor_approved: boolean; review_notes: string | null };
+    const complianceMap: Record<number, ComplianceStatusBadge> = {};
+    if (complianceResult.status === 'fulfilled') {
+      const complianceRows = complianceResult.value;
+      const cRows: ComplianceRow[] = (
+        complianceRows && typeof complianceRows === 'object' && 'rows' in complianceRows
+          ? (complianceRows as { rows: ComplianceRow[] }).rows
+          : complianceRows
+      ) as ComplianceRow[];
+      for (const cr of cRows) {
+        if (cr.vendor_po_id == null) continue;
+        if (cr.review_status === 'requires_attention') {
+          complianceMap[cr.vendor_po_id] = 'Requires Attention';
+        } else if (cr.review_status === 'blocked' || !cr.second_party_complete || !cr.vendor_approved) {
+          complianceMap[cr.vendor_po_id] = 'Blocked';
+        } else if (cr.review_status === 'reviewed') {
+          complianceMap[cr.vendor_po_id] = 'Reviewed';
+        } else {
+          complianceMap[cr.vendor_po_id] = 'Requires Attention';
+        }
+      }
+    } else {
+      console.error('[VendorPO] Compliance review query failed:', complianceResult.reason);
+    }
+
+    const augment = (po: POShape) => {
+      const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(po.status ?? '');
+      return {
+        ...po,
+        pendingReceiptCount: countMap[po.id] ?? 0,
+        // null → non-issued PO (no badge shown)
+        // 'no_link' → issued PO with no confirmation token on record
+        confirmationBadge: (isIssued ? (confirmMap[po.id] ?? 'no_link') : null) as ConfirmBadge,
+        confirmationUsedAt: isIssued ? (confirmUsedAtMap[po.id] ?? null) : null,
+        confirmationExpiresAt: isIssued ? (confirmExpiresAtMap[po.id] ?? null) : null,
+        // Compliance status badge: 'Pending Review' if no review exists
+        complianceStatus: (complianceMap[po.id] ?? 'Pending Review') as ComplianceStatusBadge,
+      };
+    };
+
+    // result is either an array of POs or a paginated { data: PO[], total: number } object
+    const resultObj = result as { data?: POShape[] } | POShape[];
+    if (Array.isArray(resultObj)) {
+      return res.json(resultObj.map(augment));
+    }
+    const paginated = resultObj as { data: POShape[]; [key: string]: unknown };
+    if (Array.isArray(paginated.data)) {
+      return res.json({ ...paginated, data: paginated.data.map(augment) });
+    }
+    return res.json(result);
   } catch (error) {
     console.error('Get vendor POs error:', error);
     if (error instanceof z.ZodError) {
@@ -136,6 +245,26 @@ router.get('/', async (req: Request, res: Response) => {
         .json({ error: 'Invalid query parameters', details: error.errors });
     }
     res.status(500).json({ error: 'Failed to retrieve vendor POs' });
+  }
+});
+
+// GET /api/vendor-pos/counts - Return tab counts for active, closed, and archived RFQs
+router.get('/counts', async (_req: Request, res: Response) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        SUM(CASE WHEN archived = false AND status IN ('Draft','RFQ Sent','Quote Received','Sent','Partially Received') THEN 1 ELSE 0 END)::int AS active,
+        SUM(CASE WHEN archived = false AND status IN ('Declined','Expired','Cancelled','Fully Received') THEN 1 ELSE 0 END)::int AS closed,
+        SUM(CASE WHEN archived = true THEN 1 ELSE 0 END)::int AS archived
+      FROM vendor_pos
+      WHERE is_current_revision = true
+    `);
+    const rows = (result && typeof result === 'object' && 'rows' in result ? (result as { rows: unknown[] }).rows : result) as { active: number; closed: number; archived: number }[];
+    const row = rows[0] ?? { active: 0, closed: 0, archived: 0 };
+    res.json({ active: Number(row.active ?? 0), closed: Number(row.closed ?? 0), archived: Number(row.archived ?? 0) });
+  } catch (error) {
+    console.error('Vendor PO counts error:', error);
+    res.status(500).json({ error: 'Failed to retrieve vendor PO counts' });
   }
 });
 
@@ -312,6 +441,127 @@ router.delete('/optional-settings/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendor-pos/compliance-backfill - Procurement Compliance Backfill Queue
+// Returns all issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Must be defined BEFORE /:id to avoid route conflict.
+// Query param: filter = 'all' | 'enforced' | 'legacy' | 'audit-sensitive-legacy'
+const backfillFilterSchema = z.enum(['all', 'enforced', 'legacy', 'audit-sensitive-legacy']).default('all');
+router.get('/compliance-backfill', async (req: Request, res: Response) => {
+  try {
+    const filterResult = backfillFilterSchema.safeParse(req.query.filter ?? 'all');
+    if (!filterResult.success) {
+      return res.status(400).json({ error: 'Invalid filter value. Must be one of: all, enforced, legacy, audit-sensitive-legacy' });
+    }
+    const { getProcurementComplianceBackfillQueue } = await import('../services/procurementComplianceBackfill');
+    const rows = await getProcurementComplianceBackfillQueue(filterResult.data);
+    res.json(rows);
+  } catch (error) {
+    console.error('[VendorPO] Compliance backfill queue error:', error);
+    res.status(500).json({ error: 'Failed to retrieve compliance backfill queue' });
+  }
+});
+
+// ─── Procurement Compliance Effective Date Routes ───────────────────────────
+// Must be defined BEFORE /:id to avoid route conflicts.
+
+// GET /api/vendor-pos/compliance-effective-date - Get current effective date + history
+router.get('/compliance-effective-date', async (_req: Request, res: Response) => {
+  try {
+    const { desc } = await import('drizzle-orm');
+    const rows = await db.select()
+      .from(procurementComplianceEffectiveDates)
+      .orderBy(desc(procurementComplianceEffectiveDates.configuredAt));
+
+    const current = rows[0] ?? {
+      id: 0,
+      effectiveDate: '2026-06-01',
+      configuredByDisplayName: 'System (default)',
+      configuredAt: null,
+      reason: 'Default effective date — no custom date has been configured.',
+    };
+
+    res.json({ current, history: rows });
+  } catch (error) {
+    console.error('[VendorPO] Get compliance effective date error:', error);
+    res.status(500).json({ error: 'Failed to retrieve compliance effective date' });
+  }
+});
+
+// PUT /api/vendor-pos/compliance-effective-date - Set a new effective date (admin-only, requires reason)
+router.put('/compliance-effective-date', async (req: Request, res: Response) => {
+  try {
+    // Admin-only: only ADMIN and OWNER roles may change the enforcement effective date
+    const userRole = (req as any).user?.role as string | undefined;
+    if (!userRole || !['ADMIN', 'OWNER'].includes(userRole)) {
+      return res.status(403).json({ error: 'Forbidden: only admins may change the compliance effective date' });
+    }
+
+    // Actor identity is always derived from the authenticated session — never from request body
+    const actorDisplayName = String((req as any).user?.username ?? (req as any).user?.id ?? 'Admin');
+    const actorUserId: number | null = ((req as any).user?.id as number | undefined) ?? null;
+
+    const schema = z.object({
+      effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Effective date must be in YYYY-MM-DD format').refine(
+        (d) => !isNaN(Date.parse(d)),
+        { message: 'Effective date must be a valid calendar date' }
+      ),
+      reason: z.string().min(10, 'Reason must be at least 10 characters'),
+    });
+    const data = schema.parse(req.body);
+
+    const { desc } = await import('drizzle-orm');
+
+    // Fetch the current (old) effective date for audit trail — must happen before the transaction
+    const currentRows = await db.select()
+      .from(procurementComplianceEffectiveDates)
+      .orderBy(desc(procurementComplianceEffectiveDates.configuredAt))
+      .limit(1);
+    const oldEffectiveDate = currentRows[0]?.effectiveDate ?? '2026-06-01';
+
+    // Atomic transaction: insert new effective date row AND write audit event together.
+    // If the audit write fails, the date change is rolled back — ensuring all configuration
+    // changes are auditable or rejected.
+    let inserted: typeof procurementComplianceEffectiveDates.$inferSelect;
+    await db.transaction(async (tx) => {
+      [inserted] = await tx.insert(procurementComplianceEffectiveDates).values({
+        effectiveDate: data.effectiveDate,
+        reason: data.reason,
+        configuredByDisplayName: actorDisplayName,
+        configuredByUserId: actorUserId,
+      }).returning();
+
+      await tx.insert(auditEvents).values({
+        entityType: 'system_config',
+        entityId: 'procurement_compliance_effective_date',
+        action: 'COMPLIANCE_EFFECTIVE_DATE_CHANGED',
+        actorId: actorUserId,
+        actorName: actorDisplayName,
+        reason: data.reason,
+        meta: {
+          oldEffectiveDate,
+          newEffectiveDate: data.effectiveDate,
+          changedByRole: userRole,
+          reason: data.reason,
+          ip: req.ip ?? null,
+          userAgent: req.headers['user-agent'] ?? null,
+        },
+      });
+    });
+
+    const allRows = await db.select()
+      .from(procurementComplianceEffectiveDates)
+      .orderBy(desc(procurementComplianceEffectiveDates.configuredAt));
+
+    res.json({ current: inserted!, history: allRows });
+  } catch (error) {
+    console.error('[VendorPO] Update compliance effective date error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update compliance effective date' });
+  }
+});
+
 // GET /api/vendor-pos/:id - Get a single vendor PO
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -333,7 +583,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/vendor-pos - Create a new vendor PO
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
   try {
     const data = insertVendorPOSchema.parse(req.body);
     const vendorPO = await storage.createVendorPO(data);
@@ -351,7 +601,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT /api/vendor-pos/:id - Update a vendor PO
 // Note: Blocks edits on issued POs (status Sent or beyond) - use revisions instead
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -384,6 +634,17 @@ router.put('/:id', async (req: Request, res: Response) => {
         error: 'Cannot edit issued PO',
         message: 'This PO has been issued and cannot be directly modified. Create a revision to make changes.',
         currentStatus: existingPO.status
+      });
+    }
+
+    // Invalidate compliance review BEFORE mutating the PO so that if invalidation
+    // fails the PO update never commits (fail-safe, not fail-open).
+    if (data.vendorId !== undefined && data.vendorId !== existingPO.vendorId) {
+      const actorId = (req as any).user?.id as number | undefined;
+      await storage.invalidateVendorPoComplianceReview(id, 'Vendor changed after compliance review', actorId, {
+        changedField: 'vendorId',
+        previousValue: existingPO.vendorId,
+        newValue: data.vendorId,
       });
     }
 
@@ -472,7 +733,7 @@ router.get('/:id/history', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/vendor-pos/:id - Delete a vendor PO
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -517,6 +778,16 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       vendorPoId,
     });
 
+    // Invalidate compliance review BEFORE creating the item so that if invalidation
+    // fails the item insertion never commits (fail-safe).
+    const actorId = (req as any).user?.id as number | undefined;
+    await storage.invalidateVendorPoComplianceReview(
+      vendorPoId,
+      'Line item added after compliance review',
+      actorId,
+      { changedField: 'lineItems', action: 'added' },
+    );
+
     const item = await storage.createVendorPOItem(data);
     res.status(201).json(item);
   } catch (error) {
@@ -538,7 +809,33 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor PO item ID' });
     }
 
+    // Fetch old item to compare material fields before updating.
+    const oldItem = await storage.getVendorPOItemById(itemId);
     const data = insertVendorPOItemSchema.partial().parse(req.body);
+
+    // Invalidate compliance review BEFORE updating the item so that if invalidation
+    // fails the item mutation never commits (fail-safe).
+    if (oldItem) {
+      const materialFields: Array<{ key: string; label: string }> = [
+        { key: 'quantity', label: 'quantity' },
+        { key: 'unitPrice', label: 'unit price' },
+        { key: 'purchaseQty', label: 'purchase quantity' },
+        { key: 'purchaseUnitPrice', label: 'purchase unit price' },
+      ];
+      const changedField = materialFields.find(
+        (f) => data[f.key as keyof typeof data] !== undefined && Number(data[f.key as keyof typeof data]) !== Number(oldItem[f.key])
+      );
+      if (changedField) {
+        const actorId = (req as any).user?.id as number | undefined;
+        await storage.invalidateVendorPoComplianceReview(
+          oldItem.vendorPoId,
+          `Line item ${changedField.label} changed after compliance review`,
+          actorId,
+          { changedField: changedField.key, itemId },
+        );
+      }
+    }
+
     const item = await storage.updateVendorPOItem(itemId, data);
 
     if (!item) {
@@ -563,6 +860,21 @@ router.delete('/items/:itemId', async (req: Request, res: Response) => {
     const itemId = parseInt(req.params.itemId);
     if (isNaN(itemId)) {
       return res.status(400).json({ error: 'Invalid vendor PO item ID' });
+    }
+
+    // Fetch item first so we know its vendorPoId for compliance invalidation.
+    // Invalidate BEFORE deletion so that if invalidation fails the delete never
+    // commits (fail-safe).
+    const itemToDelete = await storage.getVendorPOItemById(itemId);
+
+    if (itemToDelete) {
+      const actorId = (req as any).user?.id as number | undefined;
+      await storage.invalidateVendorPoComplianceReview(
+        itemToDelete.vendorPoId,
+        'Line item removed after compliance review',
+        actorId,
+        { changedField: 'lineItems', action: 'removed', itemId },
+      );
     }
 
     await storage.deleteVendorPOItem(itemId);
@@ -651,6 +963,46 @@ router.put('/:id/optional-settings', async (req: Request, res: Response) => {
 
     const { optionalSettingIds } = updateSchema.parse(req.body);
 
+    // Capture current settings (with name/statement) before update for compliance check.
+    const currentSettings = await storage.getPOOptionalSettings(vendorPoId);
+    const newIds = new Set(optionalSettingIds);
+
+    // Determine which settings are being removed and whether any are compliance-related.
+    // A removal is material only if the removed statement's text matches a keyword for a
+    // compliance field that is currently marked required in the saved review.
+    const removedSettings = currentSettings.filter((s: any) => !newIds.has(s.id));
+    let complianceRelatedRemoval = false;
+    if (removedSettings.length > 0) {
+      const review = await storage.getVendorPOComplianceReview(vendorPoId);
+      if (review && review.reviewStatus === 'reviewed') {
+        // Build keyword list from flags that are actually marked required in this review
+        const requiredKeywords: string[] = [];
+        if (review.farRequired) requiredKeywords.push('FAR', 'DFAR', 'DFARS');
+        if (review.dpasRequired) requiredKeywords.push('DPAS');
+        if (review.cocRequired) requiredKeywords.push('CoC', 'COC', 'Certificate of Conformance');
+        if (review.mtrRequired) requiredKeywords.push('MTR', 'Material Test Report');
+
+        if (requiredKeywords.length > 0) {
+          complianceRelatedRemoval = removedSettings.some((s: any) => {
+            const text = `${s.name ?? ''} ${s.statement ?? ''}`;
+            return requiredKeywords.some((kw) => text.toLowerCase().includes(kw.toLowerCase()));
+          });
+        }
+      }
+    }
+
+    // Invalidate compliance review BEFORE updating settings so that if invalidation
+    // fails the settings change never commits (fail-safe).
+    if (complianceRelatedRemoval) {
+      const actorId = (req as any).user?.id as number | undefined;
+      await storage.invalidateVendorPoComplianceReview(
+        vendorPoId,
+        'Compliance-required statement removed after compliance review',
+        actorId,
+        { changedField: 'optionalSettings', action: 'removed', removedCount: removedSettings.length },
+      );
+    }
+
     await storage.updatePOOptionalSettings(vendorPoId, optionalSettingIds);
     res.status(204).send();
   } catch (error) {
@@ -718,6 +1070,188 @@ router.get('/:id/email-recipients', async (req: Request, res: Response) => {
   }
 });
 
+// ============ Compliance Review Routes ============
+
+// GET /api/vendor-pos/:id/compliance-review - Get the compliance review for a PO
+router.get('/:id/compliance-review', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const review = await storage.getVendorPOComplianceReview(id);
+
+    if (!review) {
+      return res.json({
+        vendorPoId: id,
+        governmentContract: false,
+        farRequired: false,
+        dpasRequired: false,
+        cocRequired: false,
+        mtrRequired: false,
+        sourceInspectionRequired: false,
+        secondPartyComplete: false,
+        vendorApproved: false,
+        reviewNotes: '',
+        reviewStatus: 'pending',
+        reviewedByDisplayName: null,
+        reviewedAt: null,
+      });
+    }
+
+    res.json(review);
+  } catch (error) {
+    console.error('Get compliance review error:', error);
+    res.status(500).json({ error: 'Failed to retrieve compliance review' });
+  }
+});
+
+// PUT /api/vendor-pos/:id/compliance-review - Save/update the compliance review for a PO
+//
+// Design note on HTTP status: This endpoint intentionally returns 200 even when the
+// review is blocked (secondPartyComplete=false or vendorApproved=false). The reason is
+// that the record IS successfully persisted — saving a blocked review is valid for audit
+// trail purposes (reviewers must document their findings even when approvals are missing).
+// The response includes a `blockingReasons` array so the client can display why the PO
+// cannot proceed to issuance. The actual issuance gate lives in POST /:id/issue which
+// returns 422 if the review is not in a passing state.
+router.put('/:id/compliance-review', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const reviewSchema = z.object({
+      governmentContract: z.boolean(),
+      farRequired: z.boolean(),
+      dpasRequired: z.boolean(),
+      cocRequired: z.boolean(),
+      mtrRequired: z.boolean(),
+      sourceInspectionRequired: z.boolean(),
+      secondPartyComplete: z.boolean(),
+      vendorApproved: z.boolean(),
+      reviewNotes: z.string().min(1, 'Justification is required'),
+      reviewStatus: z.enum(['pending', 'reviewed', 'blocked', 'requires_attention']).optional().default('reviewed'),
+      historicalBackfill: z.boolean().optional().default(false),
+    });
+
+    const body = reviewSchema.parse(req.body);
+
+    const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+    const performedById = (req as any).user?.id as number | undefined;
+
+    // If a previously-reviewed PO is being re-submitted with blocking answers, write an invalidation
+    // audit event before the upsert overwrites the status to 'blocked'.
+    const existingReview = await storage.getVendorPOComplianceReview(id);
+    if (existingReview && existingReview.reviewStatus === 'reviewed') {
+      const incomingBlocking = !body.secondPartyComplete || !body.vendorApproved;
+      if (incomingBlocking) {
+        await storage.invalidateVendorPoComplianceReview(
+          id,
+          'Compliance answers changed to a blocking state',
+          performedById,
+          { changedField: 'complianceAnswers', secondPartyComplete: body.secondPartyComplete, vendorApproved: body.vendorApproved },
+        );
+      }
+    }
+
+    const review = await storage.upsertVendorPOComplianceReview({
+      vendorPoId: id,
+      ...body,
+      reviewStatus: body.reviewStatus ?? 'reviewed',
+      reviewedByUserId: performedById,
+      reviewedByDisplayName: performedBy,
+    });
+
+    // Derive blocking reasons to surface to client
+    const blockingReasons: string[] = [];
+    if (!body.secondPartyComplete) blockingReasons.push('Second-party approval is not complete');
+    if (!body.vendorApproved) blockingReasons.push('Vendor is not approved');
+
+    res.json({ ...review, blockingReasons });
+  } catch (error) {
+    console.error('Save compliance review error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid compliance review data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to save compliance review' });
+  }
+});
+
+// PUT /api/vendor-pos/:id/legacy-exception-flag - Set or clear the legacy exception flag on a PO's compliance review
+// Exception-flagged legacy POs are moved from the Legacy Queue into the Active Enforcement Queue.
+// Restricted to ADMIN and OWNER roles — changing this flag directly affects ERDI scoring population.
+router.put('/:id/legacy-exception-flag', async (req: Request, res: Response) => {
+  try {
+    const userRole = String((req as any).user?.role ?? '');
+    if (!['ADMIN', 'OWNER'].includes(userRole)) {
+      return res.status(403).json({ error: 'Insufficient permissions. Admin or Owner role required to manage legacy exception flags.' });
+    }
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const schema = z.object({
+      legacyExceptionFlagged: z.boolean(),
+      legacyExceptionReason: z.string().optional(),
+    }).superRefine((val, ctx) => {
+      if (val.legacyExceptionFlagged && (!val.legacyExceptionReason || val.legacyExceptionReason.trim().length < 10)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Reason must be at least 10 characters when setting a legacy exception flag', path: ['legacyExceptionReason'] });
+      }
+    });
+    const body = schema.parse(req.body);
+
+    const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+    const performedById = (req as any).user?.id as number | undefined;
+
+    // Capture old flag state before making changes — for audit trail old/new comparison.
+    const existingReview = await storage.getVendorPOComplianceReview(id);
+    const oldFlagged = existingReview?.legacyExceptionFlagged ?? false;
+    const oldReason = existingReview?.legacyExceptionReason ?? null;
+
+    // Use the dedicated flag-only update: does NOT recalculate review status or
+    // touch reviewedAt/reviewer identity. Creates a minimal pending record if needed.
+    const updated = await storage.setVendorPOLegacyExceptionFlag(
+      id,
+      body.legacyExceptionFlagged,
+      body.legacyExceptionReason ?? null,
+    );
+
+    const { auditService } = await import('../services/auditService');
+    await auditService.logEvent({
+      entityType: 'vendor_po_compliance_review',
+      entityId: `vendor-po-${id}`,
+      action: body.legacyExceptionFlagged ? 'LEGACY_EXCEPTION_FLAG_SET' : 'LEGACY_EXCEPTION_FLAG_CLEARED',
+      actor: { id: performedById, username: performedBy, role: userRole },
+      meta: {
+        vendorPoId: id,
+        oldFlagged,
+        newFlagged: body.legacyExceptionFlagged,
+        oldReason,
+        newReason: body.legacyExceptionReason ?? null,
+        actorRole: userRole,
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('[VendorPO] Legacy exception flag error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update legacy exception flag' });
+  }
+});
+
 // POST /api/vendor-pos/:id/send-rfq - Send an RFQ email to vendor (non-binding quote request)
 router.post('/:id/send-rfq', async (req: Request, res: Response) => {
   try {
@@ -756,7 +1290,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       rawRecipients,
       vendor.email,
       allowedEmails,
-      ['laurie@agcomposites.com']
+      ['laurie.tandy@agadvanced.com']
     );
 
     // Fetch line items for the RFQ
@@ -843,7 +1377,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 });
 
 // POST /api/vendor-pos/:id/issue - Issue a PO, optionally sending confirmation email to vendor
-router.post('/:id/issue', async (req: Request, res: Response) => {
+router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -860,7 +1394,8 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
     }
 
     // Pre-flight status check (non-locking, for fast rejection)
-    if (vendorPO.status !== 'Draft' && vendorPO.status !== 'RFQ Sent') {
+    const issuableStatuses = ['Draft', 'RFQ Sent', 'Quote Received'];
+    if (!issuableStatuses.includes(vendorPO.status ?? '')) {
       return res.status(400).json({ 
         error: 'PO cannot be issued', 
         message: `PO is already in ${vendorPO.status} status` 
@@ -869,6 +1404,47 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
+
+    // ── COMPLIANCE GATE: Server-side enforcement (UI gate is not sufficient) ─
+    // All four conditions are checked independently; status field alone is not trusted
+    // because DB edits or migration drift could leave it inconsistent.
+    const complianceReview = await storage.getVendorPOComplianceReview(id);
+    {
+      const blockingReasons: string[] = [];
+      if (!complianceReview) {
+        blockingReasons.push('No compliance review found — complete the pre-issue review before issuing');
+      } else {
+        // Explicit requires_attention check — PO changed after review
+        if (complianceReview.reviewStatus === 'requires_attention') {
+          return res.status(422).json({
+            error: 'Compliance review requires attention',
+            message: 'Compliance review requires attention because PO changed after review.',
+            complianceBlocked: true,
+            blockingReasons: ['Compliance review requires attention because PO changed after review.'],
+          });
+        }
+        if (complianceReview.reviewStatus !== 'reviewed') {
+          blockingReasons.push(`Compliance review status is "${complianceReview.reviewStatus}" — must be "reviewed"`);
+        }
+        if (!complianceReview.secondPartyComplete) {
+          blockingReasons.push('Second-party approval is not complete');
+        }
+        if (!complianceReview.vendorApproved) {
+          blockingReasons.push('Vendor is not approved');
+        }
+        if (!complianceReview.reviewNotes?.trim()) {
+          blockingReasons.push('Compliance justification is missing');
+        }
+      }
+      if (blockingReasons.length > 0) {
+        return res.status(422).json({
+          error: 'Compliance review gate failed',
+          message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
+          complianceBlocked: true,
+          blockingReasons,
+        });
+      }
+    }
 
     // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
     if (skip) {
@@ -912,11 +1488,14 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       });
     }
 
+    // Invalidate any prior unused confirmation tokens for this PO before issuing a new one
+    await storage.invalidateVendorPoConfirmationTokens(id);
+
     // Atomic transactional issuance: lock row, generate number, update status
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
 
-    // Generate magic link for PO confirmation
-    const { link, expiresAt } = await generateMagicLink({
+    // Generate magic link for PO confirmation — produce a frontend URL, not the raw API endpoint
+    const { token: confirmToken, expiresAt } = await generateMagicLink({
       email: vendor.email,
       purpose: 'vendor_po_confirmation',
       metadata: {
@@ -927,9 +1506,10 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
       },
       expiresInMinutes: 60 * 24 * 7, // 7 days expiration
     });
+    const link = createVendorConfirmFrontendUrl(confirmToken);
 
-    // Build standard CC list: always include laurie@agcomposites.com + issuing user's email
-    const standardCc: string[] = ['laurie@agcomposites.com'];
+    // Build standard CC list: always include laurie.tandy@agadvanced.com + issuing user's email
+    const standardCc: string[] = ['laurie.tandy@agadvanced.com'];
     const issuingUserEmail = (req as any).user?.email as string | undefined;
     if (issuingUserEmail && !standardCc.map((c) => c.toLowerCase()).includes(issuingUserEmail.toLowerCase())) {
       standardCc.push(issuingUserEmail);
@@ -999,6 +1579,138 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/vendor-pos/:id/rfq-transition - Transition an RFQ to Quote Received, Declined, or Expired
+router.post('/:id/rfq-transition', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const transitionSchema = z.object({
+      status: z.enum(['Quote Received', 'Declined', 'Expired']),
+      rfqOutcomeNotes: z.string().optional(),
+    });
+
+    const { status, rfqOutcomeNotes } = transitionSchema.parse(req.body);
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    if (vendorPO.status !== 'RFQ Sent') {
+      return res.status(400).json({
+        error: 'RFQ transition not allowed',
+        message: `Only RFQs in "RFQ Sent" status can be transitioned to ${status}. Current status: ${vendorPO.status}`,
+      });
+    }
+
+    const updatePayload: Record<string, unknown> = { status };
+    if (['Declined', 'Expired'].includes(status)) {
+      updatePayload.rfqOutcomeNotes = rfqOutcomeNotes || null;
+    }
+    const updated = await storage.updateVendorPO(id, updatePayload);
+    return res.json(updated);
+  } catch (error) {
+    console.error('RFQ transition error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid transition data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to transition RFQ status' });
+  }
+});
+
+// POST /api/vendor-pos/:id/archive - Toggle the archived flag on a vendor PO
+router.post('/:id/archive', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const bodySchema = z.object({
+      archived: z.boolean(),
+    });
+
+    const { archived } = bodySchema.parse(req.body);
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    // Only closed-state records can be archived
+    const closedStatuses = ['Quote Received', 'Declined', 'Expired', 'Cancelled'];
+    if (archived && !closedStatuses.includes(vendorPO.status)) {
+      return res.status(400).json({
+        error: 'Only closed-state RFQs can be archived',
+        message: `Cannot archive a record in "${vendorPO.status}" status. Archive is only allowed for: ${closedStatuses.join(', ')}.`,
+      });
+    }
+
+    const updated = await storage.updateVendorPO(id, { archived });
+    return res.json(updated);
+  } catch (error) {
+    console.error('Archive toggle error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid archive data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update archive status' });
+  }
+});
+
+// GET /api/vendor-pos/:id/confirmation - Get vendor confirmation status for an issued PO
+router.get('/:id/confirmation', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
+    if (!issuedStatuses.includes(vendorPO.status)) {
+      return res.status(404).json({ error: 'Confirmation status is only available for issued POs' });
+    }
+
+    const result = await db.execute(
+      sql`SELECT email, expires_at AS "expiresAt", used_at AS "usedAt"
+          FROM magic_link_tokens
+          WHERE purpose = 'vendor_po_confirmation'
+            AND (metadata->>'vendorPoId')::int = ${id}
+          ORDER BY created_at DESC
+          LIMIT 1`
+    );
+
+    type ConfirmationRow = { email: string; expiresAt: string; usedAt: string | null };
+    const rows: ConfirmationRow[] = (
+      result && typeof result === 'object' && 'rows' in result
+        ? (result as { rows: ConfirmationRow[] }).rows
+        : result
+    ) as ConfirmationRow[];
+
+    if (!rows || rows.length === 0) {
+      return res.json({ found: false });
+    }
+
+    const row = rows[0];
+    return res.json({
+      found: true,
+      email: row.email,
+      expiresAt: row.expiresAt,
+      usedAt: row.usedAt ?? null,
+    });
+  } catch (error) {
+    console.error('Get vendor PO confirmation error:', error);
+    res.status(500).json({ error: 'Failed to retrieve confirmation status' });
+  }
+});
+
 router.post('/:id/resend', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -1036,7 +1748,10 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     const { recipients: additionalRecipients } = req.body ?? {};
 
-    const { link, expiresAt } = await generateMagicLink({
+    // Invalidate any prior unused confirmation tokens for this PO before generating a fresh one
+    await storage.invalidateVendorPoConfirmationTokens(id);
+
+    const { token: resendConfirmToken, expiresAt } = await generateMagicLink({
       email: vendor.email,
       purpose: 'vendor_po_confirmation',
       metadata: {
@@ -1047,10 +1762,11 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       },
       expiresInMinutes: 60 * 24 * 7,
     });
+    const link = createVendorConfirmFrontendUrl(resendConfirmToken);
 
     const poNumber = vendorPO.poNumber;
 
-    const standardResendCc: string[] = ['laurie@agcomposites.com'];
+    const standardResendCc: string[] = ['laurie.tandy@agadvanced.com'];
     const resendingUserEmail = (req as any).user?.email as string | undefined;
     if (resendingUserEmail && !standardResendCc.map((c) => c.toLowerCase()).includes(resendingUserEmail.toLowerCase())) {
       standardResendCc.push(resendingUserEmail);
@@ -1108,6 +1824,125 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: 'Failed to resend vendor PO' });
+  }
+});
+
+// ── GET /confirm/preview — safe, non-consuming token validation ──────────────
+// Email scanners (Safe Links, Proofpoint, etc.) may prefetch this URL on delivery.
+// This endpoint NEVER consumes the token — it only validates and returns PO details.
+router.get('/confirm/preview', async (req: Request, res: Response) => {
+  // Fetch contact info outside the main try/catch so it is available in the
+  // error path and we can still include it in 500 responses.
+  let contactInfo = { companyName: '', companyAddress: '', companyPhone: '', companyEmail: '' };
+  try {
+    const row = await storage.getCompanySettings();
+    if (row) {
+      contactInfo = {
+        companyName: row.companyName || '',
+        companyAddress: row.companyAddress || '',
+        companyPhone: row.companyPhone || '',
+        companyEmail: row.companyEmail || '',
+      };
+    }
+  } catch {
+    // Non-fatal — the confirm page has graceful empty-field handling.
+  }
+
+  try {
+    const { token, purpose } = req.query;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ valid: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Token is required', contactInfo });
+    }
+
+    const purposeStr = typeof purpose === 'string' ? purpose : 'vendor_po_confirmation';
+    const result = await peekMagicLink(token, purposeStr);
+
+    if (!result.isValid || !result.token) {
+      console.log(`[VendorPOConfirmPreview] ${result.errorCode} token=${token.substring(0, 8)}...`);
+      return res.status(200).json({ valid: false, errorCode: result.errorCode || 'TOKEN_NOT_FOUND', error: result.error, contactInfo });
+    }
+
+    const metadata = (result.token.metadata as Record<string, any>) || {};
+    const vendorPoId = metadata.vendorPoId ? parseInt(String(metadata.vendorPoId)) : null;
+
+    // Check if PO is already confirmed
+    if (vendorPoId) {
+      const po = await storage.getVendorPO(vendorPoId);
+      if (po?.vendorConfirmedAt) {
+        console.log(`[VendorPOConfirmPreview] PO_ALREADY_CONFIRMED poId=${vendorPoId} token=${token.substring(0, 8)}...`);
+        return res.status(200).json({ valid: false, errorCode: 'PO_ALREADY_CONFIRMED', error: 'This PO has already been confirmed', contactInfo });
+      }
+    }
+
+    console.log(`[VendorPOConfirmPreview] valid token=${token.substring(0, 8)}... poNumber=${metadata.poNumber}`);
+    return res.status(200).json({
+      valid: true,
+      poNumber: metadata.poNumber || null,
+      vendorName: metadata.vendorName || null,
+      expectedDeliveryDate: vendorPoId
+        ? (await storage.getVendorPO(vendorPoId))?.expectedDeliveryDate ?? null
+        : null,
+      contactInfo,
+    });
+  } catch (error) {
+    console.error('[VendorPOConfirmPreview] error:', error);
+    res.status(500).json({ valid: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to preview confirmation', contactInfo });
+  }
+});
+
+// ── POST /confirm — consumes token and records vendor action ─────────────────
+router.post('/confirm', async (req: Request, res: Response) => {
+  try {
+    const { token, purpose, action } = req.body ?? {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Token is required' });
+    }
+
+    const validActions = ['confirm', 'reject', 'acknowledge'];
+    const vendorAction = typeof action === 'string' && validActions.includes(action) ? action : 'confirm';
+    const purposeStr = typeof purpose === 'string' ? purpose : 'vendor_po_confirmation';
+
+    const result = await validateMagicLink(token, purposeStr);
+
+    if (!result.isValid || !result.token) {
+      console.log(`[VendorPOConfirm] ${result.errorCode} token=${token.substring(0, 8)}...`);
+      return res.status(200).json({ success: false, errorCode: result.errorCode || 'TOKEN_NOT_FOUND', error: result.error });
+    }
+
+    const metadata = (result.token.metadata as Record<string, any>) || {};
+    const vendorPoId = metadata.vendorPoId ? parseInt(String(metadata.vendorPoId)) : null;
+
+    if (!vendorPoId) {
+      return res.status(400).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Token metadata is missing PO reference' });
+    }
+
+    const po = await storage.getVendorPO(vendorPoId);
+    if (!po) {
+      return res.status(404).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'PO not found' });
+    }
+
+    if (po.vendorConfirmedAt) {
+      console.log(`[VendorPOConfirm] PO_ALREADY_CONFIRMED poId=${vendorPoId} token=${token.substring(0, 8)}...`);
+      return res.status(200).json({ success: false, errorCode: 'PO_ALREADY_CONFIRMED', error: 'This PO has already been confirmed' });
+    }
+
+    await storage.updateVendorPO(vendorPoId, {
+      vendorConfirmedAt: new Date(),
+      vendorConfirmedAction: vendorAction,
+    });
+
+    console.log(`[VendorPOConfirm] CONFIRMED poId=${vendorPoId} poNumber=${metadata.poNumber} vendorName=${metadata.vendorName} action=${vendorAction} token=${token.substring(0, 8)}...`);
+
+    return res.status(200).json({
+      success: true,
+      poNumber: metadata.poNumber || null,
+      vendorName: metadata.vendorName || null,
+    });
+  } catch (error) {
+    console.error('[VendorPOConfirm] error:', error);
+    res.status(500).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to process confirmation' });
   }
 });
 

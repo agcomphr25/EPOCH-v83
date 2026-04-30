@@ -914,6 +914,9 @@ export default function InventoryReceivingPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos/items'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      if (selectedReceivingItem?.vendorPoId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedReceivingItem.vendorPoId] });
+      }
       
       // Store PO number and update received IDs before advancing
       const poNumberForAdvance = selectedReceivingItem.poNumber;

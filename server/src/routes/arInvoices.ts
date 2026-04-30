@@ -12,14 +12,14 @@ import {
 } from '../../schema';
 import { eq, desc, sql, and, ilike, or, inArray, isNull, not } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
-import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
 const router = Router();
 
 router.use(authenticateToken);
-router.use(requireAdminAccess);
+router.use(requirePermission('finance.view'));
 
 router.get('/customer-pos', async (req: Request, res: Response) => {
   try {
@@ -186,6 +186,7 @@ router.get('/', async (req: Request, res: Response) => {
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
+        poNumber: p2PurchaseOrders.poNumber,
         notes: arInvoices.notes,
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
@@ -214,6 +215,7 @@ router.get('/', async (req: Request, res: Response) => {
       })
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
       .where(
         and(
           status && status !== 'all' ? eq(arInvoices.status, String(status)) : undefined,
@@ -231,7 +233,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof p2Customers) => ({
+const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof p2Customers, purchaseOrders?: typeof p2PurchaseOrders) => ({
   id: invoices.id,
   customerId: invoices.customerId,
   customerName: customers.customerName,
@@ -245,6 +247,9 @@ const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof
   pricingMismatch: invoices.pricingMismatch,
   pricingAmbiguous: invoices.pricingAmbiguous,
   autoCreated: invoices.autoCreated,
+  poId: invoices.poId,
+  poOverride: invoices.poOverride,
+  poNumber: purchaseOrders ? purchaseOrders.poNumber : sql<string | null>`null`,
   balance: sql<string>`(
     ${invoices.totalAmount}::numeric - COALESCE(
       (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${invoices.id}),
@@ -286,9 +291,10 @@ router.get('/summary-counts', async (_req: Request, res: Response) => {
 router.get('/needs-review', async (_req: Request, res: Response) => {
   try {
     const results = await db
-      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers))
+      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers, p2PurchaseOrders))
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
       .where(
         or(
           inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
@@ -307,9 +313,10 @@ router.get('/needs-review', async (_req: Request, res: Response) => {
 router.get('/unsent', async (_req: Request, res: Response) => {
   try {
     const results = await db
-      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers))
+      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers, p2PurchaseOrders))
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
       .where(
         and(
           eq(arInvoices.status, 'POSTED'),
@@ -327,9 +334,10 @@ router.get('/unsent', async (_req: Request, res: Response) => {
 router.get('/disputed', async (_req: Request, res: Response) => {
   try {
     const results = await db
-      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers))
+      .select(DASHBOARD_INVOICE_SELECT(arInvoices, p2Customers, p2PurchaseOrders))
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
       .where(
         and(
           eq(arInvoices.isDisputed, true),
@@ -359,6 +367,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
+        poNumber: p2PurchaseOrders.poNumber,
         packingSlipId: arInvoices.packingSlipId,
         lotId: arInvoices.lotId,
         pricingMismatch: arInvoices.pricingMismatch,
@@ -391,6 +400,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       })
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
+      .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
       .where(eq(arInvoices.id, id));
 
     if (!invoice) {
@@ -419,7 +429,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const {
       customerId,
@@ -504,7 +514,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const {
@@ -600,7 +610,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/post', async (req: Request, res: Response) => {
+router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
@@ -673,7 +683,7 @@ router.post('/:id/post', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/send', async (req: Request, res: Response) => {
+router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
@@ -701,7 +711,7 @@ router.post('/:id/send', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/void', async (req: Request, res: Response) => {
+router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { voidReason } = req.body;
@@ -795,7 +805,7 @@ router.post('/:id/void', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('finance.void_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

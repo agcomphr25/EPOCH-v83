@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'wouter';
 import { PDFSignatureCapture, SignedPDFResult } from '@/components/PDFSignatureCapture';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -107,10 +108,10 @@ export default function SignPDFPage() {
                         asChild
                         data-testid={`button-open-${doc.id}`}
                       >
-                        <a href={`/${doc.storagePath}`} target="_blank" rel="noopener noreferrer">
+                        <Link href={`/${doc.storagePath}`} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="h-4 w-4 mr-1" />
                           Open
-                        </a>
+                        </Link>
                       </Button>
                     </div>
                   </li>
@@ -151,10 +152,10 @@ export default function SignPDFPage() {
                   variant="outline"
                   asChild
                 >
-                  <a href={`/${previewDocument.storagePath}`} target="_blank" rel="noopener noreferrer">
+                  <Link href={`/${previewDocument.storagePath}`} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Open in New Tab
-                  </a>
+                  </Link>
                 </Button>
               </div>
             </div>

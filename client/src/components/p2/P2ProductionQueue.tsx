@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +47,9 @@ import {
   Printer,
   ExternalLink,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Check,
+  Users
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -73,6 +76,7 @@ interface QueueItem {
   currentStageIndex: number;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
+  barcodePrintedAt?: string | null;
 }
 
 interface Department {
@@ -118,6 +122,7 @@ interface P2ProductionQueueProps {
 }
 
 export default function P2ProductionQueue({ selectedPONumbers = [] }: P2ProductionQueueProps) {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [scanInput, setScanInput] = useState('');
   const [scannedItem, setScannedItem] = useState<PartInfo | null>(null);
@@ -131,6 +136,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const [offSystemNotes, setOffSystemNotes] = useState('');
   const [offSystemLinkedTraveler, setOffSystemLinkedTraveler] = useState('');
   const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
+  const [expandedCustomerGroups, setExpandedCustomerGroups] = useState<string[]>([]);
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
   const [sortByPO, setSortByPO] = useState<'asc' | 'desc' | null>(null);
 
@@ -216,6 +222,21 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
         description: error.message || 'Failed to update status',
         variant: 'destructive',
       });
+    },
+  });
+
+  const stampPrintMutation = useMutation({
+    mutationFn: async (serialNumbers: string[]) => {
+      return apiRequest('/api/p2/control-center/stamp-barcode-printed', {
+        method: 'PATCH',
+        body: JSON.stringify({ serialNumbers }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+    },
+    onError: () => {
+      toast({ title: 'Warning', description: 'Labels printed but print history could not be saved. The "previously printed" indicator may not appear until the next refresh.', variant: 'destructive' });
     },
   });
 
@@ -322,14 +343,14 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     }
   };
 
-  const printAveryLabels = (items: QueueItem[], title: string) => {
+  const printAveryLabels = (items: QueueItem[], title: string): boolean => {
     if (items.length === 0) {
       toast({
         title: 'No Items',
         description: 'No items selected to print labels for',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     const printWindow = window.open('', '_blank');
@@ -339,7 +360,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
         description: 'Could not open print window. Please allow popups.',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     const labelsPerSheet = 30;
@@ -459,16 +480,33 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       printWindow.print();
       printWindow.close();
     }, 500);
+    return true;
   };
 
   const handlePrintAveryLabels = (dept: Department) => {
-    printAveryLabels(dept.items, `P2 ${dept.name} Queue Labels`);
+    const printed = printAveryLabels(dept.items, `P2 ${dept.name} Queue Labels`);
+    if (printed) {
+      const sns = [...new Set(dept.items.map(i => i.serialNumber).filter(Boolean))];
+      if (sns.length > 0) stampPrintMutation.mutate(sns);
+    }
   };
 
   const handlePrintSelectedLabels = (dept: Department) => {
     const selected = dept.items.filter(item => selectedLayupItems.has(item.id));
-    printAveryLabels(selected, `P2 Layup Selected Labels (${selected.length})`);
-    setSelectedLayupItems(new Set());
+    const printed = printAveryLabels(selected, `P2 Layup Selected Labels (${selected.length})`);
+    if (printed) {
+      const sns = [...new Set(selected.map(i => i.serialNumber).filter(Boolean))];
+      if (sns.length > 0) stampPrintMutation.mutate(sns);
+      setSelectedLayupItems(new Set());
+    }
+  };
+
+  const handlePrintCustomerLabels = (items: QueueItem[], deptName: string, customerName: string) => {
+    const printed = printAveryLabels(items, `P2 ${deptName} — ${customerName} Labels`);
+    if (printed) {
+      const sns = [...new Set(items.map(i => i.serialNumber).filter(Boolean))];
+      if (sns.length > 0) stampPrintMutation.mutate(sns);
+    }
   };
 
   if (isLoading) {
@@ -604,9 +642,9 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4">
+                <AccordionContent className="px-4 pb-4" stickyChildren={dept.name === 'Layup' && dept.items.length > 0}>
                   {dept.name === 'Layup' && dept.items.length > 0 && (
-                    <div className="mb-4 flex items-center justify-between gap-2 p-3 bg-blue-50/50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="sticky top-[44px] z-10 mb-4 flex items-center justify-between gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800 shadow-sm">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                           <Checkbox
@@ -653,127 +691,234 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                       <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p>No items in this department</p>
                     </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {dept.name === 'Layup' && <TableHead className="w-10"></TableHead>}
-                          <TableHead>Barcode</TableHead>
-                          <TableHead>Part Number</TableHead>
-                          <TableHead
-                            className="cursor-pointer select-none hover:bg-muted/50"
-                            onClick={() => setSortByPO(prev => prev === 'asc' ? 'desc' : 'asc')}
-                          >
-                            <span className="inline-flex items-center gap-1">
-                              PO / Customer
-                              {sortByPO === 'asc' && <ArrowUp className="h-3 w-3" />}
-                              {sortByPO === 'desc' && <ArrowDown className="h-3 w-3" />}
-                            </span>
-                          </TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(sortByPO
-                          ? [...dept.items].sort((a, b) => {
-                              const apo = a.poNumber || '';
-                              const bpo = b.poNumber || '';
-                              if (!apo && !bpo) return 0;
-                              if (!apo) return 1;
-                              if (!bpo) return -1;
-                              const cmp = apo.localeCompare(bpo);
-                              return sortByPO === 'asc' ? cmp : -cmp;
-                            })
-                          : dept.items
-                        ).map((item) => (
-                          <TableRow key={item.id} className={dept.name === 'Layup' && selectedLayupItems.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''}>
-                            {dept.name === 'Layup' && (
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedLayupItems.has(item.id)}
-                                  onCheckedChange={() => toggleLayupItem(item.id)}
-                                />
-                              </TableCell>
-                            )}
-                            <TableCell className="font-mono font-semibold">
-                              {item.barcode || item.serialNumber}
-                            </TableCell>
-                            <TableCell>
-                              <div>{item.partNumber}</div>
-                              <div className="text-xs text-muted-foreground">{item.partName}</div>
-                            </TableCell>
-                            <TableCell>
-                              <div>{item.poNumber}</div>
-                              <div className="text-xs text-muted-foreground">{item.customerName}</div>
-                            </TableCell>
-                            <TableCell>
-                              {item.hasActiveTask && item.activeTask ? (
-                                <div className="flex items-center gap-2">
-                                  <Badge className="bg-green-600">
-                                    <Play className="h-3 w-3 mr-1" />
-                                    In Progress
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <User className="h-3 w-3" />
-                                    {item.activeTask.employeeName}
-                                  </span>
+                  ) : (() => {
+                    // Group items by customer
+                    const customerMap = new Map<string, QueueItem[]>();
+                    const sortedItems = sortByPO
+                      ? [...dept.items].sort((a, b) => {
+                          const apo = a.poNumber || '';
+                          const bpo = b.poNumber || '';
+                          if (!apo && !bpo) return 0;
+                          if (!apo) return 1;
+                          if (!bpo) return -1;
+                          const cmp = apo.localeCompare(bpo);
+                          return sortByPO === 'asc' ? cmp : -cmp;
+                        })
+                      : dept.items;
+                    sortedItems.forEach(item => {
+                      const key = item.customerName || 'Unknown Customer';
+                      if (!customerMap.has(key)) customerMap.set(key, []);
+                      customerMap.get(key)!.push(item);
+                    });
+                    const customerEntries = Array.from(customerMap.entries());
+                    return (
+                      <Accordion
+                        type="multiple"
+                        value={expandedCustomerGroups}
+                        onValueChange={setExpandedCustomerGroups}
+                        className="space-y-2"
+                      >
+                        {customerEntries.map(([customerName, customerItems]) => {
+                          const groupKey = `${dept.name}||${customerName}`;
+                          const printedCount = customerItems.filter(i => i.barcodePrintedAt).length;
+                          const layupSelectedInGroup = dept.name === 'Layup' ? customerItems.filter(i => selectedLayupItems.has(i.id)).length : 0;
+                          const allGroupSelected = dept.name === 'Layup' && customerItems.length > 0 && customerItems.every(i => selectedLayupItems.has(i.id));
+                          return (
+                            <AccordionItem
+                              key={groupKey}
+                              value={groupKey}
+                              className="border rounded-md bg-white/60 dark:bg-gray-900/40"
+                            >
+                              <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                                <div className="flex items-center justify-between w-full pr-2">
+                                  <div className="flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium text-sm">{customerName}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {customerItems.length} item{customerItems.length !== 1 ? 's' : ''}
+                                    </Badge>
+                                    {printedCount > 0 && (
+                                      <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                                        <Printer className="h-3 w-3" />
+                                        <Check className="h-2.5 w-2.5 text-green-600" />
+                                        {printedCount}/{customerItems.length}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 mr-2">
+                                    {dept.name === 'Layup' && (
+                                      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                                        <Checkbox
+                                          id={`select-all-${groupKey}`}
+                                          checked={allGroupSelected}
+                                          onCheckedChange={() => {
+                                            const ids = customerItems.map(i => i.id);
+                                            if (allGroupSelected) {
+                                              setSelectedLayupItems(prev => {
+                                                const next = new Set(prev);
+                                                ids.forEach(id => next.delete(id));
+                                                return next;
+                                              });
+                                            } else {
+                                              setSelectedLayupItems(prev => {
+                                                const next = new Set(prev);
+                                                ids.forEach(id => next.add(id));
+                                                return next;
+                                              });
+                                            }
+                                          }}
+                                        />
+                                        <label
+                                          htmlFor={`select-all-${groupKey}`}
+                                          className="text-xs text-muted-foreground cursor-pointer"
+                                          onClick={e => e.stopPropagation()}
+                                        >
+                                          {layupSelectedInGroup > 0 ? `${layupSelectedInGroup} selected` : 'Select all'}
+                                        </label>
+                                      </div>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-2 text-xs"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        handlePrintCustomerLabels(customerItems, dept.name, customerName);
+                                      }}
+                                    >
+                                      <Printer className="h-3 w-3 mr-1" />
+                                      Print
+                                    </Button>
+                                  </div>
                                 </div>
-                              ) : (
-                                <Badge variant="secondary">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Waiting
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setScanInput(item.barcode);
-                                    scanMutation.mutate(item.barcode);
-                                  }}
-                                  data-testid={`button-view-${item.id}`}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openHoldDialog(item)}
-                                  className="text-amber-600 hover:text-amber-700"
-                                  data-testid={`button-hold-${item.id}`}
-                                >
-                                  <Pause className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openOffSystemDialog(item)}
-                                  className="text-indigo-600 hover:text-indigo-700"
-                                  title="Off-System Production Complete"
-                                  data-testid={`button-off-system-${item.id}`}
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openScrapDialog(item)}
-                                  className="text-red-600 hover:text-red-700"
-                                  data-testid={`button-scrap-${item.id}`}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
+                              </AccordionTrigger>
+                              <AccordionContent className="px-3 pb-3">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      {dept.name === 'Layup' && <TableHead className="w-10"></TableHead>}
+                                      <TableHead>Barcode</TableHead>
+                                      <TableHead>Part Number</TableHead>
+                                      <TableHead
+                                        className="cursor-pointer select-none hover:bg-muted/50"
+                                        onClick={() => setSortByPO(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                      >
+                                        <span className="inline-flex items-center gap-1">
+                                          PO / Customer
+                                          {sortByPO === 'asc' && <ArrowUp className="h-3 w-3" />}
+                                          {sortByPO === 'desc' && <ArrowDown className="h-3 w-3" />}
+                                        </span>
+                                      </TableHead>
+                                      <TableHead>Status</TableHead>
+                                      <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {customerItems.map((item) => (
+                                      <TableRow key={item.id} className={dept.name === 'Layup' && selectedLayupItems.has(item.id) ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''}>
+                                        {dept.name === 'Layup' && (
+                                          <TableCell>
+                                            <Checkbox
+                                              checked={selectedLayupItems.has(item.id)}
+                                              onCheckedChange={() => toggleLayupItem(item.id)}
+                                            />
+                                          </TableCell>
+                                        )}
+                                        <TableCell className="font-mono font-semibold">
+                                          <div className="flex items-center gap-1.5">
+                                            {item.barcode || item.serialNumber}
+                                            {item.barcodePrintedAt && (
+                                              <span
+                                                className="inline-flex items-center gap-0.5 text-muted-foreground/70"
+                                                title={`Label printed ${new Date(item.barcodePrintedAt).toLocaleString()}`}
+                                              >
+                                                <Printer className="h-3 w-3" />
+                                                <Check className="h-2.5 w-2.5 text-green-500" />
+                                              </span>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div>{item.partNumber}</div>
+                                          <div className="text-xs text-muted-foreground">{item.partName}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div>{item.poNumber}</div>
+                                          <div className="text-xs text-muted-foreground">{item.customerName}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                          {item.hasActiveTask && item.activeTask ? (
+                                            <div className="flex items-center gap-2">
+                                              <Badge className="bg-green-600">
+                                                <Play className="h-3 w-3 mr-1" />
+                                                In Progress
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                <User className="h-3 w-3" />
+                                                {item.activeTask.employeeName}
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <Badge variant="secondary">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              Waiting
+                                            </Badge>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => {
+                                                setScanInput(item.barcode);
+                                                scanMutation.mutate(item.barcode);
+                                              }}
+                                              data-testid={`button-view-${item.id}`}
+                                            >
+                                              <Eye className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => openHoldDialog(item)}
+                                              className="text-amber-600 hover:text-amber-700"
+                                              data-testid={`button-hold-${item.id}`}
+                                            >
+                                              <Pause className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => openOffSystemDialog(item)}
+                                              className="text-indigo-600 hover:text-indigo-700"
+                                              title="Off-System Production Complete"
+                                              data-testid={`button-off-system-${item.id}`}
+                                            >
+                                              <ExternalLink className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => openScrapDialog(item)}
+                                              className="text-red-600 hover:text-red-700"
+                                              data-testid={`button-scrap-${item.id}`}
+                                            >
+                                              <XCircle className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </AccordionContent>
+                            </AccordionItem>
+                          );
+                        })}
+                      </Accordion>
+                    );
+                  })()}
                 </AccordionContent>
               </AccordionItem>
             ))}
@@ -890,7 +1035,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               variant="default"
               onClick={() => {
                 if (scannedItem) {
-                  window.location.href = `/p2-traveler/${scannedItem.serializedItem.id}`;
+                  setLocation(`/p2-traveler/${scannedItem.serializedItem.id}`);
                 }
               }}
               data-testid="button-open-traveler"

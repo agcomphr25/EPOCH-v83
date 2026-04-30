@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../../db';
 import { employeeBadgeActions, employees, insertEmployeeBadgeActionSchema, badgeScanAuditLog } from '../../schema';
-import { eq, and, or, like } from 'drizzle-orm';
+import { eq, and, or, like, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { recordBadgeScanTransition } from '../services/orderActivityService';
 
@@ -246,28 +246,44 @@ router.get('/resolve-badge/:scanCode', async (req, res) => {
       return res.status(400).json({ error: 'Badge scan code is required' });
     }
 
-    const employee = await db
-      .select({
-        id: employees.id,
-        name: employees.name,
-        employeeCode: employees.employeeCode,
-        department: employees.department,
-        jobTitle: employees.jobTitle,
-        isActive: employees.isActive,
-      })
+    const raw = scanCode.trim();
+    // Normalize: strip dashes so UUID badges work with or without hyphens.
+    const normalized = raw.replace(/-/g, '');
+
+    const cols = {
+      id: employees.id,
+      name: employees.name,
+      employeeCode: employees.employeeCode,
+      department: employees.department,
+      jobTitle: employees.jobTitle,
+      isActive: employees.isActive,
+    };
+
+    // Strategy A: badge_scan_code (REPLACE strips dashes on both sides)
+    let rows = await db
+      .select(cols)
       .from(employees)
-      .where(eq(employees.badgeScanCode, scanCode.trim()))
+      .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`)
       .limit(1);
 
-    if (!employee.length) {
+    // Strategy B: employee_code case-insensitive fallback
+    if (!rows.length) {
+      rows = await db
+        .select(cols)
+        .from(employees)
+        .where(sql`LOWER(${employees.employeeCode}) = LOWER(${raw})`)
+        .limit(1);
+    }
+
+    if (!rows.length) {
       return res.status(404).json({ error: 'Badge not recognized' });
     }
 
-    if (!employee[0].isActive) {
+    if (!rows[0].isActive) {
       return res.status(403).json({ error: 'Employee account is inactive' });
     }
 
-    const emp = employee[0];
+    const emp = rows[0];
     res.json({
       id: emp.id,
       name: emp.name,

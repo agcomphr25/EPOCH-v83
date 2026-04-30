@@ -124,7 +124,7 @@ export async function sendEmailViaSendGrid(options: {
     const msg: any = {
       to: options.to,
       from: fromEmail,
-      replyTo: options.replyTo || { email: 'sales@agcomposites.com', name: 'A G Composites Sales' },
+      replyTo: options.replyTo || { email: 'laurie.tandy@agadvanced.com', name: 'Laurie Tandy' },
       subject: options.subject,
       text: options.text,
       html: options.html || options.text,

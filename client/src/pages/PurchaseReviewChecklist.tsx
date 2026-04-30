@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
+import { Link, useLocation, useSearch } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,7 +61,10 @@ export default function PurchaseReviewChecklist() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const search = useSearch();
+  const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+  const autoFilledRef = useRef(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
   const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
@@ -287,6 +290,14 @@ export default function PurchaseReviewChecklist() {
     loadSubmission();
   }, []);
 
+  // Auto-fill customer when customerId is provided via URL param
+  useEffect(() => {
+    if (urlCustomerId && p2Customers.length > 0 && !autoFilledRef.current) {
+      autoFilledRef.current = true;
+      handleCustomerChange(urlCustomerId);
+    }
+  }, [urlCustomerId, p2Customers]);
+
   // Load signature when formData changes and signature exists
   useEffect(() => {
     if (formData.signature && signatureCanvasRef.current) {
@@ -470,7 +481,7 @@ export default function PurchaseReviewChecklist() {
     // Redirect to submissions page after successful submit if updating
     if (submissionId && !submitChecklistMutation.isPending) {
       setTimeout(() => {
-        window.location.href = '/purchase-review-submissions';
+        setLocation('/purchase-review-submissions');
       }, 1000);
     }
   };
@@ -516,12 +527,12 @@ export default function PurchaseReviewChecklist() {
           </div>
           {(savedDraftId || submissionId) && (
             <div className="flex justify-center mb-6">
-              <a
+              <Link
                 href="/purchase-review-submissions"
                 className="text-sm text-blue-600 hover:text-blue-800 underline"
               >
                 Draft saved — view all submissions
-              </a>
+              </Link>
             </div>
           )}
         </div>

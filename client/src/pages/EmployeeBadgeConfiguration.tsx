@@ -34,6 +34,7 @@ import {
   type BadgeActionType,
 } from '@/lib/badgeActionTypes';
 import { Badge, UserCog, Settings, Scan, Printer, Download, CreditCard } from 'lucide-react';
+import { generateBadgePrintHtml } from '@/lib/badgePrintHtml';
 
 type Employee = {
   id: number;
@@ -131,46 +132,7 @@ export default function EmployeeBadgeConfiguration() {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Employee Badge - ${selectedReprintEmployee.name}</title>
-          <style>
-            @page {
-              size: 4in 2.5in;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 20px;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              font-family: Arial, sans-serif;
-            }
-            h1 {
-              font-size: 22px;
-              margin-bottom: 15px;
-              text-align: center;
-            }
-            .company {
-              font-size: 12px;
-              color: #666;
-              margin-bottom: 10px;
-            }
-            svg {
-              max-width: 100%;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="company">EPOCH Manufacturing</div>
-          <h1>${selectedReprintEmployee.name}</h1>
-          ${barcodeRef.current?.outerHTML || ''}
-        </body>
-      </html>
-    `);
+    printWindow.document.write(generateBadgePrintHtml(selectedReprintEmployee.name, barcodeRef.current?.outerHTML || ''));
 
     printWindow.document.close();
     setTimeout(() => {

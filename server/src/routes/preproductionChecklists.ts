@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
+import { requirePermission } from '../../middleware/requirePermission';
 import { 
   preproductionTemplates, 
   preproductionTemplateSections, 
@@ -762,7 +763,7 @@ router.get('/my-tasks/:employeeId/history', async (req: Request, res: Response) 
 });
 
 // Sign off checklist
-router.post('/:id/sign-off', async (req: Request, res: Response) => {
+router.post('/:id/sign-off', requirePermission('travelers.sign_qc_preproduction'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { signatureData, signedBy } = req.body;
@@ -802,7 +803,8 @@ router.get('/employees/list', async (req: Request, res: Response) => {
   }
 });
 
-// Seed default template from existing checklist structure
+// Seed default template — not available in production
+if (process.env.NODE_ENV !== 'production') {
 router.post('/templates/seed-default', async (req: Request, res: Response) => {
   try {
     // Check if default template already exists
@@ -957,5 +959,6 @@ router.post('/templates/seed-default', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to seed default template' });
   }
 });
+} // end NODE_ENV !== 'production'
 
 export default router;

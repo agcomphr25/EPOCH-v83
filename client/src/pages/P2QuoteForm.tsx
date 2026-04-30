@@ -34,11 +34,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload, Eye } from 'lucide-react';
-import { Link } from 'wouter';
+import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload, Eye, CheckCircle, BookOpen, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { getErrorMessage } from '@/lib/utils';
 import type { InventoryItem } from '@shared/schema';
+import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { format } from 'date-fns';
 
 interface QuoteLineItem {
   id: string;
@@ -65,6 +69,9 @@ interface RFQAssessment {
 export default function P2QuoteForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const search = useSearch();
+  const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+  const autoFilledRef = useRef(false);
   const [quoteDate, setQuoteDate] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -82,6 +89,9 @@ export default function P2QuoteForm() {
   const [quoteStatus, setQuoteStatus] = useState<string>('DRAFT');
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [linkedProjectId, setLinkedProjectId] = useState<string | null>(null);
+  const [, setLocation] = useLocation();
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,6 +127,30 @@ export default function P2QuoteForm() {
     [rfqAssessments]
   );
 
+  // Derive the selected RFQ's customerId for similarity lookup
+  const selectedRFQ = useMemo(
+    () => submittedRFQs.find((rfq) => rfq.rfqNumber === quoteNumber) ?? null,
+    [quoteNumber, submittedRFQs]
+  );
+
+  interface SimilarClosing {
+    id: number; projectId: string; projectCode: string; projectName: string;
+    summary: string | null; strengths: string | null; whatWentWrong: string | null;
+    nextProjectRecommendations: string | null; approvedAt: string | null;
+  }
+  const { data: similarClosings = [], isLoading: isLoadingSimilar } = useQuery<SimilarClosing[]>({
+    queryKey: ['/api/projects/closings/similar', selectedRFQ?.customerId, selectedRFQ?.description],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: '3' });
+      if (selectedRFQ!.customerId) params.set('customerId', selectedRFQ!.customerId);
+      if (selectedRFQ!.description) params.set('partFamily', selectedRFQ!.description);
+      return fetch(`/api/projects/closings/similar?${params.toString()}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : []);
+    },
+    enabled: !!selectedRFQ?.customerId,
+  });
+  const [showInsights, setShowInsights] = useState(false);
+
   // Load existing quote if id is in URL query params
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -131,6 +165,7 @@ export default function P2QuoteForm() {
           setSavedQuoteId(data.id);
           setQuoteNumber(data.quoteNumber);
           setQuoteStatus(data.status);
+          setLinkedProjectId(data.projectId ?? null);
           setCustomerName(data.description?.split('(')[0]?.replace('From: ', '').trim() || '');
           setCustomerCompany(data.customerName);
           setNotes(data.notes || '');
@@ -165,6 +200,17 @@ export default function P2QuoteForm() {
         });
     }
   }, []);
+
+  // Auto-select the first matching RFQ when customerId is provided via URL param
+  useEffect(() => {
+    if (urlCustomerId && submittedRFQs.length > 0 && !autoFilledRef.current) {
+      const matchingRFQ = submittedRFQs.find((rfq) => rfq.customerId === urlCustomerId);
+      if (matchingRFQ) {
+        autoFilledRef.current = true;
+        setQuoteNumber(matchingRFQ.rfqNumber);
+      }
+    }
+  }, [urlCustomerId, submittedRFQs]);
 
   // Auto-populate customer info when RFQ is selected
   useEffect(() => {
@@ -362,7 +408,7 @@ export default function P2QuoteForm() {
       console.error('Save quote error:', error);
       toast({
         title: 'Save Failed',
-        description: 'Failed to save quote. Please try again.',
+        description: getErrorMessage(error, 'Failed to save quote. Please try again.'),
         variant: 'destructive',
       });
     } finally {
@@ -483,7 +529,7 @@ export default function P2QuoteForm() {
       console.error('Upload error:', error);
       toast({ 
         title: 'Upload Failed', 
-        description: error instanceof Error ? error.message : 'Failed to upload files. Please try again.', 
+        description: getErrorMessage(error, 'Failed to upload files. Please try again.'), 
         variant: 'destructive' 
       });
     } finally {
@@ -506,7 +552,7 @@ export default function P2QuoteForm() {
       toast({ title: 'Success', description: 'Attachment deleted successfully.' });
     } catch (error) {
       console.error('Delete error:', error);
-      toast({ title: 'Delete Failed', description: 'Failed to delete attachment. Please try again.', variant: 'destructive' });
+      toast({ title: 'Delete Failed', description: getErrorMessage(error, 'Failed to delete attachment. Please try again.'), variant: 'destructive' });
     }
   };
 
@@ -594,11 +640,61 @@ export default function P2QuoteForm() {
       console.error('Submit quote error:', error);
       toast({
         title: 'Submit Failed',
-        description: 'Failed to submit quote. Please try again.',
+        description: getErrorMessage(error, 'Failed to submit quote. Please try again.'),
         variant: 'destructive',
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAcceptQuote = async () => {
+    if (!savedQuoteId) return;
+    setIsAccepting(true);
+    try {
+      const response = await apiRequest(`/api/quotes/${savedQuoteId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'ACCEPTED' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      setQuoteStatus('ACCEPTED');
+
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/project'] });
+
+      const projectId = response.projectId as string | null;
+      if (projectId) {
+        setLinkedProjectId(projectId);
+        toast({
+          title: 'Quote Accepted',
+          description: `Quote ${quoteNumber} has been accepted. A Work Authorization Document has been prepared for production.`,
+          action: (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setLocation(`/projects/${projectId}`)}
+            >
+              View Project
+            </Button>
+          ),
+        });
+      } else {
+        toast({
+          title: 'Quote Accepted',
+          description: `Quote ${quoteNumber} has been accepted. A Work Authorization Document has been prepared for production.`,
+        });
+      }
+    } catch (error) {
+      console.error('Accept quote error:', error);
+      toast({
+        title: 'Acceptance Failed',
+        description: getErrorMessage(error, 'Failed to accept quote. Please try again.'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAccepting(false);
     }
   };
 
@@ -625,6 +721,19 @@ export default function P2QuoteForm() {
               </CardDescription>
             </div>
             <div className="flex gap-2 items-center no-print">
+              {quoteStatus === 'ACCEPTED' && (
+                <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-md text-sm font-medium border border-blue-200 flex items-center gap-1">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Accepted
+                </div>
+              )}
+              {quoteStatus === 'ACCEPTED' && linkedProjectId && (
+                <Link href={`/projects/${linkedProjectId}`}>
+                  <Button size="sm" variant="outline" className="text-blue-700 border-blue-300" data-testid="button-view-project">
+                    View Project
+                  </Button>
+                </Link>
+              )}
               {quoteStatus === 'SENT' && (
                 <div className="bg-green-50 text-green-700 px-3 py-1 rounded-md text-sm font-medium border border-green-200">
                   ✓ Submitted
@@ -654,7 +763,7 @@ export default function P2QuoteForm() {
               </Button>
               <Button 
                 onClick={handleSave} 
-                disabled={isSaving || isSubmitting}
+                disabled={isSaving || isSubmitting || quoteStatus === 'ACCEPTED'}
                 data-testid="button-save"
               >
                 <Save className="h-4 w-4 mr-2" />
@@ -662,13 +771,25 @@ export default function P2QuoteForm() {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isSaving || isSubmitting || quoteStatus === 'SENT'}
+                disabled={isSaving || isSubmitting || quoteStatus === 'SENT' || quoteStatus === 'ACCEPTED'}
                 variant="default"
                 data-testid="button-submit"
               >
                 <FileText className="h-4 w-4 mr-2" />
                 {isSubmitting ? 'Submitting...' : 'Submit Quote'}
               </Button>
+              {quoteStatus === 'SENT' && savedQuoteId && (
+                <Button
+                  onClick={handleAcceptQuote}
+                  disabled={isAccepting || !savedQuoteId}
+                  variant="default"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  data-testid="button-accept-quote"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  {isAccepting ? 'Accepting...' : 'Mark as Accepted'}
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -798,6 +919,88 @@ export default function P2QuoteForm() {
               </div>
             </div>
           </div>
+
+          {/* Past Project Insights — no-print */}
+          {selectedRFQ && (isLoadingSimilar || similarClosings.length > 0) && (
+            <div className="mb-8 no-print border rounded-lg overflow-hidden">
+              <button
+                className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+                onClick={() => setShowInsights(prev => !prev)}
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Past Project Insights</span>
+                  <span className="text-xs text-muted-foreground">— lessons from approved closed projects for this customer</span>
+                  {!isLoadingSimilar && similarClosings.length > 0 && (
+                    <Badge variant="secondary" className="text-xs h-5">{similarClosings.length}</Badge>
+                  )}
+                </div>
+                {showInsights ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+              </button>
+              {showInsights && (
+                <div className="px-4 py-3 bg-background">
+                  {isLoadingSimilar ? (
+                    <div className="animate-pulse space-y-3">
+                      <div className="h-5 bg-gray-200 rounded w-1/3" />
+                      <div className="h-14 bg-gray-200 rounded" />
+                    </div>
+                  ) : (
+                    <Accordion type="multiple" className="space-y-1">
+                      {similarClosings.map((closing) => (
+                        <AccordionItem key={closing.id} value={String(closing.id)} className="border rounded-md px-3">
+                          <AccordionTrigger className="py-2 hover:no-underline">
+                            <div className="flex items-center gap-3 text-left">
+                              <Badge variant="outline" className="text-xs font-mono shrink-0">{closing.projectCode}</Badge>
+                              <span className="text-sm font-medium truncate">{closing.projectName}</span>
+                              {closing.approvedAt && (
+                                <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                                  {format(new Date(closing.approvedAt), 'MMM yyyy')}
+                                </span>
+                              )}
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-3 space-y-3">
+                            {closing.summary && (
+                              <div className="space-y-1">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
+                                <p className="text-sm">{closing.summary}</p>
+                              </div>
+                            )}
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {closing.strengths && (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">What Went Well</p>
+                                  <p className="text-sm">{closing.strengths}</p>
+                                </div>
+                              )}
+                              {closing.whatWentWrong && (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">What Went Wrong</p>
+                                  <p className="text-sm">{closing.whatWentWrong}</p>
+                                </div>
+                              )}
+                            </div>
+                            {closing.nextProjectRecommendations && (
+                              <div className="space-y-1">
+                                <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Recommendations</p>
+                                <p className="text-sm">{closing.nextProjectRecommendations}</p>
+                              </div>
+                            )}
+                            <Link href={`/projects/${closing.projectId}/closing`}>
+                              <Button variant="ghost" size="sm" className="text-xs mt-1 h-7">
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                View full closing record
+                              </Button>
+                            </Link>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Line Items Table */}
           <div className="mb-8">

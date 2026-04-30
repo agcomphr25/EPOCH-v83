@@ -60,6 +60,7 @@ import {
   Info,
   Unlock,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 
 type KitQueueItem = {
   id: number;
@@ -437,6 +438,8 @@ export default function KitsQueue() {
             Readiness gating for every kit in the manufacturing queue — see what's ready, partial, or blocked at a glance.
           </p>
         </div>
+
+        <ReturnsRepairsSection repairDepartment="Kits" />
 
         <Card className="dark:bg-gray-900 dark:border-gray-800">
           <CardHeader>

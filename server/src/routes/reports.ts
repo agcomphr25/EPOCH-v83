@@ -6,6 +6,7 @@ import { allOrders, stockModels, features, orderFilterPresets } from '../../sche
 import { insertOrderFilterPresetSchema } from '@shared/schema';
 import { storage } from '../../storage';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -319,7 +320,7 @@ router.get('/monthly-shipped', async (req, res) => {
 });
 
 // Get all available filter options (stock models, barrels, paints, etc.)
-router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+router.get('/filter-options', authenticateToken, requirePermission('reports.export'), async (req, res) => {
   try {
     // Get all active stock models
     const models = await db
@@ -422,7 +423,7 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
 });
 
 // Execute custom query with filters
-router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+router.post('/query', authenticateToken, requirePermission('reports.export'), async (req, res) => {
   try {
     const {
       stockModels: selectedModels,
@@ -590,7 +591,7 @@ router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) 
 });
 
 // Export filtered orders to CSV
-router.post('/export-csv', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+router.post('/export-csv', authenticateToken, requirePermission('reports.export'), async (req, res) => {
   try {
     const { orders } = req.body;
 
@@ -662,7 +663,7 @@ router.post('/export-csv', authenticateToken, requireRole('ADMIN'), async (req, 
 });
 
 // Get all saved filter presets
-router.get('/presets', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+router.get('/presets', authenticateToken, requirePermission('reports.manage_presets'), async (req, res) => {
   try {
     const presets = await db
       .select()
@@ -677,7 +678,7 @@ router.get('/presets', authenticateToken, requireRole('ADMIN'), async (req, res)
 });
 
 // Save a new filter preset
-router.post('/presets', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+router.post('/presets', authenticateToken, requirePermission('reports.manage_presets'), async (req, res) => {
   try {
     const validatedData = insertOrderFilterPresetSchema.parse(req.body);
 
@@ -694,7 +695,7 @@ router.post('/presets', authenticateToken, requireRole('ADMIN'), async (req, res
 });
 
 // Delete a filter preset
-router.delete('/presets/:id', authenticateToken, requireRole('ADMIN'), async (req, res) => {
+router.delete('/presets/:id', authenticateToken, requirePermission('reports.manage_presets'), async (req, res) => {
   try {
     const { id } = req.params;
 

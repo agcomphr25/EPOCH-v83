@@ -19,6 +19,50 @@ EPOCH Overview: User preference to maintain EPOCH-Overview.md as a living docume
 Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY show Tikka options for action inlet, barrel inlet, and bottom metal (with a green "Tikka only" badge). Non-Tikka stock models hide all Tikka options from these dropdowns. When switching between Tikka and non-Tikka models, incompatible selections are automatically cleared with a toast notification.
 Navbar-permissions alignment: The userPermissions.ts file is the source of truth for user route access. Navigation.tsx filters navbar items based on these permissions. Users not in the permissions list default to only seeing the Employee Portal. Each user sees only their own dashboard in the User Dashboards dropdown (admins see all). Any new navbar items must be added to both Navigation.tsx AND the appropriate user permission lists in userPermissions.ts to stay in sync.
 
+## DCAA-Compliant Employee Time Certification (Task #1855)
+
+Both hourly and salaried timesheets now require explicit employee certification before submission:
+
+- **Hourly (admin attest flow)**: Admin clicks the attest button → a certification dialog opens with the canonical DCAA statement and a required checkbox. The checkbox must be checked before "Certify & Attest" is enabled. The route `POST /api/timekeeping/timesheets/:id/attest` requires `{ certificationConfirmed: true }` and writes the canonical statement + version + `TIME_CERTIFIED` audit event.
+- **Salaried (employee portal)**: An amber certification card with the DCAA statement and a required checkbox appears instead of the old two-step confirm button. The portal certify route `POST /salaried-timesheet/portal/:portalId/certify/:id` requires `{ certificationConfirmed: true }` and writes the statement + audit event.
+- **Canonical statement**: `"I certify that the time recorded for this period is complete, accurate, and represents work I actually performed."` — `DCAA_CERTIFICATION_VERSION = 1`
+- **Edit lock post-certification**: `updateTimesheet` (hourly) blocks edits when `certificationStatement` is set; salaried POST/PATCH/DELETE line endpoints block edits after certification unless status is OPEN/REOPENED.
+- **Cert cleared on reopen**: `rejectTimesheet` (hourly) and the salaried reopen endpoint clear `certificationStatement`, `certificationVersion`, `certifiedAt`, and `certifiedBy`.
+- **Schema**: `timesheets` table has `certifiedByUserId`, `certificationStatement`, `certificationVersion` columns; `salaried_timesheets` has `certificationStatement`, `certificationVersion` columns (plus existing `certifiedAt`/`certifiedBy`). Inline `ALTER TABLE … IF NOT EXISTS` migration blocks added to `server/index.ts`.
+
+## WAD-Based Labor Charging Enforcement (Task #1235 — Phase 1 WARN)
+
+When a technician starts a traveler step or clocks in via a traveler barcode, the system now:
+1. **Auto-resolves the charge code** from the linked WAD (`defaultChargeCodeId`) with fallback to department-matched active charge code
+2. **Derives `projectId` server-side** from the WAD — never trusted from client input
+3. **Records certification state** (VALID/EXPIRED/MISSING) at step start time using routing operation cert requirements
+4. **Records budget overrun state** (`isOverrun`, `overrunReason`) using the existing labor budget helper
+5. **Stamps all 5 fields** on `punch_ledger` at clock-in/step-start via migration `0064_punch_ledger_wad_traceability.sql`
+
+**Policy**: Phase 1 = WARN (allow with flag). Sessions are never blocked by budget or cert issues — they are recorded and flagged for supervisor review.
+
+**UI** (TravelerExecution.tsx): NOT_STARTED step shows resolved charge code badge + source, inline budget overrun warning with acknowledgment checkbox (start disabled until acknowledged).
+
+**New API**: `GET /api/travelers/:travelerId/steps/:stepId/labor-context` returns WAD charge code, budget overrun state, and projectId for pre-step display.
+
+**Key files**: `server/src/lib/resolveChargeCode.ts`, `server/src/lib/punchLedger.ts`, `server/src/routes/timeClock.ts`, `server/src/routes/travelers.ts`, `client/src/pages/TravelerExecution.tsx`, `migrations/0064_punch_ledger_wad_traceability.sql`
+
+## MANDATORY READ — Architecture Constitution
+
+**Before implementing anything that touches labor, WAD, GL, burden, payroll, traveler, PM dashboard, DCAA, or compliance, you must read:**
+
+> **`docs/EPOCH_ARCHITECTURE_CONSTITUTION.md`**
+
+This file is the authoritative governance document for EPOCH's financial and labor architecture. It defines:
+- The single authorized labor pipeline (`punch_ledger` → `charge_codes` → `labor_approvals` → GL → payroll → DCAA)
+- A complete list of forbidden patterns (standalone imports, duplicate punch tables, free-text cost attribution, compatibility bridges)
+- The required FK chain for all cost attribution
+- Traveler scan behavior requirements
+- DCAA compliance enforcement rules
+- The agent implementation rule (delete-first, no compatibility layers, stop-and-redesign if deprecated behavior is required)
+
+Skipping this read before implementing any of the above domains is a constitution violation.
+
 ## System Architecture
 The application is a full-stack TypeScript monorepo designed for type safety, data consistency, and cross-platform compatibility with PWA support via Capacitor.
 
@@ -35,6 +79,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, Historical Data Module, and Refund Request/Queue.
 - **PDF Management**: Centralized PDF configuration, flexible Template Library System, and unified `orderPdfService` for intent-based PDF generation using frozen order snapshots.
 - **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.
+- **PM Control Center** (`/pm-control-center`): Dedicated project manager dashboard (`client/src/pages/PMControlCenterPage.tsx`) providing full project health visibility in one tabbed view. Project selector with "Only My Projects" toggle; auto-selects when PM has exactly one active project. KPI summary cards (production %, labor hours, material cost, open blockers, target ship date — refreshes every 60s). Three tabs: (1) **Production** — work order table with status badges, days ahead/behind, active traveler number; row click opens right-side drawer with work order details, traveler list, and open labor sessions; (2) **Direct Labor** — 4 summary cards (budgeted/actual/remaining/% consumed), charge code budget-vs-actual table with red (>100%) / yellow (≥80%) highlighting, live open session feed auto-refreshing every 30s showing employee, traveler, department, charge code, elapsed time, certification badge; (3) **Material Budget** — 4 summary cards, sortable allocation table defaulting to risk-first order (SHORT→ON_HOLD→PARTIAL→FULLY_ALLOCATED). Backend: `server/src/routes/pmDashboard.ts` with 6 endpoints: `GET /api/pm-dashboard/projects`, `GET /api/pm-dashboard/:projectId/summary`, `/production`, `/production/:workOrderId`, `/labor`, `/materials`. Uses raw SQL for cross-schema joins between public schema (projects, work orders, travelers) and timekeeping schema (labor_work_sessions, labor_authorizations, labor_charge_codes, certifications). Registered in `server/src/routes/index.ts`; nav item added to Purchase Orders section in `Navigation.tsx`.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table with dashboards, wizards, and progress tracking, including P2 Control Center Shipping tab, Production Timer endpoints, and Off-System Production completion (marks items complete outside digital travelers, auto-creates completed traveler records for management visibility). Production Control Center (`/production-control-center`) with hero metrics, shipment trend chart, bubble chart, kit progress tracker, signal cards, and swim lane preview — all built on the extensible widget registry system. **P2 PO Locking**: `locked_at`/`locked_by` columns on `p2_purchase_orders` (FK → employees); `POST /api/p2-purchase-orders/:id/lock` and `/:id/unlock` endpoints; state guard in PATCH route returns 423 for locked POs; `P2POManager.tsx` shows amber "Locked" badge, disables all edit/delete actions, and shows a Lock/Unlock button per card; lock banner in the edit dialog reminds users attachments can still be managed. **Control Tower Ribbon**: `ControlTowerRibbon` widget (`client/src/components/widgets/ControlTowerRibbon.tsx`) mounted at top of PCC — fetches `GET /api/control-tower/signals` (backed by `server/src/services/controlTowerService.ts`); aggregates 5 signals: stuck orders (department threshold days), inventory shortages, AR overdue, quotes awaiting response, P2 pending BOMs; each signal is severity-classified (info/warning/critical) and clickable to navigate to the relevant page.
 - **P2 Pipeline Board**: Kanban drag-and-drop board at `/projects/pipeline` (`client/src/pages/P2PipelineBoardPage.tsx`) using `@dnd-kit/core`. Displays 7 pipeline stages (rfq_received → quote_preparing → quote_submitted → purchase_review → po_received → production → completed). Dragging a project card triggers `PATCH /api/projects/:id` to update `currentStage`. Endpoint `GET /api/projects/pipeline` returns lightweight project cards with stage info. Route added to `VALID_NAVBAR_ROUTES` in `userPermissions.ts`.
 - **Flexible Project Workflow Steps**: `ProjectDetailPage.tsx` enhanced with independent step management: skip (with required reason via `POST /api/projects/:id/steps/:stepId/skip`), reopen (`POST /:stepId/reopen`), and full status support (pending/in_progress/completed/blocked/skipped/not_applicable). Step document uploads via `POST /api/project-step-attachments/request-upload-url` + object storage; `GET /api/project-step-attachments/by-project/:id` loads all attachments in one call. `projectStepStatusEnum` in schema has 6 values. Boot migration `Ensured projects table has pipeline stage columns and flexible step statuses` adds `current_stage` (text, default 'rfq_received') and `stage_updated_at` (timestamp) to projects table. Invoice file uploads added to `MediaAttachmentPicker.tsx` (`entityType: 'invoice'`).
@@ -47,7 +92,7 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - **Document Scanner**: Built-in scanning with OpenCV.js for automatic edge detection, perspective correction, image enhancement, and PDF conversion.
 - **Voice Notes System**: Voice-activated note recording for production issues with automatic order ID extraction, issue categorization, and resolution tracking.
 - **Customer Watch Rules System**: Configurable monitoring rules for tracking customer orders through departments with multi-person visibility sharing.
-- **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics.
+- **Timekeeping — SUPERSEDED ARCHITECTURE (historical record only)**: ⚠️ The description below reflects a previous architectural state and is superseded by the EPOCH Architecture Constitution (`docs/EPOCH_ARCHITECTURE_CONSTITUTION.md`). The standalone `modules/timekeeping` artifact and its dual-pool pattern are deprecated. The authorized labor pipeline is `punch_ledger` → `charge_codes` → `labor_approvals` → GL posting. Do NOT introduce new imports from `modules/timekeeping/`, `tkDb`, or dual-pool patterns. *Historical context:* The standalone Timekeeper module (`modules/timekeeping`) was absorbed INTO EPOCH (single server, port 5000) as Tier 1 of a multi-tier plan. Backend API lived under `/api/timekeeping/`. Key historical files: `server/src/lib/timekeeping.ts`, `server/src/lib/timekeeping-zod.ts`, `server/src/services/timekeeping/`, `server/src/routes/timekeeping/`. Migration `0049_timekeeping_schema.sql` created the `timekeeping.*` schema. The dual-pool architecture (timekeeping services importing `db` from `modules/timekeeping/lib/db/src` while EPOCH's `db` was used for `public.*` reads) was marked "intentional" at the time but is now a deprecated pattern under the constitution's standalone prohibition (Section 2).
 - **Accounting Shadow Layer**: Double-entry journal for wire payments, restricted to ADMIN.
 - **Attention & State-Confidence System**: Cross-domain system tracking confidence in the current state of work using `lastConfirmedAt`, `lastConfirmedByUserId`, `confirmationNote`, and `attentionRisk` fields.
 - **Real-Time WebSocket Notifications**: WebSocket server for targeted notifications.
@@ -120,3 +165,127 @@ The application is a full-stack TypeScript monorepo designed for type safety, da
 - Google APIs
 - Azure Document Intelligence (AI-powered document analysis)
 - Microsoft Azure AD / MSAL (OAuth authentication)
+## Document Vault (CUI/ITAR Classification)
+
+### Overview
+Secure document storage with file-level access controls and CUI/ITAR classification labels.
+
+### Features
+- Four classification levels: Public, Internal, CUI (Controlled Unclassified Information), ITAR (Export Controlled)
+- Document scoping: organization-wide, project-specific, or department-specific
+- Server-side ACL enforcement on every download request
+- Admin-managed access grants for CUI/ITAR documents
+- Access-denied events emitted to audit log on blocked download attempts
+
+### Files
+- `server/src/routes/vault.ts` — API endpoints (list, upload, download, access management)
+- `client/src/pages/VaultPage.tsx` — UI with upload dialog, classification legend, and admin access panel
+- `server/replit_integrations/object_storage/objectAcl.ts` — Extended ObjectAccessGroupType enum (USER_LIST, PROJECT, DEPARTMENT)
+- `server/schema.ts` — vault_documents and vault_access_grants Drizzle table definitions
+- Database tables: `vault_documents`, `vault_access_grants` (created by boot runner in server/index.ts)
+- Route: `/vault` (client), `/api/vault/*` (server)
+
+## CMMC 2.0 Level 2 Readiness (SSP)
+
+### Overview
+Complete CMMC 2.0 Level 2 (NIST SP 800-171 Rev 2) control mapping and System Security Plan (SSP) readiness system for admin/owner roles.
+
+### Features
+- All 110 NIST SP 800-171 Rev 2 practices across 14 control families (AC, AT, AU, CM, IA, IR, MA, MP, PE, PS, RA, SA, SC, SI)
+- Evidence mapping linking each practice to in-system evidence (audit logs, DCAA forensic rules, RBAC, vault documents)
+- Status tracking: Implemented / Partial / Planned / Not Applicable per practice
+- Attestation support: admins can mark practices as attested with timestamp
+- Policy document attachment fields (policyDocumentId, policyDocumentName)
+- Family coverage cards with progress bars
+- Searchable/filterable practice list with evidence badges
+- Edit dialog for updating status, notes, and attestation
+- SSP JSON export download
+
+### Files
+- `server/src/services/cmmcControlTaxonomy.ts` — 110 practice definitions
+- `server/src/services/cmmcEvidenceMapping.ts` — evidence links and seeded statuses
+- `server/src/routes/cmmc.ts` — REST API (summary, list, detail, PATCH, JSON export)
+- `client/src/pages/admin/CmmcDashboard.tsx` — Admin dashboard UI
+- Database table: `cmmc_control_status` (created and seeded by boot runner in server/index.ts)
+- Route: `/admin/cmmc` (client), `/api/cmmc/*` (server, ADMIN/OWNER only)
+
+## Proteus Labs — AI Prompt Library (Migration 0081)
+
+Admin/Owner-only internal tool for storing, organizing, and executing AI prompts.
+
+**Tables:** `proteus_prompts`, `proteus_prompt_variables`, `proteus_prompt_executions`, `proteus_prompt_results`, `proteus_prompt_tags`
+
+**Enums:** `proteus_prompt_category` (small, feature, large_architecture, audit, emergency, deployment, skill_builder), `proteus_execution_status` (pending, success, failure, noted)
+
+**Backend routes** (`/api/proteus-labs/*`): Full CRUD for prompts, executions, results. Protected by `authenticateToken + requireExecutiveAccess`. Usage count auto-increments on execution.
+
+**Frontend pages** (`/proteus-labs/*`):
+- Dashboard: Search/filter library, recent prompts, most used, execution highlights
+- Prompt Builder (`/proteus-labs/new`, `/proteus-labs/:id/edit`): Create/edit with auto-detected `{{token}}` variable support
+- Prompt Detail (`/proteus-labs/:id`): Fill variables, generate resolved output, copy to clipboard, paste result back, track execution history
+- Execution History (`/proteus-labs/history`): Global execution log with status filters and pagination
+
+**Permissions:** ADMIN/OWNER only. Registered in `ROLE_ROUTE_ACCESS` in `userPermissions.ts`. Nav button in `Navigation.tsx` gated by role.
+
+## Environment Variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `PORTAL_TOKEN_SECRET` | Yes | HMAC-SHA256 signing key for payload-based employee portal tokens. Must be set before any salaried portal links are generated. A cryptographically random 48-byte hex value is recommended. Set as a shared env var. |
+
+## Phase E — Labor Cost Reconciliation Script
+
+### Overview
+`server/scripts/phaseECostReconciliation.ts` runs both costing models against real `punch_ledger` and `labor_allocations` data and produces a side-by-side report. Finance uses this to understand where cost attribution differs between the legacy model and the new allocation model before Phase F switches the live read path.
+
+**Legacy model:** Total session hours × employee rate → full cost attributed to the single `chargeCodeId` on the `punch_ledger` row.
+
+**Allocation model:** For each closed `labor_allocations` segment, segment hours × employee rate → cost attributed to that segment's `chargeCodeId`. Multiple segments per session produce a cost split across charge codes.
+
+Both models use the same rate resolution chain: `hourlyRate` → `salary / 2080` → `defaultLaborRate` fallback (from `estimating_defaults`).
+
+### Running the Script
+
+```bash
+# Current bi-weekly pay period (default, anchored to 2024-01-01)
+npx tsx server/scripts/phaseECostReconciliation.ts
+
+# Specific date range
+npx tsx server/scripts/phaseECostReconciliation.ts --from 2025-01-01 --to 2025-01-31
+
+# With JSON output file
+npx tsx server/scripts/phaseECostReconciliation.ts --from 2025-01-01 --to 2025-01-31 --output /tmp/phase-e-results.json
+```
+
+### Interpreting the Output
+
+| Column | Meaning |
+|---|---|
+| `SessionID` | `punch_ledger.id` |
+| `EmpID` | `employees.id` |
+| `Date` | Clock-in date |
+| `Hours` | Total closed session hours |
+| `Rate` | Resolved hourly rate |
+| `CC (Legacy)` | Charge code on the `punch_ledger` row (legacy attribution) |
+| `Cost(Legacy)` | Total session cost under the legacy model |
+| `CC (Split)` | Charge code(s) from `labor_allocations` segments |
+| `Cost(Split)` | Cost attributed to each charge code in the allocation model |
+| `Delta` | `cost_legacy − cost_split`; should be ~$0.00 for healthy sessions |
+| `Status` | `OK` = reconciles, `N/A` = no allocation rows (coverage gap), `ERR` = cost discrepancy (data integrity problem) |
+
+**Session status meanings:**
+- **OK** — allocation data exists and both models agree on total cost (within $0.01). This is the normal state.
+- **N/A** — no `labor_allocations` rows found for this session. This is a coverage gap (pre-dual-write historical data), **not** an integrity error. Run `backfillLaborAllocations.ts` to fill these gaps.
+- **ERR** — allocation data exists but the cost totals differ by more than $0.01. This is a data integrity problem that must be investigated before Phase F.
+
+**Summary block:**
+- *Total cost (legacy model)* and *Total cost (allocation model)* are summed only over sessions that have allocation data on both sides. They must match within $0.01 — same hours, same rates, just different attribution.
+- *Cost reallocated across charge codes* is the financial insight: how much cost is moving from the legacy charge code to other codes due to mid-session job switches.
+
+### Exit Codes
+- `0` — all sessions with allocation data reconcile (safe to proceed to Phase F). N/A sessions do not affect exit code.
+- `1` — one or more sessions with allocation data have a cost discrepancy (ERR status). Investigate before Phase F.
+
+### Pre-requisites
+Sessions without `labor_allocations` rows (pre-dual-write historical data) show as `N/A` and are excluded from integrity checks. Run `npx tsx server/scripts/backfillLaborAllocations.ts` first to generate allocation rows for those sessions before running this report.

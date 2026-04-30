@@ -31,7 +31,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 
 interface PurchaseReviewSubmission {
   id: number;
@@ -44,6 +44,7 @@ interface PurchaseReviewSubmission {
 }
 
 export default function PurchaseReviewSubmissions() {
+  const [, setLocation] = useLocation();
   const [submissions, setSubmissions] = useState<PurchaseReviewSubmission[]>(
     []
   );
@@ -168,7 +169,7 @@ export default function PurchaseReviewSubmissions() {
   const handleCreateNew = () => {
     setIsCreateDialogOpen(false);
     // Navigate to the Purchase Review Checklist form
-    window.location.href = '/purchase-review-checklist';
+    setLocation('/purchase-review-checklist');
   };
 
   const handleStatusChange = (newStatus: string) => {

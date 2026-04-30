@@ -62,7 +62,22 @@ export function getAppBaseUrl(): string {
     const domain = process.env.REPLIT_DOMAINS.split(',')[0];
     return `https://${domain}`;
   }
+  if (process.env.NODE_ENV === 'production') {
+    const msg = '[FATAL] getAppBaseUrl: running in production but neither APP_URL nor PRODUCTION_DOMAIN is set. ' +
+      'Vendor PO confirmation links would silently point to localhost. ' +
+      'Set APP_URL or PRODUCTION_DOMAIN before deploying.';
+    console.error(msg);
+    throw new Error(msg);
+  }
   return 'http://localhost:5000';
+}
+
+/**
+ * Create a frontend vendor-confirm URL for a given token.
+ * The frontend page loads PO details via a safe GET and only consumes the token on explicit POST.
+ */
+export function createVendorConfirmFrontendUrl(token: string): string {
+  return `${getAppBaseUrl()}/vendor-confirm?token=${token}&purpose=vendor_po_confirmation`;
 }
 
 /**
@@ -291,45 +306,95 @@ export async function generateMagicLink(
 }
 
 /**
- * Validate and consume a magic link token
- * SECURITY: Compares hashed version of token
+ * Peek at a magic link token — validates existence, expiry, and purpose WITHOUT consuming it.
+ * Safe to call on every GET request even if email scanners pre-fetch the URL.
+ * Returns a specific errorCode field so callers can render distinct error states.
  */
-export async function validateMagicLink(
+export async function peekMagicLink(
   token: string,
   purpose?: string
-): Promise<MagicLinkValidationResult> {
+): Promise<MagicLinkValidationResult & { errorCode?: string }> {
   const { storage } = await import('../storage.js');
+  const tokenPrefix = token.substring(0, 8);
 
   try {
     const tokenHash = hashToken(token);
     const magicToken = await storage.getMagicLinkToken(tokenHash);
 
     if (!magicToken) {
-      return { isValid: false, error: 'Invalid or expired token' };
+      console.log(`[peekMagicLink] TOKEN_NOT_FOUND token=${tokenPrefix}...`);
+      return { isValid: false, error: 'Invalid or expired token', errorCode: 'TOKEN_NOT_FOUND' };
+    }
+
+    if (magicToken.usedAt) {
+      console.log(`[peekMagicLink] TOKEN_ALREADY_USED token=${tokenPrefix}... usedAt=${magicToken.usedAt}`);
+      return { isValid: false, error: 'This link has already been used', errorCode: 'TOKEN_ALREADY_USED' };
+    }
+
+    if (new Date() > new Date(magicToken.expiresAt)) {
+      console.log(`[peekMagicLink] TOKEN_EXPIRED token=${tokenPrefix}... expiresAt=${magicToken.expiresAt}`);
+      return { isValid: false, error: 'This link has expired', errorCode: 'TOKEN_EXPIRED' };
+    }
+
+    if (purpose && magicToken.purpose !== purpose) {
+      console.log(`[peekMagicLink] TOKEN_NOT_FOUND (purpose mismatch) token=${tokenPrefix}... expected=${purpose} got=${magicToken.purpose}`);
+      return { isValid: false, error: 'Invalid token purpose', errorCode: 'TOKEN_NOT_FOUND' };
+    }
+
+    console.log(`[peekMagicLink] valid token=${tokenPrefix}... purpose=${magicToken.purpose}`);
+    return { isValid: true, token: magicToken };
+  } catch (error) {
+    console.error('[peekMagicLink] error:', error);
+    return { isValid: false, error: 'Validation failed', errorCode: 'TOKEN_NOT_FOUND' };
+  }
+}
+
+/**
+ * Validate and consume a magic link token
+ * SECURITY: Compares hashed version of token
+ */
+export async function validateMagicLink(
+  token: string,
+  purpose?: string
+): Promise<MagicLinkValidationResult & { errorCode?: string }> {
+  const { storage } = await import('../storage.js');
+  const tokenPrefix = token.substring(0, 8);
+
+  try {
+    const tokenHash = hashToken(token);
+    const magicToken = await storage.getMagicLinkToken(tokenHash);
+
+    if (!magicToken) {
+      console.log(`[validateMagicLink] TOKEN_NOT_FOUND token=${tokenPrefix}...`);
+      return { isValid: false, error: 'Invalid or expired token', errorCode: 'TOKEN_NOT_FOUND' };
     }
 
     // Check if already used
     if (magicToken.usedAt) {
-      return { isValid: false, error: 'This link has already been used' };
+      console.log(`[validateMagicLink] TOKEN_ALREADY_USED token=${tokenPrefix}... usedAt=${magicToken.usedAt}`);
+      return { isValid: false, error: 'This link has already been used', errorCode: 'TOKEN_ALREADY_USED' };
     }
 
     // Check if expired
     if (new Date() > new Date(magicToken.expiresAt)) {
-      return { isValid: false, error: 'This link has expired' };
+      console.log(`[validateMagicLink] TOKEN_EXPIRED token=${tokenPrefix}... expiresAt=${magicToken.expiresAt}`);
+      return { isValid: false, error: 'This link has expired', errorCode: 'TOKEN_EXPIRED' };
     }
 
     // Check purpose if provided
     if (purpose && magicToken.purpose !== purpose) {
-      return { isValid: false, error: 'Invalid token purpose' };
+      console.log(`[validateMagicLink] TOKEN_NOT_FOUND (purpose mismatch) token=${tokenPrefix}... expected=${purpose} got=${magicToken.purpose}`);
+      return { isValid: false, error: 'Invalid token purpose', errorCode: 'TOKEN_NOT_FOUND' };
     }
 
     // Mark as used (using the hash)
     await storage.markMagicLinkTokenAsUsed(tokenHash);
+    console.log(`[validateMagicLink] consumed token=${tokenPrefix}... purpose=${magicToken.purpose}`);
 
     return { isValid: true, token: magicToken };
   } catch (error) {
-    console.error('Magic link validation error:', error);
-    return { isValid: false, error: 'Validation failed' };
+    console.error('[validateMagicLink] error:', error);
+    return { isValid: false, error: 'Validation failed', errorCode: 'TOKEN_NOT_FOUND' };
   }
 }
 

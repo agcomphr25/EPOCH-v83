@@ -534,9 +534,9 @@ export default function P2ShipmentDetail() {
               {packingSlip && (
                 <>
                   <Button variant="outline" size="sm" asChild>
-                    <a href={`/p2/packing-slip/${packingSlip.id}`} target="_blank" rel="noopener noreferrer">
+                    <Link href={`/p2/packing-slip/${packingSlip.id}`} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
-                    </a>
+                    </Link>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
                     <a href={`/api/p2/packing-slips/${packingSlip.id}/pdf`} target="_blank" rel="noopener noreferrer">
@@ -601,9 +601,9 @@ export default function P2ShipmentDetail() {
               {certificate && (
                 <>
                   <Button variant="outline" size="sm" asChild>
-                    <a href={`/p2/certificate/${certificate.id}`} target="_blank" rel="noopener noreferrer">
+                    <Link href={`/p2/certificate/${certificate.id}`} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
-                    </a>
+                    </Link>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
                     <a href={`/api/p2/certificates/${certificate.id}/pdf`} target="_blank" rel="noopener noreferrer">

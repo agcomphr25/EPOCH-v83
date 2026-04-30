@@ -12,3 +12,81 @@ id = "4JMfvBKV6yDHs_IQiil3Z"
 uri = "file://_audit_exports/EPOCH_SYSTEM_AUDIT_2026-04-15.pdf"
 type = "pdf"
 title = "EPOCH System Audit Report — April 15, 2026 (Landscape)"
+
+[[outputs]]
+id = "YZBHqI_AvTjb1NU6SaEup"
+uri = "file://attached_assets/SALARIED_TIMESHEET_AUDIT.md"
+type = "text"
+title = "Salaried Timesheet Audit & Phase Plan"
+
+[[outputs]]
+id = "wv_NIHpvZ7SfWiOtw3oCS"
+uri = "file://.local/tasks/CHARGE_CODE_ENGINE_READINESS_AUDIT.md"
+type = "text"
+title = "CHARGE CODE ENGINE READINESS AUDIT"
+
+[[outputs]]
+id = "aHHAWLbbfxqbWvSzF2_cN"
+uri = "file://attached_assets/DCAA_PASS_1_POST_RESTART_VERIFICATION.md"
+type = "text"
+title = "DCAA Pass 1 Post-Restart Verification Report"
+
+[[outputs]]
+id = "THae-GRSXVb8e7Mt4hr9d"
+uri = "file://attached_assets/CHARGE_CODE_AUDIT_TRAIL_AUDIT.md"
+type = "text"
+title = "CHARGE_CODE_AUDIT_TRAIL_AUDIT.md"
+
+[[outputs]]
+id = "xhZQXzNSQ-ZrVOrx6oRvh"
+uri = "file://attached_assets/CHARGE_CODE_AUDIT_TRAIL_IMPLEMENTATION.md"
+type = "text"
+title = "CHARGE_CODE_AUDIT_TRAIL_IMPLEMENTATION.md"
+
+[[outputs]]
+id = "WGHIz58YH42J75wh-sCQd"
+uri = "file://attached_assets/CHARGE_CODE_AUDIT_LIVE_VALIDATION.md"
+type = "text"
+title = "CHARGE_CODE_AUDIT_LIVE_VALIDATION.md"
+
+[[outputs]]
+id = "KXQolRL54DJqhSY3tCImM"
+uri = "file://attached_assets/CORRECTION_AUDIT_TRAIL_AUDIT.md"
+type = "text"
+title = "CORRECTION_AUDIT_TRAIL_AUDIT.md"
+
+[[outputs]]
+id = "UQMD9zltcpPTU0YEEVWZP"
+uri = "file://attached_assets/AUTO_APPROVAL_BYPASS_AUDIT.md"
+type = "text"
+title = "AUTO_APPROVAL_BYPASS_AUDIT.md"
+
+[[outputs]]
+id = "SB6_vagvUVd2RZoMQXmzV"
+uri = "file://attached_assets/PROD_CHARGE_CODE_FAST_PATH_AUDIT.md"
+type = "text"
+title = "PROD CHARGE CODE FAST PATH AUDIT"
+
+[[outputs]]
+id = "bnI_vsJ-b9MGuYr_TgTOI"
+uri = "file://attached_assets/PROD_CHARGE_CODE_FAST_PATH_IMPLEMENTATION.md"
+type = "text"
+title = "PROD CHARGE CODE FAST PATH IMPLEMENTATION"
+
+[[outputs]]
+id = "wKEtIfmlnulv7ZefLIOwT"
+uri = "file://attached_assets/FRINGE_POOL_FINAL_FIX.md"
+type = "text"
+title = "FRINGE POOL FINAL FIX"
+
+[[outputs]]
+id = "6Zcnqbl6XU16SFDLQVoYa"
+uri = "file://attached_assets/BURDEN_RATES_FINAL_AUDIT.md"
+type = "text"
+title = "BURDEN RATES FINAL AUDIT"
+
+[[outputs]]
+id = "xWmoU1t1D-rZC8NXHpwgG"
+uri = "file://attached_assets/CHARGE_CODE_MANAGER_VALIDATION_AUDIT.md"
+type = "text"
+title = "Charge Code Manager Validation Audit"

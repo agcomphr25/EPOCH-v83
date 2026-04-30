@@ -31,7 +31,15 @@ export type AuditEntityType =
   | 'qc_item'         // For QC nonconformance/kickback attention tracking
   | 'production_delay' // For production delay attention tracking
   | 'employee'        // For employee profile changes
-  | 'employee_onboarding'; // For onboarding session tracking
+  | 'employee_onboarding' // For onboarding session tracking
+  | 'work_order'      // For production work order (WAD) events
+  | 'traveler'        // For traveler lifecycle events
+  | 'traveler_step'   // For traveler step events
+  | 'time_entry'      // For time entry / punch edits
+  | 'edri_snapshot'   // For EDRI compliance score snapshots and overrides
+  | 'user_session'    // For session lifecycle events (CMMC §3.5/§3.13)
+  | 'vault_document' // For vault document access-denied events
+  | 'vendor';        // For vendor record changes
 
 // Standard audit actions for Attention & State-Confidence system
 export type AttentionAuditAction = 

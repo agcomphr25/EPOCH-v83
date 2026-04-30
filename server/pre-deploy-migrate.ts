@@ -284,6 +284,37 @@ async function main() {
     ON rail_demands (order_id, rail_sku)
   `, 'Ensure rail_demands unique index');
 
+  await runSql(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'audit_frequency') THEN
+        CREATE TYPE audit_frequency AS ENUM ('daily', 'weekly', 'bi_weekly', 'monthly');
+      END IF;
+    END $$;
+  `, 'Ensure audit_frequency enum');
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS inventory_audit_settings (
+      id SERIAL PRIMARY KEY,
+      frequency audit_frequency NOT NULL DEFAULT 'weekly',
+      next_audit_date TIMESTAMP,
+      last_audit_date TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `, 'Ensure inventory_audit_settings table');
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS inventory_audit_records (
+      id SERIAL PRIMARY KEY,
+      packet_id INTEGER NOT NULL REFERENCES inventory_items(id),
+      audit_date TIMESTAMP NOT NULL DEFAULT NOW(),
+      system_qty INTEGER NOT NULL,
+      actual_qty INTEGER NOT NULL,
+      variance INTEGER NOT NULL,
+      audited_by TEXT,
+      notes TEXT
+    )
+  `, 'Ensure inventory_audit_records table');
+
   // ------------------------------------------------------------------
   // STEP 4: Quick verification — report remaining integer→uuid mismatches
   // ------------------------------------------------------------------

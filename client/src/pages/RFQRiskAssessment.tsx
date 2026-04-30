@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearch } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,9 +91,15 @@ const RiskRadioGroup = ({
 );
 
 export default function RFQRiskAssessment() {
+  // Read customerId from URL query param (set when navigating from a project)
+  const search = useSearch();
+  const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
-  const [userSwitchedTab, setUserSwitchedTab] = useState(false);
+  // If a customerId was passed via URL, keep the create tab active rather than
+  // auto-switching to the view list (the operator is starting a new RFQ for that customer).
+  const [userSwitchedTab, setUserSwitchedTab] = useState(!!urlCustomerId);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
   const [isViewingSubmitted, setIsViewingSubmitted] = useState(false);
@@ -209,6 +216,17 @@ export default function RFQRiskAssessment() {
       console.error('Failed to generate RFQ number:', error);
     }
   };
+
+  // Auto-populate customer when a customerId is passed via URL (e.g. from a project workflow step).
+  // We wait until customers have loaded before calling handleCustomerChange so the lookup succeeds.
+  const autoPopulatedRef = useRef(false);
+  useEffect(() => {
+    if (urlCustomerId && customers.length > 0 && !autoPopulatedRef.current) {
+      autoPopulatedRef.current = true;
+      handleCustomerChange(urlCustomerId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, urlCustomerId]);
 
   // Effect to handle canvas resizing
   useEffect(() => {

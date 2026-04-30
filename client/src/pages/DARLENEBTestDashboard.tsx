@@ -30,12 +30,13 @@ import {
   Sun,
   MessageSquare,
 } from 'lucide-react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import WatchRuleCards from '@/components/WatchRuleCards';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function DARLENEBTestDashboard() {
+  const [, setLocation] = useLocation();
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('darleneb-dark-mode');
     return saved === 'true';
@@ -55,7 +56,7 @@ export default function DARLENEBTestDashboard() {
     localStorage.removeItem('jwtToken');
 
     // Redirect to login page
-    window.location.href = '/login';
+    setLocation('/login');
   };
 
   return (
@@ -368,6 +369,20 @@ export default function DARLENEBTestDashboard() {
                 </h3>
                 <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   View urgent and priority orders
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/employee-portal">
+            <Card className={`hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-violet-200 ${isDarkMode ? 'bg-gray-800 border-gray-700' : ''}`}>
+              <CardContent className="p-4 text-center">
+                <User className="w-8 h-8 text-violet-600 mx-auto mb-3" />
+                <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                  My Employee Portal
+                </h3>
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  View your employee profile
                 </p>
               </CardContent>
             </Card>

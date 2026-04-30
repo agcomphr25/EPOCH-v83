@@ -3,6 +3,7 @@ import JsBarcode from 'jsbarcode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Printer } from 'lucide-react';
+import { generateBadgePrintHtml } from '@/lib/badgePrintHtml';
 
 type Props = {
   badgeScanCode: string;
@@ -64,40 +65,7 @@ export default function EmployeeBadgeBarcode({ badgeScanCode, employeeName }: Pr
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Employee Badge - ${employeeName}</title>
-          <style>
-            @page {
-              size: 4in 2in;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 20px;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              font-family: Arial, sans-serif;
-            }
-            h1 {
-              font-size: 18px;
-              margin-bottom: 10px;
-              text-align: center;
-            }
-            svg {
-              max-width: 100%;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>${employeeName}</h1>
-          ${barcodeRef.current?.outerHTML || ''}
-        </body>
-      </html>
-    `);
+    printWindow.document.write(generateBadgePrintHtml(employeeName, barcodeRef.current?.outerHTML || ''));
 
     printWindow.document.close();
     setTimeout(() => {

@@ -9,7 +9,7 @@ import {
   partRoutings,
   insertP2LayupScheduleSchema 
 } from '../../schema';
-import { eq, and, gte, lte, desc, inArray, ilike } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, inArray, ilike, max } from 'drizzle-orm';
 import { z } from 'zod';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import JsBarcode from 'jsbarcode';
@@ -655,6 +655,14 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
       });
     }
 
+    // Find the highest sequence number already used across ALL items on this PO
+    // so that a second (or third) line continues the sequence instead of restarting at 1.
+    const maxSeqResult = await db
+      .select({ maxSeq: max(p2SerializedItems.sequenceNumber) })
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.poId, po.id));
+    const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
+
     let itemRouting = await db.query.partRoutings.findFirst({
       where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
     });
@@ -667,8 +675,9 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
     const familyKey = baseMatch ? baseMatch[1].trim() : poItem.partNumber;
 
     const itemsToCreate = [];
-    for (let i = 1; i <= poItem.quantity; i++) {
-      const seq4 = i.toString().padStart(4, '0');
+    for (let i = 0; i < poItem.quantity; i++) {
+      const seq = startSeq + i;
+      const seq4 = seq.toString().padStart(4, '0');
       const barcode = `${po.poNumber}-UNIT-${seq4}`;
       const serialNumber = barcode;
 
@@ -683,7 +692,7 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
         partName: poItem.partName,
         customerId: po.customerId,
         customerName: po.customerName,
-        sequenceNumber: i,
+        sequenceNumber: seq,
         currentDepartment: 'Pending Layup',
         currentStageIndex: 0,
         status: 'ACTIVE',
@@ -737,6 +746,15 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
     });
   } catch (error: any) {
     console.error('Error generating serialized items:', error);
+    // Catch unique constraint violations and return a clear, human-readable message
+    const isUniqueViolation =
+      error.code === '23505' ||
+      (typeof error.message === 'string' && error.message.toLowerCase().includes('unique'));
+    if (isUniqueViolation) {
+      return res.status(409).json({
+        error: 'One or more barcodes for this PO already exist. This can happen if another line was generated simultaneously. Please refresh and try again.',
+      });
+    }
     res.status(500).json({ error: error.message });
   }
 });

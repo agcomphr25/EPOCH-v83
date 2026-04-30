@@ -19,14 +19,11 @@ import {
   Square,
   ArrowRightCircle,
   CheckCircle,
-  AlertTriangle,
-  FileText,
-  Eye,
-  TrendingDown,
   Zap,
-  RotateCcw,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
@@ -37,6 +34,7 @@ import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import KickbackReportModal from '@/components/KickbackReportModal';
+import OrderActionButtons from '@/components/OrderActionButtons';
 
 export default function GunsimthQueuePage() {
   // Multi-select state
@@ -52,26 +50,16 @@ export default function GunsimthQueuePage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
   });
 
-  // Fetch nonconformance/return items assigned to Gunsmith department
-  const { data: nonconformanceItems = [] } = useQuery({
-    queryKey: ['/api/nonconformance', { repairDepartment: 'Gunsmith' }],
-    queryFn: async () => {
-      const result = await apiRequest('/api/nonconformance?limit=100');
-      return (result || []).filter(
-        (item: any) =>
-          item.repairDepartment?.toLowerCase() === 'gunsmith' &&
-          item.status !== 'Resolved' &&
-          item.status !== 'Closed' &&
-          (item.disposition === 'Repair' || item.disposition === 'Return')
-      );
-    },
-    refetchInterval: 30000,
-  });
 
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
@@ -519,6 +507,8 @@ export default function GunsimthQueuePage() {
         </CardContent>
       </Card>
 
+      <ReturnsRepairsSection repairDepartment="Gunsmith" />
+
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Previous Department Count */}
@@ -688,58 +678,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -820,58 +771,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -949,58 +861,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -1078,58 +951,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -1207,58 +1041,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -1336,58 +1131,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -1463,58 +1219,19 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-2 flex gap-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSalesOrderView(order.orderId);
-                                }}
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Badge>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOrderForKickback({
-                                    orderId: order.orderId,
-                                    department: 'Gunsmith'
-                                  });
-                                  setKickbackModalOpen(true);
-                                }}
-                                title="Report Kickback"
-                                className="h-6 w-6 p-0 ml-1"
-                                data-testid={`button-report-kickback-${order.orderId}`}
-                              >
-                                <TrendingDown className="h-3 w-3" />
-                              </Button>
-                              {hasKickbacks(order.orderId) && (
-                                <Badge
-                                  variant="destructive"
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                                    getKickbackStatus(order.orderId) ===
-                                    'CRITICAL'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'HIGH'
-                                        ? 'bg-orange-600 hover:bg-orange-700'
-                                        : getKickbackStatus(order.orderId) ===
-                                            'MEDIUM'
-                                          ? 'bg-yellow-600 hover:bg-yellow-700'
-                                          : 'bg-gray-600 hover:bg-gray-700'
-                                  }`}
-                                  onClick={() =>
-                                    handleKickbackClick(order.orderId)
-                                  }
-                                >
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Kickback
-                                </Badge>
-                              )}
-                            </div>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={(id) => {
+                                setSelectedOrderForKickback({ orderId: id, department: 'Gunsmith' });
+                                setKickbackModalOpen(true);
+                              }}
+                              hasKickbacks={hasKickbacks(order.orderId)}
+                              kickbackStatus={getKickbackStatus(order.orderId)}
+                              onKickbackBadgeClick={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                              className="mt-2"
+                            />
                           </CardContent>
                         </Card>
                       </div>
@@ -1563,92 +1280,6 @@ export default function GunsimthQueuePage() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Returns/Repairs Section - Nonconformance Items Assigned to Gunsmith */}
-      {(nonconformanceItems as any[]).length > 0 && (
-        <Card className="border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-              <RotateCcw className="h-5 w-5" />
-              Returns & Repairs ({(nonconformanceItems as any[]).length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {(nonconformanceItems as any[]).map((item: any) => (
-                <Card
-                  key={item.id}
-                  id={`return-${item.orderId || item.id}`}
-                  className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-800"
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-300">
-                          RETURN
-                        </Badge>
-                        <span className="font-semibold">
-                          {item.orderId || `RMA-${item.id}`}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      {item.serialNumber && (
-                        <div className="text-gray-600 dark:text-gray-400">
-                          Serial: {item.serialNumber}
-                        </div>
-                      )}
-                      <div className="text-gray-600 dark:text-gray-400">
-                        Customer: {item.customerName || 'N/A'}
-                      </div>
-                      {item.stockModel && (
-                        <div className="text-gray-600 dark:text-gray-400">
-                          Model: {item.stockModel}
-                        </div>
-                      )}
-                      <div className="text-gray-600 dark:text-gray-400">
-                        Issue: {item.issueCause || 'N/A'}
-                      </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                        <Badge
-                          variant="outline"
-                          className={
-                            item.status === 'Open'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                        <div className="flex items-center gap-2">
-                          {item.notes && (
-                            <div className="relative group">
-                              <FileText className="h-4 w-4 text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300" />
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-normal max-w-xs z-50 shadow-lg">
-                                <div className="font-semibold mb-1">Notes:</div>
-                                <div>{item.notes}</div>
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
-                              </div>
-                            </div>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setLocation('/nonconformance')}
-                            className="text-xs"
-                          >
-                            View Details
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Sales Order Modal */}

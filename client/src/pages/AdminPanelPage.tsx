@@ -66,7 +66,9 @@ import {
   Truck,
   Users,
   Clock,
+  Shuffle,
 } from 'lucide-react';
+import { Link } from 'wouter';
 import { format } from 'date-fns';
 import { adminFieldConfigs, getFieldsByCategory, canEditField, fieldCategories } from '@shared/adminConfig';
 
@@ -642,7 +644,18 @@ export default function AdminPanelPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                      No orders found.
+                      <div className="flex flex-col items-center gap-2">
+                        <span>No orders found.</span>
+                        {globalFilter && (
+                          <Link
+                            href={`/order-department-transfer?orderId=${encodeURIComponent(globalFilter)}`}
+                            className="inline-flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 underline underline-offset-2"
+                          >
+                            <Shuffle className="h-3 w-3" />
+                            Can't find this order? Try the Department Transfer tool
+                          </Link>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

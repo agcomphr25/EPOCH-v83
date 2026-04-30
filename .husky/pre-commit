@@ -1,3 +1,9 @@
 #!/usr/bin/env sh
+# Keep safeFiles in server/index.ts in sync with migrations/ on every commit.
+# If new entries are added, stage the updated file automatically.
+node scripts/sync-safe-migrations.js
+if ! git diff --quiet -- server/index.ts 2>/dev/null; then
+  git add server/index.ts
+fi
 npx lint-staged
 npm run check

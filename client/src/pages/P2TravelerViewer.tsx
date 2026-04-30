@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,9 +42,12 @@ import {
   Pencil,
   Save,
   X,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
+import AuditTimeline from '@/components/AuditTimeline';
 
 function safeFormat(dateValue: any, fmt: string): string {
   if (!dateValue) return '-';
@@ -55,6 +58,8 @@ function safeFormat(dateValue: any, fmt: string): string {
 
 interface TravelerData {
   serializedItem: any;
+  travelerId: string | null;
+  allTravelerIds: { id: string; status: string; createdAt: string; cycleNumber: number }[];
   purchaseOrder: any;
   poItem: any;
   routing: any;
@@ -541,6 +546,10 @@ export default function P2TravelerViewer() {
               <TabsTrigger value="documents" data-testid="tab-documents">
                 <FileText className="h-4 w-4 mr-2" />
                 Documents
+              </TabsTrigger>
+              <TabsTrigger value="audit" data-testid="tab-audit">
+                <History className="h-4 w-4 mr-2" />
+                Audit History
               </TabsTrigger>
             </TabsList>
 
@@ -1478,8 +1487,16 @@ export default function P2TravelerViewer() {
                   <ScrollArea className="h-[400px]">
                     {travelerData.events && travelerData.events.length > 0 ? (
                       <div className="space-y-3">
-                        {travelerData.events.map((event: any, index: number) => (
-                          <div key={event.id} className="flex items-start gap-3 pb-3 border-b last:border-0" data-testid={`event-${index}`}>
+                        {travelerData.events.map((event: any, index: number) => {
+                          const isCycleScrapped = event.eventType === 'CYCLE_SCRAPPED';
+                          const isCycleRestarted = event.eventType === 'CYCLE_RESTARTED';
+                          const isCycleSentinel = isCycleScrapped || isCycleRestarted;
+                          return (
+                          <div
+                            key={event.id}
+                            className={`flex items-start gap-3 pb-3 border-b last:border-0 ${isCycleSentinel ? 'rounded-lg p-2 -mx-2' : ''} ${isCycleScrapped ? 'bg-red-50 border-red-200' : isCycleRestarted ? 'bg-orange-50 border-orange-200' : ''}`}
+                            data-testid={`event-${index}`}
+                          >
                             <div className="flex-shrink-0 mt-1">
                               {event.eventType === 'DEPARTMENT_COMPLETE' ? (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
@@ -1487,22 +1504,47 @@ export default function P2TravelerViewer() {
                                 <CheckCircle className="h-4 w-4 text-blue-500" />
                               ) : event.eventType === 'QC_FAIL' ? (
                                 <XCircle className="h-4 w-4 text-red-500" />
+                              ) : isCycleScrapped ? (
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              ) : isCycleRestarted ? (
+                                <RotateCcw className="h-4 w-4 text-orange-600" />
                               ) : (
                                 <History className="h-4 w-4 text-gray-400" />
                               )}
                             </div>
                             <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">{event.eventType}</Badge>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${isCycleScrapped ? 'bg-red-100 text-red-700 border-red-300' : isCycleRestarted ? 'bg-orange-100 text-orange-700 border-orange-300' : ''}`}
+                                >
+                                  {isCycleScrapped ? 'Cycle Scrapped' : isCycleRestarted ? 'Cycle Restarted' : event.eventType}
+                                </Badge>
+                                {isCycleSentinel && (
+                                  <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
+                                    Cycle Boundary
+                                  </Badge>
+                                )}
                                 <span className="text-xs text-gray-500">
                                   {safeFormat(event.createdAt, 'MMM d, yyyy h:mm a')}
                                 </span>
                               </div>
                               {event.notes && <p className="text-sm mt-1">{event.notes}</p>}
+                              {isCycleSentinel && event.metadata?.travelerId && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Traveler: {event.metadata?.travelerNumber ?? event.metadata?.travelerId}
+                                </p>
+                              )}
+                              {isCycleRestarted && event.metadata?.previousTravelerId && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Prior Traveler: {event.metadata?.previousTravelerNumber ?? event.metadata?.previousTravelerId}
+                                </p>
+                              )}
                               <p className="text-xs text-gray-400 mt-1">by {event.performedBy}</p>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-center text-gray-500 py-8">No events recorded</p>
@@ -1670,16 +1712,16 @@ export default function P2TravelerViewer() {
                               {(lot.packingSlipId || lot.certificateId) && (
                                 <div className="mt-3 pt-3 border-t flex gap-4">
                                   {lot.packingSlipId && (
-                                    <a href={`/p2/packing-slip/${lot.packingSlipId}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                                    <Link href={`/p2/packing-slip/${lot.packingSlipId}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
                                       <Printer className="h-4 w-4" />
                                       Packing Slip
-                                    </a>
+                                    </Link>
                                   )}
                                   {lot.certificateId && (
-                                    <a href={`/p2/certificate/${lot.certificateId}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                                    <Link href={`/p2/certificate/${lot.certificateId}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
                                       <FileText className="h-4 w-4" />
                                       Certificate of Conformance
-                                    </a>
+                                    </Link>
                                   )}
                                 </div>
                               )}
@@ -1691,6 +1733,59 @@ export default function P2TravelerViewer() {
                       )}
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="audit" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <History className="h-5 w-5" />
+                    Audit History
+                  </CardTitle>
+                  <CardDescription>
+                    Timeline of traveler lifecycle events recorded by the audit system
+                    {travelerData.allTravelerIds && travelerData.allTravelerIds.length > 1 && (
+                      <span className="ml-1 text-amber-600 font-medium">
+                        — showing {travelerData.allTravelerIds.length} production cycles (re-manufactured part)
+                      </span>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const allIds = travelerData.allTravelerIds ?? (travelerData.travelerId ? [{ id: travelerData.travelerId, status: 'UNKNOWN', createdAt: '', cycleNumber: 1 }] : []);
+                    const cycleMap: Record<string, string> = {};
+                    allIds.forEach((t) => {
+                      const isActive = t.id === travelerData.travelerId;
+                      cycleMap[t.id] = allIds.length > 1
+                        ? (isActive ? `Current Cycle (Cycle ${t.cycleNumber})` : `Prior Cycle ${t.cycleNumber}`)
+                        : 'Current Cycle';
+                    });
+                    const ids = allIds.map(t => t.id);
+                    const queryUrl = ids.length > 0
+                      ? `/api/audit/traveler-events?ids=${ids.join(',')}`
+                      : '';
+                    return (
+                      <AuditTimeline
+                        entityType="traveler"
+                        entityId={ids.join(',')}
+                        queryUrl={queryUrl || undefined}
+                        cycleMap={cycleMap}
+                        filterActions={[
+                          'TRAVELER_STARTED',
+                          'TRAVELER_COMPLETED',
+                          'TRAVELER_STEP_STARTED',
+                          'TRAVELER_STEP_FINISHED',
+                          'QC_SIGNOFF',
+                          'CYCLE_SCRAPPED',
+                          'CYCLE_RESTARTED',
+                        ]}
+                        emptyMessage="No audit events recorded for this traveler yet"
+                      />
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </TabsContent>

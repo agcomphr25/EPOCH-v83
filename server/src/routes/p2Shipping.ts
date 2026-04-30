@@ -23,6 +23,51 @@ const objectStorageService = new ObjectStorageService();
 
 const router = Router();
 
+// ─── Session auth helper (for PDF routes that use cookie-based sessions) ─────
+async function getUserFromSession(req: Request): Promise<{ username: string; role: string } | null> {
+  const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+  if (!sessionToken) return null;
+  try {
+    const result = await pool.query<{ username: string; expires_at: Date }>(
+      'SELECT username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
+    if (!result || result.length === 0) return null;
+    const session = result[0];
+    if (new Date(session.expires_at) < new Date()) {
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
+      return null;
+    }
+    const userRows = await pool.query<{ username: string; role: string }>(
+      'SELECT username, role FROM users WHERE username = $1 AND is_active = true',
+      [session.username.toLowerCase()]
+    );
+    return userRows?.length > 0 ? userRows[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── P2 document access logger ─────────────────────────────────────────────
+// Logs PDF download events to p2_shipping_audit_log for audit trail
+async function logP2DocumentAccess(
+  entityType: string,
+  entityId: string,
+  actor: string,
+  ipAddress: string
+): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO p2_shipping_audit_log (entity_type, entity_id, field_name, old_value, new_value, changed_by, reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [entityType, entityId, 'pdf_download', null, null, actor, `PDF downloaded from IP ${ipAddress}`]
+    );
+  } catch (err) {
+    console.error('[P2Shipping] Failed to write document access log:', { entityType, entityId, actor, err });
+    throw err;
+  }
+}
+
 // Ensure lot_validation_report_url column exists (idempotent migration)
 ;(async () => {
   try {
@@ -496,6 +541,17 @@ router.patch(
 // TODO: unify P1 + P2 packing slip storage into single document system
 // ============================================================
 router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
+  // ACL enforcement: require an authenticated session
+  const sessionUser = await getUserFromSession(req);
+  if (!sessionUser) {
+    return res.status(401).json({ error: 'Authentication required to access P2 shipping documents' });
+  }
+  const ipAddress = (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+
   try {
     const [slip] = await db
       .select()
@@ -507,7 +563,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
     const lineItems = (slip.lineItems as any[]) || [];
     const slipItems: PackingSlipItem[] = lineItems.map((item) => ({
       partNumber: item.partNumber || '',
-      description: item.partName || '',
+      description: item.partName || item.partNumber || 'N/A',
       quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
       serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
       lotNumber: item.lotNumber || slip.lotNumber || undefined,
@@ -655,6 +711,8 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       'Content-Disposition',
       `inline; filename="packing-slip-${slip.packingSlipNumber}.pdf"`
     );
+    // Log download access before streaming
+    await logP2DocumentAccess('packing_slip', slip.id, sessionUser.username, ipAddress);
     return res.send(bytes);
   } catch (err: any) {
     console.error('Packing slip PDF error:', err);
@@ -830,6 +888,17 @@ router.get('/certificates/:id', async (req: Request, res: Response) => {
 // GET /api/p2/certificates/:id/pdf — Generate CoC PDF
 // ============================================================
 router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
+  // ACL enforcement: require an authenticated session
+  const sessionUser = await getUserFromSession(req);
+  if (!sessionUser) {
+    return res.status(401).json({ error: 'Authentication required to access P2 shipping documents' });
+  }
+  const ipAddress = (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+
   try {
     const [cert] = await db
       .select()
@@ -1045,6 +1114,8 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
       'Content-Disposition',
       `inline; filename="coc-${cert.certificateNumber}.pdf"`
     );
+    // Log download access before streaming
+    await logP2DocumentAccess('certificate', cert.id, sessionUser.username, ipAddress);
     return res.send(Buffer.from(bytes));
   } catch (err: any) {
     console.error('CoC PDF error:', err);

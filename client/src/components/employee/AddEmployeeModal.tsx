@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, AlertTriangle, KeyRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ interface AddEmployeeModalProps {
 export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
   const [formData, setFormData] = useState({
     name: '',
+    employeeCode: '',
     email: '',
     phone: '',
     jobTitle: '',
@@ -36,6 +37,7 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
     vehicleType: '',
     buildingKeyAccess: false,
     tciAccess: false,
+    timekeeperPin: '',
   });
 
   const [credentials, setCredentials] = useState({
@@ -44,6 +46,7 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -97,7 +100,20 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
       return;
     }
 
-    createEmployeeMutation.mutate(formData);
+    if (formData.timekeeperPin && !/^\d{4}$/.test(formData.timekeeperPin)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Kiosk PIN must be exactly 4 digits',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      ...(formData.timekeeperPin ? {} : { timekeeperPin: undefined }),
+    };
+    createEmployeeMutation.mutate(payload);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -121,6 +137,25 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
             placeholder="John Doe"
             required
           />
+        </div>
+
+        <div>
+          <Label htmlFor="employeeCode">
+            Employee Code
+            <span className="ml-1 text-xs font-normal text-muted-foreground">(required for time-clock matching)</span>
+          </Label>
+          <Input
+            id="employeeCode"
+            value={formData.employeeCode}
+            onChange={(e) => handleInputChange('employeeCode', e.target.value)}
+            placeholder="e.g. EMP001 — auto-generated if blank"
+          />
+          {!formData.employeeCode && (
+            <p className="flex items-center gap-1 mt-1 text-xs text-amber-600">
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              Leave blank to auto-generate a sequential code. A code is required for charge code lookup and payroll export.
+            </p>
+          )}
         </div>
 
         <div>
@@ -406,6 +441,45 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
           These credentials will be used for system login and employee portal
           access.
         </p>
+      </div>
+
+      {/* Kiosk PIN section */}
+      <div className="border-t pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <KeyRound className="w-4 h-4 text-gray-500" />
+          <Label className="text-sm font-medium">Kiosk PIN</Label>
+          <span className="text-xs text-muted-foreground">(optional)</span>
+        </div>
+        <div className="max-w-xs">
+          <Label htmlFor="timekeeperPin" className="text-xs">4-Digit PIN</Label>
+          <div className="relative">
+            <Input
+              id="timekeeperPin"
+              type={showPin ? 'text' : 'password'}
+              inputMode="numeric"
+              maxLength={4}
+              value={formData.timekeeperPin}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                handleInputChange('timekeeperPin', val);
+              }}
+              placeholder="e.g. 1234"
+              className="text-xs pr-8"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-full px-2"
+              onClick={() => setShowPin(!showPin)}
+            >
+              {showPin ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Used to clock in/out at the kiosk terminal. Leave blank to skip.
+          </p>
+        </div>
       </div>
 
         <div className="flex justify-end space-x-2 pt-4">

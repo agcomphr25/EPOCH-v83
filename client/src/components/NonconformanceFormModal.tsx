@@ -68,6 +68,10 @@ const authorizationOptions = [
 
 const repairDepartmentOptions = [
   'P1 Production Queue',
+  'Assembly',
+  'Sub-Assembly',
+  'Core',
+  'Kits',
   'Layup/Plugging',
   'Barcode',
   'CNC',

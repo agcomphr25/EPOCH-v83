@@ -1,5 +1,9 @@
 -- Task #213: Brian Ramirez production account fix
 -- Apply employee_code and create user login account for Brian Ramirez (employee ID 18)
+--
+-- All DML below is guarded: if employees(id=18) is absent (e.g. on a
+-- schema-only baseline database that has no seed data), every statement
+-- silently skips and the migration succeeds without error.
 
 -- Step 1: Set employee_code for Brian Ramirez (deterministic — always sets EMP016)
 UPDATE employees
@@ -9,7 +13,8 @@ WHERE id = 18;
 -- Step 2: Create user login account for Brian Ramirez
 -- password_hash is a bcrypt hash of a random locked placeholder.
 -- Admin must use the "Set Password" UI on employee-detail/18 to grant actual login access.
--- The INSERT is idempotent — no-op if a user already exists for this username or employee.
+-- The INSERT is idempotent — no-op if a user already exists for this username or employee,
+-- or if the referenced employee row (id=18) does not exist (e.g. schema-only baseline).
 -- NOTE: The 'password' column is a legacy NOT NULL field present in both dev and production
 -- databases (added out-of-band from the migration system). It is set to 'LOCKED' as a
 -- placeholder; the password_hash field governs actual authentication.
@@ -36,16 +41,23 @@ SELECT
   0,
   NOW(),
   NOW()
-WHERE NOT EXISTS (
+WHERE EXISTS (
+  SELECT 1 FROM employees WHERE id = 18
+) AND NOT EXISTS (
   SELECT 1 FROM users WHERE username = 'brianr' OR employee_id = 18
 );
 
--- Step 3: Post-migration verification
+-- Step 3: Post-migration verification (soft — warns instead of aborting when employee is absent)
 DO $$
 DECLARE
   emp_code TEXT;
   user_count INT;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM employees WHERE id = 18) THEN
+    RAISE NOTICE 'Verification skipped: employee id=18 does not exist in this database (schema-only baseline or employee not yet seeded)';
+    RETURN;
+  END IF;
+
   SELECT employee_code INTO emp_code FROM employees WHERE id = 18;
   IF emp_code IS DISTINCT FROM 'EMP016' THEN
     RAISE EXCEPTION 'Verification failed: employee 18 employee_code is % (expected EMP016)', emp_code;

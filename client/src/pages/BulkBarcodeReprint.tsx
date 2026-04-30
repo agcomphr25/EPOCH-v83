@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,9 +14,10 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Printer, Package, Users, Search, CheckSquare, Square, RefreshCw, Loader2 } from 'lucide-react';
+import { Printer, Package, Users, Search, CheckSquare, Square, RefreshCw, Loader2, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 interface Customer {
   id: number;
@@ -50,6 +51,7 @@ interface P2SerializedItem {
   sequenceNumber: number;
   currentDepartment: string;
   status: string;
+  barcodePrintedAt?: string | null;
 }
 
 export default function BulkBarcodeReprint() {
@@ -60,6 +62,21 @@ export default function BulkBarcodeReprint() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('orders');
   const { toast } = useToast();
+
+  const stampPrintMutation = useMutation({
+    mutationFn: async (serialNumbers: string[]) => {
+      return apiRequest('/api/p2/control-center/stamp-barcode-printed', {
+        method: 'PATCH',
+        body: JSON.stringify({ serialNumbers }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/production-control/scheduling-list'] });
+    },
+    onError: () => {
+      toast({ title: 'Warning', description: 'Labels printed but print history could not be saved. The "previously printed" indicator may not appear until the next refresh.', variant: 'destructive' });
+    },
+  });
 
   const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
@@ -285,6 +302,9 @@ export default function BulkBarcodeReprint() {
     printWindow.document.write(getLabelHtml(labelsHtml, selectedCustomer?.name || 'P2 Items'));
     printWindow.document.close();
     setIsPrinting(false);
+
+    const sns = [...new Set(itemsToPrint.map(i => i.serialNumber).filter(Boolean))];
+    if (sns.length > 0) stampPrintMutation.mutate(sns);
     
     toast({
       title: 'Print dialog opened',
@@ -707,7 +727,18 @@ export default function BulkBarcodeReprint() {
                               />
                             </td>
                             <td className="p-3 font-mono font-medium text-blue-600" data-testid={`text-barcode-${item.barcode}`}>
-                              {item.barcode}
+                              <div className="flex items-center gap-1.5">
+                                {item.barcode}
+                                {item.barcodePrintedAt && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-muted-foreground/70"
+                                    title={`Label printed ${new Date(item.barcodePrintedAt).toLocaleString()}`}
+                                  >
+                                    <Printer className="h-3 w-3" />
+                                    <Check className="h-2.5 w-2.5 text-green-500" />
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-3" data-testid={`text-po-number-${item.barcode}`}>
                               {item.poNumber}

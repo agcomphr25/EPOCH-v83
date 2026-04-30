@@ -13,6 +13,7 @@ import {
 } from '../../schema';
 import { eq, desc, sql, isNull, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -27,14 +28,6 @@ async function safeQuery<T>(queryFn: () => Promise<T[]>): Promise<T[]> {
   }
 }
 
-function requireAdmin(req: Request, res: Response, next: Function) {
-  const user = (req as any).user;
-  if (!user || (user.role !== 'ADMIN' && user.role !== 'OWNER')) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-}
-
 // ==================== ASSET CATEGORIES ====================
 
 router.get('/categories', async (_req: Request, res: Response) => {
@@ -47,7 +40,7 @@ router.get('/categories', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/categories', requireAdmin, async (req: Request, res: Response) => {
+router.post('/categories', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const parsed = insertAssetCategorySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -61,7 +54,7 @@ router.post('/categories', requireAdmin, async (req: Request, res: Response) => 
   }
 });
 
-router.put('/categories/:id', requireAdmin, async (req: Request, res: Response) => {
+router.put('/categories/:id', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, parentCategoryId } = req.body;
@@ -74,7 +67,7 @@ router.put('/categories/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
-router.delete('/categories/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/categories/:id', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const linkedAssets = await safeQuery(() => db.select({ id: assets.id }).from(assets).where(eq(assets.categoryId, id)).limit(1));
@@ -105,7 +98,7 @@ router.get('/locations', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/locations', requireAdmin, async (req: Request, res: Response) => {
+router.post('/locations', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const parsed = insertAssetLocationSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -119,7 +112,7 @@ router.post('/locations', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/locations/:id', requireAdmin, async (req: Request, res: Response) => {
+router.put('/locations/:id', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, description } = req.body;
@@ -132,7 +125,7 @@ router.put('/locations/:id', requireAdmin, async (req: Request, res: Response) =
   }
 });
 
-router.delete('/locations/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/locations/:id', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const linkedAssets = await safeQuery(() => db.select({ id: assets.id }).from(assets).where(eq(assets.physicalLocationId, id)).limit(1));
@@ -147,7 +140,7 @@ router.delete('/locations/:id', requireAdmin, async (req: Request, res: Response
   }
 });
 
-router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const linkedWOs = await safeQuery(() => db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.assetId, id)).limit(1));
@@ -364,7 +357,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', requireAdmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const parsed = insertAssetSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -395,7 +388,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const parsed = insertAssetSchema.partial().safeParse(req.body);
@@ -427,7 +420,7 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/move-location', requireAdmin, async (req: Request, res: Response) => {
+router.post('/:id/move-location', requirePermission('assets.manage'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const moveSchema = z.object({

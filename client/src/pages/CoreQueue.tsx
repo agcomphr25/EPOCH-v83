@@ -53,6 +53,7 @@ import {
   Info,
   Unlock,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 
 type CoreQueueItem = {
   id: number;
@@ -274,6 +275,8 @@ export default function CoreQueue() {
             Readiness gating for core prep jobs — confirm honeycomb/foam core stock, adhesive film, and consumables are allocated before release.
           </p>
         </div>
+
+        <ReturnsRepairsSection repairDepartment="Core" />
 
         <Card className="dark:bg-gray-900 dark:border-gray-800">
           <CardHeader>

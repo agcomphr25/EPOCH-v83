@@ -18,7 +18,6 @@ import {
   Truck,
   DollarSign,
   Package,
-  AlertTriangle,
   Download,
   X,
   ChevronLeft,
@@ -27,6 +26,7 @@ import {
   Printer,
   MessageSquare,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import UPSLabelCreator from '@/components/UPSLabelCreator';
 import { apiRequest } from '@/lib/queryClient';
 import { format, differenceInDays } from 'date-fns';
@@ -46,6 +47,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { ShipmentDialog } from '@/components/ShipmentDialog';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
+import OrderActionButtons from '@/components/OrderActionButtons';
 
 export default function QCShippingQueuePage() {
   // State for tab selection
@@ -89,6 +91,11 @@ export default function QCShippingQueuePage() {
   const { toast} = useToast();
   const [, setLocation] = useLocation();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
@@ -126,6 +133,7 @@ export default function QCShippingQueuePage() {
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
 
   // State for shipment documents modal (combined label + packing slips)
   const [shipmentDocumentsData, setShipmentDocumentsData] = useState<{
@@ -590,19 +598,14 @@ export default function QCShippingQueuePage() {
     }
   };
 
-  // Mutation for progressing orders to shipping
+  // Mutation for releasing regular orders from Shipping QC → Shipping
   const progressOrderMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const results = [];
       for (const orderId of orderIds) {
-        const result = await apiRequest(`/api/orders/${orderId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            currentDepartment: 'Shipping',
-            department: 'Shipping',
-            status: 'IN_PROGRESS',
-          }),
+        const result = await apiRequest(`/api/orders/complete-qc/${orderId}`, {
+          method: 'POST',
+          body: { qcPassedAll: true },
         });
         results.push(result);
       }
@@ -610,27 +613,29 @@ export default function QCShippingQueuePage() {
     },
     onSuccess: (_, orderIds) => {
       toast({
-        title: 'Orders Progressed',
-        description: `${orderIds.length} orders moved to Shipping department`,
+        title: 'Orders Released to Shipping',
+        description: `${orderIds.length} order${orderIds.length !== 1 ? 's' : ''} moved to Shipping queue`,
       });
-      // Clear selection and invalidate cache
       setSelectedOrders(new Set());
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: any) => {
-      console.error('Error progressing orders to shipping:', error);
+      console.error('Error releasing orders to shipping:', error);
       toast({
         title: 'Error',
-        description: 'Failed to progress orders to shipping',
+        description: 'Failed to release orders to Shipping',
         variant: 'destructive',
       });
     },
   });
 
-  // Progress selected orders to shipping
+  // Release a single order to shipping
+  const releaseOrderToShipping = (orderId: string) => {
+    progressOrderMutation.mutate([orderId]);
+  };
+
+  // Release selected orders to shipping
   const progressToShipping = () => {
     if (selectedOrders.size === 0) return;
     const orderIds = Array.from(selectedOrders);
@@ -713,6 +718,8 @@ export default function QCShippingQueuePage() {
         setSelectedCustomer(null);
       }
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/shipping-qc'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
     },
     onError: (error: any) => {
       console.error('Error progressing PO orders:', error);
@@ -1134,27 +1141,16 @@ export default function QCShippingQueuePage() {
           </div>
         )}
 
-        {/* Show Kickback Badge if order has kickbacks */}
-        {hasKickbacks(order.orderId) && (
-          <div className="mb-2">
-            <Badge
-              variant="destructive"
-              className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                getKickbackStatus(order.orderId) === 'CRITICAL'
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : getKickbackStatus(order.orderId) === 'HIGH'
-                    ? 'bg-orange-600 hover:bg-orange-700'
-                    : getKickbackStatus(order.orderId) === 'MEDIUM'
-                      ? 'bg-yellow-600 hover:bg-yellow-700'
-                      : 'bg-gray-600 hover:bg-gray-700'
-              }`}
-              onClick={() => handleKickbackClick(order.orderId)}
-            >
-              <AlertTriangle className="w-3 h-3 mr-1" />
-              Kickback
-            </Badge>
-          </div>
-        )}
+        {/* Action Buttons */}
+        <div className="mb-2">
+          <OrderActionButtons
+            orderId={order.orderId}
+            hasKickbacks={hasKickbacks(order.orderId)}
+            kickbackStatus={getKickbackStatus(order.orderId)}
+            onKickbackBadgeClick={handleKickbackClick}
+            showReassignButton={isAdmin}
+          />
+        </div>
 
         {/* RTS Order specific buttons */}
         {order.isRtsOrder ? (
@@ -1181,24 +1177,37 @@ export default function QCShippingQueuePage() {
             </Button>
           </div>
         ) : (
-          <div className="flex gap-1 mt-2">
+          <div className="flex flex-col gap-1 mt-2">
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleQCChecklistDownload(order.orderId)}
+                className="flex-1 text-xs"
+              >
+                <CheckCircle className="h-3 w-3 mr-1" />
+                QC Checklist
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleSalesOrderView(order.orderId)}
+                className="flex-1 text-xs"
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                Sales Order
+              </Button>
+            </div>
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => handleQCChecklistDownload(order.orderId)}
-              className="flex-1 text-xs"
+              variant="default"
+              onClick={() => releaseOrderToShipping(order.orderId)}
+              disabled={progressOrderMutation.isPending}
+              className="w-full text-xs bg-green-600 hover:bg-green-700 text-white"
+              data-testid={`button-release-to-shipping-${order.orderId}`}
             >
-              <CheckCircle className="h-3 w-3 mr-1" />
-              QC Checklist
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleSalesOrderView(order.orderId)}
-              className="flex-1 text-xs"
-            >
-              <FileText className="h-3 w-3 mr-1" />
-              Sales Order
+              <ArrowRight className="h-3 w-3 mr-1" />
+              Release to Shipping
             </Button>
           </div>
         )}
@@ -1238,6 +1247,8 @@ export default function QCShippingQueuePage() {
           </div>
         </CardContent>
       </Card>
+
+      <ReturnsRepairsSection repairDepartment="Shipping QC" />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -1297,6 +1308,21 @@ export default function QCShippingQueuePage() {
               <CardTitle className="flex items-center justify-between">
                 <span>Shipping QC Department Manager</span>
                 <div className="flex items-center gap-2">
+                  {selectedOrders.size > 0 && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={progressToShipping}
+                      disabled={progressOrderMutation.isPending}
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                      data-testid="button-release-to-shipping-bulk"
+                    >
+                      <ArrowRight className="h-3 w-3 mr-1" />
+                      {progressOrderMutation.isPending
+                        ? 'Releasing...'
+                        : `Release to Shipping (${selectedOrders.size})`}
+                    </Button>
+                  )}
                   {qcShippingOrders.length > 0 && (
                     <Button
                       variant="outline"
@@ -1508,6 +1534,19 @@ export default function QCShippingQueuePage() {
                 <div className="flex items-center gap-2">
                   {selectedPOItems.size > 0 && (
                     <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handlePOProgressToShipping}
+                        disabled={progressPOToShippingMutation.isPending}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                        data-testid="button-pass-qc-po"
+                      >
+                        <ArrowRight className="h-4 w-4 mr-1" />
+                        {progressPOToShippingMutation.isPending
+                          ? 'Releasing...'
+                          : `Pass QC (${selectedPOItems.size})`}
+                      </Button>
                       <Button
                         variant="default"
                         size="sm"

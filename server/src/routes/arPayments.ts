@@ -8,12 +8,12 @@ import {
 } from '../../schema';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
-import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
 router.use(authenticateToken);
-router.use(requireAdminAccess);
+router.use(requirePermission('finance.view'));
 
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -99,7 +99,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { customerId, paymentDate, paymentMethod, referenceNumber, amount, notes } = req.body;
 
@@ -132,7 +132,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/allocate', async (req: Request, res: Response) => {
+router.post('/:id/allocate', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const allocations = req.body;
@@ -240,7 +240,7 @@ router.post('/:id/allocate', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

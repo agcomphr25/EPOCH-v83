@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
-import { eq, and, or, asc, desc, inArray, like } from 'drizzle-orm';
+import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -415,83 +415,132 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
       productCategory = newCategory;
     }
     
-    // Create built packet records with full traceability
-    const createdPackets = [];
+    // Barcodes follow the pattern PKT-{agPartNumber}-{id}-{packetNumber}-{timestamp}.
+    // We match the prefix PKT-{agPartNumber}-{id}-% to count packets for this queue item.
+    //
+    // Back-fill decision: existing packets created before this fix all have
+    // packetNumber = 1. We intentionally skip back-filling them because:
+    // 1. Their barcodes already embed the old packet numbers (changing packetNumber
+    //    would create a mismatch between the barcode string and the stored field).
+    // 2. Operators may have physically labelled or scanned those barcodes, so
+    //    renumbering historical records could cause confusion on the floor.
+    // Going forward, all new packets created via this endpoint will be numbered
+    // sequentially from the correct offset.
+    const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
     const isMixedFabric = fabricSources.length > 1;
-    
-    for (let i = 0; i < quantityCompleted; i++) {
-      const packetNumber = i + 1;
-      const timestamp = Date.now();
-      const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${timestamp}`;
-      
-      // Create the built packet record
-      const [builtPacket] = await db
-        .insert(cuttingBuiltPackets)
-        .values({
-          productCategoryId: productCategory.id,
-          barcode,
-          packetNumber,
-          buildDate: new Date(),
-          status: 'AVAILABLE',
-          isMixedFabric,
-          fabricSourceCount: fabricSources.length,
-          notes: completionNotes || null,
-          createdBy: completedBy || null,
+
+    // Wrap count + inserts + queue update in a transaction, using a row-level
+    // lock on the queue item to prevent concurrent submissions from reading the
+    // same existingCount and producing duplicate packet numbers.
+    const { createdPackets, updated, isFullyCompleted, newTotalCompleted } = await db.transaction(async (tx) => {
+      // Lock this queue item row for the duration of the transaction and
+      // re-read its latest values atomically. Using .for('update') issues a
+      // SELECT … FOR UPDATE so any other concurrent request for the same queue
+      // item will block here until we commit, preventing both duplicate packet
+      // numbers and a lost-update on quantityCompleted.
+      const [lockedItem] = await tx
+        .select({
+          quantityCompleted: manufacturingQueue.quantityCompleted,
+          quantityRequested: manufacturingQueue.quantityRequested,
         })
-        .returning();
-      
-      // Create fabric source records for each fabric used
-      for (let j = 0; j < fabricSources.length; j++) {
-        const source = fabricSources[j];
-        await db
-          .insert(cuttingBuiltPacketFabricSources)
-          .values({
-            builtPacketId: builtPacket.id,
-            fabricInventoryId: source.fabricInventoryId || null,
-            fabricType: source.fabricType || null,
-            lotNumber: source.lotNumber || null,
-            batchNumber: source.batchNumber || null,
-            rollNumber: source.rollNumber || null,
-            supplierPartNumber: source.supplierPartNumber || null,
-            internalControlNumber: source.internalControlNumber || null,
-            expirationDate: source.expirationDate || null,
-            quantityUsed: source.quantityUsed || 1,
-            isPrimary: j === 0, // First source is primary
-          });
+        .from(manufacturingQueue)
+        .where(eq(manufacturingQueue.id, parseInt(id)))
+        .for('update');
+
+      if (!lockedItem) {
+        throw new Error(`Manufacturing queue item ${id} disappeared inside transaction`);
       }
-      
-      createdPackets.push({
-        ...builtPacket,
-        fabricSources,
-      });
-    }
-    
-    // Update the manufacturing queue item
-    const previousCompleted = currentItem.quantityCompleted || 0;
-    const newTotalCompleted = previousCompleted + quantityCompleted;
+
+      const lockedPreviousCompleted = lockedItem.quantityCompleted ?? 0;
+      const lockedQuantityRequested = lockedItem.quantityRequested;
+
+      const [{ existingCount }] = await tx
+        .select({ existingCount: count() })
+        .from(cuttingBuiltPackets)
+        .where(like(cuttingBuiltPackets.barcode, barcodePrefix));
+
+      // Create built packet records with full traceability
+      const createdPackets = [];
+
+      for (let i = 0; i < quantityCompleted; i++) {
+        // Offset by existing packet count so each packet receives its true sequential
+        // position across all submissions (not just within this submission).
+        const packetNumber = existingCount + i + 1;
+        const timestamp = Date.now();
+        const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${timestamp}`;
+
+        // Create the built packet record
+        const [builtPacket] = await tx
+          .insert(cuttingBuiltPackets)
+          .values({
+            productCategoryId: productCategory.id,
+            barcode,
+            packetNumber,
+            buildDate: new Date(),
+            status: 'AVAILABLE',
+            isMixedFabric,
+            fabricSourceCount: fabricSources.length,
+            notes: completionNotes || null,
+            createdBy: completedBy || null,
+          })
+          .returning();
+
+        // Create fabric source records for each fabric used
+        for (let j = 0; j < fabricSources.length; j++) {
+          const source = fabricSources[j];
+          await tx
+            .insert(cuttingBuiltPacketFabricSources)
+            .values({
+              builtPacketId: builtPacket.id,
+              fabricInventoryId: source.fabricInventoryId || null,
+              fabricType: source.fabricType || null,
+              lotNumber: source.lotNumber || null,
+              batchNumber: source.batchNumber || null,
+              rollNumber: source.rollNumber || null,
+              supplierPartNumber: source.supplierPartNumber || null,
+              internalControlNumber: source.internalControlNumber || null,
+              expirationDate: source.expirationDate || null,
+              quantityUsed: source.quantityUsed || 1,
+              isPrimary: j === 0, // First source is primary
+            });
+        }
+
+        createdPackets.push({
+          ...builtPacket,
+          fabricSources,
+        });
+      }
+
+      // Update the manufacturing queue item inside the same transaction.
+      // Use values from the locked row to prevent a lost-update when concurrent
+      // submissions race on quantityCompleted.
+      const newTotalCompleted = lockedPreviousCompleted + quantityCompleted;
+      const isFullyCompleted = newTotalCompleted >= lockedQuantityRequested;
+
+      const fabricLotSummary = fabricSources.map((s: any) => s.lotNumber || s.batchNumber).filter(Boolean).join(', ');
+
+      const [updated] = await tx
+        .update(manufacturingQueue)
+        .set({
+          quantityCompleted: newTotalCompleted,
+          status: isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+          completedAt: isFullyCompleted ? new Date() : null,
+          fabricLot: fabricLotSummary,
+          fabricBatch: fabricSources[0]?.batchNumber || null,
+          fabricRoll: fabricSources[0]?.rollNumber || null,
+          materialDetails: JSON.stringify(fabricSources),
+          completionNotes,
+          completedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, parseInt(id)))
+        .returning();
+
+      return { createdPackets, updated, isFullyCompleted, newTotalCompleted };
+    });
+
     const quantityRequested = currentItem.quantityRequested;
-    const isFullyCompleted = newTotalCompleted >= quantityRequested;
-    
-    // Consolidate fabric lot info for the queue record
-    const fabricLotSummary = fabricSources.map((s: any) => s.lotNumber || s.batchNumber).filter(Boolean).join(', ');
-    
-    const [updated] = await db
-      .update(manufacturingQueue)
-      .set({
-        quantityCompleted: newTotalCompleted,
-        status: isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS',
-        completedAt: isFullyCompleted ? new Date() : null,
-        fabricLot: fabricLotSummary,
-        fabricBatch: fabricSources[0]?.batchNumber || null,
-        fabricRoll: fabricSources[0]?.rollNumber || null,
-        materialDetails: JSON.stringify(fabricSources),
-        completionNotes,
-        completedBy,
-        updatedAt: new Date(),
-      })
-      .where(eq(manufacturingQueue.id, parseInt(id)))
-      .returning();
-    
+
     res.json({
       queueItem: updated,
       createdPackets,
@@ -1459,8 +1508,42 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       fabricSources = sources;
     }
 
-    const result = packets.map(packet => ({
+    const parsedPackets = packets.map(packet => {
+      let sku: string | null = null;
+      let queueId: string | null = null;
+      try {
+        const parts = packet.barcode.split('-');
+        if (parts.length >= 5 && parts[0] === 'PKT') {
+          queueId = parts[parts.length - 3];
+          sku = parts.slice(1, parts.length - 3).join('-');
+        }
+      } catch {
+        // non-standard barcode — leave sku and queueId as null
+      }
+      return { ...packet, sku, queueId };
+    });
+
+    // Batch-fetch quantityRequested for all referenced queue items so the
+    // frontend can show an accurate "Packet X of Y" without relying on a
+    // filtered mfgQueueItems list.
+    const uniqueQueueIds = [...new Set(
+      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+    )].map(id => parseInt(id)).filter(id => !isNaN(id));
+
+    const queueTotals: Record<string, number> = {};
+    if (uniqueQueueIds.length > 0) {
+      const queueRows = await db
+        .select({ id: manufacturingQueue.id, quantityRequested: manufacturingQueue.quantityRequested })
+        .from(manufacturingQueue)
+        .where(inArray(manufacturingQueue.id, uniqueQueueIds));
+      queueRows.forEach(row => {
+        queueTotals[String(row.id)] = row.quantityRequested;
+      });
+    }
+
+    const result = parsedPackets.map(packet => ({
       ...packet,
+      quantityOrdered: packet.queueId ? (queueTotals[packet.queueId] ?? null) : null,
       fabricSources: fabricSources.filter(s => s.builtPacketId === packet.id),
     }));
 

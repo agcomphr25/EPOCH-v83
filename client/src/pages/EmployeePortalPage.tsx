@@ -16,24 +16,14 @@ interface Employee {
   name: string;
 }
 
-function fetchWithToken(url: string) {
-  const token =
-    localStorage.getItem('sessionToken') ||
-    localStorage.getItem('jwtToken');
-  return fetch(url, {
-    credentials: 'include',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-}
-
-function ErrorCard({ message }: { message: string }) {
+function ErrorCard({ title = 'Access Unavailable', message }: { title?: string; message: string }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center">
       <Card className="max-w-md border-red-200 bg-red-50">
         <CardContent className="pt-6 text-center">
           <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-red-700 mb-2">
-            Access Unavailable
+            {title}
           </h2>
           <p className="text-red-600">{message}</p>
         </CardContent>
@@ -42,18 +32,20 @@ function ErrorCard({ message }: { message: string }) {
   );
 }
 
+interface ApiError extends Error {
+  status?: number;
+}
+
 export default function EmployeePortalPage() {
   const {
     data: currentUser,
     isLoading: userLoading,
     error: userError,
-  } = useQuery<CurrentUser>({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const response = await fetchWithToken('/api/auth/session');
-      if (!response.ok) throw new Error('Not authenticated');
-      return response.json();
-    },
+  } = useQuery<CurrentUser, ApiError>({
+    queryKey: ['/api/auth/session'],
+    refetchInterval: 5 * 60 * 1000, // re-check session every 5 minutes
+    refetchOnWindowFocus: true,      // re-check when the tab regains focus
+    refetchIntervalInBackground: false, // only poll while the tab is visible
   });
 
   const {
@@ -62,13 +54,6 @@ export default function EmployeePortalPage() {
     error: employeeError,
   } = useQuery<Employee>({
     queryKey: ['/api/employees', currentUser?.employeeId],
-    queryFn: async () => {
-      const response = await fetchWithToken(
-        `/api/employees/${currentUser!.employeeId}`
-      );
-      if (!response.ok) throw new Error('Failed to load employee record');
-      return response.json();
-    },
     enabled: !!currentUser?.employeeId,
   });
 
@@ -81,8 +66,16 @@ export default function EmployeePortalPage() {
   }
 
   if (userError) {
+    const isExpired = userError.status === 401;
     return (
-      <ErrorCard message="Your session could not be verified. Please log in again." />
+      <ErrorCard
+        title={isExpired ? 'Session Expired' : 'Access Unavailable'}
+        message={
+          isExpired
+            ? 'Your session has expired. Please log in again to continue.'
+            : 'Your session could not be verified. Please log in again.'
+        }
+      />
     );
   }
 

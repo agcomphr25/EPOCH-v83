@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
+import { db } from '../../db';
 import { storage } from '../../storage';
 import {
   insertAccountCategorySchema,
@@ -6,11 +8,15 @@ import {
   insertMonthlyAccountEntrySchema,
   insertAllocationRuleSchema,
   insertAllocationResultSchema,
+  journalEntries,
+  auditEvents,
 } from '../../schema';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
 import { processLaborCosts } from '../services/laborCostingService';
 import { postLaborToGL, voidLaborPosting } from '../services/laborPostingService';
+import { reconcileLaborCosts } from '../services/laborReconcileService';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -475,13 +481,53 @@ router.post('/calculate-labor-costs', async (req: Request, res: Response) => {
       runId: result.runId,
       recordCount: result.recordCount,
       totalsByType: result.totalsByType,
+      readModel: result.readModel,
+      ...(result.fallbackReason !== undefined ? { fallbackReason: result.fallbackReason } : {}),
     });
   } catch (error: any) {
     console.error('Calculate labor costs error:', error);
     if (error.statusCode === 409 || (error.message && error.message.includes('already posted'))) {
       return res.status(409).json({ error: error.message });
     }
+    if (error.code === 'APPROVAL_BYPASS_IN_POSTING_PIPELINE') {
+      return res.status(422).json({
+        error: error.message,
+        code: error.code,
+        unapprovedGroups: error.unapprovedGroups,
+        totalUnapprovedSessions: error.totalUnapprovedSessions,
+        totalUnapprovedHours: error.totalUnapprovedHours,
+      });
+    }
     res.status(500).json({ error: error.message || 'Failed to calculate labor costs' });
+  }
+});
+
+// POST /api/cost-accounting/reconcile-labor-costs
+// Compare the legacy punch_ledger costing model against the allocation-segment
+// model for a given calendar month without modifying any data.
+// Returns the per-session diff array and an aggregate summary.
+const reconcileLaborCostsSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+});
+
+router.post('/reconcile-labor-costs', async (req: Request, res: Response) => {
+  try {
+    const parsed = reconcileLaborCostsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'year (integer 2000–2100) and month (integer 1–12) are required',
+        details: parsed.error.format(),
+      });
+    }
+
+    const { year, month } = parsed.data;
+    const result = await reconcileLaborCosts(year, month);
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Reconcile labor costs error:', error);
+    res.status(500).json({ error: error.message || 'Failed to reconcile labor costs' });
   }
 });
 
@@ -539,6 +585,7 @@ router.post('/post-labor-to-gl', async (req: Request, res: Response) => {
       message: 'Labor costs posted to GL successfully',
       runId: result.runId,
       journalEntryIds: result.journalEntryIds,
+      skippedAlreadyPosted: result.skippedAlreadyPosted,
     });
   } catch (error: any) {
     console.error('Post labor to GL error:', error);
@@ -546,6 +593,112 @@ router.post('/post-labor-to-gl', async (req: Request, res: Response) => {
       return res.status(409).json({ error: error.message });
     }
     res.status(500).json({ error: error.message || 'Failed to post labor costs to GL' });
+  }
+});
+
+// ========================================
+// WIRE PAYMENT JOURNAL ENTRY VOID ROUTE
+// ========================================
+
+// POST /api/cost-accounting/void-wire-payment-entry/:id
+// Void a single DRAFT WIRE_PAYMENT journal entry with mandatory reason and full audit trail.
+// Protections: blocks EXPORTED, VOIDED, non-WIRE_PAYMENT entries.
+// Does not delete any rows. Does not touch journal_lines.
+router.post('/void-wire-payment-entry/:id', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid journal entry id — must be a positive integer' });
+  }
+
+  const { reason } = req.body as { reason?: string };
+  if (!reason || typeof reason !== 'string' || reason.trim().length < 10) {
+    return res.status(400).json({ error: 'void_reason is required and must be at least 10 characters' });
+  }
+
+  const actorName: string = (req.user as any)?.username || (req.user as any)?.email || (req.user as any)?.name || 'admin';
+  const actorId: number | null = (req.user as any)?.id ?? null;
+  const actorRole: string = (req.user as any)?.role || 'admin';
+
+  try {
+    // 1. Fetch the entry
+    const [entry] = await db.select().from(journalEntries).where(eq(journalEntries.id, id));
+    if (!entry) {
+      return res.status(404).json({ error: `Journal entry ${id} not found` });
+    }
+
+    // 2. Guard: WIRE_PAYMENT entries only — labor entries have their own void path
+    if (entry.transactionType !== 'WIRE_PAYMENT') {
+      return res.status(409).json({
+        error: `Entry ${id} is type ${entry.transactionType}. This route only voids WIRE_PAYMENT entries. Use void-labor-posting for labor entries.`,
+      });
+    }
+
+    // 3. Guard: already VOIDED
+    if (entry.status === 'VOIDED') {
+      return res.status(409).json({ error: `Entry ${id} is already VOIDED` });
+    }
+
+    // 4. Guard: exported entries — cannot void, must reverse via accountant
+    if (entry.exportedAt !== null || entry.status === 'EXPORTED') {
+      return res.status(409).json({
+        error: `Entry ${id} has been exported (exported_at=${entry.exportedAt}). Exported entries cannot be voided — contact your accountant to issue a reversal.`,
+      });
+    }
+
+    // 5. Guard: only DRAFT may be voided
+    if (entry.status !== 'DRAFT') {
+      return res.status(409).json({
+        error: `Entry ${id} has status '${entry.status}'. Only DRAFT entries can be voided via this route.`,
+      });
+    }
+
+    const now = new Date();
+
+    // 6. Void the entry
+    const [voided] = await db
+      .update(journalEntries)
+      .set({
+        status: 'VOIDED',
+        voidedAt: now,
+        voidedBy: actorName,
+        voidReason: reason.trim(),
+        updatedAt: now,
+      })
+      .where(eq(journalEntries.id, id))
+      .returning();
+
+    // 7. Write audit event — required for DCAA trail
+    await db.insert(auditEvents).values({
+      entityType: 'journal_entry',
+      entityId: String(id),
+      action: 'JOURNAL_ENTRY_VOIDED',
+      actorId,
+      actorName,
+      actorRole,
+      reason: reason.trim(),
+      fieldsChanged: {
+        status: { from: entry.status, to: 'VOIDED' },
+        voidedAt: now.toISOString(),
+        voidedBy: actorName,
+        voidReason: reason.trim(),
+      },
+      meta: {
+        transactionType: entry.transactionType,
+        referenceType: entry.referenceType,
+        referenceId: entry.referenceId,
+        effectiveDate: entry.effectiveDate,
+        memo: entry.memo,
+        originalCreatedBy: entry.createdBy,
+      },
+    });
+
+    return res.json({
+      message: `Journal entry ${id} voided successfully`,
+      entry: voided,
+    });
+  } catch (error: any) {
+    console.error(`[VoidWirePayment] Error voiding entry ${id}:`, error);
+    return res.status(500).json({ error: error.message || 'Failed to void journal entry' });
   }
 });
 

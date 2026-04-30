@@ -8,6 +8,20 @@ interface UserPermissions {
 
 const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
+// Universal routes that ALL authenticated users can access, regardless of their explicit permission entry.
+// Must stay in sync with UNIVERSAL_ACCESS_ROUTES in client/src/config/userPermissions.ts
+const UNIVERSAL_ACCESS_ROUTES: string[] = [
+  '/communications/inbox',
+  '/employee-portal',
+  '/badge-scanner',
+  '/help',
+  '/pdf-signature-tool',
+  '/routing-document-management',
+  '/tickets',
+  '/quick-notes',
+  '/training',
+];
+
 const USER_PERMISSIONS: Record<string, UserPermissions> = {
   glennj: { routes: [], fullAccess: true },
   tasham: { routes: [], fullAccess: true },
@@ -317,6 +331,12 @@ export function hasRouteAccess(username: string, route: string, userRole?: strin
   const lowerUsername = username.toLowerCase();
   
   if (isOwnPersonalDashboard(lowerUsername, route)) return true;
+
+  // Universal routes are accessible to every authenticated user, regardless of
+  // whether they have an explicit permissions entry.
+  for (const universalRoute of UNIVERSAL_ACCESS_ROUTES) {
+    if (routeMatches(route, universalRoute)) return true;
+  }
   
   const permissions = USER_PERMISSIONS[lowerUsername];
 

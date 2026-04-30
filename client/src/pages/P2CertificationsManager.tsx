@@ -23,13 +23,16 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { Link } from 'wouter';
 import { 
   ClipboardList, 
   UserCheck, 
   Plus, 
   Trash2, 
   Award,
-  CheckCircle2
+  CheckCircle2,
+  Wrench,
+  ExternalLink
 } from 'lucide-react';
 import type { 
   P2PartCertification, 
@@ -57,6 +60,12 @@ export default function P2CertificationsManager() {
   const [specSheetUnderstanding, setSpecSheetUnderstanding] = useState(false);
   const [procedureCompletion, setProcedureCompletion] = useState(false);
   const [empNotes, setEmpNotes] = useState('');
+
+  // Current user for admin checks
+  const { data: currentUser } = useQuery<{ username: string; role: string }>({
+    queryKey: ['/api/auth/me'],
+  });
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'OWNER';
 
   // Fetch data
   const { data: partNumbers = [] } = useQuery<Array<{ partNumber: string; partName: string }>>({
@@ -192,6 +201,26 @@ export default function P2CertificationsManager() {
         title: 'Error', 
         description: error.message || 'Failed to delete certification',
         variant: 'destructive'
+      });
+    },
+  });
+
+  // Repair Capabilities Mutation (admin action)
+  const repairCapabilitiesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/training/p2-certifications/repair-capabilities', { method: 'POST', body: {} });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: 'Repair Complete',
+        description: `Ensured capabilities for ${data.granted ?? 0} of ${data.total ?? 0} certified employee(s).${data.errors?.length ? ` ${data.errors.length} error(s) encountered.` : ''}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Repair Failed',
+        description: error.message || 'Failed to repair capabilities',
+        variant: 'destructive',
       });
     },
   });
@@ -624,10 +653,28 @@ export default function P2CertificationsManager() {
           {/* Employee Certifications Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Employee Certifications</CardTitle>
-              <CardDescription>
-                {employeeCertifications.length} certification(s) recorded
-              </CardDescription>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle>Employee Certifications</CardTitle>
+                  <CardDescription>
+                    {employeeCertifications.length} certification(s) recorded
+                  </CardDescription>
+                </div>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => repairCapabilitiesMutation.mutate()}
+                    disabled={repairCapabilitiesMutation.isPending}
+                    className="flex items-center gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-950"
+                    data-testid="button-repair-capabilities"
+                    title="Re-grant shop floor capabilities for all fully certified employees. Safe to run multiple times."
+                  >
+                    <Wrench className="h-4 w-4" />
+                    {repairCapabilitiesMutation.isPending ? 'Repairing...' : 'Repair Capabilities'}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {loadingEmpCerts ? (
@@ -654,7 +701,16 @@ export default function P2CertificationsManager() {
                         const isFullyCertified = cert.drawingKnowledge && cert.specSheetUnderstanding && cert.procedureCompletion;
                         return (
                           <TableRow key={cert.id} data-testid={`row-emp-cert-${cert.id}`}>
-                            <TableCell className="font-medium">{cert.employeeName}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-1.5">
+                                <span>{cert.employeeName}</span>
+                                <Link href={`/employee-detail/${cert.employeeId}?tab=traveler`}>
+                                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-primary" title="View employee traveler access">
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                </Link>
+                              </div>
+                            </TableCell>
                             <TableCell>{cert.partNumber}</TableCell>
                             <TableCell>{cert.department}</TableCell>
                             <TableCell className="text-center">

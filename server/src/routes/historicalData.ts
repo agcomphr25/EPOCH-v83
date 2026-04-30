@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { historicalMonthlyData, insertHistoricalMonthlyDataSchema } from '../../schema';
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
+import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
 
 const router = Router();
 
@@ -142,13 +143,9 @@ router.get('/range-comparison', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    if (!user || user.username !== 'glennj') {
-      return res.status(403).json({ error: 'Only glennj can modify historical data' });
-    }
-
     const validation = insertHistoricalMonthlyDataSchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({ error: 'Invalid data', details: validation.error.errors });
@@ -195,13 +192,9 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/bulk', async (req: Request, res: Response) => {
+router.post('/bulk', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    if (!user || user.username !== 'glennj') {
-      return res.status(403).json({ error: 'Only glennj can modify historical data' });
-    }
-
     const { entries } = req.body;
     if (!Array.isArray(entries)) {
       return res.status(400).json({ error: 'entries must be an array' });
@@ -257,12 +250,8 @@ router.post('/bulk', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    if (!user || user.username !== 'glennj') {
-      return res.status(403).json({ error: 'Only glennj can modify historical data' });
-    }
 
     const { id } = req.params;
     await db.delete(historicalMonthlyData).where(eq(historicalMonthlyData.id, Number(id)));

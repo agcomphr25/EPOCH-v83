@@ -3784,8 +3784,7 @@ export default function OrderEntry() {
 
                           return modelOptions.map((model) => (
                             <SelectItem key={model.id} value={model.id}>
-                              {model.displayName || model.name} - $
-                              {model.price?.toFixed(2) || '0.00'}
+                              {model.displayName || model.name}
                             </SelectItem>
                           ));
                         })()}

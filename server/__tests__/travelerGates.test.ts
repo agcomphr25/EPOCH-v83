@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Traveler, TravelerStep, TravelerTask } from '../schema';
+import type { Traveler, TravelerStep, TravelerTask, RoutingCncOperation } from '../schema';
+import type { RoutingOperation } from '../schema';
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be hoisted before any imports that pull in the modules
@@ -11,6 +12,11 @@ vi.mock('../storage', () => ({
     getTravelerStep: vi.fn<(id: string) => Promise<TravelerStep | undefined>>(),
     getTravelerSteps: vi.fn<(travelerId: string) => Promise<TravelerStep[]>>(),
     getTravelerTasks: vi.fn<(stepId: string) => Promise<TravelerTask[]>>(),
+    getRoutingOperationForTravelerStep: vi.fn<(partRoutingId: string, stepNumber: number) => Promise<RoutingOperation | undefined>>(),
+    getCertificationById: vi.fn<(certificationId: number) => Promise<{ id: number; name: string } | undefined>>(),
+    checkEmployeeHasValidTrainingCertificationForCert: vi.fn<(employeeId: number, certificationId: number) => Promise<{ id: number; status: string; expiresAt: Date | null } | undefined>>(),
+    getActiveEmployeeMachineQualificationsForEmployee: vi.fn<(employeeId: number) => Promise<Array<{ id: number; machineClass: string | null; operationType: string | null; department: string | null; expiresAt: Date | null }>>>(),
+    getRoutingCncOperationForRoutingOp: vi.fn<(routingOperationId: number) => Promise<RoutingCncOperation | undefined>>(),
   },
 }));
 
@@ -110,6 +116,31 @@ function makeTask(overrides: Partial<TravelerTask> = {}): TravelerTask {
   };
 }
 
+function makeRoutingOp(overrides: Partial<RoutingOperation> = {}): RoutingOperation {
+  return {
+    id: 10,
+    partRoutingId: 'routing-abc',
+    stepNumber: 1,
+    departmentName: 'CNC',
+    operationName: 'Default Op',
+    operationType: null,
+    workCenter: null,
+    estimatedMinutes: null,
+    requiresSignature: false,
+    requiresCertification: false,
+    certificationId: null,
+    isOutsideProcess: false,
+    vendorId: null,
+    outsideProcessType: null,
+    expectedLeadDays: null,
+    certificateRequired: false,
+    receivingInspectionRequired: false,
+    instructionPack: {},
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Helper to build a db.select() mock returning a given row set
 // ---------------------------------------------------------------------------
@@ -117,7 +148,7 @@ function makeTask(overrides: Partial<TravelerTask> = {}): TravelerTask {
 function mockDbSelectReturning(rows: Record<string, unknown>[]): void {
   const limitFn = vi.fn<() => Promise<Record<string, unknown>[]>>().mockResolvedValue(rows);
   const whereFn = vi.fn<() => SelectLimitChain>().mockReturnValue({ limit: limitFn });
-  const fromFn = vi.fn<() => SelectWhereChain>().mockReturnValue({ where: whereFn });
+  const fromFn = vi.fn<() => SelectFromChain>().mockReturnValue({ where: whereFn });
   vi.mocked(db.select).mockReturnValue({ from: fromFn });
 }
 
@@ -128,19 +159,36 @@ function mockDbSelectReturning(rows: Record<string, unknown>[]): void {
 describe('evaluateTravelerStartGates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default safe values for the new qualification gate methods so existing
+    // tests continue to pass without modification.
+    vi.mocked(storage.getActiveEmployeeMachineQualificationsForEmployee).mockResolvedValue([]);
+    vi.mocked(storage.getRoutingCncOperationForRoutingOp).mockResolvedValue(undefined);
   });
 
-  it('allows the first step when all gates pass (lot on traveler)', async () => {
+  it('blocks when no-partNumber traveler has no employeeId even without op cert (identity always required)', async () => {
     const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001' });
     const step = makeStep({ id: 'step-1', stepNumber: 1 });
 
     vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
     vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
     vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
-    // db.select should not be called (no partNumber, lot is on traveler)
-    mockDbSelectReturning([]);
 
     const result = await evaluateTravelerStartGates('trv-1', 'step-1');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/identity/i);
+  });
+
+  it('allows the first step when all gates pass (lot on traveler, identity provided)', async () => {
+    const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001' });
+    const step = makeStep({ id: 'step-1', stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    // partRoutingId is null, so routing-op check is skipped
+    mockDbSelectReturning([]);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', { employeeId: 7, employeeName: 'Alice' });
     expect(result.allowed).toBe(true);
   });
 
@@ -180,7 +228,7 @@ describe('evaluateTravelerStartGates', () => {
     vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
     vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
     vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
-    // No auth record returned from db
+    // No auth record returned from db; partRoutingId is null so no routing-op check
     mockDbSelectReturning([]);
 
     const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
@@ -200,7 +248,7 @@ describe('evaluateTravelerStartGates', () => {
     vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
     vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
     vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
-    // Auth record found
+    // Auth record found; partRoutingId is null so no routing-op check
     mockDbSelectReturning([{ id: 42 }]);
 
     const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
@@ -224,7 +272,7 @@ describe('evaluateTravelerStartGates', () => {
     // No consumption record found
     mockDbSelectReturning([]);
 
-    const result = await evaluateTravelerStartGates('trv-1', 'step-1');
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', { employeeId: 7 });
     expect(result.allowed).toBe(false);
     expect(result.reason).toMatch(/no material/i);
   });
@@ -243,7 +291,7 @@ describe('evaluateTravelerStartGates', () => {
     // Consumption record found
     mockDbSelectReturning([{ id: 99 }]);
 
-    const result = await evaluateTravelerStartGates('trv-1', 'step-1');
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', { employeeId: 7 });
     expect(result.allowed).toBe(true);
   });
 
@@ -259,7 +307,7 @@ describe('evaluateTravelerStartGates', () => {
     vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
     vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
 
-    const result = await evaluateTravelerStartGates('trv-1', 'step-1');
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', { employeeId: 7 });
     expect(result.allowed).toBe(true);
   });
 
@@ -278,6 +326,329 @@ describe('evaluateTravelerStartGates', () => {
     const result = await evaluateTravelerStartGates('trv-1', 'no-such-step');
     expect(result.allowed).toBe(false);
     expect(result.reason).toMatch(/step not found/i);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Operation cert gate (Gate 2b) — new tests
+  // ---------------------------------------------------------------------------
+
+  it('blocks when no-partNumber traveler has an operation cert requirement but no employeeId', async () => {
+    const traveler = makeTraveler({
+      partNumber: null,
+      lotNumber: 'LOT-001',
+      partRoutingId: 'routing-abc',
+    });
+    const step = makeStep({ stepNumber: 2 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    // Even though a cert is configured, identity is checked first so the cert name
+    // is not mentioned in the error — the reason is the generic identity message.
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, partRoutingId: 'routing-abc', stepNumber: 2, certificationId: 5 })
+    );
+    vi.mocked(storage.getCertificationById).mockResolvedValue({ id: 5, name: 'Weld Cert Level II' });
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/identity/i);
+  });
+
+  it('blocks when no-partNumber traveler has operation cert requirement and employee is missing the cert', async () => {
+    const traveler = makeTraveler({
+      partNumber: null,
+      lotNumber: 'LOT-001',
+      partRoutingId: 'routing-abc',
+    });
+    const step = makeStep({ stepNumber: 2 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, partRoutingId: 'routing-abc', stepNumber: 2, certificationId: 5 })
+    );
+    vi.mocked(storage.getCertificationById).mockResolvedValue({ id: 5, name: 'Weld Cert Level II' });
+    vi.mocked(storage.checkEmployeeHasValidTrainingCertificationForCert).mockResolvedValue(undefined);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Bob Jones',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/Weld Cert Level II/);
+    expect(result.reason).toContain('Bob Jones');
+    // Regression guard: must be called with the specific required cert ID (5), not any other.
+    expect(storage.checkEmployeeHasValidTrainingCertificationForCert).toHaveBeenCalledWith(7, 5);
+  });
+
+  it('blocks when operation cert is expired (returned as undefined from storage)', async () => {
+    const traveler = makeTraveler({
+      partNumber: null,
+      lotNumber: 'LOT-001',
+      partRoutingId: 'routing-abc',
+    });
+    const step = makeStep({ stepNumber: 2 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, partRoutingId: 'routing-abc', stepNumber: 2, certificationId: 5 })
+    );
+    vi.mocked(storage.getCertificationById).mockResolvedValue({ id: 5, name: 'Pressure Test Cert' });
+    // Storage returns undefined because the only cert record is expired
+    vi.mocked(storage.checkEmployeeHasValidTrainingCertificationForCert).mockResolvedValue(undefined);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Alice Lee',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/Pressure Test Cert/);
+    expect(result.reason).toContain('Alice Lee');
+  });
+
+  it('allows when no-partNumber traveler has operation cert and employee holds valid cert', async () => {
+    const traveler = makeTraveler({
+      partNumber: null,
+      lotNumber: 'LOT-001',
+      partRoutingId: 'routing-abc',
+    });
+    const step = makeStep({ stepNumber: 2 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, partRoutingId: 'routing-abc', stepNumber: 2, certificationId: 5 })
+    );
+    vi.mocked(storage.getCertificationById).mockResolvedValue({ id: 5, name: 'Weld Cert Level II' });
+    vi.mocked(storage.checkEmployeeHasValidTrainingCertificationForCert).mockResolvedValue({
+      id: 88,
+      status: 'certified',
+      expiresAt: new Date(Date.now() + 86400_000 * 365),
+    });
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Alice Lee',
+    });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('blocks when partNumber traveler has operation cert requirement and employee is missing the cert (auth present)', async () => {
+    const traveler = makeTraveler({
+      partNumber: 'PN-9999',
+      lotNumber: 'LOT-001',
+      partRoutingId: 'routing-xyz',
+    });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    // Auth record present
+    mockDbSelectReturning([{ id: 42 }]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 20, partRoutingId: 'routing-xyz', stepNumber: 1, certificationId: 7 })
+    );
+    vi.mocked(storage.getCertificationById).mockResolvedValue({ id: 7, name: 'CNC Operator Cert' });
+    vi.mocked(storage.checkEmployeeHasValidTrainingCertificationForCert).mockResolvedValue(undefined);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Dan Wu',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/CNC Operator Cert/);
+    expect(result.reason).toContain('Dan Wu');
+  });
+
+  it('allows when partNumber traveler has operation cert and all checks pass', async () => {
+    const traveler = makeTraveler({
+      partNumber: 'PN-9999',
+      lotNumber: 'LOT-001',
+      partRoutingId: 'routing-xyz',
+    });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    // Auth record present
+    mockDbSelectReturning([{ id: 42 }]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 20, partRoutingId: 'routing-xyz', stepNumber: 1, certificationId: 7 })
+    );
+    vi.mocked(storage.getCertificationById).mockResolvedValue({ id: 7, name: 'CNC Operator Cert' });
+    vi.mocked(storage.checkEmployeeHasValidTrainingCertificationForCert).mockResolvedValue({
+      id: 99,
+      status: 'certified',
+      expiresAt: null,
+    });
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Dan Wu',
+    });
+    expect(result.allowed).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Machine-class qualification gate (Gate 2c) — new tests
+  // ---------------------------------------------------------------------------
+
+  it('blocks when the routing CNC op requires a machine class and employee has no machine qualification', async () => {
+    const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001', partRoutingId: 'routing-abc' });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, certificationId: null })
+    );
+    vi.mocked(storage.getRoutingCncOperationForRoutingOp).mockResolvedValue({
+      id: 1,
+      routingOperationId: 10,
+      machineClass: '3-Axis Mill',
+      preferredMachineId: null,
+      programId: null,
+      fixture: null,
+      estimatedSetupMinutes: null,
+      estimatedCycleMinutes: null,
+      proveOutRequired: false,
+    });
+    vi.mocked(storage.getActiveEmployeeMachineQualificationsForEmployee).mockResolvedValue([]);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Sam Lee',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/machine-class qualification/i);
+    expect(result.reason).toContain('3-Axis Mill');
+    expect(result.reason).toContain('Sam Lee');
+  });
+
+  it('blocks when machine-class qualification is expired (not returned by getActiveEmployeeMachineQualificationsForEmployee)', async () => {
+    const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001', partRoutingId: 'routing-abc' });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, certificationId: null })
+    );
+    vi.mocked(storage.getRoutingCncOperationForRoutingOp).mockResolvedValue({
+      id: 1,
+      routingOperationId: 10,
+      machineClass: 'Lathe',
+      preferredMachineId: null,
+      programId: null,
+      fixture: null,
+      estimatedSetupMinutes: null,
+      estimatedCycleMinutes: null,
+      proveOutRequired: false,
+    });
+    // Storage filters out expired qualifications before returning, so the list
+    // is empty even though the employee once had a qualification that is now past
+    // its expiresAt date.
+    vi.mocked(storage.getActiveEmployeeMachineQualificationsForEmployee).mockResolvedValue([]);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Pat Kim',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/machine-class qualification/i);
+    expect(result.reason).toContain('Lathe');
+  });
+
+  it('blocks when employee has operation-type qualifications but is missing the required one', async () => {
+    const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001', partRoutingId: 'routing-abc' });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, operationType: 'RUN', certificationId: null })
+    );
+    vi.mocked(storage.getRoutingCncOperationForRoutingOp).mockResolvedValue(undefined);
+    // Employee only has a SETUP qualification, not RUN — so the op-type gate fires.
+    vi.mocked(storage.getActiveEmployeeMachineQualificationsForEmployee).mockResolvedValue([
+      { id: 1, machineClass: null, operationType: 'SETUP', department: null, expiresAt: null },
+    ]);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Chris Green',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/operation-type qualification/i);
+    expect(result.reason).toContain('RUN');
+    expect(result.reason).toContain('Chris Green');
+  });
+
+  it('blocks when employee has NO operation-type qualifications at all and step requires one', async () => {
+    const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001', partRoutingId: 'routing-abc' });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, operationType: 'RUN', certificationId: null })
+    );
+    vi.mocked(storage.getRoutingCncOperationForRoutingOp).mockResolvedValue(undefined);
+    // Employee has zero qualifications — gate must still fire.
+    vi.mocked(storage.getActiveEmployeeMachineQualificationsForEmployee).mockResolvedValue([]);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Alex Novak',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/operation-type qualification/i);
+    expect(result.reason).toContain('RUN');
+    expect(result.reason).toContain('Alex Novak');
+  });
+
+  it('allows when employee holds the required machine-class and operation-type qualifications', async () => {
+    const traveler = makeTraveler({ partNumber: null, lotNumber: 'LOT-001', partRoutingId: 'routing-abc' });
+    const step = makeStep({ stepNumber: 1 });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(step);
+    vi.mocked(storage.getTravelerSteps).mockResolvedValue([step]);
+    vi.mocked(storage.getRoutingOperationForTravelerStep).mockResolvedValue(
+      makeRoutingOp({ id: 10, operationType: 'RUN', certificationId: null })
+    );
+    vi.mocked(storage.getRoutingCncOperationForRoutingOp).mockResolvedValue({
+      id: 1,
+      routingOperationId: 10,
+      machineClass: '3-Axis Mill',
+      preferredMachineId: null,
+      programId: null,
+      fixture: null,
+      estimatedSetupMinutes: null,
+      estimatedCycleMinutes: null,
+      proveOutRequired: false,
+    });
+    vi.mocked(storage.getActiveEmployeeMachineQualificationsForEmployee).mockResolvedValue([
+      { id: 1, machineClass: '3-Axis Mill', operationType: null, department: null, expiresAt: null },
+      { id: 2, machineClass: null, operationType: 'RUN', department: null, expiresAt: null },
+    ]);
+
+    const result = await evaluateTravelerStartGates('trv-1', 'step-1', {
+      employeeId: 7,
+      employeeName: 'Jordan Rivers',
+    });
+    expect(result.allowed).toBe(true);
   });
 });
 

@@ -78,6 +78,7 @@ router.get('/shipping-queue', async (req, res) => {
   }
 });
 
+if (process.env.NODE_ENV !== 'production') {
 router.get('/shipping-queue-debug', async (req, res) => {
   try {
     const rows = await pool.query(`
@@ -94,6 +95,7 @@ router.get('/shipping-queue-debug', async (req, res) => {
     res.status(500).json({ error: err?.message || 'Debug query failed' });
   }
 });
+} // end NODE_ENV !== 'production'
 
 router.get('/scan/:barcode', async (req, res) => {
   try {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db';
 import { storage } from '../../storage';
+import { DEFAULT_ESTIMATING_RFQS_LIMIT, MAX_ESTIMATING_RFQS_LIMIT } from '../constants/estimating';
 import {
   insertEstimatingRfqSchema,
   insertEstimatingRfqPartSchema,
@@ -14,7 +15,12 @@ const router = Router();
 
 router.get('/rfqs', async (req, res) => {
   try {
-    const { status, customerId, limit = '50', offset = '0' } = req.query;
+    const { status, customerId, limit = String(DEFAULT_ESTIMATING_RFQS_LIMIT), offset = '0' } = req.query;
+
+    const parsedLimit = parseInt(String(limit), 10);
+    const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, MAX_ESTIMATING_RFQS_LIMIT)
+      : DEFAULT_ESTIMATING_RFQS_LIMIT;
 
     let query = `
       SELECT r.*,
@@ -38,7 +44,7 @@ router.get('/rfqs', async (req, res) => {
     }
 
     query += ` GROUP BY r.id ORDER BY r.created_at DESC LIMIT $${n + 1} OFFSET $${n + 2}`;
-    params.push(Number(limit), Number(offset));
+    params.push(effectiveLimit, Number(offset));
 
     const rows = await pool.query(query, params);
     res.json(rows);
@@ -411,6 +417,8 @@ router.post('/rfqs/:id/create-draft-quote', async (req, res) => {
       validUntil,
       quotedBy: null,
       notes: `Generated from RFQ ${rfq.rfqNumber}. Assumptions: ${rfq.assumptions ?? 'N/A'}.`,
+      // Carry the integer FK directly from the RFQ so the customer link is explicit
+      customersIntegerId: rfq.customerId ?? null,
     });
 
     res.json({ quoteId: quote.id, quoteNumber: quote.quoteNumber });

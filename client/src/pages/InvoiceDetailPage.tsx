@@ -446,7 +446,7 @@ export default function InvoiceDetailPage() {
                 {(invoice.poId || invoice.poOverride) && (
                   <div>
                     <p className="text-sm text-muted-foreground">PO</p>
-                    <p className="font-medium">{invoice.poOverride || invoice.poId || '—'}</p>
+                    <p className="font-medium">{invoice.poOverride || invoice.poNumber || invoice.poId || '—'}</p>
                   </div>
                 )}
               </div>
@@ -477,9 +477,9 @@ export default function InvoiceDetailPage() {
                       )}
                       {(invoice.poOverride || invoice.poId) && (
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/purchase-orders?search=${encodeURIComponent(invoice.poOverride || invoice.poId || '')}`}>
+                          <Link href={`/p2-control-center?tab=pos&search=${encodeURIComponent(invoice.poOverride || invoice.poNumber || '')}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            PO: {invoice.poOverride || invoice.poId}
+                            PO: {invoice.poOverride || invoice.poNumber || invoice.poId}
                             <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
                           </Link>
                         </Button>

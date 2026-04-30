@@ -145,7 +145,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
           ELSE true
         END as hasValidStock
       FROM all_orders o
-      WHERE o.status = 'FINALIZED' 
+      WHERE (o.status = 'FINALIZED' OR (o.status = 'IN_PROGRESS' AND o.current_department = 'P1 Production Queue'))
         AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
         AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None' 
@@ -332,12 +332,12 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       const diagnosticQuery = `
         SELECT 
           COUNT(*) as total_in_dept,
-          COUNT(*) FILTER (WHERE status IN ('FINALIZED', 'Active')) as valid_status,
+          COUNT(*) FILTER (WHERE status IN ('FINALIZED', 'Active', 'IN_PROGRESS')) as valid_status,
           COUNT(*) FILTER (WHERE is_cancelled IS NULL OR is_cancelled = false) as not_cancelled,
           COUNT(*) FILTER (WHERE model_id IS NOT NULL AND model_id != '' AND model_id != 'None') as has_model,
           COUNT(*) FILTER (WHERE features->>'action_length' IS NOT NULL AND features->>'action_length' != '' AND features->>'action_length' != 'null') as has_action_length,
           COUNT(*) FILTER (
-            WHERE status IN ('FINALIZED', 'Active')
+            WHERE status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
             AND (is_cancelled IS NULL OR is_cancelled = false)
             AND model_id IS NOT NULL AND model_id != '' AND model_id != 'None'
             AND LOWER(model_id) NOT IN ('no stock', 'no_stock')
@@ -390,7 +390,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       FROM all_orders o
       LEFT JOIN customers c ON o.customer_id ~ '^[0-9]+$' AND CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
-        AND o.status IN ('FINALIZED', 'Active')
+        AND o.status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
         AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND o.model_id IS NOT NULL 
         AND o.model_id != '' 

@@ -58,7 +58,9 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  ClipboardList
+  ClipboardList,
+  Lock,
+  BarChart2
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -115,7 +117,7 @@ interface Project {
   customer?: { id: number; customerId: string; name: string };
   projectManager?: { id: number; name: string };
   activityLog: ActivityLog[];
-  closingStatus: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
+  closingStatus: 'MISSING' | 'INCOMPLETE' | 'COMPLETE' | 'APPROVED';
 }
 
 interface Employee {
@@ -610,6 +612,34 @@ export default function ProjectDetailPage() {
     onError: (err: any) => toast({ title: 'Regenerate failed', description: err?.message || 'Could not regenerate quote feedback.', variant: 'destructive' }),
   });
 
+  interface SimilarClosing {
+    id: number;
+    projectId: string;
+    projectCode: string;
+    projectName: string;
+    summary: string | null;
+    whatWentWrong: string | null;
+    strengths: string | null;
+    opportunities: string | null;
+    nextProjectRecommendations: string | null;
+    approvedAt: string | null;
+    updatedAt: string;
+  }
+
+  const { data: similarClosings = [], isLoading: isLoadingSimilar } = useQuery<SimilarClosing[]>({
+    queryKey: ['/api/projects/closings/similar', project?.customerId, project?.description],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: '5' });
+      if (project!.customerId) params.set('customerId', project!.customerId);
+      if (project!.description) params.set('partFamily', project!.description);
+      return fetch(`/api/projects/closings/similar?${params.toString()}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : []);
+    },
+    enabled: !!project?.customerId,
+  });
+
+  const [showSimilarProjects, setShowSimilarProjects] = useState(false);
+
   const addRiskMutation = useMutation({
     mutationFn: (data: typeof riskForm) =>
       apiRequest(`/api/projects/${id}/closing/risks`, { method: 'POST', body: data }),
@@ -768,6 +798,9 @@ export default function ProjectDetailPage() {
       setSelectedStep(null);
       setLinkId('');
     },
+    onError: (err: any) => {
+      toast({ title: 'Failed to update step', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
+    },
   });
 
   const markStepCompleteMutation = useMutation({
@@ -780,6 +813,9 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
     },
+    onError: (err: any) => {
+      toast({ title: 'Failed to mark step complete', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
+    },
   });
 
   const startStepMutation = useMutation({
@@ -791,6 +827,9 @@ export default function ProjectDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to start step', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
     },
   });
 
@@ -808,6 +847,9 @@ export default function ProjectDetailPage() {
       setSelectedStep(null);
       toast({ title: 'Step skipped' });
     },
+    onError: (err: any) => {
+      toast({ title: 'Failed to skip step', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
+    },
   });
 
   const reopenStepMutation = useMutation({
@@ -819,6 +861,9 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       toast({ title: 'Step reopened' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to reopen step', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
     },
   });
 
@@ -860,6 +905,9 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       toast({ title: 'Document deleted', description: 'The attachment has been removed.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to delete attachment', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
     },
   });
 
@@ -1022,7 +1070,9 @@ export default function ProjectDetailPage() {
             )}
             <Badge
               className={
-                project.closingStatus === 'COMPLETE'
+                project.closingStatus === 'APPROVED'
+                  ? 'bg-blue-100 text-blue-800 text-xs'
+                  : project.closingStatus === 'COMPLETE'
                   ? 'bg-green-100 text-green-800 text-xs'
                   : project.closingStatus === 'INCOMPLETE'
                   ? 'bg-yellow-100 text-yellow-800 text-xs'
@@ -1035,6 +1085,13 @@ export default function ProjectDetailPage() {
           </div>
           <p className="text-lg text-muted-foreground">{project.projectName}</p>
         </div>
+        <Button
+          variant="outline"
+          onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}
+        >
+          <BarChart2 className="mr-2 h-4 w-4" />
+          PM Dashboard
+        </Button>
         <Button variant="outline" onClick={() => {
           setEditData({
             projectName: project.projectName,
@@ -1116,6 +1173,57 @@ export default function ProjectDetailPage() {
         <Progress value={getProgress()} className="h-3" />
       </div>
 
+      {/* Similar Past Projects widget */}
+      {(isLoadingSimilar || similarClosings.length > 0) && (
+        <div className="border rounded-lg overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+            onClick={() => setShowSimilarProjects(prev => !prev)}
+          >
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Similar Past Projects</span>
+              {!isLoadingSimilar && similarClosings.length > 0 && (
+                <Badge variant="secondary" className="text-xs h-5">{similarClosings.length}</Badge>
+              )}
+            </div>
+            {showSimilarProjects ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          {showSimilarProjects && (
+            <div className="px-4 py-3 space-y-2 bg-background">
+              {isLoadingSimilar ? (
+                <div className="animate-pulse space-y-2">
+                  {[1, 2, 3].map(i => <div key={i} className="h-8 bg-gray-200 rounded" />)}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {similarClosings.map((closing) => (
+                    <div key={closing.id} className="flex items-center justify-between py-2 gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="outline" className="text-xs font-mono shrink-0">{closing.projectCode}</Badge>
+                        <span className="text-sm truncate">{closing.projectName}</span>
+                        {closing.approvedAt && (
+                          <span className="text-xs text-muted-foreground shrink-0">{format(new Date(closing.approvedAt), 'MMM yyyy')}</span>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs shrink-0 h-7 px-2"
+                        onClick={() => setLocation(`/projects/${closing.projectId}/closing`)}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Closing
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
@@ -1126,7 +1234,9 @@ export default function ProjectDetailPage() {
             Close Project
             <span
               className={`ml-1.5 inline-block w-2 h-2 rounded-full ${
-                project.closingStatus === 'COMPLETE'
+                project.closingStatus === 'APPROVED'
+                  ? 'bg-blue-500'
+                  : project.closingStatus === 'COMPLETE'
                   ? 'bg-green-500'
                   : project.closingStatus === 'INCOMPLETE'
                   ? 'bg-yellow-500'
@@ -1157,14 +1267,37 @@ export default function ProjectDetailPage() {
                 </div>
               ) : (
               <div className="relative">
-                {project.steps.map((step, index) => {
+                {(() => {
+                  const sortedSteps = [...project.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+                  return sortedSteps;
+                })().map((step, index) => {
                   const config = STEP_CONFIG[step.stepType];
                   const StatusIcon = STEP_STATUS_ICONS[step.status];
                   const linkedId = getLinkedId(step);
-                  const isLast = index === project.steps.length - 1;
+                  const sortedStepsForGate = [...project.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+                  const isLast = index === sortedStepsForGate.length - 1;
                   const stepAttachments = getAttachmentsForStep(step.id);
                   const isExpanded = expandedSteps.has(step.id);
                   const hasContent = stepAttachments.length > 0 || linkedId;
+
+                  const prevStep = index > 0 ? sortedStepsForGate[index - 1] : null;
+                  const isLocked = (step.status === 'pending' || step.status === 'blocked')
+                    && prevStep !== null
+                    && !['completed', 'skipped', 'not_applicable'].includes(prevStep.status);
+
+                  const CLOSING_REQUIRED_FIELDS = ['summary', 'whatWentWrong', 'strengths', 'opportunities', 'nextProjectRecommendations'] as const;
+                  const closingMissingFields = step.stepType === 'p2_order' && step.status === 'in_progress'
+                    ? CLOSING_REQUIRED_FIELDS.filter(f => {
+                        const val = projectClosing?.[f as keyof typeof projectClosing];
+                        return !val || (typeof val === 'string' && val.trim() === '');
+                      })
+                    : [];
+                  const closingApproved = step.stepType === 'p2_order' && step.status === 'in_progress'
+                    ? (project.closingStatus === 'APPROVED' || !!projectClosing?.approvedBy)
+                    : true;
+                  const isClosingReady = step.stepType === 'p2_order' && step.status === 'in_progress'
+                    ? (project.closingStatus === 'APPROVED' || (project.closingStatus === 'COMPLETE' && closingApproved))
+                    : true;
 
                   return (
                     <div key={step.id} className="relative flex gap-4 pb-8" data-testid={`step-${step.stepType}`}>
@@ -1200,7 +1333,14 @@ export default function ProjectDetailPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => config?.route && setLocation(config.route)}
+                                  onClick={() => {
+                                    if (!config?.route) return;
+                                    const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
+                                    const route = CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
+                                      ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
+                                      : config.route;
+                                    setLocation(route);
+                                  }}
                                   data-testid={`button-open-${step.stepType}`}
                                 >
                                   <ExternalLink className="mr-1 h-4 w-4" />
@@ -1234,7 +1374,8 @@ export default function ProjectDetailPage() {
                                 <Button
                                   size="sm"
                                   onClick={() => markStepCompleteMutation.mutate(step.id)}
-                                  disabled={markStepCompleteMutation.isPending}
+                                  disabled={markStepCompleteMutation.isPending || (step.stepType === 'p2_order' && !isClosingReady)}
+                                  title={step.stepType === 'p2_order' && !isClosingReady ? 'Complete and approve the closing record before finishing this step' : undefined}
                                   data-testid={`button-complete-${step.stepType}`}
                                 >
                                   <CheckCircle2 className="mr-1 h-4 w-4" />
@@ -1259,7 +1400,14 @@ export default function ProjectDetailPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => config?.route && setLocation(config.route)}
+                                  onClick={() => {
+                                    if (!config?.route) return;
+                                    const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
+                                    const route = CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
+                                      ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
+                                      : config.route;
+                                    setLocation(route);
+                                  }}
                                   data-testid={`button-view-${step.stepType}`}
                                 >
                                   <Eye className="mr-1 h-4 w-4" />
@@ -1337,13 +1485,27 @@ export default function ProjectDetailPage() {
                               </>
                             )}
                             {(step.status === 'pending' || step.status === 'blocked') && (
+                              isLocked ? (
+                                <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+                                  <Lock className="h-4 w-4 flex-shrink-0" />
+                                  <span>
+                                    Complete <strong>{STEP_CONFIG[prevStep!.stepType]?.label || prevStep!.stepType}</strong> to unlock this step
+                                  </span>
+                                </div>
+                              ) : (
                               <>
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
                                     startStepMutation.mutate(step.id);
-                                    if (config?.route) setLocation(config.route);
+                                    if (config?.route) {
+                                      const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
+                                      const route = CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
+                                        ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
+                                        : config.route;
+                                      setLocation(route);
+                                    }
                                   }}
                                   disabled={startStepMutation.isPending}
                                 >
@@ -1375,11 +1537,46 @@ export default function ProjectDetailPage() {
                                   Skip
                                 </Button>
                               </>
+                              )
                             )}
                           </div>
                         </div>
                         {step.notes && (
                           <p className="text-sm bg-muted p-2 rounded">{step.notes}</p>
+                        )}
+                        {step.stepType === 'p2_order' && step.status === 'in_progress' && (
+                          <div className={`flex items-start gap-2 text-sm rounded-md px-3 py-2 border ${
+                            isClosingReady
+                              ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+                              : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
+                          }`}>
+                            {isClosingReady ? (
+                              <>
+                                <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                <span>Closing record is complete and approved. Ready to mark complete.</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="font-medium">
+                                    Closing record required before this step can be completed
+                                  </p>
+                                  {project.closingStatus === 'MISSING' && (
+                                    <p className="text-xs mt-0.5">No closing/lessons-learned record exists yet. Go to the <strong>Close Project</strong> tab to create one.</p>
+                                  )}
+                                  {project.closingStatus === 'INCOMPLETE' && closingMissingFields.length > 0 && (
+                                    <p className="text-xs mt-0.5">
+                                      Missing fields: {closingMissingFields.map(f => CLOSING_FIELD_LABELS[f] || f).join(', ')}.
+                                    </p>
+                                  )}
+                                  {project.closingStatus !== 'MISSING' && !closingApproved && (
+                                    <p className="text-xs mt-0.5">Closing record has not been approved by a manager yet.</p>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
                         )}
                         {stepAttachments.length > 0 && (step.status !== 'completed' || isExpanded) && (
                           <div className="mt-3 space-y-3 pl-2 border-l-2 border-blue-200">
@@ -1462,6 +1659,82 @@ export default function ProjectDetailPage() {
                     </div>
                   );
                 })}
+
+                {/* ── Project Closing pseudo-step ── */}
+                {project.steps.length > 0 && (() => {
+                  const sortedSteps = [...project.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+                  const lastStep = sortedSteps[sortedSteps.length - 1];
+                  const isLastStepDone = lastStep && ['completed', 'skipped', 'not_applicable'].includes(lastStep.status);
+                  const isClosingLocked = !isLastStepDone;
+                  const ClosingStatusIcon = project.closingStatus === 'APPROVED'
+                    ? CheckCircle2
+                    : project.closingStatus === 'COMPLETE'
+                    ? CheckCircle2
+                    : project.closingStatus === 'INCOMPLETE'
+                    ? Clock
+                    : AlertCircle;
+                  const closingIconColor = project.closingStatus === 'APPROVED'
+                    ? 'text-blue-500'
+                    : project.closingStatus === 'COMPLETE'
+                    ? 'text-green-500'
+                    : project.closingStatus === 'INCOMPLETE'
+                    ? 'text-amber-500'
+                    : 'text-red-400';
+                  return (
+                    <div className="relative flex gap-4 pb-2 pt-2">
+                      <div className={`relative z-10 flex-shrink-0 mt-1 ${isClosingLocked ? 'text-gray-300' : closingIconColor}`}>
+                        <ClosingStatusIcon className="h-8 w-8" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold">Project Closing</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {isClosingLocked
+                                ? 'Locked — complete the P2 Order step first'
+                                : project.closingStatus === 'APPROVED'
+                                ? 'Approved — closing record is complete and approved'
+                                : project.closingStatus === 'COMPLETE'
+                                ? 'Complete — awaiting manager approval'
+                                : project.closingStatus === 'INCOMPLETE'
+                                ? 'Incomplete — some required fields are missing'
+                                : 'No closing record yet'}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 flex-wrap justify-end">
+                            <Badge
+                              className={
+                                isClosingLocked
+                                  ? 'bg-gray-100 text-gray-500 text-xs'
+                                  : project.closingStatus === 'APPROVED'
+                                  ? 'bg-blue-100 text-blue-800 text-xs'
+                                  : project.closingStatus === 'COMPLETE'
+                                  ? 'bg-green-100 text-green-800 text-xs'
+                                  : project.closingStatus === 'INCOMPLETE'
+                                  ? 'bg-yellow-100 text-yellow-800 text-xs'
+                                  : 'bg-red-100 text-red-800 text-xs'
+                              }
+                            >
+                              {isClosingLocked ? 'Locked' : project.closingStatus}
+                            </Badge>
+                            {!isClosingLocked && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setLocation(`/projects/${id}/closing`)}
+                                data-testid="button-open-closing"
+                              >
+                                <ExternalLink className="mr-1 h-4 w-4" />
+                                Open Closing
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
               </div>
               )}
             </CardContent>
@@ -2066,479 +2339,282 @@ export default function ProjectDetailPage() {
           )}
         </TabsContent>
 
-        {/* ── CLOSING TAB ── */}
+        {/* ── CLOSING TAB — navigates to the dedicated closing record page ── */}
         <TabsContent value="closing" className="space-y-6">
-          {isLoadingClosing ? (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Loading closing record…</CardContent></Card>
-          ) : !projectClosing && !isEditingClosing ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  Project Closing
-                </CardTitle>
-                <CardDescription>Record lessons learned, risks, and follow-up actions to improve future projects.</CardDescription>
-              </CardHeader>
-              <CardContent className="py-8 text-center space-y-4">
-                <p className="text-muted-foreground">No closing record has been created for this project yet.</p>
-                <Button onClick={handleStartEditClosing} data-testid="button-create-closing">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Start Project Closing
-                </Button>
-              </CardContent>
-            </Card>
-          ) : isEditingClosing ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  {projectClosing ? 'Edit' : 'New'} Project Closing
-                </CardTitle>
-                <CardDescription>Fill in the lessons learned from this project.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="closing-closed-by">Closed By</Label>
-                  <Input
-                    id="closing-closed-by"
-                    placeholder="Name of person closing the project"
-                    value={closingForm.closedByDisplayName}
-                    onChange={e => setClosingForm(f => ({ ...f, closedByDisplayName: e.target.value }))}
-                    data-testid="input-closed-by"
-                  />
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                Project Closing &amp; Lessons Learned
+              </CardTitle>
+              <CardDescription>
+                The closing record captures lessons learned, risks, and follow-up actions from this project.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${
+                project.closingStatus === 'APPROVED'
+                  ? 'border-blue-300 bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200'
+                  : project.closingStatus === 'COMPLETE'
+                  ? 'border-green-300 bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
+                  : project.closingStatus === 'INCOMPLETE'
+                  ? 'border-amber-300 bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200'
+                  : 'border-red-300 bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200'
+              }`}>
+                {project.closingStatus === 'APPROVED' ? (
+                  <Award className="h-5 w-5 flex-shrink-0" />
+                ) : project.closingStatus === 'COMPLETE' ? (
+                  <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
+                ) : project.closingStatus === 'INCOMPLETE' ? (
+                  <Clock className="h-5 w-5 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                )}
+                <div>
+                  <p className="font-semibold">Closing: {project.closingStatus}</p>
+                  <p className="text-sm mt-0.5">
+                    {project.closingStatus === 'APPROVED'
+                      ? 'Closing record is complete and has been approved by a manager.'
+                      : project.closingStatus === 'COMPLETE'
+                      ? 'All required fields are complete — awaiting manager approval.'
+                      : project.closingStatus === 'INCOMPLETE'
+                      ? 'Closing record exists but some fields are still missing.'
+                      : 'No closing record has been created yet.'}
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="closing-summary">Summary</Label>
-                  <Textarea
-                    id="closing-summary"
-                    placeholder="Overall summary of the project…"
-                    rows={4}
-                    value={closingForm.summary}
-                    onChange={e => setClosingForm(f => ({ ...f, summary: e.target.value }))}
-                    data-testid="textarea-summary"
-                  />
+              </div>
+              <Button onClick={() => setLocation(`/projects/${id}/closing`)} data-testid="button-view-closing">
+                <BookOpen className="h-4 w-4 mr-2" />
+                View Closing Record
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Quote vs Actual Comparison */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart2 className="h-5 w-5" />
+                    Quote vs Actual Comparison
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Performance metrics comparing quoted estimates to actual execution.
+                  </CardDescription>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="closing-strengths">Strengths</Label>
-                    <Textarea
-                      id="closing-strengths"
-                      placeholder="What went well?"
-                      rows={4}
-                      value={closingForm.strengths}
-                      onChange={e => setClosingForm(f => ({ ...f, strengths: e.target.value }))}
-                      data-testid="textarea-strengths"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="closing-what-went-wrong">Weaknesses / What Went Wrong</Label>
-                    <Textarea
-                      id="closing-what-went-wrong"
-                      placeholder="What could have been better?"
-                      rows={4}
-                      value={closingForm.whatWentWrong}
-                      onChange={e => setClosingForm(f => ({ ...f, whatWentWrong: e.target.value }))}
-                      data-testid="textarea-what-went-wrong"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="closing-opportunities">Opportunities for Improvement</Label>
-                  <Textarea
-                    id="closing-opportunities"
-                    placeholder="What opportunities for improvement were identified?"
-                    rows={3}
-                    value={closingForm.opportunities}
-                    onChange={e => setClosingForm(f => ({ ...f, opportunities: e.target.value }))}
-                    data-testid="textarea-opportunities"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="closing-similarities">Similarities to Prior Projects</Label>
-                  <Textarea
-                    id="closing-similarities"
-                    placeholder="How does this project compare to previous ones?"
-                    rows={3}
-                    value={closingForm.similaritiesToPriorProjects}
-                    onChange={e => setClosingForm(f => ({ ...f, similaritiesToPriorProjects: e.target.value }))}
-                    data-testid="textarea-similarities"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="closing-recommendations">Recommendations for Next Projects</Label>
-                  <Textarea
-                    id="closing-recommendations"
-                    placeholder="What would you recommend for future similar projects?"
-                    rows={3}
-                    value={closingForm.nextProjectRecommendations}
-                    onChange={e => setClosingForm(f => ({ ...f, nextProjectRecommendations: e.target.value }))}
-                    data-testid="textarea-recommendations"
-                  />
-                </div>
-              </CardContent>
-              <div className="flex justify-end gap-3 px-6 pb-6">
                 <Button
                   variant="outline"
-                  onClick={() => setIsEditingClosing(false)}
-                  disabled={createClosingMutation.isPending || updateClosingMutation.isPending}
+                  size="sm"
+                  onClick={() => regenerateFeedbackMutation.mutate()}
+                  disabled={regenerateFeedbackMutation.isPending}
                 >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSaveClosing}
-                  disabled={createClosingMutation.isPending || updateClosingMutation.isPending}
-                  data-testid="button-save-closing"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {createClosingMutation.isPending || updateClosingMutation.isPending ? 'Saving…' : 'Save Closing Record'}
+                  <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${regenerateFeedbackMutation.isPending ? 'animate-spin' : ''}`} />
+                  {regenerateFeedbackMutation.isPending ? 'Generating…' : 'Regenerate'}
                 </Button>
               </div>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <BookOpen className="h-5 w-5" />
-                      Project Closing
-                    </CardTitle>
-                    {projectClosing!.closedByDisplayName && (
-                      <CardDescription className="mt-1">
-                        Closed by {projectClosing!.closedByDisplayName} · {format(new Date(projectClosing!.createdAt), 'MMM d, yyyy')}
-                      </CardDescription>
-                    )}
-                  </div>
-                  <Button variant="outline" size="sm" onClick={handleStartEditClosing} data-testid="button-edit-closing">
-                    <Edit className="h-4 w-4 mr-1.5" />
-                    Edit
-                  </Button>
+            </CardHeader>
+            <CardContent>
+              {isLoadingFeedback ? (
+                <div className="animate-pulse space-y-3">
+                  <div className="h-6 bg-gray-200 rounded w-1/2" />
+                  <div className="h-20 bg-gray-200 rounded" />
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {projectClosing!.summary && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
-                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.summary}</p>
-                  </div>
-                )}
-                <div className="grid gap-4 md:grid-cols-2">
-                  {projectClosing!.strengths && (
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Strengths</p>
-                      <p className="text-sm whitespace-pre-wrap">{projectClosing!.strengths}</p>
-                    </div>
-                  )}
-                  {projectClosing!.whatWentWrong && (
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-red-700 uppercase tracking-wide">Weaknesses / What Went Wrong</p>
-                      <p className="text-sm whitespace-pre-wrap">{projectClosing!.whatWentWrong}</p>
-                    </div>
-                  )}
-                </div>
-                {projectClosing!.opportunities && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Opportunities for Improvement</p>
-                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.opportunities}</p>
-                  </div>
-                )}
-                {projectClosing!.similaritiesToPriorProjects && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Similarities to Prior Projects</p>
-                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.similaritiesToPriorProjects}</p>
-                  </div>
-                )}
-                {projectClosing!.nextProjectRecommendations && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recommendations for Next Projects</p>
-                    <p className="text-sm whitespace-pre-wrap">{projectClosing!.nextProjectRecommendations}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ── Risks Section ── */}
-          {(projectClosing || isEditingClosing) && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <ShieldAlert className="h-4 w-4" />
-                    Risks Identified
-                  </CardTitle>
-                  {projectClosing && (
-                    <Button size="sm" variant="outline" onClick={() => setShowRiskDialog(true)} data-testid="button-add-risk">
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Add Risk
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {closingRisks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    {projectClosing ? 'No risks recorded yet. Add a risk above.' : 'Save the closing record first to add risks.'}
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {closingRisks.map(risk => (
-                      <div key={risk.id} className="border rounded-lg p-4 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge className={SEVERITY_COLORS[risk.severity]}>{risk.severity}</Badge>
-                            <span className="text-sm font-medium">{risk.category}</span>
-                          </div>
-                          {(risk.owner || risk.department) && (
-                            <span className="text-xs text-muted-foreground">{[risk.owner, risk.department].filter(Boolean).join(' · ')}</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{risk.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ── Actions Section ── */}
-          {(projectClosing || isEditingClosing) && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <ListChecks className="h-4 w-4" />
-                    Follow-up Actions
-                  </CardTitle>
-                  {projectClosing && (
-                    <Button size="sm" variant="outline" onClick={() => setShowActionDialog(true)} data-testid="button-add-action">
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Add Action
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {closingActions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    {projectClosing ? 'No actions recorded yet. Add an action above.' : 'Save the closing record first to add actions.'}
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {closingActions.map(action => (
-                      <div key={action.id} className="border rounded-lg p-4 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium">{action.actionText}</p>
-                          <Badge className={ACTION_STATUS_COLORS[action.status]}>{action.status.replace('_', ' ')}</Badge>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-                          {action.owner && <span><User className="h-3 w-3 inline mr-1" />{action.owner}</span>}
-                          {action.department && <span><Building2 className="h-3 w-3 inline mr-1" />{action.department}</span>}
-                          {action.dueDate && <span><Calendar className="h-3 w-3 inline mr-1" />Due {format(new Date(action.dueDate), 'MMM d, yyyy')}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ── Quote vs Actual Comparison ── */}
-          {!isLoadingFeedback && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <TrendingUp className="h-4 w-4" />
-                      Quote vs Actual Comparison
-                    </CardTitle>
-                    {quoteFeedback && (
-                      <CardDescription className="mt-1">
-                        Generated {format(new Date(quoteFeedback.generatedAt), 'MMM d, yyyy')}
-                      </CardDescription>
-                    )}
-                  </div>
+              ) : !quoteFeedback ? (
+                <div className="text-center py-6 space-y-3">
+                  <p className="text-sm text-muted-foreground">No quote comparison snapshot available yet.</p>
                   <Button
-                    size="sm"
                     variant="outline"
+                    size="sm"
                     onClick={() => regenerateFeedbackMutation.mutate()}
                     disabled={regenerateFeedbackMutation.isPending}
-                    data-testid="button-regenerate-feedback"
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${regenerateFeedbackMutation.isPending ? 'animate-spin' : ''}`} />
-                    {regenerateFeedbackMutation.isPending ? 'Generating…' : 'Regenerate'}
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                    Generate Comparison
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {!quoteFeedback ? (
-                  <div className="text-center py-8 space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      No quote comparison snapshot yet. Click <strong>Regenerate</strong> to build one from the project's labor records and quote data.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Overrun Banner */}
-                    {quoteFeedback.isOverrun && (
-                      <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200">
-                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                        <span className="text-sm font-medium">This project exceeded its quoted hours or schedule — review the figures below.</span>
-                      </div>
-                    )}
-
-                    {/* Summary */}
-                    {quoteFeedback.summary && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
-                        <p className="text-sm whitespace-pre-wrap bg-muted/40 rounded-lg p-3">{quoteFeedback.summary}</p>
-                      </div>
-                    )}
-
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {/* Labor Hours */}
-                    {(quoteFeedback.quotedLaborHours != null || quoteFeedback.actualLaborHours != null) && (
-                      <div className="space-y-3">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Labor Hours</p>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-lg border p-4 text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Quoted</p>
-                            <p className="text-2xl font-bold">{quoteFeedback.quotedLaborHours?.toFixed(1) ?? '—'}</p>
-                            <p className="text-xs text-muted-foreground">hrs</p>
-                          </div>
-                          <div className="rounded-lg border p-4 text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Actual</p>
-                            <p className="text-2xl font-bold">{quoteFeedback.actualLaborHours?.toFixed(1) ?? '—'}</p>
-                            <p className="text-xs text-muted-foreground">hrs</p>
-                          </div>
-                          <div className={`rounded-lg border p-4 text-center ${quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance > 0 ? 'border-red-300 bg-red-50 dark:bg-red-950' : quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance < 0 ? 'border-green-300 bg-green-50 dark:bg-green-950' : ''}`}>
-                            <p className="text-xs text-muted-foreground mb-1">Variance</p>
-                            <div className="flex items-center justify-center gap-1">
-                              {quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance > 0 && <TrendingUp className="h-4 w-4 text-red-600" />}
-                              {quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance < 0 && <TrendingDown className="h-4 w-4 text-green-600" />}
-                              {quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance === 0 && <Minus className="h-4 w-4 text-muted-foreground" />}
-                              <p className={`text-2xl font-bold ${quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance > 0 ? 'text-red-700 dark:text-red-300' : quoteFeedback.laborHoursVariance != null && quoteFeedback.laborHoursVariance < 0 ? 'text-green-700 dark:text-green-300' : ''}`}>
-                                {quoteFeedback.laborHoursVariance != null ? (quoteFeedback.laborHoursVariance > 0 ? '+' : '') + quoteFeedback.laborHoursVariance.toFixed(1) : '—'}
-                              </p>
-                            </div>
-                            {quoteFeedback.laborHoursVariancePct != null && (
-                              <p className="text-xs text-muted-foreground">
-                                ({quoteFeedback.laborHoursVariancePct > 0 ? '+' : ''}{quoteFeedback.laborHoursVariancePct.toFixed(1)}%)
-                              </p>
-                            )}
-                          </div>
+                    <div className="rounded-lg border p-4 space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Labor Hours</p>
+                      <div className="flex items-end gap-3">
+                        <div>
+                          <p className="text-2xl font-bold">{quoteFeedback.actualLaborHours ?? '—'}</p>
+                          <p className="text-xs text-muted-foreground">Actual</p>
                         </div>
+                        <div className="text-muted-foreground text-sm mb-1">vs</div>
+                        <div>
+                          <p className="text-lg text-muted-foreground">{quoteFeedback.quotedLaborHours ?? '—'}</p>
+                          <p className="text-xs text-muted-foreground">Quoted</p>
+                        </div>
+                        {quoteFeedback.laborHoursVariancePct !== null && (
+                          <span className={`ml-auto text-sm font-medium px-2 py-0.5 rounded ${
+                            (quoteFeedback.laborHoursVariancePct ?? 0) > 0
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                              : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                          }`}>
+                            {(quoteFeedback.laborHoursVariancePct ?? 0) > 0 ? '+' : ''}{quoteFeedback.laborHoursVariancePct?.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Lead Time */}
+                    <div className="rounded-lg border p-4 space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lead Time (Days)</p>
+                      <div className="flex items-end gap-3">
+                        <div>
+                          <p className="text-2xl font-bold">{quoteFeedback.actualLeadTimeDays ?? '—'}</p>
+                          <p className="text-xs text-muted-foreground">Actual</p>
+                        </div>
+                        <div className="text-muted-foreground text-sm mb-1">vs</div>
+                        <div>
+                          <p className="text-lg text-muted-foreground">{quoteFeedback.quotedLeadTimeDays ?? '—'}</p>
+                          <p className="text-xs text-muted-foreground">Quoted</p>
+                        </div>
+                        {quoteFeedback.scheduleVarianceDays !== null && (
+                          <span className={`ml-auto text-sm font-medium px-2 py-0.5 rounded ${
+                            (quoteFeedback.scheduleVarianceDays ?? 0) > 0
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                              : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                          }`}>
+                            {(quoteFeedback.scheduleVarianceDays ?? 0) > 0 ? '+' : ''}{quoteFeedback.scheduleVarianceDays}d
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {quoteFeedback.summary && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
+                      <p className="text-sm">{quoteFeedback.summary}</p>
+                    </div>
+                  )}
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {quoteFeedback.keyStrengths && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">Strengths</p>
+                        <p className="text-sm">{quoteFeedback.keyStrengths}</p>
                       </div>
                     )}
+                    {quoteFeedback.keyOpportunities && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Opportunities</p>
+                        <p className="text-sm">{quoteFeedback.keyOpportunities}</p>
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Schedule */}
-                    {(quoteFeedback.quotedLeadTimeDays != null || quoteFeedback.actualLeadTimeDays != null) && (
-                      <div className="space-y-3">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Schedule (Lead Time)</p>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-lg border p-4 text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Quoted Lead Time</p>
-                            <p className="text-2xl font-bold">{quoteFeedback.quotedLeadTimeDays ?? '—'}</p>
-                            <p className="text-xs text-muted-foreground">days</p>
+                  {quoteFeedback.keyRisks && quoteFeedback.keyRisks.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">Key Risks</p>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {quoteFeedback.keyRisks.map((risk, i) => (
+                          <li key={i} className="text-sm text-muted-foreground">{risk}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {quoteFeedback.recommendedQuotingNotes && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recommended Quoting Notes</p>
+                      <p className="text-sm text-muted-foreground">{quoteFeedback.recommendedQuotingNotes}</p>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Generated {format(new Date(quoteFeedback.generatedAt), 'MMM d, yyyy h:mm a')}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Past Project Insights */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                Past Project Insights
+              </CardTitle>
+              <CardDescription>
+                Lessons from similar approved closed projects for the same customer — use these to inform estimates and planning.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingSimilar ? (
+                <div className="animate-pulse space-y-3">
+                  <div className="h-5 bg-gray-200 rounded w-1/3" />
+                  <div className="h-16 bg-gray-200 rounded" />
+                </div>
+              ) : similarClosings.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No approved closing records found for this customer yet. As projects are closed and approved, their lessons learned will appear here.
+                </p>
+              ) : (
+                <Accordion type="multiple" className="space-y-1">
+                  {similarClosings.map((closing) => (
+                    <AccordionItem key={closing.id} value={String(closing.id)} className="border rounded-md px-3">
+                      <AccordionTrigger className="py-2 hover:no-underline">
+                        <div className="flex items-center gap-3 text-left">
+                          <Badge variant="outline" className="text-xs font-mono shrink-0">{closing.projectCode}</Badge>
+                          <span className="text-sm font-medium truncate">{closing.projectName}</span>
+                          {closing.approvedAt && (
+                            <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                              {format(new Date(closing.approvedAt), 'MMM yyyy')}
+                            </span>
+                          )}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-3 space-y-3">
+                        {closing.summary && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Summary</p>
+                            <p className="text-sm">{closing.summary}</p>
                           </div>
-                          <div className="rounded-lg border p-4 text-center">
-                            <p className="text-xs text-muted-foreground mb-1">Actual Lead Time</p>
-                            <p className="text-2xl font-bold">{quoteFeedback.actualLeadTimeDays ?? '—'}</p>
-                            <p className="text-xs text-muted-foreground">days</p>
-                          </div>
-                          {quoteFeedback.scheduleVarianceDays != null && (
-                            <div className={`rounded-lg border p-4 text-center ${quoteFeedback.scheduleVarianceDays > 0 ? 'border-red-300 bg-red-50 dark:bg-red-950' : quoteFeedback.scheduleVarianceDays < 0 ? 'border-green-300 bg-green-50 dark:bg-green-950' : ''}`}>
-                              <p className="text-xs text-muted-foreground mb-1">Variance</p>
-                              <div className="flex items-center justify-center gap-1">
-                                {quoteFeedback.scheduleVarianceDays > 0 && <TrendingUp className="h-4 w-4 text-red-600" />}
-                                {quoteFeedback.scheduleVarianceDays < 0 && <TrendingDown className="h-4 w-4 text-green-600" />}
-                                {quoteFeedback.scheduleVarianceDays === 0 && <Minus className="h-4 w-4 text-muted-foreground" />}
-                                <p className={`text-2xl font-bold ${quoteFeedback.scheduleVarianceDays > 0 ? 'text-red-700 dark:text-red-300' : quoteFeedback.scheduleVarianceDays < 0 ? 'text-green-700 dark:text-green-300' : ''}`}>
-                                  {quoteFeedback.scheduleVarianceDays > 0 ? '+' : ''}{quoteFeedback.scheduleVarianceDays}
-                                </p>
-                              </div>
-                              <p className="text-xs text-muted-foreground">days</p>
+                        )}
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {closing.strengths && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">What Went Well</p>
+                              <p className="text-sm">{closing.strengths}</p>
+                            </div>
+                          )}
+                          {closing.whatWentWrong && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">What Went Wrong</p>
+                              <p className="text-sm">{closing.whatWentWrong}</p>
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Departments */}
-                    {(quoteFeedback.quotedDepartments?.length || quoteFeedback.actualDepartments?.length) ? (
-                      <div className="space-y-3">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Departments Involved</p>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {quoteFeedback.quotedDepartments?.length ? (
-                            <div className="space-y-1">
-                              <p className="text-xs text-muted-foreground">Quoted</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {quoteFeedback.quotedDepartments.map(d => (
-                                  <Badge key={d} variant="outline">{d}</Badge>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                          {quoteFeedback.actualDepartments?.length ? (
-                            <div className="space-y-1">
-                              <p className="text-xs text-muted-foreground">Actual</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {quoteFeedback.actualDepartments.map(d => (
-                                  <Badge key={d} variant="secondary">{d}</Badge>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* Key Risks / Lessons */}
-                    {quoteFeedback.keyRisks?.length ? (
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Key Risks & Lessons</p>
-                        <ul className="space-y-1">
-                          {quoteFeedback.keyRisks.map((r, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm">
-                              <AlertCircle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                              {r}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {/* Strengths */}
-                    {quoteFeedback.keyStrengths && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Strengths</p>
-                        <p className="text-sm whitespace-pre-wrap">{quoteFeedback.keyStrengths}</p>
-                      </div>
-                    )}
-
-                    {/* Opportunities */}
-                    {quoteFeedback.keyOpportunities && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Opportunities for Future Quotes</p>
-                        <p className="text-sm whitespace-pre-wrap">{quoteFeedback.keyOpportunities}</p>
-                      </div>
-                    )}
-
-                    {/* Recommended Quoting Notes */}
-                    {quoteFeedback.recommendedQuotingNotes && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recommended Quoting Notes</p>
-                        <p className="text-sm whitespace-pre-wrap bg-muted/40 rounded-lg p-3">{quoteFeedback.recommendedQuotingNotes}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                        {closing.nextProjectRecommendations && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Recommendations for Next Project</p>
+                            <p className="text-sm">{closing.nextProjectRecommendations}</p>
+                          </div>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs mt-1"
+                          onClick={() => setLocation(`/projects/${closing.projectId}/closing`)}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View full closing record
+                        </Button>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
+
 
         {/* ── PDF Preview Dialog ── */}
         <Dialog open={!!pdfPreviewUrl} onOpenChange={(open) => { if (!open) setPdfPreviewUrl(null); }}>
@@ -2768,13 +2844,28 @@ export default function ProjectDetailPage() {
               />
             </div>
           </div>
+          {editData.status === 'completed' && project.status !== 'completed' && project.closingStatus !== 'APPROVED' && (
+            <div className="flex items-start gap-2 text-sm rounded-md px-3 py-2 border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300 mb-2">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Closing record required</p>
+                <p className="text-xs mt-0.5">
+                  {project.closingStatus === 'MISSING'
+                    ? 'No closing record exists. Go to the "Close Project" tab to create one before marking complete.'
+                    : project.closingStatus === 'INCOMPLETE'
+                    ? 'The closing record is incomplete. All required fields must be filled before marking complete.'
+                    : 'The closing record must be approved by a manager before marking this project complete.'}
+                </p>
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
             <Button 
               onClick={() => updateProjectMutation.mutate(editData)}
-              disabled={updateProjectMutation.isPending}
+              disabled={updateProjectMutation.isPending || (editData.status === 'completed' && project.status !== 'completed' && project.closingStatus !== 'APPROVED')}
             >
               {updateProjectMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>

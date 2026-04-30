@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Eye, EyeOff, Scan, Settings, LogIn, Timer, Clock, CreditCard, ArrowLeft } from 'lucide-react';
 
@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import { queryClient } from '@/lib/queryClient';
-import TimeClockKiosk from '@/components/TimeClockKiosk';
 
 type LoginMode = 'regular' | 'p2-traveler' | 'timer-station' | 'badge' | 'time-clock';
 
@@ -29,6 +28,7 @@ const LOGIN_MODES: { key: LoginMode; label: string; icon: typeof LogIn; descript
 
 export default function LoginPage() {
   const [activeMode, setActiveMode] = useState<LoginMode | null>(null);
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,6 +37,12 @@ export default function LoginPage() {
   const [isBadgeLoading, setIsBadgeLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (activeMode === 'time-clock') {
+      setLocation('/kiosk');
+    }
+  }, [activeMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,7 +334,14 @@ export default function LoginPage() {
     </div>
   );
 
-  const renderTimeClock = () => <TimeClockKiosk />;
+  const renderTimeClock = () => {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-center p-8">
+        <Clock className="h-10 w-10 text-primary" />
+        <p className="text-sm text-muted-foreground">Redirecting to Time Clock&hellip;</p>
+      </div>
+    );
+  };
 
   const renderContent = () => {
     switch (activeMode) {

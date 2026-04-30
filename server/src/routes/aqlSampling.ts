@@ -133,7 +133,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Seed the standard AQL sampling chart values
+// Seed route — not mounted in production
+if (process.env.NODE_ENV !== 'production') {
 router.post('/seed', async (req: Request, res: Response) => {
   try {
     const standardValues = [
@@ -177,5 +178,6 @@ router.post('/seed', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to seed sampling chart' });
   }
 });
+}
 
 export default router;

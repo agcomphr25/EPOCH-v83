@@ -5,6 +5,7 @@ import {
   insertCommunicationLogSchema,
   insertP2CustomerSchema,
 } from '@shared/schema';
+import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
 
 import { storage } from '../../storage';
 import { pool, db } from '../../db';
@@ -1599,20 +1600,13 @@ router.post('/validate-address', async (req: Request, res: Response) => {
   }
 });
 
-// Get balance due for a specific customer (glennj only)
-router.get('/:id/balance-due', async (req: Request, res: Response) => {
+// Get balance due for a specific customer (ADMIN/OWNER only)
+router.get('/:id/balance-due', requireExecutiveAccess, async (req: Request, res: Response) => {
   try {
-    // Restrict to glennj only
-    const user = (req as any).user;
-    if (!user || user.username !== 'glennj') {
-      return res.status(403).json({
-        error: 'Access denied',
-        message: 'Only glennj can access balance due information',
-      });
-    }
 
     const customerId = req.params.id;
-    console.log(`Calculating balance due for customer ${customerId} (requested by ${user.username})`);
+    const requestingUser = (req as any).user;
+    console.log(`Calculating balance due for customer ${customerId} (requested by ${requestingUser?.username})`);
 
     // Get unpaid orders for this customer using existing method
     const unpaidOrders = await storage.getUnpaidOrdersByCustomer(customerId);

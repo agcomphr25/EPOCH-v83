@@ -68,10 +68,12 @@ function ProjectCard({ project, onNavigate }: { project: PipelineProject; onNavi
       onClick={() => onNavigate(`/projects/${project.projectId}`)}
     >
       <div className="flex items-center gap-1.5">
-        <span
-          className={`flex-shrink-0 h-2 w-2 rounded-full ${closingDot}`}
-          title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
-        />
+        {project.currentStage === 'completed' && (
+          <span
+            className={`flex-shrink-0 h-2 w-2 rounded-full ${closingDot}`}
+            title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
+          />
+        )}
         <p className="font-semibold text-xs truncate text-gray-900 dark:text-gray-100">{project.projectCode}</p>
       </div>
       <p className="text-[11px] text-muted-foreground truncate">{project.projectName}</p>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { Link, useLocation, useSearch } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
@@ -84,6 +85,7 @@ import {
   Link as LinkIcon,
   Zap,
   Copy,
+  Shuffle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
@@ -113,6 +115,71 @@ import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
 import { WebsiteOrderImport } from '@/components/WebsiteOrderImport';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
+
+// Quick-filter preset definitions — every dimension is declared so the
+// active-preset check can compare the full filter state at once.
+const FILTER_PRESETS = [
+  {
+    id: 'active',
+    label: 'Active Orders',
+    filters: {
+      searchTerm: '',
+      departmentFilter: 'all',
+      departmentFilterMode: 'include' as const,
+      customerIdFilter: '',
+      statusFilter: 'all',
+      statusFilterMode: 'include' as const,
+      excludeStatuses: ['FULFILLED', 'CANCELLED'],
+      sortBy: 'dueDate',
+      sortOrder: 'asc' as const,
+    },
+  },
+  {
+    id: 'fulfilled',
+    label: 'Fulfilled',
+    filters: {
+      searchTerm: '',
+      departmentFilter: 'all',
+      departmentFilterMode: 'include' as const,
+      customerIdFilter: '',
+      statusFilter: 'FULFILLED',
+      statusFilterMode: 'include' as const,
+      excludeStatuses: [] as string[],
+      sortBy: 'dueDate',
+      sortOrder: 'desc' as const,
+    },
+  },
+  {
+    id: 'cancelled',
+    label: 'Cancelled',
+    filters: {
+      searchTerm: '',
+      departmentFilter: 'all',
+      departmentFilterMode: 'include' as const,
+      customerIdFilter: '',
+      statusFilter: 'CANCELLED',
+      statusFilterMode: 'include' as const,
+      excludeStatuses: [] as string[],
+      sortBy: 'orderDate',
+      sortOrder: 'desc' as const,
+    },
+  },
+  {
+    id: 'all',
+    label: 'All Orders',
+    filters: {
+      searchTerm: '',
+      departmentFilter: 'all',
+      departmentFilterMode: 'include' as const,
+      customerIdFilter: '',
+      statusFilter: 'all',
+      statusFilterMode: 'include' as const,
+      excludeStatuses: [] as string[],
+      sortBy: 'orderDate',
+      sortOrder: 'desc' as const,
+    },
+  },
+];
 
 // Form validation schema for kickback creation
 const kickbackFormSchema = insertKickbackSchema.extend({
@@ -234,6 +301,13 @@ export default function OrdersList() {
   const urlDepartmentMode: 'include' | 'exclude' = rawDepartmentMode === 'exclude' ? 'exclude' : 'include';
   const rawStatusMode = searchParams.get('statusMode');
   const urlStatusMode: 'include' | 'exclude' = rawStatusMode === 'exclude' ? 'exclude' : 'include';
+  const urlSortBy = searchParams.get('sortBy') || 'orderDate';
+  const rawSortOrder = searchParams.get('sortOrder');
+  const urlSortOrder: 'asc' | 'desc' = rawSortOrder === 'asc' ? 'asc' : (rawSortOrder === 'desc' ? 'desc' : 'desc');
+  const urlExcludeStatuses: string[] = (searchParams.get('excludeStatuses') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{
     orderId: string;
@@ -248,8 +322,9 @@ export default function OrdersList() {
   const [departmentFilterMode, setDepartmentFilterMode] = useState<'include' | 'exclude'>(urlDepartmentMode);
   const [statusFilterMode, setStatusFilterMode] = useState<'include' | 'exclude'>(urlStatusMode);
   const [customerIdFilter, setCustomerIdFilter] = useState<string>(urlCustomerId);
-  const [sortBy, setSortBy] = useState<string>('orderDate');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy, setSortBy] = useState<string>(urlSortBy);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(urlSortOrder);
+  const [excludeStatuses, setExcludeStatuses] = useState<string[]>(urlExcludeStatuses);
   const [communicationModal, setCommunicationModal] = useState<{
     isOpen: boolean;
     customer: { id: number; name: string; email?: string; phone?: string };
@@ -282,6 +357,17 @@ export default function OrdersList() {
     if (urlStatusMode !== statusFilterMode) {
       setStatusFilterMode(urlStatusMode);
     }
+    if (urlSortBy !== sortBy) {
+      setSortBy(urlSortBy);
+    }
+    if (urlSortOrder !== sortOrder) {
+      setSortOrder(urlSortOrder);
+    }
+    const excludeJoined = excludeStatuses.join(',');
+    const urlExcludeJoined = urlExcludeStatuses.join(',');
+    if (urlExcludeJoined !== excludeJoined) {
+      setExcludeStatuses(urlExcludeStatuses);
+    }
     // After syncing from URL, mark as not user-initiated
     isUserInitiatedRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,6 +392,9 @@ export default function OrdersList() {
         if (statusFilterMode === 'exclude') params.set('statusMode', 'exclude');
       }
       if (customerIdFilter) params.set('customerId', customerIdFilter);
+      if (sortBy !== 'orderDate') params.set('sortBy', sortBy);
+      if (sortOrder !== 'desc') params.set('sortOrder', sortOrder);
+      if (excludeStatuses.length > 0) params.set('excludeStatuses', excludeStatuses.join(','));
       
       const queryString = params.toString();
       const newUrl = queryString ? `/orders-list?${queryString}` : '/orders-list';
@@ -317,32 +406,50 @@ export default function OrdersList() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, departmentFilter, statusFilter, customerIdFilter, departmentFilterMode, statusFilterMode]);
+  }, [searchTerm, departmentFilter, statusFilter, customerIdFilter, departmentFilterMode, statusFilterMode, sortBy, sortOrder, excludeStatuses]);
   
-  // Wrapper functions that mark changes as user-initiated
+  // Wrapper functions that mark changes as user-initiated and reset to page 1
   const handleSearchChange = useCallback((value: string) => {
     isUserInitiatedRef.current = true;
     setSearchTerm(value);
+    setCurrentPage(1);
   }, []);
   
   const handleDepartmentChange = useCallback((value: string) => {
     isUserInitiatedRef.current = true;
     setDepartmentFilter(value);
+    setCurrentPage(1);
   }, []);
   
   const handleStatusChange = useCallback((value: string) => {
     isUserInitiatedRef.current = true;
     setStatusFilter(value);
+    setExcludeStatuses([]);
+    setCurrentPage(1);
   }, []);
   
   const handleDepartmentModeToggle = useCallback(() => {
     isUserInitiatedRef.current = true;
     setDepartmentFilterMode((prev) => (prev === 'include' ? 'exclude' : 'include'));
+    setCurrentPage(1);
   }, []);
 
   const handleStatusModeToggle = useCallback(() => {
     isUserInitiatedRef.current = true;
     setStatusFilterMode((prev) => (prev === 'include' ? 'exclude' : 'include'));
+    setCurrentPage(1);
+  }, []);
+
+  const handleSortByChange = useCallback((value: string) => {
+    isUserInitiatedRef.current = true;
+    setSortBy(value);
+    setCurrentPage(1);
+  }, []);
+
+  const handleSortOrderChange = useCallback((value: 'asc' | 'desc') => {
+    isUserInitiatedRef.current = true;
+    setSortOrder(value);
+    setCurrentPage(1);
   }, []);
 
   const handleResetAll = useCallback(() => {
@@ -353,9 +460,41 @@ export default function OrdersList() {
     setDepartmentFilterMode('include');
     setStatusFilterMode('include');
     setCustomerIdFilter('');
+    setExcludeStatuses([]);
     setSortBy('orderDate');
     setSortOrder('desc');
+    setCurrentPage(1);
   }, []);
+
+  const handleApplyPreset = useCallback((presetId: string) => {
+    const preset = FILTER_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    isUserInitiatedRef.current = true;
+    setSearchTerm(preset.filters.searchTerm);
+    setDepartmentFilter(preset.filters.departmentFilter);
+    setDepartmentFilterMode(preset.filters.departmentFilterMode);
+    setCustomerIdFilter(preset.filters.customerIdFilter);
+    setStatusFilter(preset.filters.statusFilter);
+    setStatusFilterMode(preset.filters.statusFilterMode);
+    setExcludeStatuses(preset.filters.excludeStatuses);
+    setSortBy(preset.filters.sortBy);
+    setSortOrder(preset.filters.sortOrder);
+    setCurrentPage(1);
+  }, []);
+
+  // Derive the active preset by matching ALL filter dimensions
+  const activePreset = FILTER_PRESETS.find(
+    (p) =>
+      p.filters.searchTerm === searchTerm &&
+      p.filters.departmentFilter === departmentFilter &&
+      p.filters.departmentFilterMode === departmentFilterMode &&
+      p.filters.customerIdFilter === customerIdFilter &&
+      p.filters.statusFilter === statusFilter &&
+      p.filters.statusFilterMode === statusFilterMode &&
+      [...p.filters.excludeStatuses].sort().join(',') === [...excludeStatuses].sort().join(',') &&
+      p.filters.sortBy === sortBy &&
+      p.filters.sortOrder === sortOrder
+  )?.id ?? null;
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -406,7 +545,7 @@ export default function OrdersList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
+        queryKey: ['/api/orders/with-payment-status/paginated'],
       });
       queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
       showToast({
@@ -437,7 +576,7 @@ export default function OrdersList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
+        queryKey: ['/api/orders/with-payment-status/paginated'],
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/orders/pipeline-counts'],
@@ -471,7 +610,7 @@ export default function OrdersList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
+        queryKey: ['/api/orders/with-payment-status/paginated'],
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/production-queue/prioritized'],
@@ -701,7 +840,7 @@ export default function OrdersList() {
         return newSet;
       });
       queryClient.invalidateQueries({
-        queryKey: ['/api/orders/with-payment-status'],
+        queryKey: ['/api/orders/with-payment-status/paginated'],
       });
       toast.error('Failed to update department');
     },
@@ -719,29 +858,13 @@ export default function OrdersList() {
         `🔄 Progressing order ${orderId} from ${currentDepartment} to ${nextDepartment}`
       );
 
-      // IMMEDIATELY update React Query cache - this prevents any reversion
-      queryClient.setQueryData(
-        ['/api/orders/with-payment-status'],
-        (old: any[]) => {
-          if (!old) return old;
-          const updated = old.map((order: any) => {
-            if (order.orderId === orderId) {
-              console.log(`✅ Cache updated: ${orderId} -> ${nextDepartment}`);
-              return { ...order, currentDepartment: nextDepartment };
-            }
-            return order;
-          });
-          return updated;
-        }
-      );
-
-      // Also update local state for redundancy
+      // Update local state for immediate UI feedback
       setLocalOrderUpdates((prev) => ({ ...prev, [orderId]: nextDepartment }));
 
       // Make the API call in the background
       progressOrderMutation.mutate({ orderId, nextDepartment });
     },
-    [progressOrderMutation, queryClient]
+    [progressOrderMutation]
   );
 
   const handleOpenCommunication = (order: Order, customersList: Customer[]) => {
@@ -837,18 +960,52 @@ export default function OrdersList() {
     }
   };
 
+  // Reset to page 1 whenever any filter/sort param changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, departmentFilter, statusFilter, departmentFilterMode, statusFilterMode, sortBy, sortOrder, customerIdFilter, excludeStatuses]);
+
   try {
+    // Build query params for server-side filtering/sorting/pagination
+    const paginatedQueryParams: Record<string, string> = {
+      page: String(currentPage),
+      limit: String(itemsPerPage),
+      sortBy,
+      sortOrder,
+    };
+    if (searchTerm.trim()) paginatedQueryParams.search = searchTerm.trim();
+    if (departmentFilter !== 'all') {
+      paginatedQueryParams.department = departmentFilter;
+      paginatedQueryParams.departmentMode = departmentFilterMode;
+    }
+    if (statusFilter !== 'all') {
+      paginatedQueryParams.status = statusFilter;
+      paginatedQueryParams.statusMode = statusFilterMode;
+    }
+    if (customerIdFilter) paginatedQueryParams.customerId = customerIdFilter;
+    if (excludeStatuses.length > 0) paginatedQueryParams.excludeStatuses = excludeStatuses.join(',');
+
+    const paginatedQueryString = new URLSearchParams(paginatedQueryParams).toString();
+
     const {
-      data: orders,
+      data: paginatedData,
       isLoading,
       error,
-    } = useQuery<Order[]>({
-      queryKey: ['/api/orders/with-payment-status'],
-      queryFn: () => apiRequest('/api/orders/with-payment-status'),
-      refetchInterval: false, // Completely disable automatic refetching
-      refetchOnWindowFocus: false, // Disable refetch on window focus
-      refetchOnReconnect: false, // Disable refetch on network reconnect
+    } = useQuery<{ orders: Order[]; total: number; page: number; limit: number; totalPages: number }>({
+      queryKey: ['/api/orders/with-payment-status/paginated', paginatedQueryParams],
+      queryFn: () => apiRequest(`/api/orders/with-payment-status/paginated?${paginatedQueryString}`),
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      placeholderData: (prev) => prev,
     });
+
+    const orders = paginatedData?.orders ?? [];
+    const totalOrders = paginatedData?.total ?? 0;
+    const totalPages = paginatedData?.totalPages ?? 0;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalOrders);
+    const paginatedOrders = orders;
 
     // Debug logging to check if isVerified field is present
     if (orders && orders.length > 0) {
@@ -878,6 +1035,7 @@ export default function OrdersList() {
     const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
       queryKey: ['/api/auth/session'],
     });
+    const isAdmin = isAdminUser(currentUser);
 
     const orderIds = useMemo(() => (orders ?? []).map((o) => o.orderId), [orders]);
     const { data: ticketMap } = useOrderTicketCounts(orderIds);
@@ -924,141 +1082,6 @@ export default function OrdersList() {
       'CANCELLED',
     ];
 
-    // Filter and sort orders based on search term, department filter, status filter, and sort options
-    const filteredOrders = useMemo(() => {
-      if (!orders) return [];
-
-      let filtered = [...orders];
-
-      // Apply search filter
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        filtered = filtered.filter((order) => {
-          // Search by Order ID
-          if (order.orderId && order.orderId.toLowerCase().includes(term)) {
-            return true;
-          }
-
-          // Search by Customer Name
-          const customerName = getCustomerName(order.customerId);
-          if (customerName && customerName.toLowerCase().includes(term)) {
-            return true;
-          }
-
-          // Search by Customer Phone
-          const customerPhone = getCustomerPhone(order.customerId);
-          if (customerPhone && customerPhone.toLowerCase().includes(term)) {
-            return true;
-          }
-
-          // Search by FB Order Number
-          if (
-            order.fbOrderNumber &&
-            order.fbOrderNumber.toLowerCase().includes(term)
-          ) {
-            return true;
-          }
-
-          return false;
-        });
-      }
-
-      // Apply customer ID filter (from URL parameter)
-      if (customerIdFilter) {
-        filtered = filtered.filter((order) => {
-          return order.customerId === customerIdFilter;
-        });
-      }
-
-      // Apply department filter
-      if (departmentFilter !== 'all') {
-        filtered = filtered.filter((order) => {
-          const dept = order.currentDepartment || 'Not Set';
-          const matches = dept === departmentFilter;
-          return departmentFilterMode === 'include' ? matches : !matches;
-        });
-      }
-
-      // Apply status filter
-      if (statusFilter !== 'all') {
-        filtered = filtered.filter((order) => {
-          const matches = order.status === statusFilter;
-          return statusFilterMode === 'include' ? matches : !matches;
-        });
-      }
-
-      // Apply sorting
-      filtered.sort((a, b) => {
-        let aValue: any, bValue: any;
-
-        switch (sortBy) {
-          case 'department':
-            aValue = a.currentDepartment || 'Not Set';
-            bValue = b.currentDepartment || 'Not Set';
-            break;
-          case 'orderId':
-            aValue = a.orderId;
-            bValue = b.orderId;
-            break;
-          case 'customer':
-            aValue = getCustomerName(a.customerId);
-            bValue = getCustomerName(b.customerId);
-            break;
-          case 'model':
-            aValue = a.modelId || '';
-            bValue = b.modelId || '';
-            break;
-          case 'dueDate':
-            aValue = new Date(a.dueDate);
-            bValue = new Date(b.dueDate);
-            break;
-          case 'enteredDate':
-            aValue = new Date(a.createdAt);
-            bValue = new Date(b.createdAt);
-            break;
-          case 'orderDate':
-          default:
-            aValue = new Date(a.orderDate);
-            bValue = new Date(b.orderDate);
-            break;
-        }
-
-        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-
-      return filtered;
-    }, [
-      orders,
-      customers,
-      searchTerm,
-      departmentFilter,
-      statusFilter,
-      departmentFilterMode,
-      statusFilterMode,
-      sortBy,
-      sortOrder,
-      customerIdFilter,
-    ]);
-
-    // Reset to page 1 when filters change
-    React.useEffect(() => {
-      setCurrentPage(1);
-    }, [searchTerm, departmentFilter, statusFilter, departmentFilterMode, statusFilterMode, sortBy, sortOrder, customerIdFilter]);
-
-    // Calculate pagination - MEMOIZED to prevent re-renders
-    const paginationData = React.useMemo(() => {
-      const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
-
-      return { totalPages, startIndex, endIndex, paginatedOrders };
-    }, [filteredOrders, currentPage, itemsPerPage]);
-
-    const { totalPages, startIndex, endIndex, paginatedOrders } =
-      paginationData;
 
     const getModelDisplayName = (modelId: string) => {
       if (!stockModels) return modelId;
@@ -1237,8 +1260,8 @@ export default function OrdersList() {
               </h1>
               <p className="text-gray-600 mt-1">
                 {searchTerm
-                  ? `Search results for "${searchTerm}"`
-                  : 'Showing last 25 orders - use search to find specific orders'}
+                  ? `Search results for "${searchTerm}" — ${totalOrders} order${totalOrders !== 1 ? 's' : ''} found`
+                  : `${totalOrders} order${totalOrders !== 1 ? 's' : ''} total`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1285,6 +1308,26 @@ export default function OrdersList() {
 
           {/* Filter and Sort Controls */}
           <div className="flex flex-col gap-4 mt-4">
+            {/* Quick-filter preset chips */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Quick filter:</span>
+              {FILTER_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => handleApplyPreset(preset.id)}
+                  className={cn(
+                    "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                    activePreset === preset.id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-foreground border-border hover:bg-muted"
+                  )}
+                  data-testid={`preset-btn-${preset.id}`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center gap-4 flex-wrap">
               {/* Department Filter */}
               <div className="flex items-center gap-2">
@@ -1371,7 +1414,7 @@ export default function OrdersList() {
                 >
                   Sort by:
                 </Label>
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortBy} onValueChange={handleSortByChange}>
                   <SelectTrigger className="w-40" id="sort-by">
                     <SelectValue />
                   </SelectTrigger>
@@ -1397,7 +1440,7 @@ export default function OrdersList() {
                 </Label>
                 <Select
                   value={sortOrder}
-                  onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}
+                  onValueChange={(value: 'asc' | 'desc') => handleSortOrderChange(value)}
                 >
                   <SelectTrigger className="w-32" id="sort-order">
                     <SelectValue />
@@ -1413,6 +1456,7 @@ export default function OrdersList() {
               {(searchTerm ||
                 departmentFilter !== 'all' ||
                 statusFilter !== 'all' ||
+                excludeStatuses.length > 0 ||
                 sortBy !== 'orderDate' ||
                 sortOrder !== 'desc') && (
                 <Button
@@ -1434,7 +1478,7 @@ export default function OrdersList() {
           <WebsiteOrderImport />
         </div>
 
-        {!filteredOrders || filteredOrders.length === 0 ? (
+        {paginatedOrders.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8">
@@ -1448,9 +1492,21 @@ export default function OrdersList() {
                       No orders found for "{searchTerm}". Try a different search
                       term.
                     </p>
-                    <Button variant="outline" onClick={() => handleSearchChange('')}>
-                      Clear Search
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                      <Button variant="outline" onClick={() => handleSearchChange('')}>
+                        Clear Search
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="outline"
+                          className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-900/20"
+                          onClick={() => setLocation(`/order-department-transfer?orderId=${encodeURIComponent(searchTerm)}`)}
+                        >
+                          <ArrowRight className="h-4 w-4 mr-2" />
+                          Can't find this order? Try the Transfer Tool
+                        </Button>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -1474,13 +1530,7 @@ export default function OrdersList() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Orders ({filteredOrders.length}
-                {searchTerm ||
-                departmentFilter !== 'all' ||
-                statusFilter !== 'all'
-                  ? ` total`
-                  : ''}
-                )
+                Orders ({totalOrders})
                 {totalPages > 1 && (
                   <span className="text-sm font-normal text-gray-500">
                     (Page {currentPage} of {totalPages})
@@ -1489,7 +1539,7 @@ export default function OrdersList() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table key={`table-${filteredOrders.length}-${searchTerm}`}>
+              <Table key={`table-${totalOrders}-${currentPage}-${searchTerm}`}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Order ID</TableHead>
@@ -2022,12 +2072,22 @@ export default function OrdersList() {
                                 Order Story
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => window.location.href = `/order-timeline/p1_order/${order.orderId}`}
+                                onClick={() => setLocation(`/order-timeline/p1_order/${order.orderId}`)}
                                 data-testid={`button-view-timeline-${order.orderId}`}
                               >
                                 <Clock className="mr-2 h-4 w-4" />
                                 View Timeline
                               </DropdownMenuItem>
+                              {isAdmin && (
+                                <DropdownMenuItem
+                                  onClick={() => setLocation(`/order-department-transfer?orderId=${encodeURIComponent(order.orderId)}`)}
+                                  className="text-purple-600 dark:text-purple-400"
+                                  data-testid={`button-reassign-dept-${order.orderId}`}
+                                >
+                                  <Shuffle className="mr-2 h-4 w-4" />
+                                  Reassign Department
+                                </DropdownMenuItem>
+                              )}
                               {/* Send Updated Order Email - for orders that need customer to sign updated version */}
                               {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
                                 order.status?.toUpperCase() === 'FINALIZED') && (
@@ -2097,8 +2157,8 @@ export default function OrdersList() {
                 <div className="flex items-center justify-between mt-4 pt-4 border-t">
                   <div className="text-sm text-gray-600">
                     Showing {startIndex + 1} to{' '}
-                    {Math.min(endIndex, filteredOrders.length)} of{' '}
-                    {filteredOrders.length} orders
+                    {endIndex} of{' '}
+                    {totalOrders} orders
                   </div>
                   <div className="flex items-center gap-2">
                     <Button

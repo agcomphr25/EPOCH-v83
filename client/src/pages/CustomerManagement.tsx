@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import AddressValidationModal from '@/components/AddressValidationModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -156,20 +156,12 @@ const CustomerFormFields = ({
   setFormData,
   formErrors,
   handleCustomerAddressChange,
-  customerFormSuggestions,
-  showCustomerFormSuggestions,
-  isValidatingCustomerAddress,
-  handleCustomerFormSuggestionSelect,
   customerTypes,
 }: {
   formData: CustomerFormData;
   setFormData: React.Dispatch<React.SetStateAction<CustomerFormData>>;
   formErrors: Record<string, string>;
   handleCustomerAddressChange: (field: string, value: string) => void;
-  customerFormSuggestions: any[];
-  showCustomerFormSuggestions: boolean;
-  isValidatingCustomerAddress: boolean;
-  handleCustomerFormSuggestionSelect: (suggestion: any) => void;
   customerTypes: { id: number; name: string; description: string | null }[];
 }) => (
   <div className="space-y-6 py-4">
@@ -436,63 +428,15 @@ const CustomerFormFields = ({
         <Label htmlFor="street" className="text-sm font-medium">
           Street Address
         </Label>
-        <div className="relative">
-          <Input
+        <Input
             id="street"
             value={formData.street}
             onChange={(e) =>
               handleCustomerAddressChange('street', e.target.value)
             }
-            className={`${formErrors.street ? 'border-red-500' : ''} ${isValidatingCustomerAddress ? 'pr-10' : ''}`}
+            className={formErrors.street ? 'border-red-500' : ''}
             placeholder="123 Main Street"
           />
-          {isValidatingCustomerAddress && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
-            </div>
-          )}
-
-          {/* Address Suggestions Dropdown */}
-          {showCustomerFormSuggestions &&
-            customerFormSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-                <div className="p-2 text-sm font-medium text-gray-700 bg-gray-50 border-b">
-                  Address Suggestions
-                </div>
-                {customerFormSuggestions.map((suggestion, index) => (
-                  <div
-                    key={index}
-                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 transition-colors"
-                    onClick={() =>
-                      handleCustomerFormSuggestionSelect(suggestion)
-                    }
-                  >
-                    <div className="font-medium text-gray-900">
-                      {suggestion.text ||
-                        suggestion.streetLine ||
-                        suggestion.street_line ||
-                        ''}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      SmartyStreets suggestion
-                    </div>
-                  </div>
-                ))}
-                <div className="p-2 text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      /* Handle close - will be managed by parent */
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    Close suggestions
-                  </Button>
-                </div>
-              </div>
-            )}
-        </div>
         {formErrors.street && (
           <p className="text-sm text-red-500">{formErrors.street}</p>
         )}
@@ -642,6 +586,7 @@ const CustomerFormFields = ({
 );
 
 export default function CustomerManagement() {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -682,11 +627,7 @@ export default function CustomerManagement() {
     isDefault: false,
   });
 
-  const [isValidatingAddress, setIsValidatingAddress] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
-  const [addressValidationError, setAddressValidationError] = useState<any>(null);
-  const [pendingAddressCustomerId, setPendingAddressCustomerId] = useState<string | null>(null);
-  const [pendingAddressData, setPendingAddressData] = useState<any>(null);
 
   // CSV Import states
   const [isCSVImportDialogOpen, setIsCSVImportDialogOpen] = useState(false);
@@ -853,206 +794,19 @@ export default function CustomerManagement() {
     }
   };
 
-  // Address suggestions state for separate address dialog
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-
-  // Customer form address suggestions state
-  const [customerFormSuggestions, setCustomerFormSuggestions] = useState<any[]>(
-    []
-  );
-  const [showCustomerFormSuggestions, setShowCustomerFormSuggestions] =
-    useState(false);
-  const [isValidatingCustomerAddress, setIsValidatingCustomerAddress] =
-    useState(false);
-
-  // Auto-fill address when street, city, state, or zipCode change
-  const handleAddressFieldChange = async (field: string, value: string) => {
-    console.log('🔧 handleAddressFieldChange called with:', field, value);
-    const updatedAddress = { ...addressFormData, [field]: value };
-    console.log('🔧 Updated address:', updatedAddress);
-    setAddressFormData(updatedAddress);
-
-    // Trigger validation if we have at least a street address
-    if (updatedAddress.street && updatedAddress.street.length > 3) {
-      setIsValidatingAddress(true);
-      try {
-        const response = await fetch('/api/validate-address', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            street: updatedAddress.street,
-            city: updatedAddress.city,
-            state: updatedAddress.state,
-            zipCode: updatedAddress.zipCode,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (data.suggestions && data.suggestions.length > 0) {
-          setAddressSuggestions(data.suggestions);
-          setShowSuggestions(true);
-        }
-      } catch (error) {
-        console.error('Address validation error:', error);
-      } finally {
-        setIsValidatingAddress(false);
-      }
-    } else {
-      setAddressSuggestions([]);
-      setShowSuggestions(false);
-    }
+  // Handle address field changes for the separate address dialog
+  const handleAddressFieldChange = (field: string, value: string) => {
+    setAddressFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Parse address string into components if structured data isn't available
-  const parseAddressString = (addressText: string) => {
-    const parts = addressText.split(', ');
-    if (parts.length >= 2) {
-      const street = parts[0];
-      const cityStateZip = parts[1];
-
-      // Parse "City ST" or "City ST 12345" format
-      const match = cityStateZip.match(
-        /^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/
-      );
-      if (match) {
-        return {
-          street,
-          city: match[1],
-          state: match[2],
-          zipCode: match[3] || '',
-        };
-      }
-    }
-    return { street: addressText, city: '', state: '', zipCode: '' };
-  };
-
-  // Handle suggestion selection
-  const handleSuggestionSelect = (suggestion: any) => {
-    console.log('🔧 handleSuggestionSelect called with:', suggestion);
-    console.log('🔧 Current addressFormData before update:', addressFormData);
-    console.log('🔧 Suggestion streetLine:', suggestion.streetLine);
-    console.log('🔧 Suggestion city:', suggestion.city);
-    console.log('🔧 Suggestion state:', suggestion.state);
-
-    // Direct mapping from the API response structure we confirmed
-    const newAddressData = {
-      ...addressFormData,
-      street:
-        suggestion.streetLine ||
-        suggestion.street_line ||
-        suggestion.street ||
-        '', // Use streetLine first
-      city: suggestion.city || '',
-      state: suggestion.state || '',
-      zipCode: suggestion.zipCode || suggestion.zipcode || '',
-      country: 'United States', // Default country
-    };
-
-    console.log('🔧 New address data being set:', newAddressData);
-    console.log('🔧 Street field will be:', newAddressData.street);
-    console.log('🔧 City field will be:', newAddressData.city);
-    console.log('🔧 State field will be:', newAddressData.state);
-
-    setAddressFormData(newAddressData);
-
-    // Verify the state was actually set
-    setTimeout(() => {
-      console.log(
-        '🔧 Address form data after setState (delayed check):',
-        addressFormData
-      );
-    }, 100);
-
-    setShowSuggestions(false);
-    setAddressSuggestions([]);
-
-    toast({
-      title: 'Address Selected',
-      description: 'All address fields have been populated.',
-      duration: 2000,
-    });
-  };
-
-  // Handle customer form address field changes with SmartyStreets autocomplete
-  const handleCustomerAddressChange = async (field: string, value: string) => {
-    console.log('🔧 handleCustomerAddressChange called with:', field, value);
-    const updatedFormData = { ...formData, [field]: value };
-    setFormData(updatedFormData);
-
-    // Trigger SmartyStreets autocomplete for street address
-    if (field === 'street' && value && value.length > 3) {
-      setIsValidatingCustomerAddress(true);
-      try {
-        const response = await fetch(
-          '/api/customers/address-autocomplete-bypass',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              search: value, // Use 'search' parameter instead of 'input'
-            }),
-          }
-        );
-
-        const data = await response.json();
-        console.log('🔧 SmartyStreets response for customer form:', data);
-
-        if (data.suggestions && data.suggestions.length > 0) {
-          setCustomerFormSuggestions(data.suggestions);
-          setShowCustomerFormSuggestions(true);
-        } else {
-          setCustomerFormSuggestions([]);
-          setShowCustomerFormSuggestions(false);
-        }
-      } catch (error) {
-        console.error('Customer address autocomplete error:', error);
-        setCustomerFormSuggestions([]);
-        setShowCustomerFormSuggestions(false);
-      } finally {
-        setIsValidatingCustomerAddress(false);
-      }
-    } else if (field === 'street') {
-      setCustomerFormSuggestions([]);
-      setShowCustomerFormSuggestions(false);
-    }
-  };
-
-  // Handle customer form suggestion selection
-  const handleCustomerFormSuggestionSelect = async (suggestion: any) => {
-    console.log('🔧 Customer form suggestion selected:', suggestion);
-
-    // Use the structured fields directly from the suggestion
-    // The API now returns: { text, streetLine, city, state, zipCode, secondary, entries }
-    setFormData((prev) => ({
-      ...prev,
-      street: suggestion.streetLine || '',
-      city: suggestion.city || '',
-      state: suggestion.state || '',
-      zipCode: suggestion.zipCode || '',
-    }));
-
-    console.log('🔧 Setting address fields:', {
-      street: suggestion.streetLine,
-      city: suggestion.city,
-      state: suggestion.state,
-      zipCode: suggestion.zipCode,
-    });
-
-    setShowCustomerFormSuggestions(false);
-    setCustomerFormSuggestions([]);
-
-    toast({
-      title: 'Address Selected',
-      description: 'Address fields have been filled automatically.',
-      duration: 2000,
-    });
+  // Handle customer form address field changes
+  const handleCustomerAddressChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   // Create customer mutation with address support
   const createCustomerMutation = useMutation({
-    mutationFn: async (data: CustomerFormData): Promise<{ customer: any; addressError: any; addrPayload: any }> => {
+    mutationFn: async (data: CustomerFormData): Promise<{ addrPayload: object | null }> => {
       // Create customer first
       const customer = await apiRequest('/api/customers/create-bypass', {
         method: 'POST',
@@ -1071,8 +825,9 @@ export default function CustomerManagement() {
       });
 
       // Create address if address fields are provided (state optional for international)
+      let addrPayload: object | null = null;
       if (data.street && data.city) {
-        const addrPayload = {
+        addrPayload = {
           customerId: customer.id.toString(),
           street: data.street,
           street2: data.street2,
@@ -1084,50 +839,26 @@ export default function CustomerManagement() {
           isDefault: true,
         };
 
-        try {
-          await apiRequest('/api/addresses', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(addrPayload),
-          });
-        } catch (addrError: any) {
-          if (addrError.responseData?.validationStatus && addrError.status === 400) {
-            // Return address error via the mutation result so onSuccess can handle it
-            // without relying on stale React state
-            return { customer, addressError: addrError.responseData, addrPayload };
-          }
-          throw addrError;
-        }
+        await apiRequest('/api/addresses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...addrPayload, skipValidation: true }),
+        });
       }
 
-      return { customer, addressError: null, addrPayload: null };
+      return { addrPayload };
     },
-    onSuccess: ({ customer, addressError, addrPayload }) => {
+    onSuccess: ({ addrPayload }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-      if (addressError) {
-        // Address validation failed — close dialog, reset form fields, then surface review UI.
-        // resetForm() is called first (clears addressValidationError), then
-        // setAddressValidationError is called last so its value wins in the React batch.
-        setIsCreateDialogOpen(false);
-        resetForm();
-        setPendingAddressCustomerId(customer.id.toString());
-        setPendingAddressData(addrPayload);
-        setAddressValidationError(addressError); // must come after resetForm to win the batch
-        toast({
-          title: 'Customer created',
-          description: 'Customer created. Please review the address.',
-        });
-      } else {
-        setIsCreateDialogOpen(false);
-        resetForm();
-        toast({
-          title: 'Success',
-          description: addrPayload
-            ? 'Customer and address created successfully'
-            : 'Customer created successfully',
-        });
-      }
+      setIsCreateDialogOpen(false);
+      resetForm();
+      toast({
+        title: 'Success',
+        description: addrPayload
+          ? 'Customer and address created successfully'
+          : 'Customer created successfully',
+      });
     },
     onError: (error: any) => {
       toast({
@@ -1200,7 +931,7 @@ export default function CustomerManagement() {
       apiRequest('/api/addresses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, skipValidation: true }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1227,7 +958,7 @@ export default function CustomerManagement() {
       apiRequest(`/api/addresses/${data.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, skipValidation: true }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1373,14 +1104,14 @@ export default function CustomerManagement() {
             await apiRequest(`/api/addresses/${existingAddress.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(addressData),
+              body: JSON.stringify({ ...addressData, skipValidation: true }),
             });
           } else {
             // Create new address
             await apiRequest('/api/addresses', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(addressData),
+              body: JSON.stringify({ ...addressData, skipValidation: true }),
             });
           }
 
@@ -1435,47 +1166,6 @@ export default function CustomerManagement() {
     setFormData(initialFormData);
     setFormErrors({});
     setSelectedCustomer(null);
-    setAddressValidationError(null);
-  };
-
-  const handleAddressUseSuggested = async (suggested: { street: string; city: string; state: string; zipCode: string }) => {
-    if (!pendingAddressCustomerId || !pendingAddressData) return;
-    try {
-      await apiRequest('/api/addresses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...pendingAddressData, ...suggested }),
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-      toast({ title: 'Address saved with correction' });
-    } catch (err: any) {
-      toast({ title: 'Failed to save address', variant: 'destructive' });
-    }
-    setAddressValidationError(null);
-    setPendingAddressCustomerId(null);
-    setPendingAddressData(null);
-    setIsCreateDialogOpen(false);
-    resetForm();
-  };
-
-  const handleAddressOverride = async (reason: string) => {
-    if (!pendingAddressCustomerId || !pendingAddressData) return;
-    try {
-      await apiRequest('/api/addresses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...pendingAddressData, allowOverride: true, overrideReason: reason }),
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/addresses/all'] });
-      toast({ title: 'Address saved with override' });
-    } catch (err: any) {
-      toast({ title: 'Failed to save address', variant: 'destructive' });
-    }
-    setAddressValidationError(null);
-    setPendingAddressCustomerId(null);
-    setPendingAddressData(null);
-    setIsCreateDialogOpen(false);
-    resetForm();
   };
 
   const handleBulkAction = (action: 'activate' | 'deactivate' | 'delete') => {
@@ -1748,7 +1438,7 @@ export default function CustomerManagement() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => (window.location.href = '/customer-satisfaction')}
+            onClick={() => setLocation('/customer-satisfaction')}
             className="flex items-center gap-2"
           >
             <BarChart3 className="h-4 w-4" />
@@ -1802,12 +1492,6 @@ export default function CustomerManagement() {
                 setFormData={setFormData}
                 formErrors={formErrors}
                 handleCustomerAddressChange={handleCustomerAddressChange}
-                customerFormSuggestions={customerFormSuggestions}
-                showCustomerFormSuggestions={showCustomerFormSuggestions}
-                isValidatingCustomerAddress={isValidatingCustomerAddress}
-                handleCustomerFormSuggestionSelect={
-                  handleCustomerFormSuggestionSelect
-                }
                 customerTypes={customerTypes}
               />
               <div className="flex justify-end gap-2 pt-6 border-t">
@@ -2401,37 +2085,8 @@ export default function CustomerManagement() {
                     onChange={(e) =>
                       handleCustomerAddressChange('street', e.target.value)
                     }
-                    placeholder="Start typing for address suggestions..."
+                    placeholder="123 Main Street"
                   />
-                  {isValidatingCustomerAddress && (
-                    <div className="absolute right-3 top-8">
-                      <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  )}
-
-                  {/* Address Suggestions Dropdown */}
-                  {showCustomerFormSuggestions &&
-                    customerFormSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {customerFormSuggestions.map((suggestion, index) => (
-                          <button
-                            key={index}
-                            className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b last:border-b-0"
-                            onClick={() =>
-                              handleCustomerFormSuggestionSelect(suggestion)
-                            }
-                          >
-                            <div className="font-medium">{suggestion.text}</div>
-                            {suggestion.streetLine &&
-                              suggestion.streetLine !== suggestion.text && (
-                                <div className="text-sm text-gray-600">
-                                  {suggestion.streetLine}
-                                </div>
-                              )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                 </div>
 
                 <div>
@@ -2733,52 +2388,8 @@ export default function CustomerManagement() {
                   onChange={(e) =>
                     handleAddressFieldChange('street', e.target.value)
                   }
-                  className="pr-10"
                   placeholder="123 Main St"
                 />
-                {isValidatingAddress && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
-                  </div>
-                )}
-
-                {/* Address Suggestions Dropdown */}
-                {showSuggestions && addressSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-                    <div className="p-2 text-sm font-medium text-gray-700 bg-gray-50 border-b">
-                      Address Suggestions
-                    </div>
-                    {addressSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors"
-                        onClick={() => handleSuggestionSelect(suggestion)}
-                      >
-                        <div className="font-medium text-gray-900">
-                          {suggestion.street ||
-                            suggestion.streetLine ||
-                            suggestion.street_line ||
-                            ''}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          {suggestion.city && suggestion.state
-                            ? `${suggestion.city}, ${suggestion.state}${suggestion.zipCode ? ' ' + suggestion.zipCode : ''}`
-                            : 'Address information'}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="p-2 text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowSuggestions(false)}
-                        className="text-gray-500 hover:text-gray-700"
-                      >
-                        Close suggestions
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -2968,14 +2579,8 @@ export default function CustomerManagement() {
                   onChange={(e) =>
                     handleAddressFieldChange('street', e.target.value)
                   }
-                  className="pr-10"
                   placeholder="123 Main St"
                 />
-                {isValidatingAddress && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
-                  </div>
-                )}
               </div>
             </div>
 
@@ -3383,14 +2988,6 @@ export default function CustomerManagement() {
         </DialogContent>
       </Dialog>
 
-      <AddressValidationModal
-        open={!!addressValidationError}
-        onOpenChange={(open) => { if (!open) { setAddressValidationError(null); setPendingAddressCustomerId(null); setPendingAddressData(null); } }}
-        validationError={addressValidationError}
-        onUseSuggested={handleAddressUseSuggested}
-        onOverride={handleAddressOverride}
-        onEdit={() => { setAddressValidationError(null); setPendingAddressCustomerId(null); setPendingAddressData(null); }}
-      />
     </div>
   );
 }

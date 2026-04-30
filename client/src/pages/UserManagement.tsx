@@ -27,6 +27,10 @@ import {
   UserCheck,
   UserX,
   Shield,
+  Monitor,
+  Smartphone,
+  Globe,
+  LogOut,
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -71,7 +75,9 @@ export default function UserManagement() {
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [sessionsUser, setSessionsUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<InsertUser>({
     username: '',
@@ -98,6 +104,23 @@ export default function UserManagement() {
   const { data: employees = [] } = useQuery<{ id: number; name: string; employeeCode: string }[]>({
     queryKey: ['/api/employees'],
   });
+
+  // Fetch roles from the role matrix
+  const {
+    data: permRoles = [],
+    isLoading: rolesLoading,
+    isError: rolesError,
+  } = useQuery<{ id: number; name: string; description: string; isSystem: boolean }[]>({
+    queryKey: ['/api/permissions/roles'],
+  });
+
+  const roleOptions = permRoles.length > 0
+    ? permRoles.map(r => ({ value: r.name, label: r.name }))
+    : [
+        { value: 'EMPLOYEE', label: 'EMPLOYEE' },
+        { value: 'OWNER', label: 'OWNER' },
+        { value: 'ADMIN', label: 'ADMIN' },
+      ];
 
   // Filter to show only active users (with safety check for array)
   const users = Array.isArray(allUsers)
@@ -453,6 +476,95 @@ export default function UserManagement() {
     );
   }
 
+  interface AdminSessionInfo {
+    id: number;
+    userId: number;
+    username: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+    createdAt: string;
+    expiresAt: string;
+    lastCredentialVerifiedAt: string | null;
+  }
+
+  interface AdminSessionsManagerProps {
+    userId: number;
+    userName: string;
+  }
+
+  function AdminSessionsManager({ userId, userName }: AdminSessionsManagerProps) {
+    const { data: sessions = [], isLoading, refetch } = useQuery<AdminSessionInfo[]>({
+      queryKey: ['/api/auth/admin/sessions', userId],
+      queryFn: () => apiRequest(`/api/auth/admin/sessions?userId=${userId}`),
+    });
+
+    const terminateMutation = useMutation({
+      mutationFn: (sessionId: number) =>
+        apiRequest(`/api/auth/admin/sessions/${sessionId}`, { method: 'DELETE' }),
+      onSuccess: () => {
+        toast({ title: 'Session Terminated', description: 'The user session has been forcibly ended.' });
+        refetch();
+        queryClient.invalidateQueries({ queryKey: ['/api/auth/admin/sessions', userId] });
+      },
+      onError: () => {
+        toast({ title: 'Error', description: 'Failed to terminate session.', variant: 'destructive' });
+      },
+    });
+
+    function getDeviceName(ua: string | null) {
+      if (!ua) return 'Unknown Device';
+      const l = ua.toLowerCase();
+      if (l.includes('mobile') || l.includes('android') || l.includes('iphone')) return 'Mobile Device';
+      if (l.includes('windows')) return 'Windows PC';
+      if (l.includes('mac')) return 'Mac';
+      return 'Desktop Browser';
+    }
+
+    if (isLoading) return <div className="text-center py-4">Loading sessions...</div>;
+
+    return (
+      <div className="py-4 space-y-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-sm text-amber-800">
+            Active sessions for: <strong>{userName}</strong>
+          </p>
+        </div>
+        {sessions.length === 0 ? (
+          <p className="text-sm text-gray-500">No active sessions for this user.</p>
+        ) : (
+          sessions.map((s: AdminSessionInfo) => {
+            const DeviceIcon = (s.userAgent?.toLowerCase().includes('mobile')) ? Smartphone : Monitor;
+            return (
+              <div key={s.id} className="flex items-start justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg gap-3">
+                <div className="flex items-start gap-2">
+                  <DeviceIcon className="h-4 w-4 mt-0.5 text-gray-500 shrink-0" />
+                  <div className="text-sm">
+                    <div className="font-medium">{getDeviceName(s.userAgent)}</div>
+                    <div className="text-xs text-gray-500 space-y-0.5">
+                      {s.ipAddress && <div>IP: {s.ipAddress}</div>}
+                      <div>Signed in: {new Date(s.createdAt).toLocaleString()}</div>
+                      <div>Expires: {new Date(s.expiresAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => terminateMutation.mutate(s.id)}
+                  disabled={terminateMutation.isPending}
+                  className="text-red-600 border-red-200 hover:bg-red-50 shrink-0"
+                >
+                  <LogOut className="h-3 w-3 mr-1" />
+                  Terminate
+                </Button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  }
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Never';
     return new Date(dateString).toLocaleString();
@@ -571,7 +683,7 @@ export default function UserManagement() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -592,6 +704,18 @@ export default function UserManagement() {
                   >
                     <Shield className="h-3 w-3" />
                     Permissions
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSessionsUser(user);
+                      setShowSessionsModal(true);
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <Monitor className="h-3 w-3" />
+                    Sessions
                   </Button>
                   <Button
                     variant="outline"
@@ -698,19 +822,27 @@ export default function UserManagement() {
 
               <div>
                 <Label htmlFor="role">Role</Label>
+                {rolesError && (
+                  <p className="text-xs text-destructive mb-1">
+                    Could not load custom roles — showing system roles only.
+                  </p>
+                )}
                 <Select
                   value={formData.role || 'EMPLOYEE'}
                   onValueChange={(value) =>
                     setFormData({ ...formData, role: value })
                   }
+                  disabled={rolesLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue placeholder={rolesLoading ? 'Loading roles…' : 'Select role'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                    <SelectItem value="OWNER">Owner</SelectItem>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    {roleOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -834,6 +966,24 @@ export default function UserManagement() {
             <UserCapabilitiesManager
               userId={selectedUser.id}
               userName={`${selectedUser.firstName} ${selectedUser.lastName}`}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sessions Management Dialog */}
+      <Dialog open={showSessionsModal} onOpenChange={setShowSessionsModal}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Active Sessions - {sessionsUser?.firstName} {sessionsUser?.lastName}
+            </DialogTitle>
+          </DialogHeader>
+
+          {sessionsUser && (
+            <AdminSessionsManager
+              userId={sessionsUser.id}
+              userName={`${sessionsUser.firstName} ${sessionsUser.lastName}`}
             />
           )}
         </DialogContent>

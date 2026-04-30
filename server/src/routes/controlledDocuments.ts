@@ -3,11 +3,14 @@ import multer from 'multer';
 import path from 'path';
 import { db } from '../../../server/db';
 import { pool } from '../../../server/db';
+import { requirePermission } from '../../../server/middleware/requirePermission';
 import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import fs from 'fs/promises';
 import { z } from 'zod';
 import Papa from 'papaparse';
+import { requireStepUp } from '../../../server/middleware/auth';
+import { writeAccessLog } from './vault';
 
 const router = Router();
 
@@ -20,9 +23,11 @@ async function getUserFromSession(req: Request): Promise<any | null> {
   }
 
   try {
-    // Query database for session
+    // Query database for session — enforce is_active so revoked/superseded sessions are rejected
     const result = await pool.query(
-      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      `SELECT user_id, username, expires_at
+       FROM user_sessions
+       WHERE session_token = $1 AND is_active = true AND expires_at > NOW()`,
       [sessionToken]
     );
 
@@ -32,9 +37,9 @@ async function getUserFromSession(req: Request): Promise<any | null> {
 
     const session = result[0];
 
-    // Check if session is expired
+    // Belt-and-suspenders expiry check (the SQL above already filters these out)
     if (new Date(session.expires_at) < new Date()) {
-      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
+      await pool.query(`UPDATE user_sessions SET is_active = false WHERE session_token = $1`, [sessionToken]);
       return null;
     }
 
@@ -362,16 +367,12 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
   }
 });
 
-// Approve document (Laurie Tandy only - session-based auth)
-router.post('/:id/approve', async (req: Request, res: Response) => {
+// Approve document — requires documents.approve capability
+router.post('/:id/approve', requirePermission('documents.approve'), async (req: Request, res: Response) => {
   try {
-    // Get username from session (server-side auth)
     const user = (req as any).user;
     if (!user) {
       return res.status(401).json({ error: 'Authentication required' });
-    }
-    if (user.username !== 'lauriet') {
-      return res.status(403).json({ error: 'Only Laurie Tandy can approve documents' });
     }
 
     const { effectiveDate } = req.body;
@@ -427,8 +428,16 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
   }
 });
 
-// Download document file (authenticated users only)
-router.get('/:id/download', requireAuth, async (req: Request, res: Response) => {
+// Download document file — requires authentication + step-up re-auth (credentials verified within 30 min)
+// ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
+router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, res: Response) => {
+  const actor = (req as any).user as { id: number; username: string; role: string };
+  const ipAddress = (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+
   try {
     const [doc] = await db
       .select()
@@ -437,6 +446,27 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
 
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // ACL enforcement for restricted/classified documents
+    const classification = (doc as any).classification ?? 'internal';
+    if (classification === 'restricted' || classification === 'classified') {
+      const isAdminOrOwner = actor.role === 'ADMIN' || actor.role === 'OWNER';
+      if (!isAdminOrOwner) {
+        // Check for explicit vault grant
+        const grantCheck = await pool.query<{ id: number }>(
+          `SELECT id FROM vault_access_grants WHERE document_id = $1 AND (
+             (grantee_type = 'user' AND grantee_name = $2)
+             OR (grantee_type = 'role' AND grantee_name = $3)
+           ) LIMIT 1`,
+          [doc.id, actor.username, actor.role]
+        );
+        if (!grantCheck || grantCheck.length === 0) {
+          // Write denied log entry — never silently discard
+          await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress });
+          return res.status(403).json({ error: 'Access denied: insufficient clearance for this document' });
+        }
+      }
     }
 
     if (!doc.filePath) {
@@ -453,6 +483,9 @@ router.get('/:id/download', requireAuth, async (req: Request, res: Response) => 
     } catch {
       return res.status(404).json({ error: 'File not found on server' });
     }
+
+    // Write download access log entry before sending the file
+    await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'download', ipAddress });
 
     // Send file with appropriate content type
     res.download(filePath, path.basename(filePath));

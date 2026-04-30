@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, Plus, Trash2, User, ChevronDown, ChevronRight, Lock, Unlock } from 'lucide-react';
+import { Shield, Plus, Trash2, User, ChevronDown, ChevronRight, Lock, Unlock, Globe, Building2, FolderOpen } from 'lucide-react';
 
 interface Capability {
   id: number;
@@ -41,12 +41,25 @@ interface UserOverride {
   effect: 'allow' | 'deny';
 }
 
+interface ScopedGrant {
+  id: number;
+  userId: number;
+  username: string;
+  firstName: string;
+  lastName: string;
+  capabilityKey: string;
+  scopeType: 'GLOBAL' | 'DEPARTMENT' | 'PROJECT';
+  department: string | null;
+  projectId: string | null;
+}
+
 interface UserOption {
   id: number;
   username: string;
   firstName: string;
   lastName: string;
   role: string;
+  employeeDisplayName?: string;
 }
 
 function groupByCategory(caps: Capability[]) {
@@ -58,6 +71,18 @@ function groupByCategory(caps: Capability[]) {
   return groups;
 }
 
+const SCOPE_TYPE_ICONS = {
+  GLOBAL: <Globe className="h-3 w-3 text-blue-500" />,
+  DEPARTMENT: <Building2 className="h-3 w-3 text-orange-500" />,
+  PROJECT: <FolderOpen className="h-3 w-3 text-purple-500" />,
+};
+
+const SCOPE_TYPE_LABELS = {
+  GLOBAL: 'Global',
+  DEPARTMENT: 'Department',
+  PROJECT: 'Project',
+};
+
 export default function RolesPermissionsPage() {
   const { toast } = useToast();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -68,15 +93,23 @@ export default function RolesPermissionsPage() {
   const [overrideCapKey, setOverrideCapKey] = useState('');
   const [overrideEffect, setOverrideEffect] = useState<'allow' | 'deny'>('allow');
 
-  const { data: roles = [], isLoading: rolesLoading } = useQuery<Role[]>({ queryKey: ['/api/permissions/roles'] });
+  // Scoped grant form state
+  const [scopeUserId, setScopeUserId] = useState('');
+  const [scopeCapKey, setScopeCapKey] = useState('');
+  const [scopeType, setScopeType] = useState<'GLOBAL' | 'DEPARTMENT' | 'PROJECT'>('GLOBAL');
+  const [scopeDepartment, setScopeDepartment] = useState('');
+  const [scopeProjectId, setScopeProjectId] = useState('');
+
+  const { data: roles = [], isLoading: rolesLoading, isError: rolesError } = useQuery<Role[]>({ queryKey: ['/api/permissions/roles'] });
   const { data: caps = [] } = useQuery<Capability[]>({ queryKey: ['/api/permissions/capabilities'] });
   const { data: overrides = [] } = useQuery<UserOverride[]>({ queryKey: ['/api/permissions/all-user-overrides'] });
+  const { data: scopedGrants = [] } = useQuery<ScopedGrant[]>({ queryKey: ['/api/permissions/all-scoped-grants'] });
   const { data: users = [] } = useQuery<UserOption[]>({ queryKey: ['/api/users'] });
 
   const capGroups = groupByCategory(caps);
 
   const addRole = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/permissions/roles', { name: newRoleName, description: newRoleDesc }),
+    mutationFn: () => apiRequest('/api/permissions/roles', { method: 'POST', body: { name: newRoleName, description: newRoleDesc } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/permissions/roles'] });
       setNewRoleName('');
@@ -87,7 +120,7 @@ export default function RolesPermissionsPage() {
   });
 
   const deleteRole = useMutation({
-    mutationFn: (roleId: number) => apiRequest('DELETE', `/api/permissions/roles/${roleId}`),
+    mutationFn: (roleId: number) => apiRequest(`/api/permissions/roles/${roleId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/permissions/roles'] });
       if (selectedRole) setSelectedRole(null);
@@ -99,9 +132,9 @@ export default function RolesPermissionsPage() {
   const toggleCapability = useMutation({
     mutationFn: async ({ roleId, capId, hasIt }: { roleId: number; capId: number; hasIt: boolean }) => {
       if (hasIt) {
-        return apiRequest('DELETE', `/api/permissions/roles/${roleId}/capabilities/${capId}`);
+        return apiRequest(`/api/permissions/roles/${roleId}/capabilities/${capId}`, { method: 'DELETE' });
       } else {
-        return apiRequest('POST', `/api/permissions/roles/${roleId}/capabilities`, { capabilityId: capId });
+        return apiRequest(`/api/permissions/roles/${roleId}/capabilities`, { method: 'POST', body: { capabilityId: capId } });
       }
     },
     onSuccess: () => {
@@ -110,10 +143,13 @@ export default function RolesPermissionsPage() {
   });
 
   const addOverride = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/permissions/user-overrides', {
-      userId: parseInt(overrideUserId),
-      capabilityKey: overrideCapKey,
-      effect: overrideEffect,
+    mutationFn: () => apiRequest('/api/permissions/user-overrides', {
+      method: 'POST',
+      body: {
+        userId: parseInt(overrideUserId),
+        capabilityKey: overrideCapKey,
+        effect: overrideEffect,
+      },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-user-overrides'] });
@@ -125,8 +161,39 @@ export default function RolesPermissionsPage() {
   });
 
   const removeOverride = useMutation({
-    mutationFn: (id: number) => apiRequest('DELETE', `/api/permissions/user-overrides/${id}`),
+    mutationFn: (id: number) => apiRequest(`/api/permissions/user-overrides/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-user-overrides'] }),
+  });
+
+  const addScopedGrant = useMutation({
+    mutationFn: () => apiRequest('/api/permissions/scoped-grants', {
+      method: 'POST',
+      body: {
+        userId: parseInt(scopeUserId),
+        capabilityKey: scopeCapKey,
+        scopeType,
+        department: scopeType === 'DEPARTMENT' ? scopeDepartment : null,
+        projectId: scopeType === 'PROJECT' ? scopeProjectId : null,
+      },
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-scoped-grants'] });
+      setScopeUserId('');
+      setScopeCapKey('');
+      setScopeType('GLOBAL');
+      setScopeDepartment('');
+      setScopeProjectId('');
+      toast({ title: 'Scoped grant added' });
+    },
+    onError: (err: any) => toast({
+      title: err?.message?.includes('already exists') ? 'Grant already exists' : 'Failed to add scoped grant',
+      variant: 'destructive',
+    }),
+  });
+
+  const removeScopedGrant = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/permissions/scoped-grants/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-scoped-grants'] }),
   });
 
   const toggleCategory = (cat: string) => {
@@ -137,8 +204,14 @@ export default function RolesPermissionsPage() {
     });
   };
 
-  // Refresh selectedRole from current roles data when roles refresh
   const liveSelectedRole = selectedRole ? roles.find(r => r.id === selectedRole.id) ?? selectedRole : null;
+
+  const isScopedGrantFormValid = () => {
+    if (!scopeUserId || !scopeCapKey) return false;
+    if (scopeType === 'DEPARTMENT' && !scopeDepartment.trim()) return false;
+    if (scopeType === 'PROJECT' && !scopeProjectId.trim()) return false;
+    return true;
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -156,6 +229,7 @@ export default function RolesPermissionsPage() {
         <TabsList>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="overrides">User Overrides</TabsTrigger>
+          <TabsTrigger value="scoped">Scoped Grants</TabsTrigger>
         </TabsList>
 
         {/* ── Roles tab ─────────────────────────────────────────── */}
@@ -169,6 +243,9 @@ export default function RolesPermissionsPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {rolesLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+                {rolesError && (
+                  <p className="text-sm text-destructive">Failed to load roles. Please refresh the page.</p>
+                )}
                 {roles.map(role => (
                   <button
                     key={role.id}
@@ -329,9 +406,11 @@ export default function RolesPermissionsPage() {
                       <SelectValue placeholder="Select user…" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(users as any[]).map((u: any) => (
+                      {users.map(u => (
                         <SelectItem key={u.id} value={String(u.id)}>
-                          {u.username}{u.firstName ? ` — ${u.firstName} ${u.lastName}` : ''}
+                          {u.employeeDisplayName
+                            ? `${u.employeeDisplayName} (${u.username})`
+                            : u.username + (u.firstName ? ` — ${u.firstName} ${u.lastName}` : '')}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -438,6 +517,179 @@ export default function RolesPermissionsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => removeOverride.mutate(ov.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ── Scoped Grants tab ─────────────────────────────────── */}
+        <TabsContent value="scoped" className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Add scoped grant form */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Add Scoped Grant</CardTitle>
+                <CardDescription>
+                  Assign a capability to a user scoped to a specific department or project, or grant it globally.
+                  ADMIN and OWNER roles bypass all scope checks.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label>User</Label>
+                  <Select value={scopeUserId} onValueChange={setScopeUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select user…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.map(u => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.employeeDisplayName
+                            ? `${u.employeeDisplayName} (${u.username})`
+                            : u.username + (u.firstName ? ` — ${u.firstName} ${u.lastName}` : '')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Capability</Label>
+                  <Select value={scopeCapKey} onValueChange={setScopeCapKey}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select capability…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(capGroups).sort().map(([cat, categoryCaps]) => (
+                        <div key={cat}>
+                          <div className="px-2 py-1 text-xs text-muted-foreground uppercase font-semibold">
+                            {cat}
+                          </div>
+                          {categoryCaps.map(c => (
+                            <SelectItem key={c.id} value={c.key}>
+                              {c.key}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Scope Type</Label>
+                  <Select value={scopeType} onValueChange={v => setScopeType(v as 'GLOBAL' | 'DEPARTMENT' | 'PROJECT')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="GLOBAL">
+                        <span className="flex items-center gap-2">
+                          <Globe className="h-3 w-3 text-blue-500" /> Global — applies everywhere
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="DEPARTMENT">
+                        <span className="flex items-center gap-2">
+                          <Building2 className="h-3 w-3 text-orange-500" /> Department — limited to one department
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="PROJECT">
+                        <span className="flex items-center gap-2">
+                          <FolderOpen className="h-3 w-3 text-purple-500" /> Project — limited to one project
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {scopeType === 'DEPARTMENT' && (
+                  <div className="space-y-1.5">
+                    <Label>Department Name</Label>
+                    <Input
+                      placeholder="e.g. Layup, CNC, Final QC"
+                      value={scopeDepartment}
+                      onChange={e => setScopeDepartment(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {scopeType === 'PROJECT' && (
+                  <div className="space-y-1.5">
+                    <Label>Project ID (UUID)</Label>
+                    <Input
+                      placeholder="e.g. 550e8400-e29b-41d4-a716-…"
+                      value={scopeProjectId}
+                      onChange={e => setScopeProjectId(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <Button
+                  className="w-full"
+                  disabled={!isScopedGrantFormValid() || addScopedGrant.isPending}
+                  onClick={() => addScopedGrant.mutate()}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add Scoped Grant
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Existing scoped grants */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Active Scoped Grants</CardTitle>
+                <CardDescription>
+                  These grants restrict capability authority to the specified scope. Requests outside the scope are denied.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(scopedGrants as ScopedGrant[]).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No scoped grants configured yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {(scopedGrants as ScopedGrant[]).map(grant => (
+                      <div
+                        key={grant.id}
+                        className="flex items-center justify-between px-3 py-2 border rounded-md"
+                      >
+                        <div className="flex items-center gap-3">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">
+                              {grant.username}
+                              {grant.firstName ? ` (${grant.firstName} ${grant.lastName})` : ''}
+                            </p>
+                            <p className="text-xs font-mono text-muted-foreground">{grant.capabilityKey}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs flex items-center gap-1">
+                            {SCOPE_TYPE_ICONS[grant.scopeType]}
+                            {SCOPE_TYPE_LABELS[grant.scopeType]}
+                            {grant.scopeType === 'DEPARTMENT' && grant.department && (
+                              <span className="ml-1 text-muted-foreground">— {grant.department}</span>
+                            )}
+                            {grant.scopeType === 'PROJECT' && grant.projectId && (
+                              <span className="ml-1 text-muted-foreground font-mono">
+                                — {grant.projectId.slice(0, 8)}…
+                              </span>
+                            )}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeScopedGrant.mutate(grant.id)}
+                            disabled={removeScopedGrant.isPending}
                           >
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>

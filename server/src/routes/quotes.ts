@@ -1,7 +1,47 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
-import { quotes, quoteLineItems, projectSteps, insertQuoteSchema, insertQuoteLineItemSchema, type QuoteExecutionFeedback } from '../../schema';
-import { eq, desc } from 'drizzle-orm';
+import { quotes, quoteLineItems, projectSteps, projects, productionWorkOrders, projectStepTypeEnum, insertQuoteSchema, insertQuoteLineItemSchema, customers, type QuoteExecutionFeedback } from '../../schema';
+import { eq, desc, max } from 'drizzle-orm';
+import { resolveCustomersIntegerId } from '../lib/customerResolver';
+
+// Resolve the best display name for a quote's customer.
+// Priority:
+//   1. Master customers table via integer bridge FK.
+//   2. Master customers table via text customerId (numeric string → PK, then key/name).
+//   3. Stored customerName snapshot as last resort.
+async function resolveQuoteCustomerName(
+  customersIntegerId: number | null | undefined,
+  fallbackName: string,
+  textCustomerId?: string | null
+): Promise<string> {
+  // Pass 1: integer bridge FK.
+  if (customersIntegerId) {
+    const [customer] = await db
+      .select({ name: customers.name, company: customers.company })
+      .from(customers)
+      .where(eq(customers.id, customersIntegerId))
+      .limit(1);
+    if (customer) {
+      return customer.company || customer.name || fallbackName;
+    }
+  }
+  // Pass 2: text customerId fallback — use shared resolver to find the integer PK,
+  // then fetch the display name from the master customers table.
+  if (textCustomerId) {
+    const resolvedId = await resolveCustomersIntegerId(textCustomerId);
+    if (resolvedId != null) {
+      const [customer] = await db
+        .select({ name: customers.name, company: customers.company })
+        .from(customers)
+        .where(eq(customers.id, resolvedId))
+        .limit(1);
+      if (customer) {
+        return customer.company || customer.name || fallbackName;
+      }
+    }
+  }
+  return fallbackName;
+}
 import { nanoid } from 'nanoid';
 import { randomUUID } from 'crypto';
 import { quoteAttachmentUpload, quoteAttachmentsDir } from '../../utils/fileUpload';
@@ -9,7 +49,16 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { ensureProjectHasWAD } from '../lib/wadHelper';
+
+type ProjectStepTypeValue = typeof projectStepTypeEnum.enumValues[number];
+
+const PROJECT_STEP_TYPES: Array<{ type: ProjectStepTypeValue; order: number }> = [
+  { type: 'rfq_risk_assessment', order: 1 },
+  { type: 'quote', order: 2 },
+  { type: 'purchase_review_checklist', order: 3 },
+  { type: 'preproduction_checklist', order: 4 },
+  { type: 'p2_order', order: 5 },
+];
 
 const router = Router();
 
@@ -49,7 +98,91 @@ router.get('/api/quotes', async (req: Request, res: Response) => {
       .from(quotes)
       .orderBy(desc(quotes.createdAt));
 
-    res.json(allQuotes);
+    // Enrich each quote with a resolved customer name from the master customers
+    // table. Two-pass strategy:
+    //   Pass 1 (bridge FK path): batch lookup by integer FK for rows that have one.
+    //   Pass 2 (text ID path): batch lookup by customer_key/name for rows without a
+    //     bridge FK, so the master table is always consulted even on legacy records.
+    const { inArray } = await import('drizzle-orm');
+
+    // Pass 1: integer FK batch lookup.
+    const integerIds = [...new Set(allQuotes.map((q) => q.customersIntegerId).filter((id): id is number => id != null))];
+    const customerMap = new Map<number, string>();
+    if (integerIds.length > 0) {
+      const rows = await db
+        .select({ id: customers.id, name: customers.name, company: customers.company })
+        .from(customers)
+        .where(inArray(customers.id, integerIds));
+      for (const row of rows) {
+        customerMap.set(row.id, row.company || row.name);
+      }
+    }
+
+    // Pass 2: text ID fallback batch lookup for rows without a bridge FK.
+    const textIdsWithoutBridge = [...new Set(
+      allQuotes
+        .filter((q) => !q.customersIntegerId && q.customerId)
+        .map((q) => q.customerId as string)
+    )];
+    // textIdToName maps text customerId → display name from master customers table.
+    const textIdToName = new Map<string, string>();
+    if (textIdsWithoutBridge.length > 0) {
+      // Numeric string IDs: look up by integer PK.
+      const numericIds = textIdsWithoutBridge
+        .filter((id) => /^\d+$/.test(id))
+        .map((id) => parseInt(id, 10));
+      if (numericIds.length > 0) {
+        const rows = await db
+          .select({ id: customers.id, name: customers.name, company: customers.company })
+          .from(customers)
+          .where(inArray(customers.id, numericIds));
+        for (const row of rows) {
+          textIdToName.set(String(row.id), row.company || row.name);
+        }
+      }
+      // Non-numeric IDs: match by customer_key or name (case-insensitive).
+      const nonNumericIds = textIdsWithoutBridge.filter((id) => !/^\d+$/.test(id));
+      if (nonNumericIds.length > 0) {
+        const allCustomers = await db
+          .select({ id: customers.id, name: customers.name, company: customers.company, customerKey: customers.customerKey })
+          .from(customers);
+        for (const cust of allCustomers) {
+          const displayName = cust.company || cust.name;
+          for (const textId of nonNumericIds) {
+            const lower = textId.toLowerCase();
+            if (
+              (cust.customerKey && cust.customerKey.toLowerCase() === lower) ||
+              cust.name.toLowerCase() === lower
+            ) {
+              textIdToName.set(textId, displayName);
+            }
+          }
+        }
+      }
+    }
+
+    const enriched = allQuotes.map((q) => {
+      let resolvedCustomerName: string;
+      if (q.customersIntegerId && customerMap.has(q.customersIntegerId)) {
+        // Bridge FK resolved — use authoritative master-table name.
+        resolvedCustomerName = customerMap.get(q.customersIntegerId)!;
+      } else if (q.customerId && textIdToName.has(q.customerId)) {
+        // Text ID resolved via master-table fallback lookup.
+        resolvedCustomerName = textIdToName.get(q.customerId)!;
+      } else {
+        // Last resort: stored snapshot.
+        resolvedCustomerName = q.customerName ?? '';
+      }
+      return {
+        ...q,
+        // Overwrite the stored snapshot with the authoritative resolved name so
+        // existing consumers that read customerName get the correct display value.
+        customerName: resolvedCustomerName,
+        resolvedCustomerName,
+      };
+    });
+
+    res.json(enriched);
   } catch (error) {
     console.error('Get quotes error:', error);
     res.status(500).json({ error: 'Failed to fetch quotes' });
@@ -76,7 +209,16 @@ router.get('/api/quotes/:id', async (req: Request, res: Response) => {
       .where(eq(quoteLineItems.quoteId, quoteId))
       .orderBy(quoteLineItems.lineNumber);
 
-    res.json({ ...quote, lineItems });
+    // Resolve the authoritative customer name: bridge FK first, then text ID fallback.
+    const resolvedCustomerName = await resolveQuoteCustomerName(
+      quote.customersIntegerId,
+      quote.customerName,
+      quote.customerId
+    );
+
+    // Overwrite customerName so existing consumers get the authoritative name
+    // without needing to switch to reading resolvedCustomerName.
+    res.json({ ...quote, customerName: resolvedCustomerName, lineItems, resolvedCustomerName });
   } catch (error) {
     console.error('Get quote error:', error);
     res.status(500).json({ error: 'Failed to fetch quote' });
@@ -137,6 +279,10 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + parseInt(validityDays || '30'));
 
+    // Resolve the integer FK to the master customers table from the text customerId.
+    // This ensures the bridge column is populated on every save, not just on RFQ conversion.
+    const resolvedCustomersIntegerId = await resolveCustomersIntegerId(customerId);
+
     let quoteId = id;
     let quoteNumber = rfqNumber;
 
@@ -158,23 +304,36 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
           validUntil,
           quotedBy: fromName,
           notes,
+          customersIntegerId: resolvedCustomersIntegerId,
         })
         .returning();
 
       quoteId = newQuote[0].id;
     } else {
-      // Update existing quote
+      // Update existing quote.
+      // customersIntegerId update policy:
+      //   - customerId provided (non-empty): always sync bridge FK to the resolved
+      //     value (null if unresolvable) so we never retain a stale link after a
+      //     customer change.
+      //   - customerId absent/empty: preserve the existing bridge FK because the
+      //     form did not touch the customer field (e.g. autosave updating notes).
+      const updateSet: Record<string, unknown> = {
+        customerName: customerCompany || customerName || '',
+        description: `From: ${fromName} (${fromEmail})`,
+        totalAmount,
+        validUntil,
+        quotedBy: fromName,
+        notes,
+        updatedAt: new Date(),
+      };
+      if (customerId) {
+        updateSet.customerId = customerId;
+        updateSet.customersIntegerId = resolvedCustomersIntegerId; // may be null (clears stale link)
+      }
+
       await db
         .update(quotes)
-        .set({
-          customerName: customerCompany || customerName || '',
-          description: `From: ${fromName} (${fromEmail})`,
-          totalAmount,
-          validUntil,
-          quotedBy: fromName,
-          notes,
-          updatedAt: new Date(),
-        })
+        .set(updateSet)
         .where(eq(quotes.id, quoteId));
 
       // Delete existing line items
@@ -194,6 +353,8 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
         totalPrice: item.totalPrice || 0,
         inventoryItemId: item.inventoryItemId || null,
         agPartNumber: item.agPartNumber || null,
+        laborHours: item.laborHours != null ? parseFloat(String(item.laborHours)) : null,
+        department: item.department || null,
       }));
 
       await db.insert(quoteLineItems).values(lineItemsToInsert);
@@ -282,56 +443,149 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Quote not found' });
     }
 
-    const [updated] = await db
-      .update(quotes)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(quotes.id, quoteId))
-      .returning();
+    // For non-ACCEPTED status changes, just update and return
+    if (status !== 'ACCEPTED' || quote.status === 'ACCEPTED') {
+      const [updated] = await db
+        .update(quotes)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(quotes.id, quoteId))
+        .returning();
 
-    if (status === 'ACCEPTED' && quote.status !== 'ACCEPTED') {
-      try {
-        // Check if a project already exists that is linked to this quote via
-        // its project step (stepType = 'quote', linkedQuoteId = quoteId).
-        const existingSteps = await db
+      // Recovery path for legacy ACCEPTED quotes missing projectId:
+      // scan project steps for a linked quote step to backfill the projectId.
+      let resolvedProjectId = updated.projectId ?? null;
+      if (updated.status === 'ACCEPTED' && !resolvedProjectId) {
+        const [linkedStep] = await db
           .select({ projectId: projectSteps.projectId })
           .from(projectSteps)
           .where(eq(projectSteps.linkedQuoteId, quoteId))
           .limit(1);
+        if (linkedStep) {
+          resolvedProjectId = linkedStep.projectId;
+          // Backfill the projectId on the quote for future lookups
+          await db
+            .update(quotes)
+            .set({ projectId: resolvedProjectId, updatedAt: new Date() })
+            .where(eq(quotes.id, quoteId));
+          console.log(`[Quote→Project] Backfilled projectId ${resolvedProjectId} onto legacy accepted quote ${updated.quoteNumber}`);
+        }
+      }
 
-        let projectId: string;
+      return res.json({ ...updated, projectId: resolvedProjectId });
+    }
 
-        if (existingSteps.length > 0) {
-          projectId = existingSteps[0].projectId;
-          console.log(`[WAD] Quote ${quote.quoteNumber} already linked to project ${projectId}, ensuring WAD exists`);
-        } else {
-          const nextCode = await storage.getNextProjectCode();
-          const project = await storage.createProject({
-            projectCode: nextCode,
-            projectName: `${quote.customerName} — ${quote.quoteNumber}`,
-            customerId: quote.customerId,
-            description: quote.description ?? null,
-            status: 'active',
-          });
-          projectId = project.id;
-          console.log(`[WAD] Auto-created project ${project.projectCode} from accepted quote ${quote.quoteNumber}`);
+    // ── ACCEPTANCE PATH: wrap everything in a transaction ──────────────────
+    let resultProjectId: string;
+
+    try {
+      resultProjectId = await db.transaction(async (tx) => {
+        // 1. Lock the quote row so concurrent acceptance requests serialize here,
+        //    then re-read projectId from the locked row for an accurate duplicate check.
+        const [lockedQuote] = await tx
+          .select()
+          .from(quotes)
+          .where(eq(quotes.id, quoteId))
+          .for('update');
+
+        // 2. Update the quote status (inside tx so it rolls back on any failure below)
+        await tx
+          .update(quotes)
+          .set({ status: 'ACCEPTED', updatedAt: new Date() })
+          .where(eq(quotes.id, quoteId));
+
+        // 3. Duplicate guard — use the locked row's projectId so concurrent requests
+        //    cannot both see null and both create projects at the same time.
+        if (lockedQuote.projectId) {
+          console.log(`[Quote→Project] Quote ${lockedQuote.quoteNumber} already linked to project ${lockedQuote.projectId}, skipping creation`);
+          // Idempotent WAD check using tx
+          const existingWads = await tx
+            .select({ id: productionWorkOrders.id })
+            .from(productionWorkOrders)
+            .where(eq(productionWorkOrders.projectId, lockedQuote.projectId))
+            .limit(1);
+          if (existingWads.length === 0) {
+            await tx.insert(productionWorkOrders).values({
+              workOrderNumber: `WAD-${Date.now()}`,
+              projectId: lockedQuote.projectId,
+              partNumber: 'TBD',
+              quantity: 1,
+              status: 'PLANNED',
+              description: `Auto-created WAD for ${lockedQuote.customerName} — ${lockedQuote.quoteNumber}`,
+            });
+          }
+          return lockedQuote.projectId;
         }
 
-        const lineItems = await db
+        // 3. Derive the next project code (using tx)
+        const [codeResult] = await tx
+          .select({ maxCode: max(projects.projectCode) })
+          .from(projects);
+        const currentMax = codeResult?.maxCode;
+        let nextCode = 'PRJ-001';
+        if (currentMax) {
+          const match = currentMax.match(/PRJ-(\d+)/);
+          if (match) {
+            nextCode = `PRJ-${(parseInt(match[1], 10) + 1).toString().padStart(3, '0')}`;
+          }
+        }
+
+        // 4. Auto-create the project (using tx)
+        const projectName = `${lockedQuote.customerName} — ${lockedQuote.quoteNumber}`;
+        const [project] = await tx
+          .insert(projects)
+          .values({
+            projectCode: nextCode,
+            projectName,
+            customerId: lockedQuote.customerId,
+            description: lockedQuote.description ?? null,
+            status: 'active',
+            // Carry the bridge FK from the quote so the project retains a resolvable
+            // integer FK to the master customers table even though customerId is text.
+            customersIntegerId: lockedQuote.customersIntegerId ?? null,
+          })
+          .returning();
+        const projectId = project.id;
+        console.log(`[Quote→Project] Auto-created project ${project.projectCode} from accepted quote ${quote.quoteNumber}`);
+
+        // 5. Create all standard P2 workflow steps (using tx)
+        for (const stepDef of PROJECT_STEP_TYPES) {
+          await tx.insert(projectSteps).values({
+            projectId,
+            stepType: stepDef.type,
+            stepOrder: stepDef.order,
+            status: stepDef.order === 1 ? 'in_progress' : 'pending',
+            startedAt: stepDef.order === 1 ? new Date() : null,
+            linkedQuoteId: stepDef.type === 'quote' ? quoteId : null,
+          });
+        }
+
+        // 6. Store projectId on the quote so future duplicate checks work (using tx)
+        await tx
+          .update(quotes)
+          .set({ projectId, updatedAt: new Date() })
+          .where(eq(quotes.id, quoteId));
+
+        // 7. Provision the WAD (using tx)
+        const lineItems = await tx
           .select()
           .from(quoteLineItems)
           .where(eq(quoteLineItems.quoteId, quoteId))
           .orderBy(quoteLineItems.lineNumber);
 
-        const itemWithPartNumber = lineItems.find(
-          (li) => li.agPartNumber && li.agPartNumber.trim() !== ''
-        );
+        // Collect all AG part numbers from line items so the WAD can be used
+        // to generate travelers for each part.  Each individual part number is
+        // capped at 40 chars so every line-item is preserved regardless of count.
+        const explicitPartNumbers = lineItems
+          .map((li) => li.agPartNumber?.trim().slice(0, 40))
+          .filter((pn): pn is string => Boolean(pn));
 
-        let firstPartNumber: string | null = itemWithPartNumber?.agPartNumber?.trim() ?? null;
-
-        if (!firstPartNumber && lineItems.length > 0) {
+        let wadPartNumber: string | null = null;
+        if (explicitPartNumbers.length > 0) {
+          wadPartNumber = explicitPartNumbers.join(', ');
+        } else if (lineItems.length > 0) {
           const firstDescription = lineItems[0].description?.trim() ?? '';
           if (firstDescription) {
-            firstPartNumber = firstDescription
+            wadPartNumber = firstDescription
               .replace(/[^a-zA-Z0-9\-_/. ]/g, '')
               .trim()
               .slice(0, 40)
@@ -339,16 +593,41 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
           }
         }
 
-        await ensureProjectHasWAD(projectId, {
-          projectName: `${quote.customerName} — ${quote.quoteNumber}`,
-          partNumber: firstPartNumber,
+        // Budget hours: sum laborHours across all line items.
+        const totalLaborHours = lineItems.reduce((sum, li) => sum + (li.laborHours ?? 0), 0);
+        const wadBudgetHours = totalLaborHours > 0 ? String(totalLaborHours) : null;
+
+        // Department budgets: aggregate laborHours per department.
+        const deptBudgets: Record<string, number> = {};
+        for (const li of lineItems) {
+          if (li.department && li.laborHours && li.laborHours > 0) {
+            deptBudgets[li.department] = (deptBudgets[li.department] ?? 0) + li.laborHours;
+          }
+        }
+
+        await tx.insert(productionWorkOrders).values({
+          workOrderNumber: `WAD-${Date.now()}`,
+          projectId,
+          partNumber: wadPartNumber || 'TBD',
+          quantity: 1,
+          status: 'PLANNED',
+          description: `Auto-created WAD for ${projectName}`,
+          ...(wadBudgetHours ? { totalBudgetHours: wadBudgetHours } : {}),
+          ...(Object.keys(deptBudgets).length > 0 ? { departmentBudgets: deptBudgets } : {}),
         });
-      } catch (err) {
-        console.error('[WAD] Failed to auto-create project/WAD on quote acceptance:', err);
-      }
+
+        return projectId;
+      });
+    } catch (err) {
+      console.error('[Quote→Project] Failed to accept quote — transaction rolled back:', err);
+      return res.status(500).json({
+        error: 'Failed to accept quote: could not create the linked project. The quote status was not changed.',
+      });
     }
 
-    res.json(updated);
+    // Return the updated quote with projectId for the frontend to use
+    const [updated] = await db.select().from(quotes).where(eq(quotes.id, quoteId));
+    return res.json({ ...updated, projectId: resultProjectId });
   } catch (error) {
     console.error('Update quote status error:', error);
     res.status(500).json({ error: 'Failed to update quote status' });

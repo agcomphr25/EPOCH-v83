@@ -21,6 +21,7 @@ import { QrCode, Printer, Save, Calendar } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import SmartLotInput from '@/components/SmartLotInput';
+import { getReceiveInvalidationKeys } from '@/lib/vendorPOInvalidation';
 
 interface P2ReceivingData {
   itemCode: string;
@@ -128,8 +129,9 @@ export default function P2ReceivingDialog({
       return scanResult;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/scans'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      for (const queryKey of getReceiveInvalidationKeys(item?.vendorPoId)) {
+        queryClient.invalidateQueries({ queryKey });
+      }
       toast.success('P2 item received and record saved');
       handleClose();
     },

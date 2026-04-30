@@ -16,7 +16,10 @@ import {
   Square,
   CheckCircle,
 } from 'lucide-react';
+import OrderActionButtons from '@/components/OrderActionButtons';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -28,6 +31,11 @@ export default function FinishQCQueuePage() {
   const [selectAll, setSelectAll] = useState(false);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
 
   // Get repair order information
   const { isRepairOrder, repairNotesMap } = useRepairOrders();
@@ -36,6 +44,7 @@ export default function FinishQCQueuePage() {
   const { data: finishQCOrders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders/department/Finish QC'],
   });
+
 
   // All orders (for department count summaries)
   const { data: allOrders = [] } = useQuery({
@@ -245,6 +254,8 @@ export default function FinishQCQueuePage() {
         </CardContent>
       </Card>
 
+      <ReturnsRepairsSection repairDepartment="Finish QC" />
+
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
@@ -372,6 +383,12 @@ export default function FinishQCQueuePage() {
                       repairNotes={repairNotesMap.get(order.orderId)}
                       className={`border-l-green-500 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                     />
+                    <div className="flex justify-end px-3 pb-2">
+                      <OrderActionButtons
+                        orderId={order.orderId}
+                        showReassignButton={isAdmin}
+                      />
+                    </div>
                     {/* Checkbox for progress selection */}
                     <div className="absolute top-2 right-2">
                       <Checkbox

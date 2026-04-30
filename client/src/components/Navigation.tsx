@@ -77,6 +77,11 @@ import {
   ShieldAlert,
   Tv,
   FileSearch,
+  LayoutDashboard,
+  Zap,
+  Fingerprint,
+  FlaskConical,
+  Tag,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -102,7 +107,7 @@ import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
-import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES } from '@/config/userPermissions';
+import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
   NavigationMenu,
@@ -186,6 +191,23 @@ export default function Navigation() {
     retry: false,
   });
 
+  // Fetch expiring/expired training certification count for nav badge
+  const { data: recertCountData } = useQuery<{ count: number; days: number }>({
+    queryKey: ['/api/employees/recertification-count'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const trainingAlertCount = recertCountData?.count ?? 0;
+
+  // Fetch compliance backfill queue count for nav badge
+  const { data: backfillRows } = useQuery<Array<{ id: number }>>({
+    queryKey: ['/api/vendor-pos/compliance-backfill'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const backfillCount = backfillRows?.length ?? 0;
+
   // Listen for storage events to refetch user data after login
   useEffect(() => {
     const handleStorageChange = () => {
@@ -225,7 +247,7 @@ export default function Navigation() {
       localStorage.removeItem('dev_username');
 
       // Redirect to login page
-      window.location.href = '/login';
+      setLocation('/login');
     }
   };
 
@@ -311,9 +333,9 @@ export default function Navigation() {
     },
     {
       path: '/time-clock-admin',
-      label: 'Timekeeping',
+      label: 'Timekeeper',
       icon: Clock,
-      description: 'Manage time clock entries and employee time tracking',
+      description: 'Open the standalone Timekeeper app',
     },
     {
       path: '/customers',
@@ -397,6 +419,12 @@ export default function Navigation() {
       description: 'Browse all 16 registered widget types with live previews and copy-ready configs',
     },
     {
+      path: '/pdf-forms',
+      label: 'PDF Forms',
+      icon: FormInput,
+      description: 'Upload any PDF, draw fillable text fields, and let operators fill and download completed forms',
+    },
+    {
       path: '/pdf-templates',
       label: 'PDF Templates',
       icon: FileText,
@@ -460,6 +488,12 @@ export default function Navigation() {
       label: 'Shipping Status Audit',
       icon: PackageCheck,
       description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
+    },
+    {
+      path: '/system-audits',
+      label: 'System Audit Library',
+      icon: FileSearch,
+      description: 'Browse all system audit reports as formatted documents',
     },
   ];
 
@@ -549,6 +583,12 @@ export default function Navigation() {
       label: 'Vendor Purchase Orders',
       icon: ShoppingCart,
       description: 'Create and manage purchase orders to vendors',
+    },
+    {
+      path: '/vendor-pos/compliance-backfill',
+      label: 'Compliance Backfill Queue',
+      icon: ShieldAlert,
+      description: 'Remediate issued POs with compliance gaps affecting the ERDI Procurement score',
     },
   ];
 
@@ -845,6 +885,12 @@ export default function Navigation() {
       icon: GraduationCap,
       description: 'Conduct training sessions using the 4-step method',
     },
+    {
+      path: '/skill-matrix',
+      label: 'Skill Matrix',
+      icon: GraduationCap,
+      description: 'View employee qualification status and manage recertifications',
+    },
   ];
 
   const employeesItems = [
@@ -874,9 +920,9 @@ export default function Navigation() {
     },
     {
       path: '/time-clock-admin',
-      label: 'Time Clock Admin',
+      label: 'Timekeeper',
       icon: Settings,
-      description: 'Manage time clock entries and punches',
+      description: 'Open the standalone Timekeeper app',
     },
     {
       path: '/badge-configuration',
@@ -904,6 +950,12 @@ export default function Navigation() {
       label: 'Finance Dashboard',
       icon: BarChart,
       description: 'Financial overview and KPIs',
+    },
+    {
+      path: '/finance/charge-codes',
+      label: 'Charge Codes',
+      icon: Tag,
+      description: 'View, create, and manage charge codes for labor cost allocation',
     },
     {
       path: '/finance/cost-centers',
@@ -1127,6 +1179,18 @@ export default function Navigation() {
       icon: Factory,
       description: 'Real-time production monitoring and operational awareness',
     },
+    {
+      path: '/production-control-center-live',
+      label: 'PCC Live',
+      icon: Zap,
+      description: 'High-contrast Lando Norris-styled live view of production metrics',
+    },
+    {
+      path: '/daily-throughput-board',
+      label: 'Daily Throughput Board',
+      icon: LayoutDashboard,
+      description: 'Real-time read-only board showing daily tube throughput across all 22 production slots',
+    },
   ];
 
   const purchaseOrdersItems = [
@@ -1213,6 +1277,12 @@ export default function Navigation() {
       label: 'Pipeline Board',
       icon: FolderKanban,
       description: 'Kanban view of project pipeline stages',
+    },
+    {
+      path: '/pm-control-center',
+      label: 'PM Control Center',
+      icon: LayoutDashboard,
+      description: 'Project health dashboard: production status, labor burn, and material budget in one view',
     },
   ];
 
@@ -1301,9 +1371,21 @@ export default function Navigation() {
       icon: Database,
       description: 'Browse all registered system metrics grouped by category',
     },
+    {
+      path: '/identity-matrix',
+      label: 'Identity Matrix',
+      icon: Fingerprint,
+      description: 'Audit identity field usage across features and view the employee/user roster',
+    },
   ];
 
   const productionSchedulingItems = [
+    {
+      path: '/command-center',
+      label: 'Command Center',
+      icon: LayoutGrid,
+      description: 'Shop floor decision surface — WADs grouped by priority: blocked, at risk, ready, in progress, and late',
+    },
     {
       path: '/cutting-control-center',
       label: 'Cutting Table Control Center',
@@ -1327,6 +1409,12 @@ export default function Navigation() {
       label: 'Production Forecast',
       icon: BarChart3,
       description: 'Estimated department progression and ship dates',
+    },
+    {
+      path: '/daily-throughput-board',
+      label: 'Daily Throughput Board',
+      icon: LayoutDashboard,
+      description: 'Real-time read-only board showing daily tube throughput across all 22 production slots',
     },
   ];
 
@@ -1943,6 +2031,11 @@ export default function Navigation() {
                 >
                   <GraduationCap className="h-4 w-4" />
                   Training
+                  {trainingAlertCount > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold min-w-[18px] h-[18px] px-1 leading-none">
+                      {trainingAlertCount > 99 ? '99+' : trainingAlertCount}
+                    </span>
+                  )}
                   {trainingExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
@@ -2025,6 +2118,11 @@ export default function Navigation() {
                           >
                             <Icon className="h-4 w-4" />
                             {item.label}
+                            {item.path === '/vendor-pos/compliance-backfill' && backfillCount > 0 && (
+                              <span className="ml-auto inline-flex items-center justify-center rounded-full bg-orange-500 text-white text-xs font-bold min-w-[18px] h-[18px] px-1 leading-none">
+                                {backfillCount > 99 ? '99+' : backfillCount}
+                              </span>
+                            )}
                           </button>
                           {legacyPath && (
                             <button
@@ -2493,6 +2591,66 @@ export default function Navigation() {
               <Settings className="h-4 w-4" />
               CNC Dashboard
             </Button>
+
+            {/* EDRI — DCAA Readiness Index (ADMIN/OWNER only) */}
+            {(userRole === 'ADMIN' || userRole === 'OWNER') && (
+              <Button
+                variant={location.startsWith('/admin/edri') ? 'default' : 'ghost'}
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  location.startsWith('/admin/edri') && 'bg-primary text-white'
+                )}
+                onClick={() => { closeAllDropdowns(); setLocation('/admin/edri'); }}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                DCAA Readiness
+              </Button>
+            )}
+
+            {/* CMMC 2.0 Level 2 Dashboard (ADMIN/OWNER only) */}
+            {(userRole === 'ADMIN' || userRole === 'OWNER') && (
+              <Button
+                variant={location.startsWith('/admin/cmmc') ? 'default' : 'ghost'}
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  location.startsWith('/admin/cmmc') && 'bg-primary text-white'
+                )}
+                onClick={() => { closeAllDropdowns(); setLocation('/admin/cmmc'); }}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                CMMC Readiness
+              </Button>
+            )}
+
+            {/* Business Continuity Dashboard (ADMIN/OWNER only) */}
+            {(userRole === 'ADMIN' || userRole === 'OWNER') && (
+              <Button
+                variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  location.startsWith('/admin/continuity') && 'bg-primary text-white'
+                )}
+                onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Business Continuity
+              </Button>
+            )}
+
+            {/* Proteus Labs — Prompt Library (glennj only) */}
+            {currentUser?.username === 'glennj' && (
+              <Button
+                variant={location.startsWith('/proteus-labs') ? 'default' : 'ghost'}
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  location.startsWith('/proteus-labs') && 'bg-primary text-white'
+                )}
+                onClick={() => { closeAllDropdowns(); setLocation('/proteus-labs'); }}
+              >
+                <FlaskConical className="h-4 w-4" />
+                Proteus Labs
+              </Button>
+            )}
 
             {/* Verified Modules Dropdown */}
             {filteredVerifiedModulesItems.length > 0 && (

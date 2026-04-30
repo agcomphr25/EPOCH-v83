@@ -253,14 +253,27 @@ export default function CuttingWeeklySchedule() {
     (mfgQueueData || []).forEach((item: any) => {
       try {
         const notes = item.notes ? JSON.parse(item.notes) : {};
+        const materialType = notes.materialType || item.materialType;
         const remaining = item.quantityRequested - (item.quantityCompleted || 0);
-        if (notes.materialType === 'carbon_fiber') cf += remaining;
-        else if (notes.materialType === 'fiberglass') fg += remaining;
-        else if (notes.materialType === 'mesa') mesa += remaining;
-      } catch {}
+        if (materialType === 'carbon_fiber') cf += remaining;
+        else if (materialType === 'fiberglass') fg += remaining;
+        else if (materialType === 'mesa') mesa += remaining;
+      } catch {
+        const materialType = item.materialType;
+        const remaining = item.quantityRequested - (item.quantityCompleted || 0);
+        if (materialType === 'carbon_fiber') cf += remaining;
+        else if (materialType === 'fiberglass') fg += remaining;
+        else if (materialType === 'mesa') mesa += remaining;
+      }
     });
     return { carbon_fiber: cf, fiberglass: fg, mesa };
   }, [mfgQueueData]);
+
+  const remainingDemand = useMemo(() => ({
+    carbon_fiber: Math.max(0, p1Demand.cf - scheduledCounts.carbon_fiber),
+    fiberglass: Math.max(0, p1Demand.fg - scheduledCounts.fiberglass),
+    mesa: Math.max(0, p1Demand.mesa - scheduledCounts.mesa),
+  }), [p1Demand, scheduledCounts]);
 
   const schedulePacketsMutation = useMutation({
     mutationFn: async (data: { packetType: string; quantity: number; materialType: string; description?: string }) => {
@@ -280,7 +293,7 @@ export default function CuttingWeeklySchedule() {
       });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table', 'ALL'] });
       setScheduleQuantities({});
       toast({ title: "Scheduled", description: `${variables.quantity} ${variables.packetType} packets added to cutting queue.` });
     },
@@ -296,7 +309,7 @@ export default function CuttingWeeklySchedule() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table', 'ALL'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-cutting-queue'] });
       toast({ title: "Unscheduled", description: "Packet removed from cutting queue." });
     },
@@ -333,7 +346,7 @@ export default function CuttingWeeklySchedule() {
       });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table', 'ALL'] });
       setCustomDemand({ poNumber: '', packetType: '', quantity: '', notes: '' });
       toast({
         title: "Packets Scheduled",
@@ -363,19 +376,25 @@ export default function CuttingWeeklySchedule() {
     });
   };
 
+  const p1MaterialKeys = ['carbon_fiber', 'fiberglass', 'mesa'] as const;
+  type P1MaterialKey = typeof p1MaterialKeys[number];
+
   const updateQuantity = (key: string, delta: number) => {
-    setScheduleQuantities(prev => ({
-      ...prev,
-      [key]: Math.max(0, (prev[key] || 0) + delta),
-    }));
+    setScheduleQuantities(prev => {
+      const next = Math.max(0, (prev[key] || 0) + delta);
+      const isP1 = (p1MaterialKeys as readonly string[]).includes(key);
+      const max = isP1 ? remainingDemand[key as P1MaterialKey] : Infinity;
+      return { ...prev, [key]: Math.min(next, max) };
+    });
   };
 
   const setQuantity = (key: string, value: string) => {
     const num = parseInt(value) || 0;
-    setScheduleQuantities(prev => ({
-      ...prev,
-      [key]: Math.max(0, num),
-    }));
+    setScheduleQuantities(prev => {
+      const isP1 = (p1MaterialKeys as readonly string[]).includes(key);
+      const max = isP1 ? remainingDemand[key as P1MaterialKey] : Infinity;
+      return { ...prev, [key]: Math.min(Math.max(0, num), max) };
+    });
   };
 
   const handleSchedule = (packetType: string, materialType: string, description?: string) => {
@@ -383,6 +402,18 @@ export default function CuttingWeeklySchedule() {
     if (qty <= 0) {
       toast({ title: "Invalid", description: "Enter a quantity greater than 0.", variant: "destructive" });
       return;
+    }
+    const isP1 = (p1MaterialKeys as readonly string[]).includes(materialType);
+    if (isP1) {
+      const maxAllowed = remainingDemand[materialType as P1MaterialKey];
+      if (qty > maxAllowed) {
+        toast({
+          title: "Quantity Exceeds Demand",
+          description: `Only ${maxAllowed} more ${packetType} are needed. Adjust the quantity and try again.`,
+          variant: "destructive",
+        });
+        return;
+      }
     }
     schedulePacketsMutation.mutate({ packetType, quantity: qty, materialType, description });
   };
@@ -436,7 +467,7 @@ export default function CuttingWeeklySchedule() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('carbon_fiber', -10)}>
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.carbon_fiber === 0} onClick={() => updateQuantity('carbon_fiber', -10)}>
                   <Minus className="h-3 w-3" />
                 </Button>
                 <Input
@@ -444,21 +475,26 @@ export default function CuttingWeeklySchedule() {
                   value={scheduleQuantities['carbon_fiber'] || 0}
                   onChange={(e) => setQuantity('carbon_fiber', e.target.value)}
                   className="text-center font-bold w-20 h-8 bg-white text-black"
+                  disabled={remainingDemand.carbon_fiber === 0}
                   data-testid="input-qty-cf"
                 />
-                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('carbon_fiber', 10)}>
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.carbon_fiber === 0} onClick={() => updateQuantity('carbon_fiber', 10)}>
                   <Plus className="h-3 w-3" />
                 </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => handleSchedule('CF Stock', 'carbon_fiber')}
-                  disabled={!scheduleQuantities['carbon_fiber'] || schedulePacketsMutation.isPending}
-                  className="bg-white text-black hover:bg-gray-200"
-                  data-testid="button-schedule-cf"
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  Schedule
-                </Button>
+                {remainingDemand.carbon_fiber === 0 ? (
+                  <Badge className="bg-green-500 text-white" data-testid="badge-demand-met-cf">Demand Met</Badge>
+                ) : (
+                  <Button 
+                    size="sm"
+                    onClick={() => handleSchedule('CF Stock', 'carbon_fiber')}
+                    disabled={!scheduleQuantities['carbon_fiber'] || schedulePacketsMutation.isPending}
+                    className="bg-white text-black hover:bg-gray-200"
+                    data-testid="button-schedule-cf"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Schedule
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -484,7 +520,7 @@ export default function CuttingWeeklySchedule() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('fiberglass', -10)}>
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.fiberglass === 0} onClick={() => updateQuantity('fiberglass', -10)}>
                   <Minus className="h-3 w-3" />
                 </Button>
                 <Input
@@ -492,21 +528,26 @@ export default function CuttingWeeklySchedule() {
                   value={scheduleQuantities['fiberglass'] || 0}
                   onChange={(e) => setQuantity('fiberglass', e.target.value)}
                   className="text-center font-bold w-20 h-8 bg-white text-black"
+                  disabled={remainingDemand.fiberglass === 0}
                   data-testid="input-qty-fg"
                 />
-                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('fiberglass', 10)}>
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.fiberglass === 0} onClick={() => updateQuantity('fiberglass', 10)}>
                   <Plus className="h-3 w-3" />
                 </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => handleSchedule('FG Stock', 'fiberglass')}
-                  disabled={!scheduleQuantities['fiberglass'] || schedulePacketsMutation.isPending}
-                  className="bg-white text-black hover:bg-gray-200"
-                  data-testid="button-schedule-fg"
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  Schedule
-                </Button>
+                {remainingDemand.fiberglass === 0 ? (
+                  <Badge className="bg-green-500 text-white" data-testid="badge-demand-met-fg">Demand Met</Badge>
+                ) : (
+                  <Button 
+                    size="sm"
+                    onClick={() => handleSchedule('FG Stock', 'fiberglass')}
+                    disabled={!scheduleQuantities['fiberglass'] || schedulePacketsMutation.isPending}
+                    className="bg-white text-black hover:bg-gray-200"
+                    data-testid="button-schedule-fg"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Schedule
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -532,7 +573,7 @@ export default function CuttingWeeklySchedule() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('mesa', -10)}>
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.mesa === 0} onClick={() => updateQuantity('mesa', -10)}>
                   <Minus className="h-3 w-3" />
                 </Button>
                 <Input
@@ -540,21 +581,26 @@ export default function CuttingWeeklySchedule() {
                   value={scheduleQuantities['mesa'] || 0}
                   onChange={(e) => setQuantity('mesa', e.target.value)}
                   className="text-center font-bold w-20 h-8 bg-white text-black"
+                  disabled={remainingDemand.mesa === 0}
                   data-testid="input-qty-mesa"
                 />
-                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('mesa', 10)}>
+                <Button variant="secondary" size="icon" className="h-8 w-8" disabled={remainingDemand.mesa === 0} onClick={() => updateQuantity('mesa', 10)}>
                   <Plus className="h-3 w-3" />
                 </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => handleSchedule('Mesa Stock', 'mesa')}
-                  disabled={!scheduleQuantities['mesa'] || schedulePacketsMutation.isPending}
-                  className="bg-white text-black hover:bg-gray-200"
-                  data-testid="button-schedule-mesa"
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  Schedule
-                </Button>
+                {remainingDemand.mesa === 0 ? (
+                  <Badge className="bg-green-500 text-white" data-testid="badge-demand-met-mesa">Demand Met</Badge>
+                ) : (
+                  <Button 
+                    size="sm"
+                    onClick={() => handleSchedule('Mesa Stock', 'mesa')}
+                    disabled={!scheduleQuantities['mesa'] || schedulePacketsMutation.isPending}
+                    className="bg-white text-black hover:bg-gray-200"
+                    data-testid="button-schedule-mesa"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Schedule
+                  </Button>
+                )}
               </div>
             </div>
           </div>

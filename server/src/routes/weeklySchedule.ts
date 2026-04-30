@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { insertWeeklyScheduleAssignmentSchema } from '@shared/schema';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/:weekStartDate', async (req: Request, res: Response) => {
     }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePermission('scheduling.manage'), async (req: Request, res: Response) => {
     try {
       const validatedData = insertWeeklyScheduleAssignmentSchema.parse(req.body);
       const assignment = await storage.createWeeklyScheduleAssignment(validatedData);
@@ -26,7 +27,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 });
 
-router.post('/batch', async (req: Request, res: Response) => {
+router.post('/batch', requirePermission('scheduling.manage'), async (req: Request, res: Response) => {
     try {
       const { assignments } = req.body;
       
@@ -67,7 +68,7 @@ router.get('/:weekStartDate/mold-usage/:dayOfWeek', async (req: Request, res: Re
     }
 });
 
-router.patch('/:id', async (req: Request, res: Response) => {
+router.patch('/:id', requirePermission('scheduling.manage'), async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       const { moldCount } = req.body;
@@ -84,7 +85,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('scheduling.manage'), async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteScheduleAssignment(id);
@@ -95,7 +96,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
 });
 
-router.delete('/week/:weekStartDate', async (req: Request, res: Response) => {
+router.delete('/week/:weekStartDate', requirePermission('scheduling.manage'), async (req: Request, res: Response) => {
     try {
       const { weekStartDate } = req.params;
       await storage.clearWeeklySchedule(weekStartDate);

@@ -13,9 +13,10 @@ import {
   AlertTriangle,
   Search,
   X,
-  FileWarning,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +25,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import KickbackReportModal from '@/components/KickbackReportModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
+import OrderActionButtons from '@/components/OrderActionButtons';
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -34,11 +36,17 @@ export default function LayupPluggingQueuePage() {
   const [, setLocation] = useLocation();
   const { toast} = useToast();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
   // Fetch all kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000,
   });
+
 
   const hasKickbacks = (orderId: string) => {
     return (allKickbacks as any[]).some(
@@ -330,6 +338,8 @@ export default function LayupPluggingQueuePage() {
         </CardContent>
       </Card>
 
+      <ReturnsRepairsSection repairDepartment="Layup/Plugging" />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
@@ -567,23 +577,15 @@ export default function LayupPluggingQueuePage() {
                           </Badge>
                         )}
                         
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full mt-2 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedOrderForKickback({
-                              orderId: order.orderId,
-                              department: 'Layup/Plugging'
-                            });
+                        <OrderActionButtons
+                          orderId={order.orderId}
+                          onReportKickback={(id) => {
+                            setSelectedOrderForKickback({ orderId: id, department: 'Layup/Plugging' });
                             setKickbackModalOpen(true);
                           }}
-                          data-testid={`button-report-kickback-${order.orderId}`}
-                        >
-                          <FileWarning className="w-3 h-3 mr-1" />
-                          Report Kickback
-                        </Button>
+                          showReassignButton={isAdmin}
+                          className="mt-2"
+                        />
                       </div>
                     </CardContent>
                   </Card>

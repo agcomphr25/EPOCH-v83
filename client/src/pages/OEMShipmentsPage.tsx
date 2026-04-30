@@ -80,6 +80,7 @@ interface Shipment {
   package_count: number;
   bill_type: string;
   reference: string;
+  invoice_number: string | null;
   created_at: string;
   created_by: string;
   has_shipping_label: boolean;
@@ -525,7 +526,7 @@ export default function OEMShipmentsPage() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Search by customer, tracking, or reference..."
+                    placeholder="Search by customer, tracking, reference, or invoice #..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -742,7 +743,17 @@ export default function OEMShipmentsPage() {
                                   </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                                  {shipment.invoice_number && (
+                                    <div>
+                                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                        Invoice #
+                                      </p>
+                                      <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
+                                        {shipment.invoice_number}
+                                      </code>
+                                    </div>
+                                  )}
                                   <div>
                                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                                       Tracking Number

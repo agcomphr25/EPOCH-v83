@@ -48,6 +48,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { 
@@ -163,6 +171,18 @@ type FabricGroup = {
   rolls: FabricInventory[];
 };
 
+type RollHistoryEntry = {
+  id: string;
+  fabricInventoryId: string;
+  sessionLotId: string | null;
+  changeType: string;
+  quantityDelta: number;
+  notes: string | null;
+  performedBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
 export default function FabricInventoryPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -173,6 +193,8 @@ export default function FabricInventoryPage() {
   const [isReactivateDialogOpen, setIsReactivateDialogOpen] = useState(false);
   const [reactivateSquareMeters, setReactivateSquareMeters] = useState("");
   const [selectedItem, setSelectedItem] = useState<FabricInventory | null>(null);
+  const [historyRoll, setHistoryRoll] = useState<FabricInventory | null>(null);
+  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "depleted">("active");
   
@@ -234,6 +256,11 @@ export default function FabricInventoryPage() {
       if (!Array.isArray(data)) return [];
       return data.filter(item => item && item.agPartNumber);
     },
+  });
+
+  const { data: rollHistory = [], isLoading: isHistoryLoading } = useQuery<RollHistoryEntry[]>({
+    queryKey: ['/api/cutting-table/fabric-inventory', historyRoll?.id, 'history'],
+    enabled: isHistoryDrawerOpen && !!historyRoll?.id,
   });
 
   const createMutation = useMutation({
@@ -481,6 +508,11 @@ export default function FabricInventoryPage() {
   const handleDelete = (item: FabricInventory) => {
     setSelectedItem(item);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleViewHistory = (item: FabricInventory) => {
+    setHistoryRoll(item);
+    setIsHistoryDrawerOpen(true);
   };
 
   const handleDeplete = (item: FabricInventory) => {
@@ -1467,6 +1499,15 @@ export default function FabricInventoryPage() {
                                         <ExternalLink className="h-4 w-4" />
                                       </Button>
                                     )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleViewHistory(item)}
+                                      title="View roll history"
+                                      data-testid={`button-history-${item.id}`}
+                                    >
+                                      <Clock className="h-4 w-4" />
+                                    </Button>
                                     {item.barcode && (
                                       <Button
                                         variant="ghost"
@@ -1750,6 +1791,101 @@ export default function FabricInventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Roll History Drawer */}
+      <Sheet open={isHistoryDrawerOpen} onOpenChange={(open) => {
+        setIsHistoryDrawerOpen(open);
+        if (!open) setHistoryRoll(null);
+      }}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Roll History
+            </SheetTitle>
+            <SheetDescription>
+              {historyRoll && (
+                <span>
+                  <span className="font-medium text-foreground">{historyRoll.rollNumber || historyRoll.id}</span>
+                  {historyRoll.fabric && <span> · {historyRoll.fabric}</span>}
+                </span>
+              )}
+            </SheetDescription>
+          </SheetHeader>
+
+          {isHistoryLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : rollHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+              <Clock className="h-10 w-10 opacity-30" />
+              <p className="text-sm">No history recorded for this roll.</p>
+            </div>
+          ) : (
+            <ol className="relative border-l border-border ml-3 space-y-6">
+              {rollHistory.map((entry) => {
+                const isDepletion = entry.notes?.toLowerCase().includes('depleted');
+                const isReactivation = entry.notes?.toLowerCase().includes('reactivat');
+                const isReceipt = entry.changeType === 'RECEIPT';
+                const isIssue = entry.changeType === 'ISSUE';
+
+                let badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
+                let badgeLabel = entry.changeType;
+                if (isDepletion) { badgeVariant = 'destructive'; badgeLabel = 'DEPLETED'; }
+                else if (isReactivation) { badgeVariant = 'default'; badgeLabel = 'REACTIVATED'; }
+                else if (isReceipt) { badgeVariant = 'default'; badgeLabel = 'RECEIPT'; }
+                else if (isIssue) { badgeVariant = 'secondary'; badgeLabel = 'ISSUE'; }
+
+                const formattedDate = entry.createdAt
+                  ? new Date(entry.createdAt).toLocaleString(undefined, {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })
+                  : '—';
+
+                return (
+                  <li key={entry.id} className="ml-6">
+                    <span className="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-background border border-border ring-4 ring-background">
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <Badge variant={badgeVariant} className="text-xs">
+                        {badgeLabel}
+                      </Badge>
+                      <time className="text-xs text-muted-foreground">{formattedDate}</time>
+                    </div>
+                    {entry.performedBy && (
+                      <p className="text-sm text-foreground">
+                        <span className="font-medium">{entry.performedBy}</span>
+                      </p>
+                    )}
+                    {entry.quantityDelta !== 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        Qty change:{' '}
+                        <span className={entry.quantityDelta > 0 ? 'text-green-600' : 'text-red-600'}>
+                          {entry.quantityDelta > 0 ? '+' : ''}{entry.quantityDelta}
+                        </span>
+                      </p>
+                    )}
+                    {entry.notes && (
+                      <p className="text-sm text-muted-foreground mt-0.5">{entry.notes}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

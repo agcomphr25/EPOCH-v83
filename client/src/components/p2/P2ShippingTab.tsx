@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +74,7 @@ type CreatedShipment = {
 };
 
 export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds = [] }: { initialPO?: string; initialUnits?: string; selectedPOIds?: number[] } = {}) {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedPO, setExpandedPO] = useState<string | null>(null);
@@ -883,7 +884,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                           <Button
                             size="sm" variant="outline"
                             className="border-slate-300 text-slate-700 hover:bg-slate-50"
-                            onClick={() => window.location.href = `/p2/shipments/${shipment.lotId}`}
+                            onClick={() => setLocation(`/p2/shipments/${shipment.lotId}`)}
                           >
                             <ExternalLink className="w-3 h-3 mr-1" />Shipment Detail
                           </Button>

@@ -36,6 +36,9 @@ function withSupplySourceDashboard(item: InventoryItem) {
 
 import { storage } from '../../storage';
 import { db } from '../../db';
+import { DEFAULT_INVENTORY_TRANSACTIONS_LIMIT, MAX_INVENTORY_TRANSACTIONS_LIMIT } from '../constants/inventory';
+import { requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -223,7 +226,7 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
 });
 
 // Enhanced Inventory API - Update item
-router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/inventory/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -268,17 +271,27 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
     }
     
     if (updates.purchaseUnitId && updates.usageUnitId) {
-      // Only validate cross-family if at least one unit actually changed — legacy items
-      // may have mismatched units from before this validation existed and should not be
-      // permanently blocked from edits that don't touch their units.
+      // Only validate cross-family when at least one unit changed.
+      // Exception: if the existing item already has a mismatched pair (legacy data
+      // entered before this validation existed), only enforce the new-pair constraint
+      // when BOTH units are being changed together.  Single-unit edits on items with
+      // pre-existing mismatched pairs must not be permanently blocked.
       const purchaseChanged = existingItem?.purchaseUnitId !== updates.purchaseUnitId;
       const usageChanged = existingItem?.usageUnitId !== updates.usageUnitId;
       if (purchaseChanged || usageChanged) {
-        const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
-        if (!familyCheck.valid) {
-          return res.status(400).json({
-            error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
-          });
+        let existingAlreadyMismatched = false;
+        if (existingItem?.purchaseUnitId && existingItem?.usageUnitId) {
+          const existingCheck = await validateSameFamily(existingItem.purchaseUnitId, existingItem.usageUnitId);
+          existingAlreadyMismatched = !existingCheck.valid;
+        }
+        const shouldEnforce = !existingAlreadyMismatched || (purchaseChanged && usageChanged);
+        if (shouldEnforce) {
+          const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+          if (!familyCheck.valid) {
+            return res.status(400).json({
+              error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+            });
+          }
         }
       }
     }
@@ -313,7 +326,7 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
 });
 
 // Enhanced Inventory API - Delete item
-router.delete('/inventory/items/:id', async (req: Request, res: Response) => {
+router.delete('/inventory/items/:id', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     await storage.deleteInventoryItem(itemId);
@@ -336,7 +349,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -393,7 +406,7 @@ router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'td
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -447,7 +460,7 @@ router.put('/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: '
 });
 
 // DELETE route for deleting inventory items at the root level
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     await storage.deleteInventoryItem(itemId);
@@ -520,7 +533,7 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -582,7 +595,7 @@ router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name
   }
 });
 
-router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -627,17 +640,27 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
     }
     
     if (updates.purchaseUnitId && updates.usageUnitId) {
-      // Only validate cross-family if at least one unit actually changed — legacy items
-      // may have mismatched units from before this validation existed and should not be
-      // permanently blocked from edits that don't touch their units.
+      // Only validate cross-family when at least one unit changed.
+      // Exception: if the existing item already has a mismatched pair (legacy data
+      // entered before this validation existed), only enforce the new-pair constraint
+      // when BOTH units are being changed together.  Single-unit edits on items with
+      // pre-existing mismatched pairs must not be permanently blocked.
       const purchaseChanged = existingItem?.purchaseUnitId !== updates.purchaseUnitId;
       const usageChanged = existingItem?.usageUnitId !== updates.usageUnitId;
       if (purchaseChanged || usageChanged) {
-        const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
-        if (!familyCheck.valid) {
-          return res.status(400).json({
-            error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
-          });
+        let existingAlreadyMismatched = false;
+        if (existingItem?.purchaseUnitId && existingItem?.usageUnitId) {
+          const existingCheck = await validateSameFamily(existingItem.purchaseUnitId, existingItem.usageUnitId);
+          existingAlreadyMismatched = !existingCheck.valid;
+        }
+        const shouldEnforce = !existingAlreadyMismatched || (purchaseChanged && usageChanged);
+        if (shouldEnforce) {
+          const familyCheck = await validateSameFamily(updates.purchaseUnitId, updates.usageUnitId);
+          if (!familyCheck.valid) {
+            return res.status(400).json({
+              error: `Purchase unit (${familyCheck.purchaseFamilyName}) and usage unit (${familyCheck.usageFamilyName}) must belong to the same measurement family`,
+            });
+          }
         }
       }
     }
@@ -671,7 +694,7 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
   }
 });
 
-router.delete('/items/:id', async (req: Request, res: Response) => {
+router.delete('/items/:id', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     await storage.deleteInventoryItem(itemId);
@@ -1617,7 +1640,7 @@ router.get('/parts-requests/pending-receipts', async (req: Request, res: Respons
 });
 
 // Receive parts against ORDER LINES (not requests directly)
-router.post('/parts-requests/receive', async (req: Request, res: Response) => {
+router.post('/parts-requests/receive', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
   try {
     const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
     const { db } = await import('../../db');
@@ -1773,7 +1796,7 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
 });
 
 // Reject request (admin/IM)
-router.post('/parts-requests/:id/reject', async (req: Request, res: Response) => {
+router.post('/parts-requests/:id/reject', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
   try {
     const { partsRequests, partsRequestStatusHistory } = await import('../../schema');
     const { db } = await import('../../db');
@@ -1838,7 +1861,7 @@ router.get('/parts-requests/:id/history', async (req: Request, res: Response) =>
   }
 });
 
-// Departments CRUD - Get actual manufacturing departments from orderDepartmentTypes
+// Departments CRUD - inventory_departments (used by receiving and inventory item assignment)
 router.get('/departments', async (req: Request, res: Response) => {
   try {
     const { inventoryDepartments } = await import('../../schema');
@@ -1851,21 +1874,19 @@ router.get('/departments', async (req: Request, res: Response) => {
       .where(eq(inventoryDepartments.isActive, true))
       .orderBy(inventoryDepartments.sortOrder);
     
-    const simpleDepartments = departments.map(dept => ({
-      id: dept.id,
-      name: dept.name
-    }));
-    res.json(simpleDepartments);
+    res.json(departments);
   } catch (error) {
     console.error('Get departments error:', error);
     res.status(500).json({ error: 'Failed to fetch departments' });
   }
 });
 
-router.post('/departments', async (req: Request, res: Response) => {
+router.post('/departments', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
   try {
-    const departmentData = insertDepartmentSchema.parse(req.body);
-    const newDepartment = await storage.createDepartment(departmentData);
+    const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
+    const { db } = await import('../../db');
+    const departmentData = insertInventoryDepartmentSchema.parse(req.body);
+    const [newDepartment] = await db.insert(inventoryDepartments).values(departmentData).returning();
     res.status(201).json(newDepartment);
   } catch (error) {
     console.error('Create department error:', error);
@@ -1876,11 +1897,19 @@ router.post('/departments', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/departments/:id', async (req: Request, res: Response) => {
+router.put('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.id);
-    const updates = insertDepartmentSchema.partial().parse(req.body);
-    const updatedDepartment = await storage.updateDepartment(departmentId, updates);
+    const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    const updates = insertInventoryDepartmentSchema.partial().parse(req.body);
+    const [updatedDepartment] = await db
+      .update(inventoryDepartments)
+      .set(updates)
+      .where(eq(inventoryDepartments.id, departmentId))
+      .returning();
+    if (!updatedDepartment) return res.status(404).json({ error: 'Department not found' });
     res.json(updatedDepartment);
   } catch (error) {
     console.error('Update department error:', error);
@@ -1891,7 +1920,7 @@ router.put('/departments/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/departments/:id', async (req: Request, res: Response) => {
+router.delete('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.id);
     await storage.deleteDepartment(departmentId);
@@ -2576,7 +2605,7 @@ router.get('/inventory/balances/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/enhanced/inventory/balances - Create a new inventory balance
-router.post('/inventory/balances', async (req: Request, res: Response) => {
+router.post('/inventory/balances', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const data = insertInventoryBalanceSchema.parse(req.body);
     const balance = await storage.createInventoryBalance(data);
@@ -2591,7 +2620,7 @@ router.post('/inventory/balances', async (req: Request, res: Response) => {
 });
 
 // PUT /api/enhanced/inventory/balances/:id - Update an inventory balance
-router.put('/inventory/balances/:id', async (req: Request, res: Response) => {
+router.put('/inventory/balances/:id', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const data = insertInventoryBalanceSchema.partial().parse(req.body);
@@ -2607,7 +2636,7 @@ router.put('/inventory/balances/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/enhanced/inventory/balances/:id - Delete an inventory balance
-router.delete('/inventory/balances/:id', async (req: Request, res: Response) => {
+router.delete('/inventory/balances/:id', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     await storage.deleteInventoryBalance(id);
@@ -2625,7 +2654,7 @@ router.delete('/inventory/balances/:id', async (req: Request, res: Response) => 
 // GET /api/enhanced/inventory/transactions - Get inventory transactions with filters and department metadata
 router.get('/inventory/transactions', async (req: Request, res: Response) => {
   try {
-    const { partId, transactionType, dateFrom, dateTo, page = '1', limit = '50' } = req.query;
+    const { partId, transactionType, dateFrom, dateTo, page = '1', limit = String(DEFAULT_INVENTORY_TRANSACTIONS_LIMIT) } = req.query;
     
     let transactions = await storage.getAllInventoryTransactions();
     
@@ -2660,7 +2689,10 @@ router.get('/inventory/transactions', async (req: Request, res: Response) => {
     
     // Pagination
     const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
+    const parsedLimit = parseInt(limit as string);
+    const limitNum = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, MAX_INVENTORY_TRANSACTIONS_LIMIT)
+      : DEFAULT_INVENTORY_TRANSACTIONS_LIMIT;
     const startIndex = (pageNum - 1) * limitNum;
     const endIndex = startIndex + limitNum;
     
@@ -2708,7 +2740,7 @@ router.get('/inventory/transactions/:id', async (req: Request, res: Response) =>
 });
 
 // POST /api/enhanced/inventory/transactions - Create a new inventory transaction
-router.post('/inventory/transactions', async (req: Request, res: Response) => {
+router.post('/inventory/transactions', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const data = insertInventoryTransactionSchema.parse(req.body);
     const transaction = await storage.createInventoryTransaction(data);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useLocation } from 'wouter';
+import { useParams, Link, useLocation, useSearch } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -27,6 +27,15 @@ import {
   Building2,
   Link2,
   KeyRound,
+  AlertTriangle,
+  Wrench,
+  Plus,
+  Ban,
+  ClipboardCheck,
+  Info,
+  XCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,6 +63,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
 import CertificationFormModal from '@/components/employee/CertificationFormModal';
@@ -70,6 +80,7 @@ interface Employee {
   userRole: string;
   department: string;
   employmentType: string;
+  payType?: string | null;
   hireDate: string;
   address: string;
   emergencyContact: string;
@@ -84,6 +95,7 @@ interface Employee {
   vehicleType?: string;
   buildingKeyAccess?: boolean;
   tciAccess?: boolean;
+  hasPin?: boolean;
 }
 
 interface CertificationFile {
@@ -123,30 +135,13 @@ interface Evaluation {
   reviewedAt: string;
 }
 
-interface Capability {
-  id: number;
-  name: string;
-  displayName: string;
-  category: string;
-  description: string;
-}
-
-interface EmployeeCapability {
-  id: number;
-  employeeId: number;
-  capabilityId: number;
-  useHardcoded: boolean;
-  capability: Capability;
-}
-
 interface TrainingMatrixEntry {
   id: number;
   employeeId: number | null;
-  employeeName: string | null;
-  jobTitle: string | null;
-  department: string | null;
   trainingName: string;
+  frequency: string | null;
   lastCompleted: string | null;
+  nextDue: string | null;
   status: string;
   notes: string | null;
 }
@@ -169,6 +164,40 @@ interface EmploymentPeriod {
   endedViaPathPurpose: string | null;
   startBundlePath: string | null;
   endBundlePath: string | null;
+}
+
+interface TravelerAuth {
+  id: number;
+  employeeId: number;
+  partNumber: string;
+  department: string | null;
+  productionLine: string | null;
+  authorizedAt: string | null;
+  expiresAt: string | null;
+  isActive: boolean;
+  planId: number | null;
+  planTitle?: string | null;
+}
+
+interface EmpP2Cert {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  partNumber: string;
+  department: string;
+  drawingKnowledge: boolean;
+  specSheetUnderstanding: boolean;
+  procedureCompletion: boolean;
+  certifiedDate: string | null;
+  certifiedBy: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+interface P2PartCert {
+  id: number;
+  partNumber: string;
+  departments: string[];
 }
 
 function CertificationCard({ 
@@ -447,16 +476,42 @@ function CertificationCard({
   );
 }
 
+const VALID_TABS = ['details','permissions','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
+type TabValue = typeof VALID_TABS[number];
+
 export default function EmployeeDetail() {
   const { id } = useParams();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const search = useSearch();
+  const searchParams = new URLSearchParams(search);
+  const tabParam = searchParams.get('tab');
+  const initialTab: TabValue = (VALID_TABS as readonly string[]).includes(tabParam ?? '') ? (tabParam as TabValue) : 'details';
+  const [activeTab, setActiveTab] = useState<TabValue>(initialTab);
+
+  useEffect(() => {
+    const sp = new URLSearchParams(search);
+    const t = sp.get('tab');
+    if (t && (VALID_TABS as readonly string[]).includes(t)) {
+      setActiveTab(t as TabValue);
+    }
+  }, [search]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as TabValue);
+    setLocation(`${location.split('?')[0]}?tab=${value}`, { replace: true });
+  };
+
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Employee>>({});
+  const [newTimekeeperPin, setNewTimekeeperPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [portalUrl, setPortalUrl] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [selectedAssignUserId, setSelectedAssignUserId] = useState<string>('');
+  const [showAssignUser, setShowAssignUser] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -496,31 +551,11 @@ export default function EmployeeDetail() {
     enabled: !!id,
   });
 
-  const { data: allCapabilities = [] } = useQuery({
-    queryKey: ['/api/employees/capabilities'],
+  const { data: employeeTrainingMatrix = [], isLoading: isLoadingTraining } = useQuery<TrainingMatrixEntry[]>({
+    queryKey: ['/api/employees', id, 'training-matrix'],
     queryFn: async () => {
-      const response = await fetch('/api/employees/capabilities');
-      if (!response.ok) throw new Error('Failed to fetch capabilities');
-      return response.json();
-    },
-  });
-
-  const { data: employeeCapabilities = [] } = useQuery({
-    queryKey: ['/api/employees', id, 'capabilities'],
-    queryFn: async () => {
-      const response = await fetch(`/api/employees/${id}/capabilities`);
-      if (!response.ok)
-        throw new Error('Failed to fetch employee capabilities');
-      return response.json();
-    },
-    enabled: !!id,
-  });
-
-  const { data: trainingMatrix = [] } = useQuery<TrainingMatrixEntry[]>({
-    queryKey: ['/api/training/matrix'],
-    queryFn: async () => {
-      const response = await fetch('/api/training/matrix');
-      if (!response.ok) throw new Error('Failed to fetch training matrix');
+      const response = await fetch(`/api/employees/${id}/training-matrix`);
+      if (!response.ok) throw new Error('Failed to fetch employee training matrix');
       return response.json();
     },
     enabled: !!id,
@@ -536,17 +571,76 @@ export default function EmployeeDetail() {
     enabled: !!id,
   });
 
-  // Filter training matrix data for this employee
-  const employeeTraining = id
-    ? trainingMatrix.filter((entry) => entry.employeeId === parseInt(id))
-    : [];
-  const completedTrainings = employeeTraining.filter(
-    (entry) => entry.status === 'COMPLETED'
+  const { data: machineQualifications = [], isLoading: isLoadingQuals } = useQuery<any[]>({
+    queryKey: ['/api/employees', id, 'qualifications'],
+    queryFn: async () => {
+      const response = await fetch(`/api/employees/${id}/qualifications`);
+      if (!response.ok) throw new Error('Failed to fetch qualifications');
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  const [showAddQualDialog, setShowAddQualDialog] = useState(false);
+  const [newQual, setNewQual] = useState({ machineClass: '', operationType: '', department: '', expiresAt: '', notes: '' });
+
+  const createQualMutation = useMutation({
+    mutationFn: async (data: typeof newQual) => {
+      const response = await fetch(`/api/employees/${id}/qualifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          machineClass: data.machineClass || null,
+          operationType: (data.operationType && data.operationType !== 'none') ? data.operationType : null,
+          department: data.department || null,
+          expiresAt: data.expiresAt || null,
+          notes: data.notes || null,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create qualification');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'qualifications'] });
+      setShowAddQualDialog(false);
+      setNewQual({ machineClass: '', operationType: '', department: '', expiresAt: '', notes: '' });
+      toast({ title: 'Qualification added' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deactivateQualMutation = useMutation({
+    mutationFn: async (qualId: number) => {
+      const response = await fetch(`/api/employees/${id}/qualifications/${qualId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to deactivate qualification');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'qualifications'] });
+      toast({ title: 'Qualification removed' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const completedTrainings = employeeTrainingMatrix.filter(
+    (entry) => entry.status === 'COMPLETED' || entry.status === 'EXPIRING_SOON'
   ).length;
-  const totalTrainings = employeeTraining.length;
+  const totalTrainings = employeeTrainingMatrix.length;
 
   const updateEmployeeMutation = useMutation({
-    mutationFn: async (data: Partial<Employee>) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       const response = await fetch(`/api/employees/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -612,6 +706,50 @@ export default function EmployeeDetail() {
     enabled: !!id,
   });
 
+  const { data: allUsers = [] } = useQuery<{
+    id: number;
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+    isActive: boolean;
+    employeeId: number | null;
+  }[]>({
+    queryKey: ['/api/users'],
+    queryFn: async () => {
+      const res = await fetch('/api/users');
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.rows ?? []);
+    },
+    enabled: !linkedUser,
+  });
+
+  const unlinkedUsers = allUsers.filter(u => u.isActive && u.employeeId == null);
+
+  const assignUserMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const employeeId = parseInt(id as string);
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to assign login account');
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'user-account'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setSelectedAssignUserId('');
+      setShowAssignUser(false);
+      toast({ title: 'Login account linked', description: 'The employee can now sign in on the kiosk.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const setPasswordMutation = useMutation({
     mutationFn: async ({ password, username }: { password: string; username?: string }) => {
       const res = await fetch(`/api/employees/${id}/set-password`, {
@@ -652,94 +790,280 @@ export default function EmployeeDetail() {
     setPasswordMutation.mutate({ password: newPassword, username: newUsername || undefined });
   };
 
-  const grantCapabilityMutation = useMutation({
-    mutationFn: async ({ capabilityId }: { capabilityId: number }) => {
-      const response = await fetch(`/api/employees/${id}/capabilities`, {
+  // CBAC queries — wired to the real permission enforcement layer
+  const { data: cbacCapabilities = [] } = useQuery<{ id: number; key: string; description: string; category: string }[]>({
+    queryKey: ['/api/permissions/capabilities'],
+    queryFn: async () => {
+      const res = await fetch('/api/permissions/capabilities');
+      if (!res.ok) throw new Error('Failed to fetch CBAC capabilities');
+      return res.json();
+    },
+  });
+
+  const { data: userOverrides = [] } = useQuery<{ id: number; capabilityKey: string; effect: string }[]>({
+    queryKey: ['/api/permissions/user-overrides', linkedUser?.id],
+    queryFn: async () => {
+      if (!linkedUser?.id) return [];
+      const res = await fetch(`/api/permissions/user-overrides?userId=${linkedUser.id}`);
+      if (!res.ok) throw new Error('Failed to fetch user overrides');
+      return res.json();
+    },
+    enabled: !!linkedUser?.id,
+  });
+
+  const { data: allRoles = [] } = useQuery<{ id: number; name: string; capabilities: string[] }[]>({
+    queryKey: ['/api/permissions/roles'],
+    queryFn: async () => {
+      const res = await fetch('/api/permissions/roles');
+      if (!res.ok) throw new Error('Failed to fetch roles');
+      return res.json();
+    },
+  });
+
+  const roleCapabilities: string[] = (() => {
+    const role = allRoles.find(r => r.name === (employee?.userRole || 'EMPLOYEE'));
+    return role?.capabilities || [];
+  })();
+
+  const grantCbacMutation = useMutation({
+    mutationFn: async (capabilityKey: string) => {
+      if (!linkedUser?.id) throw new Error('No linked user account');
+      const res = await fetch('/api/permissions/user-overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ capabilityId, useHardcoded: true }),
+        body: JSON.stringify({ userId: linkedUser.id, capabilityKey, effect: 'allow' }),
       });
-      if (!response.ok) throw new Error('Failed to grant capability');
-      return response.json();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to grant capability');
+      }
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/employees', id, 'capabilities'],
-      });
-      toast({
-        title: 'Success',
-        description: 'Capability granted successfully',
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/permissions/user-overrides', linkedUser?.id] });
+      toast({ title: 'Capability granted', description: 'The override is now active.' });
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to grant capability',
-        variant: 'destructive',
-      });
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 
-  const revokeCapabilityMutation = useMutation({
-    mutationFn: async (employeeCapabilityId: number) => {
-      const response = await fetch(
-        `/api/employees/employee-capabilities/${employeeCapabilityId}`,
-        {
-          method: 'DELETE',
-        }
-      );
-      if (!response.ok) throw new Error('Failed to revoke capability');
+  const denyCbacMutation = useMutation({
+    mutationFn: async (capabilityKey: string) => {
+      if (!linkedUser?.id) throw new Error('No linked user account');
+      const res = await fetch('/api/permissions/user-overrides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: linkedUser.id, capabilityKey, effect: 'deny' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to deny capability');
+      }
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/employees', id, 'capabilities'],
-      });
-      toast({
-        title: 'Success',
-        description: 'Capability revoked successfully',
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/permissions/user-overrides', linkedUser?.id] });
+      toast({ title: 'Capability denied', description: 'The deny override is now active.' });
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to revoke capability',
-        variant: 'destructive',
-      });
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 
-  const toggleHardcodedMutation = useMutation({
-    mutationFn: async ({
-      employeeCapabilityId,
-      useHardcoded,
-    }: {
-      employeeCapabilityId: number;
-      useHardcoded: boolean;
+  const revokeCbacMutation = useMutation({
+    mutationFn: async (overrideId: number) => {
+      const res = await fetch(`/api/permissions/user-overrides/${overrideId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to revoke capability');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/permissions/user-overrides', linkedUser?.id] });
+      toast({ title: 'Override removed' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  // Traveler Access state
+  const [showAddAuthDialog, setShowAddAuthDialog] = useState(false);
+  const [newAuthPartNumber, setNewAuthPartNumber] = useState('');
+  const [newAuthDepartment, setNewAuthDepartment] = useState('');
+  const [newAuthProductionLine, setNewAuthProductionLine] = useState('');
+  const [newAuthExpiresAt, setNewAuthExpiresAt] = useState('');
+
+  const [showAddP2CertDialog, setShowAddP2CertDialog] = useState(false);
+  const [p2PartNumber, setP2PartNumber] = useState('');
+  const [p2Department, setP2Department] = useState('');
+  const [p2DrawingKnowledge, setP2DrawingKnowledge] = useState(false);
+  const [p2SpecSheet, setP2SpecSheet] = useState(false);
+  const [p2ProcedureCompletion, setP2ProcedureCompletion] = useState(false);
+
+  const { data: travelerAuths = [], isLoading: isLoadingAuths } = useQuery<TravelerAuth[]>({
+    queryKey: ['/api/training/epoch/traveler-authorizations', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/training/epoch/traveler-authorizations/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch traveler authorizations');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: empP2Certs = [], isLoading: isLoadingP2Certs } = useQuery<EmpP2Cert[]>({
+    queryKey: ['/api/training/p2-employee-certifications/employee', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/training/p2-employee-certifications/employee/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch P2 certifications');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: partNumbers = [] } = useQuery<Array<{ partNumber: string; partName: string }>>({
+    queryKey: ['/api/training/p2-certifications/part-numbers'],
+    queryFn: async () => {
+      const res = await fetch('/api/training/p2-certifications/part-numbers');
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const createAuthMutation = useMutation({
+    mutationFn: async (data: { partNumber: string; department?: string; productionLine?: string; expiresAt?: string }) => {
+      const res = await fetch('/api/training/epoch/traveler-authorizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: parseInt(id!), ...data }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create authorization');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/epoch/traveler-authorizations', id] });
+      setShowAddAuthDialog(false);
+      setNewAuthPartNumber('');
+      setNewAuthDepartment('');
+      setNewAuthProductionLine('');
+      setNewAuthExpiresAt('');
+      toast({ title: 'Authorization added' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deactivateAuthMutation = useMutation({
+    mutationFn: async (authId: number) => {
+      const res = await fetch(`/api/training/epoch/traveler-authorizations/${authId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: false }),
+      });
+      if (!res.ok) throw new Error('Failed to deactivate authorization');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/epoch/traveler-authorizations', id] });
+      toast({ title: 'Authorization deactivated' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteAuthMutation = useMutation({
+    mutationFn: async (authId: number) => {
+      const res = await fetch(`/api/training/epoch/traveler-authorizations/${authId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete authorization');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/epoch/traveler-authorizations', id] });
+      toast({ title: 'Authorization removed' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const createP2CertMutation = useMutation({
+    mutationFn: async (data: {
+      partNumber: string; department: string;
+      drawingKnowledge: boolean; specSheetUnderstanding: boolean; procedureCompletion: boolean;
     }) => {
-      const response = await fetch(
-        `/api/employees/employee-capabilities/${employeeCapabilityId}/toggle`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ useHardcoded }),
-        }
-      );
-      if (!response.ok)
-        throw new Error('Failed to toggle hardcoded capability');
-      return response.json();
+      const partCertsRes = await fetch('/api/training/p2-certifications');
+      const partCerts: P2PartCert[] = partCertsRes.ok ? await partCertsRes.json() : [];
+      const partCert = partCerts.find((pc) => pc.partNumber === data.partNumber && pc.departments?.includes(data.department));
+      if (!partCert) {
+        throw new Error(`No P2 certification record found for part "${data.partNumber}" in department "${data.department}". Verify the part number and department are registered in the P2 Control Center.`);
+      }
+      const res = await fetch('/api/training/p2-employee-certifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partCertificationId: partCert.id,
+          partNumber: data.partNumber,
+          employeeId: parseInt(id!),
+          employeeName: employee?.name || '',
+          department: data.department,
+          drawingKnowledge: data.drawingKnowledge,
+          specSheetUnderstanding: data.specSheetUnderstanding,
+          procedureCompletion: data.procedureCompletion,
+          notes: null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create P2 certification');
+      }
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['/api/employees', id, 'capabilities'],
-      });
-      toast({ title: 'Success', description: 'Capability setting updated' });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/p2-employee-certifications/employee', id] });
+      setShowAddP2CertDialog(false);
+      setP2PartNumber('');
+      setP2Department('');
+      setP2DrawingKnowledge(false);
+      setP2SpecSheet(false);
+      setP2ProcedureCompletion(false);
+      toast({ title: 'P2 certification added' });
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to update capability setting',
-        variant: 'destructive',
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const toggleP2FlagMutation = useMutation({
+    mutationFn: async ({ certId, field, value }: { certId: number; field: string; value: boolean }) => {
+      const res = await fetch(`/api/training/p2-employee-certifications/${certId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
       });
+      if (!res.ok) throw new Error('Failed to update P2 certification');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/p2-employee-certifications/employee', id] });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteP2CertMutation = useMutation({
+    mutationFn: async (certId: number) => {
+      const res = await fetch(`/api/training/p2-employee-certifications/${certId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete P2 certification');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/training/p2-employee-certifications/employee', id] });
+      toast({ title: 'P2 certification removed' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -755,11 +1079,49 @@ export default function EmployeeDetail() {
   }, [employee]);
 
   const handleSave = () => {
-    updateEmployeeMutation.mutate(editData);
+    const hasExistingCode = !!(employee?.employeeCode);
+    const editedCode = editData.employeeCode?.trim() ?? '';
+
+    if (hasExistingCode && !editedCode) {
+      toast({
+        title: 'Employee code required',
+        description:
+          'This employee already has a code assigned. It cannot be removed — enter the existing code or a replacement.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!editedCode) {
+      toast({
+        title: 'No employee code set',
+        description:
+          'A code will be auto-generated when saved. You can also enter one manually (e.g. EMP001).',
+      });
+    }
+
+    if (newTimekeeperPin && !/^\d{4}$/.test(newTimekeeperPin)) {
+      toast({
+        title: 'Invalid PIN',
+        description: 'Kiosk PIN must be exactly 4 digits.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Never send hasPin (derived boolean) back to the server; only include timekeeperPin when explicitly set
+    const { hasPin: _hasPin, ...editDataSafe } = editData;
+    const payload: Record<string, unknown> = {
+      ...editDataSafe,
+      ...(newTimekeeperPin ? { timekeeperPin: newTimekeeperPin } : {}),
+    };
+
+    updateEmployeeMutation.mutate(payload);
   };
 
   const handleCancel = () => {
     setEditData(employee || {});
+    setNewTimekeeperPin('');
     setIsEditing(false);
   };
 
@@ -1000,6 +1362,9 @@ export default function EmployeeDetail() {
                           <SelectItem value="EMPLOYEE">Employee</SelectItem>
                           <SelectItem value="ADMIN">Administrator</SelectItem>
                           <SelectItem value="OWNER">Owner</SelectItem>
+                          <SelectItem value="DOCUMENT_MANAGER">Document Manager</SelectItem>
+                          <SelectItem value="FLOOR_OPERATOR">Floor Operator</SelectItem>
+                          <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
@@ -1010,7 +1375,13 @@ export default function EmployeeDetail() {
                             ? 'bg-red-50 text-red-700 border-red-200'
                             : employee.userRole === 'OWNER'
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                              : employee.userRole === 'DOCUMENT_MANAGER'
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                : employee.userRole === 'FLOOR_OPERATOR'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : employee.userRole === 'SUPERVISOR'
+                                    ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'
                         }
                       >
                         {employee.userRole}
@@ -1085,6 +1456,64 @@ export default function EmployeeDetail() {
                   <p className="mt-1 text-xs text-gray-500">No login account linked yet.</p>
                 )}
 
+                {/* Assign existing user account when no user is linked */}
+                {!linkedUser && !showPasswordForm && (
+                  <div className="mt-2">
+                    {showAssignUser ? (
+                      <div className="space-y-2">
+                        <Select
+                          value={selectedAssignUserId}
+                          onValueChange={setSelectedAssignUserId}
+                        >
+                          <SelectTrigger className="text-sm">
+                            <SelectValue placeholder="Select login account…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {unlinkedUsers.length === 0 ? (
+                              <SelectItem value="__none__" disabled>No unlinked accounts available</SelectItem>
+                            ) : (
+                              unlinkedUsers.map(u => (
+                                <SelectItem key={u.id} value={String(u.id)}>
+                                  @{u.username}{u.firstName || u.lastName ? ` (${[u.firstName, u.lastName].filter(Boolean).join(' ')})` : ''}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="flex-1"
+                            disabled={!selectedAssignUserId || assignUserMutation.isPending}
+                            onClick={() => {
+                              if (selectedAssignUserId) assignUserMutation.mutate(parseInt(selectedAssignUserId));
+                            }}
+                          >
+                            {assignUserMutation.isPending ? 'Linking…' : 'Link Account'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setShowAssignUser(false); setSelectedAssignUserId(''); }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setShowAssignUser(true)}
+                      >
+                        <Link2 className="w-3 h-3 mr-1" />
+                        Assign Login Account
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 {showPasswordForm ? (
                   <div className="mt-3 space-y-2">
                     {!linkedUser && (
@@ -1150,17 +1579,19 @@ export default function EmployeeDetail() {
 
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
-          <Tabs defaultValue="details" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-9">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-11">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
-              <TabsTrigger value="certifications">Certifications</TabsTrigger>
-              <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
+              <TabsTrigger value="certifications">Certs</TabsTrigger>
+              <TabsTrigger value="evaluations">Reviews</TabsTrigger>
               <TabsTrigger value="training">Training</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="traveler">Traveler</TabsTrigger>
+              <TabsTrigger value="documents">Docs</TabsTrigger>
               <TabsTrigger value="badge">Badge</TabsTrigger>
               <TabsTrigger value="journal">Journal</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
+              <TabsTrigger value="qualifications">Quals</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details">
@@ -1173,38 +1604,53 @@ export default function EmployeeDetail() {
                     <div>
                       <Label>Employee Code</Label>
                       {isEditing ? (
-                        <div className="flex gap-2">
-                          <Input
-                            value={editData.employeeCode || ''}
-                            onChange={(e) =>
-                              setEditData((prev) => ({
-                                ...prev,
-                                employeeCode: e.target.value,
-                              }))
-                            }
-                            placeholder="e.g., EMP001, TM001"
-                            className="flex-1"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              // Clear field to trigger auto-generation on save
-                              setEditData((prev) => ({
-                                ...prev,
-                                employeeCode: '',
-                              }));
-                              toast({
-                                title: "Auto-Generate Enabled",
-                                description: "Next sequential code (e.g., EMP001) will be generated when you save.",
-                              });
-                            }}
-                            data-testid="button-auto-generate-code"
-                            title="Clear field and auto-generate next sequential code on save"
-                          >
-                            Generate
-                          </Button>
+                        <div className="space-y-1">
+                          <div className="flex gap-2">
+                            <Input
+                              value={editData.employeeCode || ''}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  employeeCode: e.target.value,
+                                }))
+                              }
+                              placeholder="e.g., EMP001, TM001"
+                              className={`flex-1 ${!editData.employeeCode ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
+                            />
+                            {!employee?.employeeCode && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditData((prev) => ({
+                                    ...prev,
+                                    employeeCode: '',
+                                  }));
+                                  toast({
+                                    title: "Auto-Generate Enabled",
+                                    description: "Next sequential code (e.g., EMP001) will be generated when you save.",
+                                  });
+                                }}
+                                data-testid="button-auto-generate-code"
+                                title="Clear field and auto-generate next sequential code on save"
+                              >
+                                Generate
+                              </Button>
+                            )}
+                          </div>
+                          {!editData.employeeCode && employee?.employeeCode && (
+                            <p className="flex items-center gap-1 text-xs text-destructive">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              Code cannot be removed once assigned. Enter the existing code or a replacement.
+                            </p>
+                          )}
+                          {!editData.employeeCode && !employee?.employeeCode && (
+                            <p className="flex items-center gap-1 text-xs text-amber-600">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              A code will be auto-generated on save. Required for time-clock charge code matching.
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <p className="text-sm text-gray-900 mt-2">
@@ -1239,6 +1685,37 @@ export default function EmployeeDetail() {
                       ) : (
                         <p className="text-sm text-gray-600">
                           {employee.employmentType || 'Not specified'}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Pay Type</Label>
+                      {isEditing ? (
+                        <Select
+                          value={editData.payType ?? employee?.payType ?? ''}
+                          onValueChange={(value) =>
+                            setEditData((prev) => ({
+                              ...prev,
+                              payType: value || null,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select pay type…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="HOURLY">Hourly</SelectItem>
+                            <SelectItem value="SALARY">Salary</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {employee.payType === 'SALARY'
+                            ? 'Salary'
+                            : employee.payType === 'HOURLY'
+                            ? 'Hourly'
+                            : 'Not specified'}
                         </p>
                       )}
                     </div>
@@ -1439,6 +1916,49 @@ export default function EmployeeDetail() {
                       )}
                     </div>
                   </div>
+
+                  {/* Kiosk PIN */}
+                  <div className="border-t pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <KeyRound className="w-4 h-4 text-gray-500" />
+                      <Label className="text-sm font-medium">Kiosk PIN</Label>
+                      {employee.hasPin && (
+                        <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded px-2 py-0.5">PIN set</span>
+                      )}
+                    </div>
+                    {isEditing ? (
+                      <div className="max-w-xs space-y-1">
+                        <Label htmlFor="timekeeperPin" className="text-xs text-gray-500">
+                          New 4-digit PIN {employee.hasPin ? '(leave blank to keep current)' : '(leave blank to skip)'}
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="timekeeperPin"
+                            type={showPin ? 'text' : 'password'}
+                            inputMode="numeric"
+                            maxLength={4}
+                            value={newTimekeeperPin}
+                            onChange={(e) => setNewTimekeeperPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                            placeholder="e.g. 1234"
+                            className="text-sm pr-8"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-2"
+                            onClick={() => setShowPin(s => !s)}
+                          >
+                            {showPin ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600">
+                        {employee.hasPin ? 'PIN is set (hidden)' : 'No PIN assigned'}
+                      </p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1446,159 +1966,193 @@ export default function EmployeeDetail() {
             <TabsContent value="permissions">
               <Card>
                 <CardHeader>
-                  <CardTitle>Individual Capabilities</CardTitle>
+                  <CardTitle>Permissions</CardTitle>
                   <CardDescription>
-                    Assign specific permissions to {employee.name} based on
-                    their actual responsibilities
+                    Capabilities inherited from {employee.name}'s role and individual overrides applied on top.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Granted Capabilities */}
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      Granted Capabilities
-                    </h3>
-                    {employeeCapabilities.length === 0 ? (
-                      <div className="text-center py-8 bg-gray-50 rounded-lg">
-                        <Shield className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-500">
-                          No capabilities assigned yet
+                  {/* Guard: no linked user account */}
+                  {!linkedUser && (
+                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-800">No system login linked</p>
+                        <p className="text-xs text-amber-700 mt-1">
+                          A system login must be created for {employee.name} before individual capability overrides can be assigned.
+                          Use the "Set Password" section on the left to create one.
                         </p>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {employeeCapabilities.map(
-                          (empCap: any) => {
-                            if (!empCap.capability) {
-                              return null;
-                            }
-                            return (
-                            <div
-                              key={empCap.id}
-                              className="border rounded-lg p-4 bg-white hover:bg-gray-50 transition-colors"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="font-medium text-gray-900">
-                                      {empCap.capability.displayName}
-                                    </h4>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      {empCap.capability.category}
-                                    </Badge>
-                                  </div>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {empCap.capability.description}
-                                  </p>
-                                  <div className="flex items-center gap-4 mt-3">
-                                    <div className="flex items-center gap-2">
-                                      <Label className="text-xs text-gray-500">
-                                        Use Hardcoded:
-                                      </Label>
-                                      <input
-                                        type="checkbox"
-                                        checked={empCap.useHardcoded}
-                                        onChange={(e) => {
-                                          toggleHardcodedMutation.mutate({
-                                            employeeCapabilityId: empCap.id,
-                                            useHardcoded: e.target.checked,
-                                          });
-                                        }}
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                        data-testid={`toggle-hardcoded-${empCap.id}`}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    revokeCapabilityMutation.mutate(empCap.id)
-                                  }
-                                  disabled={revokeCapabilityMutation.isPending}
-                                  className="text-red-600 hover:text-red-700"
-                                  data-testid={`button-revoke-${empCap.id}`}
-                                >
-                                  Revoke
-                                </Button>
+                    </div>
+                  )}
+
+                  {/* Missing traveler access callout */}
+                  {(() => {
+                    const hasTravelerCaps = roleCapabilities.some(k => k.startsWith('P2_CERT_') || k.includes('TRAVELER')) ||
+                      userOverrides.some(ov => ov.effect === 'allow' && (ov.capabilityKey.startsWith('P2_CERT_') || ov.capabilityKey.includes('TRAVELER')));
+                    const missingAuths = travelerAuths.length === 0;
+                    const missingP2Certs = empP2Certs.length === 0;
+                    if (!hasTravelerCaps) return null;
+                    if (!missingAuths && !missingP2Certs) return null;
+                    return (
+                      <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4">
+                        <Info className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-orange-800">Traveler gate may still block this employee</p>
+                          <p className="text-xs text-orange-700 mt-1 mb-2">
+                            {employee.name} has traveler-related capabilities but is missing required records. The traveler gate checks these independently — capabilities alone are not enough.
+                          </p>
+                          <div className="flex flex-col gap-1">
+                            {missingAuths && (
+                              <div className="flex items-center gap-2 text-xs text-orange-800">
+                                <XCircle className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                No traveler authorizations — add them in the <span className="font-semibold">Traveler</span> tab
                               </div>
+                            )}
+                            {missingP2Certs && (
+                              <div className="flex items-center gap-2 text-xs text-orange-800">
+                                <XCircle className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                No P2 competency records — add them in the <span className="font-semibold">Traveler</span> tab
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* From Role section */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-sm font-medium text-gray-700">From Role</h3>
+                      <Badge variant="secondary" className="text-xs">{employee.userRole || 'EMPLOYEE'}</Badge>
+                      <span className="text-xs text-gray-400">— read-only, inherited automatically</span>
+                    </div>
+                    {roleCapabilities.length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-500">No capabilities assigned to this role yet</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {roleCapabilities.map((capKey) => {
+                          const cap = cbacCapabilities.find(c => c.key === capKey);
+                          return (
+                            <div key={capKey} className="flex items-center gap-2 rounded-md border border-green-100 bg-green-50 px-3 py-2">
+                              <Shield className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                              <span className="text-xs font-mono font-medium text-green-800">{capKey}</span>
+                              {cap && <span className="text-xs text-green-700 truncate">— {cap.description}</span>}
                             </div>
                           );
-                          }
-                        )}
+                        })}
                       </div>
                     )}
                   </div>
 
-                  {/* Available Capabilities */}
+                  {/* Individual Overrides section */}
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      Available Capabilities
-                    </h3>
-                    <div className="space-y-2">
-                      {allCapabilities
-                        .filter(
-                          (cap: Capability) =>
-                            !employeeCapabilities.some(
-                              (empCap: EmployeeCapability) =>
-                                empCap.capabilityId === cap.id
-                            )
-                        )
-                        .map((cap: Capability) => (
-                          <div
-                            key={cap.id}
-                            className="border rounded-lg p-3 bg-white hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h4 className="text-sm font-medium text-gray-900">
-                                    {cap.displayName}
-                                  </h4>
-                                  <Badge variant="outline" className="text-xs">
-                                    {cap.category}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {cap.description}
-                                </p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-sm font-medium text-gray-700">Individual Overrides</h3>
+                      <span className="text-xs text-gray-400">— applied on top of role, affect enforcement immediately</span>
+                    </div>
+                    {userOverrides.length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <Shield className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No individual overrides</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {userOverrides.map((ov) => {
+                          const cap = cbacCapabilities.find(c => c.key === ov.capabilityKey);
+                          const isDeny = ov.effect === 'deny';
+                          return (
+                            <div
+                              key={ov.id}
+                              className={`flex items-center justify-between rounded-md border px-3 py-2 ${isDeny ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isDeny ? (
+                                  <Ban className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                                ) : (
+                                  <Shield className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                                )}
+                                <Badge
+                                  variant={isDeny ? 'destructive' : 'default'}
+                                  className={`text-xs shrink-0 ${isDeny ? '' : 'bg-green-600 hover:bg-green-700'}`}
+                                >
+                                  {ov.effect}
+                                </Badge>
+                                <span className={`text-xs font-mono font-medium truncate ${isDeny ? 'text-red-900' : 'text-green-900'}`}>{ov.capabilityKey}</span>
+                                {cap && <span className={`text-xs truncate hidden sm:inline ${isDeny ? 'text-red-700' : 'text-green-700'}`}>— {cap.description}</span>}
                               </div>
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  grantCapabilityMutation.mutate({
-                                    capabilityId: cap.id,
-                                  })
-                                }
-                                disabled={grantCapabilityMutation.isPending}
-                                className="text-blue-600 hover:text-blue-700"
-                                data-testid={`button-grant-${cap.id}`}
+                                onClick={() => revokeCbacMutation.mutate(ov.id)}
+                                disabled={revokeCbacMutation.isPending}
+                                className="text-gray-500 hover:text-red-700 shrink-0 ml-2"
                               >
-                                Grant
+                                <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
-                          </div>
-                        ))}
-                      {allCapabilities.filter(
-                        (cap: Capability) =>
-                          !employeeCapabilities.some(
-                            (empCap: EmployeeCapability) =>
-                              empCap.capabilityId === cap.id
-                          )
-                      ).length === 0 && (
-                        <div className="text-center py-6 bg-gray-50 rounded-lg">
-                          <p className="text-sm text-gray-500">
-                            All capabilities have been granted
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Add capability override section */}
+                  {linkedUser && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-3">Add Capability Override</h3>
+                      <div className="space-y-2">
+                        {cbacCapabilities
+                          .filter(cap => !userOverrides.some(ov => ov.capabilityKey === cap.key))
+                          .map(cap => (
+                            <div key={cap.id} className="flex items-center justify-between rounded-md border bg-white px-3 py-2 hover:bg-gray-50">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-mono font-medium text-gray-900">{cap.key}</span>
+                                  <Badge variant="outline" className="text-xs shrink-0">{cap.category}</Badge>
+                                  {roleCapabilities.includes(cap.key) && (
+                                    <Badge variant="secondary" className="text-xs shrink-0">from role</Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5 truncate">{cap.description}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => grantCbacMutation.mutate(cap.key)}
+                                  disabled={grantCbacMutation.isPending || denyCbacMutation.isPending}
+                                  className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
+                                  data-testid={`button-grant-cbac-${cap.id}`}
+                                >
+                                  <Plus className="w-3.5 h-3.5 mr-1" />
+                                  Grant
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => denyCbacMutation.mutate(cap.key)}
+                                  disabled={grantCbacMutation.isPending || denyCbacMutation.isPending}
+                                  className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 hover:bg-red-50"
+                                  data-testid={`button-deny-cbac-${cap.id}`}
+                                >
+                                  <Ban className="w-3.5 h-3.5 mr-1" />
+                                  Deny
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        {cbacCapabilities.filter(cap => !userOverrides.some(ov => ov.capabilityKey === cap.key)).length === 0 && (
+                          <div className="text-center py-4 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-500">All capabilities have overrides</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1707,138 +2261,556 @@ export default function EmployeeDetail() {
             <TabsContent value="training">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
                     <div>
-                      <CardTitle>Training Completion Status</CardTitle>
+                      <CardTitle>Training Summary</CardTitle>
                       <CardDescription>
-                        Employee training matrix and completion records
+                        Per-employee compliance posture — all training and certification records
                       </CardDescription>
                     </div>
-                    {totalTrainings > 0 && (
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            completedTrainings === totalTrainings
-                              ? 'default'
-                              : completedTrainings > totalTrainings / 2
-                                ? 'secondary'
-                                : 'destructive'
-                          }
-                          className="text-sm"
-                        >
-                          {totalTrainings > 0
-                            ? Math.round(
-                                (completedTrainings / totalTrainings) * 100
-                              )
-                            : 0}
-                          % Complete
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {completedTrainings}/{totalTrainings} trainings
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {totalTrainings > 0 && (
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              completedTrainings === totalTrainings
+                                ? 'default'
+                                : completedTrainings > totalTrainings / 2
+                                  ? 'secondary'
+                                  : 'destructive'
+                            }
+                            className="text-sm"
+                          >
+                            {Math.round((completedTrainings / totalTrainings) * 100)}% Current
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {completedTrainings}/{totalTrainings} current
+                          </span>
+                        </div>
+                      )}
+                      <Link href={`/skill-matrix?employee=${encodeURIComponent(employee?.name ?? '')}`}>
+                        <Button variant="outline" size="sm" className="gap-1.5">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Full Skill Matrix
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {employeeTraining.length === 0 ? (
+                  {isLoadingTraining ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">Loading training records…</p>
+                    </div>
+                  ) : employeeTrainingMatrix.length === 0 ? (
                     <div className="text-center py-8">
                       <GraduationCap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-gray-500">No training records found</p>
                       <p className="text-sm text-gray-400 mt-2">
-                        Training data can be imported from the Training Matrix
-                        Import page
+                        Training data can be imported from the Training Matrix Import page
                       </p>
+                      <Link href={`/skill-matrix?employee=${encodeURIComponent(employee?.name ?? '')}`} className="mt-4 inline-block">
+                        <Button variant="outline" size="sm" className="gap-1.5 mt-3">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Go to Skill Matrix
+                        </Button>
+                      </Link>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {employeeTraining
-                        .sort((a, b) => {
-                          // Sort: completed items last, alphabetically within each group
-                          if (
-                            a.status === 'COMPLETED' &&
-                            b.status !== 'COMPLETED'
-                          )
-                            return 1;
-                          if (
-                            a.status !== 'COMPLETED' &&
-                            b.status === 'COMPLETED'
-                          )
-                            return -1;
-                          return a.trainingName.localeCompare(b.trainingName);
-                        })
-                        .map((training) => {
-                          const isCompleted = training.status === 'COMPLETED';
-                          const formatDate = (dateStr: string | null) => {
-                            if (!dateStr) return null;
-                            try {
-                              const date = new Date(dateStr);
-                              return date.toLocaleDateString('en-US', {
-                                month: 'numeric',
-                                day: 'numeric',
-                                year: 'numeric',
-                              });
-                            } catch {
-                              return dateStr;
-                            }
-                          };
+                      {employeeTrainingMatrix.map((training) => {
+                        const formatDate = (dateStr: string | null) => {
+                          if (!dateStr) return null;
+                          try {
+                            return new Date(dateStr).toLocaleDateString('en-US', {
+                              month: 'numeric',
+                              day: 'numeric',
+                              year: 'numeric',
+                            });
+                          } catch {
+                            return dateStr;
+                          }
+                        };
 
-                          return (
-                            <div
-                              key={training.id}
-                              className={`border rounded-lg p-4 ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}
-                              data-testid={`training-${training.trainingName.replace(/\s+/g, '-').toLowerCase()}`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    {isCompleted ? (
-                                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                    ) : (
-                                      <Circle className="h-5 w-5 text-red-400" />
-                                    )}
-                                    <h4 className="font-medium text-gray-900">
-                                      {training.trainingName}
-                                    </h4>
-                                  </div>
-                                  {isCompleted && training.lastCompleted && (
-                                    <div className="mt-2 text-sm text-gray-600">
-                                      <div className="flex items-center gap-2">
-                                        <Calendar className="h-4 w-4" />
-                                        <span>
-                                          Completed:{' '}
-                                          {formatDate(training.lastCompleted)}
-                                        </span>
-                                      </div>
-                                      {training.notes && (
-                                        <p className="mt-1 text-xs text-blue-600">
-                                          Note: {training.notes}
-                                        </p>
-                                      )}
+                        const statusConfig: Record<string, { bg: string; border: string; icon: JSX.Element; badgeClass: string; label: string }> = {
+                          COMPLETED: {
+                            bg: 'bg-green-50',
+                            border: 'border-green-200',
+                            icon: <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />,
+                            badgeClass: 'bg-green-100 text-green-800 border-green-300',
+                            label: 'Completed',
+                          },
+                          EXPIRING_SOON: {
+                            bg: 'bg-orange-50',
+                            border: 'border-orange-200',
+                            icon: <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0" />,
+                            badgeClass: 'bg-orange-100 text-orange-800 border-orange-300',
+                            label: 'Expiring Soon',
+                          },
+                          OVERDUE: {
+                            bg: 'bg-red-50',
+                            border: 'border-red-200',
+                            icon: <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />,
+                            badgeClass: 'bg-red-100 text-red-800 border-red-300',
+                            label: 'Overdue',
+                          },
+                          PENDING: {
+                            bg: 'bg-yellow-50',
+                            border: 'border-yellow-200',
+                            icon: <Circle className="h-5 w-5 text-yellow-500 shrink-0" />,
+                            badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+                            label: 'Pending',
+                          },
+                        };
+
+                        const cfg = statusConfig[training.status] ?? {
+                          bg: 'bg-gray-50',
+                          border: 'border-gray-200',
+                          icon: <Circle className="h-5 w-5 text-gray-400 shrink-0" />,
+                          badgeClass: 'bg-gray-100 text-gray-700 border-gray-300',
+                          label: training.status,
+                        };
+
+                        return (
+                          <div
+                            key={training.id}
+                            className={`border rounded-lg p-4 ${cfg.bg} ${cfg.border}`}
+                            data-testid={`training-${training.trainingName.replace(/\s+/g, '-').toLowerCase()}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {cfg.icon}
+                                  <h4 className="font-medium text-gray-900 truncate">
+                                    {training.trainingName}
+                                  </h4>
+                                </div>
+                                <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                  {training.lastCompleted && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                      <span>Completed: {formatDate(training.lastCompleted)}</span>
                                     </div>
                                   )}
-                                  {!isCompleted && (
-                                    <p className="mt-2 text-sm text-gray-600">
-                                      Not yet completed
-                                    </p>
+                                  {training.nextDue && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                                      <span>Due: {formatDate(training.nextDue)}</span>
+                                    </div>
+                                  )}
+                                  {training.frequency && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs text-muted-foreground">Frequency: {training.frequency}</span>
+                                    </div>
+                                  )}
+                                  {!training.lastCompleted && training.status === 'PENDING' && (
+                                    <p className="text-yellow-700">Not yet completed</p>
+                                  )}
+                                  {training.notes && (
+                                    <p className="text-xs text-blue-600">Note: {training.notes}</p>
                                   )}
                                 </div>
-                                <Badge
-                                  variant={
-                                    isCompleted ? 'default' : 'destructive'
-                                  }
-                                  className="ml-2"
-                                >
-                                  {training.status}
-                                </Badge>
                               </div>
+                              <span className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.badgeClass}`}>
+                                {cfg.label}
+                              </span>
                             </div>
-                          );
-                        })}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Traveler Access Tab */}
+            <TabsContent value="traveler">
+              <div className="space-y-6">
+                {/* Traveler Authorizations */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <ClipboardCheck className="w-5 h-5" />
+                        Traveler Authorizations
+                      </CardTitle>
+                      <CardDescription>
+                        Part numbers this employee is authorized to work on
+                      </CardDescription>
+                    </div>
+                    <Dialog open={showAddAuthDialog} onOpenChange={setShowAddAuthDialog}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="flex items-center gap-1">
+                          <Plus className="w-4 h-4" />
+                          Add Authorization
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add Traveler Authorization</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 pt-2">
+                          <div>
+                            <Label>Part Number *</Label>
+                            <Select value={newAuthPartNumber} onValueChange={setNewAuthPartNumber}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select part number" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {partNumbers.map((p) => (
+                                  <SelectItem key={p.partNumber} value={p.partNumber}>
+                                    {p.partNumber}{p.partName ? ` — ${p.partName}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {partNumbers.length === 0 && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                You can also type a part number directly below
+                              </p>
+                            )}
+                            {partNumbers.length === 0 && (
+                              <Input
+                                className="mt-2"
+                                placeholder="Or enter part number manually"
+                                value={newAuthPartNumber}
+                                onChange={(e) => setNewAuthPartNumber(e.target.value)}
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <Label>Department (optional)</Label>
+                            <Input
+                              value={newAuthDepartment}
+                              onChange={(e) => setNewAuthDepartment(e.target.value)}
+                              placeholder="e.g. Assembly"
+                            />
+                          </div>
+                          <div>
+                            <Label>Production Line (optional)</Label>
+                            <Select value={newAuthProductionLine} onValueChange={setNewAuthProductionLine}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select line" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="P1">P1</SelectItem>
+                                <SelectItem value="P2">P2</SelectItem>
+                                <SelectItem value="P3">P3</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Expires At (optional)</Label>
+                            <Input
+                              type="date"
+                              value={newAuthExpiresAt}
+                              onChange={(e) => setNewAuthExpiresAt(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 pt-2">
+                            <Button variant="outline" onClick={() => setShowAddAuthDialog(false)}>
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={() => createAuthMutation.mutate({
+                                partNumber: newAuthPartNumber,
+                                department: newAuthDepartment || undefined,
+                                productionLine: newAuthProductionLine || undefined,
+                                expiresAt: newAuthExpiresAt || undefined,
+                              })}
+                              disabled={!newAuthPartNumber || createAuthMutation.isPending}
+                            >
+                              {createAuthMutation.isPending ? 'Saving…' : 'Add Authorization'}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingAuths ? (
+                      <div className="text-center py-6">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400 mx-auto" />
+                      </div>
+                    ) : travelerAuths.length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <ClipboardCheck className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No traveler authorizations on record</p>
+                        <p className="text-xs text-gray-400 mt-1">The traveler gate will block this employee if authorizations are configured for a part</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {travelerAuths.map((auth) => {
+                          const isExpired = auth.expiresAt ? new Date(auth.expiresAt) < new Date() : false;
+                          return (
+                            <div
+                              key={auth.id}
+                              className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
+                                isExpired ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3 min-w-0">
+                                {isExpired ? (
+                                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                ) : (
+                                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold">{auth.partNumber}</p>
+                                  <div className="flex flex-wrap gap-2 mt-0.5">
+                                    {auth.department && (
+                                      <span className="text-xs text-muted-foreground">{auth.department}</span>
+                                    )}
+                                    {auth.productionLine && (
+                                      <Badge variant="outline" className="text-xs">{auth.productionLine}</Badge>
+                                    )}
+                                    {auth.planTitle && (
+                                      <span className="text-xs text-muted-foreground">via {auth.planTitle}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                                    {auth.authorizedAt && (
+                                      <span>Authorized: {new Date(auth.authorizedAt).toLocaleDateString()}</span>
+                                    )}
+                                    {auth.expiresAt && (
+                                      <span className={isExpired ? 'text-red-600 font-medium' : ''}>
+                                        {isExpired ? 'Expired: ' : 'Expires: '}
+                                        {new Date(auth.expiresAt).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deactivateAuthMutation.mutate(auth.id)}
+                                  disabled={deactivateAuthMutation.isPending || deleteAuthMutation.isPending}
+                                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                  title="Deactivate this authorization"
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Remove this authorization permanently?')) {
+                                      deleteAuthMutation.mutate(auth.id);
+                                    }
+                                  }}
+                                  disabled={deactivateAuthMutation.isPending || deleteAuthMutation.isPending}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Delete this authorization"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* P2 Competency Certifications */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Award className="w-5 h-5" />
+                        P2 Competency Certifications
+                      </CardTitle>
+                      <CardDescription>
+                        Part-level competency flags required by the P2 traveler gate
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Link href="/p2-control-center">
+                        <Button variant="outline" size="sm" className="flex items-center gap-1">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Bulk Manager
+                        </Button>
+                      </Link>
+                      <Dialog open={showAddP2CertDialog} onOpenChange={setShowAddP2CertDialog}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="flex items-center gap-1">
+                            <Plus className="w-4 h-4" />
+                            Add P2 Cert
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add P2 Competency Certification</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 pt-2">
+                            <div>
+                              <Label>Part Number *</Label>
+                              <Select value={p2PartNumber} onValueChange={setP2PartNumber}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select part number" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {partNumbers.map((p) => (
+                                    <SelectItem key={p.partNumber} value={p.partNumber}>
+                                      {p.partNumber}{p.partName ? ` — ${p.partName}` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Department *</Label>
+                              <Input
+                                value={p2Department}
+                                onChange={(e) => setP2Department(e.target.value)}
+                                placeholder="e.g. Assembly"
+                              />
+                            </div>
+                            <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                              <p className="text-sm font-medium">Competency Flags</p>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id="p2-drawing"
+                                  checked={p2DrawingKnowledge}
+                                  onCheckedChange={(v) => setP2DrawingKnowledge(v as boolean)}
+                                />
+                                <label htmlFor="p2-drawing" className="text-sm cursor-pointer">Drawing knowledge and department standards</label>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id="p2-spec"
+                                  checked={p2SpecSheet}
+                                  onCheckedChange={(v) => setP2SpecSheet(v as boolean)}
+                                />
+                                <label htmlFor="p2-spec" className="text-sm cursor-pointer">Spec sheet understanding</label>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id="p2-proc"
+                                  checked={p2ProcedureCompletion}
+                                  onCheckedChange={(v) => setP2ProcedureCompletion(v as boolean)}
+                                />
+                                <label htmlFor="p2-proc" className="text-sm cursor-pointer">Procedure completion after training</label>
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                              <Button variant="outline" onClick={() => setShowAddP2CertDialog(false)}>
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={() => createP2CertMutation.mutate({
+                                  partNumber: p2PartNumber,
+                                  department: p2Department,
+                                  drawingKnowledge: p2DrawingKnowledge,
+                                  specSheetUnderstanding: p2SpecSheet,
+                                  procedureCompletion: p2ProcedureCompletion,
+                                })}
+                                disabled={!p2PartNumber || !p2Department || createP2CertMutation.isPending}
+                              >
+                                {createP2CertMutation.isPending ? 'Saving…' : 'Add Certification'}
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingP2Certs ? (
+                      <div className="text-center py-6">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-400 mx-auto" />
+                      </div>
+                    ) : empP2Certs.length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <Award className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No P2 competency certifications on record</p>
+                        <p className="text-xs text-gray-400 mt-1">The P2 gate requires all three competency flags to be set for the relevant part and department</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {empP2Certs.map((cert) => {
+                          const isFullyCertified = cert.drawingKnowledge && cert.specSheetUnderstanding && cert.procedureCompletion;
+                          return (
+                            <div
+                              key={cert.id}
+                              className={`rounded-lg border p-4 ${isFullyCertified ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  {isFullyCertified ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                                  ) : (
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                                  )}
+                                  <div>
+                                    <p className="text-sm font-semibold">{cert.partNumber}</p>
+                                    <p className="text-xs text-muted-foreground">{cert.department}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {isFullyCertified && (
+                                    <Badge className="text-xs bg-green-100 text-green-800 border-green-300">Fully Certified</Badge>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (confirm('Remove this P2 certification record?')) {
+                                        deleteP2CertMutation.mutate(cert.id);
+                                      }
+                                    }}
+                                    disabled={deleteP2CertMutation.isPending}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                <label className={`flex items-center gap-2 rounded-md border px-2 py-1.5 cursor-pointer text-xs ${cert.drawingKnowledge ? 'border-green-300 bg-green-100' : 'border-gray-200 bg-white'}`}>
+                                  <Checkbox
+                                    checked={cert.drawingKnowledge}
+                                    onCheckedChange={(v) => toggleP2FlagMutation.mutate({ certId: cert.id, field: 'drawingKnowledge', value: v as boolean })}
+                                    disabled={toggleP2FlagMutation.isPending}
+                                  />
+                                  <span>Drawing</span>
+                                </label>
+                                <label className={`flex items-center gap-2 rounded-md border px-2 py-1.5 cursor-pointer text-xs ${cert.specSheetUnderstanding ? 'border-green-300 bg-green-100' : 'border-gray-200 bg-white'}`}>
+                                  <Checkbox
+                                    checked={cert.specSheetUnderstanding}
+                                    onCheckedChange={(v) => toggleP2FlagMutation.mutate({ certId: cert.id, field: 'specSheetUnderstanding', value: v as boolean })}
+                                    disabled={toggleP2FlagMutation.isPending}
+                                  />
+                                  <span>Spec Sheet</span>
+                                </label>
+                                <label className={`flex items-center gap-2 rounded-md border px-2 py-1.5 cursor-pointer text-xs ${cert.procedureCompletion ? 'border-green-300 bg-green-100' : 'border-gray-200 bg-white'}`}>
+                                  <Checkbox
+                                    checked={cert.procedureCompletion}
+                                    onCheckedChange={(v) => toggleP2FlagMutation.mutate({ certId: cert.id, field: 'procedureCompletion', value: v as boolean })}
+                                    disabled={toggleP2FlagMutation.isPending}
+                                  />
+                                  <span>Procedure</span>
+                                </label>
+                              </div>
+                              {cert.certifiedDate && (
+                                <p className="text-xs text-green-700 mt-2">
+                                  Certified on {new Date(cert.certifiedDate).toLocaleDateString()}
+                                  {cert.certifiedBy ? ` by ${cert.certifiedBy}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="documents">
@@ -2023,6 +2995,153 @@ export default function EmployeeDetail() {
                               )}
                             </div>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="qualifications">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Wrench className="w-5 h-5" />
+                        Machine &amp; Process Qualifications
+                      </CardTitle>
+                      <CardDescription>
+                        Machine-class and operation-type qualifications that gate CNC and special-process traveler steps
+                      </CardDescription>
+                    </div>
+                    <Dialog open={showAddQualDialog} onOpenChange={setShowAddQualDialog}>
+                      <DialogTrigger asChild>
+                        <Button size="sm">
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add Qualification
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add Qualification</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 pt-2">
+                          <div>
+                            <Label>Machine Class</Label>
+                            <Input
+                              placeholder="e.g. 3-Axis Mill, Lathe, EDM"
+                              value={newQual.machineClass}
+                              onChange={e => setNewQual(q => ({ ...q, machineClass: e.target.value }))}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">Leave blank if this is an operation-type-only qualification.</p>
+                          </div>
+                          <div>
+                            <Label>Operation Type</Label>
+                            <Select
+                              value={newQual.operationType}
+                              onValueChange={v => setNewQual(q => ({ ...q, operationType: v }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="None (machine class only)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                <SelectItem value="SETUP">SETUP</SelectItem>
+                                <SelectItem value="RUN">RUN</SelectItem>
+                                <SelectItem value="INSPECT">INSPECT</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Department (optional)</Label>
+                            <Input
+                              placeholder="e.g. CNC, Weld, Paint"
+                              value={newQual.department}
+                              onChange={e => setNewQual(q => ({ ...q, department: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <Label>Expiration Date (optional)</Label>
+                            <Input
+                              type="date"
+                              value={newQual.expiresAt}
+                              onChange={e => setNewQual(q => ({ ...q, expiresAt: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <Label>Notes (optional)</Label>
+                            <Input
+                              placeholder="Any notes about this qualification"
+                              value={newQual.notes}
+                              onChange={e => setNewQual(q => ({ ...q, notes: e.target.value }))}
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end pt-2">
+                            <Button variant="outline" onClick={() => setShowAddQualDialog(false)}>Cancel</Button>
+                            <Button
+                              onClick={() => createQualMutation.mutate(newQual)}
+                              disabled={createQualMutation.isPending || (!newQual.machineClass && (!newQual.operationType || newQual.operationType === 'none'))}
+                            >
+                              {createQualMutation.isPending ? 'Saving...' : 'Add Qualification'}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingQuals ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+                      <p className="text-gray-500">Loading qualifications...</p>
+                    </div>
+                  ) : machineQualifications.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Wrench className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p>No qualifications on record.</p>
+                      <p className="text-sm mt-1">Add machine-class or operation-type qualifications to gate traveler steps.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {machineQualifications.map((q: any) => (
+                        <div key={q.id} className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {q.machineClass && (
+                                <Badge variant="secondary" className="font-mono text-xs">
+                                  {q.machineClass}
+                                </Badge>
+                              )}
+                              {q.operationType && (
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {q.operationType}
+                                </Badge>
+                              )}
+                              {q.department && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Building2 className="w-3 h-3 mr-1" />
+                                  {q.department}
+                                </Badge>
+                              )}
+                              {q.expiresAt && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  Expires {new Date(q.expiresAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                            {q.notes && <p className="text-xs text-muted-foreground">{q.notes}</p>}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deactivateQualMutation.mutate(q.id)}
+                            disabled={deactivateQualMutation.isPending}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
                         </div>
                       ))}
                     </div>

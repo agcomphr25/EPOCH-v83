@@ -11,6 +11,7 @@ import {
   type PurchaseOrderItem,
 } from '@/lib/poUtils';
 import { generateProductionOrdersFromPO } from '@/lib/productionUtils';
+import { getDepartmentQueueUrl } from '@/utils/departmentQueueUtils';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,11 +127,37 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
+type StatusFilter = 'ALL' | 'LAID_UP' | 'PENDING' | 'SHIPPED' | 'CANCELLED';
+
+function getStatusLabel(filter: StatusFilter): string {
+  switch (filter) {
+    case 'ALL': return 'All Orders';
+    case 'LAID_UP': return 'In Progress';
+    case 'PENDING': return 'Pending';
+    case 'SHIPPED': return 'Shipped';
+    case 'CANCELLED': return 'Cancelled';
+  }
+}
+
+function getOrderStatusBadge(status: string) {
+  switch (status) {
+    case 'PENDING': return <Badge className="bg-blue-100 text-blue-800 text-xs">Pending</Badge>;
+    case 'LAID_UP': return <Badge className="bg-yellow-100 text-yellow-800 text-xs">In Progress</Badge>;
+    case 'ACTIVE': return <Badge className="bg-orange-100 text-orange-800 text-xs">Active</Badge>;
+    case 'SHIPPED': return <Badge className="bg-green-100 text-green-800 text-xs">Shipped</Badge>;
+    case 'CANCELLED': return <Badge className="bg-red-100 text-red-800 text-xs">Cancelled</Badge>;
+    default: return <Badge variant="outline" className="text-xs">{status}</Badge>;
+  }
+}
+
 // Component to display production status breakdown — receives pre-fetched orders from POCard
-function ProductionStatusBadge({ productionOrders, totalPoQuantity }: {
+function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: {
   productionOrders: any[];
   totalPoQuantity: number;
+  poNumber: string;
 }) {
+  const [selectedFilter, setSelectedFilter] = useState<StatusFilter | null>(null);
+
   if (productionOrders.length === 0) {
     return null;
   }
@@ -144,43 +171,146 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity }: {
   // Flag when orders outnumber the PO quantity — likely indicates duplicate generation
   const hasDuplicates = totalPoQuantity > 0 && total > totalPoQuantity;
 
+  const filteredOrders = selectedFilter === null ? [] : selectedFilter === 'ALL'
+    ? productionOrders
+    : productionOrders.filter((o: any) => o.productionStatus === selectedFilter);
+
+  const modalTitle = selectedFilter
+    ? `${poNumber} — ${getStatusLabel(selectedFilter)} (${filteredOrders.length})`
+    : '';
+
+  const handleBadgeClick = (e: React.MouseEvent, filter: StatusFilter) => {
+    e.stopPropagation();
+    setSelectedFilter(filter);
+  };
+
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {/* Duplicate warning */}
-      {hasDuplicates && (
-        <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold" title={`${total} orders generated but PO only has ${totalPoQuantity} units — possible duplicate generation`}>
-          ⚠ {total - totalPoQuantity} Duplicate{total - totalPoQuantity !== 1 ? 's' : ''}
+    <>
+      <div className="flex items-center gap-1 flex-wrap">
+        {/* Duplicate warning */}
+        {hasDuplicates && (
+          <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold" title={`${total} orders generated but PO only has ${totalPoQuantity} units — possible duplicate generation`}>
+            ⚠ {total - totalPoQuantity} Duplicate{total - totalPoQuantity !== 1 ? 's' : ''}
+          </Badge>
+        )}
+        {/* Overall total */}
+        <Badge
+          variant="outline"
+          className="text-xs font-medium cursor-pointer hover:bg-gray-100 hover:border-gray-400 transition-colors"
+          onClick={(e) => handleBadgeClick(e, 'ALL')}
+          title="Click to view all orders"
+        >
+          {total} Orders
         </Badge>
-      )}
-      {/* Overall total */}
-      <Badge variant="outline" className="text-xs font-medium">
-        {total} Orders
-      </Badge>
-      {/* In Progress */}
-      {inProgress > 0 && (
-        <Badge className="bg-yellow-100 text-yellow-800 text-xs">
-          {inProgress} In Progress
-        </Badge>
-      )}
-      {/* Pending */}
-      {pending > 0 && (
-        <Badge className="bg-blue-100 text-blue-800 text-xs">
-          {pending} Pending
-        </Badge>
-      )}
-      {/* Shipped */}
-      {shipped > 0 && (
-        <Badge className={shipped === active ? 'bg-green-100 text-green-800 text-xs' : 'bg-emerald-50 text-emerald-700 text-xs'}>
-          {shipped}/{active} Shipped
-        </Badge>
-      )}
-      {/* Cancelled — only show when present */}
-      {cancelled > 0 && (
-        <Badge className="bg-red-100 text-red-700 text-xs">
-          {cancelled} Cancelled
-        </Badge>
-      )}
-    </div>
+        {/* In Progress */}
+        {inProgress > 0 && (
+          <Badge
+            className="bg-yellow-100 text-yellow-800 text-xs cursor-pointer hover:bg-yellow-200 transition-colors"
+            onClick={(e) => handleBadgeClick(e, 'LAID_UP')}
+            title="Click to view in-progress orders"
+          >
+            {inProgress} In Progress
+          </Badge>
+        )}
+        {/* Pending */}
+        {pending > 0 && (
+          <Badge
+            className="bg-blue-100 text-blue-800 text-xs cursor-pointer hover:bg-blue-200 transition-colors"
+            onClick={(e) => handleBadgeClick(e, 'PENDING')}
+            title="Click to view pending orders"
+          >
+            {pending} Pending
+          </Badge>
+        )}
+        {/* Shipped */}
+        {shipped > 0 && (
+          <Badge
+            className={`${shipped === active ? 'bg-green-100 text-green-800' : 'bg-emerald-50 text-emerald-700'} text-xs cursor-pointer hover:brightness-95 transition-colors`}
+            onClick={(e) => handleBadgeClick(e, 'SHIPPED')}
+            title="Click to view shipped orders"
+          >
+            {shipped}/{active} Shipped
+          </Badge>
+        )}
+        {/* Cancelled — only show when present */}
+        {cancelled > 0 && (
+          <Badge
+            className="bg-red-100 text-red-700 text-xs cursor-pointer hover:bg-red-200 transition-colors"
+            onClick={(e) => handleBadgeClick(e, 'CANCELLED')}
+            title="Click to view cancelled orders"
+          >
+            {cancelled} Cancelled
+          </Badge>
+        )}
+      </div>
+
+      {/* Order detail modal */}
+      <Dialog open={selectedFilter !== null} onOpenChange={(open) => { if (!open) setSelectedFilter(null); }}>
+        <DialogContent className="max-w-3xl w-full max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{modalTitle}</DialogTitle>
+            <DialogDescription>
+              {filteredOrders.length === 0
+                ? 'No orders match this filter.'
+                : `Showing ${filteredOrders.length} production order${filteredOrders.length !== 1 ? 's' : ''}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {filteredOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <Package className="w-10 h-10 mb-3 opacity-40" />
+                <p>No orders in this category.</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background">
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium">Order ID</th>
+                    <th className="text-left p-3 font-medium">Item Name</th>
+                    <th className="text-left p-3 font-medium">Item Code</th>
+                    <th className="text-left p-3 font-medium">Status</th>
+                    <th className="text-left p-3 font-medium">Department</th>
+                    <th className="text-left p-3 font-medium">Operator</th>
+                    <th className="text-left p-3 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order: any) => (
+                    <tr key={order.id} className="border-b hover:bg-muted/50 transition-colors">
+                      <td className="p-3 font-medium">
+                        <a
+                          href={getDepartmentQueueUrl(order.currentDepartment, order.orderId || order.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {order.orderId || order.id}
+                        </a>
+                      </td>
+                      <td className="p-3">{order.itemName || '—'}</td>
+                      <td className="p-3 text-muted-foreground">{order.itemCode || order.materialCanonical || '—'}</td>
+                      <td className="p-3">{getOrderStatusBadge(order.productionStatus)}</td>
+                      <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>
+                      <td className="p-3 text-muted-foreground">{order.operatorName || order.operator || order.assignedOperator || '—'}</td>
+                      <td className="p-3 text-muted-foreground">
+                        {order.shippedAt
+                          ? formatDate(new Date(order.shippedAt), 'M/d/yy')
+                          : order.startedAt
+                          ? formatDate(new Date(order.startedAt), 'M/d/yy')
+                          : order.createdAt
+                          ? formatDate(new Date(order.createdAt), 'M/d/yy')
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -386,9 +516,9 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                   className={`border-b transition-colors ${isDuplicate ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-muted/50'}`}
                 >
                   <td className="p-3 font-medium text-blue-600">
-                    <a href={`/barcode-queue?highlight=${order.orderId}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                    <Link href={getDepartmentQueueUrl(order.currentDepartment, order.orderId)} target="_blank" rel="noopener noreferrer" className="hover:underline">
                       {order.orderId}
-                    </a>
+                    </Link>
                     {isDuplicate && (
                       <Badge className="bg-orange-200 text-orange-900 text-[10px] ml-1.5 px-1 py-0">DUPE</Badge>
                     )}
@@ -791,7 +921,7 @@ function POCard({
           </div>
           <div className="flex gap-2 flex-wrap">
             <Badge className={getStatusColor(po.status)}>{po.status}</Badge>
-            <ProductionStatusBadge productionOrders={productionOrders} totalPoQuantity={totalPoQuantity} />
+            <ProductionStatusBadge productionOrders={productionOrders} totalPoQuantity={totalPoQuantity} poNumber={po.poNumber} />
             <div className="flex gap-1 flex-wrap">
               <Button
                 variant="outline"

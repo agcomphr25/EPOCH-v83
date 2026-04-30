@@ -20,9 +20,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { softAuth, authenticateToken, sessionAwareAuth } from '../../middleware/auth';
+import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
 import employeesRoutes from './employees';
+import employeeQualificationsRoutes from './employeeQualifications';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
 import tasksRoutes from './tasks';
@@ -84,6 +85,7 @@ import gmailRoutes from './gmail';
 import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
+import vaultRoutes from './vault';
 import adminRoutes from './admin';
 import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
@@ -91,6 +93,7 @@ import costAccountingRoutes from './costAccounting';
 import employeeBadgesRoutes from './employeeBadges';
 import manufacturingQueueRoutes from './manufacturingQueue';
 import cuttingTableManufacturingQueueRoutes from './cuttingTableManufacturingQueue';
+import cuttingDocumentsRoutes from './cuttingDocuments';
 import allocationRequirementsRoutes from './allocationRequirements';
 import allocationControlRoutes from './allocationControl';
 
@@ -113,6 +116,7 @@ import mrpRoutes from './mrp';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
+import { dailyThroughputBoardHandler } from './dailyThroughputBoard';
 import p2ShippingRoutes from './p2Shipping';
 import p2RmasRoutes from './p2Rmas';
 import preproductionChecklistsRoutes from './preproductionChecklists';
@@ -124,6 +128,7 @@ import monitoredLinksRoutes from './monitoredLinks';
 import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
 import projectClosingsRoutes from './projectClosings';
+import pmDashboardRoutes from './pmDashboard';
 import quoteFeedbackRoutes from './quoteFeedback';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
@@ -149,8 +154,20 @@ import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
 import timekeepingRoutes from './timekeeping';
+import tkPunchesRoutes from './timekeeping/punches';
+import tkTimesheetsRoutes from './timekeeping/timesheets';
+import tkEmployeesRoutes from './timekeeping/employees';
+import tkDashboardRoutes from './timekeeping/dashboard';
+import tkDailyCertificationRoutes from './timekeeping/daily-certification';
+import tkTimeOffRoutes from './timekeeping/timeoff';
+import tkSalariedTimesheetsRoutes from './timekeeping/salariedTimesheets';
+import tkLaborApprovalsRoutes from './timekeeping/laborApprovals';
+import tkLaborCaptureRoutes from './timekeeping/laborCapture';
+import tkCorrectionsRoutes from './timekeeping/corrections';
+import tkPolicySettingsRoutes from './timekeeping/policySettings';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
+import pdfFormsRoutes from './pdfForms';
 import accountingPrepRoutes from './accountingPrep';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
@@ -172,91 +189,102 @@ import controlTowerRoutes from './controlTower';
 import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
 import governanceRoutes from './governance';
+import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
+import auditsRoutes from './audits';
+import commandCenterRoutes from './commandCenter';
+import edriRoutes from './edri';
+import forensicAuditRoutes from './forensicAudit';
+import vaultRoutes from './vault';
+import cmmcRoutes from './cmmc';
+import chargeCodesRoutes from './chargeCodes';
+import continuityRoutes from './continuity';
+import proteusLabsRoutes from './proteusLabs';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
-  // Temporary debug route - raw order data inspector
-  app.get('/api/debug/order/:orderId', authenticateToken, async (req, res) => {
-    try {
-      const { orderId } = req.params;
-      const { pool } = await import('../../db');
+  // Debug routes — not mounted in production
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/api/debug/order/:orderId', authenticateToken, async (req, res) => {
+      try {
+        const { orderId } = req.params;
+        const { pool } = await import('../../db');
 
-      const allOrdersResult = await pool.query(
-        `SELECT * FROM all_orders WHERE order_id = $1`,
-        [orderId]
-      );
+        const allOrdersResult = await pool.query(
+          `SELECT * FROM all_orders WHERE order_id = $1`,
+          [orderId]
+        );
 
-      const productionOrdersResult = await pool.query(
-        `SELECT * FROM production_orders WHERE order_id = $1`,
-        [orderId]
-      );
+        const productionOrdersResult = await pool.query(
+          `SELECT * FROM production_orders WHERE order_id = $1`,
+          [orderId]
+        );
 
-      const allOrderRow = allOrdersResult.length > 0 ? allOrdersResult[0] : null;
-      const prodOrderRow = productionOrdersResult.length > 0 ? productionOrdersResult[0] : null;
+        const allOrderRow = allOrdersResult.length > 0 ? allOrdersResult[0] : null;
+        const prodOrderRow = productionOrdersResult.length > 0 ? productionOrdersResult[0] : null;
 
-      console.log('=== DEBUG RAW ORDER DATA ===');
-      console.log('Order ID:', orderId);
-      console.log('--- all_orders.features ---');
-      console.log(JSON.stringify(allOrderRow?.features, null, 2));
-      console.log('--- production_orders.specifications ---');
-      console.log(JSON.stringify(prodOrderRow?.specifications, null, 2));
-      console.log('--- production_orders.features ---');
-      console.log(JSON.stringify(prodOrderRow?.features, null, 2));
-      console.log('=== END DEBUG ===');
+        console.log('=== DEBUG RAW ORDER DATA ===');
+        console.log('Order ID:', orderId);
+        console.log('--- all_orders.features ---');
+        console.log(JSON.stringify(allOrderRow?.features, null, 2));
+        console.log('--- production_orders.specifications ---');
+        console.log(JSON.stringify(prodOrderRow?.specifications, null, 2));
+        console.log('--- production_orders.features ---');
+        console.log(JSON.stringify(prodOrderRow?.features, null, 2));
+        console.log('=== END DEBUG ===');
 
-      res.json({
-        orderId,
-        all_orders: allOrderRow,
-        production_orders: prodOrderRow,
-      });
-    } catch (error: any) {
-      console.error('Debug route error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Temporary debug route - one-time repair for missing production order specs
-  app.post('/api/debug/repair-missing-production-specs', authenticateToken, async (req, res) => {
-    try {
-      const { pool } = await import('../../db');
-
-      await pool.query('BEGIN');
-
-      const result = await pool.query(`
-        UPDATE production_orders po
-        SET
-          specifications = to_jsonb(poi.specifications),
-          item_type = COALESCE(poi.item_type, po.item_type)
-        FROM purchase_order_items poi
-        WHERE po.po_item_id = poi.id
-          AND (po.specifications IS NULL OR po.specifications::text = '{}' OR po.specifications::text = 'null')
-          AND poi.specifications IS NOT NULL
-        RETURNING po.order_id, poi.item_type, poi.specifications
-      `);
-
-      const updated = Array.isArray(result) ? result : (result as any).rows || [];
-
-      await pool.query('COMMIT');
-
-      console.log(`=== REPAIR COMPLETE: ${updated.length} production orders updated ===`);
-      for (const row of updated) {
-        console.log(`  Updated ${row.order_id}: item_type=${row.item_type}`);
+        res.json({
+          orderId,
+          all_orders: allOrderRow,
+          production_orders: prodOrderRow,
+        });
+      } catch (error: any) {
+        console.error('Debug route error:', error);
+        res.status(500).json({ error: error.message });
       }
+    });
 
-      res.json({
-        success: true,
-        updatedCount: updated.length,
-        updatedOrders: updated.map((r: any) => r.order_id),
-      });
-    } catch (error: any) {
-      const { pool } = await import('../../db');
-      await pool.query('ROLLBACK');
-      console.error('Repair route error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
+    app.post('/api/debug/repair-missing-production-specs', authenticateToken, async (req, res) => {
+      try {
+        const { pool } = await import('../../db');
+
+        await pool.query('BEGIN');
+
+        const result = await pool.query(`
+          UPDATE production_orders po
+          SET
+            specifications = to_jsonb(poi.specifications),
+            item_type = COALESCE(poi.item_type, po.item_type)
+          FROM purchase_order_items poi
+          WHERE po.po_item_id = poi.id
+            AND (po.specifications IS NULL OR po.specifications::text = '{}' OR po.specifications::text = 'null')
+            AND poi.specifications IS NOT NULL
+          RETURNING po.order_id, poi.item_type, poi.specifications
+        `);
+
+        const updated = Array.isArray(result) ? result : (result as any).rows || [];
+
+        await pool.query('COMMIT');
+
+        console.log(`=== REPAIR COMPLETE: ${updated.length} production orders updated ===`);
+        for (const row of updated) {
+          console.log(`  Updated ${row.order_id}: item_type=${row.item_type}`);
+        }
+
+        res.json({
+          success: true,
+          updatedCount: updated.length,
+          updatedOrders: updated.map((r: any) => r.order_id),
+        });
+      } catch (error: any) {
+        const { pool } = await import('../../db');
+        await pool.query('ROLLBACK');
+        console.error('Repair route error:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+  }
 
   // Authentication routes
   app.use('/api/auth', authRoutes);
@@ -294,6 +322,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+  app.use('/api/employees/:employeeId/qualifications', employeeQualificationsRoutes);
 
   // Punch events routes (IC-7) - Read-only mirror from Time Clock
   app.use('/api/punches', punchesRoutes);
@@ -303,6 +332,26 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Native EPOCH timekeeping — punch_events as source of truth
   app.use('/api/timekeeping', timekeepingRoutes);
+
+  // Absorbed standalone timekeeping routes (Tier 1 — punches, timesheets, employees, dashboard)
+  // These coexist with the existing timekeepingRoutes above. Each file owns its own path segments.
+  app.use('/api/timekeeping', tkPunchesRoutes);
+  app.use('/api/timekeeping', tkTimesheetsRoutes);
+  app.use('/api/timekeeping', tkEmployeesRoutes);
+  app.use('/api/timekeeping', tkDashboardRoutes);
+  // Tier 2 — DCAA daily certification flow (TK-006)
+  app.use('/api/timekeeping', tkDailyCertificationRoutes);
+  // Tier 3 — Time-off request & approval workflow
+  app.use('/api/timekeeping', tkTimeOffRoutes);
+  // Tier 4 — Salaried timesheet system (Phase 1: read-only, feature-flagged)
+  app.use('/api/timekeeping', tkSalariedTimesheetsRoutes);
+  app.use('/api/timekeeping', tkLaborApprovalsRoutes);
+  // Tier 5 — Labor Capture AI Suggestion engine (Phase B Prompt 1)
+  app.use('/api/timekeeping', tkLaborCaptureRoutes);
+  // Tier 6 — DCAA Timesheet Correction Approval Chain
+  app.use('/api/timekeeping', tkCorrectionsRoutes);
+  // Tier 7 — Timekeeping Policy Settings (runtime-configurable compliance rules)
+  app.use('/api/timekeeping', tkPolicySettingsRoutes);
 
   // Historical Data routes - for tracking legacy system data
   app.use('/api/historical-data', historicalDataRoutes);
@@ -335,6 +384,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Customer management routes
   app.use('/api/customers', customersRoutes);
   
+  // Daily throughput board — registered as a direct app.get with the full explicit path
+  // to prevent any /api/p2 sub-router from intercepting this route via /:id patterns.
+  app.get('/api/p2/daily-throughput-board', dailyThroughputBoardHandler);
+
   // P2 Layup Schedule routes (MUST come before P2 customer routes to avoid /:id catch-all)
   app.use('/api/p2', p2LayupSchedulesRoutes);
   app.use('/api/p2', p2ShippingRoutes);
@@ -824,6 +877,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);
 
+  // CMMC Secure Vault — classification management + immutable access audit log
+  app.use('/api/vault', vaultRoutes);
+
   // Order attachments routes
   app.use('/api/order-attachments', orderAttachmentsRoutes);
 
@@ -847,7 +903,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Shipping management routes
   app.use('/api/shipping', shippingRoutes);
-  app.use('/api/shipping-test', shippingTestRoutes);
+  if (process.env.NODE_ENV !== 'production') {
+    app.use('/api/shipping-test', shippingTestRoutes);
+  }
 
   // Discount management routes
   app.use('/api/discounts', discountsRoutes);
@@ -930,6 +988,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Production Forecast Engine routes (read-only)
   app.use('/api/forecast', forecastRoutes);
 
+  // PM Control Center dashboard routes
+  app.use('/api/pm-dashboard', pmDashboardRoutes);
+
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);
 
@@ -981,6 +1042,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Fillable PDF Templates routes
   app.use('/api/fillable-pdf-templates', fillablePdfTemplatesRoutes);
 
+  // PDF Forms module routes (general-purpose fillable PDF forms)
+  app.use('/api/pdf-forms', pdfFormsRoutes);
+
   // Accounting Prep routes (Phase 0 - QuickBooks Journal Entry Prep)
   app.use('/api/accounting-prep', accountingPrepRoutes);
 
@@ -998,6 +1062,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Cutting Table Manufacturing Queue routes
   app.use('/api/cutting-table-mfg-queue', cuttingTableManufacturingQueueRoutes);
+
+  // Cutting Documents routes
+  app.use('/api/cutting-documents', cuttingDocumentsRoutes);
 
   // Executive Rundown routes (Glenn-only, access-restricted)
   app.use('/api/executive/rundown', executiveRundownRoutes);
@@ -2362,6 +2429,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         for (const item of lineItems) {
           await storage.createP2PurchaseOrderItem({
             poId: po.id,
+            inventoryItemId: item.inventoryItemId || null,
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
@@ -2858,8 +2926,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.get('/api/p2/control-center/po-statuses', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool: dbPool } = await import('../../db');
       const pos = await storage.getAllP2PurchaseOrders();
       const serializedItems = await storage.getP2SerializedItems({});
+
+      // Look up projects linked to these POs
+      const poIds = pos.map((po: any) => po.id);
+      const projectRows = poIds.length > 0
+        ? await dbPool.query(
+            `SELECT po_id AS "poId", id AS "projectId" FROM projects WHERE po_id = ANY($1)`,
+            [poIds]
+          )
+        : [];
+      const projectByPoId = new Map<number, string>(
+        (projectRows as any[]).map((r: any) => [r.poId, r.projectId])
+      );
       
       const poStatuses = pos.map((po: any) => {
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
@@ -2889,6 +2970,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
           projectName: po.projectName || null,
+          projectId: projectByPoId.get(po.id) ?? null,
           status: completedItems === poItems.length && poItems.length > 0 ? 'completed' : 
                   inProductionItems > 0 ? 'in_progress' : 'pending'
         };
@@ -3100,6 +3182,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           currentDepartment: dept,
           currentStageIndex: item.currentStageIndex || 0,
           hasActiveTask: !!activeTask,
+          barcodePrintedAt: item.barcodePrintedAt || null,
           activeTask: activeTask ? {
             id: activeTask.id,
             employeeName: activeTask.employeeName,
@@ -3140,6 +3223,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // P2 Stamp barcode print event — sets barcode_printed_at = now() if not already set
+  app.patch('/api/p2/control-center/stamp-barcode-printed', async (req, res) => {
+    try {
+      const { z } = await import('zod');
+      const schema = z.object({
+        serialNumbers: z.array(z.string().min(1)).min(1),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+      }
+      const { serialNumbers } = parsed.data;
+      const { pool } = await import('../../db');
+      const result = await pool.query(
+        `UPDATE p2_serialized_items
+         SET barcode_printed_at = NOW(), updated_at = NOW()
+         WHERE serial_number = ANY($1::text[])
+           AND barcode_printed_at IS NULL`,
+        [serialNumbers]
+      );
+      res.json({ ok: true, stamped: result.rowCount ?? 0 });
+    } catch (err: any) {
+      console.error('Stamp barcode print error:', err);
+      res.status(500).json({ error: err?.message || 'Failed to stamp barcode print' });
+    }
+  });
+
   // P2 Update item status (Hold/Scrap/Complete)
   app.patch('/api/p2/control-center/item-status/:itemId', async (req, res) => {
     try {
@@ -3165,14 +3275,26 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { status, reason, performedBy, notes, linkedTravelerId } = validationResult.data;
       
       const { db } = await import('../../db');
-      const { p2SerializedItems, p2SerializedItemEvents, travelers } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
+      const { eq, desc } = await import('drizzle-orm');
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
       
       if (!item) {
         return res.status(404).json({ error: 'Item not found' });
       }
+
+      // Fetch the currently linked travelers for this serial number (used for cycle sentinel events)
+      const linkedTravelers = item.serialNumber
+        ? await db.select().from(travelers)
+            .where(eq(travelers.serialNumber, item.serialNumber))
+            .orderBy(desc(travelers.createdAt))
+            .limit(10)
+        : [];
+      const activeTraveler = linkedTravelers.find(t => t.status === 'IN_PROGRESS')
+        || linkedTravelers.find(t => t.status === 'COMPLETED')
+        || linkedTravelers[0]
+        || null;
       
       const updateFields: any = {
         status,
@@ -3210,6 +3332,73 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         notes: [reason, notes].filter(Boolean).join(' — ') || `Status changed to ${status}`,
         metadata: { previousStatus: item.status, newStatus: status, linkedTravelerId: linkedTravelerId || null },
       });
+
+      // Write cycle sentinel events to mark manufacturing cycle boundaries
+      if (status === 'SCRAPPED') {
+        // CYCLE_SCRAPPED: marks the end of this production cycle
+        await db.insert(p2SerializedItemEvents).values({
+          serializedItemId: itemId,
+          barcode: item.barcode,
+          eventType: 'CYCLE_SCRAPPED',
+          performedBy: performedBy || 'System',
+          notes: `Production cycle scrapped — ${reason}`,
+          metadata: {
+            reason,
+            travelerId: activeTraveler?.id ?? null,
+            travelerNumber: activeTraveler?.travelerNumber ?? null,
+            serialNumber: item.serialNumber,
+          },
+        });
+        // Also write to the main audit events table so it appears in AuditTimeline
+        if (activeTraveler) {
+          await db.insert(auditEvents).values({
+            entityType: 'traveler',
+            entityId: activeTraveler.id,
+            action: 'CYCLE_SCRAPPED',
+            actorName: performedBy || 'System',
+            reason,
+            meta: {
+              travelerId: activeTraveler.id,
+              travelerNumber: activeTraveler.travelerNumber,
+              serialNumber: item.serialNumber,
+              serializedItemId: itemId,
+              barcode: item.barcode,
+            },
+          });
+        }
+      } else if (status === 'ACTIVE' && item.status === 'SCRAPPED') {
+        // CYCLE_RESTARTED: marks the beginning of a new production cycle for this serial number
+        await db.insert(p2SerializedItemEvents).values({
+          serializedItemId: itemId,
+          barcode: item.barcode,
+          eventType: 'CYCLE_RESTARTED',
+          performedBy: performedBy || 'System',
+          notes: `Production cycle restarted — ${reason}`,
+          metadata: {
+            reason,
+            previousTravelerId: activeTraveler?.id ?? null,
+            previousTravelerNumber: activeTraveler?.travelerNumber ?? null,
+            serialNumber: item.serialNumber,
+          },
+        });
+        // Also write to the main audit events table
+        if (activeTraveler) {
+          await db.insert(auditEvents).values({
+            entityType: 'traveler',
+            entityId: activeTraveler.id,
+            action: 'CYCLE_RESTARTED',
+            actorName: performedBy || 'System',
+            reason,
+            meta: {
+              previousTravelerId: activeTraveler.id,
+              previousTravelerNumber: activeTraveler.travelerNumber,
+              serialNumber: item.serialNumber,
+              serializedItemId: itemId,
+              barcode: item.barcode,
+            },
+          });
+        }
+      }
 
       let travelerCreated = false;
       let linkedTravelerFound = false;
@@ -3329,6 +3518,49 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     } catch (_error) {
       console.error('Get P2 Purchase Order error:', _error);
       res.status(500).json({ error: 'Failed to fetch P2 Purchase Order' });
+    }
+  });
+
+  app.get('/api/p2/purchase-orders/:id/pdf', sessionAwareAuth, async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required to access P2 purchase order documents' });
+    }
+    try {
+      const poId = parseInt(req.params.id);
+      if (isNaN(poId)) return res.status(400).json({ error: 'Invalid PO ID' });
+
+      const { storage } = await import('../../storage');
+      const po = await storage.getP2PurchaseOrder(poId, { includeItems: true });
+      if (!po) return res.status(404).json({ error: 'Purchase order not found' });
+
+      const { generateP2PurchaseOrderPdf } = await import('../../utils/pdf/p2PurchaseOrderPdf');
+      const pdfBuffer = await generateP2PurchaseOrderPdf({
+        poNumber: po.poNumber,
+        customerName: po.customerName,
+        customerId: po.customerId,
+        poDate: po.poDate,
+        expectedDelivery: po.expectedDelivery,
+        status: po.status,
+        notes: po.notes,
+        projectName: po.projectName,
+        lineItems: (po.items || []).map((item: any) => ({
+          partNumber: item.partNumber,
+          partName: item.partName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          specifications: item.specifications,
+          notes: item.notes,
+        })),
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="PO-${po.poNumber}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.end(pdfBuffer);
+    } catch (err: any) {
+      console.error('[P2 PO PDF] Error generating PDF:', err);
+      res.status(500).json({ error: 'Failed to generate PDF' });
     }
   });
 
@@ -10485,8 +10717,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // QuickNotes routes - collaborative note-taking with sharing
   app.use('/api/quick-notes', authenticateToken, quickNotesRoutes);
 
-  // Schema Governance routes - drift detection, audit log, override
-  app.use('/api/governance', authenticateToken, governanceRoutes);
+  // Schema Governance routes - drift detection, audit log, override (ADMIN/OWNER only)
+  app.use('/api/governance', authenticateToken, requireExecutiveAccess, governanceRoutes);
 
   // CNC Dashboard routes - job queue, setup packages, tooling, QC
   app.use('/api/cnc', authenticateToken, cncDashboardRoutes);
@@ -10496,6 +10728,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Estimating / RFQ Builder routes
   app.use('/api/estimating', authenticateToken, estimatingRoutes);
+
+  // System Audit Library routes (admin and owner only)
+  app.use('/api/audits', requireAdminOrOwner, auditsRoutes);
+
+  // Operations Command Center — shop floor decision surface
+  app.use('/api/command-center', authenticateToken, commandCenterRoutes);
+
+  // EDRI — EPOCH DCAA Readiness Index
+  app.use('/api/edri', edriRoutes);
+
+  // DCAA Forensic Audit Engine
+  app.use('/api/forensic-audit', forensicAuditRoutes);
+
+  // Document Vault — CUI/ITAR classification and access control
+  app.use('/api/vault', vaultRoutes);
+
+  // CMMC 2.0 Level 2 Readiness Dashboard
+  app.use('/api/cmmc', cmmcRoutes);
+
+  // Native charge code registry
+  app.use('/api/charge-codes', chargeCodesRoutes);
+
+  // Business Continuity Dashboard (ADMIN/OWNER only)
+  app.use('/api/continuity', continuityRoutes);
+
+  // Proteus Labs — Prompt Library (ADMIN/OWNER only)
+  app.use('/api/proteus-labs', proteusLabsRoutes);
 
   // Return the pre-existing server if one was passed in (early-bind pattern),
   // otherwise create a new one (backward-compatible fallback).

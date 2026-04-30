@@ -10,7 +10,7 @@
  * in the given date range.
  */
 
-import { db } from '../../db';
+import { db, pgPool } from '../../db';
 import { punchLedger, laborAllocations, employees, chargeCodes } from '../../schema';
 import { sql, and, gte, lte, isNotNull, eq } from 'drizzle-orm';
 
@@ -180,24 +180,6 @@ export async function reconcileLaborCostsInRange(
   // Load labor_allocations for those sessions
   const sessionIds = sessions.map((s) => s.id);
 
-  const allocRows = await db.execute(sql`
-    SELECT
-      la.id,
-      la.punch_ledger_id   AS "punchLedgerId",
-      la.employee_id       AS "employeeId",
-      la.allocation_start  AS "allocationStart",
-      la.allocation_end    AS "allocationEnd",
-      la.charge_code_id    AS "chargeCodeId",
-      la.labor_class       AS "laborClass",
-      la.status,
-      la.sequence_order    AS "sequenceOrder"
-    FROM labor_allocations la
-    WHERE la.punch_ledger_id = ANY(${sessionIds})
-      AND la.labor_class = 'REGULAR'
-      AND la.allocation_end IS NOT NULL
-    ORDER BY la.punch_ledger_id, la.sequence_order
-  `);
-
   type AllocRow = {
     id: number;
     punchLedgerId: number;
@@ -210,8 +192,27 @@ export async function reconcileLaborCostsInRange(
     sequenceOrder: number;
   };
 
+  const allocRowsResult = await pgPool.query<AllocRow>(
+    `SELECT
+      la.id,
+      la.punch_ledger_id   AS "punchLedgerId",
+      la.employee_id       AS "employeeId",
+      la.allocation_start  AS "allocationStart",
+      la.allocation_end    AS "allocationEnd",
+      la.charge_code_id    AS "chargeCodeId",
+      la.labor_class       AS "laborClass",
+      la.status,
+      la.sequence_order    AS "sequenceOrder"
+    FROM labor_allocations la
+    WHERE la.punch_ledger_id = ANY($1)
+      AND la.labor_class = 'REGULAR'
+      AND la.allocation_end IS NOT NULL
+    ORDER BY la.punch_ledger_id, la.sequence_order`,
+    [sessionIds]
+  );
+
   const allocsBySession = new Map<number, AllocRow[]>();
-  for (const row of allocRows.rows as AllocRow[]) {
+  for (const row of allocRowsResult.rows) {
     if (!allocsBySession.has(row.punchLedgerId)) {
       allocsBySession.set(row.punchLedgerId, []);
     }

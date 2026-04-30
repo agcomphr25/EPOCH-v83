@@ -1109,6 +1109,39 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       }
     } catch {}
     const displayName = packetName || userNotes || inventoryItem?.name || null;
+
+    // Set the scanned built packet to ALLOCATED if it is currently AVAILABLE.
+    // The optional seq segment in the MFG barcode identifies which packet (by
+    // display rank = id-ascending order within this queue item) was physically scanned.
+    const scannedSeq = match[3] ? parseInt(match[3]) : null;
+    try {
+      // Fetch all built packets for this queue item ordered by id ascending
+      // so we can derive the same display rank used in the built-packets endpoint.
+      const builtPacketsForQueue = await db
+        .select({ id: cuttingBuiltPackets.id, status: cuttingBuiltPackets.status })
+        .from(cuttingBuiltPackets)
+        .where(like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-%-%`))
+        .orderBy(asc(cuttingBuiltPackets.id));
+
+      let targetPacket: { id: number; status: string } | null = null;
+      if (scannedSeq !== null && scannedSeq >= 1 && scannedSeq <= builtPacketsForQueue.length) {
+        // Use rank-based lookup (1-indexed)
+        targetPacket = builtPacketsForQueue[scannedSeq - 1];
+      } else {
+        // No sequence info — update the first AVAILABLE packet for this queue item
+        targetPacket = builtPacketsForQueue.find(p => p.status === 'AVAILABLE') ?? null;
+      }
+
+      if (targetPacket && targetPacket.status === 'AVAILABLE') {
+        await db
+          .update(cuttingBuiltPackets)
+          .set({ status: 'ALLOCATED' })
+          .where(eq(cuttingBuiltPackets.id, targetPacket.id));
+      }
+    } catch (allocErr) {
+      // Non-fatal — log but don't fail the scan-start response
+      console.error('[scan-start] Failed to set ALLOCATED status:', allocErr);
+    }
     
     res.json({
       queueItem: {
@@ -1541,8 +1574,50 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       });
     }
 
+    // Compute displayPacketNumber: rank each packet within its queueId group,
+    // sorted by id ascending. This must be computed against ALL packets for the
+    // relevant queue IDs — not just the current page — so ranks remain correct
+    // even when earlier packets are outside the paginated window.
+    const relevantQueueIds = [...new Set(
+      parsedPackets.map(p => p.queueId).filter((id): id is string => id !== null)
+    )];
+
+    const displayPacketNumberMap: Record<number, number> = {};
+    if (relevantQueueIds.length > 0) {
+      // Fetch id + barcode for ALL packets whose barcode references one of the
+      // relevant queue IDs. We do this with a single query and reconstruct
+      // queueId from the barcode to avoid a schema join.
+      const allPacketsForQueues = await db
+        .select({ id: cuttingBuiltPackets.id, barcode: cuttingBuiltPackets.barcode })
+        .from(cuttingBuiltPackets)
+        .orderBy(asc(cuttingBuiltPackets.id));
+
+      // Group by derived queueId and assign rank
+      const groupedById: Record<string, number[]> = {};
+      for (const row of allPacketsForQueues) {
+        let qId: string | null = null;
+        try {
+          const parts = row.barcode.split('-');
+          if (parts.length >= 5 && parts[0] === 'PKT') {
+            qId = parts[parts.length - 3];
+          }
+        } catch {}
+        if (qId !== null && relevantQueueIds.includes(qId)) {
+          if (!groupedById[qId]) groupedById[qId] = [];
+          groupedById[qId].push(row.id);
+        }
+      }
+      for (const ids of Object.values(groupedById)) {
+        // ids are already in id-ascending order (ordered by asc(id) above)
+        ids.forEach((id, idx) => {
+          displayPacketNumberMap[id] = idx + 1;
+        });
+      }
+    }
+
     const result = parsedPackets.map(packet => ({
       ...packet,
+      displayPacketNumber: displayPacketNumberMap[packet.id] ?? packet.packetNumber,
       quantityOrdered: packet.queueId ? (queueTotals[packet.queueId] ?? null) : null,
       fabricSources: fabricSources.filter(s => s.builtPacketId === packet.id),
     }));

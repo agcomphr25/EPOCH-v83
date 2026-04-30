@@ -83,6 +83,7 @@ type BuiltPacket = {
   id: number;
   barcode: string;
   packetNumber: number;
+  displayPacketNumber: number | null;
   buildDate: string;
   status: string;
   isMixedFabric: boolean;
@@ -705,6 +706,7 @@ export default function CuttingOperatorDashboard() {
       setValidatedRolls([]);
       setMaterialScanBarcode("");
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
       toast({ title: 'Packet Started', description: `${data.queueItem?.partNumber || 'Packet'} is now active. Scan material rolls to begin.` });
     },
     onError: (error: any) => {
@@ -2367,7 +2369,7 @@ export default function CuttingOperatorDashboard() {
                           const mfgParsed = parseMfgBarcode(packet.barcode);
                           const mfgBarcode = mfgParsed.isMfgFormat
                             ? mfgParsed.raw
-                            : buildMfgBarcode(packet.queueId, packet.sku, packet.packetNumber);
+                            : buildMfgBarcode(packet.queueId, packet.sku, packet.displayPacketNumber ?? packet.packetNumber);
                           const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
                           const isInternalBarcode = !mfgParsed.isMfgFormat;
 
@@ -2382,7 +2384,17 @@ export default function CuttingOperatorDashboard() {
                                     {mfgBarcode}
                                   </span>
                                 )}
-                                <Badge variant={packet.status === 'AVAILABLE' ? 'secondary' : packet.status === 'CONSUMED' ? 'destructive' : 'default'} className="text-xs">
+                                <Badge
+                                  variant={
+                                    packet.status === 'AVAILABLE' ? 'secondary'
+                                    : packet.status === 'CONSUMED' ? 'destructive'
+                                    : 'default'
+                                  }
+                                  className={cn(
+                                    "text-xs",
+                                    packet.status === 'ALLOCATED' && "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                                  )}
+                                >
                                   {packet.status}
                                 </Badge>
                                 {packet.isMixedFabric && (
@@ -2405,7 +2417,7 @@ export default function CuttingOperatorDashboard() {
                               <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                                 {totalPackets > 0 && (
                                   <span className="text-xs font-medium text-foreground">
-                                    Packet {packet.packetNumber} of {totalPackets}
+                                    Packet {packet.displayPacketNumber ?? packet.packetNumber} of {totalPackets}
                                   </span>
                                 )}
                                 {packet.categoryName && (

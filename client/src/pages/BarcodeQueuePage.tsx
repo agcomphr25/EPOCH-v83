@@ -332,7 +332,7 @@ export default function BarcodeQueuePage() {
       cleanedName = cleanedName.replace(/-Tikka$/i, '').replace(/\s+Tikka$/i, '');
 
       const labels = deriveOrderLabels(order);
-      const materialLabel = order.materialCanonical || labels.materialLabel;
+      const materialLabel = labels.materialLabel;
       const actionLabelPart = labels.actionLengthRaw !== 'unknown' ? labels.actionLabel : '';
       const categoryKey = actionLabelPart
         ? `${cleanedName} - ${actionLabelPart}`
@@ -931,7 +931,7 @@ export default function BarcodeQueuePage() {
               const orderLabels = deriveOrderLabels(order);
               const actionLength = orderLabels.actionLengthRaw;
               const isTikka = orderLabels.isTikka;
-              const materialType = order.materialCanonical || orderLabels.materialLabel;
+              const materialType = orderLabels.materialLabel;
               const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
               const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
               const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
@@ -1049,7 +1049,7 @@ export default function BarcodeQueuePage() {
                     const orderLabels = deriveOrderLabels(order);
                     const actionLength = orderLabels.actionLengthRaw;
                     const isTikka = orderLabels.isTikka;
-                    const materialType = order.materialCanonical || orderLabels.materialLabel;
+                    const materialType = orderLabels.materialLabel;
                     const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                     const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                     const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
@@ -1218,7 +1218,7 @@ export default function BarcodeQueuePage() {
                       const orderLabels = deriveOrderLabels(order);
                       const actionLength = orderLabels.actionLengthRaw;
                       const isTikka = orderLabels.isTikka;
-                      const materialType = order.materialCanonical || orderLabels.materialLabel;
+                      const materialType = orderLabels.materialLabel;
                       const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                       const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                       const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
@@ -1543,7 +1543,7 @@ export default function BarcodeQueuePage() {
                             const orderLabels2 = deriveOrderLabels(order);
                             const actionLength = orderLabels2.actionLengthRaw;
                             const isTikka = orderLabels2.isTikka;
-                            const materialType = order.materialCanonical || orderLabels2.materialLabel;
+                            const materialType = orderLabels2.materialLabel;
 
                             // Check if this is a PO order (no label printing needed)
                             const isPOOrder = order.orderId.startsWith('PO-');

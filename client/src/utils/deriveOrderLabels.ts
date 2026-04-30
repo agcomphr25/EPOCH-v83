@@ -65,6 +65,11 @@ const MATERIAL_PREFIX_MAP: Record<string, string> = {
 function deriveMaterial(order: any, debugReasons: string[]): string {
   const features = order.features || {};
 
+  if (order.materialCanonical) {
+    debugReasons.push(`material from materialCanonical: "${order.materialCanonical}"`);
+    return normalizeMaterialLabel(order.materialCanonical);
+  }
+
   if (features.material) {
     debugReasons.push(`material from features.material: "${features.material}"`);
     return normalizeMaterialLabel(features.material);
@@ -144,7 +149,7 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
 
 function normalizeMaterialLabel(raw: string): string {
   const lower = raw.toLowerCase().trim();
-  if (lower === 'carbon fiber' || lower === 'carbon' || lower === 'cf') return 'Carbon Fiber';
+  if (lower === 'carbon fiber' || lower === 'carbon fibre' || lower === 'carbon_fiber' || lower === 'carbon_fibre' || lower === 'carbon' || lower === 'cf') return 'Carbon Fiber';
   if (lower === 'fiberglass' || lower === 'fg') return 'Fiberglass';
   if (lower === 'm1a') return 'M1A';
   if (lower === 'apr') return 'APR';

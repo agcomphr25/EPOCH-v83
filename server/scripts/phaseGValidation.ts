@@ -234,7 +234,12 @@ interface TempServer {
   stop: () => void;
 }
 
-async function startFlagOnServer(port = 5001): Promise<TempServer> {
+let _portCounter = 5100;
+function randomPort(): number {
+  return _portCounter++;
+}
+
+async function startFlagOnServer(port: number): Promise<TempServer> {
   const helper = path.resolve(__scriptDir, 'phaseGApiServer.ts');
   return new Promise((resolve, reject) => {
     const child = spawn('npx', ['tsx', helper], {
@@ -439,16 +444,17 @@ async function main() {
   log('');
 
   // ── Step 5: calculate-labor-costs — flag=ON via HTTP to temp server ───────
-  log('── Step 5: calculate-labor-costs flag=ON (HTTP POST to temp server :5001) ─');
-  log('  Starting phaseGApiServer.ts with USE_ALLOCATION_COSTING_READ=true in env ...');
-
   let calcOnLast: { data: CalcResp; statusCode: number; elapsedMs: number } | null = null;
   let calcOnCurr: { data: CalcResp; statusCode: number; elapsedMs: number } | null = null;
   let serverError: string | null = null;
   let flagOnServer: TempServer | null = null;
+  let step5Port = 0;
 
   try {
-    flagOnServer = await startFlagOnServer();
+    step5Port = randomPort();
+    log(`── Step 5: calculate-labor-costs flag=ON (HTTP POST to temp server :${step5Port}) ─`);
+    log('  Starting phaseGApiServer.ts with USE_ALLOCATION_COSTING_READ=true in env ...');
+    flagOnServer = await startFlagOnServer(step5Port);
     log(`  Server ready. Warm-up call in progress ...`);
     // Warm-up: load DB pool + service modules before timed measurements.
     await apiPost<unknown>(flagOnServer.baseUrl, '/api/cost-accounting/calculate-labor-costs', { year: offLastM.year, month: offLastM.month });
@@ -551,7 +557,7 @@ async function main() {
       const ci = new Date(row.clock_in);
       const year = ci.getFullYear(); const month = ci.getMonth() + 1;
       try {
-        const srv = await startFlagOnServer(5002);
+        const srv = await startFlagOnServer(randomPort());
         const r = await apiPost<CalcResp>(srv.baseUrl, '/api/cost-accounting/calculate-labor-costs', { year, month });
         srv.stop();
         const ok = r.statusCode === 200 && r.data.readModel === 'ALLOCATION' && !r.data.fallbackReason;
@@ -584,7 +590,7 @@ async function main() {
       } else {
         // Closed session: run flag=ON HTTP API for this employee's period.
         try {
-          const srv = await startFlagOnServer(5003);
+          const srv = await startFlagOnServer(randomPort());
           const r = await apiPost<CalcResp>(srv.baseUrl, '/api/cost-accounting/calculate-labor-costs', { year, month });
           srv.stop();
           const ok = r.statusCode === 200 && r.data.readModel === 'ALLOCATION' && !r.data.fallbackReason;
@@ -611,7 +617,7 @@ async function main() {
       const ci = new Date(row.clock_in);
       const year = ci.getFullYear(); const month = ci.getMonth() + 1;
       try {
-        const srv = await startFlagOnServer(5004);
+        const srv = await startFlagOnServer(randomPort());
         const r = await apiPost<CalcResp>(srv.baseUrl, '/api/cost-accounting/calculate-labor-costs', { year, month });
         srv.stop();
         // Expect: allocation path runs without crash; readModel may fall back to LEGACY
@@ -638,7 +644,7 @@ async function main() {
   const perfOk = ratio <= 2.0;
 
   log(`  flag=OFF (running dev server): last=${perfOffLast}ms curr=${perfOffCurr}ms avg=${avgOff.toFixed(1)}ms`);
-  log(`  flag=ON  (temp server :5001) : last=${perfOnLast}ms curr=${perfOnCurr}ms avg=${avgOn.toFixed(1)}ms`);
+  log(`  flag=ON  (temp server :${step5Port}) : last=${perfOnLast}ms curr=${perfOnCurr}ms avg=${avgOn.toFixed(1)}ms`);
   log(`  Ratio (ON÷OFF): ${ratio.toFixed(2)}× ${perfOk ? 'PASS ✓ (≤2×)' : 'WARN ✗ (>2×)'}`);
   log('');
 
@@ -769,7 +775,7 @@ function buildReport(ctx: {
     `**Environment:** Development`,
     `**Feature flag:** \`USE_ALLOCATION_COSTING_READ\``,
     `**API base (flag=OFF):** \`${apiBase}\``,
-    `**API base (flag=ON):** \`http://localhost:5001\` (phaseGApiServer.ts, flag in env)`,
+    `**API base (flag=ON):** \`http://localhost:${step5Port}\` (phaseGApiServer.ts, flag in env)`,
     '',
     '---',
     '',
@@ -796,8 +802,8 @@ function buildReport(ctx: {
     `| 3 | API reconcile — curr period month(s) | ${pass(apiCurrAgg.ok && apiCurrAgg.mismatchCount === 0)} — sessions=${apiCurrAgg.totalSessions} ERR=${apiCurrAgg.mismatchCount} Δ=${fmtCur(apiCurrAgg.grandDelta)} |`,
     `| 4 | calculate flag=OFF — last period | ${pass(calcOffLast.statusCode === 200 && calcOffLast.data.readModel === 'LEGACY')} — readModel=${calcOffLast.data.readModel} HTTP ${calcOffLast.statusCode} ${calcOffLast.elapsedMs}ms |`,
     `| 4 | calculate flag=OFF — curr period | ${pass(calcOffCurr.statusCode === 200 && calcOffCurr.data.readModel === 'LEGACY')} — readModel=${calcOffCurr.data.readModel} HTTP ${calcOffCurr.statusCode} ${calcOffCurr.elapsedMs}ms |`,
-    `| 5 | calculate flag=ON (HTTP :5001) — last | ${pass(onLastOk)} — readModel=${calcOnLast?.data.readModel ?? 'N/A'} HTTP ${calcOnLast?.statusCode ?? 'N/A'} ${calcOnLast?.elapsedMs ?? 'N/A'}ms |`,
-    `| 5 | calculate flag=ON (HTTP :5001) — curr | ${pass(onCurrOk)} — readModel=${calcOnCurr?.data.readModel ?? 'N/A'} HTTP ${calcOnCurr?.statusCode ?? 'N/A'} ${calcOnCurr?.elapsedMs ?? 'N/A'}ms |`,
+    `| 5 | calculate flag=ON (HTTP :${step5Port}) — last | ${pass(onLastOk)} — readModel=${calcOnLast?.data.readModel ?? 'N/A'} HTTP ${calcOnLast?.statusCode ?? 'N/A'} ${calcOnLast?.elapsedMs ?? 'N/A'}ms |`,
+    `| 5 | calculate flag=ON (HTTP :${step5Port}) — curr | ${pass(onCurrOk)} — readModel=${calcOnCurr?.data.readModel ?? 'N/A'} HTTP ${calcOnCurr?.statusCode ?? 'N/A'} ${calcOnCurr?.elapsedMs ?? 'N/A'}ms |`,
     `| 6a | No LEGACY_FALLBACK readModel from flag=ON | ${pass(!hasFallbackReadModel)} |`,
     `| 6b | Log file inspection | ${logAudit.insufficient ? 'INSUFFICIENT ⚠ — no log files' : pass(logAudit.fallbackCount === 0) + ` — ${logAudit.filesScanned.length} file(s), ${logAudit.fallbackCount} occurrences`} |`,
     `| 6c | Structural fallback triggers | ${pass(structuralTriggers === 0)} — ${structuralTriggers} closed session(s) without allocation |`,
@@ -898,19 +904,19 @@ function buildReport(ctx: {
     '',
     '## 5. calculate-labor-costs — flag=ON',
     '',
-    '**Method:** `phaseGApiServer.ts` spawned as child process on port :5001 with `USE_ALLOCATION_COSTING_READ=true` set in env before any module imports. Both calls are real HTTP POST requests through an Express router. A warm-up call was made before timed measurements to load DB pool and service modules.',
+    `**Method:** \`phaseGApiServer.ts\` spawned as child process on port :${step5Port} with \`USE_ALLOCATION_COSTING_READ=true\` set in env before any module imports. Both calls are real HTTP POST requests through an Express router. A warm-up call was made before timed measurements to load DB pool and service modules.`,
     '',
     serverError
       ? `**ERROR starting flag=ON server:** ${serverError}`
       : [
         '```',
-        `POST http://localhost:5001/api/cost-accounting/calculate-labor-costs {"year":${offLastM.year},"month":${offLastM.month}}`,
+        `POST http://localhost:${step5Port}/api/cost-accounting/calculate-labor-costs {"year":${offLastM.year},"month":${offLastM.month}}`,
         `HTTP ${calcOnLast?.statusCode}  ${calcOnLast?.elapsedMs}ms`,
         JSON.stringify(calcOnLast?.data ?? {}, null, 2),
         '```',
         '',
         '```',
-        `POST http://localhost:5001/api/cost-accounting/calculate-labor-costs {"year":${offCurrM.year},"month":${offCurrM.month}}`,
+        `POST http://localhost:${step5Port}/api/cost-accounting/calculate-labor-costs {"year":${offCurrM.year},"month":${offCurrM.month}}`,
         `HTTP ${calcOnCurr?.statusCode}  ${calcOnCurr?.elapsedMs}ms`,
         JSON.stringify(calcOnCurr?.data ?? {}, null, 2),
         '```',
@@ -942,7 +948,7 @@ function buildReport(ctx: {
     '',
     '| Edge Case | Found in Dev | Exercised | Result |',
     '|---|---|---|---|',
-    `| Multi-segment (job-switch) sessions | ${multiRows.length} | ${multiRows.length > 0 ? 'Yes — flag=ON HTTP API :5001' : 'No'} | ${multiRows.length === 0 ? 'N/A — CONDITIONAL criterion' : 'See Step 8a'} |`,
+    `| Multi-segment (job-switch) sessions | ${multiRows.length} | ${multiRows.length > 0 ? 'Yes — flag=ON HTTP API' : 'No'} | ${multiRows.length === 0 ? 'N/A — CONDITIONAL criterion' : 'See Step 8a'} |`,
     `| Single-session employees | ${singleRows.length} | ${singleRows.length > 0 ? 'Yes — targeted flag=ON HTTP' : 'No'} | ${singleRows.length > 0 ? 'See Step 8b' : 'N/A'} |`,
     `| Sessions with no allocation rows | ${noAllocRows} | ${noAllocRows > 0 ? 'Yes — targeted flag=ON HTTP' : 'N/A'} | ${noAllocRows === 0 ? 'PASS ✓ — 100% covered' : 'See Step 8c'} |`,
     '',
@@ -953,7 +959,7 @@ function buildReport(ctx: {
     '| Path | Last period | Curr period | Avg |',
     '|---|---|---|---|',
     `| flag=OFF — running dev server | ${perfOffLast}ms | ${perfOffCurr}ms | ${avgOff.toFixed(1)}ms |`,
-    `| flag=ON — temp server :5001 (post-warmup) | ${perfOnLast}ms | ${perfOnCurr}ms | ${avgOn.toFixed(1)}ms |`,
+    `| flag=ON — temp server :${step5Port} (post-warmup) | ${perfOnLast}ms | ${perfOnCurr}ms | ${avgOn.toFixed(1)}ms |`,
     '',
     `**Ratio (ON÷OFF):** ${ratio.toFixed(2)}× — ${perfOk ? 'PASS ✓ (≤2×)' : 'WARN ✗ (>2×)'}`,
     '',

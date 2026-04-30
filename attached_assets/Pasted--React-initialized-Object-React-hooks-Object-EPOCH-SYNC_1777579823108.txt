@@ -1,0 +1,1369 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+/p2-control-center:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/me:1  Failed to load resource: the server responded with a status of 404 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600023 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600023: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/aead5328-883b-4cab-bce6-379a9fae408d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/aead5328-883b-4cab-bce6-379a9fae408d/complete: 200
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+[DOM] Password field is not contained in a form: (More info: <URL>)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/7f4f74a3-6a2e-4d3c-943a-9f9f73afab66/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/7f4f74a3-6a2e-4d3c-943a-9f9f73afab66/sign: 200
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+[DOM] Password field is not contained in a form: (More info: <URL>) 
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/8a7ddf3a-f910-48ea-a0d3-7db63d50e8d2/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/8a7ddf3a-f910-48ea-a0d3-7db63d50e8d2/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-31 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-31: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/46d96cad-2205-4168-9a61-b32abb01bcd2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/46d96cad-2205-4168-9a61-b32abb01bcd2/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/b3ee53aa-6b9c-484c-8155-bc17ab378e7d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/b3ee53aa-6b9c-484c-8155-bc17ab378e7d/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/cc0e62d7-32c1-4468-9ad5-f3f1455d5a1b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/cc0e62d7-32c1-4468-9ad5-f3f1455d5a1b/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/286ddf7e-76da-420e-acc7-29e078234a8f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/286ddf7e-76da-420e-acc7-29e078234a8f/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/5fe16ac6-a969-4630-83d1-b7f839bcf7d2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/5fe16ac6-a969-4630-83d1-b7f839bcf7d2/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/8a7ddf3a-f910-48ea-a0d3-7db63d50e8d2/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/8a7ddf3a-f910-48ea-a0d3-7db63d50e8d2/sign: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/7fcad74a-ece8-4728-93ef-afb2ed4cc857/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/7fcad74a-ece8-4728-93ef-afb2ed4cc857/start: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/fdb5098b-06cf-4e04-9451-c87da5a91841/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/fdb5098b-06cf-4e04-9451-c87da5a91841/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/84ead11b-6619-43dc-ad2d-dbc4e3b190ff/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/84ead11b-6619-43dc-ad2d-dbc4e3b190ff/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/3fdc6c7f-a730-44ef-ab35-abf275001d3e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/3fdc6c7f-a730-44ef-ab35-abf275001d3e/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/7fcad74a-ece8-4728-93ef-afb2ed4cc857/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/7fcad74a-ece8-4728-93ef-afb2ed4cc857/sign: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/b230cdc6-0598-4e71-b03e-8b07d2229a26/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/b230cdc6-0598-4e71-b03e-8b07d2229a26/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/3287613e-4d51-4e2d-b140-e1581615dae3/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/3287613e-4d51-4e2d-b140-e1581615dae3/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/7be14b6f-fdeb-43df-a38d-34f38e3a9949/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/7be14b6f-fdeb-43df-a38d-34f38e3a9949/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/cd8c96c5-c9ad-4c53-9646-4939a902313e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/cd8c96c5-c9ad-4c53-9646-4939a902313e/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/b7bc4e9a-14f7-419a-a958-27a38d9429ec/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/b7bc4e9a-14f7-419a-a958-27a38d9429ec/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/ff3280c5-b0c0-4ec3-af66-cffc394fb1fb/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/tasks/ff3280c5-b0c0-4ec3-af66-cffc394fb1fb/complete: 200
+ 🌐 API Request to /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/b230cdc6-0598-4e71-b03e-8b07d2229a26/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23cdbb48-746b-4575-88a9-d12010ce84b6/steps/b230cdc6-0598-4e71-b03e-8b07d2229a26/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600016 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600016: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/d581721c-8547-4fd9-80fe-4af66ae40c0b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/d581721c-8547-4fd9-80fe-4af66ae40c0b/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/d995672e-3e49-434d-b285-647fe75f91ba/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/d995672e-3e49-434d-b285-647fe75f91ba/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/25a2816f-6391-4fcd-be8d-645146f3a920/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/25a2816f-6391-4fcd-be8d-645146f3a920/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-27 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-27: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/de4f4690-f989-4b19-90f5-e4cf6fe82d07/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/de4f4690-f989-4b19-90f5-e4cf6fe82d07/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/54369329-1fc2-4fd5-a00b-daf7b45957a5/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/54369329-1fc2-4fd5-a00b-daf7b45957a5/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/738abe0c-fe76-4743-8acc-ade6ff0ba9cc/complete (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/738abe0c-fe76-4743-8acc-ade6ff0ba9cc/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/1af215ea-7d3e-411e-b419-4511452f8a11/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/1af215ea-7d3e-411e-b419-4511452f8a11/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/9ea31865-7457-4aa8-8104-db428b6d641d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/9ea31865-7457-4aa8-8104-db428b6d641d/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/25a2816f-6391-4fcd-be8d-645146f3a920/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/25a2816f-6391-4fcd-be8d-645146f3a920/sign: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/81212285-b9d0-4d8b-8db3-141a395cbf74/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/81212285-b9d0-4d8b-8db3-141a395cbf74/start: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/63dff20f-166c-4ddb-948a-9c331b1ef56f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/63dff20f-166c-4ddb-948a-9c331b1ef56f/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/cb00f5a6-8d2d-4414-b680-057a4b900518/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/cb00f5a6-8d2d-4414-b680-057a4b900518/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/e3450dea-f64a-433f-935a-47a720b3e850/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/e3450dea-f64a-433f-935a-47a720b3e850/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/81212285-b9d0-4d8b-8db3-141a395cbf74/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/81212285-b9d0-4d8b-8db3-141a395cbf74/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/e829368f-f4fc-442c-9f62-ab2894af1485/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/e829368f-f4fc-442c-9f62-ab2894af1485/start: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/31435f6d-5582-4385-9f1a-609f160c2031/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/31435f6d-5582-4385-9f1a-609f160c2031/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/89a99da5-62b5-4a5a-9d71-54455d79cfdf/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/89a99da5-62b5-4a5a-9d71-54455d79cfdf/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/dd7e169a-fb65-4850-bcbe-f9c7b3e7609f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/dd7e169a-fb65-4850-bcbe-f9c7b3e7609f/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/22510c64-3099-4e10-a668-ce8c8c0f63f2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/22510c64-3099-4e10-a668-ce8c8c0f63f2/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/213686da-8251-474f-a576-597afb2c669b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/tasks/213686da-8251-474f-a576-597afb2c669b/complete: 200
+ 🌐 API Request to /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/e829368f-f4fc-442c-9f62-ab2894af1485/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/5270abf3-bec7-40eb-80b5-d25c270eac62/steps/e829368f-f4fc-442c-9f62-ab2894af1485/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 403 ()
+/api/admin/queue-integrity/status:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/admin/queue-integrity/status: 403
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/admin/queue-integrity/status: 
+/api/signature-workflow/stats/6:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/signature-workflow/stats/6: 403
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/signature-workflow/stats/6: 
+/api/signature-workflow/pending/6:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/signature-workflow/pending/6: 403
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/signature-workflow/pending/6: 
+/api/preproduction-checklists/my-tasks/6?status=pending:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 403
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/preproduction-checklists/my-tasks/6?status=pending: 
+/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 403 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 403 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600020 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600020: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/9c5da47c-d055-43b4-b893-3eb33d17ff9e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/9c5da47c-d055-43b4-b893-3eb33d17ff9e/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/ed15674b-d272-4441-9115-a066cdc43834/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/ed15674b-d272-4441-9115-a066cdc43834/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/de0356ac-a870-4ed5-90d5-7c8257f11db0/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/de0356ac-a870-4ed5-90d5-7c8257f11db0/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-23 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-23: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/91b662bb-f26e-4c54-a0d7-2ed4efc4f4e1/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/91b662bb-f26e-4c54-a0d7-2ed4efc4f4e1/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/ef9254f3-da16-4ee5-aa34-9d8ccfdb7374/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/ef9254f3-da16-4ee5-aa34-9d8ccfdb7374/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/b43b177c-8b64-4a6f-a6a1-a1704d0e45bf/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/b43b177c-8b64-4a6f-a6a1-a1704d0e45bf/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/269c9ed4-5eb8-4762-9b2e-c41d90ce37e4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/269c9ed4-5eb8-4762-9b2e-c41d90ce37e4/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/797e80e1-ca12-4c8d-bc4f-3b57fd6d81b7/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/797e80e1-ca12-4c8d-bc4f-3b57fd6d81b7/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/de0356ac-a870-4ed5-90d5-7c8257f11db0/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/de0356ac-a870-4ed5-90d5-7c8257f11db0/sign: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/1ceb5888-4ed5-4ee1-a174-6e0734807f36/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/1ceb5888-4ed5-4ee1-a174-6e0734807f36/start: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/654858a5-9fc8-43ec-a128-db5dbc218c73/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/654858a5-9fc8-43ec-a128-db5dbc218c73/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/6354acec-682f-4b3c-ad66-da69a968c891/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/6354acec-682f-4b3c-ad66-da69a968c891/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/967d8a74-8172-40c9-ae6d-1a08791c0326/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/967d8a74-8172-40c9-ae6d-1a08791c0326/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/1ceb5888-4ed5-4ee1-a174-6e0734807f36/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/1ceb5888-4ed5-4ee1-a174-6e0734807f36/sign: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/83977f0a-8c16-4f7f-8f15-06258cb9ffe7/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/83977f0a-8c16-4f7f-8f15-06258cb9ffe7/start: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/3332ab7f-7ac3-484a-ae12-129410fa3a67/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/3332ab7f-7ac3-484a-ae12-129410fa3a67/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/fc8436a0-8a4c-4c95-b24c-44ff32f3c1da/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/fc8436a0-8a4c-4c95-b24c-44ff32f3c1da/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/98ca5254-d261-46be-8587-339d54780116/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/98ca5254-d261-46be-8587-339d54780116/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/4e862a4c-42d2-42c1-81b7-a03473bc770c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/4e862a4c-42d2-42c1-81b7-a03473bc770c/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/ab1cf761-396c-4a8a-9b50-a0233375db97/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/tasks/ab1cf761-396c-4a8a-9b50-a0233375db97/complete: 200
+ 🌐 API Request to /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/83977f0a-8c16-4f7f-8f15-06258cb9ffe7/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4de4220d-d805-47e1-bace-5b9a1981a1a5/steps/83977f0a-8c16-4f7f-8f15-06258cb9ffe7/sign: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600021 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600021: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/ded04860-417e-4afa-bd88-2174c94c2945/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/ded04860-417e-4afa-bd88-2174c94c2945/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/139b0ebe-bae7-4db6-a060-34b98c4f452f/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/139b0ebe-bae7-4db6-a060-34b98c4f452f/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/6254a8b1-346a-487f-96d7-cd7222ba41d7/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/6254a8b1-346a-487f-96d7-cd7222ba41d7/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-29 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-29: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/a4ec936e-ce67-4a05-859b-c6153fa8df09/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/a4ec936e-ce67-4a05-859b-c6153fa8df09/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/47073291-e592-4207-a95a-27d2911b931f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/47073291-e592-4207-a95a-27d2911b931f/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/8fa6a136-e33f-4b75-a013-45bb96c1cb67/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/8fa6a136-e33f-4b75-a013-45bb96c1cb67/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/3f1a7556-62f3-4979-8f7d-fc400a645f23/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/3f1a7556-62f3-4979-8f7d-fc400a645f23/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/8ceb8c38-d72e-4fd9-a14e-ea0d1d384788/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/8ceb8c38-d72e-4fd9-a14e-ea0d1d384788/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/6254a8b1-346a-487f-96d7-cd7222ba41d7/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/6254a8b1-346a-487f-96d7-cd7222ba41d7/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/68fa939d-03aa-417b-8668-4fa64c235d73/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/68fa939d-03aa-417b-8668-4fa64c235d73/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/ce7499ee-939e-48d1-b61b-1ff7140248b8/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/ce7499ee-939e-48d1-b61b-1ff7140248b8/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/e71dafb8-a0e5-48e0-a4ec-472d3bf731ac/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/e71dafb8-a0e5-48e0-a4ec-472d3bf731ac/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/d7897930-d495-4f18-918e-bb4d6f8ca08c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/d7897930-d495-4f18-918e-bb4d6f8ca08c/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/68fa939d-03aa-417b-8668-4fa64c235d73/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/68fa939d-03aa-417b-8668-4fa64c235d73/sign: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/354c2028-f674-419f-9579-e5b93666034f/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/354c2028-f674-419f-9579-e5b93666034f/start: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/442abe06-de87-49ee-94de-fbf40313f30d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/442abe06-de87-49ee-94de-fbf40313f30d/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/dbdad0e2-7bdb-4e65-928d-73b81dfe4281/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/dbdad0e2-7bdb-4e65-928d-73b81dfe4281/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/caf6de08-c2b8-4396-b421-55c50a13a779/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/caf6de08-c2b8-4396-b421-55c50a13a779/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/0bd38aa1-87be-4459-b134-1b884f14392d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/0bd38aa1-87be-4459-b134-1b884f14392d/complete: 200
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/28e0c53e-c7ed-4b09-b73c-852822033d6f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/tasks/28e0c53e-c7ed-4b09-b73c-852822033d6f/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/354c2028-f674-419f-9579-e5b93666034f/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/73eade16-3712-4731-9acf-8069121a57ca/steps/354c2028-f674-419f-9579-e5b93666034f/sign: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+/api/preproduction-checklists/my-tasks/6?status=pending:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 401
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/preproduction-checklists/my-tasks/6?status=pending: 
+/api/signature-workflow/stats/6:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/signature-workflow/stats/6: 401
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/signature-workflow/stats/6: 
+/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 401 ()
+/api/admin/queue-integrity/status:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/admin/queue-integrity/status: 401
+/api/signature-workflow/pending/6:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/signature-workflow/pending/6: 401
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/admin/queue-integrity/status: 
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/signature-workflow/pending/6: 
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+/api/orders/with-payment-status:1  Failed to load resource: the server responded with a status of 401 ()
+/api/signature-workflow/stats/6:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/signature-workflow/stats/6: 401
+/api/signature-workflow/pending/6:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/signature-workflow/pending/6: 401
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/preproduction-checklists/my-tasks/6?status=pending:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 401
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/signature-workflow/stats/6: 
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/signature-workflow/pending/6: 
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/preproduction-checklists/my-tasks/6?status=pending: 
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600019 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600019: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/59093ede-8659-4126-ac04-e53a24617990/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/59093ede-8659-4126-ac04-e53a24617990/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/ef76f7c2-bb47-4d83-8964-82d8ad9123de/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/ef76f7c2-bb47-4d83-8964-82d8ad9123de/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/0584f43f-789e-48de-8a2f-b5df5ede83c9/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/0584f43f-789e-48de-8a2f-b5df5ede83c9/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-24 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-24: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/3cbcfbfe-bcaa-4ee3-b64c-34f2b6bde6d7/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/3cbcfbfe-bcaa-4ee3-b64c-34f2b6bde6d7/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/750fb3b7-57d2-4693-aac5-2d039618b69b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/750fb3b7-57d2-4693-aac5-2d039618b69b/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/d49ab5b2-a180-429d-b944-3993324cd51f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/d49ab5b2-a180-429d-b944-3993324cd51f/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/cc986c8d-eca1-4bbd-9c8e-a2e5b71872b5/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/cc986c8d-eca1-4bbd-9c8e-a2e5b71872b5/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/ca8812d0-9828-4ed6-a32e-cd3a6181944b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/ca8812d0-9828-4ed6-a32e-cd3a6181944b/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/0584f43f-789e-48de-8a2f-b5df5ede83c9/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/0584f43f-789e-48de-8a2f-b5df5ede83c9/sign: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/17c413fa-71c4-4aec-b565-f8803c403e43/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/17c413fa-71c4-4aec-b565-f8803c403e43/start: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/8bb1b059-23f4-4a07-b756-eda6016872ef/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/8bb1b059-23f4-4a07-b756-eda6016872ef/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/30a39201-1ab3-4f3c-8b67-abb66da97fec/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/30a39201-1ab3-4f3c-8b67-abb66da97fec/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/de483e9d-89b5-4a8b-88aa-80e982e0bf0f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/de483e9d-89b5-4a8b-88aa-80e982e0bf0f/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/17c413fa-71c4-4aec-b565-f8803c403e43/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/17c413fa-71c4-4aec-b565-f8803c403e43/sign: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/afda37d3-f765-4971-9ebf-c5e532d91cc5/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/afda37d3-f765-4971-9ebf-c5e532d91cc5/start: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/046ca8ac-59ab-4481-901b-989566fbb189/complete (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/046ca8ac-59ab-4481-901b-989566fbb189/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/5d40afb2-c938-4aa2-a63c-3c7bef45654a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/5d40afb2-c938-4aa2-a63c-3c7bef45654a/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/b03c1eb3-49c9-4e5f-aeed-066975b0e4c4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/b03c1eb3-49c9-4e5f-aeed-066975b0e4c4/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/2c7c81cb-ca32-4c8d-a11a-af84844c21be/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/2c7c81cb-ca32-4c8d-a11a-af84844c21be/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/eab99cc6-5130-48d0-9691-5204639c9eef/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/tasks/eab99cc6-5130-48d0-9691-5204639c9eef/complete: 200
+ 🌐 API Request to /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/afda37d3-f765-4971-9ebf-c5e532d91cc5/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/00f01421-80ee-4284-82f5-c322a9a5019c/steps/afda37d3-f765-4971-9ebf-c5e532d91cc5/sign: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600024 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600024: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/d07f8b58-42bd-4bd7-aa16-4868dbe0e5c3/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/d07f8b58-42bd-4bd7-aa16-4868dbe0e5c3/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/a8dcaed8-0dc3-44c5-af34-5fd873d6a07a/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/a8dcaed8-0dc3-44c5-af34-5fd873d6a07a/sign: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/da6ef8f0-335e-4298-beb4-18159f4194b9/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/da6ef8f0-335e-4298-beb4-18159f4194b9/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-30 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-30: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/821f3c74-4b70-4b57-a03a-c4ee3dbb5265/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/821f3c74-4b70-4b57-a03a-c4ee3dbb5265/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/adb09129-c12f-476e-a309-084ce8c058a5/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/adb09129-c12f-476e-a309-084ce8c058a5/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/4d1c1fbc-d23f-460b-9d56-f62e36f08b26/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/4d1c1fbc-d23f-460b-9d56-f62e36f08b26/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/ef9d5c67-c638-4bcf-b362-942f9630e4f3/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/ef9d5c67-c638-4bcf-b362-942f9630e4f3/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/d2d5e4fd-d641-4125-aa1d-58dcb0385cc4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/d2d5e4fd-d641-4125-aa1d-58dcb0385cc4/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/da6ef8f0-335e-4298-beb4-18159f4194b9/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/da6ef8f0-335e-4298-beb4-18159f4194b9/sign: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/a9321d08-922c-49c2-9c60-0341855ebd3c/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/a9321d08-922c-49c2-9c60-0341855ebd3c/start: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/ad9b6d44-d9c0-4e77-9199-3d16d37a7389/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/ad9b6d44-d9c0-4e77-9199-3d16d37a7389/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/9eb39863-a221-40ae-93f1-471e8de98112/complete (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/9eb39863-a221-40ae-93f1-471e8de98112/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/9069507a-06b0-4fff-937f-a4d20280cf2b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/9069507a-06b0-4fff-937f-a4d20280cf2b/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/a9321d08-922c-49c2-9c60-0341855ebd3c/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/a9321d08-922c-49c2-9c60-0341855ebd3c/sign: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/e02092c4-eed1-4b94-8f3a-4628f5b4a866/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/e02092c4-eed1-4b94-8f3a-4628f5b4a866/start: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/96e8f775-12b7-4f70-9063-ea838b23c630/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/96e8f775-12b7-4f70-9063-ea838b23c630/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/8db6c06c-997c-413f-87d9-cf37de060b5e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/8db6c06c-997c-413f-87d9-cf37de060b5e/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/9ecff728-f66f-4d6e-9c7e-505865bba77b/complete (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/9ecff728-f66f-4d6e-9c7e-505865bba77b/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/88394cf9-ae16-4245-a16d-9bd8208d1823/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/88394cf9-ae16-4245-a16d-9bd8208d1823/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/e3a2089a-36b0-4d31-a9a2-9e2e0a5b9224/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/tasks/e3a2089a-36b0-4d31-a9a2-9e2e0a5b9224/complete: 200
+ 🌐 API Request to /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/e02092c4-eed1-4b94-8f3a-4628f5b4a866/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/3caff014-6911-4bfa-9091-dab45a8fb204/steps/e02092c4-eed1-4b94-8f3a-4628f5b4a866/sign: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600022 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600022: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/d143e807-bfdb-461c-9968-ab1d753fd266/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/d143e807-bfdb-461c-9968-ab1d753fd266/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/cc1e91fd-1114-4731-981e-fd33ed9b4ade/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/cc1e91fd-1114-4731-981e-fd33ed9b4ade/sign: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/22c16d69-cae0-4f94-856e-8919b14bb4b2/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/22c16d69-cae0-4f94-856e-8919b14bb4b2/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-28 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-28: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/8dc6f56c-ac96-42de-b68e-2cded4e5c2ff/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/8dc6f56c-ac96-42de-b68e-2cded4e5c2ff/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/d512f6a9-db2a-4b2f-af77-8bd2e4416da1/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/d512f6a9-db2a-4b2f-af77-8bd2e4416da1/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/c9bb1899-1c98-4bb4-a0a9-99beb772e8d8/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/c9bb1899-1c98-4bb4-a0a9-99beb772e8d8/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/fa27399d-ae1d-4080-9230-14afa1115ac2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/fa27399d-ae1d-4080-9230-14afa1115ac2/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/3f9a9b83-5882-4bbc-a236-2fb0fb97b9dd/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/3f9a9b83-5882-4bbc-a236-2fb0fb97b9dd/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/22c16d69-cae0-4f94-856e-8919b14bb4b2/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/22c16d69-cae0-4f94-856e-8919b14bb4b2/sign: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/27f2b6be-d2cf-4c09-b0fc-6a750547e5ad/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/27f2b6be-d2cf-4c09-b0fc-6a750547e5ad/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/7f9ff0a6-a77c-44de-8307-aa20c8899d3b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/7f9ff0a6-a77c-44de-8307-aa20c8899d3b/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/a7fe9530-e509-4ae7-af06-0aec10c7c685/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/a7fe9530-e509-4ae7-af06-0aec10c7c685/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/6cd7c387-fdb5-4394-aebd-8908a90c7e15/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/6cd7c387-fdb5-4394-aebd-8908a90c7e15/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/27f2b6be-d2cf-4c09-b0fc-6a750547e5ad/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/27f2b6be-d2cf-4c09-b0fc-6a750547e5ad/sign: 200
+/api/p2-traveler/badge-lookup/d306c66446f7871fac16bd141974:1  Failed to load resource: the server responded with a status of 404 ()
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/bd7a13e7-bc1a-46ab-b893-141c902ec75a/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/bd7a13e7-bc1a-46ab-b893-141c902ec75a/start: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/44d48e57-726a-493f-84e1-8023d609e47e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/44d48e57-726a-493f-84e1-8023d609e47e/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/cdb8ef7f-f64f-4f66-a0e2-8c15b02ab61b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/cdb8ef7f-f64f-4f66-a0e2-8c15b02ab61b/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/ce4f84d8-d0ef-4990-af07-be18211f4e24/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/ce4f84d8-d0ef-4990-af07-be18211f4e24/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/eb6a1e12-0a19-440b-954b-059be020b9bb/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/eb6a1e12-0a19-440b-954b-059be020b9bb/complete: 200
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/923cb4fd-00e4-4b70-88dc-8d5825031f16/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/tasks/923cb4fd-00e4-4b70-88dc-8d5825031f16/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/bd7a13e7-bc1a-46ab-b893-141c902ec75a/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/4edd8a12-8efc-44d8-af29-964a98738f7e/steps/bd7a13e7-bc1a-46ab-b893-141c902ec75a/sign: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600018 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600018: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/3ca55b8f-dd4a-44b7-96de-559a52e5625d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/3ca55b8f-dd4a-44b7-96de-559a52e5625d/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/4234f576-9ca3-45ab-9340-699c6dd0faf8/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/4234f576-9ca3-45ab-9340-699c6dd0faf8/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/f9baff1e-201d-4fc7-8bf1-f33b4c8c4b7c (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/f9baff1e-201d-4fc7-8bf1-f33b4c8c4b7c: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/f9baff1e-201d-4fc7-8bf1-f33b4c8c4b7c/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/f9baff1e-201d-4fc7-8bf1-f33b4c8c4b7c/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-25 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-25: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/b0d4f0e1-8c16-4d5f-9741-19439680908c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/b0d4f0e1-8c16-4d5f-9741-19439680908c/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/5775c93c-3b6f-4ab7-baa6-a6262f447465/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/5775c93c-3b6f-4ab7-baa6-a6262f447465/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/59fab50a-c40e-4067-bbcb-b38a30820221/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/59fab50a-c40e-4067-bbcb-b38a30820221/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/bf1bfc08-15c1-4710-94a9-f86973c300e2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/bf1bfc08-15c1-4710-94a9-f86973c300e2/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/58b1fc79-d2f4-43b8-a7ee-5ded52de7a52/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/58b1fc79-d2f4-43b8-a7ee-5ded52de7a52/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/f9baff1e-201d-4fc7-8bf1-f33b4c8c4b7c/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/f9baff1e-201d-4fc7-8bf1-f33b4c8c4b7c/sign: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/fd0d0725-5552-4086-88ea-3e150a959e16/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/fd0d0725-5552-4086-88ea-3e150a959e16/start: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/7ae198df-ca95-4766-8057-feac1430a4c3/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/7ae198df-ca95-4766-8057-feac1430a4c3/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/7f47e54f-8cdc-4e0b-9c03-8303049de857/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/7f47e54f-8cdc-4e0b-9c03-8303049de857/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/e7219127-7347-4381-ab8c-c399623737bf/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/e7219127-7347-4381-ab8c-c399623737bf/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/fd0d0725-5552-4086-88ea-3e150a959e16/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/fd0d0725-5552-4086-88ea-3e150a959e16/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/542c3318-e08c-4dc3-8b75-8c80ea69a67d/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/542c3318-e08c-4dc3-8b75-8c80ea69a67d/start: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/dc70ef22-e0d0-4ca1-9fcc-1823da82ac79/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/dc70ef22-e0d0-4ca1-9fcc-1823da82ac79/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/79e74def-1f0e-437f-95fa-aee8c1c610a4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/79e74def-1f0e-437f-95fa-aee8c1c610a4/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/ed344dcc-84ce-469f-965a-0927292f2198/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/ed344dcc-84ce-469f-965a-0927292f2198/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/9d3d8f60-fc6f-460c-ac3a-2f4fdf8cb569/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/9d3d8f60-fc6f-460c-ac3a-2f4fdf8cb569/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/1995f666-17f1-4b30-9e0f-a554502ebd7d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/tasks/1995f666-17f1-4b30-9e0f-a554502ebd7d/complete: 200
+ 🌐 API Request to /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/542c3318-e08c-4dc3-8b75-8c80ea69a67d/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/a74e6cd7-6f0a-4d06-b0ff-4cda54bebadc/steps/542c3318-e08c-4dc3-8b75-8c80ea69a67d/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600025 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600025: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/7c5ae9fd-47dc-4a17-a1ee-0bd13a550b3c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/7c5ae9fd-47dc-4a17-a1ee-0bd13a550b3c/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/cfec8cc7-c82d-4d95-9255-d6d577ec553e/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/cfec8cc7-c82d-4d95-9255-d6d577ec553e/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/58bb35c1-c0be-48f8-86e6-231c96091c7b/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/58bb35c1-c0be-48f8-86e6-231c96091c7b/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-18 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-18: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/dfa0b1b8-1513-4902-9091-0d9d8777db1d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/dfa0b1b8-1513-4902-9091-0d9d8777db1d/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/830487a6-1b23-4038-a220-1d6a5bf5600e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/830487a6-1b23-4038-a220-1d6a5bf5600e/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/8a143e13-f3e6-4949-a68c-0872d3454212/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/8a143e13-f3e6-4949-a68c-0872d3454212/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/98cdb776-809a-40a1-888c-92e4d59e94a8/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/98cdb776-809a-40a1-888c-92e4d59e94a8/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/4ddb0f19-a37c-45f8-8b59-6e065004fc58/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/4ddb0f19-a37c-45f8-8b59-6e065004fc58/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/58bb35c1-c0be-48f8-86e6-231c96091c7b/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/58bb35c1-c0be-48f8-86e6-231c96091c7b/sign: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0a507f83-d574-4ee9-8c2c-5bf8b85f95b8/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0a507f83-d574-4ee9-8c2c-5bf8b85f95b8/start: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/60fcb8b9-752d-4dd9-8bf2-c2784e894250/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/60fcb8b9-752d-4dd9-8bf2-c2784e894250/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/c9a539bc-e2d7-4a81-aea3-bb2cd016089a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/c9a539bc-e2d7-4a81-aea3-bb2cd016089a/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/5224cc0c-70f0-4817-8fc2-2e4f761418be/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/5224cc0c-70f0-4817-8fc2-2e4f761418be/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0a507f83-d574-4ee9-8c2c-5bf8b85f95b8/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0a507f83-d574-4ee9-8c2c-5bf8b85f95b8/sign: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0209e08d-44bc-4134-b100-8cef0f89f871/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0209e08d-44bc-4134-b100-8cef0f89f871/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/3373f873-4ab0-4785-a8b2-b19be4c0f77c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/3373f873-4ab0-4785-a8b2-b19be4c0f77c/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/b5b8a469-bdee-48b4-834f-841ed1be0e2d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/b5b8a469-bdee-48b4-834f-841ed1be0e2d/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/d9cd0dd3-7767-4687-9365-483fafd77614/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/d9cd0dd3-7767-4687-9365-483fafd77614/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/2d10f584-62aa-4f68-acb4-7a08286da4a9/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/2d10f584-62aa-4f68-acb4-7a08286da4a9/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/d615daea-1f70-4d9f-a86d-d180fe213f5e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/tasks/d615daea-1f70-4d9f-a86d-d180fe213f5e/complete: 200
+ 🌐 API Request to /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0209e08d-44bc-4134-b100-8cef0f89f871/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/dc53b706-36ad-4db5-a3ca-75651c4cb752/steps/0209e08d-44bc-4134-b100-8cef0f89f871/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600030 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600030: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/4eca442d-65b1-482c-8466-06130f35eef0/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/4eca442d-65b1-482c-8466-06130f35eef0/sign: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/97749ed8-7768-4091-85d6-f5d7f6102089/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/97749ed8-7768-4091-85d6-f5d7f6102089/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-17 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-17: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/a7b57ae9-d758-48a8-b91d-8f89e2a078bf/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/a7b57ae9-d758-48a8-b91d-8f89e2a078bf/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/9b379560-0cce-4518-8344-5d94b34e0abe/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/9b379560-0cce-4518-8344-5d94b34e0abe/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/660215c7-c885-4e7a-b978-72b16b04b3be/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/660215c7-c885-4e7a-b978-72b16b04b3be/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/8f812565-3f41-4b88-9836-724319d10bf0/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/8f812565-3f41-4b88-9836-724319d10bf0/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/02054d5a-3d43-4158-8af8-fe1583a6fa75/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/02054d5a-3d43-4158-8af8-fe1583a6fa75/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/97749ed8-7768-4091-85d6-f5d7f6102089/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/97749ed8-7768-4091-85d6-f5d7f6102089/sign: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/274d5021-23bd-4be2-9b0c-8668052dd7ea/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/274d5021-23bd-4be2-9b0c-8668052dd7ea/start: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/bcd96473-29ea-41f2-835b-c367b04336be/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/bcd96473-29ea-41f2-835b-c367b04336be/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/86e38d69-f838-4b06-bdf2-5529595dd72a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/86e38d69-f838-4b06-bdf2-5529595dd72a/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/37dd8177-c077-4d81-b09d-fd1dc49f8ce2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/37dd8177-c077-4d81-b09d-fd1dc49f8ce2/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/274d5021-23bd-4be2-9b0c-8668052dd7ea/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/274d5021-23bd-4be2-9b0c-8668052dd7ea/sign: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/38d8a530-daf4-445f-9c25-3d9aa7289bae/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/38d8a530-daf4-445f-9c25-3d9aa7289bae/start: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/bb285980-9f77-4062-9bab-549ba45414ff/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/bb285980-9f77-4062-9bab-549ba45414ff/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/53e45e79-86f6-494a-825f-842a62a1a9bf/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/53e45e79-86f6-494a-825f-842a62a1a9bf/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/fc91a033-8838-41a1-8bc4-6cca103b8b81/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/fc91a033-8838-41a1-8bc4-6cca103b8b81/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/2048a71f-5a74-4aae-9974-3f31933a977f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/2048a71f-5a74-4aae-9974-3f31933a977f/complete: 200
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/72268a05-8d2d-437d-ab99-b92cf32986bd/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/tasks/72268a05-8d2d-437d-ab99-b92cf32986bd/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/38d8a530-daf4-445f-9c25-3d9aa7289bae/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/steps/38d8a530-daf4-445f-9c25-3d9aa7289bae/sign: 200
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+/api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/dependency-status:1  Failed to load resource: the server responded with a status of 404 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+/api/travelers/cff4a6cb-6469-4270-b043-519ef3614d4f/dependency-status:1  Failed to load resource: the server responded with a status of 404 ()
+/api/production/timers/runs/active?travelerStepId=38d8a530-daf4-445f-9c25-3d9aa7289bae:1  Failed to load resource: the server responded with a status of 404 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600001 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600001: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/85b4a293-1b12-44be-97e6-8c81bad56e48/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/85b4a293-1b12-44be-97e6-8c81bad56e48/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/35d292e1-8712-4d8b-8378-ddf0dcbaec7e/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/35d292e1-8712-4d8b-8378-ddf0dcbaec7e/sign: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/06085be5-ce40-406e-9422-2405137d73e8/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/06085be5-ce40-406e-9422-2405137d73e8/start: 200
+ 🌐 API Request to /api/material-lots/validate/22 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/22: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-2 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-2: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/9387ff5d-ea74-476e-a656-abb7d5b5ed0f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/9387ff5d-ea74-476e-a656-abb7d5b5ed0f/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/29327c15-3973-4518-8890-0c6b55f14da4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/29327c15-3973-4518-8890-0c6b55f14da4/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/8227fd01-77cb-4fba-ae3e-4a49296e1ace/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/8227fd01-77cb-4fba-ae3e-4a49296e1ace/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/aecab05f-dff1-4aef-b1b9-6e16bb159d21/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/aecab05f-dff1-4aef-b1b9-6e16bb159d21/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/9e640bed-c106-48df-9539-6a4329a52723/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/9e640bed-c106-48df-9539-6a4329a52723/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/06085be5-ce40-406e-9422-2405137d73e8/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/06085be5-ce40-406e-9422-2405137d73e8/sign: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/2be3670f-2619-44a3-a4f6-a0bcd6794659/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/2be3670f-2619-44a3-a4f6-a0bcd6794659/start: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/b680b137-ceb2-4c4e-a0fb-01bab17f0721/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/b680b137-ceb2-4c4e-a0fb-01bab17f0721/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/bd25ac0a-72e5-4789-baa7-73dbc4cf1039/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/bd25ac0a-72e5-4789-baa7-73dbc4cf1039/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/b34f9f68-85bd-417f-8791-2e959c73ba34/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/b34f9f68-85bd-417f-8791-2e959c73ba34/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/2be3670f-2619-44a3-a4f6-a0bcd6794659/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/2be3670f-2619-44a3-a4f6-a0bcd6794659/sign: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/f8be57e6-2a3c-4cd6-ad6f-aabd90dfbb97/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/f8be57e6-2a3c-4cd6-ad6f-aabd90dfbb97/start: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/d94e23a5-6057-45bb-ac42-4c7a97ca99fb/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/d94e23a5-6057-45bb-ac42-4c7a97ca99fb/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/8aa12e13-4b6e-4f8d-88d4-d3dcf68e898b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/8aa12e13-4b6e-4f8d-88d4-d3dcf68e898b/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/15c0137c-1f53-487d-8464-781b21efc959/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/15c0137c-1f53-487d-8464-781b21efc959/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/c4b508fe-28e7-4a8f-bcf8-aaee4c030324/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/c4b508fe-28e7-4a8f-bcf8-aaee4c030324/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/e2d7cfa6-8a52-4eed-8ba9-9d9e1e606a5a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/e2d7cfa6-8a52-4eed-8ba9-9d9e1e606a5a/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/f8be57e6-2a3c-4cd6-ad6f-aabd90dfbb97/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/f8be57e6-2a3c-4cd6-ad6f-aabd90dfbb97/sign: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/5744312f-1480-4e55-b16d-45b42bfd6e5c/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/5744312f-1480-4e55-b16d-45b42bfd6e5c/start: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/1f6f6f70-6b81-474e-a9b1-f65fc0dc0902/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/1f6f6f70-6b81-474e-a9b1-f65fc0dc0902/complete: 200
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=8631d10170b19ba6e72842b50ca98024077383e4512718ca709ad2471f3e4652' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=8631d10170b19ba6e72842b50ca98024077383e4512718ca709ad2471f3e4652' failed: 
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/0ebf8fe9-7bdb-47f3-88a1-8ac42e16d8b6/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/0ebf8fe9-7bdb-47f3-88a1-8ac42e16d8b6/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/5744312f-1480-4e55-b16d-45b42bfd6e5c/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/5744312f-1480-4e55-b16d-45b42bfd6e5c/sign: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/d55cdcbe-5ae1-4b41-b94a-b6f1a54abc67/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/d55cdcbe-5ae1-4b41-b94a-b6f1a54abc67/start: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/e12071d2-0a37-46f2-b16d-415018101e9a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/e12071d2-0a37-46f2-b16d-415018101e9a/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/44e8f2c9-f87c-4920-b29b-c34ea0418abd/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/44e8f2c9-f87c-4920-b29b-c34ea0418abd/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/2d682851-4da9-4fb3-93a3-b0dfb17c7fac/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/tasks/2d682851-4da9-4fb3-93a3-b0dfb17c7fac/complete: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/d55cdcbe-5ae1-4b41-b94a-b6f1a54abc67/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/steps/d55cdcbe-5ae1-4b41-b94a-b6f1a54abc67/sign: 200
+ 🌐 API Request to /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/1d8c6c31-6462-4f27-a8c4-647685580cb4/complete: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/signature-workflow/pending/6: 200
+ ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+ ✅ API Response from /api/signature-workflow/stats/6: 200
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600002 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600002: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/3e7b7d00-ab96-4fbf-b82f-4c6460f43328/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/3e7b7d00-ab96-4fbf-b82f-4c6460f43328/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/edf2f412-a9da-44f6-bc0e-ab8205402ccc/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/edf2f412-a9da-44f6-bc0e-ab8205402ccc/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/be9122c9-286d-44c8-b9cc-7c3b8e60bd47/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/be9122c9-286d-44c8-b9cc-7c3b8e60bd47/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-13 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-13: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/b9f7d542-4630-4fc0-bf9d-c199f97ae990/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/b9f7d542-4630-4fc0-bf9d-c199f97ae990/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/1b538a4a-d77b-4ff7-a297-b6ff5f1a27e1/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/1b538a4a-d77b-4ff7-a297-b6ff5f1a27e1/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/7faaf067-7886-4266-b590-89a18e64e5af/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/7faaf067-7886-4266-b590-89a18e64e5af/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/20019893-1fea-4e43-8bf2-5f4c9dd962b9/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/20019893-1fea-4e43-8bf2-5f4c9dd962b9/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/5ef5cae2-b1c2-45ee-9804-5c0ea3fbb833/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/5ef5cae2-b1c2-45ee-9804-5c0ea3fbb833/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/be9122c9-286d-44c8-b9cc-7c3b8e60bd47/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/be9122c9-286d-44c8-b9cc-7c3b8e60bd47/sign: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c475b28f-07e7-4c75-84a8-63d351413222/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c475b28f-07e7-4c75-84a8-63d351413222/start: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/5f2be21c-907b-42e7-a4a3-a397cef4cbe6/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/5f2be21c-907b-42e7-a4a3-a397cef4cbe6/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/21f249ad-b6c5-48fc-b76d-bb05dac1776f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/21f249ad-b6c5-48fc-b76d-bb05dac1776f/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/0431ca21-5e6c-42ba-8311-ac8febcce945/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/0431ca21-5e6c-42ba-8311-ac8febcce945/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c475b28f-07e7-4c75-84a8-63d351413222/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c475b28f-07e7-4c75-84a8-63d351413222/sign: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/3fb5f712-51ec-471d-b424-29cdd3b32b10/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/3fb5f712-51ec-471d-b424-29cdd3b32b10/start: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/24a74a0e-ec17-4035-83e8-a6745e33d929/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/24a74a0e-ec17-4035-83e8-a6745e33d929/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/e618ff75-6aef-4da5-8f1f-93c9cb1213ff/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/e618ff75-6aef-4da5-8f1f-93c9cb1213ff/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/1e1f0ec7-173d-4b0c-9d0b-9d9759fc262f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/1e1f0ec7-173d-4b0c-9d0b-9d9759fc262f/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/c94b953c-8899-4956-834e-8159b7b2a6ac/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/c94b953c-8899-4956-834e-8159b7b2a6ac/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/8fe03f4f-32c7-4235-9637-6f6b8b3de44e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/8fe03f4f-32c7-4235-9637-6f6b8b3de44e/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/3fb5f712-51ec-471d-b424-29cdd3b32b10/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/3fb5f712-51ec-471d-b424-29cdd3b32b10/sign: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/d6228930-d686-4897-8293-e62e7259b00e/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/d6228930-d686-4897-8293-e62e7259b00e/start: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/03a86ae8-6031-4c23-a6ca-f96bc4db6104/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/03a86ae8-6031-4c23-a6ca-f96bc4db6104/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/f4e36ccd-a502-4775-a449-33062f15daee/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/f4e36ccd-a502-4775-a449-33062f15daee/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/d6228930-d686-4897-8293-e62e7259b00e/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/d6228930-d686-4897-8293-e62e7259b00e/sign: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c325a6ce-6fce-48ca-a297-8147bd333202/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c325a6ce-6fce-48ca-a297-8147bd333202/start: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/9c8b177c-5608-4f5b-9f9c-c944df25c1f2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/9c8b177c-5608-4f5b-9f9c-c944df25c1f2/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/ffc8f9cb-b748-4dd5-8cf2-4edc5ed9f87a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/ffc8f9cb-b748-4dd5-8cf2-4edc5ed9f87a/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/62dc0940-ba70-4bf1-9ef2-49042ac2b470/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/tasks/62dc0940-ba70-4bf1-9ef2-49042ac2b470/complete: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c325a6ce-6fce-48ca-a297-8147bd333202/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/steps/c325a6ce-6fce-48ca-a297-8147bd333202/sign: 200
+ 🌐 API Request to /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/52132da1-72e1-4ad4-b600-0b87a704074f/complete: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600003 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600003: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/963b5697-c1b1-4433-ba49-ab86c346096c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/963b5697-c1b1-4433-ba49-ab86c346096c/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/8d0279fd-e19e-4b7d-953d-425951caaf66/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/8d0279fd-e19e-4b7d-953d-425951caaf66/sign: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/a649e89a-2379-4f44-8aba-bdefc0f90ade/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/a649e89a-2379-4f44-8aba-bdefc0f90ade/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-12 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-12: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/b877c2e0-9c45-4e16-b98b-72adb5b84c79/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/b877c2e0-9c45-4e16-b98b-72adb5b84c79/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/5bc3bee6-5567-42f8-ace8-fe8f3a536c76/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/5bc3bee6-5567-42f8-ace8-fe8f3a536c76/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/b60ef8bf-1662-4aa5-9a74-144bf737c75a/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/b60ef8bf-1662-4aa5-9a74-144bf737c75a/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/c2f8d956-a028-4cc9-aa13-e8a863bd48eb/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/c2f8d956-a028-4cc9-aa13-e8a863bd48eb/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/6b54cef4-68e8-404e-8a2a-0df7eb5d5d39/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/6b54cef4-68e8-404e-8a2a-0df7eb5d5d39/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/a649e89a-2379-4f44-8aba-bdefc0f90ade/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/a649e89a-2379-4f44-8aba-bdefc0f90ade/sign: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/cb4ca292-3c01-46bf-9e00-1b3fb3e5ec43/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/cb4ca292-3c01-46bf-9e00-1b3fb3e5ec43/start: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/1798bb2c-6f2c-4864-afb1-0c40f4d8de64/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/1798bb2c-6f2c-4864-afb1-0c40f4d8de64/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/58dde8bb-0dbd-40a1-b20a-63ca88944cf7/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/58dde8bb-0dbd-40a1-b20a-63ca88944cf7/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/6b4ba295-f907-430e-b687-0e567d5b5f3c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/6b4ba295-f907-430e-b687-0e567d5b5f3c/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/cb4ca292-3c01-46bf-9e00-1b3fb3e5ec43/sign (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/cb4ca292-3c01-46bf-9e00-1b3fb3e5ec43/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b8258aef-8f90-429a-9f1d-6f1f5ff43391/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b8258aef-8f90-429a-9f1d-6f1f5ff43391/start: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/9a9d945f-284f-4387-b38a-4315301903e1/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/9a9d945f-284f-4387-b38a-4315301903e1/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/e786d939-f946-421b-a088-4837a23d43c7/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/e786d939-f946-421b-a088-4837a23d43c7/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/73517b6a-2112-4359-9eaf-fce139d83723/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/73517b6a-2112-4359-9eaf-fce139d83723/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/61164391-9714-4729-83d6-60cc0a4cf2cf/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/61164391-9714-4729-83d6-60cc0a4cf2cf/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/51db7370-6487-422e-97ab-7333069345f4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/51db7370-6487-422e-97ab-7333069345f4/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b8258aef-8f90-429a-9f1d-6f1f5ff43391/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b8258aef-8f90-429a-9f1d-6f1f5ff43391/sign: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/start: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/c9584465-4d2a-4f81-ae23-ba3a3b9d0704/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/c9584465-4d2a-4f81-ae23-ba3a3b9d0704/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/610078b4-a27e-4f79-bfef-262de1baa32e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/610078b4-a27e-4f79-bfef-262de1baa32e/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/production/timers/runs/active?travelerStepId=b5989076-6a3c-4e34-a9d5-1709afb32b3c:1  Failed to load resource: the server responded with a status of 404 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign (timeout: 15000ms, deployment: true)
+/api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign:1  Failed to load resource: the server responded with a status of 404 ()
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign: 404
+ API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign</pre>
+</body>
+</html>
+
+ 💥 API Request failed for /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign: 
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/b5989076-6a3c-4e34-a9d5-1709afb32b3c/sign: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/f651081a-ac08-4657-841e-7064859ff7b9/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/f651081a-ac08-4657-841e-7064859ff7b9/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/69517868-a1dd-43aa-a3f2-c1aa9f890e43/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/69517868-a1dd-43aa-a3f2-c1aa9f890e43/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/32604f9a-021f-4919-8608-af50705a97da/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/32604f9a-021f-4919-8608-af50705a97da/complete: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/ff21218d-2ec7-43a9-ab08-2a514b4e1b18/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/tasks/ff21218d-2ec7-43a9-ab08-2a514b4e1b18/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/f651081a-ac08-4657-841e-7064859ff7b9/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/f651081a-ac08-4657-841e-7064859ff7b9/sign: 200
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete (timeout: 15000ms, deployment: true)
+/api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete:1  Failed to load resource: the server responded with a status of 422 ()
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete: 422
+ API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+ 💥 API Request failed for /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete: 
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/f651081a-ac08-4657-841e-7064859ff7b9 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/steps/f651081a-ac08-4657-841e-7064859ff7b9: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete (timeout: 15000ms, deployment: true)
+/api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete:1  Failed to load resource: the server responded with a status of 422 ()
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete: 422
+ API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+ 💥 API Request failed for /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete: 
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete (timeout: 15000ms, deployment: true)
+/api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete:1  Failed to load resource: the server responded with a status of 422 ()
+ ✅ API Response from /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete: 422
+ API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+ 💥 API Request failed for /api/travelers/558a7fc5-9455-4792-9f27-1fc289acb6c9/complete: 
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600004 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600004: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/44fae8b9-c65e-4cd2-a78e-8e557b26ef4c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/44fae8b9-c65e-4cd2-a78e-8e557b26ef4c/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/e3eff5e5-3489-41e1-8ff5-9020d4a9a268/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/e3eff5e5-3489-41e1-8ff5-9020d4a9a268/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/99443562-83b4-416b-b622-8328f89ce1d1/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/99443562-83b4-416b-b622-8328f89ce1d1/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-15 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-15: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/4da701be-a5d6-44a7-b499-1da893ade69f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/4da701be-a5d6-44a7-b499-1da893ade69f/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/5dc10365-bc18-458b-aff2-867d90b96188/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/5dc10365-bc18-458b-aff2-867d90b96188/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/d0edc171-fab0-4aeb-95ce-ebc83cca223f/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/d0edc171-fab0-4aeb-95ce-ebc83cca223f/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/7c7c2d91-08d0-4954-bf6a-24f450fd78da/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/7c7c2d91-08d0-4954-bf6a-24f450fd78da/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/f736bc7e-1756-4dea-99bf-e8ab0dd65db1/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/f736bc7e-1756-4dea-99bf-e8ab0dd65db1/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/99443562-83b4-416b-b622-8328f89ce1d1/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/99443562-83b4-416b-b622-8328f89ce1d1/sign: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/144da079-8e84-42f4-8676-18afa6ee3aa7/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/144da079-8e84-42f4-8676-18afa6ee3aa7/start: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/9a3f3be5-e012-4289-9ae3-8142d845a950/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/9a3f3be5-e012-4289-9ae3-8142d845a950/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/270decf0-eba7-4bdd-b42c-2a3a3cd2652d/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/270decf0-eba7-4bdd-b42c-2a3a3cd2652d/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/4bf92813-096e-4b7d-ad47-630a133735ea/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/4bf92813-096e-4b7d-ad47-630a133735ea/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/144da079-8e84-42f4-8676-18afa6ee3aa7/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/144da079-8e84-42f4-8676-18afa6ee3aa7/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/8c51315e-8d0f-460f-a478-e902af62d9c3/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/8c51315e-8d0f-460f-a478-e902af62d9c3/start: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/7100a809-63b9-4973-b898-c281f742d6e2/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/7100a809-63b9-4973-b898-c281f742d6e2/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/8bab55af-0df3-4502-9e95-d9fb97b92661/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/8bab55af-0df3-4502-9e95-d9fb97b92661/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/9287afcb-c1f6-4c9f-8a7e-c80af5792b52/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/9287afcb-c1f6-4c9f-8a7e-c80af5792b52/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/5edb2f8c-2a6c-4203-a2f3-24a80a9bbe03/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/5edb2f8c-2a6c-4203-a2f3-24a80a9bbe03/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/166f86e2-6adb-498b-92db-5d402761784c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/166f86e2-6adb-498b-92db-5d402761784c/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/8c51315e-8d0f-460f-a478-e902af62d9c3/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/8c51315e-8d0f-460f-a478-e902af62d9c3/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/fedaa1fd-875c-41e2-8bbc-d686c5227e16/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/fedaa1fd-875c-41e2-8bbc-d686c5227e16/start: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/c035864b-1616-4bab-9cb6-ed994892f8ef/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/c035864b-1616-4bab-9cb6-ed994892f8ef/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/0435fb92-720d-4c2e-a2ca-598fa8841e9e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/0435fb92-720d-4c2e-a2ca-598fa8841e9e/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/fedaa1fd-875c-41e2-8bbc-d686c5227e16/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/fedaa1fd-875c-41e2-8bbc-d686c5227e16/sign: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/89a6f36a-ae92-45d5-8193-aa4f7fc96d46/start (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/89a6f36a-ae92-45d5-8193-aa4f7fc96d46/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/fcdb5c0c-1113-433f-b46b-03a04ca13eb6/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/fcdb5c0c-1113-433f-b46b-03a04ca13eb6/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/d7221324-67bf-4190-bdef-8c4fcd5a7b2c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/d7221324-67bf-4190-bdef-8c4fcd5a7b2c/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/fd9eae7f-ea4f-477e-8ab4-4ead759b966c/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/tasks/fd9eae7f-ea4f-477e-8ab4-4ead759b966c/complete: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/89a6f36a-ae92-45d5-8193-aa4f7fc96d46/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/steps/89a6f36a-ae92-45d5-8193-aa4f7fc96d46/sign: 200
+ 🌐 API Request to /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/complete (timeout: 15000ms, deployment: true)
+/api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/complete:1  Failed to load resource: the server responded with a status of 422 ()
+ ✅ API Response from /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/complete: 422
+ API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+ 💥 API Request failed for /api/travelers/0423386c-5388-4a1b-83ae-8393dd7425a5/complete: 
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600005 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600005: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/6e7d4669-337a-44d0-a3fc-0b43bec54de6/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/6e7d4669-337a-44d0-a3fc-0b43bec54de6/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/f3f1cb06-93c6-46c1-94f0-979c059f2cd5/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/f3f1cb06-93c6-46c1-94f0-979c059f2cd5/sign: 200
+ 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/f3f1cb06-93c6-46c1-94f0-979c059f2cd5 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/f3f1cb06-93c6-46c1-94f0-979c059f2cd5: 200
+ 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/419b0892-5141-4e1d-a685-b280acf2ee8e/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/419b0892-5141-4e1d-a685-b280acf2ee8e/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/material-lots/validate/MFG-7-712-14 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-7-712-14: 200
+ 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/0acef7a4-929d-49d2-be02-225450652450/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/0acef7a4-929d-49d2-be02-225450652450/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/c0cb3c22-9f36-486c-b6a7-b68732df235c/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/c0cb3c22-9f36-486c-b6a7-b68732df235c/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/654cf005-efc1-4333-aa94-a33ae27fd3b7/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/654cf005-efc1-4333-aa94-a33ae27fd3b7/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/16a3605c-0103-4833-a127-4d6150a0b511/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/16a3605c-0103-4833-a127-4d6150a0b511/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/0535dcb3-d798-48b5-88b1-56f190e3ff0b/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/0535dcb3-d798-48b5-88b1-56f190e3ff0b/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/419b0892-5141-4e1d-a685-b280acf2ee8e/sign (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/419b0892-5141-4e1d-a685-b280acf2ee8e/sign: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/54b88b1a-9a67-485c-8a31-b15b4b006273/start (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/54b88b1a-9a67-485c-8a31-b15b4b006273/start: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/d48be655-a517-4c53-aae2-ae612b586e06/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/d48be655-a517-4c53-aae2-ae612b586e06/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/d6f64655-02b1-412c-8d5c-e84f57cacdd5/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/d6f64655-02b1-412c-8d5c-e84f57cacdd5/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/337d4c86-d9bb-4925-9074-e82ae16b9b3d/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/337d4c86-d9bb-4925-9074-e82ae16b9b3d/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/54b88b1a-9a67-485c-8a31-b15b4b006273/sign (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/54b88b1a-9a67-485c-8a31-b15b4b006273/sign: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/5cb90f13-a8a9-4a35-b056-7f06030ea263/start (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/5cb90f13-a8a9-4a35-b056-7f06030ea263/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/af18ede8-5cb1-461e-9b00-c79eb6419e76/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/af18ede8-5cb1-461e-9b00-c79eb6419e76/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/1fcda19e-f5b5-4595-9673-aa880ce5b7b0/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/1fcda19e-f5b5-4595-9673-aa880ce5b7b0/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/06a8607b-b537-4db9-8bfe-93861a8eed1f/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/06a8607b-b537-4db9-8bfe-93861a8eed1f/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/9c96d8f0-f062-43b3-8104-7d2e2dc15957/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/9c96d8f0-f062-43b3-8104-7d2e2dc15957/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/f6ff70ae-918d-4eaf-a7a3-efa07e818c00/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/f6ff70ae-918d-4eaf-a7a3-efa07e818c00/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/5cb90f13-a8a9-4a35-b056-7f06030ea263/sign (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/5cb90f13-a8a9-4a35-b056-7f06030ea263/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/af4ccc74-c0e2-486c-84c3-281a3e502160/start (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/af4ccc74-c0e2-486c-84c3-281a3e502160/start: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/95898364-8e2e-41e7-a4d2-54d039b75da5/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/95898364-8e2e-41e7-a4d2-54d039b75da5/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/97686fce-0c36-4641-9b69-5f7be061e409/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/97686fce-0c36-4641-9b69-5f7be061e409/complete: 200
+index-C-NKcBeb.js:1714 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+(anonymous) @ index-C-NKcBeb.js:1714
+index-C-NKcBeb.js:1714 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+(anonymous) @ index-C-NKcBeb.js:1714
+/api/travelers/503bd032-516f-4316-b13a-50d642304b8e/dependency-status:1  Failed to load resource: the server responded with a status of 404 ()
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/af4ccc74-c0e2-486c-84c3-281a3e502160/sign (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/af4ccc74-c0e2-486c-84c3-281a3e502160/sign: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/e97c9566-0027-4ad6-a3e2-9ec3690e5369/start (timeout: 15000ms, deployment: true)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/e97c9566-0027-4ad6-a3e2-9ec3690e5369/start: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/080a1098-4d7f-4610-bdfc-0985925f45d9/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/080a1098-4d7f-4610-bdfc-0985925f45d9/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/ca102bed-7bee-46ea-b4a1-90691bd32e57/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/ca102bed-7bee-46ea-b4a1-90691bd32e57/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/7ff2f94d-a142-4d9e-a82a-b2346b0e70df/complete (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/tasks/7ff2f94d-a142-4d9e-a82a-b2346b0e70df/complete: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/e97c9566-0027-4ad6-a3e2-9ec3690e5369/sign (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/steps/e97c9566-0027-4ad6-a3e2-9ec3690e5369/sign: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/complete (timeout: 15000ms, deployment: true)
+/api/travelers/503bd032-516f-4316-b13a-50d642304b8e/complete:1  Failed to load resource: the server responded with a status of 422 ()
+index-C-NKcBeb.js:235 ✅ API Response from /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/complete: 422
+index-C-NKcBeb.js:5436 API error raw body: {"error":"Badge not recognised","detail":"The badge ID you entered was not found in the employee directory. Please check the badge ID and try again."}
+console.error @ index-C-NKcBeb.js:5436
+index-C-NKcBeb.js:5436 💥 API Request failed for /api/travelers/503bd032-516f-4316-b13a-50d642304b8e/complete: Error: Badge not recognised
+    at Se (index-C-NKcBeb.js:235:6500)
+console.error @ index-C-NKcBeb.js:5436

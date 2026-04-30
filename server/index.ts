@@ -408,6 +408,7 @@ async function initializeBackgroundServices() {
           '0091_timesheet_corrections.sql',
           '0092_timesheet_status_extended.sql',
           '0093_timekeeping_policy_settings.sql',
+          '0094_labor_entry_drafts.sql',
         ];
         const criticalMigrations = new Set([
           '0060_punch_ledger.sql',

@@ -1,7 +1,7 @@
-import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { employees } from "../../schema";
+import { employees, users } from "../../schema";
 import type { TimesheetStatus } from "../services/timekeeping/timesheetStateMachine";
 
 export const timekeepingSchema = pgSchema("timekeeping");
@@ -392,3 +392,74 @@ export const insertPolicySettingsSchema = createInsertSchema(policySettingsTable
 });
 export type InsertPolicySettings = z.infer<typeof insertPolicySettingsSchema>;
 export type PolicySettings = typeof policySettingsTable.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// LABOR ENTRY DRAFTS — Phase 2
+// Intermediary layer for all salaried and indirect labor entry.  Every entry
+// (manual, conversational, or AI-parsed) lands here first before any rows are
+// written to punch_ledger or labor_allocations.  The existing hourly kiosk
+// pipeline is completely untouched.
+// ---------------------------------------------------------------------------
+
+export const laborEntryDraftsTable = timekeepingSchema.table("labor_entry_drafts", {
+  id: serial("id").primaryKey(),
+
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+
+  entryDate: date("entry_date").notNull(),
+
+  rawInputText: text("raw_input_text"),
+
+  parsedSegmentsJson: jsonb("parsed_segments_json").notNull().default([]),
+
+  status: text("status").notNull().default("DRAFT"),
+
+  source: text("source").notNull(),
+
+  totalHours: numeric("total_hours", { precision: 8, scale: 4 }),
+
+  confidenceScore: numeric("confidence_score", { precision: 5, scale: 4 }),
+
+  validationErrorsJson: jsonb("validation_errors_json"),
+
+  createdBy: integer("created_by").notNull().references(() => users.id),
+
+  reviewedBy: integer("reviewed_by").references(() => users.id),
+
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+const LABOR_ENTRY_DRAFT_STATUSES = ["DRAFT", "NEEDS_REVIEW", "CONFIRMED", "POSTED", "VOIDED"] as const;
+const LABOR_ENTRY_DRAFT_SOURCES = ["MANUAL", "CONVERSATIONAL", "AI"] as const;
+
+export const insertLaborEntryDraftSchema = createInsertSchema(laborEntryDraftsTable)
+  .omit({
+    id: true,
+    reviewedBy: true,
+    reviewedAt: true,
+    postedAt: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    status: z.enum(LABOR_ENTRY_DRAFT_STATUSES).default("DRAFT"),
+    source: z.enum(LABOR_ENTRY_DRAFT_SOURCES),
+  });
+export type LaborEntryDraftInsert = z.infer<typeof insertLaborEntryDraftSchema>;
+
+export const updateLaborEntryDraftSchema = createInsertSchema(laborEntryDraftsTable)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    status: z.enum(LABOR_ENTRY_DRAFT_STATUSES).optional(),
+    source: z.enum(LABOR_ENTRY_DRAFT_SOURCES).optional(),
+  })
+  .partial();
+export type LaborEntryDraftUpdate = z.infer<typeof updateLaborEntryDraftSchema>;
+
+export type LaborEntryDraft = typeof laborEntryDraftsTable.$inferSelect;

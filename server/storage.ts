@@ -752,6 +752,12 @@ import {
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
 import { formatDates } from './utils/formatDates';
+import {
+  laborEntryDraftsTable,
+  type LaborEntryDraftInsert,
+  type LaborEntryDraftUpdate,
+  type LaborEntryDraft,
+} from './src/schema/timekeeping';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATE_COLUMNS constants
@@ -3037,6 +3043,12 @@ export interface IStorage {
   createLocalCalendarEvent(data: InsertLocalCalendarEvent): Promise<LocalCalendarEvent>;
   updateLocalCalendarEvent(id: number, data: Partial<InsertLocalCalendarEvent>): Promise<LocalCalendarEvent>;
   deleteLocalCalendarEvent(id: number): Promise<void>;
+
+  // Labor entry drafts (Phase 2 — salaried / indirect labor)
+  createLaborEntryDraft(data: LaborEntryDraftInsert): Promise<LaborEntryDraft>;
+  getLaborEntryDraft(id: number): Promise<LaborEntryDraft | undefined>;
+  updateLaborEntryDraft(id: number, data: LaborEntryDraftUpdate): Promise<LaborEntryDraft>;
+  listLaborEntryDraftsByEmployee(employeeId: number, entryDate?: string): Promise<LaborEntryDraft[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -25731,6 +25743,46 @@ export class DatabaseStorage implements IStorage {
   async createInventoryAuditRecord(data: InsertInventoryAuditRecord): Promise<InventoryAuditRecord> {
     const [row] = await db.insert(inventoryAuditRecords).values(data).returning();
     return row;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Labor entry drafts
+  // ---------------------------------------------------------------------------
+
+  async createLaborEntryDraft(data: LaborEntryDraftInsert): Promise<LaborEntryDraft> {
+    const [row] = await db.insert(laborEntryDraftsTable).values(data).returning();
+    return row!;
+  }
+
+  async getLaborEntryDraft(id: number): Promise<LaborEntryDraft | undefined> {
+    const [row] = await db
+      .select()
+      .from(laborEntryDraftsTable)
+      .where(eq(laborEntryDraftsTable.id, id))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async updateLaborEntryDraft(id: number, data: LaborEntryDraftUpdate): Promise<LaborEntryDraft> {
+    const [row] = await db
+      .update(laborEntryDraftsTable)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(laborEntryDraftsTable.id, id))
+      .returning();
+    if (!row) throw new Error(`LaborEntryDraft id=${id} not found`);
+    return row;
+  }
+
+  async listLaborEntryDraftsByEmployee(employeeId: number, entryDate?: string): Promise<LaborEntryDraft[]> {
+    const conditions = [eq(laborEntryDraftsTable.employeeId, employeeId)];
+    if (entryDate) {
+      conditions.push(eq(laborEntryDraftsTable.entryDate, entryDate));
+    }
+    return db
+      .select()
+      .from(laborEntryDraftsTable)
+      .where(and(...conditions))
+      .orderBy(desc(laborEntryDraftsTable.createdAt));
   }
 }
 

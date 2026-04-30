@@ -762,13 +762,15 @@ router.get('/:id/employment-periods', async (req: Request, res: Response) => {
         ep.started_via_session_id as "startedViaSessionId",
         ep.ended_via_session_id as "endedViaSessionId",
         ep.created_at as "createdAt",
-        start_session.path_name as "startedViaPathName",
-        start_session.path_purpose as "startedViaPathPurpose",
-        end_session.path_name as "endedViaPathName",
-        end_session.path_purpose as "endedViaPathPurpose"
+        start_path.name as "startedViaPathName",
+        start_path.path_purpose as "startedViaPathPurpose",
+        end_path.name as "endedViaPathName",
+        end_path.path_purpose as "endedViaPathPurpose"
       FROM employment_periods ep
       LEFT JOIN onboarding_sessions start_session ON ep.started_via_session_id = start_session.id
+      LEFT JOIN onboarding_paths start_path ON start_session.path_id = start_path.id
       LEFT JOIN onboarding_sessions end_session ON ep.ended_via_session_id = end_session.id
+      LEFT JOIN onboarding_paths end_path ON end_session.path_id = end_path.id
       WHERE ep.employee_id = $1
       ORDER BY ep.start_date ASC
     `, [employeeId]);

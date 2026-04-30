@@ -1069,6 +1069,23 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_packing_slips external_pdf_url migration skipped:', extPdfErr.message);
       }
 
+      // Data repair: clear stuck SHIPPED stock_status on metal-accessory purchase_order_items
+      // from POs 58631218, 58636476, and 58641595 that were left behind after return-to-QC.
+      // The return-to-QC endpoint previously had a guard that refused to clear stock_status
+      // for items already at 'SHIPPED', causing metal accessories to disappear from the
+      // Shipping QC PO tab. This repair is idempotent — rows already cleared are untouched.
+      try {
+        const { apply: repairReturnToQcShippedStatus } = await import('./src/migrations/repairReturnToQcShippedStatus');
+        const repairResult = await repairReturnToQcShippedStatus();
+        if (repairResult.totalCleared > 0) {
+          console.log(`✅ Repair: cleared stuck SHIPPED stock_status on ${repairResult.totalCleared} purchase_order_items across POs 58631218, 58636476, 58641595`);
+        } else {
+          console.log('✅ Repair: no stuck SHIPPED stock_status rows found (already applied or data was clean)');
+        }
+      } catch (repairErr: any) {
+        console.warn('⚠️ Return-to-QC stock_status repair skipped:', repairErr.message);
+      }
+
       // Ensure cutting table packet BOM tables exist (needed for scan-start endpoint)
       try {
         const { sql: sqlCut } = await import('drizzle-orm');

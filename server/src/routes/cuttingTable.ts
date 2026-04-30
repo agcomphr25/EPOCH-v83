@@ -2515,6 +2515,18 @@ router.post('/schedule-to-cutting', async (req, res) => {
     }
 
     // Create manufacturing queue entry
+    // For P2 packets, stamp p2BackfillApplied:true so the boot backfill skips this row
+    // (the order status is updated inline below, so no historical reconciliation is needed)
+    const queueNotes = JSON.stringify({
+      orderId,
+      source,
+      materialType,
+      bomId: validBomId,
+      userNotes: notes,
+      isP2Packet: source === 'P2',
+      packetName,
+      ...(source === 'P2' ? { p2BackfillApplied: true } : {}),
+    });
     const [queueItem] = await db.insert(manufacturingQueue).values({
       inventoryItemId,
       department: 'Cutting Table',
@@ -2523,11 +2535,45 @@ router.post('/schedule-to-cutting', async (req, res) => {
       priority: priority || 50,
       status: 'PENDING',
       dueDate: dueDate ? new Date(dueDate) : null,
-      notes: JSON.stringify({ orderId, source, materialType, bomId: validBomId, userNotes: notes, isP2Packet: source === 'P2', packetName }),
+      notes: queueNotes,
       requestedBy: 'system',
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
+
+    // For P2 items, update the source production order status so it no longer appears as open demand
+    if (source === 'P2' && orderId) {
+      try {
+        // orderId format is either "PO-{poNumber}-{id}" or "P2-{id}" — the last segment is always the DB id
+        const idParts = String(orderId).split('-');
+        const p2OrderId = parseInt(idParts[idParts.length - 1], 10);
+        if (!isNaN(p2OrderId)) {
+          const orderRows = await pool.query(
+            `SELECT id, quantity FROM p2_production_orders WHERE id = $1`,
+            [p2OrderId]
+          );
+          const orderRow = (orderRows as any).rows?.[0] || (orderRows as any[])[0];
+          if (orderRow) {
+            const remaining = (orderRow.quantity || 0) - quantity;
+            if (remaining <= 0) {
+              await pool.query(
+                `UPDATE p2_production_orders SET status = 'scheduled', updated_at = NOW() WHERE id = $1`,
+                [p2OrderId]
+              );
+              console.log(`✅ P2 production order ${p2OrderId} fully scheduled — status → scheduled`);
+            } else {
+              await pool.query(
+                `UPDATE p2_production_orders SET quantity = $1, updated_at = NOW() WHERE id = $2`,
+                [remaining, p2OrderId]
+              );
+              console.log(`✅ P2 production order ${p2OrderId} partially scheduled — remaining quantity: ${remaining}`);
+            }
+          }
+        }
+      } catch (p2UpdateErr: any) {
+        console.warn('⚠️ Could not update P2 production order status after scheduling:', p2UpdateErr.message);
+      }
+    }
 
     res.status(201).json({
       ...queueItem,
@@ -2541,6 +2587,95 @@ router.post('/schedule-to-cutting', async (req, res) => {
     res.status(500).json({ error: 'Failed to schedule to cutting queue' });
   }
 });
+
+// Backfill endpoint: reconcile historical manufacturing_queue P2 entries to their source production orders
+router.post('/backfill-p2-scheduled-status', async (req, res) => {
+  try {
+    const { pool: bfPool } = await import('../../db');
+    const summary = await runP2ScheduledBackfill(bfPool);
+    res.json({ success: true, ...summary });
+  } catch (err: any) {
+    console.error('❌ P2 backfill endpoint error:', err.message);
+    res.status(500).json({ error: 'Backfill failed', detail: err.message });
+  }
+});
+
+// Shared backfill logic — also called at boot
+// Idempotent: once a queue row is processed its notes are stamped with p2BackfillApplied:true
+// so re-running on the next restart never double-subtracts quantity.
+export async function runP2ScheduledBackfill(pool: any): Promise<{ updated: number; partial: number; skipped: number }> {
+  // Only fetch rows that have NOT already been processed by a previous backfill run
+  const queueResult = await pool.query(`
+    SELECT id, notes, quantity_requested
+    FROM manufacturing_queue
+    WHERE department = 'Cutting Table'
+      AND notes IS NOT NULL
+      AND notes::text LIKE '%"isP2Packet":true%'
+      AND notes::text NOT LIKE '%"p2BackfillApplied":true%'
+  `);
+  const queueRows = (queueResult as any).rows || (queueResult as any[]) || [];
+
+  let updated = 0;
+  let partial = 0;
+  let skipped = 0;
+
+  for (const row of queueRows) {
+    try {
+      let parsedNotes: any = {};
+      try { parsedNotes = JSON.parse(row.notes); } catch (_) { skipped++; continue; }
+      const orderId = parsedNotes?.orderId;
+      if (!orderId) { skipped++; continue; }
+
+      // Parse orderId: "PO-{poNumber}-{id}" or "P2-{id}" — last segment is DB id
+      const idParts = String(orderId).split('-');
+      const p2OrderId = parseInt(idParts[idParts.length - 1], 10);
+      if (isNaN(p2OrderId)) { skipped++; continue; }
+
+      const orderResult = await pool.query(
+        `SELECT id, quantity, status FROM p2_production_orders WHERE id = $1`,
+        [p2OrderId]
+      );
+      const orderRow = (orderResult as any).rows?.[0] || (orderResult as any[])[0];
+      if (!orderRow) { skipped++; continue; }
+
+      // Skip orders already moved past pending
+      if (orderRow.status === 'scheduled' || orderRow.status === 'completed' || orderRow.status === 'cancelled') {
+        skipped++;
+        continue;
+      }
+
+      const scheduledQty = row.quantity_requested || 0;
+      const remaining = (orderRow.quantity || 0) - scheduledQty;
+
+      if (remaining <= 0) {
+        await pool.query(
+          `UPDATE p2_production_orders SET status = 'scheduled', updated_at = NOW() WHERE id = $1`,
+          [p2OrderId]
+        );
+        updated++;
+      } else {
+        await pool.query(
+          `UPDATE p2_production_orders SET quantity = $1, updated_at = NOW() WHERE id = $2`,
+          [remaining, p2OrderId]
+        );
+        partial++;
+      }
+
+      // Stamp this queue row so the backfill never processes it again (idempotency guard)
+      parsedNotes.p2BackfillApplied = true;
+      await pool.query(
+        `UPDATE manufacturing_queue SET notes = $1 WHERE id = $2`,
+        [JSON.stringify(parsedNotes), row.id]
+      );
+    } catch (rowErr: any) {
+      console.warn(`⚠️ P2 backfill: error processing queue row ${row.id}:`, rowErr.message);
+      skipped++;
+    }
+  }
+
+  console.log(`✅ P2 backfill complete — fully scheduled: ${updated}, partial qty reduced: ${partial}, skipped: ${skipped}`);
+  return { updated, partial, skipped };
+}
 
 // ========== Packet BOM Endpoints ==========
 

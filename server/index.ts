@@ -608,6 +608,35 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Serialized item sync skipped:', syncErr.message);
       }
 
+      // Historical backfill: reconcile P2 manufacturing_queue entries to their source production orders
+      // Guard: only run when there are both P2 queue entries AND pending P2 production orders,
+      // so this is a no-op on clean databases and skips on subsequent restarts after the fix is applied.
+      try {
+        const p2GuardResult = await pool.query(`
+          SELECT
+            (SELECT COUNT(*) FROM manufacturing_queue
+             WHERE department = 'Cutting Table'
+               AND notes IS NOT NULL
+               AND notes::text LIKE '%"isP2Packet":true%'
+               AND notes::text NOT LIKE '%"p2BackfillApplied":true%') AS queue_count,
+            (SELECT COUNT(*) FROM p2_production_orders
+             WHERE status IN ('pending', 'PENDING', 'in_progress', 'queued')) AS pending_count
+        `);
+        const guardRow = (p2GuardResult as any).rows?.[0] || (p2GuardResult as any[])[0] || {};
+        const queueCount = parseInt(guardRow.queue_count ?? '0', 10);
+        const pendingCount = parseInt(guardRow.pending_count ?? '0', 10);
+        if (queueCount > 0 && pendingCount > 0) {
+          console.log(`🔄 P2 backfill: ${queueCount} P2 queue entries found, ${pendingCount} pending P2 orders — running historical backfill`);
+          const { runP2ScheduledBackfill } = await import('./src/routes/cuttingTable');
+          const bfSummary = await runP2ScheduledBackfill(pool);
+          console.log(`✅ P2 boot backfill complete: ${JSON.stringify(bfSummary)}`);
+        } else {
+          console.log(`✅ P2 boot backfill: guard check passed (queue_count=${queueCount}, pending_count=${pendingCount}) — skipping`);
+        }
+      } catch (p2BfErr: any) {
+        console.warn('⚠️ P2 boot backfill skipped:', p2BfErr.message);
+      }
+
       // Data correction: PO 037517 item 225 (Grace Engineering) — fix cf_privateer → cf_beartooth
       // The specifications snapshot was frozen with the wrong stock model at creation time.
       // This correction updates stockModelId, stockModelName, and specifications.stockModel atomically.

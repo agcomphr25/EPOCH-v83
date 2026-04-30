@@ -234,9 +234,10 @@ interface TempServer {
   stop: () => void;
 }
 
-let _portCounter = 5100;
+const _portBase = 5000 + Math.floor(Math.random() * 1000);
+let _portOffset = 0;
 function randomPort(): number {
-  return _portCounter++;
+  return _portBase + _portOffset++;
 }
 
 async function startFlagOnServer(port: number): Promise<TempServer> {

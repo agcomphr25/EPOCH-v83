@@ -20,9 +20,15 @@ export interface SignBadgeLookupDeps {
 }
 
 export async function fetchResolveBadge(scanCode: string): Promise<SignBadgeLookupResult> {
-  const resp = await fetch(`/api/employee-badges/resolve-badge/${encodeURIComponent(scanCode)}`);
+  const resp = await fetch(`/api/p2-traveler/badge-lookup/${encodeURIComponent(scanCode)}`);
   if (!resp.ok) return { ok: false };
-  const emp: ResolvedEmployee = await resp.json();
+  const raw = await resp.json();
+  const emp: ResolvedEmployee = {
+    id: raw.id,
+    name: raw.name,
+    employeeCode: raw.employeeCode,
+    department: raw.department ?? null,
+  };
   return { ok: true, employee: emp };
 }
 

@@ -177,7 +177,7 @@ describe('fetchResolveBadge — fetch URL wiring and response parsing', () => {
 
     expect(global.fetch).toHaveBeenCalledOnce();
     expect(global.fetch).toHaveBeenCalledWith(
-      '/api/employee-badges/resolve-badge/BADGE001',
+      '/api/p2-traveler/badge-lookup/BADGE001',
     );
   });
 
@@ -190,7 +190,7 @@ describe('fetchResolveBadge — fetch URL wiring and response parsing', () => {
     await fetchResolveBadge('BADGE 001/test');
 
     expect(global.fetch).toHaveBeenCalledWith(
-      '/api/employee-badges/resolve-badge/BADGE%20001%2Ftest',
+      '/api/p2-traveler/badge-lookup/BADGE%20001%2Ftest',
     );
   });
 

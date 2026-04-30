@@ -408,10 +408,10 @@ export default function TravelerExecution() {
       setBadgeLookupStatus('loading');
       badgeLookupTimerRef.current = setTimeout(async () => {
         try {
-          const resp = await fetch(`/api/employee-badges/resolve-badge/${encodeURIComponent(value.trim())}`);
+          const resp = await fetch(`/api/p2-traveler/badge-lookup/${encodeURIComponent(value.trim())}`);
           if (resp.ok) {
             const emp = await resp.json();
-            setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: emp.department });
+            setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
             setSignatureData((prev) => ({ ...prev, signedByName: emp.name }));
             setBadgeLookupStatus('found');
           } else {
@@ -2191,15 +2191,27 @@ export default function TravelerExecution() {
                         </div>
                       )}
 
+                      {badgeLookupStatus === 'idle' && !signatureData.badgeScan && activeBadge && activeTechName && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <User className="h-5 w-5 text-green-600" />
+                            <div>
+                              <p className="font-medium text-green-800">{activeTechName}</p>
+                            </div>
+                            <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
+                          </div>
+                        </div>
+                      )}
+
                       <Button
                         onClick={() => startStepMutation.mutate({
                           stepId: currentStep.id,
-                          badge: signatureData.badgeScan,
-                          techName: resolvedEmployee?.name || signatureData.signedByName,
+                          badge: signatureData.badgeScan || activeBadge,
+                          techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
                         })}
                         disabled={
                           startStepMutation.isPending ||
-                          !signatureData.badgeScan ||
+                          !(signatureData.badgeScan || activeBadge) ||
                           (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
                           // Require acknowledgment when budget is overrun (Task #1235)
                           (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||

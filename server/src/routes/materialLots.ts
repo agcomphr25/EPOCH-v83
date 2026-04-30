@@ -178,6 +178,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         return res.json({
           valid: true,
           status: 'PACKET',
+          icnSource: 'built_packet',
           message: `Packet ${packet.barcode} found with ${fabricRolls.length} fabric roll(s)`,
           packet: {
             id: packet.id,
@@ -302,6 +303,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
             return res.json({
               valid: true,
               status: 'PACKET',
+              icnSource: 'built_packet',
               message: `Manufacturing packet ${icn} linked — ${fabricRolls.length} fabric roll(s)`,
               packet: {
                 id: builtPacketForQueue.id,
@@ -356,6 +358,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           return res.json({
             valid: true,
             status: 'PACKET',
+            icnSource: 'planned_materials',
             message: `Manufacturing packet ${icn} linked — ${fabricRolls.length} fabric roll(s)`,
             packet: {
               id: queueItem.id,

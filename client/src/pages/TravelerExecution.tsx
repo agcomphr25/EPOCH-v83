@@ -2139,7 +2139,29 @@ export default function TravelerExecution() {
                     <p className="text-muted-foreground mb-4">
                       Scan your badge to start this step
                     </p>
-                    <div className="max-w-xs mx-auto space-y-3">
+                    <form
+                      className="max-w-xs mx-auto space-y-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (
+                          startStepMutation.isPending ||
+                          !(signatureData.badgeScan || activeBadge) ||
+                          (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
+                          badgeLookupStatus === 'error' ||
+                          nameLookupPending ||
+                          (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||
+                          (!!laborContext?.requiresCertification &&
+                            (laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') &&
+                            !certWarnAcknowledged)
+                        ) return;
+                        startStepMutation.mutate({
+                          stepId: currentStep.id,
+                          badge: signatureData.badgeScan || activeBadge,
+                          techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
+                          employeeId: resolvedEmployee?.id,
+                        });
+                      }}
+                    >
                       <div className="space-y-1">
                         <Label htmlFor="step-badge-scan" className="text-sm">Scan Badge</Label>
                         <Input
@@ -2211,6 +2233,7 @@ export default function TravelerExecution() {
                               Could not reach the badge reader. Check your connection and try scanning again.
                             </p>
                             <button
+                              type="button"
                               className="text-xs text-blue-600 underline"
                               onClick={() => {
                                 setBadgeLookupStatus('idle');
@@ -2252,6 +2275,7 @@ export default function TravelerExecution() {
                       )}
 
                       <Button
+                        type="button"
                         onClick={() => startStepMutation.mutate({
                           stepId: currentStep.id,
                           badge: signatureData.badgeScan || activeBadge,
@@ -2280,7 +2304,7 @@ export default function TravelerExecution() {
                         )}
                         Start Step
                       </Button>
-                    </div>
+                    </form>
 
                     {stepGates.length > 0 && (
                       <div className="mt-6 max-w-sm mx-auto">

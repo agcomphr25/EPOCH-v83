@@ -1515,7 +1515,10 @@ export default function EmployeeDetail() {
                 )}
 
                 {showPasswordForm ? (
-                  <div className="mt-3 space-y-2">
+                  <form
+                    className="mt-3 space-y-2"
+                    onSubmit={(e) => { e.preventDefault(); handleSetPassword(); }}
+                  >
                     {!linkedUser && (
                       <Input
                         placeholder="Username"
@@ -1530,6 +1533,7 @@ export default function EmployeeDetail() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="text-sm"
+                      autoComplete="new-password"
                     />
                     <Input
                       type="password"
@@ -1537,17 +1541,19 @@ export default function EmployeeDetail() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="text-sm"
+                      autoComplete="new-password"
                     />
                     <div className="flex gap-2">
                       <Button
+                        type="submit"
                         size="sm"
                         className="flex-1"
-                        onClick={handleSetPassword}
                         disabled={setPasswordMutation.isPending}
                       >
                         {setPasswordMutation.isPending ? 'Saving...' : 'Set Password'}
                       </Button>
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => {
@@ -1560,7 +1566,7 @@ export default function EmployeeDetail() {
                         Cancel
                       </Button>
                     </div>
-                  </div>
+                  </form>
                 ) : (
                   <Button
                     size="sm"

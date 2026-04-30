@@ -280,22 +280,26 @@ export default function BadgeScanner() {
                 </div>
               ) : (
                 <div className="mt-2">
-                  <Input
-                    type="password"
-                    value={employeeBarcodeInput}
-                    onChange={(e) => setEmployeeBarcodeInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && employeeBarcodeInput.trim()) {
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (employeeBarcodeInput.trim()) {
                         handleEmployeeBadgeScan(employeeBarcodeInput.trim());
                         setEmployeeBarcodeInput('');
                       }
                     }}
-                    placeholder="Scan badge..."
-                    disabled={scanState !== 'READY'}
-                    autoFocus
-                    autoComplete="new-password"
-                    data-testid="input-employee-barcode"
-                  />
+                  >
+                    <Input
+                      type="password"
+                      value={employeeBarcodeInput}
+                      onChange={(e) => setEmployeeBarcodeInput(e.target.value)}
+                      placeholder="Scan badge..."
+                      disabled={scanState !== 'READY'}
+                      autoFocus
+                      autoComplete="new-password"
+                      data-testid="input-employee-barcode"
+                    />
+                  </form>
                 </div>
               )}
             </div>

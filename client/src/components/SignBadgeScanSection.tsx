@@ -10,6 +10,7 @@ interface Props {
   resolvedEmployee: ResolvedEmployee | null;
   onBadgeChange: (value: string) => void;
   onNameChange: (value: string) => void;
+  onSubmit?: () => void;
 }
 
 export default function SignBadgeScanSection({
@@ -19,9 +20,13 @@ export default function SignBadgeScanSection({
   resolvedEmployee,
   onBadgeChange,
   onNameChange,
+  onSubmit,
 }: Props) {
   return (
-    <div className="space-y-2">
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSubmit?.(); }}
+      className="space-y-2"
+    >
       <Label htmlFor="sign-badge">Employee ID / Badge *</Label>
       <div className="relative">
         <Input
@@ -92,6 +97,6 @@ export default function SignBadgeScanSection({
           </div>
         </div>
       )}
-    </div>
+    </form>
   );
 }

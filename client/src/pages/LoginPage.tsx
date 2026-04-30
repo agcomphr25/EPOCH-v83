@@ -294,7 +294,7 @@ export default function LoginPage() {
 
   const renderBadgeLogin = () => (
     <div className="space-y-4">
-      <div className="space-y-2">
+      <form onSubmit={handleBadgeLogin} className="space-y-2">
         <Label htmlFor="badgeCode" className="flex items-center gap-2">
           <Scan className="w-4 h-4" />
           Badge Code
@@ -306,11 +306,6 @@ export default function LoginPage() {
             placeholder="Scan badge..."
             value={badgeCode}
             onChange={(e) => setBadgeCode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && badgeCode.trim()) {
-                handleBadgeLogin();
-              }
-            }}
             disabled={isBadgeLoading}
             data-testid="input-badge-code"
             autoComplete="new-password"
@@ -318,8 +313,7 @@ export default function LoginPage() {
             className="flex-1"
           />
           <Button
-            type="button"
-            onClick={() => handleBadgeLogin()}
+            type="submit"
             disabled={isBadgeLoading || !badgeCode.trim()}
             data-testid="button-badge-login"
             className="h-10"
@@ -330,7 +324,7 @@ export default function LoginPage() {
         <p className="text-xs text-muted-foreground">
           Scan your employee badge or enter your code
         </p>
-      </div>
+      </form>
     </div>
   );
 

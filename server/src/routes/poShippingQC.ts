@@ -1392,7 +1392,7 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
         WHERE id = ANY($1::int[])
           AND stock_status IN ('SHIPPED', 'FULFILLED')
       `, [uniquePoItemIds]);
-      const terminalSkipped = terminalCheckResult.rows[0]?.count ?? 0;
+      const terminalSkipped = terminalCheckResult[0]?.count ?? 0;
       if (terminalSkipped > 0) {
         console.warn(`⚠️ Skipped ${terminalSkipped} purchase_order_items that are already SHIPPED or FULFILLED — their status was not cleared.`);
       }

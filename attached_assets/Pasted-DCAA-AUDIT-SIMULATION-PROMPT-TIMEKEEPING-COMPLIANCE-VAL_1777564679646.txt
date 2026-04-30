@@ -1,0 +1,227 @@
+DCAA AUDIT SIMULATION PROMPT — TIMEKEEPING COMPLIANCE VALIDATION (READ-ONLY)
+
+STRICT MODE
+
+DO NOT MODIFY CODE
+DO NOT APPLY FIXES
+DO NOT ADD FEATURES
+
+THIS IS A FORENSIC + VALIDATION EXERCISE ONLY
+
+Goal:
+Simulate a DCAA-style audit of the EPOCH timekeeping system and determine whether it is fully compliant, defensible, and auditable based on real system behavior and stored evidence.
+
+==================================================
+AUDIT SCOPE
+===========
+
+Evaluate the following controls:
+
+1. Employee Certification
+2. Immutability After Certification
+3. Correction Approval Chain
+4. Audit Trail Completeness
+5. Exception Handling
+6. State Enforcement
+7. Payroll Readiness Integrity
+
+Use REAL data and system behavior.
+
+No assumptions.
+
+==================================================
+SCENARIO 1 — EMPLOYEE CERTIFICATION
+===================================
+
+Select a recently certified timesheet.
+
+Verify:
+
+* certification exists
+* certification statement is stored
+* certified_by_user_id is correct
+* certified_at timestamp exists
+* certification is tied to exact timesheet snapshot
+
+Show:
+
+* raw DB record
+* associated audit event (TIME_CERTIFIED)
+* punch/ledger snapshot at certification
+
+Question:
+
+Can an auditor answer:
+“What exactly did the employee certify, and when?”
+
+==================================================
+SCENARIO 2 — POST-CERTIFICATION IMMUTABILITY
+============================================
+
+Attempt to identify:
+
+* any edits after certification
+* any recalculation after certification
+* any mutation endpoints that bypass lock
+
+Verify:
+
+* system blocks edits after certification
+* HTTP responses enforce restriction
+* no silent mutations occur
+
+Question:
+
+Can certified time be changed without a correction workflow?
+
+==================================================
+SCENARIO 3 — CORRECTION APPROVAL CHAIN
+======================================
+
+Find a corrected timesheet.
+
+Trace:
+
+* original certified state
+* correction request
+* approval/rejection
+* final state
+
+Verify:
+
+* original values preserved
+* correction reason captured
+* approved_by_user_id exists
+* timestamps recorded
+
+Show:
+
+* before snapshot
+* after snapshot
+* audit events:
+
+  * TIME_CORRECTION_REQUESTED
+  * TIME_CORRECTION_APPROVED
+
+Question:
+
+Can an auditor reconstruct the full change history?
+
+==================================================
+SCENARIO 4 — ADMIN OVERRIDE
+===========================
+
+Locate a TIME_CERTIFIED_ADMIN event.
+
+Verify:
+
+* override is clearly distinguished
+* reason is present and non-empty
+* performed by authorized role
+* original employee did NOT certify
+
+Question:
+
+Is admin override transparent and auditable?
+
+==================================================
+SCENARIO 5 — EXCEPTION HANDLING
+===============================
+
+Identify:
+
+* uncertified timesheets
+* pending correction requests
+* rejected corrections
+
+Verify:
+
+* appear in exception dashboard
+* block downstream processes where appropriate
+
+Question:
+
+Can the system surface compliance risks proactively?
+
+==================================================
+SCENARIO 6 — STATE MACHINE ENFORCEMENT
+======================================
+
+Test transitions:
+
+* draft → submitted → certified → locked
+* locked → correction_requested → approved
+
+Verify:
+
+* illegal transitions are blocked
+* all transitions enforced server-side
+* UI cannot bypass state rules
+
+Question:
+
+Is the system state-controlled or user-controlled?
+
+==================================================
+SCENARIO 7 — PAYROLL INTEGRITY
+==============================
+
+Evaluate payroll readiness:
+
+* uncertified time included?
+* pending corrections included?
+* rejected entries included?
+
+Verify:
+
+* only compliant time is eligible for payroll
+* system prevents export of invalid data
+
+Question:
+
+Can payroll rely on this system without manual validation?
+
+==================================================
+SCORING OUTPUT
+==============
+
+For each control:
+
+Return:
+
+* PASS / PARTIAL / FAIL
+* Supporting evidence
+* Exact data references
+* Identified weaknesses
+
+==================================================
+FINAL DELIVERABLE
+=================
+
+Produce:
+
+# TIMEKEEPING DCAA AUDIT REPORT
+
+Sections:
+
+1. Executive Summary
+2. Control-by-Control Findings
+3. Evidence Samples
+4. Identified Risks
+5. Compliance Gaps (if any)
+6. Recommended Remediation (if needed)
+7. Overall Compliance Rating
+
+==================================================
+FINAL RULE
+==========
+
+This audit must reflect REAL system behavior.
+
+If the system passes, prove it.
+
+If the system fails, expose it.
+
+No assumptions. No padding. No optimism bias.
+
+Proceed.

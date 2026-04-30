@@ -1,0 +1,176 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ [EPOCH] Install prompt captured and ready
+/department-queue/paint:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🛒 P1 Purchase Orders received: Object
+ 🔍 Fetching production queue...
+ 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/p1-po-queue/stuck-counts (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/production-queue/attention: 200
+ 🛒 P1 Purchase Orders received: Object
+ ✅ API Response from /api/p1-po-queue/stuck-counts: 200
+ 🛒 P1 Purchase Orders received: Object
+ ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+ 🛒 P1 Purchase Orders received: Object
+ ✅ API Response from /api/production-queue/prioritized: 200
+ 🔍 Production queue result: 154 orders
+ 🛒 P1 Purchase Orders received: Object
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ ✅ API Response from /api/tickets/by-orders: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/nonconformance?limit=100: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-tcfwfoGB.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-tcfwfoGB.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-tcfwfoGB.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600017 (timeout: 15000ms, deployment: true)
+index-tcfwfoGB.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600017: 200
+index-tcfwfoGB.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-tcfwfoGB.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/0da99f91-ae34-4cbf-9a08-85245c1d6e41/labor-context:1  Failed to load resource: the server responded with a status of 404 ()
+index-tcfwfoGB.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/tasks/4b47aabc-a488-4766-8dbb-89585cd2153e/complete (timeout: 15000ms, deployment: true)
+index-tcfwfoGB.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/tasks/4b47aabc-a488-4766-8dbb-89585cd2153e/complete: 200
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-tcfwfoGB.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/0da99f91-ae34-4cbf-9a08-85245c1d6e41/sign (timeout: 15000ms, deployment: true)
+index-tcfwfoGB.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/0da99f91-ae34-4cbf-9a08-85245c1d6e41/sign: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/labor-context:1  Failed to load resource: the server responded with a status of 404 ()
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) <input type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" id=​"step-badge-scan" name=​"step-badge-scan" placeholder=​"Scan badge..." autocomplete=​"new-password" data-testid=​"input-badge-scan" value=​"757ed306c66446f7871fac16bd141974">​flex
+/api/employee-badges/resolve-badge/757ed306c66446f7871fac16bd141974:1  Failed to load resource: the server responded with a status of 401 ()
+index-tcfwfoGB.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start (timeout: 15000ms, deployment: true)
+/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start:1  Failed to load resource: the server responded with a status of 403 ()
+index-tcfwfoGB.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start: 403
+index-tcfwfoGB.js:5436 API error raw body: {"error":"Step start blocked by process gate","reason":"Employee identity could not be verified for part 4002P0001 Rev P. Scan a valid badge or enter a recognized employee code before starting this step."}
+console.error @ index-tcfwfoGB.js:5436
+index-tcfwfoGB.js:5436 💥 API Request failed for /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start: Error: Step start blocked by process gate
+    at Se (index-tcfwfoGB.js:235:6500)
+console.error @ index-tcfwfoGB.js:5436
+/api/employee-badges/resolve-badge/757ed306c66446f7871fac16bd141974:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/757ed306c66446f7871fac16bd14197:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/EMP002:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/EMP00:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/EMP:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/EMP00:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/EMP002:1  Failed to load resource: the server responded with a status of 401 ()
+index-tcfwfoGB.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start (timeout: 15000ms, deployment: true)
+/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start:1  Failed to load resource: the server responded with a status of 403 ()
+index-tcfwfoGB.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start: 403
+index-tcfwfoGB.js:5436 API error raw body: {"error":"Step start blocked by process gate","reason":"Tasha Mireles does not have a training authorization for part 4002P0001 Rev P. An authorization record must be created before work can begin."}
+console.error @ index-tcfwfoGB.js:5436
+index-tcfwfoGB.js:5436 💥 API Request failed for /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start: Error: Step start blocked by process gate
+    at Se (index-tcfwfoGB.js:235:6500)
+console.error @ index-tcfwfoGB.js:5436
+index-tcfwfoGB.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override (timeout: 15000ms, deployment: true)
+/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override:1  Failed to load resource: the server responded with a status of 403 ()
+index-tcfwfoGB.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override: 403
+index-tcfwfoGB.js:5436 API error raw body: {"error":"Supervisor badge not recognised. Scan a valid supervisor badge to override."}
+console.error @ index-tcfwfoGB.js:5436
+index-tcfwfoGB.js:5436 💥 API Request failed for /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override: Error: Supervisor badge not recognised. Scan a valid supervisor badge to override.
+    at Se (index-tcfwfoGB.js:235:6500)
+console.error @ index-tcfwfoGB.js:5436
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/employee-badges/resolve-badge/757ed306c66446f7871fac16bd141974:1  Failed to load resource: the server responded with a status of 404 ()

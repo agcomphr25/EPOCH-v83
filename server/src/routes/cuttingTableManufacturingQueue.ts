@@ -101,6 +101,7 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         materialType,
         source,
         orderId,
+        packetName,
       };
     });
     

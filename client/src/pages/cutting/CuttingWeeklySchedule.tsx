@@ -275,6 +275,20 @@ export default function CuttingWeeklySchedule() {
     mesa: Math.max(0, p1Demand.mesa - scheduledCounts.mesa),
   }), [p1Demand, scheduledCounts]);
 
+  const p2ScheduledByName = useMemo(() => {
+    const p1MaterialTypes = new Set(['carbon_fiber', 'fiberglass', 'mesa']);
+    const result: Record<string, number> = {};
+    (mfgQueueData || []).forEach((item: any) => {
+      const materialType = item.materialType || '';
+      if (p1MaterialTypes.has(materialType)) return;
+      const packetName = item.packetName;
+      if (!packetName) return;
+      const remaining = (item.quantityRequested || 0) - (item.quantityCompleted || 0);
+      result[packetName] = (result[packetName] || 0) + Math.max(0, remaining);
+    });
+    return result;
+  }, [mfgQueueData]);
+
   const schedulePacketsMutation = useMutation({
     mutationFn: async (data: { packetType: string; quantity: number; materialType: string; description?: string }) => {
       return apiRequest('/api/cutting-table/schedule-to-cutting', {
@@ -687,13 +701,18 @@ export default function CuttingWeeklySchedule() {
                 const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500', 'bg-pink-600', 'bg-cyan-600', 'bg-violet-600'];
                 return sortedTypes.map(([name, count], idx) => {
                   const scheduleKey = `p2_${name.replace(/\s+/g, '_').toLowerCase()}`;
+                  const scheduledForName = p2ScheduledByName[name] || 0;
+                  const remainingForName = Math.max(0, count - scheduledForName);
                   return (
                     <div key={name} className={`p-4 ${colors[idx % colors.length]} text-white rounded-lg`}>
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <p className="text-sm opacity-80">{name}</p>
-                          <p className="text-3xl font-bold">{count}</p>
-                          <p className="text-xs opacity-60">P2 demand</p>
+                          <p className="text-3xl font-bold">{remainingForName}</p>
+                          <p className="text-xs opacity-60">P2 remaining</p>
+                          {scheduledForName > 0 && (
+                            <p className="text-xs text-green-300 mt-0.5">Scheduled: {scheduledForName}</p>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="text-sm">POs: <span className="font-bold">{p2Demand.filter(po => po.items.some(i => i.name === name)).length}</span></p>

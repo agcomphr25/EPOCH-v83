@@ -20,7 +20,7 @@ import {
   inventoryBalances,
 } from '../../schema';
 import { db } from '../../db';
-import { eq, sql, and } from 'drizzle-orm';
+import { eq, sql, and, like, desc } from 'drizzle-orm';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 
 const router = Router();
@@ -202,6 +202,120 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           .limit(1);
 
         if (queueItem) {
+          // First: check if a built packet exists for this queue ID.
+          // Built packets have the authoritative ICNs from cutting_built_packet_fabric_sources.
+          // Strategy: (1) exact barcode match within this branch (handles normalisation differences
+          //   where the first exact lookup at line 121 may have missed due to format); (2) match by
+          //   queue-ID prefix + packet-number when the scanned barcode includes a sequence component;
+          //   (3) broadest queue-ID-prefix-only match ordered by most recent build.
+          const parsedPacketNumber = mfgMatch[3] ? parseInt(mfgMatch[3], 10) : null;
+
+          let builtPacketForQueue: typeof cuttingBuiltPackets.$inferSelect | undefined;
+
+          // Attempt 1: exact barcode (catches format-normalised duplicates missed by outer lookup)
+          const [exactPacket] = await db
+            .select()
+            .from(cuttingBuiltPackets)
+            .where(eq(cuttingBuiltPackets.barcode, icn))
+            .limit(1);
+          builtPacketForQueue = exactPacket;
+
+          // Attempt 2: queue-ID prefix + packet-number for deterministic match when seq is present
+          if (!builtPacketForQueue && parsedPacketNumber !== null) {
+            const [seqPacket] = await db
+              .select()
+              .from(cuttingBuiltPackets)
+              .where(
+                and(
+                  like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`),
+                  eq(cuttingBuiltPackets.packetNumber, parsedPacketNumber)
+                )
+              )
+              .limit(1);
+            builtPacketForQueue = seqPacket;
+          }
+
+          // Attempt 3: broadest queue-ID prefix fallback — most recently built packet wins
+          if (!builtPacketForQueue) {
+            const [latestPacket] = await db
+              .select()
+              .from(cuttingBuiltPackets)
+              .where(like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`))
+              .orderBy(desc(cuttingBuiltPackets.id))
+              .limit(1);
+            builtPacketForQueue = latestPacket;
+          }
+
+          if (builtPacketForQueue) {
+            // Use the actual fabric sources from the built packet — these are the real ICNs
+            const sources = await db
+              .select({
+                sourceId: cuttingBuiltPacketFabricSources.id,
+                fabricInventoryId: cuttingBuiltPacketFabricSources.fabricInventoryId,
+                fabricType: cuttingBuiltPacketFabricSources.fabricType,
+                lotNumber: cuttingBuiltPacketFabricSources.lotNumber,
+                batchNumber: cuttingBuiltPacketFabricSources.batchNumber,
+                rollNumber: cuttingBuiltPacketFabricSources.rollNumber,
+                supplierPartNumber: cuttingBuiltPacketFabricSources.supplierPartNumber,
+                internalControlNumber: cuttingBuiltPacketFabricSources.internalControlNumber,
+                expirationDate: cuttingBuiltPacketFabricSources.expirationDate,
+                quantityUsed: cuttingBuiltPacketFabricSources.quantityUsed,
+                isPrimary: cuttingBuiltPacketFabricSources.isPrimary,
+                invId: cuttingFabricInventory.id,
+                invSource: cuttingFabricInventory.source,
+                invFabric: cuttingFabricInventory.fabric,
+                invFabricPartNumber: cuttingFabricInventory.fabricPartNumber,
+                invSupplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+                invInternalControlNumber: cuttingFabricInventory.internalControlNumber,
+                invLotNumber: cuttingFabricInventory.lotNumber,
+                invBatchNumber: cuttingFabricInventory.batchNumber,
+                invRollNumber: cuttingFabricInventory.rollNumber,
+                invExpirationDate: cuttingFabricInventory.expirationDate,
+                invReceivedDate: cuttingFabricInventory.receivedDate,
+                invSquareMeters: cuttingFabricInventory.squareMeters,
+                invLocation: cuttingFabricInventory.location,
+              })
+              .from(cuttingBuiltPacketFabricSources)
+              .leftJoin(
+                cuttingFabricInventory,
+                eq(cuttingBuiltPacketFabricSources.fabricInventoryId, cuttingFabricInventory.id)
+              )
+              .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, builtPacketForQueue.id));
+
+            const fabricRolls = sources.map(s => ({
+              fabricInventoryId: s.fabricInventoryId,
+              fabricType: s.fabricType || s.invFabric,
+              lotNumber: s.lotNumber || s.invLotNumber,
+              batchNumber: s.batchNumber || s.invBatchNumber,
+              rollNumber: s.rollNumber || s.invRollNumber,
+              supplierPartNumber: s.supplierPartNumber || s.invSupplierPartNumber || s.invFabricPartNumber,
+              internalControlNumber: s.internalControlNumber || s.invInternalControlNumber,
+              expirationDate: s.expirationDate || s.invExpirationDate,
+              quantityUsed: s.quantityUsed,
+              isPrimary: s.isPrimary,
+              source: s.invSource,
+              location: s.invLocation,
+              squareMeters: s.invSquareMeters,
+              receivedDate: s.invReceivedDate,
+            }));
+
+            return res.json({
+              valid: true,
+              status: 'PACKET',
+              message: `Manufacturing packet ${icn} linked — ${fabricRolls.length} fabric roll(s)`,
+              packet: {
+                id: builtPacketForQueue.id,
+                barcode: builtPacketForQueue.barcode,
+                packetNumber: builtPacketForQueue.packetNumber,
+                buildDate: builtPacketForQueue.buildDate,
+                status: builtPacketForQueue.status,
+                isMixedFabric: builtPacketForQueue.isMixedFabric,
+              },
+              fabricRolls,
+            });
+          }
+
+          // No built packet found — fall back to materialDetails JSON (planned materials)
           let fabricRolls: any[] = [];
 
           // Parse stored fabric sources from materialDetails JSON

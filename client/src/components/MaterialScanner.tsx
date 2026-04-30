@@ -83,7 +83,7 @@ interface BuiltPacket {
 interface ValidationResult {
   valid: boolean;
   status?: string;
-  icnSource?: 'built_packet' | 'planned_materials';
+  icnSource?: 'built_packet' | 'planned_materials' | 'backfilled_from_queue';
   message?: string;
   lot?: MaterialLot;
   warnings?: string[];

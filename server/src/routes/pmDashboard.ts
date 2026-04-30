@@ -131,7 +131,7 @@ router.get('/managers', h(async (_req, res) => {
       AND p.project_manager_id IS NOT NULL
     ORDER BY e.name ASC
   `);
-  res.json(result.rows);
+  res.json(result);
 }));
 
 // GET /api/pm-dashboard/projects — active projects for the selector dropdown
@@ -153,7 +153,7 @@ router.get('/projects', h(async (_req, res) => {
     WHERE p.status NOT IN ('cancelled', 'completed')
     ORDER BY p.project_code ASC
   `);
-  res.json(result.rows);
+  res.json(result);
 }));
 
 // GET /api/pm-dashboard/:projectId/summary — KPI cards
@@ -171,7 +171,7 @@ router.get('/:projectId/summary', h(async (req, res) => {
     WHERE p.id = $1
   `, [projectId]);
 
-  if (!projRes.rows.length) {
+  if (!projRes.length) {
     res.status(404).json({ error: 'Project not found' });
     return;
   }
@@ -253,34 +253,34 @@ router.get('/:projectId/summary', h(async (req, res) => {
     WHERE wo2.project_id = $1
   `, [projectId]);
 
-  const wo = woRes.rows[0];
+  const wo = woRes[0];
   const total = parseInt(wo.totalWorkOrders) || 0;
   const completed = parseInt(wo.completedWorkOrders) || 0;
-  const totalRequired = parseFloat(qtyProgressRes.rows[0].totalRequired) || 0;
-  const totalCompleted = parseFloat(qtyProgressRes.rows[0].totalCompleted) || 0;
+  const totalRequired = parseFloat(qtyProgressRes[0].totalRequired) || 0;
+  const totalCompleted = parseFloat(qtyProgressRes[0].totalCompleted) || 0;
   const productionPercent = totalRequired > 0
     ? Math.min(100, Math.round((totalCompleted / totalRequired) * 100))
     : (total > 0 ? Math.round((completed / total) * 100) : 0);
 
   const blockedWOs = parseInt(wo.blockedWorkOrders) || 0;
-  const blockedTravelers = parseInt(travelerRes.rows[0].blockedTravelerCount) || 0;
+  const blockedTravelers = parseInt(travelerRes[0].blockedTravelerCount) || 0;
   const blockedCount = blockedWOs + blockedTravelers;
 
-  const budgetedLaborHours = parseFloat(laborBudgetRes.rows[0].budgetedLaborHours) || 0;
-  const actualLaborHours = parseFloat(laborActualRes.rows[0].actualLaborHours) || 0;
+  const budgetedLaborHours = parseFloat(laborBudgetRes[0].budgetedLaborHours) || 0;
+  const actualLaborHours = parseFloat(laborActualRes[0].actualLaborHours) || 0;
   const laborRemainingHours = budgetedLaborHours - actualLaborHours;
 
-  const committedMaterialCost = parseFloat(materialRes.rows[0].committedMaterialCost) || 0;
-  const consumedMaterialCost = parseFloat(consumedRes.rows[0].consumedMaterialCost) || 0;
-  const plannedMaterialCost = parseFloat(materialRes.rows[0].plannedMaterialCost) || 0;
+  const committedMaterialCost = parseFloat(materialRes[0].committedMaterialCost) || 0;
+  const consumedMaterialCost = parseFloat(consumedRes[0].consumedMaterialCost) || 0;
+  const plannedMaterialCost = parseFloat(materialRes[0].plannedMaterialCost) || 0;
   const remainingMaterialBudget = plannedMaterialCost - consumedMaterialCost;
 
   res.json({
-    ...projRes.rows[0],
+    ...projRes[0],
     totalWorkOrders: total,
     completedWorkOrders: completed,
     productionPercent,
-    openTravelerCount: parseInt(travelerRes.rows[0].openTravelerCount) || 0,
+    openTravelerCount: parseInt(travelerRes[0].openTravelerCount) || 0,
     blockedCount,
     budgetedLaborHours,
     actualLaborHours,
@@ -373,7 +373,7 @@ router.get('/:projectId/production', h(async (req, res) => {
     ORDER BY wo.created_at ASC
   `, [today, projectId]);
 
-  res.json(result.rows);
+  res.json(result);
 }));
 
 // GET /api/pm-dashboard/:projectId/production/:workOrderId — drawer detail
@@ -396,7 +396,7 @@ router.get('/:projectId/production/:workOrderId', h(async (req, res) => {
     WHERE wo.id = $1 AND wo.project_id = $2
   `, [workOrderId, projectId]);
 
-  if (!woRes.rows.length) {
+  if (!woRes.length) {
     res.status(404).json({ error: 'Work order not found in this project' });
     return;
   }
@@ -430,9 +430,9 @@ router.get('/:projectId/production/:workOrderId', h(async (req, res) => {
   `, [workOrderId]);
 
   res.json({
-    workOrder: woRes.rows[0],
-    travelers: travelersRes.rows,
-    openSessions: sessionsRes.rows,
+    workOrder: woRes[0],
+    travelers: travelersRes,
+    openSessions: sessionsRes,
   });
 }));
 
@@ -489,9 +489,9 @@ router.get('/:projectId/labor', h(async (req, res) => {
       )
   `, [projectId]);
 
-  const budgetedHours = (parseFloat(budgetRes.rows[0].budgetedHours) || 0)
-    + (parseFloat(budgetRes.rows[0].overrunHours) || 0);
-  const actualHours = parseFloat(actualRes.rows[0].actualHours) || 0;
+  const budgetedHours = (parseFloat(budgetRes[0].budgetedHours) || 0)
+    + (parseFloat(budgetRes[0].overrunHours) || 0);
+  const actualHours = parseFloat(actualRes[0].actualHours) || 0;
   const remainingHours = budgetedHours - actualHours;
   const percentConsumed = budgetedHours > 0 ? Math.round((actualHours / budgetedHours) * 100) : 0;
 
@@ -568,7 +568,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     ORDER BY lcc.code ASC
   `, [projectId]);
 
-  const chargeCodeRows = chargeCodeRes.rows.map((r) => {
+  const chargeCodeRows = chargeCodeRes.map((r) => {
     const budgeted = parseFloat(r.budgetedHours) || 0;
     const actual = parseFloat(r.actualHours) || 0;
     const remaining = budgeted - actual;
@@ -614,7 +614,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     ORDER BY pl.clock_in DESC
   `, [projectId]);
 
-  const employeeIds = [...new Set(liveRes.rows.map((r) => r.employeeId))];
+  const employeeIds = [...new Set(liveRes.map((r) => r.employeeId))];
   const certMap: Record<number, string> = {};
   const authMap: Record<number, boolean> = {};
 
@@ -634,7 +634,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     `, [employeeIds]);
 
     const today = new Date().toISOString().slice(0, 10);
-    for (const row of certRes.rows) {
+    for (const row of certRes) {
       if (!row.expiresDate) {
         certMap[row.employeeId] = 'Unknown';
       } else if (row.expiresDate < today) {
@@ -662,12 +662,12 @@ router.get('/:projectId/labor', h(async (req, res) => {
             AND t.part_number = ta.part_number
         )
     `, [employeeIds, projectId]);
-    for (const row of authRes.rows) {
+    for (const row of authRes) {
       authMap[row.employeeId] = true;
     }
   }
 
-  const liveFeed = liveRes.rows.map((r) => ({
+  const liveFeed = liveRes.map((r) => ({
     sessionId: r.sessionId,
     employeeId: r.employeeId,
     employeeName: r.employeeName,
@@ -687,7 +687,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
       actualHours,
       remainingHours,
       percentConsumed,
-      openSessionCount: parseInt(openSessionRes.rows[0].openSessionCount) || 0,
+      openSessionCount: parseInt(openSessionRes[0].openSessionCount) || 0,
     },
     chargeCodeRows,
     liveFeed,
@@ -773,8 +773,8 @@ router.get('/:projectId/materials', h(async (req, res) => {
       ii.ag_part_number ASC
   `, [projectId]);
 
-  const committedCost = parseFloat(summaryRes.rows[0]?.committedCost) || 0;
-  const consumedCost = parseFloat(summaryRes.rows[0]?.consumedCost) || 0;
+  const committedCost = parseFloat(summaryRes[0]?.committedCost) || 0;
+  const consumedCost = parseFloat(summaryRes[0]?.consumedCost) || 0;
 
   res.json({
     summary: {
@@ -783,7 +783,7 @@ router.get('/:projectId/materials', h(async (req, res) => {
       consumedCost,
       remainingCost: committedCost - consumedCost,
     },
-    rows: rowsRes.rows,
+    rows: rowsRes,
   });
 }));
 

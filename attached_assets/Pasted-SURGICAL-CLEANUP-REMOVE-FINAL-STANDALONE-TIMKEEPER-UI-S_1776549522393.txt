@@ -1,0 +1,90 @@
+SURGICAL CLEANUP — REMOVE FINAL STANDALONE TIMKEEPER UI + SSO REMNANTS
+
+Goal:
+Remove the last stale standalone Timekeeper UI and SSO remnants now that Timekeeping has been fully absorbed into native EPOCH.
+
+Verified forensic findings:
+- The “Open Timekeeper” button in EmployeePortal.tsx is controlled by VITE_TIMER_APP_URL
+- VITE_TIMER_APP_URL is still set, which makes the button render
+- Clicking it calls /api/auth/timekeeping-handoff-token
+- That endpoint still generates a JWT and opens the old standalone URL
+- The standalone deployment is already dead (404)
+- TimekeepingHandoffPage.tsx still exists but is orphaned and unused
+- The absorbed Timekeeping system is already native via /kiosk and /time-clock-admin
+
+This cleanup must remove stale standalone plumbing without touching the absorbed native timekeeping system.
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform the minimum safe surgical cleanup.
+
+1. EMPLOYEE PORTAL
+In:
+client/src/components/EmployeePortal.tsx
+
+Remove:
+- TIMEKEEPER_URL constant
+- openTimekeeperWithSso function
+- “Open Timekeeper” button JSX
+
+Do NOT alter other Employee Portal behavior.
+
+2. DEAD HANDOFF PAGE
+Delete:
+client/src/pages/TimekeepingHandoffPage.tsx
+
+and remove its dead import from:
+client/src/App.tsx
+
+Only if it is truly unreferenced, which the audit says it is.
+
+3. DEAD AUTH ENDPOINT
+In:
+server/src/routes/auth.ts
+
+Remove:
+- /api/auth/timekeeping-handoff-token
+
+This endpoint now only generates tokens for a dead standalone app.
+
+4. ENV / STANDALONE CLEANUP NOTES
+Document clearly in output that:
+- VITE_TIMER_APP_URL must be removed from dev and production env
+- TIMEKEEPING_SSO_SECRET is no longer required for absorbed Timekeeping
+- standalone runtime/workflow shutdown should be finalized separately if still present in dev
+
+5. DO NOT TOUCH
+Do NOT touch:
+- /kiosk
+- /time-clock-admin
+- native absorbed timekeeping backend routes
+- traveler/WAD logic
+- timekeeping schema
+- public.employees
+- thin-anchor architecture
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+A. files changed
+
+B. exact stale standalone remnants removed
+
+C. confirmation no production UI path still points to standalone
+
+D. confirmation native EPOCH timekeeping remains intact
+
+E. any remaining manual env/workflow cleanup still required
+
+==================================================
+RULES
+==================================================
+
+- surgical only
+- no broad refactor
+- no schema changes
+- no traveler/WAD changes
+- preserve absorbed architecture

@@ -1,0 +1,261 @@
+READ-ONLY FORENSIC AUDIT — P1 PO VISIBILITY FAILURES IN DEPARTMENT QUEUES (EPOCH)
+
+You are performing a STRICTLY READ-ONLY forensic audit of the current EPOCH codebase.
+
+DO NOT modify code.
+DO NOT create migrations.
+DO NOT refactor.
+DO NOT “quick fix.”
+DO NOT assume the problem.
+
+Your job is to fully understand why P1 Purchase Orders (POs) are inconsistently appearing (or not appearing) inside department queues and provide a precise root-cause analysis before any implementation work begins.
+
+====================================================
+PROBLEM SUMMARY
+====================================================
+
+We are experiencing inconsistent visibility of P1 PO orders inside department queues.
+
+Symptoms include:
+- Some P1 POs appear correctly in department queues
+- Some P1 POs do not appear at all
+- Some appear in one department but not another
+- Some appear delayed or only after unrelated updates
+- Visibility behavior is inconsistent and unreliable
+
+The Replit agent previously believed this was fixed, but the actual issue remains unresolved.
+
+We need a full forensic understanding of:
+1. how P1 POs are supposed to flow into queues
+2. where that flow breaks
+3. whether old legacy logic is interfering
+4. whether filters/status mappings are inconsistent
+5. whether queue visibility depends on incorrect assumptions
+
+====================================================
+AUDIT SCOPE
+====================================================
+
+Investigate ALL systems involved in:
+
+- P1 Purchase Orders
+- Department Queues
+- Queue Assignment Logic
+- Status Mapping
+- Production Routing
+- Queue Visibility Filters
+- Department-specific dashboards
+- Purchase Order lifecycle transitions
+- Trigger events that cause queue appearance
+- stale cache / computed state issues
+- delayed sync behavior
+- legacy/deprecated purchasing logic
+
+Especially inspect:
+
+/vendor-pos
+/purchasing
+/production
+/department-queues
+/dashboard
+/order-management
+/work-orders
+/production-orders
+/all_orders
+/p1-specific flows
+background jobs
+cron logic
+queue generation services
+status patch jobs
+derived views
+database joins
+materialized views if any
+
+Also verify whether remnants of old/defunct purchasing workflows still influence current queue logic.
+
+We want to avoid accidentally re-awakening legacy problems.
+
+====================================================
+SPECIFIC QUESTIONS TO ANSWER
+====================================================
+
+A. SOURCE OF TRUTH
+
+What is the actual source of truth for whether a P1 PO should appear in a department queue?
+
+Examples:
+- PO status?
+- line item status?
+- production order status?
+- traveler status?
+- work order status?
+- vendor receipt status?
+- operation status?
+- custom queue assignment table?
+- computed API response?
+
+Identify the exact source.
+
+----------------------------------------------------
+
+B. QUEUE ENTRY CONDITIONS
+
+What exact conditions must be true for a P1 PO to appear in a department queue?
+
+For example:
+- approved?
+- issued?
+- received?
+- partially received?
+- linked to sales order?
+- linked to production order?
+- linked to traveler?
+- assigned department?
+- operation sequence generated?
+
+Document exact logic.
+
+----------------------------------------------------
+
+C. FILTERS CAUSING DISAPPEARANCE
+
+Identify all filters that could suppress visibility:
+
+Examples:
+- hidden status filters
+- stale completion flags
+- department mismatch
+- missing route generation
+- incorrect operation sequence
+- partial receipt edge cases
+- null values
+- old schema assumptions
+- “soft complete” logic
+- archived flags
+- legacy booleans
+- customer/vendor mismatch
+- duplicate suppression
+- join failures
+
+----------------------------------------------------
+
+D. P1 VS P2 DIFFERENCES
+
+Compare:
+
+P1 PO flow
+vs
+P2 PO flow
+
+Determine whether queue logic handles them differently.
+
+Specifically identify:
+- schema differences
+- status differences
+- assignment differences
+- visibility differences
+- historical assumptions
+
+----------------------------------------------------
+
+E. ASYNC / DELAYED STATE FAILURES
+
+Investigate whether visibility depends on:
+
+- background jobs
+- delayed sync
+- cron jobs
+- scheduled patches
+- queue rebuilds
+- recalculation jobs
+- manual refreshes
+- cache invalidation failures
+
+We need to know if the issue is:
+logic failure
+or
+event timing failure
+
+----------------------------------------------------
+
+F. UI VS BACKEND MISMATCH
+
+Determine whether:
+
+backend is correct but UI filters hide records
+
+OR
+
+backend itself is failing to return the records
+
+Trace both sides.
+
+----------------------------------------------------
+
+G. LEGACY INTERFERENCE
+
+Check whether deprecated:
+- standalone purchasing logic
+- old vendor PO systems
+- old production routing logic
+- old queue generation code
+
+still influences current behavior.
+
+Identify exact files if present.
+
+====================================================
+REQUIRED DELIVERABLE FORMAT
+====================================================
+
+Return findings ONLY in this structure:
+
+1. SYSTEM FLOW MAP
+- step-by-step current flow of a P1 PO into department queues
+
+2. SOURCE OF TRUTH
+- exact authoritative logic
+
+3. ROOT CAUSE(S)
+- precise explanation of failure points
+
+4. FALSE FIXS PREVIOUSLY ATTEMPTED
+- what looked fixed but actually was not
+
+5. LEGACY INTERFERENCE
+- old code still affecting behavior
+
+6. FILES THAT CONTROL THIS
+- exact files
+- functions
+- routes
+- services
+- jobs
+- database tables
+
+7. SAFE FIX STRATEGY
+- what should be fixed first
+- what must NOT be touched yet
+
+8. RISK AREAS
+- what could break if changed carelessly
+
+9. IMPLEMENTATION PLAN
+- Phase 1 safest correction
+- Phase 2 structural correction
+- Phase 3 hardening and audit visibility
+
+====================================================
+IMPORTANT
+====================================================
+
+This is a forensic audit.
+
+Accuracy > speed.
+
+Do not provide assumptions.
+Trace actual code paths.
+Show real source of truth.
+Expose hidden dependencies.
+
+We are solving the real issue permanently, not creating another “looks fixed” situation.

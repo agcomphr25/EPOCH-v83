@@ -1,0 +1,96 @@
+Given that full picture, the next best inventory tasks are the ones that close control gaps before adding more planning layers.
+
+My recommended order is:
+
+1. #320 — Guard inventory balance sums against zero-quantity ledger events
+
+This is the highest-priority backend integrity task.
+If balances can drift because of bad ledger math, every downstream feature gets weaker:
+
+MRP
+shortages
+reorder signals
+reconciliation
+lot history trust
+
+This is the kind of issue that quietly poisons the whole system.
+
+2. #300 — Add SCRAPPED status to the lot workflow
+
+You already have lot events and scrap handling direction. The status model should fully reflect that.
+Without this, scrap can exist as an event but not as a first-class workflow state, which causes confusion in:
+
+lot detail
+filters
+history
+audits
+operator understanding
+3. #301 — Show scrap summary on lot detail
+
+Once SCRAPPED is a formal status, expose it clearly on the lot detail screen.
+That gives supervisors immediate visibility into:
+
+how much was scrapped
+when
+why
+by whom
+
+This is strong for AS9100-style traceability.
+
+4. #319 — Show ISSUE, MOVE, and SPLIT events in lot history
+
+This is a high-value usability task.
+You already have event history, but if major movement types are not visible, the history is incomplete from the operator’s perspective.
+This improves auditability and troubleshooting immediately.
+
+5. #314 → #315 → #316 — History filtering and pagination
+
+Do these as a bundle:
+
+filter transaction history by type
+paginate lot history in UI
+paginate lot history at DB level
+
+This becomes important once lot histories get large, which they will if the system is used properly.
+
+6. #328 — Auto-fill operator name on move, split, and status change
+
+This is a very good quality-of-life and audit improvement, but it should come after the integrity and visibility work above.
+It reduces manual entry friction and improves data quality.
+
+7. #313 — Return material directly from the lot detail screen
+
+This is useful, but I would put it after the history and control tasks unless return handling is currently slowing operators down on the floor.
+
+My priority stack
+
+If I were sequencing inventory work for EPOCH right now, I’d do:
+
+#320 — balance guardrails
+#300 — SCRAPPED workflow status
+#301 — scrap summary on lot detail
+#319 — complete lot history visibility
+#314 — filter history by type
+#316 — DB pagination
+#315 — UI pagination
+#328 — auto-fill operator name
+#313 — return from lot detail
+Why this order makes sense
+
+It follows the right progression:
+
+data integrity first
+then workflow/state correctness
+then audit/history visibility
+then scalability/usability
+then operator convenience
+
+That is the safest order for an inventory system that is becoming production-critical.
+
+The single next task I’d pick is:
+
+#320 — Guard inventory balance sums against zero-quantity ledger events
+
+Because if that foundation is wrong, everything built on top of inventory numbers becomes less trustworthy.
+
+If you want, I can turn #320 into the same full ticket format next.

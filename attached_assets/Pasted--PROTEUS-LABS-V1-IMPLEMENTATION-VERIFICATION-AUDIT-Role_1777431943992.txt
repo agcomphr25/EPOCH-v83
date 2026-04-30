@@ -1,0 +1,219 @@
+# PROTEUS LABS V1 — IMPLEMENTATION VERIFICATION AUDIT
+
+Role:
+Act as a senior ERP systems architect, database auditor, internal tools security engineer, and production safety reviewer.
+
+Objective:
+Perform a STRICT READ-ONLY forensic verification of the newly implemented Proteus Labs V1 / AI Governance Center module.
+
+Your job is to verify what was actually built, what is production-safe, what is incomplete, and what must be remediated before any additional features are added.
+
+This is NOT an implementation task.
+
+---
+
+Scope:
+Verify the current implementation of:
+
+Proteus Labs
+AI Governance Center
+Prompt Library + Reusable Templates
+
+Expected V1 capabilities:
+
+* Proteus Labs route/page exists
+* Admin/trusted-user-only access
+* Prompt CRUD
+* Prompt categories
+* Variable/token support
+* One-click copy-ready prompt output
+* Prompt execution history
+* Prompt results storage
+* Success/failure tracking
+* Search/tag behavior
+* Navigation visibility
+* Database constraints
+* API route safety
+
+---
+
+Hard Constraints:
+
+* READ-ONLY ONLY
+* Do NOT modify code
+* Do NOT create files
+* Do NOT run migrations
+* Do NOT patch bugs
+* Do NOT mark this as implemented
+* Do NOT “fix while auditing”
+* No production writes
+* No assumptions without evidence
+
+If you find an issue, document it only.
+
+---
+
+Required Verification Areas:
+
+1. File + Route Verification
+   Confirm exact files created or modified for Proteus Labs.
+   Return exact paths and purpose.
+
+2. UI Verification
+   Confirm whether these exist:
+
+* dashboard
+* prompt library
+* prompt builder
+* execution history
+* prompt detail view
+* copy-ready prompt output
+* empty states
+* loading states
+* error states
+
+3. API Verification
+   List every Proteus Labs API endpoint.
+
+For each endpoint, verify:
+
+* method
+* route
+* purpose
+* auth requirement
+* input validation
+* error handling
+* whether it writes data
+
+4. Database Verification
+   Inspect schema and migrations.
+
+Verify tables for:
+
+* prompts
+* categories/tags
+* variables
+* executions/history
+* results
+* success/failure state
+
+Confirm:
+
+* primary keys
+* foreign keys
+* unique constraints
+* timestamps
+* created_by / updated_by fields if present
+* execution/result relationship
+
+5. Permission Verification
+   Confirm access is restricted to:
+
+* ADMIN
+* OWNER
+* trusted fullAccess users
+
+Verify both:
+
+* frontend navigation gating
+* backend route protection
+
+6. Search + Tag Verification
+   Verify:
+
+* title search
+* description search
+* body search
+* tag search
+* empty query behavior
+* no early-return bugs
+
+7. Variable / Token Verification
+   Confirm whether prompts support variables such as:
+
+{{module_name}}
+{{risk_type}}
+{{system_area}}
+
+Verify:
+
+* how variables are stored
+* how values are entered
+* how final prompts are generated
+* whether unresolved variables are detected
+
+8. Execution History Verification
+   Confirm whether the system stores:
+
+* prompt used
+* filled variables
+* generated final prompt
+* Replit output
+* implementation notes
+* success/failure result
+* owner/user
+* timestamps
+
+9. Production Safety Review
+   Identify:
+
+* unsafe writes
+* missing auth
+* missing validation
+* broken relationships
+* migration risks
+* UI routes exposed incorrectly
+* any unrelated 500 errors observed during testing
+
+10. Gap Analysis
+    Compare actual implementation against V1 requirements.
+
+Return:
+
+* Fully implemented
+* Partially implemented
+* Missing
+* Unsafe / needs remediation
+
+---
+
+Deliverable Format:
+
+Return a structured report:
+
+# 1. Executive Summary
+
+# 2. What Was Actually Built
+
+# 3. Verified Working Capabilities
+
+# 4. Partially Implemented Capabilities
+
+# 5. Missing Capabilities
+
+# 6. Security / Permission Findings
+
+# 7. Database / Schema Findings
+
+# 8. API Findings
+
+# 9. UI / UX Findings
+
+# 10. Production Safety Risks
+
+# 11. Required Remediation Before Expansion
+
+# 12. Recommended Next Prompt
+
+---
+
+Non-Negotiables:
+
+* No code changes
+* No file creation
+* No migration execution
+* No silent fixes
+* No vague claims
+* Cite exact file paths and evidence
+* Be honest about uncertainty
+* Treat this as production-adjacent governance infrastructure

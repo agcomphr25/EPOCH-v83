@@ -1,0 +1,64 @@
+EAD-ONLY ARCHITECTURE LOCK-IN — EPOCH TIMEKEEPING END-STATE DECISION
+
+Goal:
+Establish the truthful current architecture of the Timekeeping domain after Phases 1, 2, and 2.5, and determine whether timekeeping.employees should now be treated as:
+A) a temporary thin anchor table to keep for now
+or
+B) a table that can be eliminated only through a dedicated schema refactor
+
+Critical context:
+- public.employees is now the authoritative employee source for identity, PIN, timezone, status, and pay fields
+- timekeeping.punches is the live attendance/payroll ledger
+- public.punch_events has been operationally retired from attendance/payroll flows
+- traveler/WAD labor remains separate and must not be merged
+- Phase 2.5 output says timekeeping.employees is still used for:
+  - supplemental fields
+  - FK anchor for punches
+  - admin writes
+
+Your task:
+Perform a READ-ONLY architecture analysis of the current codebase and tell us the true current end-state.
+
+Output format:
+
+1. CURRENT DOMAIN TRUTH
+- What is the real current architecture now?
+- Which table is employee truth?
+- Which table is punch truth?
+- What exactly is timekeeping.employees now?
+
+2. ACTIVE DEPENDENCY MAP FOR timekeeping.employees
+- exact files/functions still depending on it
+- classify each dependency:
+  - hard runtime dependency
+  - admin-only dependency
+  - supplemental-only dependency
+  - migration/backfill-only dependency
+
+3. ELIMINATION FEASIBILITY
+- Can timekeeping.employees be safely removed now?
+- If not, why not exactly?
+- What schema/table/foreign key realities prevent removal?
+
+4. OPTION A VS OPTION B
+Evaluate:
+A. keep timekeeping.employees temporarily as a thin anchor table
+B. redesign punches and related tables to reference public.employees directly
+
+For each option:
+- pros
+- risks
+- approximate implementation scope based on actual code touched
+
+5. RECOMMENDED NEXT STEP
+Give the grounded recommendation for what to do next:
+- stabilize and proceed with thin-anchor architecture
+or
+- launch dedicated FK/schema refactor
+
+Rules:
+- READ ONLY
+- no code changes
+- no vague architecture advice
+- cite actual tables, fields, files, and functions
+- be explicit and honest

@@ -1,0 +1,209 @@
+🔥 #269 - Scope-Aware Permissions and Approval Authority
+What & Why
+
+Right now (#267):
+
+👉 Permissions are global
+
+If user has APPROVE_LABOR_OVERRUN → they can approve anything
+
+That’s not realistic.
+
+🎯 Goal
+
+Enforce:
+
+Capability + Scope + Context = Authority
+
+Examples:
+
+QC can only sign QC steps
+Layup lead can only approve Layup work
+Project manager can only approve their project
+Supervisor can approve within department
+Admin can approve everything
+🧠 WHAT YOU ARE BUILDING
+
+You are introducing 3 levels of control:
+
+1. Capability (already built)
+APPROVE_LABOR_OVERRUN
+SIGN_QC
+RELEASE_WORK_ORDER
+2. Scope (NEW)
+
+Where permission applies:
+
+GLOBAL
+DEPARTMENT
+PROJECT
+3. Context (runtime)
+
+What is being acted on:
+
+department: "Layup"
+projectId: "abc123"
+🧱 DONE LOOKS LIKE
+Permission checks now consider:
+capability
+scope
+context
+System enforces:
+department-level authority
+project-level authority
+Approvals require proper scope
+Unauthorized scope returns 403 with reason
+Global admins still bypass
+🚀 TASKS
+1. Extend Capability Model (Schema)
+
+Add new table:
+
+user_capability_scopes
+id
+userId
+capabilityId
+scopeType  // "GLOBAL" | "DEPARTMENT" | "PROJECT"
+department // nullable
+projectId  // nullable
+2. Storage Methods
+
+Add:
+
+userHasScopedCapability(userId, capabilityName, context)
+Context Example:
+{
+  department: "Layup",
+  projectId: "uuid"
+}
+Logic:
+if GLOBAL → allow
+
+if DEPARTMENT → match department
+
+if PROJECT → match projectId
+3. Permission Helper Upgrade
+
+📁 permissions.ts
+
+export async function requireScopedCapability(
+  storage,
+  userId,
+  capabilityName,
+  context
+) {
+  const allowed = await storage.userHasScopedCapability(
+    userId,
+    capabilityName,
+    context
+  );
+
+  if (!allowed) {
+    throw {
+      status: 403,
+      payload: {
+        error: "Forbidden",
+        requiredCapability: capabilityName,
+        context
+      }
+    };
+  }
+}
+4. Apply to Critical Routes
+A. Labor Overrun Approval
+await requireScopedCapability(
+  storage,
+  req.user.id,
+  "APPROVE_LABOR_OVERRUN",
+  {
+    department,
+    projectId
+  }
+);
+B. QC Signoff
+await requireScopedCapability(
+  storage,
+  req.user.id,
+  "SIGN_QC",
+  {
+    department: step.department
+  }
+);
+C. Work Order Release
+await requireScopedCapability(
+  storage,
+  req.user.id,
+  "RELEASE_WORK_ORDER",
+  {
+    projectId: workOrder.projectId
+  }
+);
+D. Project Close
+await requireScopedCapability(
+  storage,
+  req.user.id,
+  "CLOSE_PROJECT",
+  {
+    projectId
+  }
+);
+5. Admin Override
+
+Add:
+
+if user.role === "ADMIN" → allow
+6. Error Response
+{
+  "error": "Forbidden",
+  "requiredCapability": "SIGN_QC",
+  "context": {
+    "department": "Layup"
+  }
+}
+🧪 TEST FLOW
+1. QC user (Layup only)
+tries QC in Layup → ✅
+tries QC in CNC → ❌
+2. Project Manager
+approve own project → ✅
+approve other project → ❌
+3. Global Admin
+everything → ✅
+4. Department Supervisor
+approve within department → ✅
+outside department → ❌
+⚠️ RULES
+Scope must ALWAYS be checked when provided
+Do NOT fallback to global unless explicitly allowed
+Always return WHY user is blocked
+Do NOT silently elevate permissions
+🔥 WHAT THIS UNLOCKS
+
+After this:
+
+👉 You now have:
+
+real organizational control
+department-level authority
+project-level authority
+approval accountability
+🧭 NEXT STEP
+#270 — Audit Logging System
+
+Track:
+
+approvals
+overrides
+time edits
+traveler signoffs
+💡 STRAIGHT TALK
+
+At this point you will have:
+
+process control
+labor control
+permission control
+training control
+scope control
+
+👉 That is true enterprise-grade behavior

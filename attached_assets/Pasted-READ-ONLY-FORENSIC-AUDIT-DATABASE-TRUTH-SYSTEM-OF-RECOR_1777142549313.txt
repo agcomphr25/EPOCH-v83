@@ -1,0 +1,156 @@
+READ-ONLY FORENSIC AUDIT — DATABASE TRUTH / SYSTEM OF RECORD
+
+Strict read-only audit.
+
+DO NOT modify code.
+DO NOT apply migrations.
+DO NOT seed data.
+DO NOT change environment variables.
+DO NOT deploy anything.
+
+Goal:
+
+Determine with certainty which database is the true production system of record for EPOCH.
+
+We currently have at least:
+
+1. DATABASE_URL
+2. NEON_DATABASE_URL
+
+and evidence suggests they are not the same database.
+
+We must establish:
+
+- which DB the live production app uses
+- which DB EDRI / DCAA scoring reads from
+- which DB startup migrations target
+- which DB manual executeSql operations affect
+- whether Neon is primary, shadow, migration target, or abandoned path
+
+No assumptions.
+
+Only verified runtime truth.
+
+--------------------------------------------------
+AUDIT SCOPE
+--------------------------------------------------
+
+Inspect:
+
+- deployment environment
+- runtime environment variables
+- server startup path
+- db connection initialization
+- drizzle config
+- executeSql implementation
+- forensic scan / EDRI scoring path
+- post-merge / deployment scripts
+- startup migration blocks
+- production deployment config
+- Replit deployment settings if visible
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. Which connection string does the live production app use?
+
+Trace:
+
+app startup
+→ db initialization
+→ actual runtime connection target
+
+Identify exact code path.
+
+--------------------------------------------------
+
+2. Which database does EDRI scoring use?
+
+Trace:
+
+forensic scan
+→ scorer execution
+→ snapshot creation
+→ dcaa_readiness_snapshots writes
+
+Which DB receives these writes?
+
+--------------------------------------------------
+
+3. Which database does executeSql target?
+
+When the agent runs direct SQL from the app context:
+
+which DB is being modified?
+
+DATABASE_URL?
+NEON?
+something else?
+
+--------------------------------------------------
+
+4. What is NEON_DATABASE_URL actually for?
+
+Determine whether it is:
+
+- primary production DB
+- intended migration target
+- shadow reporting DB
+- abandoned legacy DB
+- staging DB
+- backup
+- future cutover target
+
+Use evidence.
+
+--------------------------------------------------
+
+5. Which DB should be treated as the accounting source of truth?
+
+Hard answer required.
+
+Not “probably.”
+
+Which one.
+
+--------------------------------------------------
+
+6. What should happen next?
+
+Recommend:
+
+Option A:
+Production must remain on DATABASE_URL
+
+Option B:
+Production should be migrated fully to Neon
+
+Option C:
+Current dual-DB architecture should be removed
+
+Option D:
+Other
+
+Do not implement yet.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/DATABASE_TRUTH_AUDIT.md
+
+Include:
+
+- exact runtime DB path
+- exact scorer DB path
+- exact executeSql DB path
+- DATABASE_URL vs NEON comparison
+- true production source of record
+- recommended architecture decision
+
+This is infrastructure truth.
+
+Without this, all accounting work is built on sand.

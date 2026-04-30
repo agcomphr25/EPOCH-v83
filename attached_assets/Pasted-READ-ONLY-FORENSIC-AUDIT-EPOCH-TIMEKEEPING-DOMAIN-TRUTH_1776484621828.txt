@@ -1,0 +1,125 @@
+READ-ONLY FORENSIC AUDIT — EPOCH TIMEKEEPING DOMAIN TRUTH RESET
+
+Goal:
+We are resetting the Timekeeping domain and establishing ONE single source of truth inside EPOCH.
+
+Critical context:
+- The standalone timekeeping module was always intended to become the only real timekeeping system.
+- It is NOT meant to remain a separate product.
+- It should become the native EPOCH Timekeeping domain.
+- The old legacy EPOCH timekeeping path was scaffolding and was never truly used for production labor tracking.
+- There is no meaningful legacy internal labor data to preserve or migrate from old EPOCH tables.
+- Historical labor records from an older external application are out of scope for now.
+- We do NOT want dual systems.
+- We do NOT want bridge views.
+- We do NOT want sync logic.
+- We do NOT want dual-write periods.
+- We want one employee identity: EPOCH employees are the truth.
+- We do NOT care about preserving standalone employee records if they exist; EPOCH employees are authoritative.
+
+Your task:
+Perform a complete READ-ONLY forensic audit of the CURRENT codebase and determine exactly what must happen to make the standalone module become the native EPOCH Timekeeping system and safely retire the legacy scaffolding.
+
+This is NOT a generic architecture exercise.
+This must be grounded in actual files, routes, tables, services, and dependencies found in the codebase.
+
+Audit these exact areas:
+
+1. EPOCH employee source of truth
+- Identify the actual authoritative employee table(s)
+- fields used for identity
+- fields used for payroll
+- fields used for permissions
+- fields used for traveler/timekeeping linkage
+- canonicalId / employeeCode / anything identity-related
+- how auth connects to employees
+
+2. Standalone timekeeping employee model
+- exact schema
+- whether employees can simply be replaced by EPOCH employee linkage
+- whether standalone employees should be removed entirely
+- what schema changes would be required
+
+3. Legacy timekeeping dependencies still live in EPOCH
+- punch_events
+- time_clock_entries
+- /api/timekeeping/*
+- /api/time-clock/*
+- /api/labor/*
+- payroll exports
+- labor costing
+- labor posting
+- admin review pages
+- employee clock UI
+- approval workflows
+
+4. Traveler-based labor capture
+Very important:
+Determine whether traveler scan clocking and employee timekeeping are:
+A) the same system
+B) separate but connected systems
+C) incorrectly overlapping systems
+
+I need a clear answer here.
+
+Audit:
+- traveler scan routes
+- WAD budget enforcement
+- labor session creation
+- charge code linkage
+- whether traveler capture should remain separate or merge into the new timekeeping domain
+
+5. Payroll + GL dependency chain
+Trace exact flow:
+Punch → approval → labor costing → GL posting → payroll export
+
+Identify:
+- exact files
+- exact tables
+- exact breakpoints if legacy punch_events is retired
+
+6. Standalone module operational readiness
+- why api-server is failing
+- whether frontend is production-usable
+- whether auth should be deleted and replaced
+- whether the standalone API should be absorbed into main server or remain modular
+
+7. Exact retirement map
+Create a precise list of:
+- safe to remove now
+- must rewire first
+- should remain because it belongs to manufacturing traveler flow
+- dangerous to touch right now
+
+Output format (required):
+
+SECTION A — DOMAIN TRUTH MAP
+What is the true intended architecture after cleanup?
+
+SECTION B — EMPLOYEE IDENTITY MAP
+EPOCH employee truth + exact standalone replacement strategy
+
+SECTION C — TIMEKEEPING FLOW MAP
+Current actual labor flow from punch to payroll/GL
+
+SECTION D — TRAVELER VS TIMECLOCK DECISION
+Very explicit answer on whether these are same domain or separate domains
+
+SECTION E — CUTOVER BLOCKERS
+Only real blockers based on audited code
+
+SECTION F — RETIREMENT MAP
+Safe remove / rewire first / leave alone
+
+SECTION G — RECOMMENDED EXECUTION ORDER
+The exact order of implementation with minimal operational risk
+
+Rules:
+- READ ONLY
+- No code changes
+- No assumptions
+- Cite actual files, routes, components, functions, and table names
+- Be explicit when something is definitely live vs probably live vs appears dead
+- Do not provide vague ERP advice
+- Do not skip difficult areas
+- Especially do not hand-wave traveler vs employee timekeeping

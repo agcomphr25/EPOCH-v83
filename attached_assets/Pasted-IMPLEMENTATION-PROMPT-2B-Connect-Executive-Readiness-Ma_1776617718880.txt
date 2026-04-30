@@ -1,0 +1,177 @@
+IMPLEMENTATION PROMPT 2B — Connect Executive Readiness Matrix To Live EDRI Data
+
+Objective:
+Upgrade the existing Executive Readiness Matrix from static mock current-state data to live EDRI-connected data, while preserving the editorial executive-comparison columns.
+
+Background:
+The current page shell is already built and merged.
+The TK-005 native audit trail wiring issue has now been corrected for future native EPOCH punch edits, so we can proceed with more confidence in live timekeeping-derived state.
+
+We now want to connect ONLY the EPOCH-current-state layer to real EDRI data.
+
+IMPORTANT RULES:
+
+Do NOT rebuild the page from scratch
+Do NOT create a second scoring engine
+Do NOT change EDRI scoring formulas
+Do NOT alter forensic thresholds
+Preserve the current table structure and visual design
+Reuse existing APIs and data models already available in EDRI
+Keep editorial columns editorial
+Do NOT oversell rows that are not yet backed by live system truth
+
+Use live data from existing endpoints where possible, including:
+
+latest EDRI snapshot
+domain scores
+red flags
+remediation items
+forensic summary if already available and appropriate
+
+Implementation Requirements:
+
+Add real data queries to EdriExecutiveMatrix.tsx
+Use the same frontend query patterns already used in other EDRI pages.
+
+Pull live data for:
+
+latest snapshot
+domain scores
+red flags
+remediation items
+forensic summary if needed for recommendation language
+
+Do not invent duplicate backend endpoints unless absolutely necessary.
+
+Create an explicit row-to-domain mapping layer
+Add a clear mapping object in code for the matrix rows.
+
+Suggested mapping:
+
+TIMEKEEPING-backed rows:
+
+Labor Charging Controls
+Supervisor Approval Integrity
+Time Correction Auditability
+
+ACCOUNTING-backed rows:
+
+Direct vs Indirect Segregation
+Project Cost Visibility
+
+PROCUREMENT-backed rows:
+
+Purchasing Controls
+Vendor Justification
+Subcontract Flowdown
+
+INVENTORY-backed rows:
+
+Inventory Traceability
+Material Genealogy
+
+POLICY / cross-domain-backed rows:
+
+Customer Audit Defensibility
+
+Rows that are NOT yet truly live-scored in EDRI and should remain editorial/roadmap:
+
+Traveler Enforcement
+PM Schedule Risk Visibility
+Machine Telemetry
+Cert Validation
+Operator Authorization Controls
+Quality Gate Enforcement
+Freezer/Oven Telemetry
+
+If some rows need blended mapping across multiple domains, do that carefully and document it in code comments.
+
+Derive Current EPOCH State dynamically
+Replace static currentEpochState values ONLY for rows that can be supported by live EDRI data.
+
+Create an explainable mapping from live numeric domain score to matrix state:
+
+STRONG
+ADEQUATE
+PARTIAL
+WEAK
+NONE
+
+Use a clearly documented mapping, for example:
+
+
+
+
+= 90 = STRONG
+
+
+
+
+= 80 = ADEQUATE
+
+
+
+
+= 65 = PARTIAL
+
+
+
+
+= 50 = WEAK
+
+< 50 = NONE
+
+If you choose different breakpoints, explain why in code comments and in the final report.
+
+Preserve editorial rows honestly
+For rows without live EDRI backing:
+keep their current editorial state structure
+visually distinguish them from live-backed rows
+do NOT present them as if they came from EDRI runtime data
+
+A subtle “Roadmap” / “Editorial” / “Not yet live-scored” indicator is acceptable.
+
+Make KPI cards dynamic where supportable
+Replace static KPI card counts with render-time derived values where the logic is supportable.
+
+Examples:
+
+Critical Gaps
+High Gaps
+EPOCH Strong
+EPOCH Advantage
+
+Important:
+If a KPI still depends partly on editorial rows, handle that explicitly and cleanly.
+Do not imply pure runtime objectivity if the count is mixed.
+
+Upgrade the recommendation panel carefully
+Replace the placeholder recommendation text with a recommendation informed by live EDRI conditions where reasonable.
+
+Examples:
+
+if ACCOUNTING or PROCUREMENT remain weak, recommendation should say Costpoint is safer in those control areas today
+if TIMEKEEPING or INVENTORY are strong, recommendation should say EPOCH is already strong there
+if roadmap rows remain non-live, the recommendation should say so explicitly
+
+The recommendation should sound executive-facing, clear, and honest.
+Truth over optimism.
+
+Preserve visual consistency
+Reuse the existing page shell and visual structure.
+Do not redesign the page.
+Do not introduce a brand new visual system.
+
+Required Output Format:
+
+SECTION A — Live Data Sources Used
+SECTION B — Mapping Logic Added
+SECTION C — Dynamic Current-State Logic
+SECTION D — KPI Logic Updated
+SECTION E — Editorial vs Live Separation
+SECTION F — Recommendation Logic
+SECTION G — Remaining Matrix Rows Still Not Backed By Live EDRI Data
+SECTION H — Any Risks Or Ambiguities
+
+Be brutally honest.
+If only part of the matrix can be truly live today, say so clearly.

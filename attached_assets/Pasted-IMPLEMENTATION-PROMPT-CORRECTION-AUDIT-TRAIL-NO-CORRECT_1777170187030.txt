@@ -1,0 +1,124 @@
+IMPLEMENTATION PROMPT — CORRECTION AUDIT TRAIL
+NO_CORRECTION_AUDIT_TRAIL RESOLUTION
+
+STRICT SCOPE
+
+Do NOT change scorer logic.
+Do NOT modify legacy timekeeping.punches.
+Do NOT refactor timekeeping architecture.
+Do NOT change approval workflows.
+Do NOT seed fake audit rows.
+Do NOT touch unrelated files.
+
+Only modify:
+
+server/src/routes/timekeeping/punches.ts
+
+Goal:
+
+Resolve:
+
+NO_CORRECTION_AUDIT_TRAIL
+
+by writing a real audit_events row whenever a punch_ledger correction/edit is successfully saved.
+
+Current score:
+88.38
+
+Expected after:
+~90.25
+
+--------------------------------------------------
+CONFIRMED GAP
+--------------------------------------------------
+
+The route:
+
+PATCH/PUT /api/timekeeping/punches/:id
+
+already:
+
+- validates editNote
+- fetches existing punch record
+- computes changed values
+- sets isEdited = true
+- updates punch_ledger successfully
+
+But it does NOT write to audit_events.
+
+The scorer reads audit_events, not labor_entry_audit.
+
+--------------------------------------------------
+REQUIRED IMPLEMENTATION
+--------------------------------------------------
+
+In server/src/routes/timekeeping/punches.ts:
+
+1. Import auditEvents if needed.
+
+2. After successful storage.updatePunchLedgerEntry():
+
+insert one audit_events row with:
+
+entityType: 'time_entry'
+entityId: String(punchId)
+action: 'PUNCH_CORRECTED'
+
+actor:
+- actorId
+- actorName
+- actorRole
+
+from the existing actorFromUser() / req.user logic.
+
+reason:
+- editNote
+
+fieldsChanged:
+- before/after diff for each changed punch field
+
+meta:
+- source: 'punch_ledger'
+- correctionRoute: '/api/timekeeping/punches/:id'
+- previousIsEdited
+- newIsEdited: true
+
+3. Only write audit row after successful update.
+
+4. Do not audit failed validation.
+
+5. Do not write duplicate audit rows.
+
+6. Do not change legacy labor_entry_audit behavior.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. editing a punch with editNote creates audit_events row
+2. entity_type = 'time_entry'
+3. action = 'PUNCH_CORRECTED'
+4. reason contains editNote
+5. fields_changed contains before/after diff
+6. scorer clears NO_CORRECTION_AUDIT_TRAIL
+7. TIMEKEEPING domain becomes 100
+8. composite score moves to ~90.25
+9. no unrelated timekeeping behavior changed
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/CORRECTION_AUDIT_TRAIL_IMPLEMENTATION.md
+
+Include:
+
+- exact file changed
+- exact audit row created
+- validation result
+- before/after score
+- remaining score blockers

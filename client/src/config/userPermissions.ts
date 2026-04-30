@@ -595,7 +595,7 @@ export function hasRouteAccess(
  * Role-based route access configuration
  * Maps route patterns to the roles that can access them
  */
-const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
+export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
   '/metrics-sandbox': ['ADMIN', 'OWNER'],

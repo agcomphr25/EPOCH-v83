@@ -1,0 +1,148 @@
+#267 - Permission Enforcement Layer
+
+What & Why
+Now that EPOCH has backbone, traveler gates, release-to-floor, auto WAD creation, traveler-from-WAD flow, and the command center, the next highest-impact task is to make permissions actually control behavior. Right now you already have capabilities and user/employee capability tables in the system, but this layer still needs to be enforced consistently across approvals, travelers, time edits, and project closeout.
+
+Goal
+
+Move from “roles exist” to:
+
+Role → Capability → Scope → Approval Authority
+
+So the system can enforce:
+
+who can release work
+who can approve labor overrun
+who can sign QC
+who can edit time
+who can close projects
+who can access controlled project data
+Done looks like
+Permission checks are enforced in backend routes, not just UI
+A reusable permission helper exists
+Scope-aware checks exist for:
+department
+project
+global/admin
+At minimum, the following actions are protected:
+release WAD
+approve labor overrun
+start/finish restricted traveler steps
+QC signoff
+edit time entry
+approve/close project closing
+Clear 403 responses are returned when the user lacks authority
+Existing capability tables are reused
+No large UI rebuild is required in this ticket
+Out of scope
+full permission admin UI
+document vault permissions
+CMMC file segmentation
+MFA
+org hierarchy modeling
+approval delegation workflows
+Tasks
+1. Define capability names
+
+Standardize and document capability keys for the new control layer, for example:
+
+RELEASE_WORK_ORDER
+APPROVE_LABOR_OVERRUN
+START_TRAVELER
+FINISH_TRAVELER
+SIGN_QC
+EDIT_TIME_ENTRY
+APPROVE_PROJECT_CLOSING
+CLOSE_PROJECT
+
+If some already exist, reuse them instead of creating duplicates.
+
+2. Build a permission helper
+
+Create something like:
+
+server/src/lib/permissions.ts
+
+Functions:
+
+hasCapability(userId, capabilityName)
+requireCapability(userId, capabilityName)
+optional later:
+hasScopedCapability(userId, capabilityName, { department, projectId })
+
+For first version, global capability enforcement is enough if scope data is not yet mature.
+
+3. Add storage methods
+
+Add to IStorage and implement in server/storage.ts:
+
+userHasCapability(userId: number, capabilityName: string)
+optional:
+employeeHasCapability(employeeId: number, capabilityName: string)
+
+Use existing user_capabilities / employee_capabilities and capabilities tables.
+
+4. Enforce on high-impact routes
+
+Start with these routes:
+
+Work Orders
+release work order
+approve overrun
+Travelers
+start restricted traveler step
+finish restricted traveler step
+QC signoff actions
+Time Clock
+edit time entry
+manual charge code override if present
+Projects / Closings
+approve closing
+set project to completed/closed
+5. Return clean authorization errors
+
+Use consistent 403 response shape:
+
+{
+  "error": "Forbidden",
+  "requiredCapability": "APPROVE_LABOR_OVERRUN"
+}
+6. Add optional route for capability introspection
+
+Useful for UI later:
+
+GET /api/me/capabilities
+
+Not required, but helpful.
+
+Relevant files
+server/storage.ts
+server/schema.ts
+server/src/lib/permissions.ts
+server/src/routes/workOrders.ts
+server/src/routes/travelers.ts
+server/src/routes/timeClock.ts
+server/src/routes/projects.ts
+Acceptance checklist
+ reusable permission helper exists
+ capability checks use backend data, not UI assumptions
+ WAD release requires permission
+ labor overrun approval requires permission
+ project close approval requires permission
+ unauthorized attempts return 403
+ legacy routes still function for authorized users
+Suggested live tests
+User without RELEASE_WORK_ORDER tries to release WAD → 403
+User with RELEASE_WORK_ORDER releases WAD → success
+User without APPROVE_LABOR_OVERRUN tries approval → 403
+User without CLOSE_PROJECT tries to close project → 403
+Authorized user succeeds on each action
+Why this is the right next task
+
+This is the fastest way to make all the control you already built actually trustworthy. Without permission enforcement, your gates and approvals still depend too much on UI behavior and trust.
+
+After #267, the strongest next task is:
+
+#268 - Training Enforcement Hard Block
+
+That’s where EPOCH starts enforcing not just authority, but qualification.

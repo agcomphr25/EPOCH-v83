@@ -1,0 +1,210 @@
+#300 — Add SCRAPPED Status to Material Lot Workflow
+What & Why
+
+Add a formal SCRAPPED status to the material lot lifecycle so scrapped material is represented as a first-class state, not just an event.
+
+Right now:
+
+scrap exists as a transaction/event
+but may not be consistently reflected in the lot status lifecycle
+
+That creates gaps in:
+
+filtering (what is still usable vs not)
+operator understanding
+audit clarity
+dashboard logic
+reconciliation visibility
+
+👉 This ticket makes scrap structural, not just historical.
+
+Done looks like
+Lot lifecycle includes:
+RECEIVED → QUARANTINE → ACCEPTED → ISSUED → CONSUMED
+                                      ↘
+                                       SCRAPPED
+Behavior:
+When a lot is fully scrapped → status becomes SCRAPPED
+SCRAPPED lots:
+are not usable
+are excluded from available inventory
+remain visible for audit/history
+Partial scrap does not change status unless:
+remainingQty reaches 0
+UI:
+SCRAPPED appears:
+in status badges
+in filters
+in dropdown disable logic
+clearly styled as destructive
+Why this is needed
+
+Without this:
+
+a lot can have zero quantity but still show as ACCEPTED
+scrap becomes invisible in workflow
+operators don’t trust system state
+dashboards and filters become misleading
+
+With this:
+
+lot state = real-world condition
+audit trail becomes clearer
+control center logic becomes accurate
+Out of scope
+scrap UI (already handled in #295)
+scrap summary display (#301)
+NCR linkage
+approval workflow for scrap
+partial scrap tracking UI
+Backend Tasks
+1. Update schema enum (if enforced)
+
+Ensure material_lots.status supports:
+
+'SCRAPPED'
+
+Schema already includes it based on your current model, but verify it is:
+
+allowed
+consistently used
+2. Enforce status on scrap
+
+In scrap route:
+
+if (newRemaining <= 0) {
+  status = 'SCRAPPED'
+}
+
+Ensure:
+
+this happens inside transaction
+no other status overrides it afterward
+3. Prevent invalid transitions
+
+Block:
+
+changing a SCRAPPED lot back to:
+ACCEPTED
+ISSUED
+QUARANTINE
+
+Unless you explicitly allow admin override later.
+
+4. Exclude SCRAPPED from availability logic
+
+Anywhere availability is computed:
+
+inventory dashboards
+reservation logic
+control center
+restock signals
+
+Ensure:
+
+status !== 'SCRAPPED'
+5. Ensure consistency with balance logic
+
+If:
+
+remainingQty = 0
+status must be:
+CONSUMED OR SCRAPPED
+
+Never:
+
+ACCEPTED
+ISSUED
+Frontend Tasks
+1. Add SCRAPPED to status badge map
+
+Already present in your page:
+
+SCRAPPED: { variant: 'destructive', label: 'Scrapped', icon: Trash2 }
+
+Confirm consistency across:
+
+Material Inventory
+Lot detail
+dashboards
+2. Filter support
+
+Add to status filter dropdown (already exists):
+
+<SelectItem value="SCRAPPED">Scrapped</SelectItem>
+
+Ensure:
+
+appears in list
+works with filtering logic
+3. Disable actions on SCRAPPED lots
+
+Already partially done:
+
+disabled={lot.status === 'SCRAPPED'}
+
+Apply consistently to:
+
+move
+split
+issue
+return
+status change
+scrap (already disabled)
+4. Visual clarity
+
+Ensure:
+
+red/destructive styling
+appears clearly distinct from:
+REJECTED
+EXPIRED
+Data Integrity Rules
+SCRAPPED lots:
+must have remainingQty = 0
+lots with remainingQty = 0:
+must be either:
+CONSUMED
+SCRAPPED
+Test Cases
+1. Full scrap
+remaining = 5
+scrap = 5
+→ status = SCRAPPED
+2. Partial scrap
+remaining = 10
+scrap = 3
+→ status unchanged
+3. Invalid transition
+SCRAPPED → ACCEPTED
+→ blocked
+4. UI behavior
+SCRAPPED lots:
+visible
+not actionable
+filterable
+Edge Cases
+lot manually adjusted to zero → enforce status update
+migration data where:
+remainingQty = 0
+status ≠ CONSUMED/SCRAPPED
+→ should be flagged or corrected
+Follow-up
+
+Next task after this:
+
+#301 — Scrap Summary on Lot Detail
+
+This will:
+
+show total scrapped qty
+show scrap events
+improve audit visibility
+Bottom line
+
+This is a small change with big clarity impact:
+
+aligns system state with reality
+removes ambiguity
+strengthens audit trail
+improves operator trust

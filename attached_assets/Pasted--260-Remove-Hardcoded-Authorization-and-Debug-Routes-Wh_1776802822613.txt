@@ -1,0 +1,185 @@
+#260 - Remove Hardcoded Authorization and Debug Routes
+What & Why
+EPOCH currently has hardcoded authorization logic and live debug routes in production code. This is a compliance blocker and the highest-priority integration gap to close before adding more capability. The current state includes hardcoded username authorization like AUTHORIZED_USERS = ['glennj'] and live /api/debug/... routes, both of which are disqualifiers for DCAA-style audit posture and any future CMMC claim.
+
+This ticket replaces hardcoded user allowlists with capability-based authorization and disables/removes production debug endpoints in a safe, non-breaking way.
+
+Done looks like
+No route in production source uses hardcoded username authorization
+No route in production source uses AUTHORIZED_USERS = [...]
+Sensitive routes use existing auth + capability checks instead
+All live /api/debug/... routes are removed, disabled, or gated behind a non-production environment check
+Existing authorized users can still perform their work through proper role/capability assignment
+Unauthorized users now receive clean 403 responses
+No existing business behavior changes beyond access control enforcement
+Audit trail remains intact
+Out of scope
+Full RBAC redesign
+New permissions UI
+Reworking every route in the app
+CMMC MFA
+Project/document segmentation
+Financial audit field fixes using req.user on every route
+WAD → GL posting
+Tasks
+1. Find and remove hardcoded authorization
+
+Search for patterns like:
+
+AUTHORIZED_USERS
+direct username comparisons
+req.user.username === '...'
+user?.username === '...'
+email/name allowlists in route handlers
+
+Replace them with:
+
+authenticateToken
+existing capability checks
+a small shared helper like requireCapability(...) if one does not already exist
+2. Identify affected sensitive routes
+
+At minimum, any route that does one of these must not rely on hardcoded users:
+
+financial adjustments
+refunds
+GL actions
+labor edits
+admin actions
+shipment overrides
+project closure overrides
+debug/admin utilities
+3. Add or standardize capability enforcement
+
+Use the existing capability system already in EPOCH.
+
+Recommended pattern:
+
+authenticate first
+resolve user/employee capability keys
+return 403 if missing required capability
+keep route logic unchanged otherwise
+
+Example capability names if already present:
+
+MANAGE_REFUNDS
+POST_GL_ENTRIES
+EDIT_LABOR
+ADMIN_OVERRIDE
+VIEW_DEBUG_TOOLS
+
+Do not invent a new auth model if the current capability system can support this.
+
+4. Remove or disable debug routes
+
+Search for:
+
+/api/debug/...
+routes named debug, test, dev-only, seed, inspect, dump, replay, etc.
+
+For each:
+
+remove if unused
+or gate with something like process.env.NODE_ENV !== 'production'
+or mount only in development
+
+Production behavior target:
+
+debug routes are not reachable in production
+5. Preserve operational continuity
+
+Before removing hardcoded allowlists:
+
+make sure affected real users have the required capabilities
+add missing capability assignments if needed
+verify current authorized users are not locked out
+
+This ticket should be rolled out safely, not as a blind hard cutover.
+
+6. Add clean failure behavior
+
+When access is denied:
+
+return 403
+return consistent message like "Forbidden" or "Missing required capability"
+do not leak internal auth logic details
+7. Add minimal logging
+
+For denied sensitive actions, log:
+
+user id
+route
+attempted action
+timestamp
+
+Do not overbuild a full audit engine in this ticket. Just make denied access traceable.
+
+Relevant files
+routes and services using hardcoded username checks
+routes containing /api/debug/...
+auth middleware files
+capability helper files
+permission/capability storage lookups
+likely sensitive modules:
+refunds
+GL
+labor
+admin
+shipping overrides
+Recommended implementation notes
+Use additive rollout first
+
+Best sequence:
+
+add capability checks
+assign capabilities to currently authorized users
+test access
+remove hardcoded user logic
+Prefer helper reuse
+
+If you do not already have a reusable guard, add one like:
+
+requireCapability(req, res, next, 'MANAGE_REFUNDS')
+or a wrapper/helper consistent with your route style
+Do not leave silent bypasses
+
+Avoid patterns like:
+
+“if capability missing, allow if username is glennj”
+
+That defeats the point of the ticket.
+
+Keep debug access out of production completely
+
+For compliance, the best answer is not “restricted debug routes.”
+The best answer is:
+
+not mounted in production
+Acceptance checklist
+ no hardcoded username allowlists remain in production auth paths
+ no AUTHORIZED_USERS = [...] remains in active route logic
+ sensitive routes use capability-based access
+ currently authorized users still have access through assigned capability
+ unauthorized users receive 403
+ /api/debug/... is not reachable in production
+ no core business flow breaks
+Suggested live tests
+Log in as a properly authorized user and perform a sensitive action that previously depended on hardcoded auth.
+Log in as a user without the capability and confirm 403.
+Hit previous debug endpoints in production mode and confirm they are unavailable.
+Verify normal operational routes still work.
+Verify denied attempts are logged.
+Why this is first
+
+This has the best risk-to-value ratio of any remaining fix:
+
+high compliance impact
+relatively small implementation
+low business logic disruption if rolled out correctly
+
+It also clears the way for the next tickets:
+
+real authenticated audit identity on sensitive routes
+WAD → GL posting integration
+training enforcement at clock-in
+project closing as a hard gate

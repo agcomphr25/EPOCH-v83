@@ -1,0 +1,168 @@
+STRICT READ-ONLY FORENSIC AUDIT — PTO REQUEST SYSTEM (NO CHANGES)
+
+Objective:
+Perform a complete forensic audit of the existing EPOCH codebase to determine current PTO request capability, leave tracking structure, approval workflows, payroll interaction points, timesheet integration, calendar integration, and role/permission wiring.
+
+CRITICAL RULES:
+- READ ONLY
+- NO schema changes
+- NO migrations
+- NO code modifications
+- NO placeholder assumptions
+- NO “recommended implementation” yet
+- Must verify with actual code, routes, schema, services, and UI findings only
+
+Business Context:
+We need employees to be able to submit PTO requests inside EPOCH.
+
+Operational Requirements:
+- All employees can submit PTO
+- Single PTO category (covers vacation, sick, personal, bereavement, floating holiday)
+- Approval chain:
+  1. Direct Supervisor
+  2. HR
+  3. Specific VP approval
+- Approved PTO should affect:
+  - timesheet prefill
+  - company calendar visibility
+  - labor planning / production scheduling
+  - payroll export
+- Employees may request:
+  - full day
+  - half day
+  - hourly partial day
+  - multi-day ranges
+- Managers may submit PTO on behalf of employees
+- No blackout rules required
+- Denials must require reason capture
+- Attachments optional but not required
+- Existing HR/Admin module may be reused if appropriate
+
+Audit Scope Required:
+
+SECTION A — Existing Data Model
+Find:
+- PTO tables
+- leave tables
+- absence tables
+- attendance tables
+- timesheet leave markers
+- payroll paid leave references
+- employee accrual structures
+- calendar leave structures
+- approval workflow tables
+
+Show:
+- exact table names
+- columns
+- foreign keys
+- enums
+- status values
+- approval fields
+- balance fields
+- audit fields
+
+SECTION B — Existing API + Services
+Find:
+- PTO endpoints
+- leave request endpoints
+- approval endpoints
+- employee time adjustment endpoints
+- supervisor approval routes
+- payroll export interactions
+- labor posting interactions
+
+Show:
+- exact routes
+- controllers
+- services
+- validation layers
+- auth/permission enforcement
+
+SECTION C — Existing UI
+Find:
+- employee self-service PTO screens
+- HR admin leave screens
+- supervisor approval inboxes
+- timesheet leave entry UI
+- calendar leave visibility
+- admin override tools
+
+Show:
+- exact pages/components
+- route paths
+- visibility rules
+- role restrictions
+
+SECTION D — Approval Chain Capability
+Determine:
+Can system currently support:
+Employee → Supervisor → HR → VP approval chain
+
+Specifically verify:
+- multi-stage approvals
+- conditional approvers
+- escalation support
+- approval comments
+- denial reason capture
+- delegation coverage
+
+SECTION E — Payroll + Timekeeping Integration
+Determine:
+How PTO would currently impact:
+- payable hours
+- labor costing
+- charge codes
+- fringe calculations
+- payroll export
+- attendance exception reporting
+
+Specifically verify:
+whether PTO already exists as:
+- paid non-work hours
+- labor substitute
+- payroll category
+- manual override only
+
+SECTION F — Company Calendar Integration
+Determine:
+Can approved PTO automatically populate:
+- employee schedule visibility
+- company absence calendar
+- staffing planning board
+- production scheduling visibility
+
+SECTION G — Role + Permission System
+Determine:
+Who can currently:
+- submit leave
+- approve leave
+- override leave
+- edit timesheets
+- modify payroll payable hours
+
+Verify:
+exact capability model
+and whether PTO should use:
+existing permissions
+or require new permission domains
+
+Required Deliverable Format:
+
+1. Executive Summary
+2. Confirmed Existing Capability
+3. Missing Capability
+4. Technical Constraints
+5. Hidden Risks
+6. Recommended Reuse Points
+7. Files Reviewed
+8. Exact Tables Found
+9. Exact Routes Found
+10. Exact UI Components Found
+11. Approval Chain Feasibility
+12. Payroll Integration Findings
+13. Calendar Integration Findings
+14. Final Implementation Readiness Score (1–10)
+
+This is a forensic audit only.
+Do not implement anything yet.

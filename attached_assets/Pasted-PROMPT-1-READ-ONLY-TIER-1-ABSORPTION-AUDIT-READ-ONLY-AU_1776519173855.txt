@@ -1,0 +1,84 @@
+PROMPT 1 — READ-ONLY TIER 1 ABSORPTION AUDIT
+READ-ONLY AUDIT — TIER 1 TIMKEEPING ABSORPTION (PAYROLL-CRITICAL ONLY)
+
+Goal:
+Absorb the core Timekeeping runtime into native EPOCH without touching schema redesign or traveler/WAD domains.
+
+This prompt is ONLY for Tier 1:
+- punches
+- timesheets
+- employees
+- dashboard
+- kiosk login + kiosk punch flow
+
+Do NOT analyze all 11 standalone route files yet.
+
+Critical architecture:
+
+public.employees = only employee truth
+
+timekeeping.punches = attendance/payroll ledger
+
+timekeeping.timesheets = approval workflow
+
+timekeeping.employees = thin anchor table only (retain for now)
+
+public.time_clock_entries = traveler/WAD labor system (separate domain)
+
+Do NOT merge attendance and traveler domains.
+
+Do NOT drift into schema redesign.
+
+Do NOT propose deleting timekeeping.employees.
+
+Your task:
+
+Perform a READ-ONLY forensic audit of ONLY these source areas:
+
+modules/timekeeping/artifacts/api-server/src/routes/
+- punches.ts
+- timesheets.ts
+- employees.ts
+- dashboard.ts
+- kiosk login flow
+
+and compare them against:
+
+server/src/routes/timekeeping.ts
+server/src/routes/timeClock.ts
+server/src/routes/punches.ts
+server/src/routes/labor.ts (only where directly required for Tier 1)
+
+and the related existing frontend:
+- TimeClock.tsx
+- TimeClockAdmin.tsx
+- TimeClockAdminPage.tsx
+- kiosk-related UI
+
+Output required:
+
+1. TIER 1 ABSORPTION MAP
+Exact endpoints/features that should move first
+
+2. DUPLICATION MAP
+What already exists in EPOCH vs what exists only in standalone
+
+3. KIOSK CRITICAL PATH
+Exact end-to-end path:
+PIN login → punch in → punch out → approval → payroll export
+
+4. PAYROLL RISK CHECK
+What breaks if we move incorrectly
+
+5. SAFEST TIER 1 EXECUTION ORDER
+Exact backend + frontend order for only Tier 1
+
+6. DO NOT TOUCH LIST
+Specific things the agent must leave alone for now
+
+Rules:
+- READ ONLY
+- no code changes
+- do not analyze Phase 3 schema redesign
+- do not drift into traveler/WAD logic
+- be explicit and grounded in actual files/routes/tables

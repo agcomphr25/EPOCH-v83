@@ -1,0 +1,225 @@
+You are performing a READ-ONLY architectural audit of the EPOCH codebase.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any files
+- DO NOT create migrations
+- DO NOT assume behavior — TRACE actual execution paths
+- You must follow data from UI → API → DB → downstream usage
+- This is NOT a UI audit — this is a SYSTEM OF RECORD audit
+
+---
+
+## 🎯 OBJECTIVE
+
+Determine whether EPOCH has a unified labor capture system or if the following inputs are fragmented:
+
+1) Kiosk Time Clock
+2) Traveler-Based Time Entry (production/labor tracking)
+3) Employee Portal Time Entry
+
+We need to understand:
+- Are these writing to the SAME table/system?
+- If not, where do they diverge?
+- Is there a true "timesheet" system or just raw punches?
+
+---
+
+## 🔍 STEP 1 — IDENTIFY ALL LABOR DATA TABLES
+
+Search for ALL tables related to:
+- time tracking
+- punches
+- labor entries
+- timesheets
+- clock in/out
+- job/traveler labor
+
+Return:
+- Table names
+- Full schema (columns, types)
+- Relationships (FKs if any)
+
+Specifically look for patterns like:
+- time_entries
+- time_punches
+- labor_logs
+- job_time
+- employee_time
+- timesheets
+- attendance
+
+---
+
+## 🔍 STEP 2 — TRACE EACH INPUT SYSTEM
+
+### A) KIOSK
+Find:
+- UI component
+- API route
+- DB write
+
+Trace full flow:
+Kiosk UI → API → DB
+
+Answer:
+- What table(s) does kiosk write to?
+- Does it create:
+  - clock_in / clock_out pairs?
+  - single punch events?
+- Does it assign:
+  - employee_id?
+  - timestamp?
+  - charge_code / job?
+
+---
+
+### B) TRAVELER (Production Labor)
+Find:
+- Where users log time against jobs/travelers
+
+Trace:
+Traveler UI → API → DB
+
+Answer:
+- What table(s) does this write to?
+- Is this:
+  - duration-based (hours)?
+  - start/stop based?
+- Does it overlap with kiosk time?
+- Does it create independent labor records?
+
+---
+
+### C) EMPLOYEE PORTAL
+Find:
+- Manual time entry or edits
+
+Trace:
+Portal UI → API → DB
+
+Answer:
+- Does this:
+  - create new records?
+  - modify existing ones?
+- What tables are affected?
+
+---
+
+## 🔍 STEP 3 — DETERMINE SYSTEM OF RECORD
+
+Answer clearly:
+
+❗ Is there ONE canonical labor table?
+
+If YES:
+- What is it?
+- Do all systems write to it?
+
+If NO:
+- List ALL competing sources of truth
+
+---
+
+## 🔍 STEP 4 — TIMESHEET GENERATION LOGIC
+
+Find any logic related to:
+- timesheets
+- payroll prep
+- weekly summaries
+- labor aggregation
+
+Answer:
+- How is a “timesheet” created?
+  - Query?
+  - Stored table?
+- Does it:
+  - merge multiple sources?
+  - rely on only one?
+
+---
+
+## 🔍 STEP 5 — CONFLICT & OVERLAP ANALYSIS
+
+Determine:
+
+- Can a user:
+  - be clocked in (kiosk)
+  - AND log time on a traveler
+  at the same time?
+
+- If YES:
+  - what happens?
+  - is there validation?
+  - is overlap prevented or ignored?
+
+- Are duplicate labor entries possible?
+
+---
+
+## 🔍 STEP 6 — EVENT MODEL CLASSIFICATION
+
+Classify current system:
+
+A) Event-based (raw punches only)
+B) Duration-based (manual hours)
+C) Hybrid (both, but not unified)
+D) Proper unified model
+
+Explain why.
+
+---
+
+## 🔍 STEP 7 — GAP ANALYSIS
+
+Identify:
+
+- Missing concepts:
+  - shift
+  - session
+  - labor allocation
+  - charge code linkage
+  - approval state
+
+- Missing controls:
+  - overlap prevention
+  - required clock-out
+  - reconciliation logic
+
+---
+
+## 🔍 STEP 8 — RETURN FORMAT
+
+Return a structured report:
+
+### 1. Tables Identified
+(list)
+
+### 2. Data Flow Per System
+Kiosk:
+Traveler:
+Portal:
+
+### 3. System of Record Verdict
+(unified or fragmented)
+
+### 4. Timesheet Logic
+(explain clearly)
+
+### 5. Critical Risks
+(e.g. double-counting, payroll errors, DCAA risk)
+
+### 6. Recommended Target Architecture (HIGH LEVEL ONLY)
+DO NOT implement — just describe:
+
+- single event table?
+- session model?
+- allocation layer?
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+This audit must be based ONLY on actual code.
+If something is missing or unclear, say so explicitly.
+
+Do not guess.

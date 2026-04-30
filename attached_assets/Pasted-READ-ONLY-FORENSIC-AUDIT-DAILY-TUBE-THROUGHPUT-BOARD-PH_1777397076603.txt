@@ -1,0 +1,338 @@
+READ-ONLY FORENSIC AUDIT — DAILY TUBE THROUGHPUT BOARD (PHASE 1)
+
+STRICTLY READ-ONLY.
+DO NOT MODIFY CODE.
+DO NOT WRITE MIGRATIONS.
+DO NOT PATCH DATA.
+DO NOT CREATE FILES.
+DO NOT IMPLEMENT ANYTHING.
+
+Your job is to perform a forensic audit of the current EPOCH codebase and production architecture to determine exactly how a Daily Tube Throughput Board can be built using existing traveler events as the sole source of truth.
+
+This is a visibility-only production dashboard.
+
+The dashboard must NEVER require manual updates.
+
+It must be driven entirely by traveler state transitions already happening inside EPOCH.
+
+We are NOT building scheduling.
+We are NOT assigning today’s 22 tubes in advance.
+We are NOT building approvals from the dashboard.
+
+We ARE building:
+
+DAILY TUBE THROUGHPUT BOARD
+
+Where:
+
+- Slot #1 = first tube whose Layup Started event occurs today
+- Slot #2 = second tube started today
+- Slot #3 = third tube started today
+- etc.
+
+This continues until approximately 22 daily production slots.
+
+The board shows:
+
+“How many tubes entered production today, where are they now, and what is preventing completion?”
+
+The board resets daily.
+
+A “green” slot means:
+
+The tube successfully reached the final required TODAY milestone
+(before shift end)
+
+—not necessarily full completion.
+
+If a traveler is blocked/held/rework/etc.,
+the board should visibly reflect that.
+
+The board itself performs NO actions.
+
+It is visibility only.
+
+--------------------------------------------------
+AUDIT OBJECTIVES
+--------------------------------------------------
+
+You must determine EXACTLY:
+
+1. How traveler state transitions are stored
+
+2. Whether “Layup Started” exists as a reliable event trigger
+
+3. How traveler progression history is reconstructed
+
+4. Whether block/hold/rework states already exist
+
+5. Whether timestamps support live dashboard rendering
+
+6. How we can derive daily production slots automatically
+
+7. Whether we can determine “green state” without adding manual input
+
+8. What gaps exist before implementation
+
+NO GUESSING.
+ONLY EVIDENCE.
+
+--------------------------------------------------
+SECTION A — TRAVELER DATA MODEL
+--------------------------------------------------
+
+Identify:
+
+- primary traveler tables
+- production order tables
+- traveler step tables
+- operation status tables
+- traveler event history tables
+- QC / inspection related tables
+- block / hold / exception tables
+
+For each:
+
+Return:
+
+- table name
+- purpose
+- critical columns
+- status fields
+- timestamps
+- foreign key relationships
+
+Especially identify:
+
+- current step
+- completed step history
+- started vs completed timestamps
+- approval flags
+- hold states
+- inspection states
+
+--------------------------------------------------
+SECTION B — LAYUP STARTED EVENT
+--------------------------------------------------
+
+We need:
+
+SLOT CREATION = LAYUP STARTED
+
+Determine:
+
+1. Does “Layup Started” exist explicitly?
+
+OR
+
+2. Is it inferred from another event?
+
+OR
+
+3. Is it not reliably captured?
+
+Show:
+
+- exact field
+- exact trigger
+- where it is written
+- UI action causing it
+- API endpoint causing it
+- audit logging if present
+
+We must know if this is trustworthy enough to create Slot #1.
+
+--------------------------------------------------
+SECTION C — DAILY SLOT DERIVATION
+--------------------------------------------------
+
+Determine if we can derive:
+
+Today’s Slot Sequence
+
+like:
+
+1st traveler started today = Slot 1
+2nd = Slot 2
+etc.
+
+using existing timestamps only.
+
+Need:
+
+- exact query path
+- exact timestamp source
+- timezone behavior
+- reset behavior at midnight
+- edge cases (late night, delayed entry, corrections)
+
+We need deterministic slot assignment.
+
+--------------------------------------------------
+SECTION D — GREEN STATE LOGIC
+--------------------------------------------------
+
+We need to determine:
+
+What event should make a slot GREEN
+
+Meaning:
+
+“This tube successfully progressed far enough today”
+
+NOT full completion.
+
+Likely candidates:
+
+- in-process inspection
+- final required oven entry
+- final required cure state
+- release threshold
+
+Audit:
+
+Which milestone is most reliable and already captured.
+
+Recommend:
+
+Best GREEN trigger using existing system truth.
+
+Explain why.
+
+--------------------------------------------------
+SECTION E — BLOCK / HOLD VISIBILITY
+--------------------------------------------------
+
+Determine:
+
+Can the dashboard show:
+
+BLOCKED / HOLD / REWORK
+
+without adding new workflow?
+
+Find:
+
+- current block flags
+- approval holds
+- QC holds
+- traveler blocked states
+- exception states
+- rework paths
+
+Need:
+
+How these are currently represented.
+
+Need:
+
+Can dashboard simply read them?
+
+--------------------------------------------------
+SECTION F — HISTORICAL RECONSTRUCTION
+--------------------------------------------------
+
+We want:
+
+Historical operational review
+
+Example:
+
+“Why did Thursday only finish 17 green?”
+
+Determine:
+
+Can we reconstruct prior day boards from existing data?
+
+Need:
+
+- traveler state history
+- timestamps
+- block history
+- milestone completion history
+
+Not audit-grade.
+
+But enough for operational review.
+
+--------------------------------------------------
+SECTION G — UI + API ENTRY POINTS
+--------------------------------------------------
+
+Identify:
+
+Where current traveler status is updated:
+
+- pages
+- React components
+- API endpoints
+- services
+- cron jobs
+- background jobs
+
+Need exact files.
+
+Need exact status update flows.
+
+This is critical.
+
+--------------------------------------------------
+SECTION H — GAP ANALYSIS
+--------------------------------------------------
+
+Return:
+
+What already exists
+
+vs
+
+What must be added
+
+Examples:
+
+GOOD:
+“Layup Started exists and is reliable”
+
+BAD:
+“No distinct started timestamp exists”
+
+GOOD:
+“Blocked state already available”
+
+BAD:
+“Green milestone cannot be determined cleanly”
+
+Be brutally honest.
+
+--------------------------------------------------
+REQUIRED OUTPUT FORMAT
+--------------------------------------------------
+
+Return ONLY:
+
+# DAILY TUBE THROUGHPUT BOARD FORENSIC AUDIT
+
+## Executive Summary
+
+## Existing Architecture
+
+## Verified Findings
+
+## Risks / Gaps
+
+## Exact Tables + Fields
+
+## Exact Code Locations
+
+## Recommended Green-State Trigger
+
+## Can This Be Built Without New Workflow? (YES / NO)
+
+## Minimum Required Changes Before Build
+
+## Recommended Implementation Path
+
+NO implementation.
+NO code writing.
+NO assumptions.
+ONLY forensic truth.

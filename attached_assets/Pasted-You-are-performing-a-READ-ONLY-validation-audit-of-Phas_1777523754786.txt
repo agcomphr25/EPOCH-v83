@@ -1,0 +1,218 @@
+You are performing a READ-ONLY validation audit of Phase D (allocation switching) in EPOCH.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any code
+- DO NOT write to the database
+- DO NOT trigger mutations
+- VERIFY using real queries only
+- DO NOT assume correctness — prove it
+
+---
+
+## 🎯 OBJECTIVE
+
+Validate that allocation segmentation is working correctly when:
+
+- Traveler steps start
+- Job switches occur
+
+And confirm:
+
+- No data corruption
+- No overlaps
+- Correct sequencing
+- Accurate time segmentation
+
+---
+
+## 🔍 STEP 1 — MULTI-ALLOCATION DETECTION
+
+Query:
+
+- Find punch_ledger sessions with MORE THAN ONE allocation
+
+Return:
+
+- count of such sessions
+- % of total sessions
+- sample 5 sessions with multiple allocations
+
+---
+
+## 🔍 STEP 2 — SEQUENCE ORDER VALIDATION
+
+For sessions with multiple allocations:
+
+Check:
+
+- sequence_order starts at 1
+- increments by 1
+- no duplicates
+- no gaps
+
+Return:
+
+- number of sessions with valid sequence
+- number of sessions with issues
+- sample broken sequences (if any)
+
+---
+
+## 🔍 STEP 3 — TEMPORAL INTEGRITY
+
+For each multi-allocation session:
+
+Check:
+
+- allocation_start < allocation_end (for closed rows)
+- allocations are contiguous:
+    previous.allocation_end ≈ next.allocation_start (allow ≤ 1 second gap)
+
+Return:
+
+- number of sessions with:
+  - perfect continuity
+  - gaps
+  - overlaps
+
+---
+
+## 🔍 STEP 4 — OVERLAP DETECTION (CRITICAL)
+
+Check:
+
+- any allocations within same punch_ledger_id where:
+    allocation_start < other.allocation_end
+AND
+    allocation_end > other.allocation_start
+
+Return:
+
+- total overlaps (should be 0)
+- sample rows if any
+
+---
+
+## 🔍 STEP 5 — OPEN ALLOCATION CONSISTENCY
+
+Query:
+
+- open punch_ledger sessions (clock_out IS NULL)
+
+Check:
+
+- exactly ONE allocation where status = 'OPEN'
+
+Return:
+
+- sessions with:
+  - 1 open allocation ✅
+  - 0 open allocations ❌
+  - >1 open allocations ❌
+
+---
+
+## 🔍 STEP 6 — DURATION RECONCILIATION
+
+For each session:
+
+Compare:
+
+- session_duration = clock_out - clock_in
+- allocation_duration = SUM(allocation_end - allocation_start)
+
+Tolerance: 1 second
+
+Return:
+
+- mismatches count
+- max deviation
+- sample mismatches
+
+---
+
+## 🔍 STEP 7 — TRAVELER ATTRIBUTION VALIDATION
+
+For multi-allocation sessions:
+
+Check:
+
+- each allocation has distinct traveler_id or charge_code_id (where expected)
+- traveler transitions match event flow
+
+Return:
+
+- % of allocations with valid attribution
+- sample transitions
+
+---
+
+## 🔍 STEP 8 — EDGE CASE CHECK
+
+Find sessions where:
+
+- allocation created without prior open allocation
+- allocation closed without matching open
+- sequence_order not set
+- allocation_end is NULL but status != 'OPEN'
+
+Return all anomalies
+
+---
+
+## 🔍 STEP 9 — REAL EXAMPLE TRACE
+
+Select ONE real session with multiple allocations.
+
+Return:
+
+- full punch_ledger row
+- all allocation rows ordered by sequence_order
+
+Visually confirm:
+
+- time splits
+- attribution changes
+- clean progression
+
+---
+
+## 🔍 STEP 10 — FINAL VERDICT
+
+### ✅ READY FOR NEXT PHASE IF:
+- 0 overlaps
+- 0 sequence issues
+- 0 open allocation issues
+- duration matches within tolerance
+- segmentation behaves correctly
+
+### ⚠️ NOT READY IF:
+- any structural or temporal issues exist
+
+---
+
+## 📊 RETURN FORMAT
+
+# Phase D Validation Report
+
+## 1. Multi-Allocation Coverage
+## 2. Sequence Order Validation
+## 3. Temporal Integrity
+## 4. Overlap Check
+## 5. Open Allocation Consistency
+## 6. Duration Reconciliation
+## 7. Attribution Validation
+## 8. Edge Cases
+## 9. Example Trace
+## 10. Final Verdict
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+Do NOT summarize without data.
+
+You must:
+- show counts
+- show mismatches
+- prove correctness with queries

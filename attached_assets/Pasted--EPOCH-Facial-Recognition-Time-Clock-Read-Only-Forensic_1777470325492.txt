@@ -1,0 +1,209 @@
+# EPOCH Facial Recognition Time Clock — Read-Only Forensic Audit Prompt
+
+You are performing a STRICT READ-ONLY forensic audit of the existing EPOCH codebase to evaluate feasibility of adding facial recognition to the current kiosk time clock system.
+
+IMPORTANT RULES:
+- DO NOT modify any code
+- DO NOT create files
+- DO NOT install packages
+- DO NOT run migrations
+- DO NOT propose implementation yet
+- DO NOT make assumptions without evidence
+- READ ONLY
+- Your job is to understand the current architecture and produce a senior-level implementation feasibility assessment
+
+Your objective is to determine:
+1. How the existing kiosk time clock currently works
+2. Where facial recognition would integrate cleanly
+3. What infrastructure already exists that can be reused
+4. What security/compliance risks exist
+5. How difficult implementation would be
+6. Whether browser-native facial recognition, cloud verification, or local image matching would be the best architecture for EPOCH
+
+---
+
+# REQUIRED AUDIT SCOPE
+
+Perform a full forensic review of:
+
+## 1. Current Time Clock Flow
+
+Find and trace:
+- kiosk mode routes
+- clock in / clock out endpoints
+- employee identification flow
+- PIN entry logic
+- badge ID logic (if exists)
+- session/auth handling
+- time punch creation
+- audit logging
+- payroll/timekeeping write path
+- admin override paths
+- missed punch correction paths
+
+Identify:
+- frontend components
+- backend routes
+- services
+- DB tables involved
+- validation rules
+- audit protections
+
+Output exact file paths.
+
+---
+
+## 2. Employee Identity Model
+
+Inspect:
+- employees table
+- users table
+- auth tables
+- badge tables
+- labor tracking tables
+
+Determine:
+- current unique identifier used for punches
+- whether employee photos already exist
+- whether profile image fields exist
+- whether document/image upload systems already exist that could store facial enrollment images
+
+Check for:
+- avatar/profile photo systems
+- file upload infrastructure
+- image storage patterns
+- S3 usage
+- blob storage usage
+- signed URL systems
+
+---
+
+## 3. Kiosk Hardware Assumptions
+
+Determine:
+- is kiosk browser-only
+- tablet support
+- webcam support assumptions
+- dedicated kiosk workstation
+- shared manufacturing floor stations
+- browser permissions model
+
+Specifically determine:
+Can the current kiosk hardware support webcam capture without major infrastructure changes?
+
+---
+
+## 4. Security + Compliance Review
+
+Audit for:
+- DCAA audit implications
+- labor fraud prevention
+- buddy punching prevention
+- privacy concerns
+- biometric storage compliance concerns
+- consent requirements
+- retention policies
+- owner/admin override risks
+
+Determine:
+Should facial recognition use:
+A) stored biometric templates only
+B) stored employee photos only
+C) cloud verification provider
+D) browser-side face match only
+
+Evaluate audit defensibility.
+
+---
+
+## 5. Architecture Feasibility Comparison
+
+Compare these implementation models:
+
+### Option A — Simple Photo Verification
+Employee photo shown for manager confirmation only
+
+### Option B — Webcam Snapshot + Manual Verification
+Employee takes live photo during punch for audit trail
+
+### Option C — Browser Facial Match
+Face-api.js / browser model matching
+
+### Option D — Cloud Facial Recognition
+AWS Rekognition / Azure Face API / similar
+
+### Option E — Hybrid
+PIN + facial confidence validation + fallback approval workflow
+
+Determine:
+- implementation difficulty
+- operational risk
+- false positive risk
+- maintenance burden
+- compliance strength
+- best fit for AG Composites
+
+---
+
+## 6. Existing Reusable Systems
+
+Look for:
+- approval workflows
+- exception workflows
+- admin review queues
+- signature systems
+- camera capture systems
+- document upload systems
+- audit drawer systems
+- compliance dashboards
+
+We want maximum reuse and minimum new architecture.
+
+---
+
+# REQUIRED DELIVERABLE FORMAT
+
+Return findings ONLY in this structure:
+
+# EPOCH Facial Recognition Time Clock Forensic Audit
+
+## Executive Summary
+
+## Current Time Clock Architecture
+
+## Files + Routes Identified
+
+## Existing Reusable Infrastructure
+
+## Employee Identity Model Findings
+
+## Kiosk Hardware Feasibility
+
+## Compliance + DCAA Risk Review
+
+## Recommended Architecture Option
+
+## Difficulty Assessment
+Rate:
+- Low
+- Moderate
+- High
+- Very High
+
+and explain why.
+
+## Exact Implementation Risks
+
+## Recommended Next Prompt
+
+---
+
+# CRITICAL INSTRUCTION
+
+Do NOT recommend implementation until you fully understand the existing architecture.
+
+This is forensic architecture review only.
+
+Evidence over assumptions.
+
+Read deeply.

@@ -1,0 +1,61 @@
+IMPLEMENTATION PROMPT — PHASE A HARDENING PATCH
+EPOCH LABOR CAPTURE ASSISTANT
+
+Implement ONLY the Phase A hardening items from the verification audit.
+
+DO NOT build AI parsing.
+DO NOT build DONNA labor intake.
+DO NOT build natural language suggestions.
+DO NOT start Phase B.
+
+Fix these items only:
+
+1. Add HMAC/signature protection to portal tokens
+- Current portal tokens are base64url JSON and not cryptographically signed.
+- Preserve existing portal behavior.
+- Add backwards-compatible handling only if necessary.
+- Do not break current employee portal access.
+- Ensure token validation checks signature, expiry, and active employee status.
+
+2. Add hours > 0 validation
+- Prevent salaried timesheet lines with 0 or negative hours.
+- Enforce both frontend and backend validation.
+- Return clear validation errors.
+- Ensure zero-hour lines cannot mask missing labor in payroll completeness checks.
+
+3. Improve Quoting/Proposal UX
+- Do not create duplicate accounting categories unless necessary.
+- Prefer user-facing label: “Quoting & Proposals”
+- It may continue mapping internally to PROPOSAL / IND-PROPOSAL if that is accounting-correct.
+- Ensure employee-facing dropdown language is understandable.
+
+4. Create formal versioned migration
+- Move or mirror Phase A schema changes into a numbered migration file.
+- Include original_narrative, confidence_score, ai_source, traveler_id TEXT fix, and missing indirect code seeds.
+- Keep migration idempotent.
+- Do not corrupt existing records.
+- Avoid duplicate seed data.
+
+5. Improve traveler picker usability
+- Add search/filter support for all active travelers.
+- Preserve “likely travelers first.”
+- Keep “show more” or equivalent option.
+- Avoid dumping an unusable full list with no search.
+
+Validation required:
+- App boots cleanly.
+- Existing portal links still work or migration path is documented.
+- Add/edit/delete salaried lines still work.
+- Submitted timesheets remain locked.
+- Payroll completeness blocker still works.
+- No DCAA audit rules are broken.
+
+Return:
+1. Files changed
+2. Security changes made
+3. UX changes made
+4. Migration created
+5. Validation results
+6. Remaining risks
+
+Proceed carefully.

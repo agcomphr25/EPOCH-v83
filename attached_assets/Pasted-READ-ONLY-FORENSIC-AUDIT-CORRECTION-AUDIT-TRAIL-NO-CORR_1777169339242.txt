@@ -1,0 +1,140 @@
+READ-ONLY FORENSIC AUDIT — CORRECTION AUDIT TRAIL
+NO_CORRECTION_AUDIT_TRAIL Resolution
+
+Strict read-only audit.
+
+DO NOT modify code.
+DO NOT create audit hooks yet.
+DO NOT change scorer logic.
+DO NOT seed fake audit rows.
+
+Goal:
+
+Resolve the remaining DCAA flag:
+
+NO_CORRECTION_AUDIT_TRAIL
+
+Current score:
+88.38
+
+We must determine whether labor corrections
+(punch edits, clock corrections, labor adjustments, approval overrides)
+
+are properly audited.
+
+If not:
+
+where the gap exists
+and the safest implementation path.
+
+This affects real labor defensibility.
+
+--------------------------------------------------
+AUDIT SCOPE
+--------------------------------------------------
+
+Inspect:
+
+- punch_ledger
+- punch_sessions
+- timekeeping correction routes
+- clock edit routes
+- edit punch routes
+- supervisor override routes
+- approval override routes
+- labor correction workflows
+- audit_events
+- admin_audit_log
+- EDRI scorer logic for correction audit trail
+- reopen / recalc flows
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. What corrections exist?
+
+Identify exact mutation paths for:
+
+- clock in/out edits
+- punch corrections
+- supervisor corrections
+- labor approval overrides
+- payroll overrides
+- reopen workflows
+- manual labor adjustments
+
+--------------------------------------------------
+
+2. What is currently audited?
+
+For each:
+
+does audit exist?
+
+If yes:
+where?
+
+If no:
+where is the gap?
+
+--------------------------------------------------
+
+3. What does the scorer require?
+
+Determine:
+
+- exact SQL
+- exact event types expected
+- exact fields required
+
+We must satisfy real compliance.
+
+--------------------------------------------------
+
+4. Safest implementation path
+
+Recommend:
+
+Option A:
+route-layer audit hooks
+
+Option B:
+storage-layer immutable correction ledger
+
+Option C:
+approval workflow + audit
+
+Option D:
+mixed approach
+
+Choose safest.
+
+Do NOT implement yet.
+
+--------------------------------------------------
+
+5. Score impact
+
+Estimate:
+
+what score improvement should occur?
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/CORRECTION_AUDIT_TRAIL_AUDIT.md
+
+Include:
+
+- exact files inspected
+- exact missing audit hooks
+- exact scorer expectations
+- recommended implementation path
+- safest next implementation prompt
+
+Accounting truth first.
+Score second.

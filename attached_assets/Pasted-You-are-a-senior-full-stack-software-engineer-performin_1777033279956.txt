@@ -1,0 +1,203 @@
+You are a senior full-stack software engineer performing a production-safe implementation inside EPOCH.
+
+OBJECTIVE:
+Add a new feature to EPOCH that allows a user to trigger/control a physical MOES Smart Bluetooth Fingerbot device (Tuya-compatible, model BS-FB-V3 style device) by pressing a button inside EPOCH.
+
+This is NOT a UI-only mockup. I want the system architected correctly so it can later support:
+1. Reliable physical device triggering
+2. Audit logging
+3. User permissions
+4. Future expansion to multiple devices
+5. Retry/error handling
+6. Centralized device control patterns (not one-off hacks)
+
+IMPORTANT:
+Do NOT hardcode assumptions into random pages.
+Do NOT create fragile front-end-only logic.
+Do NOT break existing EPOCH functionality.
+
+We do NOT yet care where the button lives in the UI.
+For now, create a clean placeholder location called:
+
+"Device Control (Placeholder)"
+
+This can be a temporary admin-only page, panel, or settings section.
+
+--------------------------------------------------
+PHASE 1 — FORENSIC AUDIT FIRST (READ BEFORE WRITING)
+--------------------------------------------------
+
+Before implementing anything:
+
+1. Audit the existing codebase and identify:
+   - current backend stack
+   - API route patterns
+   - service layer structure
+   - authentication/authorization pattern
+   - audit logging system
+   - settings/config storage
+   - existing “engine” patterns (if any)
+   - notification/retry/background job patterns
+   - existing hardware integrations (if any)
+   - role/capability permission model
+   - whether there is already a centralized automation/action engine
+
+2. Determine the BEST architectural placement for:
+   - Device Control Engine
+   - Device registry
+   - Command execution
+   - Future device abstraction layer
+
+3. Check if there is already:
+   - Tuya integration
+   - webhook engine
+   - outbound API service wrapper
+   - action queue
+   - scheduler
+   - command execution service
+
+DO NOT implement until you fully understand the architecture.
+
+--------------------------------------------------
+PHASE 2 — DESIGN THE CORRECT ARCHITECTURE
+--------------------------------------------------
+
+Create a scalable structure for:
+
+DEVICE CONTROL ENGINE
+
+Suggested concepts (adapt to existing architecture if better):
+
+/server/services/deviceControl/
+    deviceControl.service.ts
+    deviceRegistry.service.ts
+    deviceExecution.service.ts
+    deviceAudit.service.ts
+    providers/
+        tuya.provider.ts
+        mock.provider.ts
+
+Core concepts:
+
+Device
+- id
+- name
+- provider
+- providerDeviceId
+- location
+- enabled
+- requiresApproval
+- lastTriggeredAt
+- status
+- metadata JSON
+
+DeviceAction
+- id
+- deviceId
+- actionType
+- requestedBy
+- executedAt
+- success
+- responsePayload
+- errorMessage
+- retryCount
+
+Supported actions initially:
+- press
+- hold
+- release
+- toggle
+
+For now:
+Implement only PRESS action if needed.
+
+--------------------------------------------------
+PHASE 3 — SAFE INITIAL IMPLEMENTATION
+--------------------------------------------------
+
+Create:
+
+1. Placeholder UI:
+“Device Control (Placeholder)”
+
+Inside it:
+A single button:
+
+[ Trigger Fingerbot ]
+
+and a visible status area:
+- Last Triggered
+- Last Result
+- Current Device Status
+
+2. Backend endpoint:
+POST /api/device-control/trigger
+
+This should:
+- validate permissions
+- call the Device Control Engine
+- write audit logs
+- return success/failure state
+
+3. Provider strategy:
+Implement provider abstraction
+
+If Tuya credentials are not yet configured:
+use MOCK provider first
+
+MOCK provider should:
+- simulate successful trigger
+- log execution
+- preserve architecture for real Tuya later
+
+DO NOT fake Tuya production calls if credentials are missing.
+
+--------------------------------------------------
+PHASE 4 — FUTURE-READY TUYA INTEGRATION
+--------------------------------------------------
+
+Prepare the code so we can later connect:
+
+Tuya Cloud API
+OR
+local bridge solution
+
+without rewriting the system.
+
+Add clear TODO comments only where truly necessary.
+
+Do NOT leave architecture incomplete.
+
+--------------------------------------------------
+PHASE 5 — SECURITY + GOVERNANCE
+--------------------------------------------------
+
+Ensure:
+- only authorized users can trigger device actions
+- all actions are audit logged
+- failed actions are visible
+- future approval workflows are possible
+
+This must feel like EPOCH enterprise architecture,
+not a hobby project.
+
+--------------------------------------------------
+DELIVERABLES REQUIRED
+--------------------------------------------------
+
+After implementation provide:
+
+1. Files created
+2. Files modified
+3. API routes added
+4. Database changes (if any)
+5. Permission model used
+6. Mock provider behavior
+7. Recommended next step for real Tuya integration
+8. Risks discovered in current architecture
+
+DO NOT skip the forensic audit.
+
+DO NOT shortcut architecture.
+
+Build this like it will later control critical production devices.

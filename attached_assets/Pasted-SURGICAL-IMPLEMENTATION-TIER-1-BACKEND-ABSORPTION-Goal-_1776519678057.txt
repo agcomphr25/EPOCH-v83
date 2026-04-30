@@ -1,0 +1,125 @@
+SURGICAL IMPLEMENTATION — TIER 1 BACKEND ABSORPTION
+
+Goal:
+Move the payroll-critical Timekeeping backend into native EPOCH first.
+
+Scope ONLY:
+- punches
+- timesheets
+- employees
+- dashboard
+- kiosk login + kiosk punch endpoints
+
+Do NOT move labor routes yet.
+Do NOT move traveler/WAD logic.
+Do NOT redesign schema.
+
+Critical architecture:
+- one EPOCH server
+- one auth system
+- one deployment
+- public.employees = truth
+- timekeeping.employees = thin anchor
+- timekeeping.punches = ledger
+- timekeeping.timesheets = approval workflow
+
+Important audit-grounded constraints:
+- server/src/routes/timekeeping.ts must remain registered and live for:
+  - /active-job
+  - /active-context
+  - /jobs
+  - /buckets
+  - /kiosk/jobs
+  - /kiosk/buckets
+  - /admin/job-allocate
+  - /admin/job-allocations/:jobId
+  - /admin/projects
+- server/src/routes/timeClock.ts must remain untouched
+- public.time_clock_entries must remain untouched
+- traveler/WAD routes and logic must remain untouched
+- timekeeping.employees is NOT part of this absorption phase except as the retained thin anchor
+- timekeeping.punches and timekeeping.timesheets must not receive schema changes in this phase
+
+Your task:
+
+Using the completed Tier 1 audit findings:
+
+1. Move only the required Tier 1 pure library:
+- lib/timekeeping.ts → server/src/lib/timekeeping.ts
+
+2. Move only the required Tier 1 services into:
+server/src/services/timekeeping/
+in this dependency-aware order:
+- audit.service.ts
+- settings.service.ts
+- employees.service.ts
+- punches.service.ts
+- leave.service.ts
+- timesheets.service.ts
+- dashboard.service.ts
+
+3. Move only the required Tier 1 routes into:
+server/src/routes/timekeeping/
+- punches.ts
+- timesheets.ts
+- employees.ts
+- dashboard.ts
+
+4. Replace standalone auth middleware with:
+- authenticateToken
+- requireRole('ADMIN', 'OWNER')
+Preserve kiosk PIN login as a public endpoint.
+Do NOT force normal EPOCH employee login for kiosk use.
+
+5. Translate imports carefully:
+- from "@workspace/db" → EPOCH's db/pool
+- from "@workspace/api-zod" → inline or shared EPOCH zod location
+- remove any standalone-only workspace assumptions
+
+6. Fix route-path issues during port:
+- remove the self-included /timekeeping prefix from the Gusto export route before mounting under /api/timekeeping
+- ensure kiosk endpoints mount correctly under /api/timekeeping/kiosk/*
+- do not duplicate prefixes
+
+7. Register the 4 new route files in EPOCH's route index under /api/timekeeping/
+BUT:
+- do not replace or remove existing server/src/routes/timekeeping.ts
+- keep existing live traveler/WAD-related timekeeping endpoints alongside the new Tier 1 routes
+
+8. Keep standalone still running temporarily
+- do NOT shut it down yet
+- do NOT remove SSO/handoff code yet unless absolutely required for backend compile correctness
+- do NOT delete TimekeepingHandoffPage yet
+
+9. Verify backend behavior
+At minimum verify:
+- EPOCH server boots cleanly
+- new routes respond
+- kiosk login route responds
+- kiosk punch route responds
+- timesheet routes respond
+- dashboard routes respond
+- no traveler/WAD routes were altered
+
+Output required:
+
+A. files changed
+
+B. exact reason for each change
+
+C. verification server boots cleanly
+
+D. verification old and new paths can coexist temporarily
+
+E. exact remaining frontend work for Tier 1 absorption
+
+F. anything skipped and why
+
+Guardrails:
+- do NOT touch traveler/WAD
+- do NOT delete standalone yet
+- do NOT move all 11 routes
+- do NOT redesign FK structure
+- do NOT drop timekeeping.employees
+- keep changes surgical
+- preserve payroll correctness first

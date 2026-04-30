@@ -1,0 +1,129 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ [EPOCH] Install prompt captured and ready
+/department-queue/shipping:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ OrdersList component rendering - with CSV export
+ Orders data: Array(0)
+ Customers data: Array(2097)
+ Loading state: true
+ Error state: null
+ 🌐 API Request to /api/orders/with-payment-status/paginated?page=1&limit=25&sortBy=orderDate&sortOrder=desc (timeout: 15000ms, deployment: true)
+ OrdersList component rendering - with CSV export
+ Orders data: Array(0)
+ Customers data: Array(2097)
+ Loading state: true
+ Error state: null
+ OrdersList component rendering - with CSV export
+ Orders data: Array(0)
+ Customers data: Array(2097)
+ Loading state: true
+ Error state: null
+ ✅ API Response from /api/orders/with-payment-status/paginated?page=1&limit=25&sortBy=orderDate&sortOrder=desc: 200
+ OrdersList component rendering - with CSV export
+ Orders data: Array(25)
+ Customers data: Array(2097)
+ Loading state: false
+ Error state: null
+ 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/tickets/by-orders: 200
+ OrdersList component rendering - with CSV export
+ Orders data: Array(25)
+ Customers data: Array(2097)
+ Loading state: false
+ Error state: null
+ OrdersList component rendering - with CSV export
+ Orders data: Array(25)
+ Customers data: Array(2097)
+ Loading state: false
+ Error state: null
+index-8L9Oghuw.js:235 🌐 API Request to /api/orders/with-payment-status/paginated?page=1&limit=25&department=Shipping&departmentMode=include&sortBy=orderDate&sortOrder=desc (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:2008 OrdersList component rendering - with CSV export
+index-8L9Oghuw.js:2008 Orders data: Array(25)
+index-8L9Oghuw.js:2008 Customers data: Array(2097)
+index-8L9Oghuw.js:2008 Loading state: false
+index-8L9Oghuw.js:2008 Error state: null
+index-8L9Oghuw.js:2008 OrdersList component rendering - with CSV export
+index-8L9Oghuw.js:2008 Orders data: Array(25)
+index-8L9Oghuw.js:2008 Customers data: Array(2097)
+index-8L9Oghuw.js:2008 Loading state: false
+index-8L9Oghuw.js:2008 Error state: null
+index-8L9Oghuw.js:235 ✅ API Response from /api/orders/with-payment-status/paginated?page=1&limit=25&department=Shipping&departmentMode=include&sortBy=orderDate&sortOrder=desc: 200
+index-8L9Oghuw.js:2008 OrdersList component rendering - with CSV export
+index-8L9Oghuw.js:2008 Orders data: Array(16)
+index-8L9Oghuw.js:2008 Customers data: Array(2097)
+index-8L9Oghuw.js:2008 Loading state: false
+index-8L9Oghuw.js:2008 Error state: null
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:2008 OrdersList component rendering - with CSV export
+index-8L9Oghuw.js:2008 Orders data: Array(16)
+index-8L9Oghuw.js:2008 Customers data: Array(2097)
+index-8L9Oghuw.js:2008 Loading state: false
+index-8L9Oghuw.js:2008 Error state: null
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:5376 [EPOCH SYNC] Connection restored — triggering sync
+index-8L9Oghuw.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-8L9Oghuw.js:5373 Redirecting tasham to /admin-dashboard
+index-8L9Oghuw.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-8L9Oghuw.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-8L9Oghuw.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-8L9Oghuw.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/vendor-pos?status=Sent&pageSize=200 (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 🌐 API Request to /api/vendor-pos?status=Partially%20Received&pageSize=200 (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-8L9Oghuw.js:235 ✅ API Response from /api/vendor-pos?status=Sent&pageSize=200: 200
+index-8L9Oghuw.js:235 ✅ API Response from /api/vendor-pos?status=Partially%20Received&pageSize=200: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts/5 (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts/5: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/inventory/items/by-part-number/505 (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/inventory/items/by-part-number/505: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts/pending-by-po: 200
+index-8L9Oghuw.js:235 🌐 API Request to /api/receipts/5/lines/8/split (timeout: 15000ms, deployment: true)
+/api/receipts/5/lines/8/split:1  Failed to load resource: the server responded with a status of 500 ()
+index-8L9Oghuw.js:235 ✅ API Response from /api/receipts/5/lines/8/split: 500
+index-8L9Oghuw.js:5376 API error raw body: {"error":"Failed to split line"}
+console.error @ index-8L9Oghuw.js:5376
+index-8L9Oghuw.js:5376 💥 API Request failed for /api/receipts/5/lines/8/split: Error: Failed to split line
+    at Ee (index-8L9Oghuw.js:235:6381)
+console.error @ index-8L9Oghuw.js:5376
+receiving:1  Failed to load resource: the server responded with a status of 500 ()

@@ -1,0 +1,245 @@
+Good — #951 gives PM visibility.
+
+Now your next ticket should close the loop and make that dashboard actually actionable and audit-safe.
+
+Right now, PM Control Center will show problems… but it won’t control behavior.
+
+So the next ticket needs to enforce rules where it matters most:
+
+👉 labor charging tied to WAD + traveler (DCAA-critical)
+
+#952 — Enforce WAD-Based Labor Charging (Traveler-Driven Time Control)
+What & Why
+
+Right now, labor can be viewed in the PM Control Center, but it is not yet fully controlled by WAD + traveler context.
+
+This ticket enforces that:
+
+All direct labor must be tied to a valid WAD charge code
+Charge codes are automatically assigned based on:
+project
+work order
+traveler step (department/task)
+Labor cannot continue when:
+budgeted hours are exhausted (configurable: warn vs hard stop)
+certification is invalid (configurable: warn vs block)
+
+This transforms EPOCH from:
+
+“tracking time”
+into:
+DCAA-compliant labor control system
+Done looks like
+Starting work on a traveler step automatically:
+assigns the correct charge code
+links time to project → work order → traveler → step
+Users cannot manually override charge codes unless permission allows
+When budgeted hours are exhausted:
+system either:
+blocks time start OR
+flags as “overrun requiring approval”
+Labor sessions store:
+projectId
+productionWorkOrderId
+travelerId
+travelerStepId
+chargeCodeId
+department
+Certification is validated at time start:
+valid → allow
+expired/missing → warn or block
+PM Control Center reflects:
+accurate real-time labor allocation
+no “unlinked” labor
+Out of scope
+Full approval workflow UI (future)
+Payroll processing
+Indirect labor policy expansion
+Mobile UX optimization
+Steps
+Backend — enforce charge code resolution
+
+Create a resolver function:
+
+resolveChargeCode({
+  projectId,
+  productionWorkOrderId,
+  travelerStepId
+})
+
+Logic:
+
+Get project WAD
+Find matching labor_charge_code by:
+department
+task / operation
+Fallback:
+department-level charge code
+If none found:
+return error (cannot start labor)
+Backend — update labor session start
+
+Modify existing labor start endpoint:
+
+/api/labor/start (or equivalent)
+
+Add:
+
+auto-resolve charge code
+attach:
+projectId
+productionWorkOrderId
+travelerId
+travelerStepId
+validate:
+certification
+budget remaining
+Backend — budget enforcement
+
+When starting or continuing labor:
+
+Compute:
+
+total hours used for this charge code
+compare to budgeted hours
+
+Add logic:
+
+if (actualHours >= budgetedHours) {
+  if (policy === "HARD_STOP") throw error
+  if (policy === "WARN") allow + flagOverrun = true
+}
+
+Store:
+
+isOverrun
+overrunReason (optional)
+Backend — certification validation
+
+Using:
+
+certifications.ts
+
+Check:
+
+employee has required cert for:
+department or task
+
+Return:
+
+VALID
+EXPIRED
+MISSING
+
+Attach to session:
+
+certificationStatus: "VALID" | "EXPIRED" | "MISSING"
+Backend — normalize labor_work_sessions
+
+Ensure table includes:
+
+projectId
+productionWorkOrderId
+travelerId
+travelerStepId
+chargeCodeId
+department
+startedAt
+endedAt
+isOverrun
+certificationStatus
+
+No new table — just enforce population.
+
+Frontend — traveler start flow update
+
+Wherever user starts work (Traveler UI):
+
+Replace manual/implicit logic with:
+
+call updated labor start endpoint
+remove ability to pick charge code (unless admin)
+
+Display:
+
+charge code assigned
+certification status
+warning if near/exceeded budget
+Frontend — overrun + certification warnings
+
+Add modal or inline warning:
+
+Overrun warning
+
+“This task has exceeded allocated hours. Continue?”
+Show:
+budget
+actual
+overrun amount
+
+Certification warning
+
+“You are not certified for this task”
+block or warn depending on policy
+Frontend — live labor indicator improvements
+
+Update traveler UI to show:
+
+active session timer
+charge code
+certification badge
+overrun badge
+Integration — PM Control Center (#951)
+
+No UI changes required, but now:
+
+Direct Labor tab becomes trustworthy
+live feed shows:
+correct charge codes
+valid certification status
+overrun flags
+Relevant files
+modules/timekeeping/lib/db/src/schema/labor-work-sessions.ts
+modules/timekeeping/lib/db/src/schema/labor-charge-codes.ts
+modules/timekeeping/lib/db/src/schema/certifications.ts
+server/routes/labor.ts (or equivalent)
+server/routes/travelers.ts
+client/src/pages/TravelerPage.tsx (or equivalent traveler UI)
+Key business rules to lock
+
+Before building, define:
+
+Overrun policy:
+HARD_STOP or WARN (recommend WARN for phase 1)
+Certification policy:
+BLOCK or WARN (recommend WARN initially)
+Charge code override:
+allowed only for ADMIN / PM roles
+Why this is the correct next ticket
+
+You just built:
+👉 visibility (PM dashboard)
+
+Now you need:
+👉 control + compliance (labor enforcement)
+
+Without this:
+
+PM dashboard shows incorrect labor
+charge codes can drift
+DCAA compliance is broken
+audit trail is weak
+
+With this:
+
+labor is automatically correct
+traceability is enforced at execution
+PM data becomes reliable
+foundation for approvals, audits, and reporting is solid
+What comes after #952
+
+Once this is in place, your next moves should be:
+
+#953 — Labor Overrun Approval Workflow
+#954 — Material Allocation Enforcement (same concept for inventory)
+#955 — Project Risk & Issue Tracking (feeds PM dashboard)

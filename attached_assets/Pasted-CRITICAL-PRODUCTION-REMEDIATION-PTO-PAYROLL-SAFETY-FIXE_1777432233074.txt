@@ -1,0 +1,224 @@
+CRITICAL PRODUCTION REMEDIATION — PTO PAYROLL SAFETY FIXES
+
+This is NOT optional polish.
+
+These are blocker-level fixes required before PTO can be trusted for payroll and DCAA defensibility.
+
+Audit confirmed:
+
+CRITICAL FAILURES:
+1. Hourly PTO does not export to payroll
+2. Hourly employees can clock in on approved PTO days
+3. Approved PTO has no reversal mechanism if later rejected/cancelled
+4. VP approval finalization is not transaction-safe
+
+This prompt fixes those issues only.
+
+Do not scope-creep.
+
+Do not redesign the PTO system.
+
+Fix production blockers first.
+
+==================================================
+FIX #1 — HOURLY PTO MUST REACH PAYROLL EXPORT
+==================================================
+
+Current failure:
+exportApprovedTimesheetsForGusto()
+hardcodes:
+
+vacation_hours = 0
+sick_hours = 0
+
+for hourly employees.
+
+This is unacceptable.
+
+Required:
+
+Update payroll export so:
+approved PTO for hourly employees
+correctly contributes to:
+
+vacation_hours
+
+NOT sick_hours
+
+Rules:
+- only approved PTO
+- only final approved PTO
+- rejected/cancelled excluded
+- duplicate PTO hours prevented
+- no unsafe fake punches
+- PTO must remain separate from worked labor hours
+
+Use:
+leave_entries
+or safest existing authoritative source
+
+Do NOT invent fake labor punches.
+
+We need payable PTO
+not fake production labor.
+
+==================================================
+FIX #2 — HARD BLOCK CLOCK-IN ON PTO DAY
+==================================================
+
+Current failure:
+clock-in-check endpoint exists
+but actual clock-in route does not enforce it.
+
+Required:
+
+If employee has approved PTO
+for current day:
+
+clock-in must be blocked
+
+unless:
+ADMIN/OWNER override explicitly used
+
+Requirements:
+- clear user-facing reason
+- admin override path logged
+- supervisor visibility preserved
+- no silent bypass
+
+This prevents:
+worked hours + PTO overlap
+
+This is mandatory.
+
+==================================================
+FIX #3 — PTO REVERSAL MECHANISM
+==================================================
+
+Current failure:
+VP approval creates leave_entries
+
+but if PTO is later:
+rejected
+cancelled
+administratively reversed
+
+leave_entries remain forever
+
+This creates duplicate pay risk.
+
+Required:
+
+Build safe reversal handling:
+
+When approved PTO is cancelled/reversed:
+
+- associated leave_entries must be voided
+OR safely removed
+based on project accounting conventions
+
+- injected salaried timesheet PTO lines
+must be safely recalculated
+
+- payroll export must no longer include reversed PTO
+
+- audit trail must preserve:
+who reversed
+when
+why
+
+No silent deletion.
+
+Audit defensibility required.
+
+Preferred:
+soft-void over hard delete
+if architecture supports it safely.
+
+==================================================
+FIX #4 — TRANSACTION SAFETY
+==================================================
+
+Current failure:
+
+VP approval does:
+
+status = approved
+
+THEN:
+createLeaveEntries()
+
+THEN:
+injectApprovedPTO()
+
+Sequential only.
+
+If downstream fails:
+approved status remains
+but payroll objects are missing.
+
+Required:
+
+Make final approval atomic.
+
+Use transaction-safe orchestration so:
+
+either ALL happen:
+
+- approved status
+- leave entry creation
+- timesheet injection
+- payroll availability
+- audit logging
+
+OR NONE happen.
+
+No partial approval state allowed.
+
+==================================================
+FIX #5 — EXPLICIT PTO CANCELLATION ROUTE
+==================================================
+
+Required:
+
+Create formal PTO cancellation flow.
+
+Need:
+- employee cancellation (before final approval)
+- admin cancellation (after final approval with reason)
+
+Must log:
+- who cancelled
+- reason
+- whether reversal actions triggered
+
+No hidden database edits.
+
+==================================================
+RULES
+==================================================
+
+- production-safe only
+- minimal safe changes
+- preserve history
+- preserve audit defensibility
+- no schema destruction
+- use migrations where needed
+- do not break salaried PTO path
+- no placeholder TODOs for critical logic
+
+==================================================
+DELIVERABLE
+==================================================
+
+Return:
+
+1. What changed
+2. Files changed
+3. Routes updated
+4. Migration names
+5. Validation performed
+6. Exact protections added
+7. Remaining known risks
+8. Payroll trust reassessment
+9. Final hourly PTO Go / No-Go

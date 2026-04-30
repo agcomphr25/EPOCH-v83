@@ -1,0 +1,104 @@
+PROMPT A — READ-ONLY PTO / LEAVE ARCHITECTURE AUDIT
+READ-ONLY FORENSIC AUDIT ONLY.
+DO NOT MODIFY CODE.
+
+GOAL:
+Understand the current EPOCH codebase state for PTO / leave / timesheet / payroll / approval workflows before implementing a native PTO system.
+
+ARCHITECTURAL CONSTITUTION:
+Follow docs/EPOCH_ARCHITECTURE_CONSTITUTION.md
+It is authoritative.
+
+NON-NEGOTIABLE RULE:
+The defunct standalone Timekeeping module may not be reintroduced in any form.
+
+Forbidden:
+- imports from deleted standalone module paths
+- recreation of tkDb.ts
+- recreation of timekeepingPairing.ts
+- new compatibility bridges
+- free-text chargeCode/jobCode/departmentCode writes
+- any change that weakens the WAD → Traveler → Authorization → Charge Code → Punch → GL chain
+
+CRITICAL PROTECTION:
+This audit must specifically determine how PTO can be added WITHOUT affecting:
+- WAD-driven labor capture
+- traveler attribution
+- charge code enforcement
+- burden allocation
+- labor approvals
+- payroll export controls
+- DCAA audit trail
+
+AUDIT REQUIRED:
+
+1. Existing leave / PTO structures
+Find and report any existing:
+- leave tables
+- PTO tables
+- time off request models
+- employee balance fields
+- accrual logic
+- holiday logic
+- sick leave logic
+- attachment/document handling for HR items
+
+2. Existing employee profile controls
+Audit whether /employee or employee profile admin already supports:
+- opening leave balance
+- accrual rate
+- supervisor linkage
+- HR linkage
+- employment class / policy group
+- custom employee settings that could hold PTO policy assignment
+
+3. Existing timesheet integration points
+Audit how the current timesheet pipeline works:
+- draft creation
+- attestation
+- submission
+- approval
+- payroll export
+- approved-period locking
+
+Determine where approved PTO should integrate without changing labor truth.
+
+4. Existing payroll export shape
+Audit the Gusto export pipeline and determine:
+- how hours are categorized today
+- where PTO / indirect leave hours should be introduced
+- whether export already supports leave categories
+- whether mapping layer exists or must be created
+
+5. Existing audit / compliance controls
+Audit:
+- audit_events
+- labor approvals
+- timesheet approvals
+- edit logging
+- supporting attachments/documents
+
+Determine what compliance evidence exists today that PTO should reuse.
+
+6. Existing charge code model for indirect time
+Audit whether the native charge_codes table already has or can support:
+- VAC
+- SICK
+- HOL
+- BEREAVEMENT
+- JURY
+- ADMIN leave categories
+
+Determine whether PTO should map to existing indirect codes or require new ones.
+
+OUTPUT REQUIRED:
+
+A) Current leave/PTO-related structures found
+B) Gaps that must be added
+C) Best integration points in employee profile, timesheets, payroll export, and approvals
+D) Any risk to WAD labor truth
+E) Any risk of accidentally reintroducing deprecated standalone timekeeping patterns
+F) Exact files that would likely be touched in implementation
+
+DO NOT WRITE CODE.
+READ-ONLY ONLY.

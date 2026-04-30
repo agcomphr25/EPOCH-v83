@@ -1,0 +1,98 @@
+SURGICAL FIX — REMOVE FINAL TIER 1 ROUTE COLLISIONS
+
+Goal:
+Fix the two critical route collisions preventing live Timekeeping backend operation.
+
+Verified audit findings:
+Because server/src/routes/index.ts registers old timekeepingRoutes first:
+
+app.use('/api/timekeeping', timekeepingRoutes)
+
+before:
+
+tkPunchesRoutes
+tkTimesheetsRoutes
+tkEmployeesRoutes
+tkDashboardRoutes
+
+the old handlers win for matching paths.
+
+This causes two critical failures:
+
+1. POST /api/timekeeping/kiosk/punch
+Old handler in server/src/routes/timekeeping.ts returns 410 Gone
+New real handler in tkPunchesRoutes is unreachable
+
+2. GET /api/timekeeping/admin/export/gusto
+Old handler in server/src/routes/timekeeping.ts returns 410 Gone
+New real CSV export in tkTimesheetsRoutes is unreachable
+
+These must be fixed before frontend absorption.
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform the minimum safe surgical fix.
+
+1. In:
+server/src/routes/timekeeping.ts
+
+remove or disable ONLY these obsolete 410 handlers:
+
+- POST /kiosk/punch
+- GET /admin/export/gusto
+
+These old stubs have been superseded by the new absorbed Tier 1 routes.
+
+2. Do NOT touch:
+
+- /active-job
+- /active-context
+- /jobs
+- /buckets
+- /kiosk/jobs
+- /kiosk/buckets
+- /admin/job-allocate
+- traveler/WAD routes
+- public.time_clock_entries logic
+- any other legacy routes not directly related to these two collisions
+
+3. Verify after change:
+
+- POST /api/timekeeping/kiosk/punch reaches the real new handler
+- GET /api/timekeeping/admin/export/gusto reaches the real CSV export
+- no traveler/WAD route behavior changed
+- server boots cleanly
+
+4. Confirm old and new architecture still remains:
+
+public.employees = truth
+timekeeping.punches = ledger
+timekeeping.timesheets = workflow
+timekeeping.employees = thin anchor
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+A. exact lines removed/changed
+
+B. confirmation collisions are resolved
+
+C. endpoint verification results
+
+D. confirmation traveler/WAD boundaries remain untouched
+
+E. confirmation safe to proceed to frontend absorption
+
+==================================================
+RULES
+==================================================
+
+- surgical only
+- do NOT broad refactor
+- do NOT move more routes
+- do NOT touch schema
+- do NOT touch WAD/traveler
+- preserve payroll correctness first

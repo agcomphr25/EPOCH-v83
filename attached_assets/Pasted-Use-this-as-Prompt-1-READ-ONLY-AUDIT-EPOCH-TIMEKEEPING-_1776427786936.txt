@@ -1,0 +1,68 @@
+Use this as Prompt 1.
+
+READ ONLY AUDIT — EPOCH TIMEKEEPING CUTOVER / LEGACY RETIREMENT
+
+Goal:
+We are performing a hard cutover to the standalone timekeeping module and retiring the legacy timekeeping path inside EPOCH.
+
+Important context:
+- The legacy EPOCH timekeeping system was never used for real production timekeeping.
+- There is no meaningful internal legacy labor data to migrate.
+- Historical real-world timekeeping records exist in a different external application and are NOT part of this cutover.
+- We do NOT want a bridge layer, sync logic, or dual-write plan.
+- We want one single active timekeeping system inside EPOCH going forward.
+
+Your task:
+Perform a READ-ONLY forensic audit of the current codebase and identify every touchpoint related to:
+1. legacy/main-app timekeeping
+2. standalone/new timekeeping module
+3. any payroll/reporting/export logic that references labor punches or time entries
+4. auth / routing / navigation / permissions related to timekeeping
+5. employee identity mapping related to time capture
+
+Output format:
+Provide a structured report with these exact sections:
+
+A. LEGACY TIMEKEEPING TOUCHPOINTS
+- routes
+- pages/components
+- API endpoints
+- services
+- background jobs
+- schema/tables
+- reports/exports
+- navigation entries
+- permissions/role checks
+- anything else tied to old timekeeping
+
+B. STANDALONE MODULE PROMOTION READINESS
+- where the standalone module currently lives
+- how auth works
+- how employee identity works
+- how API access works
+- how it would need to be wired into main EPOCH routing/navigation
+- anything preventing it from becoming the single in-app system of record
+
+C. PAYROLL / LABOR COST / REPORTING DEPENDENCIES
+- every location that currently reads old labor or punch data
+- whether it must be rewired to the new module
+- whether it appears dead/unused
+- risk level for each dependency
+
+D. CUTOVER BLOCKERS
+- anything that would prevent immediate retirement of the legacy path
+- anything that would break if we disabled legacy timekeeping today
+
+E. RECOMMENDED RETIREMENT LIST
+Create a precise checklist with:
+- safe to remove now
+- safe to disable now
+- must rewire first
+- leave alone for now
+
+Rules:
+- READ ONLY
+- Do not modify code
+- Do not propose speculative fixes unless tied to specific files or functions you found
+- Cite actual file paths, route names, component names, table names, and function names
+- Be explicit about whether each item is definitely live, probably live, or appears unused

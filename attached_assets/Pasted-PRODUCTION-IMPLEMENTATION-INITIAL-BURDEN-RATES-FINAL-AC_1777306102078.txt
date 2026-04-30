@@ -1,0 +1,148 @@
+PRODUCTION IMPLEMENTATION — INITIAL BURDEN RATES
+FINAL ACTIVE VIOLATION RESOLUTION
+
+STRICT SCOPE
+
+Do NOT change scorer logic.
+Do NOT create fake placeholder rows.
+Do NOT modify GL posting logic.
+Do NOT change charge code routing.
+Do NOT change labor posting services.
+Do NOT touch employee pay rates yet.
+
+Goal:
+
+Resolve the final active DCAA violation:
+
+NO_BURDEN_RATES_CONFIGURED
+
+using a real minimum DCAA-defensible burden structure.
+
+Current production:
+
+Conditionally Ready
+Composite: 76.33
+Only Active Violation:
+No Burden Rates Configured
+
+We are implementing formal initial estimated indirect rates,
+not gaming the score.
+
+--------------------------------------------------
+APPROVED INITIAL STRUCTURE
+--------------------------------------------------
+
+Create 3 active burden rate rows:
+
+1. OVERHEAD
+
+name:
+Manufacturing Overhead Rate
+
+rate_type:
+OVERHEAD
+
+rate:
+0.8500
+
+effective_date:
+2026-01-01
+
+notes:
+Estimated 85% of direct labor — based on facility, utilities, equipment, and indirect labor costs relative to expected direct labor base. Pending incurred cost submission.
+
+--------------------------------------------------
+
+2. FRINGE
+
+name:
+Fringe Benefits Rate
+
+rate_type:
+FRINGE
+
+rate:
+0.3500
+
+effective_date:
+2026-01-01
+
+notes:
+Estimated 35% of total labor — statutory payroll taxes plus workers comp, health benefits, and retirement contribution assumptions. Pending formal rate study.
+
+--------------------------------------------------
+
+3. G_AND_A
+
+name:
+G&A Rate
+
+rate_type:
+G_AND_A
+
+rate:
+0.1200
+
+effective_date:
+2026-01-01
+
+notes:
+Estimated 12% of total cost input — based on administrative expenses relative to total cost structure. Pending incurred cost submission.
+
+--------------------------------------------------
+IMPLEMENTATION RULES
+--------------------------------------------------
+
+Use:
+
+production API if route exists
+
+Otherwise:
+
+direct controlled production DB insert
+
+Must be:
+
+idempotent
+
+No duplicate rows.
+
+If rows already exist,
+update only if clearly incomplete.
+
+No placeholder junk.
+
+No one-row fake pass.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. labor_burden_rates has all 3 rows
+2. BURDEN_RATES scorer clears
+3. ACCOUNTING domain becomes 100%
+4. composite moves:
+76.33 → ~84.33
+5. dashboard removes active violation
+6. no regressions
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/INITIAL_BURDEN_RATES_IMPLEMENTATION.md
+
+Include:
+
+- exact rows created
+- exact insertion method
+- before/after score
+- dashboard state after recompute
+- next real accounting risk after burden setup
+
+This is accounting policy formalization,
+not software cleanup.

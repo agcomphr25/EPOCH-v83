@@ -1,0 +1,149 @@
+READ-ONLY FORENSIC AUDIT — CHARGE CODE AUDIT TRAIL
+NO_CHARGE_CODE_AUDIT RESOLUTION
+
+Strict read-only audit.
+
+DO NOT modify code.
+DO NOT create audit hooks yet.
+DO NOT change scorer logic.
+DO NOT seed fake audit rows.
+
+Goal:
+
+Resolve the remaining DCAA flag:
+
+NO_CHARGE_CODE_AUDIT
+
+Current score after Pass 2:
+~85.38
+
+Root cause:
+
+SUPERVISOR_OVERRIDE_TRAIL = 0
+
+The system currently does not produce sufficient audit_events for:
+
+charge code create / update / deactivate / override activity
+
+This creates a compliance gap because charge codes directly control accounting classification.
+
+We must determine:
+
+- where charge codes are modified
+- what is currently audited
+- what exact audit hooks are missing
+- safest implementation path
+
+--------------------------------------------------
+AUDIT SCOPE
+--------------------------------------------------
+
+Inspect:
+
+- charge_codes table
+- charge code create routes
+- charge code update routes
+- charge code deactivate routes
+- admin override routes if present
+- storage methods for charge codes
+- audit_events table
+- admin_audit_log if relevant
+- EDRI scorer logic for SUPERVISOR_OVERRIDE_TRAIL
+- any approval workflow around charge code changes
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. Where are charge codes changed?
+
+Identify exact:
+
+- routes
+- services
+- storage methods
+- UI paths
+
+for:
+
+CREATE
+UPDATE
+DEACTIVATE
+OVERRIDE
+
+--------------------------------------------------
+
+2. What is currently audited?
+
+For each operation:
+
+does an audit event exist?
+
+If yes:
+what event type?
+
+If no:
+where is the gap?
+
+--------------------------------------------------
+
+3. What does the scorer actually require?
+
+Determine:
+
+- exact SQL/query
+- exact event types expected
+- exact fields required
+
+We must satisfy real compliance, not guess.
+
+--------------------------------------------------
+
+4. Safest implementation path
+
+Recommend:
+
+Option A:
+audit_events hook at route layer
+
+Option B:
+audit hook at storage layer
+
+Option C:
+approval workflow + audit
+
+Option D:
+mixed approach
+
+Choose safest/most auditable path.
+
+Do NOT implement yet.
+
+--------------------------------------------------
+
+5. Score impact
+
+Estimate:
+
+what score improvement should occur after proper implementation?
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/CHARGE_CODE_AUDIT_TRAIL_AUDIT.md
+
+Include:
+
+- exact files inspected
+- exact missing audit hooks
+- exact scorer expectations
+- recommended implementation path
+- safest next implementation prompt
+
+Be conservative.
+
+Accounting truth first.
+Score second.

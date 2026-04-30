@@ -1,0 +1,103 @@
+IMPLEMENTATION PROMPT — PRODUCTION DCAA STATE ALIGNMENT
+SAFE NEON SEED (NO ARCHITECTURE CHANGES)
+
+STRICT SCOPE
+
+Do NOT change application code.
+Do NOT modify server/index.ts.
+Do NOT refactor migrations.
+Do NOT touch traveler logic.
+Do NOT touch GL posting logic.
+Do NOT enable salariedTimesheetEnabled.
+
+Goal:
+
+Bring PRODUCTION Neon database accounting configuration into parity with the already-validated DEV DCAA Pass 1 state.
+
+We are fixing database state only.
+
+Production currently remains near:
+
+62.38
+
+because the required accounting seed data does not exist there.
+
+We must safely apply only the minimum validated configuration.
+
+--------------------------------------------------
+REQUIRED PROD OBJECTS
+--------------------------------------------------
+
+Ensure production contains:
+
+1. labor_burden_rates
+- table exists
+- one active preliminary burden rate exists
+
+2. charge_codes
+- IND-IRD
+(type = IR_AND_D)
+
+- IND-BNP
+(type = B_AND_P)
+
+Both:
+- active = true
+- billable = false
+- requires_approval = true
+
+3. cost_centers
+- FRINGE
+(active)
+
+Clearly marked preliminary/configuration-only
+
+--------------------------------------------------
+RULES
+--------------------------------------------------
+
+Use:
+
+- idempotent SQL only
+- safe existence checks
+- no duplicate rows
+- no destructive operations
+- no deletes
+- no updates unless required for missing/null values
+
+Do NOT rely on startup migrations.
+
+Apply directly to Neon production DB.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+After seed:
+
+Verify:
+
+1. burden rate exists
+2. IND-IRD exists
+3. IND-BNP exists
+4. FRINGE exists
+5. forensic recompute produces expected score movement
+6. no unrelated production data changed
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/PROD_DCAA_STATE_ALIGNMENT.md
+
+Include:
+
+- exact SQL applied
+- exact rows created
+- before/after production score
+- any remaining prod gaps
+
+This is a surgical accounting correction.
+Not a development task.

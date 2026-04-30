@@ -1,0 +1,109 @@
+READ-ONLY FORENSIC AUDIT — PRODUCTION CHARGE CODE DOMAIN
+FASTEST PATH FROM 68 → 80+
+
+Strict read-only audit.
+
+DO NOT modify code.
+DO NOT seed rows yet.
+DO NOT patch scorer logic.
+DO NOT apply migrations.
+
+Goal:
+
+Production CHARGE_CODE domain currently shows:
+
+RAW SCORE = 40
+
+Passing:
+- WAD_GL_LINK
+- CODE_TYPE_RESTRICTIONS
+
+Failing:
+- FRINGE_POOL
+- IRD_BP_CATEGORIES
+- SUPERVISOR_OVERRIDE_TRAIL
+
+We need the safest and fastest real production fix.
+
+No dev assumptions.
+Production truth only.
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. FRINGE_POOL failure
+
+Determine exactly:
+
+- does cost_centers contain a FRINGE row?
+- if yes, why is scorer still failing?
+- if no, what exact row is required?
+
+Confirm exact scorer SQL.
+
+--------------------------------------------------
+
+2. IRD_BP_CATEGORIES failure
+
+Determine exactly:
+
+- do charge_codes contain IR_AND_D?
+- do charge_codes contain B_AND_P?
+
+If missing:
+
+what exact production-safe rows should exist?
+
+Confirm exact scorer SQL.
+
+--------------------------------------------------
+
+3. SUPERVISOR_OVERRIDE_TRAIL failure
+
+Determine exactly:
+
+- does audit_events contain entity_type='charge_code' rows?
+- were charge code audit hooks deployed but never exercised?
+- is the failure because no real production mutation happened?
+
+Confirm exact scorer SQL.
+
+--------------------------------------------------
+
+4. Single best implementation order
+
+Recommend exact order:
+
+A. seed FRINGE first
+B. seed IR&D/B&P first
+C. perform one real charge code mutation first
+
+Which order creates the fastest honest score gain?
+
+--------------------------------------------------
+
+5. Expected score movement
+
+Estimate:
+
+If all 3 are completed correctly,
+what does production score become?
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/PROD_CHARGE_CODE_FAST_PATH_AUDIT.md
+
+Include:
+
+- exact production DB evidence
+- exact rows missing
+- exact recommended first move
+- safest implementation prompt
+
+We are solving the real production score,
+not chasing dev assumptions.

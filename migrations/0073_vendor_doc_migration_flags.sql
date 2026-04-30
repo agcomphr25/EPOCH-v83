@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS vendor_doc_migration_flags (
+  key TEXT PRIMARY KEY,
+  complete BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

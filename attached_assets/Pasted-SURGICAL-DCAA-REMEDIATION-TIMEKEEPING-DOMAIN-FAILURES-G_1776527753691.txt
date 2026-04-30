@@ -1,0 +1,130 @@
+SURGICAL DCAA REMEDIATION — TIMEKEEPING DOMAIN FAILURES
+
+Goal:
+Fix the specific DCAA readiness failures currently shown in EDRI for the Timekeeping domain after Tier 1 + Tier 2 absorption.
+
+Current EDRI status:
+- DUAL_SYSTEM_GAP = PASS
+- PIN_ENFORCEMENT = FAIL
+- NO_AUTO_APPROVAL = PARTIAL
+- EMPLOYEE_CERTIFICATION = PASS
+- CORRECTION_APPROVAL_CHAIN = FAIL
+- IMMUTABLE_APPROVED_RECORDS = PASS
+
+We are focused ONLY on fixing:
+
+1. PIN_ENFORCEMENT
+2. CORRECTION_APPROVAL_CHAIN
+3. NO_AUTO_APPROVAL
+
+Do NOT work on unrelated domains.
+
+Do NOT touch traveler/WAD.
+
+Do NOT redesign schema unnecessarily.
+
+==================================================
+ARCHITECTURAL TRUTH
+==================================================
+
+public.employees = employee truth
+
+timekeeping.punches = attendance/payroll ledger
+
+timekeeping.timesheets = approval workflow
+
+timekeeping.employees = thin anchor only
+
+Kiosk is now native:
+ /kiosk
+
+Admin is now native:
+ /time-clock-admin
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform a READ-ONLY audit first, then implement only the required surgical fixes.
+
+--------------------------------------------------
+1. PIN_ENFORCEMENT
+--------------------------------------------------
+
+Audit why EDRI still marks this FAIL.
+
+Expected behavior:
+- missing PIN blocks kiosk access
+- no default PINs
+- no unsafe fallback
+- multiple identifiers allowed only with fail-closed resolution
+
+Determine:
+- what rule/check is failing
+- whether the issue is UI, backend validation, DB constraint, or EDRI scorer logic
+
+Fix only what is actually wrong.
+
+--------------------------------------------------
+2. CORRECTION_APPROVAL_CHAIN
+--------------------------------------------------
+
+Audit why this is FAIL.
+
+Expected behavior:
+- punch edits require audit note
+- corrections are attributable
+- correction approval chain exists
+- unauthorized silent edits are impossible
+
+Determine:
+- what is missing
+- whether edits bypass approval
+- whether manager approval metadata is missing
+- whether EDRI is checking the wrong evidence source
+
+Implement the minimum safe correction.
+
+--------------------------------------------------
+3. NO_AUTO_APPROVAL
+--------------------------------------------------
+
+Audit why this is only PARTIAL.
+
+Expected behavior:
+- no automatic approval of labor records
+- explicit review/approval required
+- approval actions attributable
+
+Determine:
+- what still allows implicit approval
+- whether default statuses are wrong
+- whether approval timestamps/users are missing
+
+Implement the minimum safe correction.
+
+--------------------------------------------------
+4. OUTPUT REQUIRED
+--------------------------------------------------
+
+Provide:
+
+A. exact cause of each failure
+
+B. exact files changed
+
+C. exact fixes implemented
+
+D. expected new EDRI score impact
+
+E. whether additional policy/process (not code) is still required
+
+==================================================
+RULES
+==================================================
+
+- fix the actual problem, not cosmetic scoring
+- do NOT broad refactor
+- do NOT touch traveler/WAD
+- preserve payroll correctness first
+- preserve audit defensibility first

@@ -1,0 +1,143 @@
+Implement P1 OEM Packing Slip Invoice # Persistence + Searchability.
+
+This is an implementation task, but proceed carefully and preserve existing behavior unless explicitly changed.
+
+Context:
+For now, the Invoice # printed on the P1 OEM packing slip is the official operational invoice identifier. It does not need to match a future preferred accounting format yet. Accounting can make QuickBooks match this number for now.
+
+Primary goal:
+The packing slip Invoice # must tie back to the shipment summary in /oem-shipments.
+
+Do not redesign AR invoicing.
+Do not change invoice numbering format yet.
+Do not create QuickBooks integration.
+Do not change customer alias behavior yet.
+
+==================================================
+REQUIRED BUSINESS RULES
+==================================================
+
+1. The Invoice # generated for a P1 OEM packing slip must be stored on the shipment record.
+
+2. Same shipment = same Invoice # forever.
+
+3. Reprinting or regenerating a packing slip must reuse the existing stored Invoice #.
+
+4. Regeneration must NOT call getNextInvoiceNumber() if the shipment already has an invoice_number.
+
+5. /oem-shipments must display the Invoice # in the shipment summary/details.
+
+6. /oem-shipments search must allow searching by Invoice #.
+
+7. The packing slip PDF must continue to show the Invoice #.
+
+8. Existing historical shipments may have NULL invoice_number until regenerated or manually handled. Do not attempt risky PDF parsing or historical backfill in this task.
+
+==================================================
+EXPECTED DATA MODEL
+==================================================
+
+Add a nullable invoice_number column to shipment_records.
+
+Preferred column:
+shipment_records.invoice_number text nullable
+
+Reason:
+Invoice # belongs to the shipment, not to individual shipment items.
+
+Do not store invoice_number only on shipment_items unless the current schema absolutely requires it. If shipment_items must also reference it for compatibility, shipment_records remains the source of truth.
+
+==================================================
+IMPLEMENTATION REQUIREMENTS
+==================================================
+
+1. Create a safe additive migration:
+- Add invoice_number text nullable to shipment_records.
+- No destructive changes.
+- No NOT NULL constraint.
+- No backfill required.
+
+2. Update P1 packing slip generation:
+When a packing slip is first generated:
+- call getNextInvoiceNumber() only if shipment_records.invoice_number is NULL
+- save the generated invoice number to shipment_records.invoice_number
+- use that same value in PackingSlipData / PDF rendering
+
+3. Update P1 packing slip retrieval/regeneration:
+For GET /api/po-orders/oem-shipments/packing-slip/:itemId:
+- load the shipment record
+- if shipment_records.invoice_number exists, use it
+- do NOT generate a new invoice number
+- if packing_slip_base64 is missing and invoice_number exists, regenerate PDF using existing invoice_number
+- if both packing_slip_base64 and invoice_number are missing, generate a new invoice number, save it, then render PDF
+
+4. Preserve current PDF return behavior:
+- if a valid packing_slip_base64 exists, continue returning it
+- do not force regenerate in this task unless explicitly needed
+
+5. Update /oem-shipments list/search route:
+- include invoice_number in returned shipment summary data
+- allow search query to match invoice_number
+- existing search behavior for customer, tracking, and reference must keep working
+
+6. Update OEMShipmentsPage.tsx:
+- show Invoice # in the shipment summary row or expanded details
+- make it obvious enough for accounting/shipping to find
+- do not redesign the full page
+
+7. Add defensive logging:
+- when a new invoice number is generated and persisted
+- when an existing invoice number is reused
+- when regeneration occurs using an existing invoice number
+
+==================================================
+DO NOT DO IN THIS TASK
+==================================================
+
+Do not:
+- change invoice number format
+- build AR invoice integration
+- build QuickBooks sync
+- parse old PDFs
+- backfill historical invoice numbers
+- implement customer alias table
+- fix item grouping yet unless directly required by regeneration path
+- delete shipment records
+- change Return to QC behavior yet
+
+==================================================
+VALIDATION REQUIRED
+==================================================
+
+After implementation, validate:
+
+1. New P1 OEM packing slip generation:
+- creates Invoice #
+- stores it on shipment_records.invoice_number
+- PDF shows same Invoice #
+
+2. Reprint existing shipment:
+- does not generate a new Invoice #
+- returns same Invoice #
+
+3. Regenerate missing PDF:
+- uses existing invoice_number if present
+- does not increment sequence
+
+4. Search /oem-shipments by Invoice #:
+- searching SW26-206 or similar returns the correct shipment
+
+5. UI:
+- Invoice # is visible on /oem-shipments
+
+6. No TypeScript errors.
+
+7. No migration safety issues.
+
+Return:
+- files changed
+- schema changes
+- routes changed
+- UI changes
+- validation results
+- any follow-up recommendations

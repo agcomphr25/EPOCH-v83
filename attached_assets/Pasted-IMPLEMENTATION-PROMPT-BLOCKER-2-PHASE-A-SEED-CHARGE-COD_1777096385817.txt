@@ -1,0 +1,137 @@
+IMPLEMENTATION PROMPT — BLOCKER 2 PHASE A
+SEED CHARGE CODES + RECONCILE SALARIED TIMESHEET SCHEMA
+
+Proceed with implementation based on:
+
+attached_assets/BLOCKER_2_INDIRECT_CODE_UNIFICATION.md
+
+STRICT SCOPE:
+Do NOT enable salariedTimesheetEnabled yet.
+Do NOT build hourly indirect labor entry yet.
+Do NOT change Task #305 GL posting logic.
+Do NOT change traveler direct labor.
+Do NOT touch payroll export.
+Do NOT remove legacy routes.
+
+Your job is only Phase A:
+
+1. Seed public.charge_codes with the approved indirect charge codes.
+2. Reconcile live DB salaried_timesheet_lines schema with Drizzle schema.
+3. Ensure PTO/Holiday/Sick/Training/Admin/etc. can resolve to chargeCodeId.
+4. Preserve indirect_code label as UX/display only.
+5. Add fail-closed protections so no indirect line can exist without valid chargeCodeId once feature is enabled.
+
+--------------------------------------------------
+REQUIRED CHARGE CODE SEEDING
+--------------------------------------------------
+
+Seed these charge codes idempotently.
+
+OVERHEAD:
+- HOLIDAY
+- PTO
+- SICK
+- TRAINING
+- INDIRECT
+- UNALLOC
+- SUPERVISION
+- MAINT
+- SAFETY
+- QUALITY_REVIEW
+- INTERNAL_ENG
+- FACILITY
+
+G_AND_A:
+- ADMIN
+- G_AND_A
+- PROPOSAL
+
+DIRECT:
+- none for this phase
+
+Rules:
+
+- idempotent inserts only
+- do not duplicate rows
+- preserve existing rows if later environments already have data
+- billable = false for all above
+- requires_approval = true where appropriate, especially PTO/SICK/PROPOSAL if supported
+
+--------------------------------------------------
+SCHEMA RECONCILIATION
+--------------------------------------------------
+
+The audit found live DB / Drizzle divergence.
+
+Fix salaried_timesheet_lines so live DB has the columns expected by the schema, including:
+
+- chargeCodeId
+- indirectCodeId
+- leaveEntryId
+- source
+- any other missing columns already defined in Drizzle schema
+
+Use additive ALTER TABLE only.
+
+No destructive migration.
+
+There are zero rows, so no data migration risk, but still be conservative.
+
+--------------------------------------------------
+SERVICE CHANGES
+--------------------------------------------------
+
+Update:
+
+server/src/services/timekeeping/salariedTimesheet.service.ts
+
+Required behavior:
+
+1. injectHolidayLines() must write a valid chargeCodeId.
+
+2. injectApprovedPTO() must write a valid chargeCodeId.
+
+3. getIndirectCodes must return or resolve the mapped chargeCodeId.
+
+4. If a mapped charge code is missing:
+   - throw hard error
+   - do not create the line
+   - do not silently fall back to text labels
+
+5. indirect_code / indirectCode label may remain for display, but accounting truth must be chargeCodeId.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. public.charge_codes is seeded correctly.
+2. all 15 indirect codes resolve to a chargeCodeId.
+3. salaried_timesheet_lines live DB matches Drizzle schema.
+4. injectHolidayLines no longer writes missing columns.
+5. injectApprovedPTO no longer writes missing columns.
+6. feature flag remains false.
+7. no existing traveler/timeclock/direct labor behavior changes.
+8. server starts clean.
+9. tests pass if available.
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/BLOCKER_2_PHASE_A_IMPLEMENTATION.md
+
+Include:
+
+- exact files changed
+- charge codes seeded
+- schema columns added
+- service logic changed
+- validation results
+- remaining risks
+- whether Phase B can begin
+
+Do not continue to Phase B unless explicitly instructed.

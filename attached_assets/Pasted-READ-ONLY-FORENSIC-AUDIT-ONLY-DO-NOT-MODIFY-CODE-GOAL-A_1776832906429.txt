@@ -1,0 +1,160 @@
+READ-ONLY FORENSIC AUDIT ONLY.
+DO NOT MODIFY CODE.
+
+GOAL:
+Audit the current Timesheets / Time Clock Admin architecture and determine how to safely remove the manual “Generate Timesheet” behavior without affecting labor capture, WAD attribution, charge code integrity, GL posting, burden allocation, payroll export, or DCAA compliance.
+
+CRITICAL RULE:
+Labor capture and labor allocation tied to the WAD must remain untouched and audit-safe.
+
+We are NOT changing:
+- traveler auto clock-in behavior
+- traveler assignment switching
+- public.punch_ledger as source of truth
+- WAD → Traveler → Authorization → Charge Code → Punch → GL chain
+- charge code enforcement
+- burden allocation logic
+- labor approvals
+- payroll approval controls
+- DCAA forensic rules
+
+We are ONLY auditing whether:
+“Generate Timesheet” is unnecessary legacy behavior and should be replaced by automatic pay-period timesheet construction.
+
+ARCHITECTURAL CONSTITUTION:
+Follow docs/EPOCH_ARCHITECTURE_CONSTITUTION.md
+It is authoritative.
+
+EXPECTED END STATE:
+Timesheet = auto-derived view of punches
+NOT manually generated object
+
+Employee action should be:
+Review + Certify
+NOT Generate
+
+====================================================
+AUDIT REQUIRED
+====================================================
+
+Investigate:
+
+1. Current Generate Timesheet button behavior
+
+Specifically audit:
+- frontend button on Time Clock Admin > Timesheets tab
+- what API endpoint it calls
+- what server route handles it
+- what service performs the generation
+- what tables are written to
+- whether it creates timesheet rows, snapshots, summaries, or something else
+
+Answer:
+What exactly happens when “Generate Timesheet” is clicked?
+
+====================================================
+
+2. Dependency on WAD / labor allocation
+
+Determine whether Generate Timesheet affects:
+
+- WAD attribution
+- traveler labor allocation
+- charge code assignment
+- direct vs indirect classification
+- burden calculations
+- labor approvals
+- GL posting inputs
+- payroll export eligibility
+
+Very important:
+Does clicking Generate Timesheet create accounting truth,
+or is accounting truth already established in public.punch_ledger?
+
+====================================================
+
+3. Timesheet table purpose
+
+Audit:
+- timekeeping.timesheets
+- daily certification flow
+- labor approvals
+- payroll export logic
+
+Determine:
+
+Is timesheet generation:
+A) required for payroll
+B) required for GL posting
+C) required only for employee review/certification
+D) legacy behavior from absorbed standalone architecture
+
+====================================================
+
+4. Safe replacement path
+
+Determine whether system should move to:
+
+Punch Ledger
+→ Auto-derived pay-period timesheet
+→ Employee certification
+→ Supervisor approval
+→ Payroll export
+
+instead of:
+
+Punch Ledger
+→ Manual Generate button
+→ Timesheet exists
+→ Certification
+
+====================================================
+
+5. UI recommendation
+
+Recommend the correct replacement for:
+
+“Generate Timesheet”
+
+Should it become:
+
+- Review Timesheet
+- Certify Timesheet
+- Submit for Approval
+- Lock Pay Period
+- nothing at all
+
+====================================================
+
+OUTPUT REQUIRED
+====================================================
+
+A)
+Exact current flow of Generate Timesheet
+
+B)
+Whether it affects WAD labor truth
+
+C)
+Whether removing manual generation is safe
+
+D)
+Whether timesheet should be auto-derived instead
+
+E)
+Specific implementation recommendation
+
+F)
+Any hidden DCAA risk if we remove Generate
+
+IMPORTANT:
+DO NOT CHANGE CODE
+
+This is forensic architecture validation only.
+
+The goal is:
+TimeTrakGo simplicity
+with
+Costpoint-level auditability
+
+without damaging WAD-driven labor truth.

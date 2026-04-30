@@ -1,0 +1,132 @@
+IMPLEMENTATION PROMPT — ALLOW FRINGE COST CENTER TYPE
+FINAL CHARGE_CODE DOMAIN FIX
+
+STRICT SCOPE
+
+Do NOT change scorer logic.
+Do NOT modify database schema.
+Do NOT touch charge code routes.
+Do NOT change accounting posting logic.
+Do NOT change permissions.
+
+Goal:
+
+Resolve the final failing CHARGE_CODE check:
+
+FRINGE_POOL
+
+Current production state:
+
+CHARGE_CODE = 80%
+Composite = 76.33
+
+Only failing check:
+
+FRINGE_POOL
+
+Root cause:
+
+The database allows:
+
+type = 'FRINGE'
+
+The scorer correctly checks:
+
+WHERE type = 'FRINGE'
+
+But the API route for:
+
+POST /api/cost-centers
+
+rejects FRINGE because the Zod enum excludes it.
+
+This is a validation mismatch only.
+
+--------------------------------------------------
+REQUIRED FIX
+--------------------------------------------------
+
+Locate:
+
+server/src/routes/costCenters.ts
+(or exact route file handling POST /api/cost-centers)
+
+Find:
+
+the Zod enum / validation for:
+
+type
+
+Currently likely:
+
+[
+  'DEPARTMENT',
+  ...
+]
+
+Add:
+
+'FRINGE'
+
+Only that.
+
+No other enum changes.
+
+No schema changes.
+
+No migrations.
+
+--------------------------------------------------
+AFTER FIX
+--------------------------------------------------
+
+Use the existing production API:
+
+POST /api/cost-centers
+
+Create:
+
+{
+  "code": "FRINGE",
+  "name": "Fringe Benefits Pool",
+  "type": "FRINGE",
+  "status": "ACTIVE"
+}
+
+Use idempotent behavior:
+if FRINGE already exists,
+do not duplicate.
+
+--------------------------------------------------
+VALIDATION
+--------------------------------------------------
+
+Verify:
+
+1. API accepts FRINGE
+2. cost_centers contains type='FRINGE'
+3. FRINGE_POOL scorer clears
+4. CHARGE_CODE becomes 100%
+5. production composite moves
+   76.33 → ~80.33
+6. no regressions
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/FRINGE_POOL_FINAL_FIX.md
+
+Include:
+
+- exact file changed
+- exact enum change
+- created cost center row
+- before/after score
+- remaining top production blockers
+
+This is a validation correction,
+not a business logic change.
+Be surgical.

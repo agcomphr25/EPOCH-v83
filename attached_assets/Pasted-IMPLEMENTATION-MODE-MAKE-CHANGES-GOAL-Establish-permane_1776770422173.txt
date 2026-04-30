@@ -1,0 +1,195 @@
+IMPLEMENTATION MODE.
+MAKE CHANGES.
+
+GOAL:
+Establish permanent architectural controls so Replit Agent can no longer drift back into deprecated standalone timekeeping architecture or violate EPOCH labor-system truth.
+
+This is a governance task, not a feature task.
+
+We are creating repo-level constitutional controls.
+
+REQUIRED IMPLEMENTATION:
+
+====================================================
+PART 1 — CREATE AUTHORITATIVE CONSTITUTION FILE
+====================================================
+
+Create:
+
+docs/EPOCH_ARCHITECTURE_CONSTITUTION.md
+
+This file is authoritative and must be treated as architectural law.
+
+It must clearly define:
+
+----------------------------------------------------
+SECTION 1 — SINGLE SOURCE OF TRUTH
+----------------------------------------------------
+
+EPOCH uses exactly ONE labor system:
+
+Kiosk + Traveler + Employee Portal
+→ public.punch_ledger
+→ charge_codes
+→ labor_approvals
+→ GL posting
+→ payroll export
+→ DCAA audit trail
+
+This is the sole source of truth for:
+- labor capture
+- charge code attribution
+- burden allocation
+- direct vs indirect labor classification
+- payroll export
+- GL posting
+- audit/compliance evidence
+
+No parallel systems allowed.
+
+----------------------------------------------------
+SECTION 2 — STANDALONE TIMECLOCK PROHIBITION
+----------------------------------------------------
+
+The standalone Timekeeping module is permanently deprecated.
+
+Forbidden:
+- imports from modules/timekeeping/
+- imports from standalone artifacts
+- recreation of tkDb.ts
+- recreation of timekeepingPairing.ts
+- reads from deprecated standalone labor_charge_codes
+- reads from deprecated standalone punch tables
+- duplicate labor ledgers
+- parallel timekeeping systems
+- compatibility bridges to legacy standalone behavior
+
+This architecture may never be reintroduced.
+
+----------------------------------------------------
+SECTION 3 — NO FREE-TEXT COST ATTRIBUTION
+----------------------------------------------------
+
+Forbidden:
+- free-text chargeCode writes
+- free-text jobCode writes
+- free-text departmentCode writes
+
+All cost attribution must resolve through FK-enforced relationships:
+
+Project
+→ WAD
+→ Traveler
+→ Authorization
+→ Charge Code
+→ Punch Ledger
+→ GL Posting
+
+No exceptions.
+
+----------------------------------------------------
+SECTION 4 — TRAVELER LABOR CONTROL
+----------------------------------------------------
+
+Traveler scan is first-class labor control.
+
+If employee is NOT clocked in:
+→ auto clock-in
+
+If employee IS already clocked in:
+→ switch labor assignment only
+
+No duplicate punches.
+No delayed labor entry.
+No post-facto manual labor reconstruction.
+
+Labor begins where work begins.
+
+----------------------------------------------------
+SECTION 5 — DCAA / AUDIT PRINCIPLE
+----------------------------------------------------
+
+Compliance must be enforced by system design,
+not user memory.
+
+Manual override must be:
+- rare
+- approved
+- audited
+- visible
+
+System-enforced controls are preferred over policy-only controls.
+
+----------------------------------------------------
+SECTION 6 — AGENT IMPLEMENTATION RULE
+----------------------------------------------------
+
+If a requested implementation appears to require deprecated standalone behavior:
+
+STOP.
+
+Do not preserve compatibility.
+
+Redesign the solution using native EPOCH-owned tables and services.
+
+Delete-first and rewire-second is preferred over temporary compatibility layers.
+
+This file takes precedence over:
+- convenience
+- legacy behavior
+- temporary compatibility
+- historical implementation patterns
+
+====================================================
+PART 2 — UPDATE replit.md
+====================================================
+
+Add a mandatory reference section near the top of:
+
+replit.md
+
+Required content:
+
+Before implementing labor, WAD, GL, burden, payroll,
+traveler, PM dashboard, DCAA, or compliance-related changes:
+
+READ:
+docs/EPOCH_ARCHITECTURE_CONSTITUTION.md
+
+This file is authoritative and non-optional.
+
+Do not implement architectural decisions that conflict with this constitution.
+
+====================================================
+PART 3 — VALIDATION
+====================================================
+
+Verify:
+
+1. both files exist
+2. replit.md clearly references the Constitution file
+3. future prompts involving labor/GL/WAD work will naturally surface this rule
+4. no conflicting language exists elsewhere in repo docs
+
+====================================================
+OUTPUT REQUIRED
+====================================================
+
+A)
+Files created
+
+B)
+Files updated
+
+C)
+Final content summary
+
+D)
+Any conflicting legacy documentation discovered
+
+IMPORTANT:
+
+Do NOT summarize only.
+Actually create and update the files.
+
+This is permanent governance infrastructure.

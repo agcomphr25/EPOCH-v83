@@ -1,0 +1,270 @@
+STRICT FORENSIC VALIDATION AUDIT — PTO PAYROLL + TIMESHEET SAFETY
+
+READ ONLY
+NO CHANGES
+NO FIXES
+NO IMPLEMENTATION
+
+Objective:
+Validate that the newly implemented PTO workflow is safe for:
+- payroll export
+- salaried timesheet injection
+- hourly employee handling
+- labor costing
+- GL posting
+- audit trail integrity
+- duplicate prevention
+- DCAA defensibility
+
+This is NOT a feature audit.
+This is a production safety audit.
+
+We are validating that approved PTO cannot silently create:
+- duplicate pay
+- missing pay
+- incorrect labor costing
+- audit gaps
+- payroll fraud exposure
+- DCAA compliance failures
+
+Known Implemented System:
+- Multi-stage PTO approval exists:
+  Supervisor → HR → VP
+- Final VP approval triggers PTO finalization
+- Approved PTO feeds timesheets
+- Approved PTO affects payroll export
+- PTO calendar visibility exists
+- PTO permissions are capability-based
+- Duplicate injection protections were added
+- Hourly PTO uses guarded handling (not fake punches)
+
+Audit Required:
+
+SECTION A — Final Approval Trigger Validation
+
+Verify exactly what happens at:
+VP approval → final approved status
+
+Show:
+- exact route
+- exact service
+- exact functions called
+- exact order of operations
+
+Confirm:
+- leave_entries creation
+- timesheet injection
+- payroll availability
+- calendar event creation
+- audit log creation
+
+Determine:
+Can partial failures happen?
+
+Example:
+approved status saved
+but leave entry fails
+
+If yes:
+what protections exist?
+
+SECTION B — Duplicate Prevention Validation
+
+Verify:
+- duplicate leave entry prevention
+- duplicate salaried timesheet line prevention
+- duplicate calendar event prevention
+- duplicate payroll export inclusion prevention
+
+Show:
+exact code protections
+
+Determine:
+Can:
+re-approval
+recalculation
+timesheet reopen
+manual admin actions
+cause duplicate PTO pay?
+
+This section is critical.
+
+SECTION C — Salaried Employee Validation
+
+Verify:
+Approved PTO correctly:
+- creates locked leave rows
+- cannot be manually edited
+- contributes to payable hours
+- does not inflate worked labor hours
+- respects indirect cost classification
+- posts correctly to labor costing
+
+Determine:
+Can an employee accidentally receive:
+40 worked + 8 PTO = 48 paid
+
+when they should receive 40 total?
+
+Show exact protection or failure.
+
+SECTION D — Hourly Employee Validation
+
+This is the highest-risk section.
+
+Verify:
+What actually happens for hourly employees.
+
+Specifically:
+- where PTO hours are stored
+- whether payroll export includes them
+- whether punches can overlap PTO
+- whether clock-in is blocked
+- whether supervisors can detect overlap
+
+Determine:
+Can an hourly employee:
+clock in + receive PTO for same hours
+
+If yes:
+severity = critical
+
+Show exact findings.
+
+SECTION E — Payroll Export Validation
+
+Audit:
+GET /api/timekeeping/admin/export/gusto
+
+Verify:
+- where PTO hours are sourced from
+- whether PTO maps to vacation_hours
+- whether sick_hours is still accidentally used
+- whether rejected PTO can leak into export
+- whether cancelled PTO can leak into export
+- whether historical legacy PTO rows still behave correctly
+
+Confirm:
+exact export logic
+
+Show:
+example export row behavior
+
+SECTION F — Labor Costing + GL Validation
+
+Verify:
+How approved PTO posts into:
+- labor costing
+- burden calculations
+- fringe
+- overhead
+- G&A
+- GL posting
+
+Determine:
+Is PTO:
+direct labor
+or
+indirect labor
+
+and where enforced?
+
+Show:
+exact services involved
+
+Determine:
+whether burden application is safe
+or still manual-risk
+
+SECTION G — Audit Trail Integrity
+
+Verify:
+every material PTO action logs:
+
+- submit
+- submit on behalf
+- supervisor approve/reject
+- HR approve/reject
+- VP approve/reject
+- final approval
+- leave entry creation
+- timesheet injection
+- calendar creation
+- denial reason
+- cancellation if supported
+
+Determine:
+Can an auditor reconstruct:
+who approved what
+and why
+
+without manual investigation?
+
+SECTION H — Supervisor Routing Safety
+
+Verify:
+If employee has:
+no supervisor assigned
+
+what happens?
+
+Confirm:
+safe fallback exists
+
+Determine:
+Can requests become orphaned
+and never reviewed?
+
+SECTION I — Failure Simulation Review
+
+Theoretical validation:
+what happens if:
+
+1. VP approves during payroll export
+2. employee already has generated timesheet
+3. PTO approved after payroll preview
+4. employee requests overlapping PTO
+5. PTO denied after earlier approval attempt
+6. manager submits on behalf of employee incorrectly
+7. supervisor changed mid-request
+
+Determine:
+what breaks
+and where risk exists
+
+SECTION J — DCAA Compliance Review
+
+Evaluate specifically for:
+government contractor audit defensibility
+
+Review:
+- approval traceability
+- denial documentation
+- prevention of duplicate pay
+- timesheet certification integrity
+- supervisor approval defensibility
+- labor distribution integrity
+- audit immutability
+
+Score:
+DCAA readiness for PTO workflow
+
+Required Deliverable Format:
+
+1. Executive Risk Summary
+2. Safe Areas
+3. High-Risk Areas
+4. Critical Failures (if any)
+5. Duplicate Pay Risk Score (1–10)
+6. Payroll Trust Score (1–10)
+7. DCAA Defensibility Score (1–10)
+8. Must-Fix Before Production
+9. Can-Fix Later
+10. Exact Files Reviewed
+11. Final Go / No-Go Recommendation
+
+This is validation only.
+No fixes yet.
+No implementation yet.
+
+This audit determines whether PTO can be trusted.

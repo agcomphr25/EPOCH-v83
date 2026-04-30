@@ -1,0 +1,134 @@
+READ-ONLY VERIFICATION AUDIT — TIER 1 BACKEND ABSORPTION + MIGRATION 0049
+
+Goal:
+Verify that Tier 1 backend absorption was implemented correctly and that migration 0049 created the correct thin-anchor architecture without introducing bad schema, duplicate employee truth, or incorrect employee seeding.
+
+Critical context:
+
+Business intent:
+- No one was using the old standalone app for real production timekeeping
+- No one was using the legacy EPOCH punch system for real payroll punches
+- We are building the real production timekeeping system now
+
+Architecture intent:
+- public.employees = ONLY employee source of truth
+- timekeeping.punches = attendance/payroll ledger
+- timekeeping.timesheets = approval workflow
+- timekeeping.employees = thin anchor table only (NOT a second employee system)
+- public.time_clock_entries = traveler/WAD labor system (separate domain)
+
+Employee eligibility intent:
+- all active EPOCH employees should start as timekeeping-eligible by default
+- missing punches for owners/salaried employees should surface as exception workflows, not silent exclusions
+- missing PIN should block kiosk access
+- multiple kiosk identifiers are allowed (badge scan, employee number, last name) but ambiguity must fail closed
+- owners/admins/salaried users remain eligible even if their long-term labor-costing policy is finalized later
+
+This is a verification audit only.
+
+READ ONLY.
+No code changes.
+
+==================================================
+YOUR TASK
+==================================================
+
+Audit the implemented Tier 1 backend absorption and specifically verify migration 0049.
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+1. ROUTE VERIFICATION
+
+- list the new absorbed Tier 1 routes now live in EPOCH
+- confirm exact mounted paths
+- confirm whether any path collisions or duplicate handlers exist with older EPOCH routes
+- confirm whether old and new paths can safely coexist temporarily
+
+2. SERVICE VERIFICATION
+
+- confirm the moved Tier 1 services are wired correctly
+- identify any remaining standalone-only dependencies
+- identify any bad imports, hidden workspace assumptions, or service boundaries that still imply sidecar architecture
+
+3. MIGRATION 0049 VERIFICATION
+
+- list every table created by 0049
+- confirm whether each table is appropriate for Project 1 runtime absorption
+- identify anything in 0049 that drifted into Phase 3 / full schema redesign territory
+
+Most important:
+verify whether auto-seeding all active EPOCH employees into timekeeping.employees created:
+
+A. correct thin-anchor stub rows
+
+or
+
+B. accidental duplicate employee truth
+
+Be explicit.
+
+4. THIN-ANCHOR ARCHITECTURE CHECK
+
+Confirm whether the resulting architecture is still:
+
+- public.employees = truth
+- timekeeping.punches = ledger
+- timekeeping.timesheets = workflow
+- timekeeping.employees = thin anchor
+
+Identify anything that accidentally reintroduced:
+a second employee system
+
+5. EMPLOYEE ELIGIBILITY + KIOSK CONTROL CHECK
+
+Verify whether the implementation correctly supports:
+
+- all active employees eligible by default
+- missing PIN blocks access
+- multiple identifiers allowed without ambiguity
+- no unsafe fallback behavior
+- fail-closed identity resolution
+
+Identify any audit-risk gaps.
+
+6. PAYROLL / KIOSK READINESS CHECK
+
+Based on actual implemented code:
+
+- what is ready for frontend absorption now
+- what must still be verified before live kiosk rollout
+- what must be tested before admin approval / Gusto UI is ported
+
+7. DO NOT TOUCH CONFIRMATION
+
+Confirm:
+
+- traveler/WAD boundaries remain intact
+- public.time_clock_entries was not altered
+- traveler routes were not altered
+- attendance and traveler domains remain separate
+
+8. FINAL RECOMMENDATION
+
+Answer clearly:
+
+Is it safe to proceed to Tier 1 frontend absorption now?
+
+If YES:
+list cautions
+
+If NO:
+explain exactly why
+
+==================================================
+RULES
+==================================================
+
+- READ ONLY
+- no code changes
+- be explicit and grounded in actual files/tables/routes
+- do not hand-wave migration 0049
+- do not drift into unrelated cleanup
+- do not propose Phase 3 schema redesign here

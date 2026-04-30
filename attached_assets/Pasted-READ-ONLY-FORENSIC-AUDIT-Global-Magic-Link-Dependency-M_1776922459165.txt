@@ -1,0 +1,294 @@
+READ-ONLY FORENSIC AUDIT — Global Magic Link Dependency Map / Action Session Engine Readiness
+
+We have completed the forensic audit of the Vendor PO confirmation issue and confirmed the root cause:
+
+Current architecture consumes tokens on first GET request inside:
+
+GET /api/magic-link/verify
+→ validateMagicLink()
+→ markMagicLinkTokenAsUsed()
+
+This is causing immediate “expired” links due to:
+- Microsoft Safe Links
+- Proofpoint
+- Mimecast
+- Barracuda
+- Outlook preview
+- Apple Mail prefetch
+- browser preloading
+
+We are now evaluating whether to:
+
+A) patch only vendor PO confirmation
+
+or
+
+B) build a centralized Action Session Engine (recommended)
+
+before implementation.
+
+I need a READ-ONLY dependency audit first.
+
+DO NOT MODIFY CODE
+DO NOT PATCH
+DO NOT REFACTOR
+DO NOT IMPLEMENT
+
+Only produce forensic truth.
+
+====================================================
+AUDIT GOAL
+====================================================
+
+Map EVERY place in the codebase that depends on:
+
+- generateMagicLink()
+- validateMagicLink()
+- createMagicLinkUrl()
+- magic_link_tokens table
+- GET /api/magic-link/verify
+- token verification flows
+- token resend flows
+- signature link systems
+- any similar single-use token systems
+
+I need to understand:
+
+WHO depends on this engine
+HOW they depend on it
+WHETHER consume-on-GET is intentional or accidental
+
+This determines whether we:
+
+- safely refactor current engine
+
+or
+
+- build parallel Action Session Engine + phased migration
+
+====================================================
+REQUIRED OUTPUT
+====================================================
+
+For every finding provide:
+
+- file name
+- function name
+- line number
+- route path
+- business purpose
+- exact execution path
+
+DO NOT summarize vaguely.
+
+====================================================
+QUESTIONS TO ANSWER
+====================================================
+
+1. Everywhere generateMagicLink() is used
+
+List:
+- every call site
+- route path
+- business purpose
+
+Examples may include:
+- vendor PO confirmation
+- signature requests
+- onboarding
+- approvals
+- customer acceptance
+- password reset
+- employee acknowledgements
+
+I need ALL usages.
+
+====================================================
+
+2. Everywhere validateMagicLink() is used
+
+List:
+- every call site
+- route path
+- whether GET or POST
+- what business action it supports
+
+====================================================
+
+3. Everywhere createMagicLinkUrl() is used
+
+List:
+- all email templates
+- notification systems
+- background jobs
+- resend flows
+
+====================================================
+
+4. Inventory ALL token-driven workflows
+
+Even if they do NOT use generateMagicLink()
+
+Find:
+- signature systems
+- approval systems
+- action confirmation flows
+- externally accessible confirmation links
+- vendor/customer acknowledgement systems
+
+Some systems may have their own token logic.
+
+Find them.
+
+====================================================
+
+5. Identify flows where consume-on-GET is CORRECT
+
+Examples:
+- true passwordless login
+- one-time auth login
+
+versus
+
+flows where consume-on-GET is WRONG
+
+Examples:
+- vendor confirmation
+- signatures
+- business acknowledgements
+
+Classify each flow.
+
+====================================================
+
+6. Identify flows where multiple active tokens are dangerous
+
+Examples:
+- resend links
+- signatures
+- approvals
+
+Show:
+- whether old tokens remain active
+- whether prior tokens should be invalidated
+
+====================================================
+
+7. Audit current logging quality
+
+For each flow:
+
+Can we distinguish:
+- expired
+- already used
+- invalid
+- superseded
+- completed
+
+or do they collapse into one generic failure?
+
+====================================================
+
+8. Verify environment URL consistency
+
+Compare:
+
+magicLink.ts
+
+vs
+
+signature systems
+
+vs
+
+other externally emailed links
+
+Do we have:
+- inconsistent base URL generation
+- localhost fallback risks
+- hardcoded domain risks
+- production vs dev mismatch risks
+
+====================================================
+
+9. Identify schema risks
+
+Can current:
+
+magic_link_tokens
+
+safely support a centralized Action Session Engine
+
+or would we need:
+
+action_tokens
+
+as a new governed table?
+
+Explain:
+- pros
+- risks
+- migration complexity
+
+====================================================
+
+10. Recommend architecture path
+
+Based on actual code:
+
+Should we:
+
+A) refactor current magicLink engine
+
+or
+
+B) build parallel Action Session Engine and migrate gradually
+
+I need a recommendation based on:
+- blast radius
+- safety
+- maintainability
+- audit defensibility
+- DCAA impact
+
+====================================================
+REQUIRED FINAL SECTION
+====================================================
+
+End with:
+
+DEPENDENCY RISK MAP
+
+Rank:
+
+HIGH RISK dependencies
+MEDIUM RISK dependencies
+LOW RISK dependencies
+
+====================================================
+
+Then include:
+
+RECOMMENDED MIGRATION STRATEGY
+
+with:
+
+Phase 1
+Phase 2
+Phase 3
+
+But still:
+
+DO NOT IMPLEMENT
+
+Only forensic truth.
+
+This system affects:
+- purchasing controls
+- signatures
+- customer/vendor trust
+- audit trail integrity
+- compliance defensibility
+- future Proteus Core governance
+
+Accuracy matters more than speed.

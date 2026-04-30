@@ -1,0 +1,315 @@
+Build an internal EPOCH Business Continuity Dashboard focused on executive reassurance, system ownership, and digital operations continuity.
+
+IMPORTANT CONTEXT:
+This dashboard is not an SOP for how to run production, create vendor POs, complete quotes, move orders through queues, or perform department-level work. Those operational SOPs will be handled separately.
+
+This dashboard should answer a different executive question:
+
+“If the primary EPOCH maintainers were unavailable, could the company continue using and maintaining EPOCH without interruption, and what people, systems, credentials, vendors, and dependencies would need to be understood?”
+
+The goal is to present EPOCH as a professional continuity-ready system, not as a fragile custom app known only by one or two people.
+
+Do not mention Costpoint.
+Do not mention Proteus.
+Do not frame this as a comparison to any other system.
+
+Build this as an internal EPOCH governance/continuity feature.
+
+FEATURE NAME:
+Business Continuity Dashboard
+
+PRIMARY AUDIENCE:
+Company owners and senior leadership.
+
+TONE:
+Professional, reassuring, executive-level, practical, non-technical where possible, but detailed enough to be credible.
+
+CORE PURPOSE:
+Create a mapped view of EPOCH’s continuity posture:
+- where the code lives
+- where the database lives
+- where hosting/deployment lives
+- where accounting/reporting dependencies live
+- what credentials and access controls matter
+- what vendors/platforms are involved
+- what external roles/skills would be needed if current maintainers were unavailable
+- what decisions owners would need to make during triage
+- what areas are already documented
+- what areas need documentation or handoff improvement
+
+DO NOT BUILD:
+- no production workflow SOPs
+- no “how to create a quote”
+- no “how to complete a vendor PO”
+- no “how an order moves through manufacturing”
+- no queue-level process training
+- no Costpoint comparison
+- no risk score
+- no red/yellow/green scoring
+- no scare-tactic “hit by a bus” simulation
+
+BUILD:
+A clean dashboard with mapped continuity sections.
+
+Suggested dashboard sections:
+
+1. Executive Summary
+Purpose:
+Explain that EPOCH’s continuity depends on separating and documenting:
+- source code
+- database
+- hosting
+- domain/DNS
+- credentials
+- accounting/reporting systems
+- payroll/payment dependencies
+- support roles
+
+Include language similar to:
+“EPOCH is designed to become maintainable by qualified outside technical personnel when source code, deployment paths, credentials, database access, and vendor dependencies are properly documented and controlled.”
+
+2. System Ownership Map
+Show cards or a structured map for:
+- Application code repository: GitHub
+- Local/IDE maintenance path: Cursor / VS Code / compatible IDEs
+- Current deployment path: Replit
+- Future hosting options: Hostinger, Railway, Render, AWS, Azure, DigitalOcean, etc. listed parenthetically as options only
+- Database: PostgreSQL, likely hosted through Neon if applicable
+- Domain/DNS: current domain registrar / DNS provider placeholder
+- Email/SMS/payment integrations: placeholders where applicable
+
+Use “Current State” and “Continuity Option” fields.
+
+Example:
+Current hosting: Replit
+Continuity option: Any compatible Node/PostgreSQL-capable host connected to GitHub, with required environment variables configured.
+
+3. Credential & Access Governance
+Map the access categories that must be controlled:
+- GitHub repository access
+- Replit access
+- database provider access
+- domain registrar/DNS access
+- email provider access
+- payment processor/banking access
+- QuickBooks access
+- payroll provider access
+- admin accounts inside EPOCH
+- environment variables/secrets
+
+Include an “Owner Decision Needed” style field:
+- who should hold emergency owner access
+- who should hold technical admin access
+- whether credentials should be stored in a password vault
+- whether shared accounts should be eliminated
+
+Recommended vendors/options may be listed parenthetically:
+1Password, Bitwarden, Keeper, Google Workspace password management, etc.
+
+Do not store real passwords in this dashboard.
+
+4. Database Continuity Map
+Explain conceptually:
+- PostgreSQL is the database engine
+- Neon, if used, is a managed PostgreSQL hosting provider
+- EPOCH application code and EPOCH data are separate assets
+- moving hosting does not necessarily mean moving the database
+- database backups, restore testing, and admin access are part of continuity
+
+Include fields:
+- current DB provider
+- database type
+- backup status
+- restore procedure status
+- admin owner
+- emergency technical contact
+- known gaps
+
+Use placeholders if exact values are unknown.
+
+5. Hosting & Deployment Continuity Map
+Explain:
+- Replit currently publishes/republishes the production app
+- a future host would connect to GitHub, install dependencies, build the app, load environment variables, connect to the database, and serve the domain
+- “Republish” in Replit is conceptually equivalent to “Deploy/Redeploy” on other hosting platforms
+
+Include a visual step map:
+GitHub repo → build process → environment variables → hosting provider → domain → live EPOCH site → PostgreSQL database
+
+Include current state:
+- current host: Replit
+- deploy action: Republish
+- continuity path: GitHub-connected hosting provider with documented build/start commands and environment variables
+
+6. Accounting & Reporting Dependency Map
+This section is conceptual, not a workflow SOP.
+
+Explain:
+- EPOCH may contain operational/accounting preparation data
+- QuickBooks may remain the formal reporting/accounting system for now
+- continuity requires understanding which accounting activities occur in EPOCH versus which reporting/final accounting activities occur in QuickBooks
+
+Include mapped dependencies:
+- EPOCH accounting prep / operational financial data
+- QuickBooks reporting / financial statements / accounting records
+- bank/payment access
+- payroll continuity
+- vendor payment dependency placeholders
+
+Do not explain how to perform accounting tasks.
+Only map dependency relationships.
+
+7. Payroll & Payment Dependency Map
+Map:
+- payroll system/provider placeholder
+- timekeeping data source in EPOCH
+- payroll export or reporting dependency
+- bank/payment access dependency
+- emergency approval owner
+- outside payroll/accounting support needed
+
+Focus on continuity:
+“What access and knowledge would be required for a qualified person to continue payroll support?”
+
+8. Support Roles & Replacement Skills
+Create a role matrix showing what type of person or vendor could maintain EPOCH if current maintainers were unavailable.
+
+Include roles such as:
+- Fractional CTO / technical advisor
+- Senior full-stack TypeScript/React/Node engineer
+- PostgreSQL database administrator or backend engineer
+- DevOps / deployment consultant
+- Cybersecurity / credential governance consultant
+- Accounting systems consultant familiar with QuickBooks and operational systems
+- Payroll systems consultant
+- Compliance/governance consultant if needed
+
+For each role include:
+- what they would be responsible for
+- when they would be needed
+- skills required
+- estimated cost range
+- emergency priority
+- whether they are short-term, fractional, or ongoing
+
+Use broad estimated cost ranges, clearly labeled as placeholders:
+- Fractional CTO: $150–$300/hr or monthly retainer
+- Senior full-stack engineer: $100–$200/hr
+- DevOps consultant: $125–$250/hr
+- PostgreSQL/DBA: $125–$250/hr
+- Cybersecurity/access consultant: $150–$300/hr
+- QuickBooks/accounting systems consultant: $75–$175/hr
+- Payroll consultant: $75–$175/hr
+
+Make clear that these are planning estimates, not quotes.
+
+9. Triage Decision Map
+Do not create a scary “hit by a bus” scenario.
+
+Instead create a calm executive triage map:
+If primary maintainers are unavailable, owners would need to identify:
+- who has owner access
+- who can access the code repository
+- who can access hosting
+- who can access database provider
+- who can access domain/DNS
+- who can access QuickBooks
+- who can access payroll/payment systems
+- which outside role to contact first
+
+This should feel like an executive continuity checklist.
+
+10. Documentation Roadmap
+Show documentation areas that should be completed over the next few weeks:
+- GitHub repository map
+- deployment guide
+- environment variable inventory
+- database backup/restore guide
+- admin access matrix
+- vendor/platform dependency list
+- QuickBooks/EPOCH dependency map
+- payroll continuity dependency map
+- emergency technical contact plan
+- owner access confirmation
+
+Make these editable statuses:
+- Not Started
+- Drafted
+- Needs Review
+- Approved
+- Archived
+
+11. AI-Assisted Update Workflow
+Add a section explaining that the dashboard can be updated over time through controlled prompts.
+
+Important rule:
+AI-assisted updates must be draft-first and reviewable.
+Do not auto-change approved continuity statements silently.
+
+Build the UI concept so an authorized admin can:
+- select a section
+- enter an update prompt
+- generate a draft revision
+- compare current vs proposed text
+- approve or discard the update
+- log who approved it and when
+
+Example prompt:
+“Update the hosting continuity section to reflect that EPOCH is now connected to GitHub and can be redeployed through Replit or another GitHub-connected hosting provider.”
+
+AI update states:
+- Draft Generated
+- Under Review
+- Approved
+- Rejected
+
+Include audit trail fields:
+- createdBy
+- createdAt
+- approvedBy
+- approvedAt
+- sectionUpdated
+- priorVersion
+- newVersion
+
+IMPLEMENTATION REQUIREMENTS:
+Start with a read-only/static version if the existing app architecture is not ready for persistence.
+If persistence is already available, create a structured data model for continuity sections, roles, dependencies, vendors, and update logs.
+Do not overbuild.
+Prefer clean architecture and editable content.
+
+UI REQUIREMENTS:
+- clean executive dashboard
+- simple cards and section tabs
+- mapped dependency visuals
+- no clutter
+- no scary language
+- no red/yellow/green scoring
+- no Costpoint comparison
+- no Proteus mention
+- printable/exportable executive summary if feasible
+- responsive layout
+
+Suggested navigation:
+Settings / Governance / Business Continuity
+or
+Admin / Business Continuity
+
+ACCESS CONTROL:
+Only owners/admins should access this dashboard.
+If role-based permissions already exist, wire this feature into the existing permission model.
+If not, include TODO notes for access control.
+
+FIRST TASK:
+Before implementing, perform a read-only audit of the current EPOCH codebase and identify:
+- routing structure
+- admin/settings navigation structure
+- existing role/permission model
+- existing database/schema patterns
+- existing UI card/table components
+- existing AI assistant or audit-log patterns, if any
+- best place to add Business Continuity Dashboard
+
+Then provide an implementation plan before writing code.
+
+Do not implement until the audit and plan are complete.

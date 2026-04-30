@@ -1,0 +1,72 @@
+IMPLEMENTATION MODE.
+MAKE CHANGES.
+
+GOAL:
+Remove the manual "Generate Timesheet" requirement from Time Clock Admin and replace it with automatic draft timesheet creation, without affecting labor capture, WAD attribution, charge code integrity, burden allocation, GL posting, payroll approval controls, or DCAA compliance.
+
+ARCHITECTURAL CONSTITUTION:
+Follow docs/EPOCH_ARCHITECTURE_CONSTITUTION.md
+It is authoritative.
+
+CRITICAL RULE:
+Do NOT modify the labor truth chain:
+
+Traveler / Kiosk / Portal
+→ public.punch_ledger
+→ charge_codes
+→ labor_approvals
+→ GL posting / payroll / audit
+
+WAD-driven labor capture and allocation must remain untouched.
+
+WHAT THE AUDIT CONFIRMED:
+- Generate Timesheet currently creates a draft timesheet row and writes an audit entry
+- It does not affect WAD attribution, traveler allocation, charge code assignment, direct/indirect classification, burden logic, or GL inputs
+- The timesheet object must still exist for attestation, approval, payroll export, and approved-period locking
+- The manual trigger is the unnecessary part
+
+REQUIRED IMPLEMENTATION:
+
+1. Remove manual dependency on "Generate Timesheet"
+- The system must no longer require an admin or employee to click Generate before a timesheet exists
+
+2. Add lazy auto-create behavior
+- When a user or admin opens a pay period timesheet view, if no timesheet exists for that employee + period:
+  → automatically create a draft timesheet using the existing createTimesheet() flow
+- Preserve the same audit logging behavior currently used during manual generation
+
+3. UI change
+- Replace "Generate Timesheet" button with "Review Timesheet"
+OR remove the button entirely if entering the pay period view is enough
+- Employee action should become:
+  Review → Certify / Attest → Submit → Approve
+
+4. Preserve all current controls
+Do NOT weaken:
+- employee attestation
+- supervisor approval
+- approved-period punch locking
+- payroll export gating
+- audit trail
+- separation of duties
+
+5. Zero-hour hardening
+- Decide whether zero-hour periods should:
+  A) auto-create draft zero-hour timesheets
+  or
+  B) skip auto-creation until punches exist
+- Choose the safer and cleaner UX, and explain the choice in the summary
+
+6. Read path hardening
+- Audit whether timesheet hour computation still reads from any legacy punch source
+- If safe and low-risk, rewire computation to use the native punch ledger only
+- If not safe in this prompt, leave behavior unchanged and clearly report it as a follow-up
+
+OUTPUT REQUIRED:
+
+A) files changed
+B) exact trigger change implemented
+C) confirmation that WAD labor truth and allocation were not touched
+D) confirmation that payroll / approval / DCAA controls remain intact
+E) whether timesheet computation still reads any legacy source
+F) any recommended follow-up cleanup

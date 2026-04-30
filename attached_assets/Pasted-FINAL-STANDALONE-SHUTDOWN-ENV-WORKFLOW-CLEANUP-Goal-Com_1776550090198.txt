@@ -1,0 +1,132 @@
+FINAL STANDALONE SHUTDOWN — ENV + WORKFLOW CLEANUP
+
+Goal:
+Complete the final shutdown of the old standalone Timekeeper module now that native EPOCH Timekeeping absorption is complete.
+
+Current verified state:
+- /kiosk = native EPOCH kiosk
+- /time-clock-admin = native EPOCH admin
+- Employee Portal no longer uses standalone links
+- LoginPage no longer redirects to standalone kiosk
+- timekeeping-handoff endpoint removed
+- TimekeepingHandoffPage removed
+- standalone deployment itself is already dead (404)
+
+What remains:
+- stale environment variables
+- standalone dev workflows still running
+- App-backup.tsx still exists as dead historical file
+
+We are NOT changing architecture.
+We are only finishing shutdown.
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform the final safe shutdown cleanup.
+
+--------------------------------------------------
+1. ENVIRONMENT VARIABLES
+--------------------------------------------------
+
+Audit and remove stale standalone-only environment variables from both dev and production where safe:
+
+Primary target:
+- VITE_TIMER_APP_URL
+
+Also verify whether these are still used:
+- TIMEKEEPING_SSO_SECRET
+- TIMEKEEPER_SERVICE_KEY
+
+Rules:
+- remove only if no active production code path depends on them
+- if still referenced, report exact file/location before removing
+
+Confirm:
+there are no remaining env-driven standalone redirects or hidden runtime dependencies.
+
+--------------------------------------------------
+2. STOP STANDALONE WORKFLOWS
+--------------------------------------------------
+
+Audit and disable/archive any remaining dev workflows tied to:
+
+- modules/timekeeping/artifacts/timekeeper
+- modules/timekeeping/artifacts/api-server
+- modules/timekeeping/artifacts/mockup-sandbox
+
+Goal:
+these should no longer auto-start or be treated as active production infrastructure.
+
+Do NOT delete folders yet.
+Archive/disable only.
+
+--------------------------------------------------
+3. DEAD FILE CLEANUP
+--------------------------------------------------
+
+Audit:
+client/src/App-backup.tsx
+
+Determine:
+- truly unused historical file
+or
+- hidden runtime dependency
+
+If unused:
+remove safely
+
+If referenced:
+report exactly where and stop
+
+--------------------------------------------------
+4. POST-CLEANUP VALIDATION
+--------------------------------------------------
+
+Verify after cleanup:
+
+- Employee Portal has no “Open Timekeeper”
+- LoginPage time clock mode routes to native /kiosk
+- /kiosk works
+- /time-clock-admin works
+- no standalone URL opens anywhere
+- no standalone workflow is required for normal development
+
+--------------------------------------------------
+5. DO NOT TOUCH
+--------------------------------------------------
+
+Do NOT touch:
+- /kiosk
+- /time-clock-admin
+- native timekeeping backend
+- timekeeping schema
+- public.employees
+- traveler/WAD logic
+- thin-anchor architecture
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+A. exact env vars removed or retained
+
+B. exact workflows disabled
+
+C. whether App-backup.tsx was removed or preserved
+
+D. confirmation no standalone runtime dependency remains
+
+E. confirmation Timekeeping is now fully native to EPOCH
+
+==================================================
+RULES
+==================================================
+
+- surgical only
+- no broad deletion
+- no schema redesign
+- no traveler/WAD changes
+- preserve rollback safety
+- preserve absorbed architecture

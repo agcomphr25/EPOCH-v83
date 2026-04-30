@@ -1,0 +1,228 @@
+READ-ONLY FORENSIC AUDIT — NO_BURDEN_RATES (DCAA / EDRI Compliance)
+
+You are performing a strict READ-ONLY forensic audit of the current EPOCH codebase.
+
+DO NOT modify code.
+DO NOT create files.
+DO NOT refactor.
+DO NOT implement fixes yet.
+
+Your job is to determine exactly why the EDRI / DCAA scorer is flagging:
+
+NO_BURDEN_RATES
+
+and what must be true for EPOCH to become audit-defensible for labor burden allocation.
+
+We are not guessing.
+We are tracing the real system.
+
+--------------------------------------------------
+PRIMARY QUESTIONS
+--------------------------------------------------
+
+1. Where is the NO_BURDEN_RATES scorer defined exactly?
+2. What fields/tables does it inspect?
+3. What is missing today that causes failure?
+4. Does labor_cost_records support burden storage already?
+5. Is burden calculation partially implemented somewhere?
+6. Are indirect pools / overhead structures already modeled?
+7. Where should burden rates come from architecturally?
+8. What is the safest implementation path later?
+
+--------------------------------------------------
+PHASE 1 — FIND THE EXACT SCORER LOGIC
+--------------------------------------------------
+
+Audit:
+
+- server/src/services/edriDomainScorers.ts
+- dcaaForensicRules.ts
+- any burden-related forensic rule definitions
+- any references to:
+  NO_BURDEN_RATES
+  burden
+  overhead
+  fringe
+  G&A
+  indirect labor
+  burdenRate
+  burdenApplied
+  labor burden
+
+I need:
+
+- exact SQL
+- exact thresholds
+- exact scoring logic
+- severity
+- FAR / DCAA citation
+- current score math
+
+Show exactly how the scorer decides pass / fail.
+
+--------------------------------------------------
+PHASE 2 — LABOR COST RECORDS FORENSIC TRACE
+--------------------------------------------------
+
+Audit:
+
+- shared/schema.ts
+- labor_cost_records table
+- labor posting services
+- labor costing services
+- posting services
+- GL journal generation
+
+Determine:
+
+Does labor_cost_records already contain:
+
+- direct labor cost
+- burden rate
+- burden amount
+- overhead amount
+- fringe
+- G&A
+- fully burdened labor cost
+- cost pool references
+
+Or is it direct labor only?
+
+Trace:
+
+Punch
+→ labor_cost_records
+→ journal_entries
+
+Show exact fields.
+
+--------------------------------------------------
+PHASE 3 — INDIRECT POOLS + ACCOUNTING MODEL
+--------------------------------------------------
+
+Audit:
+
+- chart of accounts logic
+- indirect labor handling
+- overhead allocation logic
+- manufacturing burden models
+- department burden pools
+- burden tables
+- labor rates tables
+- burden configuration settings
+- accounting prep modules
+- cost accounting routes
+
+Search for:
+
+- fringe
+- overhead
+- burden
+- indirect pool
+- cost pool
+- allocation base
+- applied overhead
+- burden rate table
+- manufacturing overhead
+
+We need to know whether burden architecture already exists but is disconnected, or does not exist at all.
+
+--------------------------------------------------
+PHASE 4 — COSTPOINT PARITY CHECK
+--------------------------------------------------
+
+Audit whether EPOCH currently supports the accounting concepts needed for:
+
+Costpoint-style:
+
+- direct labor
+- indirect labor
+- overhead pools
+- fringe pools
+- G&A pools
+- provisional billing rates
+- applied burden rates
+- year-end true-up capability
+
+Determine:
+
+Are we:
+
+A) missing only calculation logic
+
+or
+
+B) missing the actual accounting architecture
+
+This matters enormously.
+
+--------------------------------------------------
+PHASE 5 — SOURCE OF TRUTH FOR RATES
+--------------------------------------------------
+
+Determine where burden rates should realistically come from:
+
+Examples:
+
+- manually maintained admin burden table
+- imported from Costpoint
+- derived from GL actuals
+- department-specific rate matrix
+- employee class rate table
+- WAD / program-specific burden logic
+
+Find:
+
+- existing configuration points
+- admin settings
+- financial controls
+- accounting prep UI
+- rate management modules
+
+We need the safest real-world operational answer.
+
+--------------------------------------------------
+PHASE 6 — BEST IMPLEMENTATION PATH
+--------------------------------------------------
+
+Based ONLY on the existing codebase:
+
+What is the safest path to fix:
+
+NO_BURDEN_RATES
+
+WITHOUT creating accounting architecture debt?
+
+Examples:
+
+- add burden fields to labor_cost_records
+- create burden_rate_config table
+- inject burden inside processLaborCosts()
+- apply burden only at posting
+- sync from Costpoint first
+- temporary admin-managed burden rates
+
+I want the answer based on the real codebase, not theory.
+
+--------------------------------------------------
+FINAL DELIVERABLE
+--------------------------------------------------
+
+Return:
+
+1. Exact scorer logic
+2. Exact files involved
+3. Current missing architecture
+4. Existing reusable infrastructure
+5. Whether this is a calculation problem or architecture problem
+6. Best implementation path later
+7. Technical risks
+8. Expected score recovery
+
+This is forensic only.
+
+READ ONLY.
+
+No implementation.
+No assumptions.
+Trace the real system.

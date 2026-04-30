@@ -1,0 +1,219 @@
+IMPLEMENTATION PROMPT — TIMEKEEPING EMPLOYEE CERTIFICATION (DCAA COMPLIANT)
+
+STRICT COMPLIANCE-FIRST EXECUTION
+
+DO NOT fake certification.
+DO NOT auto-certify.
+DO NOT allow submission without certification.
+DO NOT allow edits after certification without correction workflow.
+DO NOT overwrite certification history.
+
+Goal:
+
+Implement a DCAA-compliant Employee Time Certification system that ensures every submitted timesheet is formally attested by the employee and preserved immutably.
+
+==================================================
+PHASE 1 — READ-ONLY FORENSIC AUDIT
+==================================
+
+Before coding, analyze current system behavior.
+
+Find:
+
+1. Where timesheet submission occurs (UI + API)
+2. Whether any certification mechanism already exists
+3. How submission status is stored (draft, submitted, approved, etc.)
+4. Whether timestamps exist for submission
+5. Whether employee identity is tied to submission
+6. Whether any audit log exists for submission events
+
+Return findings BEFORE implementing changes.
+
+==================================================
+PHASE 2 — REQUIRED COMPLIANCE MODEL
+===================================
+
+DCAA requires:
+
+Employee must explicitly certify that:
+
+“The time recorded is complete and accurate.”
+
+Certification must be:
+
+* explicit (not implied)
+* tied to the employee
+* tied to the exact record being submitted
+* timestamped
+* immutable after submission
+
+==================================================
+PHASE 3 — DATA MODEL
+====================
+
+Add fields to timesheet entity (or equivalent table):
+
+* certified_at TIMESTAMP NULL
+* certified_by_user_id UUID / INT
+* certification_statement TEXT
+* certification_version INT (for future policy updates)
+
+DO NOT reuse generic “updated_at” or “submitted_at” as certification.
+
+Certification must be distinct.
+
+==================================================
+PHASE 4 — UI IMPLEMENTATION
+===========================
+
+On timesheet submission screen:
+
+Add required certification block:
+
+---
+
+☐ I certify that the time recorded is complete and accurate.
+
+[ Submit Timesheet ]
+
+---
+
+RULES:
+
+* Checkbox MUST be checked to enable submission
+* Statement must be visible at time of certification
+* Cannot be hidden or auto-filled
+* Must be tied to submit action (not separate step)
+
+==================================================
+PHASE 5 — SUBMISSION GATE (CRITICAL)
+====================================
+
+Modify submission endpoint:
+
+BLOCK submission unless:
+
+* certification checkbox = true
+* user is authenticated employee
+* timesheet is in editable state
+
+On success:
+
+* set certified_at = now
+* set certified_by_user_id
+* store certification_statement
+* transition state → SUBMITTED
+
+==================================================
+PHASE 6 — IMMUTABILITY RULES
+============================
+
+Once certified:
+
+* timesheet lines become LOCKED
+* no direct edits allowed
+
+Any change must go through:
+
+→ correction request workflow (separate system)
+
+DO NOT allow:
+
+* silent edits
+* inline edits after certification
+* overwrite of original data
+
+==================================================
+PHASE 7 — AUDIT TRAIL
+=====================
+
+Create audit event:
+
+TIME_CERTIFIED
+
+Include:
+
+* employee_id
+* timesheet_id
+* timestamp
+* certification statement
+* full snapshot of hours (optional but preferred)
+
+This must allow reconstruction of:
+
+“What did the employee certify at that moment?”
+
+==================================================
+PHASE 8 — DISPLAY / VISIBILITY
+==============================
+
+On timesheet view:
+
+Show:
+
+Certified By: [Employee Name]
+Certified At: [Timestamp]
+Statement: “The time recorded is complete and accurate”
+
+This must be visible to:
+
+* employee
+* payroll
+* auditors
+
+==================================================
+PHASE 9 — EDGE CASES
+====================
+
+Handle:
+
+1. Partial week submission
+2. PTO-only weeks
+3. Late submissions
+4. Re-submission after rejection
+
+If rejected:
+
+* certification must be cleared
+* re-certification required
+
+==================================================
+PHASE 10 — VALIDATION
+=====================
+
+Verify:
+
+1. Cannot submit without certification
+2. Certification timestamp is stored
+3. Certification user is correct
+4. Post-certification edits are blocked
+5. Audit event is created
+6. UI shows certification clearly
+7. No TypeScript errors
+8. No regression in payroll workflow
+
+==================================================
+DELIVERABLE FORMAT
+==================
+
+Return:
+
+1. Audit findings (current gaps)
+2. Implementation plan
+3. Exact files modified
+4. Schema changes
+5. API changes
+6. UI changes
+7. Audit events added
+8. Validation results
+9. Remaining risks
+
+==================================================
+FINAL RULE
+==========
+
+Certification must represent a real, deliberate employee action.
+
+Not a system assumption.
+
+Proceed.

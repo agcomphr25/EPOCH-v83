@@ -1,0 +1,127 @@
+We need a schema drift forensic audit before publishing P1 OEM invoice_number changes.
+
+Current problem:
+
+Republish is attempting dangerous unrelated destructive schema changes including:
+
+- deleting barcode_printed from p2_serialized_items with live data
+- dropping unrelated tables
+- dropping indexes
+- altering unrelated ID types
+- disabling row-level security
+
+These are NOT part of the P1 invoice_number task.
+
+Before isolating migrations, we must determine whether this is:
+
+A) legitimate unapplied migrations
+
+or
+
+B) schema drift between production DB and schema.ts
+
+We must establish production truth first.
+
+==================================================
+TASK
+==================================================
+
+STEP 1 — Establish Production Schema Baseline
+
+Inspect the actual production database schema for the affected tables:
+
+- shipment_records
+- shipment_items
+- p2_serialized_items
+- kiosk_pin_rate_limits
+- persistent_discounts
+- order_filter_presets
+- short_term_sales
+- linked_order_groups
+- linked_orders
+- and any other tables included in the publish warning
+
+Determine:
+
+- which columns currently exist
+- which indexes currently exist
+- which tables actually exist
+- whether barcode_printed currently exists in production
+- whether barcode_printed_at was intentionally deployed previously
+- whether the dangerous diff is real or false-positive drift
+
+Do not assume schema.ts is correct.
+
+Production DB is source of truth.
+
+==================================================
+STEP 2 — Compare Against schema.ts / Drizzle
+
+Identify:
+
+1. Legitimate pending migrations
+(actual intended work not yet deployed)
+
+2. Schema drift
+(local schema definitions no longer match production reality)
+
+3. Previously intended migrations that never reached production
+
+Especially verify:
+
+- barcode_printed / barcode_printed_at history
+- whether deletion is safe or actually dangerous
+
+==================================================
+STEP 3 — Safe Reconciliation Plan
+
+Recommend:
+
+- what should be published
+- what should be removed from migration bundle
+- what should be reconciled in schema.ts
+- what should be deferred
+- what should never be auto-published
+
+Do NOT guess.
+
+==================================================
+STEP 4 — P1 Invoice Migration Isolation
+
+After drift is understood:
+
+Create the cleanest safe path for:
+
+ALTER TABLE shipment_records
+ADD COLUMN invoice_number text;
+
+(nullable, additive)
+
+while preserving:
+
+- invoice persistence
+- invoice reuse on reprint
+- OEM shipment search by invoice #
+- UI invoice display
+
+without publishing unrelated destructive changes
+
+==================================================
+IMPORTANT
+==================================================
+
+Do NOT publish anything yet.
+
+Do NOT delete migration files blindly.
+
+Do NOT approve destructive changes without proving they are intentional.
+
+Protect production first.
+
+Return:
+
+1. Production truth
+2. Drift diagnosis
+3. Safe reconciliation plan
+4. Final safe migration path for invoice_number
+5. Confirmation whether republish can proceed safely

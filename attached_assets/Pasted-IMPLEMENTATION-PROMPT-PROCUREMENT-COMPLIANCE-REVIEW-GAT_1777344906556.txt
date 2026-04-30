@@ -1,0 +1,359 @@
+IMPLEMENTATION PROMPT — PROCUREMENT COMPLIANCE REVIEW GATE
+PRE-ISSUE PO FAR/DFARS + PROCUREMENT CHECKPOINT
+
+STRICT COMPLIANCE-FIRST EXECUTION
+
+DO NOT redesign Procurement.
+DO NOT build a full compliance engine.
+DO NOT build automatic FAR determination logic yet.
+DO NOT create speculative AI logic.
+DO NOT break existing PO issue workflows.
+
+This phase is an INTERIM HUMAN-CONTROLLED COMPLIANCE GATE.
+
+The goal is to prevent “checkbox theater” and create a real documented compliance decision before Vendor POs are issued.
+
+Accuracy > speed.
+
+Audit defensibility > convenience.
+
+Compliance > shortcuts.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Implement a mandatory:
+
+PROCUREMENT COMPLIANCE REVIEW GATE
+
+before a Vendor PO can be issued.
+
+This applies specifically to:
+
+Vendor PO Issue Flow
+
+inside EPOCH Procurement.
+
+The system must force a documented compliance review before:
+
+SEND PO
+ISSUE PO
+SEND RFQ (if applicable)
+
+This is not a warning.
+
+This is a required pre-issue gate.
+
+==================================================
+CURRENT PROBLEM
+==================================================
+
+Current state:
+
+Users can manually select Optional Statements like:
+
+- FAR/DFARS Flowdown Statement
+- DPAS Rated Orders
+- Certificate of Conformance
+- MTR Required
+
+But:
+
+- system does not ask when they are required
+- no reason is documented
+- no audit trail exists
+- issue flow does not require compliance review
+- users can issue POs with no meaningful compliance confirmation
+
+This creates major DCAA / FAR / subcontractor audit risk.
+
+We need a controlled review step.
+
+==================================================
+REQUIRED IMPLEMENTATION
+==================================================
+
+Build:
+
+Compliance Review Drawer / Modal
+
+triggered BEFORE:
+
+POST /api/vendor-pos/:id/issue
+
+can complete.
+
+==================================================
+SECTION 1 — COMPLIANCE REVIEW UI
+==================================================
+
+When user clicks:
+
+Issue PO
+
+system opens:
+
+PROCUREMENT COMPLIANCE REVIEW
+
+Required review fields:
+
+--------------------------------------------------
+
+GOVERNMENT / FLOWDOWN REVIEW
+
+1. Does this PO support a government contract?
+
+Options:
+- Yes
+- No
+
+2. Are FAR/DFARS clauses required?
+
+Options:
+- Required
+- Not Required
+
+3. Is DPAS rating required?
+
+Options:
+- Required
+- Not Required
+
+4. Is Certificate of Conformance required?
+
+Options:
+- Required
+- Not Required
+
+5. Is MTR / traceability required?
+
+Options:
+- Required
+- Not Required
+
+6. Is source inspection required?
+
+Options:
+- Required
+- Not Required
+
+7. Is second-party approval complete?
+
+Options:
+- Yes
+- No
+
+8. Vendor approved for this work?
+
+Options:
+- Yes
+- No
+
+--------------------------------------------------
+
+JUSTIFICATION
+
+Required free-text field:
+
+Compliance Review Notes
+
+Example:
+
+“Customer PO includes FAR flowed-down clauses and MTR requirement for serialized aerospace material.”
+
+This is mandatory.
+
+==================================================
+SECTION 2 — OPTIONAL STATEMENT AUTO-SELECTION
+==================================================
+
+If user selects:
+
+FAR/DFARS Required
+
+system should automatically select:
+
+FAR/DFARS Flowdown Statement
+
+inside existing Optional Statements
+
+Same for:
+
+DPAS → DPAS statement
+COC → Certificate of Conformance
+MTR → MTR Required
+
+User may still review/edit,
+but default should be system-assisted.
+
+No silent magic.
+
+Visible and explainable.
+
+==================================================
+SECTION 3 — HARD ISSUE BLOCK
+==================================================
+
+PO CANNOT BE ISSUED unless:
+
+Compliance Review is completed.
+
+Block issue if:
+
+- required fields incomplete
+- justification missing
+- second-party approval = No
+- vendor approved = No
+
+Show exact blocking reason.
+
+Not generic failure.
+
+Example:
+
+“PO cannot be issued:
+Vendor approval must be completed before issuance.”
+
+==================================================
+SECTION 4 — AUDIT TRAIL
+==================================================
+
+System must store:
+
+- who completed compliance review
+- when
+- before/after values
+- justification notes
+- final decision state
+
+This must be immutable enough for audit review.
+
+Do NOT overwrite silently.
+
+Must support forensic reconstruction.
+
+==================================================
+SECTION 5 — VISIBLE PO STATUS
+==================================================
+
+Add visible badge on Vendor PO:
+
+Compliance Status
+
+Statuses:
+
+- Pending Review
+- Reviewed
+- Blocked
+- Requires Attention
+
+This should be obvious in queues and PO detail view.
+
+==================================================
+SECTION 6 — FUTURE-SAFE ARCHITECTURE
+==================================================
+
+Design this so future rule engine can replace manual decisions.
+
+Meaning:
+
+future:
+
+system determines FAR required
+
+today:
+
+human confirms FAR required
+
+Architecture must support that future cleanly.
+
+Do NOT hardcode dead-end logic.
+
+==================================================
+DATABASE REQUIREMENTS
+==================================================
+
+Add proper structured persistence.
+
+Do NOT use random JSON blobs unless clearly justified.
+
+Prefer clean schema.
+
+Likely:
+
+vendor_po_compliance_reviews
+
+with normalized fields for:
+
+- government_contract
+- far_required
+- dpas_required
+- coc_required
+- mtr_required
+- source_inspection_required
+- second_party_complete
+- vendor_approved
+- review_notes
+- reviewed_by
+- reviewed_at
+- review_status
+
+Audit-safe design required.
+
+==================================================
+CRITICAL RULES
+==================================================
+
+NON-NEGOTIABLE:
+
+Human Confirms
+System Enforces
+Audit Preserves
+
+Never allow:
+
+silent bypass
+self-approval loopholes
+unlogged overrides
+invisible compliance decisions
+
+This must be DCAA-defensible.
+
+==================================================
+DELIVERABLE FORMAT (MANDATORY)
+==================================================
+
+Return:
+
+1. Exact implementation plan before coding
+
+2. Exact files to modify
+
+3. Exact migrations required
+
+4. Services impacted
+
+5. Compliance risk checks before execution
+
+6. Implementation completed summary
+
+7. Remaining known risks
+
+Do NOT skip analysis.
+
+Do NOT blindly code first.
+
+Think first.
+
+Then execute safely.
+
+==================================================
+FINAL RULE
+==================================================
+
+Do NOT build the full compliance engine yet.
+
+This is the INTERIM HUMAN REVIEW GATE ONLY.
+
+Proceed.

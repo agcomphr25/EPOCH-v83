@@ -1,0 +1,148 @@
+ARCHITECTURAL OVERRIDE — TIMKEEPING ABSORPTION (RUNTIME NOW, SCHEMA LATER)
+
+Critical correction:
+
+We are absorbing Timekeeping into EPOCH NOW.
+
+We are NOT performing full schema normalization right now.
+
+These are two different projects.
+
+Project 1 (NOW):
+Absorb runtime, UI, auth, and deployment into native EPOCH.
+
+Project 2 (LATER / Phase 3):
+Optional full FK/schema redesign to eliminate timekeeping.employees and move all references to public.employees.
+
+Do NOT combine these.
+
+==================================================
+CORRECT TARGET ARCHITECTURE (NOW)
+==================================================
+
+One server
+One Express app
+One authentication system
+One deployment
+One employee source of truth
+
+Runtime should become:
+
+server/src/routes/timekeeping/
+client/src/pages/timekeeping/
+public.employees
+timekeeping.punches
+timekeeping.timesheets
+timekeeping.employees (thin anchor table only)
+
+Kiosk:
+- lives inside EPOCH (example: /kiosk)
+- full-screen UI, no normal nav chrome
+- served by main EPOCH app
+- uses EPOCH auth/session infrastructure
+- PIN workflow preserved
+
+Admin:
+- Time Clock Admin + approvals + payroll export live inside EPOCH admin area
+
+==================================================
+DO NOT DO THIS RIGHT NOW
+==================================================
+
+Do NOT:
+- redesign all employee foreign keys
+- drop timekeeping.employees
+- move all timekeeping tables into public.*
+- perform a full schema migration to eliminate the timekeeping schema
+- build permanent service-to-service architecture
+- create long-term standalone API patterns
+- use TIMEKEEPER_SERVICE_KEY as permanent architecture
+
+timekeeping.employees is intentionally retained for now as:
+1. FK anchor table
+2. supplemental employee fields
+3. admin compatibility layer
+
+It is NOT:
+- a second employee truth
+- payroll truth
+- auth truth
+- identity truth
+
+==================================================
+PERMANENT DOMAIN RULE — DO NOT VIOLATE
+==================================================
+
+Attendance / Payroll Timekeeping and Traveler / WAD Labor are separate but connected systems.
+
+Attendance / Payroll answers:
+“Was this employee on the clock?”
+
+System of record:
+- timekeeping.punches
+- timekeeping.timesheets
+- public.employees
+
+Traveler / WAD answers:
+“What job / traveler / charge code was that labor charged to?”
+
+System of record:
+- public.time_clock_entries
+- production_work_orders
+- WAD structures
+- labor budget enforcement
+
+Do NOT merge these domains.
+
+Do NOT use public.punch_events for new development.
+
+Do NOT use timekeeping.punches as the job-cost ledger.
+
+==================================================
+YOUR TASK — READ ONLY FIRST
+==================================================
+
+Create the exact absorption plan for Project 1 only:
+
+Absorb Timekeeping runtime into EPOCH core.
+
+Determine:
+
+1. Exact backend routes/services from:
+modules/timekeeping/artifacts/api-server
+
+that should move into:
+main EPOCH Express server
+
+2. Exact frontend pages/components from:
+modules/timekeeping/artifacts/timekeeper
+
+that should move into:
+main EPOCH frontend
+
+3. Exact auth/session logic that should be deleted and replaced by EPOCH auth
+
+4. Exact deployment/runtime pieces that become unnecessary after absorption
+
+5. Exact safest execution order to perform the absorption without breaking:
+- payroll
+- approvals
+- kiosk flow
+- timesheets
+- Gusto export
+
+6. Explicit confirmation that:
+timekeeping.employees remains temporarily as a thin anchor table and is NOT part of this runtime absorption work
+
+==================================================
+RULES
+==================================================
+
+- READ ONLY
+- no code changes yet
+- do not propose permanent sidecar architecture
+- prefer absorption over integration
+- preserve thin-anchor model
+- preserve traveler/WAD boundary
+- be explicit and grounded in actual files/routes/tables
+- do not drift into Phase 3 schema redesign

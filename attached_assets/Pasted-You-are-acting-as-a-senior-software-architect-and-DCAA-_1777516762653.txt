@@ -1,0 +1,235 @@
+You are acting as a senior software architect and DCAA-aware labor systems engineer.
+
+We are designing the next phase of EPOCH labor capture: the Labor Allocation Engine.
+
+READ-ONLY FIRST. Do not modify files until you complete the design report and clearly identify the safest implementation sequence.
+
+Context from prior audit:
+- Hourly kiosk, traveler, and hourly employee portal already converge mostly through `punch_ledger`.
+- Traveler currently stamps job/traveler/charge-code metadata onto the employee’s open `punch_ledger` row.
+- This avoids double-counting, but it does not preserve allocation history when an employee switches jobs during a shift.
+- Salaried labor currently uses `timekeeping.timesheets` separately and does not touch `punch_ledger`.
+- The target model is:
+  - `punch_ledger` = labor session / attendance shell
+  - `labor_allocations` = one or more charge-code / traveler / job segments inside that session
+  - Timesheets should eventually be generated from labor sessions + allocations, not manually treated as separate sources of truth.
+
+OBJECTIVE:
+Design the safest implementation plan for adding a Labor Allocation Engine to EPOCH without breaking current hourly payroll, traveler execution, kiosk punches, or timekeeping admin workflows.
+
+PHASE 1 — CURRENT CODE TRACE
+Inspect the codebase and identify the exact files/functions/routes involved in:
+
+1. Opening a punch session
+   - kiosk clock-in
+   - employee portal hourly clock-in
+   - any traveler-initiated clock-in
+
+2. Closing a punch session
+   - kiosk clock-out
+   - employee portal hourly clock-out
+   - admin edits, if any
+
+3. Traveler assignment / job switching
+   - where `traveler_id`, `traveler_step_id`, `production_work_order_id`, and `charge_code_id` are currently written onto `punch_ledger`
+   - where `switchPunchLedgerAssignment()` or equivalent logic lives
+
+4. Timesheet generation
+   - where hourly timesheets are generated from `punch_ledger`
+   - whether timesheet generation reads current assignment fields from `punch_ledger`
+   - whether it currently loses historical job-switch detail
+
+5. Payroll export
+   - whether payroll export depends on `punch_ledger`, `timekeeping.timesheets`, or both
+   - whether adding allocations would affect Gusto export or only job costing
+
+Return exact file paths and function names.
+
+PHASE 2 — TARGET DATA MODEL DESIGN
+Design a new `labor_allocations` model that can sit under `punch_ledger` without replacing it.
+
+Propose schema fields for a new table such as:
+
+- id
+- punch_ledger_id
+- employee_id
+- allocation_start
+- allocation_end
+- charge_code_id
+- traveler_id
+- traveler_step_id
+- production_work_order_id
+- department_id / area_id if relevant
+- source
+- status
+- certification_status
+- created_by
+- updated_by
+- approved_by
+- approved_at
+- locked_at
+- notes
+- audit metadata
+
+Also determine:
+- Which fields should remain on `punch_ledger`
+- Which fields should eventually move to `labor_allocations`
+- Which duplicated fields are acceptable during transition
+- Which indexes and constraints are needed
+- How to prevent overlapping allocations within the same punch session
+- Whether DB constraints, application validation, or both should enforce overlap rules
+
+PHASE 3 — BEHAVIOR DESIGN
+Design the new behavior for these flows:
+
+1. Clock in
+   - Creates/open `punch_ledger` session
+   - Should it also create a default allocation?
+   - What if no traveler / charge code is known yet?
+
+2. Traveler start / badge scan
+   - Should close current open allocation
+   - Should create a new allocation attached to same punch session
+   - Should preserve previous allocation history
+   - Should no longer overwrite historical job context
+
+3. Job switch
+   - Close prior allocation
+   - Open new allocation
+   - Preserve all traveler/charge-code transitions
+
+4. Clock out
+   - Close open allocation
+   - Close punch session
+   - Validate no orphan open allocations remain
+
+5. Manual correction
+   - How should admin edit allocation segments?
+   - How should corrections be audited?
+   - Should edits create amendments instead of overwriting?
+
+6. Salaried future compatibility
+   - How could salaried manual labor entries eventually create synthetic sessions and allocations?
+   - Do not implement salaried changes yet, but design for compatibility.
+
+PHASE 4 — MIGRATION STRATEGY
+Create a safe migration plan.
+
+We need to avoid breaking current payroll.
+
+Plan should include:
+
+1. Create new `labor_allocations` table
+2. Backfill one allocation per closed `punch_ledger` row using existing assignment fields
+3. For open punches, create one open allocation matching current assignment state
+4. Keep existing `punch_ledger` assignment fields during transition
+5. Dual-write during transition:
+   - Continue writing old `punch_ledger` fields
+   - Also write new `labor_allocations`
+6. Add read path behind feature flag or config toggle
+7. Validate reports from old model vs allocation model
+8. Only later switch timesheet/job costing reads to allocation model
+
+PHASE 5 — IMPACT ANALYSIS
+Analyze risk and impact on:
+
+- Kiosk clock-in/out
+- Traveler execution
+- Badge scanning
+- Employee portal hourly time entry
+- Timekeeping admin
+- Timesheet generation
+- Payroll export
+- Labor costing
+- DCAA audit trail
+- Existing reports
+- Legacy tables
+
+Identify:
+- high-risk files
+- low-risk files
+- areas where tests are missing
+- areas where feature flags are required
+
+PHASE 6 — IMPLEMENTATION SEQUENCE
+Return a phased implementation plan.
+
+Do NOT jump directly to code.
+
+Recommended structure:
+
+### Phase A — Schema only
+- migration
+- Drizzle schema
+- no behavior change
+
+### Phase B — Backfill + validation script
+- compare old assignment totals to allocation totals
+
+### Phase C — Dual-write service
+- allocation service
+- create/open/close allocation helpers
+- still preserve old behavior
+
+### Phase D — Traveler switch refactor
+- replace overwrite-only behavior with close/open allocation behavior
+- keep old punch_ledger fields updated for compatibility
+
+### Phase E — Clock-out integration
+- close open allocation when session closes
+
+### Phase F — Reporting read toggle
+- allow reports to read from allocations
+- compare results against current system
+
+### Phase G — Payroll-safe adoption
+- only after validation
+- never break Gusto export without explicit signoff
+
+PHASE 7 — RETURN FORMAT
+Return your answer in this exact structure:
+
+# EPOCH Labor Allocation Engine Design Report
+
+## 1. Current Code Map
+- file paths
+- routes
+- functions
+- tables touched
+
+## 2. Current Behavior Summary
+Explain what happens today.
+
+## 3. Proposed Data Model
+Include proposed schema.
+
+## 4. Allocation Flow Design
+Explain clock-in, traveler start, job switch, clock-out, correction.
+
+## 5. Migration and Backfill Plan
+Step-by-step.
+
+## 6. Risk Analysis
+High / medium / low risk.
+
+## 7. Feature Flag Strategy
+How to keep this safe.
+
+## 8. Test Plan
+Include unit, integration, migration, and reconciliation tests.
+
+## 9. Recommended Implementation Phases
+Give the exact order.
+
+## 10. Open Questions / Decisions Needed
+List decisions that require owner input.
+
+IMPORTANT:
+- Do not modify code during the design phase.
+- If implementation is requested later, implement only Phase A first unless explicitly instructed otherwise.
+- Preserve current payroll behavior.
+- Preserve current kiosk behavior.
+- Preserve current traveler execution behavior.
+- Preserve DCAA auditability.
+- Do not delete legacy tables.
+- Do not assume salaried labor should be merged immediately.

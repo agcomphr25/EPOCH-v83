@@ -1,0 +1,177 @@
+🔥 #266 — Operations Command Center
+🎯 Goal
+
+One screen that answers:
+
+“What is happening in my shop right now—and what is broken?”
+
+🧠 What This Should Show
+
+You are NOT building a generic dashboard.
+
+You are building:
+
+👉 a decision surface
+
+Core Sections
+🔴 1. BLOCKED WORK (Top Priority)
+
+Show WADs that cannot proceed:
+
+Reasons:
+
+not released
+material missing
+training missing
+traveler gate failure
+🟡 2. AT RISK
+
+Show WADs that are:
+
+nearing labor budget (≥80%)
+behind schedule
+missing upcoming requirements
+🟢 3. READY
+fully ready
+released
+can be worked immediately
+⚙️ 4. IN PROGRESS
+currently active WADs
+show:
+% labor used
+current department
+time running
+⏱️ 5. LATE / OVERDUE
+past dueDate
+not complete
+🧱 BACKEND BUILD
+1. Create Aggregation Service
+
+📁 server/src/lib/commandCenter.ts
+
+export async function getCommandCenterData(storage) {
+  const workOrders = await storage.getAllProductionWorkOrders();
+
+  const result = {
+    blocked: [],
+    atRisk: [],
+    ready: [],
+    inProgress: [],
+    late: []
+  };
+
+  for (const wo of workOrders) {
+    const readiness = await evaluateWorkOrderReadiness(storage, wo.id);
+    const labor = await evaluateWorkOrderLaborStatus(storage, wo.id);
+
+    // BLOCKED
+    if (wo.status !== "RELEASED") {
+      result.blocked.push({ ...wo, reason: "Not released" });
+      continue;
+    }
+
+    if (readiness.status !== "READY") {
+      result.blocked.push({ ...wo, reason: readiness.reason });
+      continue;
+    }
+
+    // AT RISK
+    if (labor.status === "WARNING") {
+      result.atRisk.push({ ...wo, labor });
+      continue;
+    }
+
+    // IN PROGRESS
+    if (wo.status === "IN_PROGRESS") {
+      result.inProgress.push({ ...wo, labor });
+      continue;
+    }
+
+    // READY
+    if (wo.status === "RELEASED") {
+      result.ready.push(wo);
+    }
+
+    // LATE
+    if (wo.dueDate && new Date(wo.dueDate) < new Date()) {
+      result.late.push(wo);
+    }
+  }
+
+  return result;
+}
+2. Storage Method
+
+Add:
+
+getAllProductionWorkOrders()
+3. Route
+
+📁 server/src/routes/commandCenter.ts
+
+router.get("/", async (req, res) => {
+  const data = await getCommandCenterData(storage);
+  res.json(data);
+});
+4. Register Route
+app.use("/api/command-center", commandCenterRouter);
+🎨 FRONTEND (KEEP IT SIMPLE)
+
+📁 client/src/pages/CommandCenter.tsx
+
+Layout
+[ BLOCKED ]
+[ AT RISK ]
+[ READY ]
+[ IN PROGRESS ]
+[ LATE ]
+Each Card Shows:
+WAD number
+part number
+project
+status
+labor %
+due date
+reason (if blocked)
+Example Card
+WAD-1042
+Part: Tailcone
+Status: BLOCKED
+Reason: Material not allocated
+Due: 04/20
+🧪 TEST FLOW
+Create test WADs:
+Not released → BLOCKED
+Missing material → BLOCKED
+85% labor → AT RISK
+Released + ready → READY
+Active → IN PROGRESS
+Past due → LATE
+Call:
+GET /api/command-center
+Confirm:
+each category populates correctly
+no duplicates across categories
+⚠️ RULES
+Each WAD must appear in only ONE category
+BLOCKED overrides everything
+AT RISK overrides READY
+IN_PROGRESS separate
+LATE can overlap OR be separate (your choice, recommend separate)
+🔥 WHAT THIS UNLOCKS
+
+After this:
+
+👉 You now have:
+
+real-time shop visibility
+actionable priorities
+a system you can demo
+operational awareness
+💡 STRAIGHT TALK
+
+This is the moment where:
+
+👨‍💼 Owner sees it and says:
+
+“I need this in my shop”

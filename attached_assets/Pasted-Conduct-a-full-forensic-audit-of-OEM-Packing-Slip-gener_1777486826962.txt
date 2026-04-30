@@ -1,0 +1,272 @@
+Conduct a full forensic audit of OEM Packing Slip generation and Invoice # traceability for P1 shipments.
+
+This is a READ-ONLY forensic audit.
+Do not write code yet.
+Do not refactor yet.
+Do not create migrations yet.
+
+We need exact source-of-truth analysis before implementation.
+
+==================================================
+PROBLEM #1 — PACKING SLIP CONTENTS ARE WRONG
+==================================================
+
+Example:
+Shipment SWS2505 contains:
+
+- SWS-CAT-SA qty 1
+- SWS-AH-LA qty 2
+
+UI correctly shows:
+3 stock units
+
+But generated Packing Slip PDF prints:
+
+Contents: SWS-CAT-SA
+Sticker #: 1
+Quantity: 3
+
+This is operationally incorrect because it prints only the first item description while using total shipment quantity.
+
+This creates receiving confusion, audit risk, and customer mismatch.
+
+--------------------------------------------------
+REQUIRED BUSINESS RULE (FINAL DECISION)
+--------------------------------------------------
+
+Packing slips must follow:
+
+MODEL B — Grouped By Item Type
+
+Example:
+
+PO | Contents | Sticker # Range | Qty
+SWS2505 | SWS-CAT-SA | [blank] | 1
+SWS2505 | SWS-AH-LA | [blank] | 2
+
+Rules:
+
+1. Group shipment items by customer-facing item description
+
+2. Sum quantities per grouped item
+
+3. Leave Sticker # Range column present but BLANK for now
+
+4. Do NOT use:
+- first item only
+- representative item
+- shipment header summary pretending to be line-item truth
+
+5. “Contents” source-of-truth priority must be:
+
+Priority 1:
+customer-specific item alias
+
+Priority 2:
+sales order line item description
+
+Priority 3:
+internal SKU description
+
+Never use:
+- random slug fields
+- old shorthand values
+- inconsistent legacy labels
+
+==================================================
+PROBLEM #2 — INVOICE # HAS NO TRACEABILITY
+==================================================
+
+Example:
+
+Packing Slip PDF shows:
+
+Invoice #:
+SW26-206
+
+But there is no clear way in OEM Shipments to trace that Invoice # back to the shipment.
+
+Users cannot reliably answer:
+
+“What shipment is SW26-206?”
+
+This creates accounting confusion and audit failure.
+
+--------------------------------------------------
+REQUIRED BUSINESS RULE
+--------------------------------------------------
+
+Invoice # must be a real accounting-traceable identifier.
+
+It should be:
+
+- stored in the database
+- tied directly to the shipment record
+- searchable in OEM Shipments
+- visible in shipment summary/details
+- reliably connected to the printed packing slip
+
+It should not exist only on the PDF.
+
+Even if numbering format is imperfect today, traceability must exist first.
+
+==================================================
+AUDIT REQUIRED
+==================================================
+
+PART 1 — PACKING SLIP GENERATION
+
+1. Find exact backend route responsible for:
+
+- View Packing Slip
+- PDF generation
+- template rendering
+- invoice number generation
+
+2. Identify exact frontend trigger path from:
+
+OEM Shipment screen
+→ View Packing Slip button
+→ backend route
+→ PDF output
+
+3. Trace full data source:
+
+shipment
+→ shipment items
+→ inventory units
+→ stock items
+→ serialized labels
+→ customer aliases
+→ sales order lines
+
+4. Identify exact source for:
+
+- Contents field
+- Quantity field
+- Sticker Range field
+- Invoice # field
+
+5. Find any logic using:
+
+- first item only
+- array[0]
+- LIMIT 1
+- SELECT TOP 1
+- MIN()
+- representative item selection
+- shipment header summary only
+
+6. Determine if current PDF is generated from:
+
+A. shipment header only
+
+or
+
+B. shipment line items
+
+7. Identify whether grouping exists:
+
+- grouped by item type
+- grouped by PO
+- grouped by shipment only
+
+8. Identify if wrong customer item names can appear from:
+
+bad joins
+customer alias mismatch
+cross-customer item description leakage
+
+==================================================
+PART 2 — INVOICE # TRACEABILITY
+==================================================
+
+9. Find where Invoice # is generated
+
+Specifically:
+
+- backend function
+- route
+- service
+- helper
+- template logic
+
+10. Determine whether Invoice # is:
+
+A. stored in database
+
+B. generated dynamically only at PDF render time
+
+C. partially stored / partially generated
+
+11. Identify exact table + column if stored
+
+12. If not stored:
+
+identify safest architecture to make it persistent
+
+13. Determine whether Invoice # is currently linked to:
+
+- shipment
+- sales order
+- customer
+- AR workflow
+- QuickBooks sync
+- accounting exports
+
+or if it is isolated
+
+14. Identify whether OEM Shipment screen can support:
+
+search by Invoice #
+display Invoice #
+filter by Invoice #
+
+without schema conflict
+
+==================================================
+DELIVERABLES REQUIRED
+==================================================
+
+Return:
+
+1. Exact files involved
+
+2. Exact functions involved
+
+3. Exact bug source
+
+4. Exact reason packing slip prints incorrectly
+
+5. Exact reason Invoice # lacks traceability
+
+6. Whether this is:
+print-layer issue
+schema issue
+join issue
+or architectural issue
+
+7. Safest implementation plan for production fix
+
+8. Migration safety risks
+
+9. Recommended implementation order
+
+10. Any hidden side effects
+that could affect:
+shipping
+inventory
+accounting
+QuickBooks
+audit trails
+customer history
+
+==================================================
+IMPORTANT
+==================================================
+
+This is forensic analysis only.
+
+Do NOT code yet.
+
+We want exact truth first.

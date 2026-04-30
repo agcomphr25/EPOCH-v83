@@ -1,0 +1,231 @@
+🔥 #270 - Audit Logging System (FULL BUILD)
+🎯 Goal
+
+Track who did what, when, and why
+
+Action → User → Timestamp → Before → After → Context
+🧠 What Must Be Logged
+
+Start with high-risk / audit-critical actions:
+
+🔴 MUST LOG
+Work Order release
+Labor overrun approvals
+Time entry edits
+Traveler step start/finish
+QC signoffs
+Project closing + approval
+Permission/role changes (later)
+🧱 DONE LOOKS LIKE
+audit_logs table exists
+Every critical action creates a log entry
+Logs capture:
+user
+action type
+entity
+before/after values
+context (project, department, etc.)
+Logs are queryable by:
+project
+work order
+user
+No existing flows are broken
+Logging is automatic, not optional
+🚀 BUILD
+🧱 1. SCHEMA
+
+📁 server/schema.ts
+
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  userId: integer("user_id").notNull(),
+
+  action: text("action").notNull(),
+
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+
+  beforeData: jsonb("before_data"),
+  afterData: jsonb("after_data"),
+
+  context: jsonb("context"),
+
+  createdAt: timestamp("created_at").defaultNow()
+});
+Export types
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+🧠 2. STORAGE METHOD
+
+📁 server/storage.ts
+
+Add:
+
+createAuditLog(data: InsertAuditLog): Promise<AuditLog>;
+Implementation
+async createAuditLog(data: InsertAuditLog) {
+  const result = await db
+    .insert(auditLogs)
+    .values(data)
+    .returning();
+
+  return result[0];
+}
+🧠 3. LOGGING HELPER
+
+📁 server/src/lib/auditLogger.ts
+
+export async function logAudit(
+  storage,
+  userId,
+  action,
+  entityType,
+  entityId,
+  beforeData = null,
+  afterData = null,
+  context = {}
+) {
+  try {
+    await storage.createAuditLog({
+      userId,
+      action,
+      entityType,
+      entityId,
+      beforeData,
+      afterData,
+      context
+    });
+  } catch (err) {
+    console.error("Audit log failed", err);
+  }
+}
+
+👉 IMPORTANT:
+Audit logging should never break the main action
+
+🌐 4. APPLY TO CRITICAL ROUTES
+A. Work Order Release
+await logAudit(
+  storage,
+  req.user.id,
+  "RELEASE_WORK_ORDER",
+  "work_order",
+  workOrder.id,
+  { status: "READY" },
+  { status: "RELEASED" },
+  { projectId: workOrder.projectId }
+);
+B. Labor Overrun Approval
+await logAudit(
+  storage,
+  req.user.id,
+  "APPROVE_LABOR_OVERRUN",
+  "work_order",
+  workOrder.id,
+  null,
+  { approved: true },
+  { reason }
+);
+C. Traveler Step Start
+await logAudit(
+  storage,
+  req.user.id,
+  "START_TRAVELER_STEP",
+  "traveler_step",
+  stepId,
+  null,
+  { status: "IN_PROGRESS" },
+  { travelerId }
+);
+D. Traveler Step Finish
+await logAudit(
+  storage,
+  req.user.id,
+  "FINISH_TRAVELER_STEP",
+  "traveler_step",
+  stepId,
+  null,
+  { status: "COMPLETE" },
+  { travelerId }
+);
+E. QC Signoff
+await logAudit(
+  storage,
+  req.user.id,
+  "QC_SIGNOFF",
+  "traveler_step",
+  stepId,
+  null,
+  { signed: true },
+  { department: step.department }
+);
+F. Time Entry Edit
+await logAudit(
+  storage,
+  req.user.id,
+  "EDIT_TIME_ENTRY",
+  "time_entry",
+  timeEntry.id,
+  before,
+  after,
+  { workOrderId }
+);
+G. Project Closing
+await logAudit(
+  storage,
+  req.user.id,
+  "CLOSE_PROJECT",
+  "project",
+  projectId,
+  null,
+  { closed: true },
+  {}
+);
+🔍 5. QUERY ROUTES
+
+Add:
+
+Get logs by project
+GET /api/audit-logs/project/:projectId
+Get logs by work order
+GET /api/audit-logs/work-order/:id
+Get logs by user
+GET /api/audit-logs/user/:userId
+🧪 TEST FLOW
+1. Release WAD
+
+→ log created
+
+2. Approve overrun
+
+→ log created
+
+3. Start traveler
+
+→ log created
+
+4. Edit time
+
+→ before/after captured
+
+Query logs:
+
+→ correct entries returned
+
+⚠️ RULES
+NEVER allow silent critical actions
+ALWAYS log approvals
+ALWAYS log edits (before/after)
+NEVER block main flow if logging fails
+🔥 WHAT THIS UNLOCKS
+
+After this:
+
+👉 You now have:
+
+full traceability
+compliance-grade audit trail
+accountability for every action
+legal defensibility
+🧭 NEXT STEP

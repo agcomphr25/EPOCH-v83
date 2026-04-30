@@ -1,0 +1,156 @@
+READ-ONLY FORENSIC AUDIT — BURDEN RATES
+FINAL ACTIVE VIOLATION
+
+Strict read-only audit.
+
+DO NOT seed placeholder rows.
+DO NOT create fake burden rates.
+DO NOT change scorer logic.
+DO NOT patch scores.
+DO NOT implement yet.
+
+Goal:
+
+Resolve the final active DCAA violation:
+
+NO_BURDEN_RATES_CONFIGURED
+
+Current production status:
+
+Would Fail Audit Today? NO
+Conditionally Ready
+Composite: 76.3
+
+Only active violation:
+
+No Burden Rates Configured
+
+This is now the highest-priority accounting control.
+
+We must determine the correct burden rate structure
+for AG Composites / EPOCH.
+
+Not just “make the scorer green.”
+
+Real accounting truth only.
+
+--------------------------------------------------
+AUDIT SCOPE
+--------------------------------------------------
+
+Inspect:
+
+- labor_burden_rates
+- labor_account_config
+- charge_codes
+- cost_centers
+- labor_cost_records
+- journal_entries
+- payroll burden assumptions
+- overhead pools
+- G&A allocation structure
+- fringe treatment
+- EDRI scorer logic for burden rates
+- any existing placeholder rows
+- any QuickBooks / Costpoint mapping assumptions if present
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. What exactly does the scorer require?
+
+Determine:
+
+- exact SQL
+- exact minimum passing condition
+- threshold logic
+
+--------------------------------------------------
+
+2. What burden pools should exist?
+
+For AG Composites specifically:
+
+- OVERHEAD
+- G&A
+- FRINGE
+- MATERIAL HANDLING?
+- IR&D?
+- B&P?
+
+Which should be formalized now?
+
+Which should be deferred?
+
+--------------------------------------------------
+
+3. What rate basis should be used?
+
+Determine recommended structure:
+
+- direct labor base?
+- total labor base?
+- total cost input?
+- other?
+
+We need accounting defensibility.
+
+--------------------------------------------------
+
+4. Is there already partial configuration?
+
+Are there:
+
+- placeholder rows
+- stale rows
+- dev-only rows
+- prod gaps
+
+What is real?
+
+--------------------------------------------------
+
+5. Safest implementation path
+
+Recommend:
+
+Option A:
+minimal audit-safe initial burden structure
+
+Option B:
+full DCAA burden architecture now
+
+Option C:
+phased rollout
+
+Choose safest.
+
+Do NOT implement yet.
+
+--------------------------------------------------
+
+6. Score impact
+
+Estimate:
+
+after proper burden setup,
+where does production score move?
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/BURDEN_RATES_FINAL_AUDIT.md
+
+Include:
+
+- exact current DB evidence
+- recommended burden structure
+- safest implementation prompt
+- executive recommendation
+
+This is accounting policy,
+not software cleanup.

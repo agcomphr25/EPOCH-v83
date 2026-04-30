@@ -1,0 +1,212 @@
+You are performing Phase G of the EPOCH Labor Allocation Engine.
+
+This is a PRODUCTION READINESS and DRY-RUN VALIDATION phase.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any code
+- DO NOT change schemas
+- DO NOT change write behavior
+- DO NOT remove legacy logic
+- DO NOT force-enable flags globally
+- This is VALIDATION ONLY
+
+---
+
+## 🎯 OBJECTIVE
+
+Prove that allocation-based costing can safely replace legacy costing by:
+
+1) Running both models on real production data
+2) Verifying reconciliation accuracy across full pay periods
+3) Ensuring NO fallbacks occur
+4) Confirming system stability under allocation read path
+5) Producing a GO / NO-GO decision
+
+---
+
+## 🔍 STEP 1 — IDENTIFY TEST PERIODS
+
+Select:
+
+- Last FULL completed pay period
+- Current ACTIVE pay period (to date)
+
+Return:
+- date ranges used
+
+---
+
+## 🔍 STEP 2 — RUN RECONCILIATION (CLI)
+
+Run:
+
+npx tsx server/scripts/phaseECostReconciliation.ts --from <start> --to <end>
+
+Capture:
+
+- total_cost_old
+- total_cost_new
+- total delta
+- count of ERR rows
+- count of N/A rows
+
+Repeat for both periods.
+
+---
+
+## 🔍 STEP 3 — RUN API RECONCILIATION
+
+Call:
+
+POST /api/cost-accounting/reconcile-labor-costs
+
+For same periods.
+
+Verify:
+
+- API output matches CLI output
+- No discrepancies between services
+
+---
+
+## 🔍 STEP 4 — ENABLE FLAG IN CONTROLLED ENV
+
+Temporarily set:
+
+USE_ALLOCATION_COSTING_READ=true
+
+(ONLY in dev or staging)
+
+Then:
+
+Call:
+
+POST /api/cost-accounting/calculate-labor-costs
+
+Verify:
+
+- readModel = 'ALLOCATION'
+- results are returned successfully
+- no errors
+
+---
+
+## 🔍 STEP 5 — VERIFY NO FALLBACK
+
+Inspect logs:
+
+Search for:
+
+- LEGACY_FALLBACK
+- fallbackReason
+
+Return:
+
+- number of fallback events
+- sample logs if any
+
+Expected:
+
+- 0 fallbacks
+
+---
+
+## 🔍 STEP 6 — RESULT CONSISTENCY CHECK
+
+Compare:
+
+- allocation-based API results vs reconciliation new model
+
+Ensure:
+
+- totals match
+- breakdown matches
+
+---
+
+## 🔍 STEP 7 — EDGE CASE CHECK
+
+Specifically test:
+
+- employee with multiple job switches
+- employee with single session
+- employee with no allocations (if any)
+
+Verify:
+
+- correct costing
+- no crashes
+- no fallback
+
+---
+
+## 🔍 STEP 8 — PERFORMANCE CHECK
+
+Measure:
+
+- response time (legacy vs allocation)
+- DB query count (if available)
+
+Return:
+
+- avg response time
+- any degradation
+
+---
+
+## 🔍 STEP 9 — COVERAGE VALIDATION
+
+Query:
+
+- count of punch_ledger sessions
+- count of labor_allocations
+
+Ensure:
+
+- 100% coverage
+- no missing allocations
+
+---
+
+## 🔍 STEP 10 — FINAL VERDICT
+
+Return:
+
+# Phase G Readiness Report
+
+## Periods Tested
+(list)
+
+## Reconciliation Results
+- totals
+- deltas
+- ERR count
+- N/A count
+
+## API Validation
+(pass/fail)
+
+## Fallback Events
+(count)
+
+## Performance
+(summary)
+
+## Coverage
+(summary)
+
+## FINAL DECISION
+- ✅ GO (safe to enable in production)
+- ⚠️ CONDITIONAL GO (with notes)
+- ❌ NO-GO (blocking issues)
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+DO NOT:
+- enable flag in production yet
+- remove legacy costing
+- skip reconciliation validation
+
+This phase is strictly about PROVING SAFETY before cutover.

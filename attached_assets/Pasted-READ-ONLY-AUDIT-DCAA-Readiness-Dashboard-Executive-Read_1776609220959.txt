@@ -1,0 +1,136 @@
+READ-ONLY AUDIT — DCAA Readiness Dashboard + Executive Readiness Matrix Planning
+
+Objective:
+Perform a full READ-ONLY audit of the existing EPOCH codebase to locate and understand the current DCAA Readiness Dashboard, all related scoring logic, compliance widgets, audit tracking components, and any supporting schemas/services so we can design a new separate tab called “Executive Readiness Matrix.”
+
+IMPORTANT RULES:
+
+DO NOT modify code
+DO NOT create files
+DO NOT delete files
+DO NOT refactor
+DO NOT propose implementation yet
+DO NOT make assumptions without verifying in code
+READ FIRST, REPORT ONLY
+
+I need a forensic architectural audit with exact file paths, actual component names, service names, schema references, routes, and how the current dashboard is wired.
+
+Audit Scope:
+
+Locate the current DCAA Readiness Dashboard
+exact route(s)
+parent page/component
+tabs/subtabs if they exist
+navigation entry point
+sidebar/menu wiring
+permissions/role gating if present
+Identify all dashboard sections currently shown
+Examples may include:
+compliance score
+risk scoring
+missing approvals
+labor audit exceptions
+changed time punches
+orphan labor entries
+invalid charge codes
+purchasing controls
+indirect/direct segregation checks
+vendor approval gaps
+inventory traceability gaps
+audit trail completeness
+supervisor approval status
+project allocation gaps
+
+I need:
+
+exact widget/component names
+where each card/table/chart is rendered
+where the data comes from
+Find the scoring engine
+Identify:
+where compliance score is calculated
+scoring formulas
+weighted scoring logic
+thresholds (green/yellow/red)
+mock data vs real DB queries
+hardcoded values vs dynamic evaluation
+Find all backend support
+Identify:
+API routes
+service layer
+query layer
+Drizzle schemas/tables involved
+cron jobs if any
+background validation jobs if any
+Determine whether dashboard is using:
+real production data
+placeholder data
+mixed mode
+partially wired modules
+
+Be explicit.
+
+Evaluate where a NEW separate tab should live
+
+We want:
+NEW TAB = Executive Readiness Matrix
+
+This should be a separate tab beside—not inside—the existing DCAA dashboard sections.
+
+Audit:
+
+best parent component location
+best tab system to extend
+safest place to add this without breaking existing dashboard behavior
+whether current architecture supports tab expansion cleanly
+Identify what the Executive Readiness Matrix should be able to compare
+
+Future matrix rows may include:
+
+labor charging controls
+project cost accounting
+direct vs indirect segregation
+supervisor approvals
+time correction auditability
+traveler enforcement
+inventory traceability
+material genealogy
+purchasing controls
+subcontract flowdown
+vendor justification
+earned value visibility
+PM reporting
+machine telemetry
+cert validation
+operator authorization controls
+quality checkpoints
+freezer/oven telemetry
+customer audit defensibility
+
+Audit whether these already exist in some form and where.
+
+Required Output Format:
+
+SECTION A — Exact Existing Architecture
+(file paths + components + routes + APIs)
+
+SECTION B — Current DCAA Scoring Engine
+(actual formulas + where logic lives)
+
+SECTION C — Existing Data Reality
+(real vs mock vs partial)
+
+SECTION D — Recommended Placement for New Executive Readiness Matrix Tab
+(exact insertion point only, no coding yet)
+
+SECTION E — Existing Reusable Components We Should Reuse
+(cards, tables, scoring widgets, badges, charts, permissions)
+
+SECTION F — Risks Before Implementation
+(hidden dependencies, dangerous refactors, duplicate logic risks)
+
+Final instruction:
+Be brutally honest.
+If the existing dashboard is weaker than expected, say so clearly.
+Do not protect assumptions.
+We need architectural truth, not optimism.

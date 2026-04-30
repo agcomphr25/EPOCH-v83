@@ -1,0 +1,90 @@
+# PROTEUS LABS V1 — INTEGRITY LOCK PROMPT
+
+Role:
+Act as a senior ERP systems engineer, ORM consistency reviewer, and production safety specialist.
+
+Objective:
+Fix the final two confirmed integrity gaps in Proteus Labs V1 so the system is production-safe and schema-consistent.
+
+Implement ONLY these fixes:
+
+1. ORM Schema Drift Fix
+
+Problem:
+The live database correctly has ON DELETE CASCADE on proteus_prompt_executions.prompt_id via migration 0083, but server/schema.ts is missing:
+
+{ onDelete: 'cascade' }
+
+on:
+
+proteusPromptExecutions.promptId
+
+This causes schema drift and failed migration-safety validation.
+
+Required Fix:
+Update the Drizzle schema so ORM matches the live database exactly.
+
+This must eliminate migration drift.
+
+---
+
+2. Copy Path Variable Validation Fix
+
+Problem:
+handleGenerate() correctly blocks required-variable omissions.
+
+handleCopy() does NOT.
+
+Users can still copy unresolved prompts containing {{tokens}}.
+
+Required Fix:
+Apply the same required-variable validation to handleCopy().
+
+If required variables are blank:
+
+* block copy
+* show destructive toast
+* do not create execution record
+* do not write to clipboard
+
+Copy and Generate must behave consistently.
+
+---
+
+Constraints:
+
+* No unrelated refactors
+* No new features
+* No redesign
+* No touching unrelated modules
+* Preserve existing behavior
+* Maintain production safety
+* Follow existing project patterns
+
+Validation Required:
+
+Verify:
+
+1. Drizzle schema matches live DB cascade behavior
+2. Migration-safety validation passes
+3. Copy cannot occur with missing required variables
+4. Generate still works correctly
+5. Prompt CRUD still works
+6. Execution history still works
+
+Deliverable:
+
+Return:
+
+* files changed
+* exact fixes made
+* validation proof
+* remaining risks (if any)
+
+Non-Negotiables:
+
+* No placeholder fixes
+* No fake validation
+* No silent assumptions
+* No “should work” language
+* Must verify with evidence

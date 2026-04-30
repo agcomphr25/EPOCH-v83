@@ -1,0 +1,139 @@
+SURGICAL IMPLEMENTATION — TIER 1 FRONTEND ABSORPTION
+
+Goal:
+Make Timekeeping feel native inside EPOCH and eliminate dependence on the standalone frontend.
+
+Backend Tier 1 is complete:
+- live punch flow works
+- live Gusto export works
+- dashboard works
+- timesheets work
+- employee anchor model is stable
+
+Now the frontend must be absorbed.
+
+Scope ONLY:
+- kiosk page
+- Time Clock Admin
+- punches admin
+- weekly timesheet approvals
+- Gusto export trigger
+- PIN management visibility where needed
+
+Do NOT move every employee/admin page yet.
+
+Do NOT touch traveler/WAD UI.
+
+Do NOT redesign schema.
+
+==================================================
+CRITICAL ARCHITECTURE
+==================================================
+
+One server
+One frontend
+One auth system
+One deployment
+
+public.employees = employee truth
+timekeeping.punches = attendance/payroll ledger
+timekeeping.timesheets = approval workflow
+timekeeping.employees = thin anchor only
+
+Traveler/WAD remains separate:
+public.time_clock_entries
+
+Do NOT merge them.
+
+==================================================
+YOUR TASK
+==================================================
+
+1. Create native kiosk page:
+
+client/src/pages/timekeeping/KioskPage.tsx
+
+This should replace the standalone kiosk experience.
+
+Requirements:
+- full-screen layout
+- no normal EPOCH nav chrome
+- PIN-based flow preserved
+- multiple identifiers supported safely
+- fail-closed behavior preserved
+- punch in / punch out
+- employee confirmation screen
+- active punch visibility
+
+2. Register:
+
+/kiosk
+
+inside EPOCH routing
+
+with a dedicated kiosk layout
+
+not normal employee navigation
+
+3. Expand existing:
+
+TimeClockAdminPage.tsx
+
+with missing standalone functionality:
+
+- punch review
+- weekly approval flow
+- timesheet review
+- Gusto export trigger
+- employee PIN visibility/management where appropriate
+- exception visibility for missing punches
+
+4. Preserve current behavior for:
+
+- employee punch flow
+- admin approval flow
+- payroll export flow
+
+Do NOT break stable backend behavior.
+
+5. Keep legacy standalone frontend untouched temporarily
+
+Do NOT delete:
+- TimekeepingHandoffPage.tsx
+- standalone frontend artifacts
+
+until live testing passes
+
+6. Build explicit testing checklist
+
+for:
+
+A. live kiosk rollout
+B. admin approval validation
+C. payroll export validation
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+A. files changed
+
+B. exact UI flows preserved
+
+C. admin testing checklist
+
+D. kiosk live testing checklist
+
+E. confirmation safe for standalone frontend shutdown
+
+F. anything intentionally deferred
+
+==================================================
+GUARDRAILS
+==================================================
+
+- do NOT touch traveler/WAD UI
+- do NOT delete legacy first
+- preserve payroll correctness first
+- do NOT redesign schema
+- do NOT broad refactor unrelated pages

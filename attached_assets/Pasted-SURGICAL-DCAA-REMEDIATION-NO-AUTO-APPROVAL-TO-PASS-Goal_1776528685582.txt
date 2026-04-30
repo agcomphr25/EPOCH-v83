@@ -1,0 +1,125 @@
+SURGICAL DCAA REMEDIATION — NO_AUTO_APPROVAL TO PASS
+
+Goal:
+Move the Timekeeping DCAA check NO_AUTO_APPROVAL from real FAIL to legitimate PASS.
+
+Current state:
+- PIN_ENFORCEMENT = PASS
+- CORRECTION_APPROVAL_CHAIN = PARTIAL
+- NO_AUTO_APPROVAL = FAIL
+
+The FAIL is now accurate:
+there is at least one punch not covered by an approved timesheet.
+
+This is not a scoring bug.
+This is a real workflow gap.
+
+We must fix the operational approval path correctly.
+
+==================================================
+ARCHITECTURAL TRUTH
+==================================================
+
+public.employees = employee truth
+
+timekeeping.punches = attendance/payroll ledger
+
+timekeeping.timesheets = approval workflow
+
+No automatic labor approval is allowed.
+
+Approval must be:
+explicit
+attributable
+auditable
+
+==================================================
+YOUR TASK
+==================================================
+
+Perform a READ-ONLY audit first, then implement only the required correction.
+
+--------------------------------------------------
+1. FIND THE REAL FAILURE
+--------------------------------------------------
+
+Identify exactly:
+
+- which punch(es) are unapproved
+- why they are not attached to an approved timesheet
+- whether the issue is:
+  A. timesheet creation gap
+  B. approval workflow gap
+  C. status transition issue
+  D. missing auto-rollup into review queue
+  E. approval UI issue
+  F. approval metadata issue
+
+Be specific.
+
+--------------------------------------------------
+2. FIX THE OPERATIONAL GAP
+--------------------------------------------------
+
+Implement the minimum safe correction so that:
+
+- punches move into review correctly
+- approval is explicit
+- approval is attributable
+- no silent approval exists
+- no labor record bypasses approval workflow
+
+Do NOT create fake approval.
+
+Do NOT auto-approve punches.
+
+Fix the real workflow.
+
+--------------------------------------------------
+3. VERIFY ADMIN FLOW
+--------------------------------------------------
+
+Ensure:
+
+/time-clock-admin
+
+actually supports the correct approval path needed for PASS
+
+If admin workflow is missing a required step,
+fix it there.
+
+--------------------------------------------------
+4. VERIFY EDRI SCORING
+--------------------------------------------------
+
+Confirm:
+
+the scorer now reflects true PASS only when approval actually exists
+
+No cosmetic scoring changes.
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+A. exact cause of FAIL
+
+B. exact files changed
+
+C. exact workflow correction implemented
+
+D. how approval attribution is preserved
+
+E. expected EDRI score result
+
+F. whether any policy/process training is still required
+
+==================================================
+RULES
+==================================================
+
+- fix the real workflow, not the dashboard
+- do NOT auto-approve
+- do NOT touch traveler/WAD
+- preserve audit defensibility first
+- preserve payroll correctness first

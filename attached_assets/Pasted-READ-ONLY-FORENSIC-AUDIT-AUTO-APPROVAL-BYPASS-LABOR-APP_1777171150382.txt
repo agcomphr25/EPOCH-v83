@@ -1,0 +1,153 @@
+READ-ONLY FORENSIC AUDIT — AUTO_APPROVAL_BYPASS
+LABOR APPROVAL DEFENSIBILITY
+
+Strict read-only audit.
+
+DO NOT modify code.
+DO NOT seed approvals.
+DO NOT change scorer logic.
+DO NOT create fake approval rows.
+
+Goal:
+
+Resolve the remaining major DCAA issue:
+
+AUTO_APPROVAL_BYPASS
+
+We must determine whether labor can be charged
+without proper approval chain enforcement.
+
+This is one of the highest-value remaining audit risks.
+
+Current score:
+90.25
+
+We need accounting truth, not score optimization.
+
+--------------------------------------------------
+AUDIT SCOPE
+--------------------------------------------------
+
+Inspect:
+
+- labor_approvals
+- punch_ledger
+- punch_sessions
+- labor_cost_records
+- labor posting flow
+- traveler labor flow
+- approval routes
+- supervisor approval routes
+- payroll approval routes
+- reopen flows
+- timesheet approvals
+- salaried approval chain
+- EDRI scorer logic for AUTO_APPROVAL_BYPASS
+- any approval enforcement flags
+- approval bypass settings
+
+--------------------------------------------------
+QUESTIONS TO ANSWER
+--------------------------------------------------
+
+1. What exactly triggers AUTO_APPROVAL_BYPASS?
+
+Determine:
+
+- exact scorer SQL
+- exact missing condition
+- exact threshold
+
+No assumptions.
+
+--------------------------------------------------
+
+2. Can labor currently reach labor_cost_records
+without labor_approvals?
+
+Trace:
+
+punch
+→ approval
+→ labor cost
+→ GL
+
+Identify exact bypass path.
+
+--------------------------------------------------
+
+3. Is the problem:
+
+- missing approval rows
+- approval route not enforced
+- approval rows exist but not linked
+- scorer mismatch
+- legacy flow bypass
+- feature flag disabled
+- reopen flow issue
+- mixed traveler vs salaried inconsistency
+
+Classify exactly.
+
+--------------------------------------------------
+
+4. Which labor types are affected?
+
+- traveler direct labor
+- indirect labor
+- salaried labor
+- PTO / Holiday
+- manual adjustments
+
+Which are protected?
+Which are bypassing?
+
+--------------------------------------------------
+
+5. Safest implementation path
+
+Recommend:
+
+Option A:
+approval rows required before labor costing
+
+Option B:
+approval hook during posting
+
+Option C:
+approval generation during punch finalization
+
+Option D:
+mixed approach
+
+Choose safest.
+
+Do NOT implement yet.
+
+--------------------------------------------------
+
+6. Score impact
+
+Estimate:
+
+what score movement occurs after proper fix?
+
+--------------------------------------------------
+DELIVERABLE
+--------------------------------------------------
+
+Produce:
+
+attached_assets/AUTO_APPROVAL_BYPASS_AUDIT.md
+
+Include:
+
+- exact files inspected
+- exact bypass path
+- exact scorer expectations
+- safest implementation recommendation
+- implementation priority
+
+This is not cosmetic.
+
+This is labor audit defensibility.

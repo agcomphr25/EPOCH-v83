@@ -1,0 +1,312 @@
+IMPLEMENTATION PROMPT — PROCUREMENT COMPLIANCE EFFECTIVE DATE + LEGACY SEGMENTATION
+
+STRICT COMPLIANCE-FIRST EXECUTION
+
+DO NOT weaken the Procurement Compliance Review Gate.
+DO NOT reduce FAR_FLOWDOWN integrity.
+DO NOT fake historical compliance reviews.
+DO NOT silently grandfather legacy POs.
+DO NOT manipulate ERDI scores without policy-backed logic.
+
+Goal:
+
+Create a formal Procurement Compliance Effective Date system so Vendor POs issued before formal enforcement are treated as legacy transactions, while all POs after the effective date remain under mandatory compliance enforcement.
+
+This is policy-backed governance.
+
+Not score manipulation.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Current problem:
+
+The rewritten Procurement ERDI scorer now correctly evaluates real compliance evidence.
+
+However, many historical Vendor POs were issued before the Compliance Review Gate existed and therefore:
+
+- have no compliance review
+- have no FAR applicability documentation
+- have no second-party review evidence
+- were issued under legacy controls
+
+These should not be falsely treated as if they failed a process that did not yet exist.
+
+We need:
+
+PROCUREMENT COMPLIANCE EFFECTIVE DATE
+
+and
+
+LEGACY PO SEGMENTATION
+
+==================================================
+POLICY MODEL
+==================================================
+
+Two populations must exist:
+
+--------------------------------------------------
+1. LEGACY POPULATION
+--------------------------------------------------
+
+Vendor POs issued BEFORE:
+
+Formal Compliance Effective Date
+
+Example:
+
+June 1, 2026
+
+These are:
+
+Legacy Procurement Transactions
+
+They remain governed by prior controls and should not be treated as failing the new Compliance Review Gate by default.
+
+They may still be reviewed if:
+
+- audit-sensitive
+- government contract critical
+- legal exposure exists
+- still-open compliance obligations exist
+
+But they should not poison standard ERDI enforcement scoring.
+
+--------------------------------------------------
+2. ENFORCED POPULATION
+--------------------------------------------------
+
+Vendor POs issued ON or AFTER:
+
+Formal Compliance Effective Date
+
+These MUST satisfy:
+
+- compliance review
+- FAR applicability decision
+- required optional statements
+- second-party approval
+- vendor approval
+- audit evidence
+- issue gate enforcement
+
+No exceptions.
+
+==================================================
+PART A — CONFIGURABLE EFFECTIVE DATE
+==================================================
+
+Create a controlled setting:
+
+Procurement Compliance Effective Date
+
+Initial recommended value:
+
+June 1, 2026
+
+This should be:
+
+admin-controlled
+visible
+auditable
+
+Prefer:
+
+company settings
+or compliance settings
+
+not hardcoded constants.
+
+Store:
+
+effective_date
+configured_by
+configured_at
+reason/notes
+
+This matters.
+
+==================================================
+PART B — ERDI SCORER SEGMENTATION
+==================================================
+
+Update Procurement ERDI scoring:
+
+FAR_FLOWDOWN
+SECOND_PARTY_APPROVAL
+VENDOR_APPROVAL_BLOCKING
+REQUISITION_WORKFLOW
+etc.
+
+Primary scoring population:
+
+issued Vendor POs >= effective_date
+
+Legacy POs:
+
+issued Vendor POs < effective_date
+
+must be excluded from mandatory failure scoring
+unless specifically flagged for exception review
+
+Scorer must distinguish:
+
+“non-compliant”
+vs
+“legacy pre-policy transaction”
+
+This is critical.
+
+==================================================
+PART C — DASHBOARD VISIBILITY
+==================================================
+
+Update Procurement ERDI UI to clearly show:
+
+Example:
+
+--------------------------------------------------
+
+Enforced Population:
+7 failing POs
+
+Legacy Population:
+38 historical POs (pre-policy)
+
+Compliance Effective Date:
+June 1, 2026
+
+--------------------------------------------------
+
+This prevents misleading:
+
+“45 failing POs”
+
+when only 7 are true active failures.
+
+==================================================
+PART D — BACKFILL QUEUE SEGMENTATION
+==================================================
+
+Update Procurement Compliance Backfill Queue:
+
+Separate sections:
+
+1. Active Enforcement Queue
+2. Legacy Review Queue
+
+Legacy queue should be:
+
+lower priority
+exception-driven
+not default panic mode
+
+Allow filters:
+
+Show:
+- Enforced only
+- Legacy only
+- Audit-sensitive legacy only
+
+==================================================
+PART E — OPTIONAL LEGACY EXCEPTION FLAG
+==================================================
+
+Allow a legacy PO to be manually flagged:
+
+Requires Exception Review
+
+Examples:
+
+- major government contract
+- customer audit request
+- active dispute
+- legal concern
+- subcontractor compliance issue
+
+These legacy exception POs should:
+
+enter active review queue
+affect compliance scoring if appropriate
+
+Do NOT auto-flag all legacy POs.
+
+==================================================
+PART F — POLICY DISPLAY
+==================================================
+
+Add visible policy language somewhere appropriate:
+
+Procurement Compliance Effective Date
+
+Example:
+
+“Vendor POs issued prior to June 1, 2026
+predate formal Procurement Compliance Review Gate enforcement
+and are governed under legacy procurement controls.
+
+Vendor POs issued on or after June 1, 2026
+must satisfy full compliance review prior to issuance.”
+
+This helps users and auditors.
+
+==================================================
+AUDIT REQUIREMENTS
+==================================================
+
+Changing the effective date must be auditable.
+
+Store:
+
+old value
+new value
+changed by
+changed at
+reason
+
+Do NOT allow silent date changes.
+
+This is non-negotiable.
+
+==================================================
+VALIDATION REQUIREMENTS
+==================================================
+
+After implementation verify:
+
+1. Pre-effective-date POs no longer fail mandatory ERDI scoring
+2. Post-effective-date POs still fail correctly
+3. Backfill queue separates legacy vs active enforcement
+4. Effective date is visible and editable with audit trail
+5. Legacy exception flag works correctly
+6. Procurement ERDI score becomes explainable
+7. No TypeScript errors
+8. Existing issue gate behavior remains unchanged
+
+==================================================
+DELIVERABLE FORMAT
+==================================================
+
+Return:
+
+1. Implementation plan first
+2. Exact files modified
+3. Schema/settings changes
+4. Scorer updates
+5. Queue segmentation changes
+6. UI changes
+7. Audit trail additions
+8. Validation performed
+9. Remaining known risks
+
+==================================================
+FINAL RULE
+==================================================
+
+This must improve truthfulness and defensibility.
+
+Not just make the score look better.
+
+Proceed.

@@ -1,0 +1,67 @@
+IMPLEMENTATION PROMPT — EPOCH LABOR POSTING APPROVAL GATE
+
+You just implemented the supervisor labor approval workflow under:
+
+/api/timekeeping/labor-approvals
+
+Now implement the second half of the AUTO_APPROVAL_BYPASS fix: prevent WAD-linked REGULAR labor from entering labor_cost_records unless it is covered by a labor_approvals row.
+
+Goal:
+Close APPROVAL_BYPASS_IN_POSTING_PIPELINE.
+
+Scope:
+Modify the labor cost calculation/posting pipeline only enough to block unapproved direct labor before it becomes a cost record.
+
+Primary target:
+server/src/services/laborCostingService.ts
+
+Known audit finding:
+processLaborCosts currently:
+- loads all punch_ledger sessions
+- filters closed REGULAR sessions
+- never checks approvalStatus
+- never checks laborApprovalId
+- never checks labor_approvals
+- bulk-inserts labor_cost_records
+
+Required behavior:
+Before inserting labor_cost_records, identify any session where:
+- clockOut IS NOT NULL
+- laborClass === 'REGULAR'
+- productionWorkOrderId IS NOT NULL
+- no matching labor_approvals row exists for employeeId + productionWorkOrderId
+
+If any exist:
+- BLOCK the calculation/posting run
+- return a clear error
+- include grouped details by employeeId + productionWorkOrderId
+- include total unapproved sessions and total unapproved hours
+- tell the user to resolve them in Time Clock Admin → Labor Approvals
+
+Do NOT:
+- auto-create approvals
+- silently skip unapproved sessions
+- downgrade to warning only
+- modify EDRI scorer logic
+- modify salaried timesheet approval logic
+- change traveler clock-in behavior
+
+Important:
+Match the scorer logic exactly:
+employee_id = punch_ledger.employee_id::text
+production_work_order_id = punch_ledger.production_work_order_id
+
+Validation:
+After implementation, prove:
+1. normal empty dev DB still passes
+2. an approved WAD-linked group can proceed
+3. an unapproved WAD-linked group blocks
+4. indirect/no-WAD sessions are not blocked
+5. error message includes enough detail for supervisors to fix it
+
+Return:
+- files changed
+- exact blocking logic
+- sample error response
+- validation results
+- any remaining risks

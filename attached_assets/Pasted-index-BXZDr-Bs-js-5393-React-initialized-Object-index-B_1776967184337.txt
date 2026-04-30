@@ -1,0 +1,52 @@
+index-BXZDr-Bs.js:5393 React initialized: Object
+index-BXZDr-Bs.js:5393 React hooks: Object
+index-BXZDr-Bs.js:5393 [EPOCH SYNC] Sync engine starting
+index-BXZDr-Bs.js:5393 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-BXZDr-Bs.js:5390 App component is rendering...
+index-BXZDr-Bs.js:5390 Environment: production
+index-BXZDr-Bs.js:5390 Base URL: /
+index-BXZDr-Bs.js:1670 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-BXZDr-Bs.js:1670 [EPOCH] Install prompt captured and ready
+/cutting-control-center/bom:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-BXZDr-Bs.js:2116 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-BXZDr-Bs.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-BXZDr-Bs.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-BXZDr-Bs.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/STR2600278 (timeout: 15000ms, deployment: true)
+index-BXZDr-Bs.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/STR2600278: 200
+index-BXZDr-Bs.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-BXZDr-Bs.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-BXZDr-Bs.js:235 🌐 API Request to /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/tasks/bda5c217-1ad2-48ba-a202-c3ba2feacf8e/complete (timeout: 15000ms, deployment: true)
+index-BXZDr-Bs.js:235 ✅ API Response from /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/tasks/bda5c217-1ad2-48ba-a202-c3ba2feacf8e/complete: 200
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+index-BXZDr-Bs.js:235 🌐 API Request to /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign (timeout: 15000ms, deployment: true)
+/api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign:1  Failed to load resource: the server responded with a status of 403 ()
+index-BXZDr-Bs.js:235 ✅ API Response from /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign: 403
+index-BXZDr-Bs.js:5393 API error raw body: {"error":"Forbidden","requiredCapability":"travelers.sign_qc","context":{"department":"Mold Prep"}}
+console.error @ index-BXZDr-Bs.js:5393
+index-BXZDr-Bs.js:5393 💥 API Request failed for /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign: Error: Forbidden
+    at ke (index-BXZDr-Bs.js:235:6500)
+console.error @ index-BXZDr-Bs.js:5393
+index-BXZDr-Bs.js:235 🌐 API Request to /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign (timeout: 15000ms, deployment: true)
+/api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign:1  Failed to load resource: the server responded with a status of 403 ()
+index-BXZDr-Bs.js:235 ✅ API Response from /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign: 403
+index-BXZDr-Bs.js:5393 API error raw body: {"error":"Forbidden","requiredCapability":"travelers.sign_qc","context":{"department":"Mold Prep"}}
+console.error @ index-BXZDr-Bs.js:5393
+index-BXZDr-Bs.js:5393 💥 API Request failed for /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign: Error: Forbidden
+    at ke (index-BXZDr-Bs.js:235:6500)
+console.error @ index-BXZDr-Bs.js:5393
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq)
+index-BXZDr-Bs.js:235 🌐 API Request to /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign (timeout: 15000ms, deployment: true)
+/api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign:1  Failed to load resource: the server responded with a status of 403 ()
+index-BXZDr-Bs.js:235 ✅ API Response from /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign: 403
+index-BXZDr-Bs.js:5393 API error raw body: {"error":"Forbidden","requiredCapability":"travelers.sign_qc","context":{"department":"Mold Prep"}}
+console.error @ index-BXZDr-Bs.js:5393
+index-BXZDr-Bs.js:5393 💥 API Request failed for /api/travelers/e57314ab-b101-4893-9c5e-3968c3f877e6/steps/c8ee8515-327e-47e0-92af-883aad2372d1/sign: Error: Forbidden
+    at ke (index-BXZDr-Bs.js:235:6500)
+console.error @ index-BXZDr-Bs.js:5393

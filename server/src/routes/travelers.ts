@@ -761,6 +761,10 @@ router.post('/:id/complete', requirePermission('travelers.finish'), async (req: 
 
     const { traveler, steps } = travelerDetails;
 
+    if (traveler.status === 'COMPLETED') {
+      return res.json(traveler);
+    }
+
     if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to complete',

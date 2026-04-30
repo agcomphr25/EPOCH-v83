@@ -916,8 +916,11 @@ export default function TravelerExecution() {
       fieldVals?: Record<string, string>;
       fieldValidations?: Record<string, any>;
       toleranceApproval?: { approvedBy: string; notes: string };
-    }) =>
-      apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
+    }) => {
+      const badgeHeader: Record<string, string> = activeBadge
+        ? { 'X-Badge-Code': activeBadge }
+        : {};
+      return apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
         body: JSON.stringify({
           completedBy: activeTechName || activeBadge || 'operator',
@@ -925,8 +928,9 @@ export default function TravelerExecution() {
           fieldValidations,
           toleranceApproval,
         }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
+        headers: { 'Content-Type': 'application/json', ...badgeHeader },
+      });
+    },
     onSuccess: () => {
       toast({ title: 'Task Completed', description: 'Task has been marked complete' });
       setShowQcApprovalDialog(false);
@@ -1030,12 +1034,16 @@ export default function TravelerExecution() {
   });
 
   const completeTravelerMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/travelers/${travelerId}/complete`, {
+    mutationFn: () => {
+      const badgeHeader: Record<string, string> = activeBadge
+        ? { 'X-Badge-Code': activeBadge }
+        : {};
+      return apiRequest(`/api/travelers/${travelerId}/complete`, {
         method: 'POST',
         body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
+        headers: { 'Content-Type': 'application/json', ...badgeHeader },
+      });
+    },
     onSuccess: () => {
       toast({ title: 'Traveler Completed', description: 'All work has been completed' });
       refetch();

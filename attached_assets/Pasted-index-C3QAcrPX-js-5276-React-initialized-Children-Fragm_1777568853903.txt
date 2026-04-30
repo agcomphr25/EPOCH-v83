@@ -1,0 +1,280 @@
+index-C3QAcrPX.js:5276 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-C3QAcrPX.js:5276 React hooks: {useState: ƒ, useEffect: ƒ}
+index-C3QAcrPX.js:5276 [EPOCH SYNC] Sync engine starting
+index-C3QAcrPX.js:5276 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-C3QAcrPX.js:5273 App component is rendering...
+index-C3QAcrPX.js:5273 Environment: production
+index-C3QAcrPX.js:5273 Base URL: /
+index-C3QAcrPX.js:1600 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-C3QAcrPX.js:1600 [EPOCH] Install prompt captured and ready
+login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-C3QAcrPX.js:1609  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-C3QAcrPX.js:1609
+o @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+fetch @ index-C3QAcrPX.js:51
+Ez @ index-C3QAcrPX.js:51
+onSubscribe @ index-C3QAcrPX.js:51
+subscribe @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+Rpt @ index-C3QAcrPX.js:38
+nme @ index-C3QAcrPX.js:40
+tL @ index-C3QAcrPX.js:40
+q7e @ index-C3QAcrPX.js:40
+fD @ index-C3QAcrPX.js:38
+mWt @ index-C3QAcrPX.js:40
+oT @ index-C3QAcrPX.js:40
+p0t @ index-C3QAcrPX.js:40
+j @ index-C3QAcrPX.js:25
+k @ index-C3QAcrPX.js:25
+postMessage
+D @ index-C3QAcrPX.js:25
+k @ index-C3QAcrPX.js:25
+postMessage
+D @ index-C3QAcrPX.js:25
+R @ index-C3QAcrPX.js:25
+r.unstable_scheduleCallback @ index-C3QAcrPX.js:25
+j0t @ index-C3QAcrPX.js:40
+vb @ index-C3QAcrPX.js:40
+b2 @ index-C3QAcrPX.js:40
+ome @ index-C3QAcrPX.js:40
+lme.render.Z3e.render @ index-C3QAcrPX.js:40
+(anonymous) @ index-C3QAcrPX.js:5276
+index-C3QAcrPX.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-C3QAcrPX.js:235
+o @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+fetch @ index-C3QAcrPX.js:51
+Ez @ index-C3QAcrPX.js:51
+onSubscribe @ index-C3QAcrPX.js:51
+subscribe @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+Rpt @ index-C3QAcrPX.js:38
+nme @ index-C3QAcrPX.js:40
+tL @ index-C3QAcrPX.js:40
+q7e @ index-C3QAcrPX.js:40
+fD @ index-C3QAcrPX.js:38
+mWt @ index-C3QAcrPX.js:40
+oT @ index-C3QAcrPX.js:40
+p0t @ index-C3QAcrPX.js:40
+j @ index-C3QAcrPX.js:25
+k @ index-C3QAcrPX.js:25
+postMessage
+D @ index-C3QAcrPX.js:25
+k @ index-C3QAcrPX.js:25
+postMessage
+D @ index-C3QAcrPX.js:25
+R @ index-C3QAcrPX.js:25
+r.unstable_scheduleCallback @ index-C3QAcrPX.js:25
+j0t @ index-C3QAcrPX.js:40
+vb @ index-C3QAcrPX.js:40
+b2 @ index-C3QAcrPX.js:40
+ome @ index-C3QAcrPX.js:40
+lme.render.Z3e.render @ index-C3QAcrPX.js:40
+(anonymous) @ index-C3QAcrPX.js:5276
+index-C3QAcrPX.js:2046 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-C3QAcrPX.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-C3QAcrPX.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-C3QAcrPX.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600017 (timeout: 15000ms, deployment: true)
+index-C3QAcrPX.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600017: 200
+index-C3QAcrPX.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-C3QAcrPX.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+index-C3QAcrPX.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-C3QAcrPX.js:235
+o @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+fetch @ index-C3QAcrPX.js:51
+Ez @ index-C3QAcrPX.js:51
+onSubscribe @ index-C3QAcrPX.js:51
+subscribe @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+Rpt @ index-C3QAcrPX.js:38
+nme @ index-C3QAcrPX.js:40
+tL @ index-C3QAcrPX.js:40
+mWt @ index-C3QAcrPX.js:40
+oT @ index-C3QAcrPX.js:40
+q7e @ index-C3QAcrPX.js:40
+fD @ index-C3QAcrPX.js:38
+(anonymous) @ index-C3QAcrPX.js:40
+travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/execute:1 [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) <input type=​"password" class=​"flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:​border-0 file:​bg-transparent file:​text-sm file:​font-medium file:​text-foreground placeholder:​text-muted-foreground focus-visible:​outline-none focus-visible:​ring-2 focus-visible:​ring-ring focus-visible:​ring-offset-2 disabled:​cursor-not-allowed disabled:​opacity-50 md:​text-sm" id=​"step-badge-scan" name=​"step-badge-scan" placeholder=​"Scan badge..." autocomplete=​"new-password" data-testid=​"input-badge-scan" value=​"757ed306c66446f7871fac16bd141974">​flex
+index-C3QAcrPX.js:5124  GET https://agcompepoch.xyz/api/employee-badges/resolve-badge/757ed306c66446f7871fac16bd141974 401 (Unauthorized)
+(anonymous) @ index-C3QAcrPX.js:5124
+setTimeout
+Us @ index-C3QAcrPX.js:5124
+onChange @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start (timeout: 15000ms, deployment: true)
+index-C3QAcrPX.js:235  POST https://agcompepoch.xyz/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start 403 (Forbidden)
+Ie @ index-C3QAcrPX.js:235
+mutationFn @ index-C3QAcrPX.js:5124
+fn @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+execute @ index-C3QAcrPX.js:51
+await in execute
+mutate @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+onClick @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start: 403
+index-C3QAcrPX.js:5276 API error raw body: {"error":"Step start blocked by process gate","reason":"Employee identity could not be verified for part 4002P0001 Rev P. Scan a valid badge or enter a recognized employee code before starting this step."}
+console.error @ index-C3QAcrPX.js:5276
+Ie @ index-C3QAcrPX.js:235
+await in Ie
+mutationFn @ index-C3QAcrPX.js:5124
+fn @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+execute @ index-C3QAcrPX.js:51
+await in execute
+mutate @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+onClick @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:5276 💥 API Request failed for /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start: Error: Step start blocked by process gate
+    at Ie (index-C3QAcrPX.js:235:6381)
+console.error @ index-C3QAcrPX.js:5276
+Ie @ index-C3QAcrPX.js:235
+await in Ie
+mutationFn @ index-C3QAcrPX.js:5124
+fn @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+execute @ index-C3QAcrPX.js:51
+await in execute
+mutate @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+onClick @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:235 🌐 API Request to /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override (timeout: 15000ms, deployment: true)
+index-C3QAcrPX.js:235  POST https://agcompepoch.xyz/api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override 403 (Forbidden)
+Ie @ index-C3QAcrPX.js:235
+mutationFn @ index-C3QAcrPX.js:5124
+fn @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+execute @ index-C3QAcrPX.js:51
+await in execute
+mutate @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+onClick @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:235 ✅ API Response from /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override: 403
+index-C3QAcrPX.js:5276 API error raw body: {"error":"Supervisor badge not recognised. Scan a valid supervisor badge to override."}
+console.error @ index-C3QAcrPX.js:5276
+Ie @ index-C3QAcrPX.js:235
+await in Ie
+mutationFn @ index-C3QAcrPX.js:5124
+fn @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+execute @ index-C3QAcrPX.js:51
+await in execute
+mutate @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+onClick @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:5276 💥 API Request failed for /api/travelers/6058e6fa-0190-4c33-a521-d3618e3fc97a/steps/08d07ee6-ed39-4dda-924f-683f72002207/start/override: Error: Supervisor badge not recognised. Scan a valid supervisor badge to override.
+    at Ie (index-C3QAcrPX.js:235:6381)
+console.error @ index-C3QAcrPX.js:5276
+Ie @ index-C3QAcrPX.js:235
+await in Ie
+mutationFn @ index-C3QAcrPX.js:5124
+fn @ index-C3QAcrPX.js:51
+p @ index-C3QAcrPX.js:51
+start @ index-C3QAcrPX.js:51
+execute @ index-C3QAcrPX.js:51
+await in execute
+mutate @ index-C3QAcrPX.js:51
+(anonymous) @ index-C3QAcrPX.js:51
+onClick @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37
+index-C3QAcrPX.js:5124  GET https://agcompepoch.xyz/api/employee-badges/resolve-badge/757ed306c66446f7871fac16bd141974 404 (Not Found)
+(anonymous) @ index-C3QAcrPX.js:5124
+setTimeout
+Us @ index-C3QAcrPX.js:5124
+onChange @ index-C3QAcrPX.js:5124
+DKt @ index-C3QAcrPX.js:37
+OKt @ index-C3QAcrPX.js:37
+BKt @ index-C3QAcrPX.js:37
+h7e @ index-C3QAcrPX.js:37
+bpt @ index-C3QAcrPX.js:37
+(anonymous) @ index-C3QAcrPX.js:37
+K3e @ index-C3QAcrPX.js:40
+Hft @ index-C3QAcrPX.js:37
+Xge @ index-C3QAcrPX.js:37
+b3e @ index-C3QAcrPX.js:37
+XKt @ index-C3QAcrPX.js:37

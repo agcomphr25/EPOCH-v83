@@ -99,6 +99,7 @@ function isBusinessRuleError(err: unknown): boolean {
   if (err != null && typeof err === 'object') {
     const code = (err as { code?: unknown }).code;
     if (code === 'APPROVAL_BYPASS_IN_POSTING_PIPELINE') return true;
+    if (code === 'SALARIED_ALLOCATION_MISSING_CHARGE_CODE') return true;
   }
   return false;
 }
@@ -134,6 +135,7 @@ interface AllocationRow {
   laborClass: string;
   status: string;
   sequenceOrder: number;
+  source: string;
 }
 
 // ── Allocation-based costing path ─────────────────────────────────────────────
@@ -171,7 +173,8 @@ export async function processLaborCostsFromAllocations(
       la.traveler_id            AS "travelerId",
       la.labor_class            AS "laborClass",
       la.status,
-      la.sequence_order         AS "sequenceOrder"
+      la.sequence_order         AS "sequenceOrder",
+      la.source
     FROM labor_allocations la
     WHERE la.labor_class = 'REGULAR'
       AND la.status = 'CLOSED'
@@ -182,6 +185,29 @@ export async function processLaborCostsFromAllocations(
   `);
 
   const allocRows = allocResult.rows as AllocationRow[];
+
+  // ── FAIL-CLOSED: SALARIED_ENTRY allocations must have a charge_code_id ─────
+  // A SALARIED_ENTRY allocation without a charge code would either produce a
+  // zero-cost entry (silent data loss) or be mis-classified as OVERHEAD.
+  // Both are unacceptable for DCAA compliance — throw before processing any rows.
+  const salariedMissingChargeCode = allocRows.filter(
+    (r) => (r.source === 'SALARIED_ENTRY' || r.source === 'CONVERSATIONAL_ENTRY') &&
+      r.chargeCodeId == null,
+  );
+
+  if (salariedMissingChargeCode.length > 0) {
+    const ids = salariedMissingChargeCode.map((r) => r.id).join(', ');
+    throw Object.assign(
+      new Error(
+        `Labor costing blocked: ${salariedMissingChargeCode.length} SALARIED_ENTRY / ` +
+        `CONVERSATIONAL_ENTRY allocation(s) have charge_code_id = null. ` +
+        `Resolve the missing charge codes before running costing. ` +
+        `Affected allocation IDs: ${ids}.`,
+      ),
+      { code: 'SALARIED_ALLOCATION_MISSING_CHARGE_CODE', affectedAllocationIds: salariedMissingChargeCode.map((r) => r.id) },
+    );
+  }
+  // ── END FAIL-CLOSED GUARD ──────────────────────────────────────────────────
 
   // ── APPROVAL GATE ──────────────────────────────────────────────────────────
   // WAD-linked allocations (productionWorkOrderId IS NOT NULL) must have a

@@ -564,3 +564,143 @@ export async function postLaborEntryDraft(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Reconciliation: verify every POSTED draft has matching CLOSED allocations
+// ---------------------------------------------------------------------------
+
+export interface ReconcileSalariedDraftsResult {
+  ok: boolean;
+  year: number;
+  month: number;
+  totalPostedDrafts: number;
+  orphanedDraftIds: number[];
+  report: {
+    draftId: number;
+    employeeId: number;
+    entryDate: string;
+    punchLedgerId: number | null;
+    closedAllocationCount: number;
+    status: "ok" | "orphaned";
+  }[];
+}
+
+/**
+ * Verifies that every POSTED labor_entry_draft for the given period has at least
+ * one matching CLOSED labor_allocation.  Orphaned drafts (posted but allocations
+ * missing) indicate data integrity issues that must be resolved before GL posting.
+ *
+ * Uses the salaried_timesheet_audit trail to recover the punch_ledger_id that was
+ * created during draft posting, then checks labor_allocations for CLOSED rows
+ * tied to that punch.
+ */
+export async function reconcileSalariedDrafts(
+  year: number,
+  month: number,
+): Promise<ReconcileSalariedDraftsResult> {
+  // 1. Find all POSTED drafts for the period
+  const postedDraftsResult = await db.execute(sql`
+    SELECT
+      ld.id             AS "draftId",
+      ld.employee_id    AS "employeeId",
+      ld.entry_date     AS "entryDate"
+    FROM timekeeping.labor_entry_drafts ld
+    WHERE ld.status = 'POSTED'
+      AND EXTRACT(YEAR  FROM ld.entry_date) = ${year}
+      AND EXTRACT(MONTH FROM ld.entry_date) = ${month}
+    ORDER BY ld.id
+  `);
+
+  const postedDrafts = postedDraftsResult.rows as {
+    draftId: number;
+    employeeId: number;
+    entryDate: string;
+  }[];
+
+  if (postedDrafts.length === 0) {
+    return {
+      ok: true,
+      year,
+      month,
+      totalPostedDrafts: 0,
+      orphanedDraftIds: [],
+      report: [],
+    };
+  }
+
+  // 2. For each posted draft, recover the punchLedgerId from audit trail and
+  //    count how many CLOSED allocations are attached.
+  const draftIds = postedDrafts.map((d) => d.draftId);
+
+  const auditResult = await db.execute(sql`
+    SELECT
+      (sta.after_state->>'draftId')::int        AS "draftId",
+      (sta.after_state->>'punchLedgerId')::int  AS "punchLedgerId"
+    FROM timekeeping.salaried_timesheet_audit sta
+    WHERE sta.action = 'SYNTHETIC_SESSION_POSTED'
+      AND (sta.after_state->>'draftId')::int = ANY(${draftIds})
+    ORDER BY sta.id DESC
+  `);
+
+  const auditMap = new Map<number, number | null>();
+  for (const row of auditResult.rows as { draftId: number; punchLedgerId: number | null }[]) {
+    if (!auditMap.has(row.draftId)) {
+      auditMap.set(row.draftId, row.punchLedgerId ?? null);
+    }
+  }
+
+  // Collect all known punchLedgerIds to batch-query allocations
+  const punchLedgerIds = [...auditMap.values()].filter((id): id is number => id != null);
+
+  const allocCountMap = new Map<number, number>();
+  if (punchLedgerIds.length > 0) {
+    const allocResult = await db.execute(sql`
+      SELECT
+        la.punch_ledger_id AS "punchLedgerId",
+        COUNT(*)::int      AS "closedCount"
+      FROM labor_allocations la
+      WHERE la.punch_ledger_id = ANY(${punchLedgerIds})
+        AND la.status = 'CLOSED'
+        AND la.allocation_end IS NOT NULL
+      GROUP BY la.punch_ledger_id
+    `);
+
+    for (const row of allocResult.rows as { punchLedgerId: number; closedCount: number }[]) {
+      allocCountMap.set(row.punchLedgerId, row.closedCount);
+    }
+  }
+
+  // 3. Build the reconciliation report
+  const report: ReconcileSalariedDraftsResult["report"] = [];
+  const orphanedDraftIds: number[] = [];
+
+  for (const draft of postedDrafts) {
+    const punchLedgerId = auditMap.get(draft.draftId) ?? null;
+    const closedAllocationCount = punchLedgerId != null
+      ? (allocCountMap.get(punchLedgerId) ?? 0)
+      : 0;
+
+    const isOrphaned = closedAllocationCount === 0;
+    if (isOrphaned) orphanedDraftIds.push(draft.draftId);
+
+    report.push({
+      draftId: draft.draftId,
+      employeeId: draft.employeeId,
+      entryDate: typeof draft.entryDate === "string"
+        ? draft.entryDate
+        : (draft.entryDate as Date).toISOString().slice(0, 10),
+      punchLedgerId,
+      closedAllocationCount,
+      status: isOrphaned ? "orphaned" : "ok",
+    });
+  }
+
+  return {
+    ok: orphanedDraftIds.length === 0,
+    year,
+    month,
+    totalPostedDrafts: postedDrafts.length,
+    orphanedDraftIds,
+    report,
+  };
+}

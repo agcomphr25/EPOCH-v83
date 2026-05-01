@@ -16,6 +16,8 @@ import { requireAdminAccess } from '../../middleware/routeAuthorization';
 import { processLaborCosts } from '../services/laborCostingService';
 import { postLaborToGL, voidLaborPosting } from '../services/laborPostingService';
 import { reconcileLaborCosts } from '../services/laborReconcileService';
+import { reconcileSalariedDrafts } from '../services/timekeeping/laborEntryDraftPostingService';
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 const router = Router();
@@ -699,6 +701,175 @@ router.post('/void-wire-payment-entry/:id', async (req: Request, res: Response) 
   } catch (error: any) {
     console.error(`[VoidWirePayment] Error voiding entry ${id}:`, error);
     return res.status(500).json({ error: error.message || 'Failed to void journal entry' });
+  }
+});
+
+// ========================================
+// SALARIED ALLOCATION AUDIT ENDPOINT
+// ========================================
+
+const salariedAuditQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+});
+
+// GET /api/cost-accounting/salaried-allocation-audit?year=&month=
+// Returns all SALARIED_ENTRY and CONVERSATIONAL_ENTRY allocations for the period
+// with their draft id, employee name, charge code, GL status, and posting timestamps.
+// For DCAA traceability.
+router.get('/salaried-allocation-audit', async (req: Request, res: Response) => {
+  try {
+    const parsed = salariedAuditQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'year (2000–2100) and month (1–12) are required query parameters',
+        details: parsed.error.format(),
+      });
+    }
+    const { year, month } = parsed.data;
+    const periodStart = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const periodEnd = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const result = await db.execute(sql`
+      SELECT
+        la.id                         AS "allocationId",
+        la.source                     AS "source",
+        la.employee_id                AS "employeeId",
+        e.name                        AS "employeeName",
+        la.allocation_start           AS "allocationStart",
+        la.allocation_end             AS "allocationEnd",
+        la.status                     AS "allocationStatus",
+        la.charge_code_id             AS "chargeCodeId",
+        cc.code                       AS "chargeCodeCode",
+        cc.type                       AS "chargeCodeType",
+        pl.id                         AS "punchLedgerId",
+        ld.id                         AS "draftId",
+        ld.status                     AS "draftStatus",
+        ld.posted_at                  AS "draftPostedAt",
+        lcr.id                        AS "laborCostRecordId",
+        lcr.journal_entry_id          AS "journalEntryId",
+        je.status                     AS "glStatus",
+        je.exported_at                AS "glExportedAt"
+      FROM labor_allocations la
+      JOIN employees e ON e.id = la.employee_id
+      LEFT JOIN charge_codes cc ON cc.id = la.charge_code_id
+      JOIN punch_ledger pl ON pl.id = la.punch_ledger_id
+      LEFT JOIN timekeeping.labor_entry_drafts ld
+        ON ld.employee_id = (
+          SELECT te.id FROM timekeeping.employees te
+          WHERE te.epoch_employee_id = la.employee_id
+          LIMIT 1
+        )
+        AND ld.entry_date = la.allocation_start::date
+        AND ld.status = 'POSTED'
+      LEFT JOIN labor_cost_records lcr
+        ON lcr.canonical_id = CONCAT('la-', la.id::text)
+      LEFT JOIN journal_entries je ON je.id = lcr.journal_entry_id
+      WHERE la.source IN ('SALARIED_ENTRY', 'CONVERSATIONAL_ENTRY')
+        AND la.allocation_start >= ${periodStart}
+        AND la.allocation_start <= ${periodEnd}
+      ORDER BY la.employee_id, la.allocation_start
+    `);
+
+    res.json({
+      year,
+      month,
+      rowCount: result.rows.length,
+      rows: result.rows,
+    });
+  } catch (error: any) {
+    console.error('Salaried allocation audit error:', error);
+    res.status(500).json({ error: error.message || 'Failed to run salaried allocation audit' });
+  }
+});
+
+// ========================================
+// LABOR SOURCE SUMMARY ENDPOINT
+// ========================================
+
+const laborSourceSummaryQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+});
+
+// GET /api/cost-accounting/labor-source-summary?year=&month=
+// Returns total hours and estimated cost broken down by source (LIVE, SALARIED_ENTRY,
+// CONVERSATIONAL_ENTRY) for the requested period. Management visibility.
+router.get('/labor-source-summary', async (req: Request, res: Response) => {
+  try {
+    const parsed = laborSourceSummaryQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'year (2000–2100) and month (1–12) are required query parameters',
+        details: parsed.error.format(),
+      });
+    }
+    const { year, month } = parsed.data;
+    const periodStart = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const periodEnd = new Date(year, month, 0, 23, 59, 59, 999);
+
+    // Aggregate hours and rows by source from CLOSED REGULAR allocations in the period.
+    // Hours = sum of (allocation_end - allocation_start) in hours.
+    // Cost is estimated from labor_cost_records where they exist; otherwise null.
+    const allocResult = await db.execute(sql`
+      SELECT
+        la.source                                                        AS "source",
+        COUNT(*)::int                                                    AS "allocationCount",
+        SUM(
+          EXTRACT(EPOCH FROM (la.allocation_end - la.allocation_start)) / 3600.0
+        )                                                                AS "totalHours",
+        SUM(lcr.dollar_cost::numeric)                                   AS "totalEstimatedCost"
+      FROM labor_allocations la
+      LEFT JOIN labor_cost_records lcr
+        ON lcr.canonical_id = CONCAT('la-', la.id::text)
+      WHERE la.labor_class = 'REGULAR'
+        AND la.status = 'CLOSED'
+        AND la.allocation_end IS NOT NULL
+        AND la.allocation_start >= ${periodStart}
+        AND la.allocation_start <= ${periodEnd}
+      GROUP BY la.source
+      ORDER BY la.source
+    `);
+
+    res.json({
+      year,
+      month,
+      bySource: allocResult.rows,
+    });
+  } catch (error: any) {
+    console.error('Labor source summary error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch labor source summary' });
+  }
+});
+
+// ========================================
+// RECONCILE SALARIED DRAFTS ENDPOINT
+// ========================================
+
+const reconcileSalariedDraftsBodySchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+});
+
+// POST /api/cost-accounting/reconcile-salaried-drafts
+// Checks that every POSTED labor_entry_draft in the period has at least one
+// matching CLOSED labor_allocation. Returns orphaned draft IDs and a full report.
+// Payroll/admin role gated (inherits from router-level requireAdminAccess).
+router.post('/reconcile-salaried-drafts', async (req: Request, res: Response) => {
+  try {
+    const parsed = reconcileSalariedDraftsBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'year (integer 2000–2100) and month (integer 1–12) are required',
+        details: parsed.error.format(),
+      });
+    }
+    const { year, month } = parsed.data;
+    const result = await reconcileSalariedDrafts(year, month);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Reconcile salaried drafts error:', error);
+    res.status(500).json({ error: error.message || 'Failed to reconcile salaried drafts' });
   }
 });
 

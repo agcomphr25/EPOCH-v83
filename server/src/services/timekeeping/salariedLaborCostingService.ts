@@ -36,7 +36,7 @@
 
 import { db } from "../../../db";
 import { laborCostRecords, employees, punchLedger, laborAllocations } from "../../../schema";
-import { and, eq, gte, lte, like, isNull, isNotNull, inArray, desc } from "drizzle-orm";
+import { and, eq, gte, lte, like, isNull, isNotNull, inArray, desc, sql } from "drizzle-orm";
 import {
   salariedTimesheetsTable,
   salariedTimesheetLinesTable,
@@ -723,14 +723,16 @@ export async function validateTimesheetCompleteness(
 export async function getSalariedLaborCostAudit(
   timesheetId: number,
 ): Promise<SalariedCostAuditRow[]> {
+  // ── Part A: Traditional STL records (canonical_id like 'stl-{timesheetId}-*') ──
   const postedPattern = `stl-${timesheetId}-%`;
-  const records = await db
+  const stlRecords = await db
     .select()
     .from(laborCostRecords)
     .where(like(laborCostRecords.canonicalId, postedPattern));
 
   const results: SalariedCostAuditRow[] = [];
-  for (const rec of records) {
+
+  for (const rec of stlRecords) {
     const canonicalParts = (rec.canonicalId ?? "").split("-");
     const lineId = canonicalParts.length === 3 ? Number(canonicalParts[2]) : null;
 
@@ -768,6 +770,72 @@ export async function getSalariedLaborCostAudit(
       rateSource: rec.rateSource,
       journalEntryId: rec.journalEntryId ?? null,
     });
+  }
+
+  // ── Part B: Draft-sourced records (labor_entry_drafts posted during payroll approval) ──
+  // When createSalariedLaborCostRecords() runs payroll approval, CONFIRMED drafts are
+  // posted via postLaborEntryDraft(), creating synthetic punch_ledger rows with
+  // source='SALARIED_ENTRY'.  The cost records for those punches have
+  // source_punch_canonical_id='pl-{punchLedgerId}'.  We recover the punchLedgerId
+  // from the SYNTHETIC_SESSION_POSTED audit records written under this timesheetId.
+  // Filter to PAYROLL_APPROVAL source only:
+  //   Phase-4 audit rows use timesheetId=draftId, source='SALARIED_ENTRY'
+  //   Phase-6 audit rows use timesheetId=realTimesheetId, source='PAYROLL_APPROVAL'
+  // Without the source filter, an ID collision between a draftId and a real
+  // timesheetId could inject unrelated punch/cost records into the audit report.
+  const draftAuditResult = await db.execute(sql`
+    SELECT DISTINCT
+      (after_state->>'punchLedgerId')::int  AS "punchLedgerId",
+      (after_state->>'draftId')::int        AS "draftId",
+      (after_state->>'entryDate')           AS "entryDate"
+    FROM timekeeping.salaried_timesheet_audit
+    WHERE timesheet_id = ${timesheetId}
+      AND action = 'SYNTHETIC_SESSION_POSTED'
+      AND source = 'PAYROLL_APPROVAL'
+      AND after_state->>'punchLedgerId' IS NOT NULL
+  `);
+
+  const draftAuditRows = draftAuditResult.rows as {
+    punchLedgerId: number;
+    draftId: number;
+    entryDate: string | null;
+  }[];
+
+  for (const auditRow of draftAuditRows) {
+    const sourcePunchCanonical = `pl-${auditRow.punchLedgerId}`;
+
+    // Fetch cost records linked to this draft's synthetic punch
+    const draftCostRecords = await db
+      .select()
+      .from(laborCostRecords)
+      .where(eq(laborCostRecords.sourcePunchCanonicalId, sourcePunchCanonical));
+
+    for (const rec of draftCostRecords) {
+      let ccData: { code: string; type: string } | null = null;
+      if (rec.chargeCodeId) {
+        const cc = await storage.getChargeCodeById(rec.chargeCodeId);
+        if (cc) ccData = { code: cc.code, type: cc.type };
+      }
+
+      results.push({
+        lineId: 0,
+        date: auditRow.entryDate ?? "",
+        lineType: "DRAFT_ALLOCATION",
+        hours: Number(rec.hoursWorked),
+        chargeCodeId: rec.chargeCodeId ?? null,
+        chargeCodeCode: ccData?.code ?? null,
+        chargeCodeType: ccData?.type ?? null,
+        indirectCodeId: null,
+        leaveEntryId: null,
+        source: "SALARIED_ENTRY",
+        canonicalId: rec.canonicalId ?? "",
+        dollarCost: String(rec.dollarCost),
+        costType: rec.costType,
+        rateUsed: String(rec.rateUsed),
+        rateSource: rec.rateSource,
+        journalEntryId: rec.journalEntryId ?? null,
+      });
+    }
   }
 
   return results;

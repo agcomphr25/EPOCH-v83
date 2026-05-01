@@ -1173,6 +1173,81 @@ export default function ProjectDetailPage() {
         <Progress value={getProgress()} className="h-3" />
       </div>
 
+      {/* Lifecycle Progress Bar */}
+      {(() => {
+        const LIFECYCLE_STAGES = [
+          { label: 'RFQ', key: 'rfq' },
+          { label: 'Quote', key: 'quote' },
+          { label: 'Project Start', key: 'project_start' },
+          { label: 'PO Received', key: 'po_received' },
+          { label: 'WAD', key: 'wad' },
+          { label: 'Pre-Production', key: 'preprod' },
+          { label: 'Production', key: 'production' },
+          { label: 'Closed', key: 'closed' },
+        ];
+
+        const rfqStep = project.steps.find(s => s.stepType === 'rfq_risk_assessment');
+        const quoteStep = project.steps.find(s => s.stepType === 'quote');
+        const p2Step = project.steps.find(s => s.stepType === 'p2_order');
+        const preprodStep = project.steps.find(s => s.stepType === 'preproduction_checklist');
+
+        const stageComplete = [
+          rfqStep?.status === 'completed',
+          quoteStep?.status === 'completed',
+          true,
+          !!project.poId,
+          p2Step?.status === 'in_progress' || p2Step?.status === 'completed',
+          preprodStep?.status === 'completed',
+          p2Step?.status === 'completed',
+          project.status === 'completed',
+        ];
+
+        const currentIdx = stageComplete.lastIndexOf(true);
+        const inProgressIdx = stageComplete.findIndex((v, i) => !v && (i === 0 || stageComplete[i - 1]));
+
+        return (
+          <div className="border rounded-lg p-4 bg-white">
+            <h3 className="text-sm font-semibold mb-3 text-gray-700">Project Lifecycle</h3>
+            <div className="flex items-center gap-0 overflow-x-auto pb-1">
+              {LIFECYCLE_STAGES.map((stage, i) => {
+                const isDone = stageComplete[i];
+                const isCurrent = i === inProgressIdx || (inProgressIdx === -1 && i === currentIdx);
+                const isLast = i === LIFECYCLE_STAGES.length - 1;
+                return (
+                  <div key={stage.key} className="flex items-center min-w-0 flex-shrink-0">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                        isDone
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : isCurrent
+                            ? 'bg-blue-100 border-blue-500 text-blue-700'
+                            : 'bg-gray-100 border-gray-300 text-gray-400'
+                      }`}>
+                        {isDone ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : isCurrent ? (
+                          <Clock className="h-4 w-4" />
+                        ) : (
+                          <Circle className="h-4 w-4" />
+                        )}
+                      </div>
+                      <span className={`text-xs mt-1 text-center whitespace-nowrap px-1 ${
+                        isDone ? 'text-green-700 font-medium' : isCurrent ? 'text-blue-700 font-medium' : 'text-gray-400'
+                      }`} style={{ maxWidth: '72px', fontSize: '0.65rem', lineHeight: '1.2' }}>
+                        {stage.label}
+                      </span>
+                    </div>
+                    {!isLast && (
+                      <div className={`h-0.5 w-8 mx-0.5 flex-shrink-0 ${stageComplete[i] && stageComplete[i + 1] ? 'bg-green-400' : stageComplete[i] ? 'bg-blue-200' : 'bg-gray-200'}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Similar Past Projects widget */}
       {(isLoadingSimilar || similarClosings.length > 0) && (
         <div className="border rounded-lg overflow-hidden">
@@ -1248,6 +1323,95 @@ export default function ProjectDetailPage() {
         </TabsList>
 
         <TabsContent value="workflow" className="space-y-4">
+          {/* Inline Workflow Action Cards */}
+          {(() => {
+            const purchaseStep = project.steps.find(s => s.stepType === 'purchase_review_checklist');
+            const wadStep = project.steps.find(s => s.stepType === 'p2_order');
+            const preprodStep = project.steps.find(s => s.stepType === 'preproduction_checklist');
+
+            const actionCards = [
+              {
+                key: 'purchase_review',
+                title: 'Purchase Review Checklist',
+                description: 'Verify PO terms, pricing, and contract requirements before authorizing work.',
+                step: purchaseStep,
+                route: `/purchase-review-checklist${project.customerId ? `?customerId=${encodeURIComponent(project.customerId)}` : ''}`,
+                icon: <ListChecks className="h-5 w-5 text-blue-600" />,
+                gateLabel: 'Complete before WAD',
+              },
+              {
+                key: 'wad',
+                title: 'Work Authorization Document (WAD)',
+                description: 'Authorize charge codes, labor budgets, and departments before production begins.',
+                step: wadStep,
+                route: `/p2-control-center?tab=status&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`,
+                icon: <FileText className="h-5 w-5 text-purple-600" />,
+                gateLabel: 'Complete before Pre-Production',
+              },
+              {
+                key: 'preprod',
+                title: 'Pre-Production Checklist',
+                description: 'Confirm drawings, materials, tooling, and task assignments are ready before production release.',
+                step: preprodStep,
+                route: `/preproduction-checklists?projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poNumber ? `&poNumber=${encodeURIComponent(project.poNumber)}` : ''}`,
+                icon: <ClipboardList className="h-5 w-5 text-green-600" />,
+                gateLabel: 'Gate to P2 Production',
+              },
+            ];
+
+            const getStepBadge = (step: ProjectStep | undefined) => {
+              if (!step) return null;
+              const colors: Record<string, string> = {
+                completed: 'bg-green-100 text-green-800',
+                in_progress: 'bg-blue-100 text-blue-800',
+                pending: 'bg-gray-100 text-gray-600',
+                blocked: 'bg-red-100 text-red-800',
+              };
+              const labels: Record<string, string> = {
+                completed: 'Complete',
+                in_progress: 'In Progress',
+                pending: 'Pending',
+                blocked: 'Blocked',
+              };
+              return (
+                <Badge className={`${colors[step.status] || 'bg-gray-100 text-gray-600'} text-xs`}>
+                  {labels[step.status] || step.status}
+                </Badge>
+              );
+            };
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {actionCards.map((card) => (
+                  <Card key={card.key} className={`border-l-4 ${card.step?.status === 'completed' ? 'border-l-green-500' : card.step?.status === 'in_progress' ? 'border-l-blue-500' : 'border-l-gray-300'}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {card.icon}
+                          <span className="text-sm font-semibold">{card.title}</span>
+                        </div>
+                        {getStepBadge(card.step)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-3">{card.description}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">{card.gateLabel}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setLocation(card.route)}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Open
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
+
           <Card>
             <CardHeader>
               <CardTitle>Project Workflow</CardTitle>

@@ -17,7 +17,8 @@ import {
   Layers,
   Factory,
   TrendingUp,
-  FolderOpen
+  FolderOpen,
+  PlayCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -38,6 +39,7 @@ interface POStatus {
   pendingItems: number;
   hasBOMsNeeded: boolean;
   status: 'pending' | 'in_progress' | 'completed';
+  rawStatus?: string;
   projectName?: string | null;
 }
 
@@ -90,6 +92,18 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
     };
     const c = config[status] || config.pending;
     return <Badge variant={c.variant}>{c.label}</Badge>;
+  };
+
+  const getReadyForProductionBadge = (po: POStatus) => {
+    if (po.rawStatus === 'READY_FOR_PRODUCTION') {
+      return (
+        <Badge className="gap-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border border-green-300">
+          <PlayCircle className="h-3 w-3" />
+          Ready for Production
+        </Badge>
+      );
+    }
+    return null;
   };
 
   const getProgressPercentage = (po: POStatus): number => {
@@ -193,10 +207,11 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           {getStatusIcon(po.status)}
                           <span className="font-semibold text-lg">{po.poNumber}</span>
                           {getStatusBadge(po.status)}
+                          {getReadyForProductionBadge(po)}
                           {po.hasBOMsNeeded && (
                             <Badge variant="destructive" className="gap-1">
                               <AlertCircle className="h-3 w-3" />

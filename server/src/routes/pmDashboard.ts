@@ -21,6 +21,11 @@ interface ProjectRow {
   projectManagerName: string | null;
   poId: number | null;
   poNumber: string | null;
+  p2StepStatus: string;
+  preprodStepStatus: string;
+  purchaseStepStatus: string;
+  quoteStepStatus: string;
+  rfqStepStatus: string;
 }
 
 interface SummaryRow {
@@ -64,6 +69,7 @@ interface ProductionRow {
   partNumber: string;
   quantityRequired: number;
   quantityCompleted: number;
+  quantityCompletedToday: number;
   status: string;
   dueDate: string | null;
   currentDepartment: string | null;
@@ -146,7 +152,22 @@ router.get('/projects', h(async (_req, res) => {
       p.project_manager_id AS "projectManagerId",
       e.name AS "projectManagerName",
       p.po_id AS "poId",
-      po.po_number AS "poNumber"
+      po.po_number AS "poNumber",
+      COALESCE(
+        (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'p2_order' LIMIT 1), 'pending'
+      ) AS "p2StepStatus",
+      COALESCE(
+        (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'preproduction_checklist' LIMIT 1), 'pending'
+      ) AS "preprodStepStatus",
+      COALESCE(
+        (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'purchase_review_checklist' LIMIT 1), 'pending'
+      ) AS "purchaseStepStatus",
+      COALESCE(
+        (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'quote' LIMIT 1), 'pending'
+      ) AS "quoteStepStatus",
+      COALESCE(
+        (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'rfq_risk_assessment' LIMIT 1), 'pending'
+      ) AS "rfqStepStatus"
     FROM projects p
     LEFT JOIN employees e ON e.id = p.project_manager_id
     LEFT JOIN p2_purchase_orders po ON po.id = p.po_id
@@ -309,6 +330,12 @@ router.get('/:projectId/production', h(async (req, res) => {
         WHERE t2.production_work_order_id = wo.id
           AND t2.status IN ('COMPLETE', 'CLOSED')
       )::int AS "quantityCompleted",
+      (
+        SELECT COUNT(*) FROM travelers t2
+        WHERE t2.production_work_order_id = wo.id
+          AND t2.status IN ('COMPLETE', 'CLOSED')
+          AND t2.updated_at::date = $1::date
+      )::int AS "quantityCompletedToday",
       wo.status,
       wo.due_date AS "dueDate",
       (

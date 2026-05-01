@@ -4492,6 +4492,7 @@ async function initializeBackgroundServices() {
           EXCEPTION WHEN duplicate_object THEN NULL;
           END $$
         `);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_name_snapshot TEXT`);
         console.log('✅ Ensured projects table has pipeline stage columns and flexible step statuses');
       } catch (projErr: any) {
         console.warn('⚠️ Projects pipeline migration:', projErr.message);

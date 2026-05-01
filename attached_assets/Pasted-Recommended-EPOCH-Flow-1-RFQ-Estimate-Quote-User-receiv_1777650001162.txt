@@ -1,0 +1,204 @@
+Recommended EPOCH Flow
+1. RFQ → Estimate / Quote
+
+User receives RFQ.
+
+Inside Estimating / RFQ Builder:
+
+RFQ entered → estimate created → quote generated.
+
+Add field:
+
+Risk Assessment Required?
+
+Yes
+No
+
+If No:
+Estimate can proceed directly to quote generation.
+
+If Yes:
+Create or open Project Start workflow before quote is finalized.
+
+2. Risk Assessment → Project Start
+
+When risk assessment = Yes:
+
+EPOCH creates a new P2 Project Start record and auto-fills from the estimate:
+
+Customer
+Part number
+Revision
+Quantity
+RFQ number
+Estimated labor
+Estimated material
+Tooling needs
+Special process needs
+Due date / requested delivery
+Risk flags
+Required departments
+Quote reference
+
+Risk assessment must be approved before quote release.
+
+Gate
+
+Quote cannot be formally issued until:
+
+Risk Assessment Status = Approved
+
+Then EPOCH allows:
+
+Generate Quote from Estimate
+
+3. Customer PO Received → Purchase Order Review
+
+Once customer sends PO:
+
+Create Customer PO Review Checklist linked to the project.
+
+Checklist should verify:
+
+PO matches quote
+Part number/revision matches
+Quantity matches
+Price matches
+Delivery date accepted
+Terms accepted
+Customer flow-downs reviewed
+Quality clauses reviewed
+ITAR / export requirement checked
+Cert requirements checked
+Drawing/spec package available
+Special process requirements identified
+Contract risk accepted
+Gate
+
+PO cannot enter P2 Control Center until:
+
+PO Review Checklist = Complete / Approved
+
+4. WAD Starts After PO Review
+
+After PO review is approved, EPOCH starts the WAD — Work Authorization Document.
+
+The WAD should be part of the Project Workflow, not separate.
+
+WAD should define:
+
+Project
+Customer PO
+Work order number
+Part number/revision
+Quantity authorized
+Departments authorized to work
+Charge codes
+Labor hour budgets
+Material budget
+Responsible manager
+Approval authority
+Start authorization
+Due date
+Contract / quality requirements
+Whether overruns are warning or approval-required
+Gate
+
+PO cannot move to P2 Control Center until:
+
+WAD Status = Approved
+
+5. Preproduction Checklist Starts
+
+Once WAD is approved, EPOCH starts the Preproduction Checklist.
+
+This verifies readiness before production:
+
+Approved drawing/specs available
+BOM configured
+Routing needed
+Material availability reviewed
+Required certs identified
+Tooling available
+CNC programs required
+Inspection requirements defined
+Traveler requirements defined
+Work instructions/spec sheets attached
+Assigned users/tasks created
+
+Tasks are assigned to users during this stage.
+
+Gate
+
+Production cannot start until:
+
+Preproduction Checklist = Complete
+
+6. P2 Control Center Handoff
+
+Only after:
+
+PO Review = Approved
+WAD = Approved
+Preproduction Checklist = Complete
+
+Then EPOCH adds the PO to P2 Control Center.
+
+At that point P2 can handle:
+
+Configure BOM
+Create routing
+Generate traveler
+Schedule
+Release to production
+Track production
+QC
+Completion
+Simple Status Flow
+RFQ Received
+→ Estimate Created
+→ Risk Assessment Required?
+   → No: Quote Generated
+   → Yes: Project Start + Risk Assessment
+        → Risk Approved
+        → Quote Generated
+→ Customer PO Received
+→ PO Review Checklist
+→ WAD Created
+→ WAD Approved
+→ Preproduction Checklist
+→ Tasks Assigned
+→ Preproduction Approved
+→ Send to P2 Control Center
+→ Routing / Traveler Creation
+→ Production Release
+Build This as Gates
+
+The key rule:
+
+P2 Control Center should not accept a PO until the project is contractually, financially, and operationally authorized.
+
+So the P2 entry gate should check:
+
+canEnterP2 =
+  poReviewStatus === "APPROVED" &&
+  wadStatus === "APPROVED" &&
+  preproductionStatus === "COMPLETE";
+Recommended New Module Name
+
+Add this before P2:
+
+Project Intake & Authorization
+
+Tabs:
+
+RFQ / Estimate Link
+Risk Assessment
+Quote Approval
+PO Review
+WAD
+Preproduction Checklist
+Task Assignments
+Send to P2 Control Center
+
+This makes P2 stay focused on production execution, while Project Intake controls authorization.

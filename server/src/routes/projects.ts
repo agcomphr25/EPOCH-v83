@@ -51,6 +51,8 @@ const createProjectRequestSchema = z.object({
   projectManagerId: z.number().optional().nullable(),
   reminderDays: z.number().min(1).default(3),
   createdBy: z.number().optional(),
+  quoteId: z.string().uuid().optional().nullable(),
+  customerNameSnapshot: z.string().optional().nullable(),
 });
 
 const VALID_PIPELINE_STAGES = [
@@ -596,26 +598,30 @@ router.post('/', async (req, res) => {
     }
     
     const validatedData = validationResult.data;
+    const { quoteId, customerNameSnapshot, ...projectFields } = validatedData;
     const nextCode = await storage.getNextProjectCode();
 
     // Resolve the integer FK to the master customers table from the text customerId.
     const customersIntegerId = await resolveCustomersIntegerId(validatedData.customerId);
 
     const projectData = {
-      ...validatedData,
+      ...projectFields,
       projectCode: nextCode,
       customersIntegerId,
+      ...(customerNameSnapshot ? { customerNameSnapshot } : {}),
     };
     
     const project = await storage.createProject(projectData);
     
     for (const stepType of PROJECT_STEP_TYPES) {
+      const isQuoteStep = stepType.type === 'quote';
       await storage.createProjectStep({
         projectId: project.id,
         stepType: stepType.type as any,
         stepOrder: stepType.order,
         status: stepType.order === 1 ? 'in_progress' : 'pending',
         startedAt: stepType.order === 1 ? new Date() : null,
+        ...(isQuoteStep && quoteId ? { linkedQuoteId: quoteId, status: 'completed', completedAt: new Date() } : {}),
       });
     }
 

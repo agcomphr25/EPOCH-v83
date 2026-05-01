@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -24,7 +25,7 @@ import {
   Briefcase, Users, ShieldCheck, ShieldAlert, ShieldOff, HelpCircle,
   ChevronUp, ChevronDown, ArrowUpDown, LayoutDashboard, XCircle, Filter,
 } from 'lucide-react';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,22 @@ interface ProjectOption {
   projectManagerName: string | null;
   poId: number | null;
   poNumber: string | null;
+  p2StepStatus?: string;
+  preprodStepStatus?: string;
+  purchaseStepStatus?: string;
+  quoteStepStatus?: string;
+  rfqStepStatus?: string;
+}
+
+function deriveStageLabel(p: ProjectOption): string {
+  if (p.status === 'completed') return 'Closed';
+  if (p.preprodStepStatus === 'completed') return 'Production';
+  if (p.p2StepStatus === 'completed') return 'Pre-Production';
+  if (p.p2StepStatus === 'in_progress') return 'WAD';
+  if (p.poId || p.purchaseStepStatus === 'completed') return 'PO Received';
+  if (p.quoteStepStatus === 'completed') return 'Project Start';
+  if (p.rfqStepStatus === 'completed') return 'Quote';
+  return 'RFQ';
 }
 
 interface Summary {
@@ -65,6 +82,7 @@ interface WorkOrderRow {
   partNumber: string;
   quantityRequired: number;
   quantityCompleted: number;
+  quantityCompletedToday: number;
   status: string;
   dueDate: string | null;
   currentDepartment: string | null;
@@ -685,6 +703,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                   <TableHead className="text-right">Actual</TableHead>
                   <TableHead className="text-right">Remaining</TableHead>
                   <TableHead className="text-right">%</TableHead>
+                  <TableHead className="min-w-[100px]">Labor Used</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -717,6 +736,17 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                       }>
                         {row.percentConsumed}%
                       </Badge>
+                    </TableCell>
+                    <TableCell className="min-w-[100px]">
+                      <div className="space-y-1">
+                        <Progress
+                          value={Math.min(row.percentConsumed, 100)}
+                          className={`h-2 ${row.isOverrun ? '[&>div]:bg-red-500' : row.isNearLimit ? '[&>div]:bg-amber-500' : '[&>div]:bg-green-500'}`}
+                        />
+                        {row.isOverrun && (
+                          <p className="text-xs text-red-600 font-medium">+{(row.percentConsumed - 100).toFixed(0)}% over</p>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1013,14 +1043,61 @@ export default function PMControlCenterPage() {
     refetchInterval: 60000,
   });
 
-  // Page-level production query — shares cache with ProductionTab, only used for blockers sheet
+  // Page-level production query — shares cache with ProductionTab, only used for blockers sheet + throughput
   const { data: productionRows = [] } = useQuery<WorkOrderRow[]>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'production'],
     queryFn: () => fetch(`/api/pm-dashboard/${selectedProjectId}/production`).then(r => r.json()),
     enabled: !!selectedProjectId,
   });
 
+  // Project detail query — used for lifecycle stage derivation
+  const { data: projectDetail } = useQuery<{ currentStage: string | null; status: string; poId: number | null; steps: { stepType: string; status: string }[] }>({
+    queryKey: ['/api/projects', selectedProjectId],
+    queryFn: () => fetch(`/api/projects/${selectedProjectId}`).then(r => r.json()),
+    enabled: !!selectedProjectId,
+  });
+
   const blockedWorkOrders = productionRows.filter(r => r.status === 'BLOCKED');
+
+  const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
+
+  // Derive lifecycle stage label from project steps
+  const lifecycleStageLabel = (() => {
+    if (!selectedProject) return null;
+    // Use the detailed step statuses from projectDetail if available, fall back to ProjectOption fields
+    if (projectDetail) {
+      const steps = projectDetail.steps || [];
+      const p2Step = steps.find(s => s.stepType === 'p2_order');
+      const preprodStep = steps.find(s => s.stepType === 'preproduction_checklist');
+      const purchaseStep = steps.find(s => s.stepType === 'purchase_review_checklist');
+      const quoteStep = steps.find(s => s.stepType === 'quote');
+      const rfqStep = steps.find(s => s.stepType === 'rfq_risk_assessment');
+      return deriveStageLabel({
+        ...selectedProject,
+        p2StepStatus: p2Step?.status,
+        preprodStepStatus: preprodStep?.status,
+        purchaseStepStatus: purchaseStep?.status,
+        quoteStepStatus: quoteStep?.status,
+        rfqStepStatus: rfqStep?.status,
+      });
+    }
+    return deriveStageLabel(selectedProject);
+  })();
+
+  // Daily throughput calculation
+  const dailyThroughput = (() => {
+    if (!productionRows.length || !selectedProject?.targetShipDate) return null;
+    const totalRequired = productionRows.reduce((sum, r) => sum + (r.quantityRequired || 0), 0);
+    const totalCompleted = productionRows.reduce((sum, r) => sum + (r.quantityCompleted || 0), 0);
+    const completedToday = productionRows.reduce((sum, r) => sum + (r.quantityCompletedToday || 0), 0);
+    const totalRemaining = Math.max(0, totalRequired - totalCompleted);
+    const daysRemaining = Math.max(1, differenceInBusinessDays(parseISO(selectedProject.targetShipDate), new Date()));
+    // Daily target = total units still needed / business days remaining (Mon-Fri, excl. weekends)
+    const neededPerDay = Math.ceil(totalRemaining / daysRemaining);
+    // Pace: today's actual completions vs. daily target
+    const pacePercent = neededPerDay > 0 ? Math.round((completedToday / neededPerDay) * 100) : 100;
+    return { totalRequired, totalCompleted, completedToday, totalRemaining, daysRemaining, neededPerDay, pacePercent, percentComplete: totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0 };
+  })();
 
   // Detect current user for "Only My Projects" toggle
   const { data: currentUser } = useQuery<{ id: number; name: string; username: string }>({
@@ -1054,8 +1131,6 @@ export default function PMControlCenterPage() {
       handleProjectChange('');
     }
   }, [filteredProjects, selectedProjectId]);
-
-  const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -1225,16 +1300,58 @@ export default function PMControlCenterPage() {
                 value={fmtDate(summary.targetShipDate)}
                 sub={summary.targetShipDate
                   ? (() => {
-                      const diff = differenceInDays(parseISO(summary.targetShipDate), new Date());
-                      if (diff < 0) return `${Math.abs(diff)}d overdue`;
+                      const diff = differenceInBusinessDays(parseISO(summary.targetShipDate), new Date());
+                      if (diff < 0) return `${Math.abs(diff)} biz days overdue`;
                       if (diff === 0) return 'Due today';
-                      return `${diff}d remaining`;
+                      return `${diff} biz days remaining`;
                     })()
                   : undefined}
                 colorClass="text-orange-600"
               />
             </div>
           ) : null}
+
+          {/* Stage + Throughput Row */}
+          {summary && (lifecycleStageLabel || dailyThroughput) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lifecycleStageLabel && (
+                <KpiCard
+                  icon={<TrendingUp className="h-4 w-4" />}
+                  label="Lifecycle Stage"
+                  value={lifecycleStageLabel}
+                  colorClass={
+                    lifecycleStageLabel === 'Closed' ? 'text-green-600' :
+                    lifecycleStageLabel === 'Production' ? 'text-blue-600' :
+                    lifecycleStageLabel === 'Pre-Production' ? 'text-purple-600' :
+                    'text-orange-600'
+                  }
+                />
+              )}
+              {dailyThroughput && (
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="h-4 w-4 text-blue-600" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Daily Throughput</span>
+                    </div>
+                    <div className="flex items-end justify-between mb-2">
+                      <div>
+                        <p className="text-lg font-bold">{dailyThroughput.completedToday}<span className="text-sm text-muted-foreground"> / {dailyThroughput.neededPerDay} today's target</span></p>
+                        <p className="text-xs text-muted-foreground">{dailyThroughput.totalCompleted}/{dailyThroughput.totalRequired} total · {dailyThroughput.daysRemaining}d left</p>
+                      </div>
+                      <span className={`text-sm font-semibold ${dailyThroughput.pacePercent >= 100 ? 'text-green-600' : dailyThroughput.pacePercent >= 75 ? 'text-blue-600' : 'text-orange-600'}`}>
+                        {dailyThroughput.pacePercent}% pace
+                      </span>
+                    </div>
+                    <Progress
+                      value={Math.min(100, dailyThroughput.pacePercent)}
+                      className={`h-2 ${dailyThroughput.pacePercent >= 100 ? '[&>div]:bg-green-500' : dailyThroughput.pacePercent >= 75 ? '[&>div]:bg-blue-500' : '[&>div]:bg-orange-500'}`}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
 
           {/* Blockers Detail Sheet */}
           <Sheet open={blockersSheetOpen} onOpenChange={setBlockersSheetOpen}>
@@ -1325,12 +1442,64 @@ export default function PMControlCenterPage() {
       )}
 
       {!selectedProjectId && !projectsLoading && (
-        <Card className="p-16 text-center">
-          <LayoutDashboard className="mx-auto h-14 w-14 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Select a Project</h3>
-          <p className="text-muted-foreground">
-            Choose a project from the dropdown above to view its health dashboard.
-          </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <LayoutDashboard className="h-5 w-5 text-blue-600" />
+              All Active Projects
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {filteredProjects.length === 0 ? (
+              <p className="text-center text-muted-foreground py-12">No active projects found.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Project Name</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>PO Number</TableHead>
+                    <TableHead>PM</TableHead>
+                    <TableHead>Ship Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProjects.map(p => {
+                    const stage = deriveStageLabel(p);
+                    const stageBadgeClass =
+                      stage === 'Production' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                      stage === 'Pre-Production' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200' :
+                      stage === 'WAD' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                      stage === 'PO Received' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                      stage === 'Project Start' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' :
+                      stage === 'Quote' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                      'bg-muted text-muted-foreground';
+                    return (
+                      <TableRow
+                        key={p.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleProjectChange(p.id)}
+                      >
+                        <TableCell className="font-mono text-sm">{p.projectCode}</TableCell>
+                        <TableCell className="font-medium">{p.projectName}</TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${stageBadgeClass}`}>
+                            {stage}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{p.poNumber ?? '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{p.projectManagerName ?? '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {p.targetShipDate ? format(parseISO(p.targetShipDate), 'MMM d, yyyy') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
         </Card>
       )}
     </div>

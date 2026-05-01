@@ -10788,6 +10788,8 @@ export const projects = pgTable('projects', {
   // and is populated from the parent quote during auto-creation (quote acceptance) or
   // manual project creation when the customer can be resolved to the master customers table.
   customersIntegerId: integer('customers_integer_id'),
+  // Denormalized customer name snapshot captured at project creation from the originating quote
+  customerNameSnapshot: text('customer_name_snapshot'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

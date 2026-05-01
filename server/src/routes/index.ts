@@ -2993,6 +2993,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           hasBOMsNeeded: !po.bomConfigured,
           projectName: po.projectName || null,
           projectId: projectByPoId.get(po.id) ?? null,
+          rawStatus: po.status || 'OPEN',
           status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
                   inProductionItems > 0 ? 'in_progress' : 'pending'
         };

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -167,6 +167,19 @@ export default function PreproductionChecklistPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Parse context query params passed from the project workflow card
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const contextProjectId = searchParams.get('projectId') || '';
+  const contextProjectName = searchParams.get('projectName') || '';
+  const contextPoNumber = searchParams.get('poNumber') || '';
+
+  // Auto-open create dialog when navigated from a project workflow card
+  useEffect(() => {
+    if (contextProjectId && !selectedChecklist) {
+      setIsCreateChecklistOpen(true);
+    }
+  }, [contextProjectId]);
+
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="preproduction-checklist-page">
       <div className="flex items-center justify-between">
@@ -207,6 +220,8 @@ export default function PreproductionChecklistPage() {
               onSelectChecklist={setSelectedChecklist}
               isCreateOpen={isCreateChecklistOpen}
               setIsCreateOpen={setIsCreateChecklistOpen}
+              initialProjectName={contextProjectName}
+              initialPoNumber={contextPoNumber}
             />
           )}
         </TabsContent>
@@ -242,6 +257,8 @@ function ChecklistsTab({
   onSelectChecklist,
   isCreateOpen,
   setIsCreateOpen,
+  initialProjectName = '',
+  initialPoNumber = '',
 }: {
   searchTerm: string;
   setSearchTerm: (s: string) => void;
@@ -250,6 +267,8 @@ function ChecklistsTab({
   onSelectChecklist: (c: Checklist) => void;
   isCreateOpen: boolean;
   setIsCreateOpen: (b: boolean) => void;
+  initialProjectName?: string;
+  initialPoNumber?: string;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -264,8 +283,8 @@ function ChecklistsTab({
   });
 
   const [newChecklist, setNewChecklist] = useState({
-    projectName: '',
-    poNumber: '',
+    projectName: initialProjectName,
+    poNumber: initialPoNumber,
     dueDate: '',
     templateId: '',
     preProductionDueDate: '',
@@ -277,6 +296,17 @@ function ChecklistsTab({
     poDueDate: '',
     poDueQuantity: '',
   });
+
+  // Sync initial values whenever they change (e.g., on first navigation from project card)
+  useEffect(() => {
+    if (initialProjectName || initialPoNumber) {
+      setNewChecklist(prev => ({
+        ...prev,
+        projectName: initialProjectName || prev.projectName,
+        poNumber: initialPoNumber || prev.poNumber,
+      }));
+    }
+  }, [initialProjectName, initialPoNumber]);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => 

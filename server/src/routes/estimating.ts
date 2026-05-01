@@ -88,6 +88,29 @@ router.get('/rfqs/:id', async (req, res) => {
   }
 });
 
+// ── Lookup RFQ by rfqNumber ───────────────────────────────────────────────────
+
+router.get('/rfqs/by-rfq-number/:rfqNumber', async (req, res) => {
+  try {
+    const { rfqNumber } = req.params;
+    const rows = await pool.query(
+      `SELECT r.*, json_agg(p.* ORDER BY p.line_number) FILTER (WHERE p.id IS NOT NULL) AS parts
+       FROM estimating_rfqs r
+       LEFT JOIN estimating_rfq_parts p ON p.rfq_id = r.id
+       WHERE r.rfq_number = $1
+       GROUP BY r.id
+       LIMIT 1`,
+      [rfqNumber]
+    );
+    if (!rows || (rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'No estimating RFQ found for this RFQ number' });
+    }
+    res.json((rows as any[])[0]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Update RFQ ────────────────────────────────────────────────────────────────
 
 router.patch('/rfqs/:id', async (req, res) => {

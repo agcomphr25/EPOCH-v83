@@ -10,6 +10,7 @@ import {
   preproductionChecklistTasks,
   employees,
   users,
+  p2PurchaseOrders,
   insertPreproductionTemplateSchema,
   insertPreproductionChecklistSchema,
 } from '../../schema';
@@ -424,6 +425,14 @@ router.patch('/:id', async (req: Request, res: Response) => {
     if (!checklist) {
       return res.status(404).json({ error: 'Checklist not found' });
     }
+
+    // When checklist is marked completed, advance the linked P2 PO to READY_FOR_PRODUCTION
+    if (updateData.status === 'completed' && checklist.poNumber) {
+      await db
+        .update(p2PurchaseOrders)
+        .set({ status: 'READY_FOR_PRODUCTION', updatedAt: new Date() })
+        .where(eq(p2PurchaseOrders.poNumber, checklist.poNumber));
+    }
     
     res.json(checklist);
   } catch (error) {
@@ -779,6 +788,14 @@ router.post('/:id/sign-off', requirePermission('travelers.sign_qc_preproduction'
       })
       .where(eq(preproductionChecklists.id, id))
       .returning();
+
+    // Advance the linked P2 PO to READY_FOR_PRODUCTION
+    if (checklist?.poNumber) {
+      await db
+        .update(p2PurchaseOrders)
+        .set({ status: 'READY_FOR_PRODUCTION', updatedAt: new Date() })
+        .where(eq(p2PurchaseOrders.poNumber, checklist.poNumber));
+    }
     
     res.json(checklist);
   } catch (error) {

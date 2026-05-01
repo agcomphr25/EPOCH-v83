@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload, Eye, CheckCircle, BookOpen, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload, Eye, CheckCircle, BookOpen, ChevronDown, ChevronUp, ExternalLink, Lock } from 'lucide-react';
 import { Link, useLocation, useSearch } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -62,6 +62,7 @@ interface RFQAssessment {
   customerName: string;
   description: string | null;
   status: string;
+  bidDecision: string | null;
   submittedBy: string | null;
   submittedAt: string | null;
 }
@@ -71,6 +72,7 @@ export default function P2QuoteForm() {
   const queryClient = useQueryClient();
   const search = useSearch();
   const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+  const urlRfqNumber = new URLSearchParams(search).get('rfqNumber') ?? '';
   const autoFilledRef = useRef(false);
   const [quoteDate, setQuoteDate] = useState(
     new Date().toISOString().split('T')[0]
@@ -132,6 +134,17 @@ export default function P2QuoteForm() {
     () => submittedRFQs.find((rfq) => rfq.rfqNumber === quoteNumber) ?? null,
     [quoteNumber, submittedRFQs]
   );
+
+  // Compute whether the RFQ gate blocks saving/submitting this quote.
+  // Only applies when the form was opened via rfqNumber URL param.
+  const rfqGuardBlocked = useMemo(() => {
+    if (!urlRfqNumber) return false;
+    const guardRFQ = rfqAssessments.find(r => r.rfqNumber === urlRfqNumber);
+    if (!guardRFQ) return true;
+    if (guardRFQ.status !== 'submitted') return true;
+    if (guardRFQ.bidDecision !== 'Bid') return true;
+    return false;
+  }, [urlRfqNumber, rfqAssessments]);
 
   interface SimilarClosing {
     id: number; projectId: string; projectCode: string; projectName: string;
@@ -201,16 +214,27 @@ export default function P2QuoteForm() {
     }
   }, []);
 
+  // Auto-select by rfqNumber URL param (takes priority over customerId)
+  useEffect(() => {
+    if (urlRfqNumber && rfqAssessments.length > 0 && !autoFilledRef.current) {
+      const matchingRFQ = rfqAssessments.find((rfq) => rfq.rfqNumber === urlRfqNumber);
+      if (matchingRFQ) {
+        autoFilledRef.current = true;
+        setQuoteNumber(matchingRFQ.rfqNumber);
+      }
+    }
+  }, [urlRfqNumber, rfqAssessments]);
+
   // Auto-select the first matching RFQ when customerId is provided via URL param
   useEffect(() => {
-    if (urlCustomerId && submittedRFQs.length > 0 && !autoFilledRef.current) {
+    if (urlCustomerId && !urlRfqNumber && submittedRFQs.length > 0 && !autoFilledRef.current) {
       const matchingRFQ = submittedRFQs.find((rfq) => rfq.customerId === urlCustomerId);
       if (matchingRFQ) {
         autoFilledRef.current = true;
         setQuoteNumber(matchingRFQ.rfqNumber);
       }
     }
-  }, [urlCustomerId, submittedRFQs]);
+  }, [urlCustomerId, urlRfqNumber, submittedRFQs]);
 
   // Auto-populate customer info when RFQ is selected
   useEffect(() => {
@@ -235,6 +259,31 @@ export default function P2QuoteForm() {
       }
     }
   }, [quoteNumber, submittedRFQs, p2Customers]);
+
+  // Auto-populate line items from the estimating RFQ when rfqNumber is provided via URL
+  const rfqLineItemsFilledRef = useRef(false);
+  useEffect(() => {
+    if (!urlRfqNumber || rfqLineItemsFilledRef.current || lineItems.length > 0) return;
+    fetch(`/api/estimating/rfqs/by-rfq-number/${encodeURIComponent(urlRfqNumber)}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !Array.isArray(data.parts) || data.parts.length === 0) return;
+        rfqLineItemsFilledRef.current = true;
+        const newItems = data.parts.map((p: any, idx: number) => ({
+          lineNumber: idx + 1,
+          quantity: p.quantity ?? 1,
+          description: [p.part_number, p.part_description].filter(Boolean).join(' — ') || 'Part',
+          unitPrice: 0,
+          totalPrice: 0,
+        }));
+        setLineItems(newItems);
+        // Also set requested due date if available
+        if (data.requested_due_date) {
+          setQuoteDate(data.requested_due_date.slice(0, 10));
+        }
+      })
+      .catch(() => {});
+  }, [urlRfqNumber, lineItems.length]);
 
   // Calculate grand total
   const grandTotal = lineItems.reduce(
@@ -763,17 +812,19 @@ export default function P2QuoteForm() {
               </Button>
               <Button 
                 onClick={handleSave} 
-                disabled={isSaving || isSubmitting || quoteStatus === 'ACCEPTED'}
+                disabled={isSaving || isSubmitting || quoteStatus === 'ACCEPTED' || rfqGuardBlocked}
                 data-testid="button-save"
+                title={rfqGuardBlocked ? 'Quote is locked — RFQ gate not cleared' : undefined}
               >
                 <Save className="h-4 w-4 mr-2" />
                 {isSaving ? 'Saving...' : 'Save Quote'}
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={isSaving || isSubmitting || quoteStatus === 'SENT' || quoteStatus === 'ACCEPTED'}
+                disabled={isSaving || isSubmitting || quoteStatus === 'SENT' || quoteStatus === 'ACCEPTED' || rfqGuardBlocked}
                 variant="default"
                 data-testid="button-submit"
+                title={rfqGuardBlocked ? 'Quote is locked — RFQ gate not cleared' : undefined}
               >
                 <FileText className="h-4 w-4 mr-2" />
                 {isSubmitting ? 'Submitting...' : 'Submit Quote'}
@@ -832,6 +883,58 @@ export default function P2QuoteForm() {
               </Select>
             </div>
           </div>
+
+          {/* RFQ Guard Banner */}
+          {urlRfqNumber && (() => {
+            const guardRFQ = rfqAssessments.find(r => r.rfqNumber === urlRfqNumber);
+            if (!guardRFQ) {
+              return (
+                <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-800 font-bold">
+                    <Lock className="h-5 w-5" />
+                    No Risk Assessment Found
+                  </div>
+                  <p className="text-red-700 mt-1 text-sm">
+                    No risk assessment was found for RFQ #{urlRfqNumber}. A submitted and approved risk assessment with a "Bid" decision is required before generating a quote.
+                  </p>
+                </div>
+              );
+            }
+            if (guardRFQ.status !== 'submitted') {
+              return (
+                <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                  <div className="flex items-center gap-2 text-amber-800 font-bold">
+                    <Lock className="h-5 w-5" />
+                    Risk Assessment Not Submitted
+                  </div>
+                  <p className="text-amber-700 mt-1 text-sm">
+                    The risk assessment for RFQ #{urlRfqNumber} is still in draft status. It must be submitted before a quote can be generated.
+                  </p>
+                </div>
+              );
+            }
+            if (guardRFQ.bidDecision !== 'Bid') {
+              return (
+                <div className="mb-6 p-4 bg-red-50 border-2 border-red-400 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-800 font-bold text-lg">
+                    <Lock className="h-5 w-5" />
+                    Quote Locked — No Bid Decision
+                  </div>
+                  <p className="text-red-700 mt-1">
+                    The risk assessment for RFQ #{urlRfqNumber} resulted in a "{guardRFQ.bidDecision || 'No Bid'}" decision. A quote cannot be generated for this RFQ.
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <div className="mb-6 p-3 bg-green-50 border border-green-300 rounded-lg">
+                <div className="flex items-center gap-2 text-green-800 font-medium text-sm">
+                  <CheckCircle className="h-4 w-4" />
+                  Risk assessment approved — Bid decision confirmed for RFQ #{urlRfqNumber}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Quote Details */}
           <div className="grid grid-cols-2 gap-8 mb-8">

@@ -109,6 +109,10 @@ export default function P2ControlCenter() {
   const poFromUrl = urlParams.get('po') || undefined;
   const unitsFromUrl = urlParams.get('units') || undefined;
   const searchFromUrl = urlParams.get('search') || '';
+  // WAD context: passed from project workflow card
+  const wadProjectId = urlParams.get('projectId') || '';
+  const wadProjectName = urlParams.get('projectName') || '';
+  const wadPoId = urlParams.get('poId') || '';
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
 
   useEffect(() => {
@@ -275,6 +279,21 @@ export default function P2ControlCenter() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {wadProjectId && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 px-4 py-3">
+          <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+          <div className="flex-1 text-sm">
+            <span className="font-medium text-blue-800 dark:text-blue-200">WAD context:</span>
+            <span className="ml-2 text-blue-700 dark:text-blue-300">{wadProjectName || 'Project'}</span>
+            {wadPoId && <span className="ml-2 text-blue-600 dark:text-blue-400">· PO ID {wadPoId}</span>}
+          </div>
+          <Link href={`/projects/${wadProjectId}`}>
+            <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-100">
+              Back to Project
+            </Button>
+          </Link>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">P2 Control Center</h1>

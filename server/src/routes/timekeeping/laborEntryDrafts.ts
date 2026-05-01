@@ -14,6 +14,9 @@
  *   POST   /labor-entry-drafts/portal/:portalId/:id/confirm         confirm (DRAFT→CONFIRMED)
  *   GET    /labor-entry-drafts/portal/:portalId/charge-codes        list active direct charge codes
  *   GET    /labor-entry-drafts/portal/:portalId/indirect-codes      list active indirect codes
+ *
+ * Admin routes (session-auth, ADMIN/OWNER/SUPERVISOR only):
+ *   POST   /portal/:portalId/labor-entry-drafts/:id/post            post CONFIRMED draft as synthetic punch session
  */
 
 import {
@@ -27,8 +30,11 @@ import {
 import { z } from "zod";
 import { db } from "../../../db";
 import { eq, and, gte, lte, desc, isNull } from "drizzle-orm";
-import { authenticatePortalToken } from "../../../middleware/auth";
+import { authenticatePortalToken, authenticateToken, requireRole } from "../../../middleware/auth";
 import { salariedDraftEntryEnabled } from "../../lib/featureFlags";
+import {
+  postLaborEntryDraft,
+} from "../../services/timekeeping/laborEntryDraftPostingService";
 import {
   laborEntryDraftsTable,
   indirectCodesTable,
@@ -42,7 +48,11 @@ import { chargeCodes } from "../../../schema";
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
     console.error("[timekeeping/laborEntryDrafts]", err?.message ?? err);
-    if (!res.headersSent) res.status(500).json({ error: err?.message ?? "Internal server error" });
+    const statusCode: number =
+      typeof err?.statusCode === "number" && err.statusCode >= 400 && err.statusCode < 600
+        ? err.statusCode
+        : 500;
+    if (!res.headersSent) res.status(statusCode).json({ error: err?.message ?? "Internal server error" });
   });
 }
 
@@ -666,6 +676,46 @@ router.post(
       draft: confirmed,
       message: "Draft confirmed and queued for posting.",
     });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /portal/:portalId/labor-entry-drafts/:id/post
+// Post a CONFIRMED draft as a synthetic punch session + allocations.
+// Requires session auth with ADMIN, OWNER, or SUPERVISOR role (payroll/admin gated).
+// Returns 409 if already posted (idempotent — includes existing punch_ledger_id).
+// ---------------------------------------------------------------------------
+router.post(
+  "/portal/:portalId/labor-entry-drafts/:id/post",
+  authenticateToken,
+  requireRole("ADMIN", "OWNER", "SUPERVISOR"),
+  h(async (req, res): Promise<void> => {
+    if (!requireFlag(res)) return;
+
+    const draftId = Number(req.params.id);
+    if (!draftId || isNaN(draftId)) {
+      res.status(400).json({ error: "Invalid draft ID" });
+      return;
+    }
+
+    const postedByUserId: number | null = req.user?.id ?? null;
+    if (!postedByUserId) {
+      res.status(401).json({ error: "Authenticated user required" });
+      return;
+    }
+
+    const result = await postLaborEntryDraft(draftId, postedByUserId);
+
+    if ("alreadyPosted" in result && result.alreadyPosted) {
+      res.status(409).json({
+        error: result.message,
+        draftId: result.draftId,
+        punchLedgerId: result.punchLedgerId,
+      });
+      return;
+    }
+
+    res.status(200).json(result);
   }),
 );
 

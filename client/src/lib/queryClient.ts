@@ -45,17 +45,42 @@ export function generateIdempotencyKey(): string {
 // ─── Session expiry handler ───────────────────────────────────────────────────
 // Called when a 401/403 is confirmed to be a genuine session expiry.
 // Shows a toast and redirects to /login after a brief delay.
+// Kiosk/floor pages are exempt — they use badge auth, not session auth.
 let sessionExpiryNotified = false;
+
+// Routes that run on the production floor as badge-authenticated kiosks.
+// A session expiry on these pages should silently clear tokens but NOT
+// redirect to /login — that would disrupt workers mid-task.
+const KIOSK_ROUTES = [
+  '/p2-traveler',
+  '/p2-traveler-viewer',
+  '/traveler',
+  '/production/timers',
+  '/badge-scan',
+];
+
+function isKioskRoute(): boolean {
+  const path = window.location.pathname;
+  return KIOSK_ROUTES.some(r => path === r || path.startsWith(r + '/'));
+}
 
 function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   if (sessionExpiryNotified) return;
   sessionExpiryNotified = true;
 
-  console.warn(`[AUTH] Session ${reason} — redirecting to login`);
-
-  // Clear stored tokens
+  // Clear stored tokens regardless of page type
   localStorage.removeItem('sessionToken');
   localStorage.removeItem('jwtToken');
+
+  // On kiosk/floor pages: silently drop the expired session without
+  // redirecting — the badge scan flow still works without a session.
+  if (isKioskRoute()) {
+    console.warn(`[AUTH] Session ${reason} on kiosk page — tokens cleared, no redirect`);
+    sessionExpiryNotified = false;
+    return;
+  }
+
+  console.warn(`[AUTH] Session ${reason} — redirecting to login`);
 
   // Show toast via a custom event so we don't depend on a specific toast library import here
   window.dispatchEvent(

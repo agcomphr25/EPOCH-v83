@@ -1,0 +1,531 @@
+Here’s the ideal WAD wizard flow for EPOCH.
+WAD Wizard
+Step 1 — Project / Contract Context
+Auto-fill from Project + PO:
+
+
+Project number
+
+
+Customer
+
+
+Customer PO
+
+
+Quote
+
+
+RFQ
+
+
+Part number / revision
+
+
+Quantity
+
+
+Target ship date
+
+
+Contract review status
+
+
+Risk assessment status
+
+
+Gate:
+PO Review must be Approved before WAD can be started.
+
+Step 2 — Scope of Work
+User confirms:
+
+
+What is authorized to build
+
+
+Quantity authorized
+
+
+Build type:
+
+
+Prototype
+
+
+Production
+
+
+Repair / Rework
+
+
+Engineering sample
+
+
+
+
+Departments involved:
+
+
+Cutting / Kitting
+
+
+Layup
+
+
+Cure
+
+
+CNC
+
+
+Finish
+
+
+QC
+
+
+Shipping
+
+
+
+
+Deliverables:
+
+
+Finished part
+
+
+Assembly
+
+
+Cert package
+
+
+Inspection report
+
+
+Test report
+
+
+
+
+
+Step 3 — Work Breakdown / Departments
+Create WAD work sections by department.
+Example:
+DepartmentOperationRequired?KittingMaterial issue / allocationYesLayupComposite layupYesCureOven cure cycleYesCNCTrim / machineYesFinishSand / paint / cosmetic finishOptionalQCFinal inspectionYes
+Each section should define:
+
+
+Department
+
+
+Operation
+
+
+Responsible lead
+
+
+Estimated hours
+
+
+Required certifications
+
+
+Required traveler step?
+
+
+Requires QC signoff?
+
+
+
+Step 4 — Charge Codes
+This is the DCAA-critical part.
+For each department/operation:
+
+
+Charge code
+
+
+Labor category
+
+
+Direct / indirect / unallowable
+
+
+Budgeted hours
+
+
+Allow overtime? yes/no
+
+
+Allow operator override? yes/no
+
+
+Overrun rule:
+
+
+Warn only
+
+
+Require approval
+
+
+Hard stop
+
+
+
+
+Example:
+OperationCharge CodeBudget HoursOverrun RuleLayupP-1001-LAYUP24Require approvalCNCP-1001-CNC8Require approvalQCP-1001-QC4Warn
+
+Step 5 — Material / BOM Authorization
+Authorize material usage:
+
+
+BOM linked?
+
+
+Material lots required?
+
+
+Serialized material required?
+
+
+ICN scan required?
+
+
+Expiration blocking?
+
+
+Out-time tracking required?
+
+
+Customer-supplied material?
+
+
+Certs required?
+
+
+Gate:
+If material traceability is required, production cannot start unless BOM/material rules are defined.
+
+Step 6 — Routing / Traveler Requirements
+Define production-control requirements:
+
+
+Routing required? yes/no
+
+
+Traveler required? yes/no
+
+
+Work instruction required? yes/no
+
+
+Spec sheet required? yes/no
+
+
+Final QC only allowed? yes/no
+
+
+In-process inspection required? yes/no
+
+
+Spot check plan required? yes/no
+
+
+This step should decide what P2 must create.
+Example:
+Composite part → routing + traveler requiredSimple CNC repeat part → work order + spec sheet + final QC may be enoughSpecial process → traveler step + cert required
+
+Step 7 — Quality Requirements
+Capture:
+
+
+Inspection level
+
+
+First article required?
+
+
+In-process QC required?
+
+
+Final QC required?
+
+
+Spot checking required?
+
+
+100% inspection required?
+
+
+Customer source inspection?
+
+
+Material cert package required?
+
+
+Dimensional report required?
+
+
+NCR process required?
+
+
+Spot check fields:
+
+
+Sample size
+
+
+Frequency
+
+
+Acceptance criteria
+
+
+Who can approve
+
+
+Escalation rule if failure occurs
+
+
+
+Step 8 — Schedule / Capacity
+Define:
+
+
+Authorized start date
+
+
+Required completion date
+
+
+Department due dates
+
+
+Priority
+
+
+Daily target quantity
+
+
+Capacity risk
+
+
+Bottleneck department
+
+
+This feeds:
+
+
+PM Control Center
+
+
+P2 scheduling
+
+
+CNC dashboard
+
+
+production queues
+
+
+
+Step 9 — Risk / Special Controls
+Carry over from risk assessment and PO review:
+
+
+Technical risk
+
+
+Schedule risk
+
+
+Material risk
+
+
+Quality risk
+
+
+Tooling risk
+
+
+Supplier risk
+
+
+ITAR / controlled data flag
+
+
+Customer flow-downs
+
+
+Special process controls
+
+
+Each risk should have:
+
+
+Owner
+
+
+Mitigation
+
+
+Due date
+
+
+Approval status
+
+
+
+Step 10 — Required Documents
+Attach or confirm:
+
+
+Customer PO
+
+
+Drawing
+
+
+Revision/spec sheet
+
+
+Work instructions
+
+
+BOM
+
+
+Routing
+
+
+Quote
+
+
+Risk assessment
+
+
+Purchase review checklist
+
+
+Material cert requirements
+
+
+Inspection plan
+
+
+Customer flow-downs
+
+
+Gate:
+Required documents must be attached or waived before WAD approval.
+
+Step 11 — Approvals
+Required signatures:
+
+
+Project manager
+
+
+Production manager
+
+
+Quality
+
+
+Finance / accounting
+
+
+Optional: engineering
+
+
+Optional: compliance/export control
+
+
+Each approval records:
+
+
+User
+
+
+Role
+
+
+Date/time
+
+
+Approval decision
+
+
+Comments
+
+
+
+Step 12 — WAD Release
+Final review screen.
+Show:
+
+
+Contract accepted?
+
+
+Risk approved?
+
+
+PO review approved?
+
+
+Charge codes assigned?
+
+
+Budgets assigned?
+
+
+Material rules defined?
+
+
+Routing/traveler requirements defined?
+
+
+Quality requirements defined?
+
+
+Required docs attached?
+
+
+Approvals complete?
+
+
+Then:
+Release WAD
+Once released:
+
+
+WAD status = APPROVED / RELEASED
+
+
+Project can move to Preproduction
+
+
+Time clock can use WAD charge codes
+
+
+P2 release gate can evaluate the project
+
+
+
+Ideal WAD Statuses
+DRAFTIN_REVIEWCHANGES_REQUIREDAPPROVEDRELEASEDACTIVECLOSEDCANCELLED
+My recommended simplified version for EPOCH now:
+DRAFTIN_REVIEWAPPROVEDRELEASEDACTIVECLOSED
+
+Best EPOCH Rule
+The WAD should not create the traveler.
+The WAD should authorize the work.
+P2 should create the routing and traveler.
+Project/WAD = authorizationP2 = executionTraveler = shop-floor recordTime Clock = labor record
+That separation is the cleanest for AS9100 + DCAA.

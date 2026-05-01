@@ -1,0 +1,245 @@
+Yes — and you should. This is exactly what will make your AI wizard actually useful instead of generic.
+What you’re describing becomes a Template + AI hybrid system, which is the right move for AS9100 control.
+
+How this should work in EPOCH (ideal design)
+1. You upload prior templates (your real company data)
+You can support templates for:
+Routing Templates
+
+
+Composite routing (Layup → Cure → Finish → QC)
+
+
+CNC routing (Ops, programs, QC tolerances)
+
+
+Assembly / Sub-assembly
+
+
+Paint / Finish
+
+
+Special processes (anodize, coating, etc.)
+
+
+Traveler Templates
+
+
+Department steps + phases (START / WORK / FINISH)
+
+
+Required tasks:
+
+
+Badge scan
+
+
+Material traceability
+
+
+QC checkpoints
+
+
+Signoffs
+
+
+Oven cure logs
+
+
+Special process cert capture
+
+
+
+
+Work Instructions
+
+
+PDFs, docs, or structured instructions tied to part/process
+
+
+Spec Sheets
+
+
+Tolerances
+
+
+Materials
+
+
+Finish requirements
+
+
+Customer specs
+
+
+QC Templates
+
+
+First article
+
+
+In-process checks
+
+
+Final inspection checklists
+
+
+Spot check plans
+
+
+
+2. Where templates live (backend design)
+You’ll want something like:
+templates {  id  name  templateType: 'ROUTING' | 'TRAVELER' | 'QC' | 'WORK_INSTRUCTION' | 'SPEC'  routingType: 'CNC' | 'COMPOSITE' | 'ASSEMBLY' | 'FINISH'  isActive  version  data (jsonb)  createdBy}
+
+3. Step 6 + Templates + AI (this is the key)
+Flow becomes:
+
+
+AI decides requirements (what is needed)
+
+
+AI suggests templates (how to build it)
+
+
+User confirms
+
+
+System generates P2 artifacts
+
+
+
+Example (what you actually want)
+User in WAD Step 6:
+AI says:
+Composite part detected→ Routing required→ Traveler required→ In-process QC required→ Spot check required
+Then:
+Suggested Templates:Routing:✔ Composite Standard Routing v3Traveler:✔ Composite Traveler w/ Cure + QCQC Plan:✔ Composite In-Process + Final QCWork Instruction:✔ Layup Work Instruction Rev BSpec Sheet:✔ Customer Spec MIL-XYZ
+User clicks:
+[Approve & Generate]
+
+4. What happens on click (THIS is your automation win)
+EPOCH automatically:
+Creates Routing → from templateCreates Traveler → from routingAttaches QC checkpoints → from QC templateLinks Work Instructions → to routing stepsAttaches Spec Sheet → to WAD + travelerSets traceability requirements → based on template
+No manual setup.
+
+5. AI’s actual job (important distinction)
+AI should NOT invent your process.
+AI should:
+✔ Do:
+
+
+Pick the correct template
+
+
+Decide required controls
+
+
+Fill missing fields
+
+
+Adjust based on risk / quantity / revision
+
+
+❌ NOT:
+
+
+Create random routing logic
+
+
+Guess QC requirements
+
+
+Override your AS9100 process
+
+
+
+6. How you upload templates (practical options)
+Option A — Structured (best long-term)
+You convert templates into JSON inside EPOCH:
+{  name: "Composite Routing v3",  routingType: "COMPOSITE",  departments: [    "Cutting",    "Layup",    "Cure",    "Finish",    "QC"  ],  departmentConfig: {    Layup: {      requiresMaterialTraceability: true,      requiresSignoff: true    },    Cure: {      requiresOvenLog: true    }  }}
+
+Option B — Upload existing files (fast start)
+Upload:
+
+
+PDFs
+
+
+Excel sheets
+
+
+Word docs
+
+
+Then:
+
+
+Tag them (Composite / CNC / etc.)
+
+
+AI references them
+
+
+Later convert to structured templates
+
+
+
+7. UI you should build (simple)
+“Template Library” page
+Tabs:
+Routing TemplatesTraveler TemplatesQC TemplatesWork InstructionsSpec Sheets
+Actions:
+Upload TemplateEdit TemplateVersion TemplateActivate / Deactivate
+
+8. This unlocks your entire system
+Once this is in place:
+
+
+WAD becomes the trigger
+
+
+Step 6 becomes the decision engine
+
+
+Templates become the execution layer
+
+
+P2 becomes fully auto-generated
+
+
+
+Bottom line
+Yes — and not just “can you upload templates”:
+👉 Templates are the backbone of making your AI WAD wizard actually work.
+Without them:
+
+
+AI guesses → bad for AS9100
+
+
+With them:
+
+
+AI selects → controlled, auditable, repeatable
+
+
+
+If you want next step
+I can give you:
+👉 Copy/paste:
+
+
+DB schema for templates
+
+
+API routes
+
+
+Step 6 AI + template selection logic
+
+
+“Create P2 Controls” backend function
+
+
+That’s the piece that will make your WAD → P2 pipeline real.

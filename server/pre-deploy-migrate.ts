@@ -55,8 +55,15 @@ async function runSql(sql: string, label: string): Promise<boolean> {
  * Strategy: compare the explicit migration file list against the hashes already
  * recorded in drizzle.__drizzle_migrations. A migration is "pending" if its
  * filename-derived hash is not present in that table OR the table doesn't exist yet.
+ *
+ * BASELINE: All migrations through BASELINE_APPLIED_THROUGH are treated as
+ * already applied unconditionally. These ran before hash-tracking was added
+ * so they have no records in drizzle.__drizzle_migrations, but they are
+ * confirmed applied on production.
  */
 async function getPendingMigrationFiles(migrationsDir: string, knownFiles: string[]): Promise<string[]> {
+  const BASELINE_APPLIED_THROUGH = '0094_labor_entry_drafts.sql';
+
   let appliedHashes: Set<string> = new Set();
   try {
     const result = await pool.query(`SELECT hash FROM drizzle.__drizzle_migrations`);
@@ -67,6 +74,8 @@ async function getPendingMigrationFiles(migrationsDir: string, knownFiles: strin
 
   const pending: string[] = [];
   for (const file of knownFiles) {
+    if (file <= BASELINE_APPLIED_THROUGH) continue;
+
     const filePath = path.join(migrationsDir, file);
     if (!fs.existsSync(filePath)) continue;
     // Use the bare filename (without .sql) as the hash key — matches drizzle-kit convention

@@ -1,0 +1,166 @@
+1. 🔒 Template Approval / Control (AS9100 requirement)
+
+Right now you have:
+
+is_active
+version
+created_by
+
+You need:
+
+approved_by
+approved_at
+approval_status: 'DRAFT' | 'APPROVED' | 'OBSOLETE'
+
+👉 Why:
+
+Auditors will ask: who approved the process used to build this part?
+AI must ONLY select APPROVED templates
+2. 🧬 Template → Routing/Traveler Traceability
+
+You added:
+
+selected_template_ids
+
+You ALSO need this stamped on created records:
+
+Routing
+createdFromTemplateId
+createdFromTemplateVersion
+Traveler
+createdFromTemplateId
+createdFromTemplateVersion
+QC checkpoints
+templateSourceId
+
+👉 Why:
+
+You need to prove how a traveler was generated
+This is HUGE for AS9100 + customer audits
+3. 🧠 AI Confidence + Risk Tie-In
+
+Your AI returns:
+
+reason
+flags
+templates
+
+Add:
+
+confidenceScore: number (0–1)
+riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+
+Then enforce:
+
+HIGH RISK → require manual approval (no auto-create)
+LOW RISK → allow one-click generate
+
+👉 This ties directly into your Step 1 risk assessment
+
+🧠 How Step 6 Should Actually Behave (real flow)
+UI Flow (operator experience)
+Step 6 Panel
+Step 6 — Production Control Requirements
+
+[Part Type]  Composite
+[Production Type]  New Part
+
+[Get AI Recommendation]
+AI Response
+CONTROL REQUIREMENTS
+
+Routing Required: YES
+Traveler Required: YES
+Work Instruction Required: YES
+Spec Sheet Required: YES
+Final QC Only: NO
+In-Process Inspection: YES
+Spot Check Plan: YES
+Cert Required: NO
+
+Risk Level: HIGH
+Confidence: 92%
+
+Reason:
+Composite structure requires full traceability, cure control, and in-process inspection.
+
+SUGGESTED TEMPLATES
+
+Routing: Composite Routing v3
+Traveler: Composite Traveler v5
+QC: Composite Inspection Plan v2
+Work Instruction: Layup WI Rev B
+Spec Sheet: MIL-COMP-4421
+User Actions
+[Approve & Generate]   ← disabled if HIGH risk unless override role
+[Edit Requirements]
+[Swap Templates]
+⚙️ What Happens When They Click “Approve & Generate”
+
+This is where your system becomes powerful.
+
+Backend Execution Pipeline
+async function createProductionControls(wadId, selection) {
+
+  if (selection.routingRequired) {
+    const routing = await createRoutingFromTemplate(selection.routingTemplateId)
+  }
+
+  if (selection.travelerRequired) {
+    const traveler = await createTravelerFromRouting(routing.id)
+  }
+
+  if (selection.inProcessInspectionRequired) {
+    await attachQCFromTemplate(selection.qcTemplateId, traveler.id)
+  }
+
+  if (selection.workInstructionRequired) {
+    await linkWorkInstructions(wadId, selection.workInstructionTemplateId)
+  }
+
+  if (selection.specSheetRequired) {
+    await linkSpecSheet(wadId, selection.specSheetTemplateId)
+  }
+
+  if (selection.certRequired) {
+    await addCertificationRequirement(traveler.id)
+  }
+
+  return provisionSummary
+}
+🔗 How This Connects to Your Existing System
+
+This plugs directly into what you already built:
+
+✅ Travelers
+Use: /api/travelers/from-routing/:partRoutingId
+✅ Routing
+Use your existing part_routings structure
+✅ QC
+Inject into:
+traveler steps
+instructionPack
+QC tasks
+✅ Traceability
+Automatically enable:
+lot tracking
+ICN scanning
+material reservations
+🧩 Where This Fits in Your Bigger System
+
+This Step 6 becomes the bridge between:
+
+RFQ → WAD → Step 6 → P2 → Travelers → Time Clock → DCAA logs
+
+Without Step 6:
+
+Everything is manual
+Inconsistent
+Not auditable
+
+With Step 6:
+
+Controlled
+Repeatable
+Traceable
+Auto-generated

@@ -24,9 +24,10 @@ import {
   indirectCodesTable,
   employeesTable,
   leaveEntriesTable,
+  laborEntryDraftsTable,
 } from "../../schema/timekeeping";
 import { employees, travelers } from "../../../schema";
-import { eq, and, gte, lte, asc, desc, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, asc, desc, isNull, inArray } from "drizzle-orm";
 
 /**
  * Minimal interface for a Drizzle transaction client (or the db itself).
@@ -451,12 +452,14 @@ export async function getIndirectCodes(): Promise<(typeof indirectCodesTable.$in
 
 /**
  * Returns all salaried timesheets with basic employee info for admin review.
- * Phase 1 — read-only, no filtering by status.
+ * Phase 6 — includes pending draft count and needs-review draft count per employee.
  */
 export async function getAdminReviewQueue(): Promise<
   {
     timesheet: typeof salariedTimesheetsTable.$inferSelect;
     employeeName: string | null;
+    pendingDraftCount: number;
+    needsReviewDraftCount: number;
   }[]
 > {
   const rows = await db
@@ -471,10 +474,61 @@ export async function getAdminReviewQueue(): Promise<
       asc(employees.name),
     );
 
-  return rows.map((r) => ({
-    timesheet: r.timesheet,
-    employeeName: r.employeeName ?? null,
-  }));
+  if (rows.length === 0) return [];
+
+  // Collect unique epoch employee IDs
+  const epochEmpIds = [...new Set(rows.map((r) => r.timesheet.employeeId))];
+
+  // Resolve timekeeping employee IDs for these epoch employees
+  const tkEmployees = await db
+    .select({ id: employeesTable.id, epochEmployeeId: employeesTable.epochEmployeeId })
+    .from(employeesTable)
+    .where(inArray(employeesTable.epochEmployeeId, epochEmpIds));
+
+  const epochToTkId = new Map<number, number>(
+    tkEmployees.map((e) => [e.epochEmployeeId!, e.id]),
+  );
+  const tkIds = tkEmployees.map((e) => e.id);
+
+  // Fetch all in-scope drafts (with entry dates) for these employees so we can
+  // filter counts per-timesheet by periodStart/periodEnd.  This avoids N+1
+  // queries and ensures badges reflect only drafts within each timesheet's week.
+  let allDrafts: { employeeId: number; status: string; entryDate: string }[] = [];
+  if (tkIds.length > 0) {
+    allDrafts = await db
+      .select({
+        employeeId: laborEntryDraftsTable.employeeId,
+        status: laborEntryDraftsTable.status,
+        entryDate: laborEntryDraftsTable.entryDate,
+      })
+      .from(laborEntryDraftsTable)
+      .where(
+        and(
+          inArray(laborEntryDraftsTable.employeeId, tkIds),
+          inArray(laborEntryDraftsTable.status, ["DRAFT", "CONFIRMED", "NEEDS_REVIEW"]),
+        ),
+      );
+  }
+
+  return rows.map((r) => {
+    const tkId = epochToTkId.get(r.timesheet.employeeId);
+    if (tkId == null) {
+      return { timesheet: r.timesheet, employeeName: r.employeeName ?? null, pendingDraftCount: 0, needsReviewDraftCount: 0 };
+    }
+    // Count only drafts whose entryDate falls within this specific timesheet week
+    const periodDrafts = allDrafts.filter(
+      (d) =>
+        d.employeeId === tkId &&
+        d.entryDate >= r.timesheet.periodStart &&
+        d.entryDate <= r.timesheet.periodEnd,
+    );
+    return {
+      timesheet: r.timesheet,
+      employeeName: r.employeeName ?? null,
+      pendingDraftCount: periodDrafts.length,
+      needsReviewDraftCount: periodDrafts.filter((d) => d.status === "NEEDS_REVIEW").length,
+    };
+  });
 }
 
 /**

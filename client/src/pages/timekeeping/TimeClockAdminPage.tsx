@@ -261,6 +261,8 @@ interface SalariedTimesheetRow {
     createdAt: string;
   };
   employeeName: string | null;
+  pendingDraftCount: number;
+  needsReviewDraftCount: number;
 }
 
 function SalariedTimesheetsAdminPanel() {
@@ -316,6 +318,7 @@ function SalariedTimesheetsAdminPanel() {
                     <TableHead>Period</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Hours</TableHead>
+                    <TableHead>Drafts</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -342,6 +345,34 @@ function SalariedTimesheetsAdminPanel() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.timesheet.totalActualHours.toFixed(2)}h
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {row.needsReviewDraftCount > 0 && (
+                            <span
+                              title={`${row.needsReviewDraftCount} draft(s) need review — will block payroll approval`}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800"
+                            >
+                              {row.needsReviewDraftCount} needs review
+                            </span>
+                          )}
+                          {row.pendingDraftCount > 0 && row.needsReviewDraftCount === 0 && (
+                            <span
+                              title={`${row.pendingDraftCount} pending draft(s) — will be posted at payroll approval`}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {row.pendingDraftCount} pending
+                            </span>
+                          )}
+                          {row.pendingDraftCount > 0 && row.needsReviewDraftCount > 0 && (
+                            <span
+                              title={`${row.pendingDraftCount} total pending draft(s)`}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600"
+                            >
+                              {row.pendingDraftCount} total
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

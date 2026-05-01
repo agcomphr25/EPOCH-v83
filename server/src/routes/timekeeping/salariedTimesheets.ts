@@ -35,6 +35,7 @@ import { authenticateToken, authenticatePortalToken } from "../../../middleware/
 import { getOrCreateSettings } from "../../services/timekeeping/settings.service";
 import * as svc from "../../services/timekeeping/salariedTimesheet.service";
 import * as costSvc from "../../services/timekeeping/salariedLaborCostingService";
+import { DraftNeedsReviewError } from "../../services/timekeeping/salariedLaborCostingService";
 import { z } from "zod";
 import { db } from "../../../db";
 import { employees } from "../../../schema";
@@ -42,8 +43,10 @@ import {
   salariedTimesheetsTable,
   salariedTimesheetLinesTable,
   salariedTimesheetAuditTable,
+  laborEntryDraftsTable,
+  employeesTable,
 } from "../../schema/timekeeping";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -390,6 +393,40 @@ router.post(
       return;
     }
 
+    // ── WARNING BADGE: check for NEEDS_REVIEW drafts (non-blocking) ──────────
+    // Resolve timekeeping employee ID from the timesheet's epoch employee ID
+    let needsReviewDraftCount = 0;
+    let needsReviewDraftIds: number[] = [];
+    try {
+      const [tkEmpRow] = await db
+        .select({ id: employeesTable.id })
+        .from(employeesTable)
+        .where(eq(employeesTable.epochEmployeeId, ts.employeeId))
+        .limit(1);
+      if (tkEmpRow) {
+        const nrDrafts = await db
+          .select({ id: laborEntryDraftsTable.id })
+          .from(laborEntryDraftsTable)
+          .where(
+            and(
+              eq(laborEntryDraftsTable.employeeId, tkEmpRow.id),
+              eq(laborEntryDraftsTable.status, "NEEDS_REVIEW"),
+              gte(laborEntryDraftsTable.entryDate, ts.periodStart),
+              lte(laborEntryDraftsTable.entryDate, ts.periodEnd),
+            ),
+          );
+        needsReviewDraftCount = nrDrafts.length;
+        needsReviewDraftIds = nrDrafts.map((d) => d.id);
+      }
+    } catch (warnLookupErr: any) {
+      // Non-blocking — warning badge query failure does not block approval,
+      // but log for observability so silently missing badges are detectable.
+      console.warn(
+        "[salariedTimesheets] supervisor-approve: NEEDS_REVIEW draft lookup failed " +
+        `for timesheet ${id} — warning badge suppressed. Error: ${warnLookupErr?.message ?? String(warnLookupErr)}`,
+      );
+    }
+
     const [updated] = await db
       .update(salariedTimesheetsTable)
       .set({
@@ -406,7 +443,12 @@ router.post(
       actorName: userName,
       actorRole: user?.role ?? null,
       beforeState: { status: "SUBMITTED" },
-      afterState: { status: "SUPERVISOR_APPROVED", supervisorApprovedAt: updated?.supervisorApprovedAt },
+      afterState: {
+        status: "SUPERVISOR_APPROVED",
+        supervisorApprovedAt: updated?.supervisorApprovedAt,
+        needsReviewDraftCount,
+        needsReviewDraftIds,
+      },
       ipAddress: req.ip,
     });
 
@@ -414,6 +456,14 @@ router.post(
       timesheetId: id,
       status: "SUPERVISOR_APPROVED",
       supervisorApprovedAt: updated?.supervisorApprovedAt,
+      ...(needsReviewDraftCount > 0 && {
+        warning: {
+          code: "DRAFT_NEEDS_REVIEW",
+          message: `${needsReviewDraftCount} labor entry draft(s) for this week have unresolved validation errors. Resolve them before payroll approval or they will block the final step.`,
+          needsReviewDraftCount,
+          needsReviewDraftIds,
+        },
+      }),
       message: "Timesheet approved by supervisor and queued for payroll approval.",
     });
   }),
@@ -473,6 +523,15 @@ router.post(
     try {
       costSummary = await costSvc.createSalariedLaborCostRecords(id, userId ?? 0);
     } catch (accountingErr: any) {
+      if (accountingErr instanceof DraftNeedsReviewError) {
+        res.status(422).json({
+          error: accountingErr.message,
+          code: accountingErr.code,
+          draftIds: accountingErr.draftIds,
+          timesheetId: id,
+        });
+        return;
+      }
       res.status(422).json({
         error: `Payroll approval blocked by accounting validation: ${accountingErr.message}`,
         timesheetId: id,
@@ -509,6 +568,8 @@ router.post(
         totalDollarCost: costSummary.totalDollarCost,
         costBreakdownByType: costSummary.byType,
         laborCostRecordIds: costSummary.recordIds,
+        draftsPosted: costSummary.draftsPosted,
+        draftPostingResults: costSummary.draftPostingResults,
       },
       source: "PAYROLL_APPROVAL",
       ipAddress: req.ip,
@@ -575,7 +636,7 @@ router.post(
     // ── FAIL-CLOSED: check for GL-posted labor cost records ─────────────────
     // deleteSalariedLaborCostRecordsForReopen throws if any records are posted.
     // On throw, no status update happens — atomically safe.
-    let deleteResult: { deleted: number };
+    let deleteResult: { deleted: number; draftsReset: number };
     try {
       deleteResult = await costSvc.deleteSalariedLaborCostRecordsForReopen(id);
     } catch (reopenErr: any) {
@@ -614,6 +675,7 @@ router.post(
         reopenedAt: updated?.reopenedAt,
         reason: String(reason).trim(),
         nonPostedCostRecordsDeleted: deleteResult.deleted,
+        draftsReset: deleteResult.draftsReset,
       },
       reason: String(reason).trim(),
       ipAddress: req.ip,
@@ -624,6 +686,7 @@ router.post(
       status: "REOPENED",
       reopenedAt: updated?.reopenedAt,
       nonPostedCostRecordsDeleted: deleteResult.deleted,
+      draftsReset: deleteResult.draftsReset,
       message:
         "Timesheet reopened for correction. Employee must recertify before resubmission.",
     });

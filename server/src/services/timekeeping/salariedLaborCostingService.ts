@@ -35,14 +35,18 @@
  */
 
 import { db } from "../../../db";
-import { laborCostRecords, employees } from "../../../schema";
-import { and, eq, like, isNull, isNotNull } from "drizzle-orm";
+import { laborCostRecords, employees, punchLedger, laborAllocations } from "../../../schema";
+import { and, eq, gte, lte, like, isNull, isNotNull, inArray, desc } from "drizzle-orm";
 import {
   salariedTimesheetsTable,
   salariedTimesheetLinesTable,
+  laborEntryDraftsTable,
+  employeesTable,
+  salariedTimesheetAuditTable,
 } from "../../schema/timekeeping";
 import { storage } from "../../../storage";
 import { resolveEmployeeRate, classifyLaborCost } from "../laborCostingService";
+import { postLaborEntryDraft } from "./laborEntryDraftPostingService";
 import type { InsertLaborCostRecord } from "../../../schema";
 
 // ---------------------------------------------------------------------------
@@ -57,6 +61,26 @@ export interface SalariedCostRecordSummary {
   totalDollarCost: number;
   recordIds: number[];
   byType: Record<string, { hours: number; dollarCost: number }>;
+  draftsPosted: number;
+  draftPostingResults: { draftId: number; punchLedgerId: number; allocationIds: number[] }[];
+}
+
+/**
+ * Structured error thrown when NEEDS_REVIEW drafts block payroll approval.
+ * The route catches this and returns a 422 with the draft IDs listed.
+ */
+export class DraftNeedsReviewError extends Error {
+  readonly code = "DRAFT_NEEDS_REVIEW" as const;
+  readonly draftIds: number[];
+  constructor(draftIds: number[]) {
+    super(
+      `Payroll approval blocked: ${draftIds.length} labor entry draft(s) require review before approval. ` +
+      `Resolve all validation errors then re-confirm the draft(s) before approving. ` +
+      `Affected draft IDs: ${draftIds.join(", ")}.`,
+    );
+    this.draftIds = draftIds;
+    this.name = "DraftNeedsReviewError";
+  }
 }
 
 export interface SalariedCostAuditRow {
@@ -233,6 +257,37 @@ export async function createSalariedLaborCostRecords(
   // ── 7. Resolve employee rate once for all lines ───────────────────────────
   const resolvedRate = await resolveEmployeeRate(epochEmployeeId);
 
+  // ── 7b. Pre-check: block if any in-scope labor_entry_drafts are NEEDS_REVIEW ─
+  // This check happens BEFORE any inserts so we fail without any partial writes.
+  const [tkEmpRow] = await db
+    .select({ id: employeesTable.id })
+    .from(employeesTable)
+    .where(eq(employeesTable.epochEmployeeId, epochEmployeeId))
+    .limit(1);
+
+  let inScopeDrafts: { id: number; status: string; reviewedBy: number | null }[] = [];
+  if (tkEmpRow) {
+    inScopeDrafts = await db
+      .select({
+        id: laborEntryDraftsTable.id,
+        status: laborEntryDraftsTable.status,
+        reviewedBy: laborEntryDraftsTable.reviewedBy,
+      })
+      .from(laborEntryDraftsTable)
+      .where(
+        and(
+          eq(laborEntryDraftsTable.employeeId, tkEmpRow.id),
+          gte(laborEntryDraftsTable.entryDate, timesheet.periodStart),
+          lte(laborEntryDraftsTable.entryDate, timesheet.periodEnd),
+        ),
+      );
+
+    const needsReview = inScopeDrafts.filter((d) => d.status === "NEEDS_REVIEW");
+    if (needsReview.length > 0) {
+      throw new DraftNeedsReviewError(needsReview.map((d) => d.id));
+    }
+  }
+
   // ── 8. Build labor_cost_record rows — fail-closed per line ───────────────
   const toInsert: InsertLaborCostRecord[] = [];
   const totalsByType: Record<string, { hours: number; dollarCost: number }> = {};
@@ -289,6 +344,80 @@ export async function createSalariedLaborCostRecords(
 
   const inserted = await db.insert(laborCostRecords).values(toInsert).returning();
 
+  // ── 10. Post any CONFIRMED labor_entry_drafts for this employee/week ─────
+  // inScopeDrafts was already loaded in step 7b (NEEDS_REVIEW already blocked above).
+  // Only CONFIRMED drafts are posted here; POSTED/VOIDED are skipped.
+  const draftPostingResults: { draftId: number; punchLedgerId: number; allocationIds: number[] }[] = [];
+
+  const confirmedDrafts = inScopeDrafts.filter((d) => d.status === "CONFIRMED");
+  // Wrap draft posting in a compensating rollback: if any draft post fails,
+  // delete the STL records we just inserted so the system is left in a clean
+  // state and payroll approval can be retried safely.  Already-posted drafts
+  // (those that succeeded before the failure) are handled idempotently by
+  // postLaborEntryDraft's AlreadyPostedGuard on the next retry.
+  try {
+    for (const draft of confirmedDrafts) {
+      const result = await postLaborEntryDraft(draft.id, approvedByUserId);
+      const isNew = !("alreadyPosted" in result);
+      const punchLedgerId = result.punchLedgerId ?? 0;
+      const allocationIds = isNew ? result.allocationIds : [];
+
+      draftPostingResults.push({ draftId: result.draftId, punchLedgerId, allocationIds });
+
+      // Write a Phase-6 audit record under the REAL salaried timesheet ID.
+      // Uses action=SYNTHETIC_SESSION_POSTED (same as Phase-4) but with
+      // timesheetId=realTimesheetId (not draftId) so the reopen path can query
+      // by real timesheet context.  Includes reviewer + approver for traceability.
+      await db.insert(salariedTimesheetAuditTable).values({
+        timesheetId,
+        lineId: null,
+        action: "SYNTHETIC_SESSION_POSTED",
+        actorId: approvedByUserId,
+        actorName: null,
+        actorRole: null,
+        beforeState: null,
+        afterState: {
+          draftId: result.draftId,
+          punchLedgerId,
+          allocationIds,
+          reviewer: draft.reviewedBy ?? null,
+          approver: approvedByUserId,
+          isNew,
+        },
+        reason: `Draft ${result.draftId} posted as part of payroll approval for timesheet ${timesheetId}.`,
+        source: "PAYROLL_APPROVAL",
+        ipAddress: null,
+      });
+    }
+  } catch (postingErr) {
+    // Compensating rollback — restore all side effects so the payroll-approve
+    // route is fully atomic.  Any draft that was posted before the failure
+    // must be voided and reset to CONFIRMED so it can be re-posted on retry.
+    // 1. Void/reset drafts that were already posted in this run.
+    for (const posted of draftPostingResults) {
+      if (posted.punchLedgerId > 0) {
+        const rollbackNote = `VOIDED: compensating rollback — payroll approval for timesheet ${timesheetId} failed after posting draft ${posted.draftId}`;
+        await db
+          .update(laborAllocations)
+          .set({ status: "VOIDED", isEdited: true, editNote: rollbackNote })
+          .where(eq(laborAllocations.punchLedgerId, posted.punchLedgerId));
+        await db
+          .update(punchLedger)
+          .set({ isEdited: true, editNote: rollbackNote })
+          .where(eq(punchLedger.id, posted.punchLedgerId));
+      }
+      await db
+        .update(laborEntryDraftsTable)
+        .set({ status: "CONFIRMED", postedAt: null, reviewedAt: null, reviewedBy: null })
+        .where(eq(laborEntryDraftsTable.id, posted.draftId));
+    }
+    // 2. Delete the STL records we just inserted.
+    await db
+      .delete(laborCostRecords)
+      .where(inArray(laborCostRecords.id, inserted.map((r) => r.id)));
+    throw postingErr;
+  }
+
   return {
     timesheetId,
     employeeId: epochEmployeeId,
@@ -297,6 +426,8 @@ export async function createSalariedLaborCostRecords(
     totalDollarCost: Object.values(totalsByType).reduce((s, t) => s + t.dollarCost, 0),
     recordIds: inserted.map((r) => r.id),
     byType: totalsByType,
+    draftsPosted: draftPostingResults.length,
+    draftPostingResults,
   };
 }
 
@@ -308,12 +439,16 @@ export async function createSalariedLaborCostRecords(
  * Called when a timesheet is reopened.  Deletes any non-posted labor cost
  * records so that reapproval creates a fresh, authoritative set.
  *
+ * Also voids any synthetic punch_ledger rows + labor_allocations created from
+ * POSTED labor_entry_drafts for the same employee/week, and resets those
+ * drafts to CONFIRMED so they can be re-posted on re-approval.
+ *
  * Throws if any records are already GL-posted — caller must void GL entries
  * first (those cannot be deleted without a separate void transaction).
  */
 export async function deleteSalariedLaborCostRecordsForReopen(
   timesheetId: number,
-): Promise<{ deleted: number }> {
+): Promise<{ deleted: number; draftsReset: number }> {
   const postedPattern = `stl-${timesheetId}-%`;
 
   // Block reopen if any records are GL-posted
@@ -334,17 +469,126 @@ export async function deleteSalariedLaborCostRecordsForReopen(
     );
   }
 
-  const deleted = await db
-    .delete(laborCostRecords)
-    .where(
-      and(
-        like(laborCostRecords.canonicalId, postedPattern),
-        isNull(laborCostRecords.journalEntryId),
-      ),
-    )
-    .returning({ id: laborCostRecords.id });
+  // ── READ PHASE (outside transaction) ─────────────────────────────────────
+  // Load everything we need to compute the reversal plan before starting writes.
 
-  return { deleted: deleted.length };
+  const [timesheet] = await db
+    .select({
+      employeeId: salariedTimesheetsTable.employeeId,
+      periodStart: salariedTimesheetsTable.periodStart,
+      periodEnd: salariedTimesheetsTable.periodEnd,
+    })
+    .from(salariedTimesheetsTable)
+    .where(eq(salariedTimesheetsTable.id, timesheetId))
+    .limit(1);
+
+  // Collect drafts that can be reversed: POSTED drafts with recoverable punchLedgerId.
+  type ReversibleDraft = { draftId: number; punchLedgerId: number };
+  const reversibleDrafts: ReversibleDraft[] = [];
+
+  if (timesheet) {
+    const [tkEmpRow] = await db
+      .select({ id: employeesTable.id })
+      .from(employeesTable)
+      .where(eq(employeesTable.epochEmployeeId, timesheet.employeeId))
+      .limit(1);
+
+    if (tkEmpRow) {
+      const postedDrafts = await db
+        .select({ id: laborEntryDraftsTable.id })
+        .from(laborEntryDraftsTable)
+        .where(
+          and(
+            eq(laborEntryDraftsTable.employeeId, tkEmpRow.id),
+            gte(laborEntryDraftsTable.entryDate, timesheet.periodStart),
+            lte(laborEntryDraftsTable.entryDate, timesheet.periodEnd),
+            eq(laborEntryDraftsTable.status, "POSTED"),
+          ),
+        );
+
+      // Load Phase-6 SYNTHETIC_SESSION_POSTED audit records for this real timesheetId.
+      // (Phase-4 records use timesheetId=draftId; Phase-6 uses timesheetId=realId.)
+      // Ordered desc so in-memory find() returns the most recent posting per draft.
+      const auditRows = await db
+        .select({ id: salariedTimesheetAuditTable.id, afterState: salariedTimesheetAuditTable.afterState })
+        .from(salariedTimesheetAuditTable)
+        .where(
+          and(
+            eq(salariedTimesheetAuditTable.timesheetId, timesheetId),
+            eq(salariedTimesheetAuditTable.action, "SYNTHETIC_SESSION_POSTED"),
+          ),
+        )
+        .orderBy(desc(salariedTimesheetAuditTable.id));
+
+      for (const draft of postedDrafts) {
+        const auditRow = auditRows.find(
+          (r) => (r.afterState as Record<string, unknown> | null)?.draftId === draft.id,
+        );
+        const punchLedgerId = typeof (auditRow?.afterState as Record<string, unknown> | null)?.punchLedgerId === "number"
+          ? ((auditRow!.afterState as Record<string, unknown>).punchLedgerId as number)
+          : null;
+
+        // Fail closed: skip drafts with no recoverable punch_ledger linkage.
+        if (punchLedgerId != null) {
+          reversibleDrafts.push({ draftId: draft.id, punchLedgerId });
+        }
+      }
+    }
+  }
+
+  // ── WRITE PHASE (inside transaction for atomicity) ─────────────────────────
+  let deletedCount = 0;
+  let draftsReset = 0;
+
+  await db.transaction(async (tx) => {
+    const deleted = await tx
+      .delete(laborCostRecords)
+      .where(
+        and(
+          like(laborCostRecords.canonicalId, postedPattern),
+          isNull(laborCostRecords.journalEntryId),
+        ),
+      )
+      .returning({ id: laborCostRecords.id });
+    deletedCount = deleted.length;
+
+    for (const { draftId, punchLedgerId } of reversibleDrafts) {
+      const voidNote = `VOIDED: synthetic session from draft ${draftId} voided on timesheet ${timesheetId} reopen`;
+
+      await tx
+        .update(laborAllocations)
+        .set({ status: "VOIDED", isEdited: true, editNote: voidNote })
+        .where(eq(laborAllocations.punchLedgerId, punchLedgerId));
+
+      await tx
+        .update(punchLedger)
+        .set({ isEdited: true, editNote: voidNote })
+        .where(eq(punchLedger.id, punchLedgerId));
+
+      await tx
+        .update(laborEntryDraftsTable)
+        .set({ status: "CONFIRMED", postedAt: null, reviewedAt: null, reviewedBy: null })
+        .where(eq(laborEntryDraftsTable.id, draftId));
+
+      await tx.insert(salariedTimesheetAuditTable).values({
+        timesheetId,
+        lineId: null,
+        action: "SYNTHETIC_SESSION_VOIDED",
+        actorId: null,
+        actorName: null,
+        actorRole: null,
+        beforeState: { draftId, draftStatus: "POSTED", punchLedgerId },
+        afterState: { draftId, draftStatus: "CONFIRMED", punchLedgerId, allocationsVoided: true },
+        reason: `Timesheet ${timesheetId} reopened — synthetic session from draft ${draftId} voided and draft reset to CONFIRMED for re-approval.`,
+        source: "REOPEN",
+        ipAddress: null,
+      });
+
+      draftsReset++;
+    }
+  });
+
+  return { deleted: deletedCount, draftsReset };
 }
 
 // ---------------------------------------------------------------------------

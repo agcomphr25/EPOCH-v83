@@ -1,0 +1,543 @@
+~/workspace$ npm run db:push
+
+> rest-express@1.0.0 predb:push
+> npx tsx server/pre-deploy-migrate.ts
+
+🔧 Pre-deploy migration runner starting...
+   DATABASE_URL host: postgresql://postgres:***@helium/heliumdb?sslmode=disable
+   Found 98 migration file(s): 0000_shiny_amazoness.sql, 0001_fix_cutting_built_packets_category_uuid.sql, 0002_fix_fabric_sources_inventory_id_uuid.sql, 0003_comprehensive_integer_to_uuid_audit.sql, 0004_job_allocations.sql, 0005_backfill_production_orders_item_codes.sql, 0006_nonconforming_rmas_and_schema_columns.sql, 0007_p2_shipping_audit_log.sql, 0008_inventory_item_type_category.sql, 0009_schema_change_log.sql, 0010_all_orders_unique_order_id.sql, 0011_fix_finalized_orders_in_production_departments.sql, 0012_bulk_payment_batches.sql, 0013_add_composite_manufactured_category.sql, 0014_receiving_control_center.sql, 0015_receiving_fk_constraints.sql, 0016_routing_type_enum.sql, 0017_routing_operations_tables.sql, 0018_routing_templates.sql, 0019_routing_dependencies.sql, 0020_anodize_jobs.sql, 0021_anodize_cert_inspection.sql, 0022_routing_dependency_enhancements.sql, 0023_traveler_component_associations.sql, 0024_add_assigned_technician_to_production_orders.sql, 0025_fix_production_daily_checklist_seed.sql, 0026_manufacturing_queue_released_at.sql, 0027_brian_ramirez_account_fix.sql, 0028_packing_slip_external_pdf.sql, 0029_add_component_manufactured_category.sql, 0030_p2_invoicing_phase1_schema.sql, 0031_p2_replacement_shipment_linkage.sql, 0032_canonical_customer_key.sql, 0033_v_all_shipments.sql, 0034_labor_gl_posting.sql, 0035_labor_cost_records_journal_entry_id.sql, 0036_project_closing_lessons_learned.sql, 0037_cycle_count_sessions.sql, 0038_labor_schema_phase1.sql, 0039_routing_operation_certification_id.sql, 0040_timestamptz_time_clock_entries.sql, 0041_perm_user_capability_scopes.sql, 0042_perm_ucs_unique_constraint.sql, 0043_perm_ucs_fk_and_constraints.sql, 0044_perm_ucs_strict_scope_constraint.sql, 0045_refund_requests_last_reminded_at.sql, 0046_dcaa_audit_findings.sql, 0047_timekeeper_pin_and_timezone.sql, 0048_drop_punch_events.sql, 0049_retire_timekeeping_identity_columns.sql, 0050_replace_perm_ucs_coalesce_index.sql, 0051_dcaa_enable_kiosk_pin.sql, 0052_dcaa_missing_tables.sql, 0053_seed_labor_charge_codes.sql, 0054_add_project_id_to_quotes.sql, 0055_customer_integer_id_bridge.sql, 0056_backfill_fulfilled_orders_shipped_date.sql, 0057_p2_cert_hardening.sql, 0058_backfill_training_cert_part_numbers.sql, 0059_native_charge_codes.sql, 0060_punch_ledger.sql, 0061_punch_ledger_pwo_fk.sql, 0062_punch_ledger_check_constraints.sql, 0063_vendor_pos_archived_column.sql, 0064_punch_ledger_wad_traceability.sql, 0065_vendor_date_columns_proper_type.sql, 0066_drop_timekeeping_deprecated_columns.sql, 0067_project_closing_approval_fields.sql, 0068_settings_table.sql, 0069_timekeeping_schema.sql, 0070_dcaa_scheduler_state.sql, 0071_training_certifications_cert_id.sql, 0072_labor_session_request_ref.sql, 0073_vendor_doc_migration_flags.sql, 0074_vendor_po_confirmed_fields.sql, 0075_cutting_documents_table.sql, 0075_time_off_requests.sql, 0076_vendor_po_compliance_reviews.sql, 0077_compliance_requires_attention.sql, 0077_phase_a_salaried_labor_capture.sql, 0078_historical_backfill_flag.sql, 0079_procurement_compliance_effective_date.sql, 0080_link_users_to_employees.sql, 0081_proteus_labs.sql, 0082_pto_three_stage_approval.sql, 0083_proteus_executions_cascade.sql, 0084_pto_payroll_blockers.sql, 0085_labor_capture_suggestions.sql, 0086_p2_serialized_items_barcode_printed_at.sql, 0087_pin_rate_limit.sql, 0088_oem_invoice_number.sql, 0089_vendor_po_compliance_legacy_exception.sql, 0090_labor_allocations.sql, 0091_timesheet_corrections.sql, 0092_timesheet_status_extended.sql, 0093_timekeeping_policy_settings.sql, 0094_labor_entry_drafts.sql, investigation_308_order_duplication.sql
+
+📋 SCHEMA DIFF (0000_shiny_amazoness.sql, 0001_fix_cutting_built_packets_category_uuid.sql, 0002_fix_fabric_sources_inventory_id_uuid.sql, 0004_job_allocations.sql, 0005_backfill_production_orders_item_codes.sql, 0006_nonconforming_rmas_and_schema_columns.sql, 0007_p2_shipping_audit_log.sql, 0008_inventory_item_type_category.sql, 0009_schema_change_log.sql, 0010_all_orders_unique_order_id.sql, 0011_fix_finalized_orders_in_production_departments.sql, 0012_bulk_payment_batches.sql, 0013_add_composite_manufactured_category.sql, 0014_receiving_control_center.sql, 0015_receiving_fk_constraints.sql, 0016_routing_type_enum.sql, 0017_routing_operations_tables.sql, 0018_routing_templates.sql, 0019_routing_dependencies.sql, 0020_anodize_jobs.sql, 0021_anodize_cert_inspection.sql, 0022_routing_dependency_enhancements.sql, 0023_traveler_component_associations.sql, 0024_add_assigned_technician_to_production_orders.sql, 0025_fix_production_daily_checklist_seed.sql, 0026_manufacturing_queue_released_at.sql, 0027_brian_ramirez_account_fix.sql, 0028_packing_slip_external_pdf.sql, 0029_add_component_manufactured_category.sql, 0030_p2_invoicing_phase1_schema.sql, 0031_p2_replacement_shipment_linkage.sql, 0032_canonical_customer_key.sql, 0033_v_all_shipments.sql, 0034_labor_gl_posting.sql, 0035_labor_cost_records_journal_entry_id.sql, 0036_project_closing_lessons_learned.sql, 0037_cycle_count_sessions.sql, 0038_labor_schema_phase1.sql, 0039_routing_operation_certification_id.sql, 0040_timestamptz_time_clock_entries.sql, 0041_perm_user_capability_scopes.sql, 0042_perm_ucs_unique_constraint.sql, 0043_perm_ucs_fk_and_constraints.sql, 0044_perm_ucs_strict_scope_constraint.sql, 0045_refund_requests_last_reminded_at.sql, 0046_dcaa_audit_findings.sql, 0047_timekeeper_pin_and_timezone.sql, 0048_drop_punch_events.sql, 0049_retire_timekeeping_identity_columns.sql, 0050_replace_perm_ucs_coalesce_index.sql, 0051_dcaa_enable_kiosk_pin.sql, 0052_dcaa_missing_tables.sql, 0053_seed_labor_charge_codes.sql, 0054_add_project_id_to_quotes.sql, 0055_customer_integer_id_bridge.sql, 0056_backfill_fulfilled_orders_shipped_date.sql, 0057_p2_cert_hardening.sql, 0058_backfill_training_cert_part_numbers.sql, 0059_native_charge_codes.sql, 0060_punch_ledger.sql, 0061_punch_ledger_pwo_fk.sql, 0062_punch_ledger_check_constraints.sql, 0063_vendor_pos_archived_column.sql, 0064_punch_ledger_wad_traceability.sql, 0065_vendor_date_columns_proper_type.sql, 0066_drop_timekeeping_deprecated_columns.sql, 0067_project_closing_approval_fields.sql, 0068_settings_table.sql, 0069_timekeeping_schema.sql, 0070_dcaa_scheduler_state.sql, 0071_training_certifications_cert_id.sql, 0072_labor_session_request_ref.sql, 0073_vendor_doc_migration_flags.sql, 0074_vendor_po_confirmed_fields.sql, 0075_cutting_documents_table.sql, 0075_time_off_requests.sql, 0076_vendor_po_compliance_reviews.sql, 0077_compliance_requires_attention.sql, 0077_phase_a_salaried_labor_capture.sql, 0078_historical_backfill_flag.sql, 0079_procurement_compliance_effective_date.sql, 0080_link_users_to_employees.sql, 0081_proteus_labs.sql, 0082_pto_three_stage_approval.sql, 0083_proteus_executions_cascade.sql, 0084_pto_payroll_blockers.sql, 0085_labor_capture_suggestions.sql, 0086_p2_serialized_items_barcode_printed_at.sql, 0087_pin_rate_limit.sql, 0088_oem_invoice_number.sql, 0089_vendor_po_compliance_legacy_exception.sql, 0090_labor_allocations.sql, 0091_timesheet_corrections.sql, 0092_timesheet_status_extended.sql, 0093_timekeeping_policy_settings.sql, 0094_labor_entry_drafts.sql, investigation_308_order_duplication.sql):
+   ✅ [L2] Create table: CREATE TABLE "admin_audit_log" (
+   ✅ [L17] Create table: CREATE TABLE "all_orders" (
+   ✅ [L114] Create table: CREATE TABLE "bom_definitions" (
+   ✅ [L125] Create table: CREATE TABLE "bom_items" (
+   ✅ [L144] Create table: CREATE TABLE "bom_lines" (
+   ✅ [L157] Create table: CREATE TABLE "bom_revisions" (
+   ✅ [L169] Create table: CREATE TABLE "boms" (
+   ✅ [L179] Create table: CREATE TABLE "capabilities" (
+   ✅ [L191] Create table: CREATE TABLE "certifications" (
+   ✅ [L208] Create table: CREATE TABLE "checklist_items" (
+   ✅ [L220] Create table: CREATE TABLE "communication_logs" (
+   ✅ [L241] Create table: CREATE TABLE "controlled_documents" (
+   ✅ [L262] Create table: CREATE TABLE "credit_card_transactions" (
+   ✅ [L298] Create table: CREATE TABLE "csv_data" (
+   ✅ [L305] Create table: CREATE TABLE "customer_addresses" (
+   ✅ [L321] Create table: CREATE TABLE "customer_communications" (
+   ✅ [L338] Create table: CREATE TABLE "customer_satisfaction_responses" (
+   ✅ [L358] Create table: CREATE TABLE "customer_satisfaction_surveys" (
+   ✅ [L370] Create table: CREATE TABLE "customer_stock_model_prices" (
+   ✅ [L381] Create table: CREATE TABLE "customer_types" (
+   ✅ [L389] Create table: CREATE TABLE "customers" (
+   ✅ [L405] Create table: CREATE TABLE "cutting_components" (
+   ✅ [L419] Create table: CREATE TABLE "cutting_cut_progress" (
+   ✅ [L435] Create table: CREATE TABLE "cutting_cut_records" (
+   ✅ [L449] Create table: CREATE TABLE "cutting_fabric_inventory" (
+   ✅ [L472] Create table: CREATE TABLE "cutting_fabric_inventory_transactions" (
+   ✅ [L484] Create table: CREATE TABLE "cutting_materials" (
+   ✅ [L494] Create table: CREATE TABLE "cutting_packet_compositions" (
+   ✅ [L504] Create table: CREATE TABLE "cutting_packet_session_lots" (
+   ✅ [L516] Create table: CREATE TABLE "cutting_packet_sessions" (
+   ✅ [L528] Create table: CREATE TABLE "cutting_product_categories" (
+   ✅ [L538] Create table: CREATE TABLE "cutting_production_lines" (
+   ✅ [L549] Create table: CREATE TABLE "cutting_weekly_data" (
+   ✅ [L559] Create table: CREATE TABLE "department_consumption_rates" (
+   ✅ [L572] Create table: CREATE TABLE "departments" (
+   ✅ [L584] Create table: CREATE TABLE "document_collection_relations" (
+   ✅ [L593] Create table: CREATE TABLE "document_collections" (
+   ✅ [L606] Create table: CREATE TABLE "document_tag_relations" (
+   ✅ [L612] Create table: CREATE TABLE "document_tags" (
+   ✅ [L623] Create table: CREATE TABLE "document_version_history" (
+   ✅ [L639] Create table: CREATE TABLE "documents" (
+   ✅ [L656] Create table: CREATE TABLE "employee_audit_log" (
+   ✅ [L668] Create table: CREATE TABLE "employee_capabilities" (
+   ✅ [L681] Create table: CREATE TABLE "employee_certifications" (
+   ✅ [L706] Create table: CREATE TABLE "employee_documents" (
+   ✅ [L725] Create table: CREATE TABLE "employee_layup_settings" (
+   ✅ [L736] Create table: CREATE TABLE "employee_quiz_attempts" (
+   ✅ [L751] Create table: CREATE TABLE "employee_training_records" (
+   ✅ [L769] Create table: CREATE TABLE "employees" (
+   ✅ [L799] Create table: CREATE TABLE "enhanced_form_categories" (
+   ✅ [L807] Create table: CREATE TABLE "enhanced_form_submissions" (
+   ✅ [L815] Create table: CREATE TABLE "enhanced_form_versions" (
+   ✅ [L824] Create table: CREATE TABLE "enhanced_forms" (
+   ✅ [L836] Create table: CREATE TABLE "evaluations" (
+   ✅ [L857] Create table: CREATE TABLE "feature_categories" (
+   ✅ [L867] Create table: CREATE TABLE "feature_selections" (
+   ✅ [L878] Create table: CREATE TABLE "feature_sub_categories" (
+   ✅ [L890] Create table: CREATE TABLE "features" (
+   ✅ [L908] Create table: CREATE TABLE "followup_orders" (
+   ✅ [L935] Create table: CREATE TABLE "form_submissions" (
+   ✅ [L942] Create table: CREATE TABLE "forms" (
+   ✅ [L951] Create table: CREATE TABLE "internal_messages" (
+   ✅ [L969] Create table: CREATE TABLE "inventory_balances" (
+   ✅ [L983] Create table: CREATE TABLE "inventory_item_cost_history" (
+   ✅ [L997] Create table: CREATE TABLE "inventory_item_groups" (
+   ✅ [L1005] Create table: CREATE TABLE "inventory_items" (
+   ✅ [L1066] Create table: CREATE TABLE "inventory_scans" (
+   ✅ [L1082] Create table: CREATE TABLE "inventory_transactions" (
+   ✅ [L1101] Create table: CREATE TABLE "invoice_numbers" (
+   ✅ [L1111] Create table: CREATE TABLE "item_groups" (
+   ✅ [L1122] Create table: CREATE TABLE "kickbacks" (
+   ✅ [L1142] Create table: CREATE TABLE "layup_schedule" (
+   ✅ [L1164] Create table: CREATE TABLE "linked_order_groups" (
+   ✅ [L1175] Create table: CREATE TABLE "linked_orders" (
+   ✅ [L1183] Create table: CREATE TABLE "magic_link_tokens" (
+   ✅ [L1197] Create table: CREATE TABLE "maintenance_logs" (
+   ✅ [L1207] Create table: CREATE TABLE "maintenance_schedules" (
+   ✅ [L1217] Create table: CREATE TABLE "manufacturers_certificates" (
+   ✅ [L1232] Create table: CREATE TABLE "message_attachments" (
+   ✅ [L1243] Create table: CREATE TABLE "message_recipients" (
+   ✅ [L1255] Create table: CREATE TABLE "metal_accessories" (
+   ✅ [L1267] Create table: CREATE TABLE "molds" (
+   ✅ [L1281] Create table: CREATE TABLE "nonconformance_records" (
+   ✅ [L1306] Create table: CREATE TABLE "oauth_states" (
+   ✅ [L1317] Create table: CREATE TABLE "oem_priority_settings" (
+   ✅ [L1333] Create table: CREATE TABLE "onboarding_docs" (
+   ✅ [L1344] Create table: CREATE TABLE "order_attachments" (
+   ✅ [L1357] Create table: CREATE TABLE "order_department_types" (
+   ✅ [L1368] Create table: CREATE TABLE "order_filter_presets" (
+   ✅ [L1379] Create table: CREATE TABLE "order_id_reservations" (
+   ✅ [L1393] Create table: CREATE TABLE "order_id_sequences" (
+   ✅ [L1403] Create table: CREATE TABLE "order_status_types" (
+   ✅ [L1414] Create table: CREATE TABLE "orders" (
+   ✅ [L1455] Create table: CREATE TABLE "p2_customers" (
+   ✅ [L1474] Create table: CREATE TABLE "p2_employee_part_certifications" (
+   ✅ [L1491] Create table: CREATE TABLE "p2_part_certifications" (
+   ✅ [L1501] Create table: CREATE TABLE "p2_production_orders" (
+   ✅ [L1523] Create table: CREATE TABLE "p2_purchase_order_items" (
+   ✅ [L1537] Create table: CREATE TABLE "p2_purchase_orders" (
+   ✅ [L1551] Create table: CREATE TABLE "p2_serialized_item_events" (
+   ✅ [L1566] Create table: CREATE TABLE "p2_serialized_item_traceability" (
+   ✅ [L1579] Create table: CREATE TABLE "p2_serialized_items" (
+   ✅ [L1616] Create table: CREATE TABLE "part_routings" (
+   ✅ [L1630] Create table: CREATE TABLE "parts" (
+   ✅ [L1642] Create table: CREATE TABLE "parts_requests" (
+   ✅ [L1671] Create table: CREATE TABLE "payments" (
+   ✅ [L1682] Create table: CREATE TABLE "pdf_documents" (
+   ✅ [L1695] Create table: CREATE TABLE "pdf_templates" (
+   ✅ [L1709] Create table: CREATE TABLE "persistent_discounts" (
+   ✅ [L1722] Create table: CREATE TABLE "po_product_selections" (
+   ✅ [L1731] Create table: CREATE TABLE "po_products" (
+   ✅ [L1764] Create table: CREATE TABLE "production_orders" (
+   ✅ [L1803] Create table: CREATE TABLE "production_queue" (
+   ✅ [L1825] Create table: CREATE TABLE "purchase_order_items" (
+   ✅ [L1851] Create table: CREATE TABLE "purchase_orders" (
+   ✅ [L1866] Create table: CREATE TABLE "purchase_review_checklist_submissions" (
+   ✅ [L1943] Create table: CREATE TABLE "purchase_review_checklists" (
+   ✅ [L1953] Create table: CREATE TABLE "qc_definitions" (
+   ✅ [L1967] Create table: CREATE TABLE "qc_submissions" (
+   ✅ [L1983] Create table: CREATE TABLE "quote_line_items" (
+   ✅ [L1996] Create table: CREATE TABLE "quotes" (
+   ✅ [L2013] Create table: CREATE TABLE "refund_requests" (
+   ✅ [L2038] Create table: CREATE TABLE "rfq_risk_assessments" (
+   ✅ [L2058] Create table: CREATE TABLE "rts_inventory" (
+   ✅ [L2080] Create table: CREATE TABLE "rts_inventory_history" (
+   ✅ [L2093] Create table: CREATE TABLE "rts_sale_items" (
+   ✅ [L2110] Create table: CREATE TABLE "rts_sales" (
+   ✅ [L2147] Create table: CREATE TABLE "shipment_items" (
+   ✅ [L2159] Create table: CREATE TABLE "shipment_records" (
+   ✅ [L2181] Create table: CREATE TABLE "short_term_sales" (
+   ✅ [L2192] Create table: CREATE TABLE "stock_models" (
+   ✅ [L2205] Create table: CREATE TABLE "task_items" (
+   ✅ [L2229] Create table: CREATE TABLE "time_clock_entries" (
+   ✅ [L2238] Create table: CREATE TABLE "training_matrix" (
+   ✅ [L2258] Create table: CREATE TABLE "training_modules" (
+   ✅ [L2277] Create table: CREATE TABLE "training_question_options" (
+   ✅ [L2287] Create table: CREATE TABLE "training_questions" (
+   ✅ [L2301] Create table: CREATE TABLE "user_capabilities" (
+   ✅ [L2314] Create table: CREATE TABLE "user_integrations" (
+   ✅ [L2330] Create table: CREATE TABLE "user_sessions" (
+   ✅ [L2342] Create table: CREATE TABLE "users" (
+   ✅ [L2361] Create table: CREATE TABLE "vendor_contacts" (
+   ✅ [L2375] Create table: CREATE TABLE "vendor_monthly_evaluations" (
+   ✅ [L2390] Create table: CREATE TABLE "vendor_po_items" (
+   ✅ [L2407] Create table: CREATE TABLE "vendor_po_settings" (
+   ✅ [L2416] Create table: CREATE TABLE "vendor_pos" (
+   ✅ [L2438] Create table: CREATE TABLE "vendor_parts" (
+   ✅ [L2453] Create table: CREATE TABLE "vendor_scope_groups" (
+   ✅ [L2461] Create table: CREATE TABLE "vendor_scope_items" (
+   ✅ [L2469] Create table: CREATE TABLE "vendors" (
+   ✅ [L2504] Create table: CREATE TABLE "weekly_schedule_assignments" (
+   ✅ [L2517] Add column: ALTER TABLE "all_orders" ADD CONSTRAINT "all_orders_status_id_order_status_types_id_fk" FOREIGN KEY 
+   ✅ [L2518] Add column: ALTER TABLE "all_orders" ADD CONSTRAINT "all_orders_current_department_id_order_department_types_id_
+   ✅ [L2519] Add column: ALTER TABLE "all_orders" ADD CONSTRAINT "all_orders_bom_definition_id_bom_definitions_id_fk" FOREIGN
+   ✅ [L2520] Add column: ALTER TABLE "bom_items" ADD CONSTRAINT "bom_items_bom_id_bom_definitions_id_fk" FOREIGN KEY ("bom_id
+   ✅ [L2521] Add column: ALTER TABLE "bom_items" ADD CONSTRAINT "bom_items_reference_bom_id_bom_definitions_id_fk" FOREIGN KE
+   ✅ [L2522] Add column: ALTER TABLE "bom_lines" ADD CONSTRAINT "bom_lines_revision_id_bom_revisions_id_fk" FOREIGN KEY ("rev
+   ✅ [L2523] Add column: ALTER TABLE "bom_lines" ADD CONSTRAINT "bom_lines_child_part_ag_number_inventory_items_ag_part_numbe
+   ✅ [L2524] Add column: ALTER TABLE "bom_revisions" ADD CONSTRAINT "bom_revisions_bom_id_boms_id_fk" FOREIGN KEY ("bom_id") 
+   ✅ [L2525] Add column: ALTER TABLE "boms" ADD CONSTRAINT "boms_parent_part_ag_number_inventory_items_ag_part_number_fk" FOR
+   ✅ [L2526] Add column: ALTER TABLE "credit_card_transactions" ADD CONSTRAINT "credit_card_transactions_payment_id_payments_
+   ✅ [L2527] Add column: ALTER TABLE "customer_communications" ADD CONSTRAINT "customer_communications_communication_log_id_c
+   ✅ [L2528] Add column: ALTER TABLE "customer_satisfaction_responses" ADD CONSTRAINT "customer_satisfaction_responses_survey
+   ✅ [L2529] Add column: ALTER TABLE "customer_satisfaction_responses" ADD CONSTRAINT "customer_satisfaction_responses_custom
+   ✅ [L2530] Add column: ALTER TABLE "customer_stock_model_prices" ADD CONSTRAINT "customer_stock_model_prices_stock_model_id
+   ✅ [L2531] Add column: ALTER TABLE "cutting_components" ADD CONSTRAINT "cutting_components_material_id_cutting_materials_id
+   ✅ [L2532] Add column: ALTER TABLE "cutting_components" ADD CONSTRAINT "cutting_components_inventory_item_id_inventory_item
+   ✅ [L2533] Add column: ALTER TABLE "cutting_cut_progress" ADD CONSTRAINT "cutting_cut_progress_material_id_cutting_material
+   ✅ [L2534] Add column: ALTER TABLE "cutting_cut_progress" ADD CONSTRAINT "cutting_cut_progress_production_line_id_cutting_p
+   ✅ [L2535] Add column: ALTER TABLE "cutting_cut_progress" ADD CONSTRAINT "cutting_cut_progress_product_category_id_cutting_
+   ✅ [L2536] Add column: ALTER TABLE "cutting_cut_progress" ADD CONSTRAINT "cutting_cut_progress_component_id_cutting_compone
+   ✅ [L2537] Add column: ALTER TABLE "cutting_cut_records" ADD CONSTRAINT "cutting_cut_records_product_category_id_cutting_pr
+   ✅ [L2538] Add column: ALTER TABLE "cutting_fabric_inventory" ADD CONSTRAINT "cutting_fabric_inventory_material_id_cutting_
+   ✅ [L2539] Add column: ALTER TABLE "cutting_fabric_inventory" ADD CONSTRAINT "cutting_fabric_inventory_production_line_id_c
+   ✅ [L2540] Add column: ALTER TABLE "cutting_fabric_inventory_transactions" ADD CONSTRAINT "cutting_fabric_inventory_transac
+   ✅ [L2541] Add column: ALTER TABLE "cutting_fabric_inventory_transactions" ADD CONSTRAINT "cutting_fabric_inventory_transac
+   ✅ [L2542] Add column: ALTER TABLE "cutting_packet_compositions" ADD CONSTRAINT "cutting_packet_compositions_product_catego
+   ✅ [L2543] Add column: ALTER TABLE "cutting_packet_compositions" ADD CONSTRAINT "cutting_packet_compositions_component_id_c
+   ✅ [L2544] Add column: ALTER TABLE "cutting_packet_compositions" ADD CONSTRAINT "cutting_packet_compositions_inventory_item
+   ✅ [L2545] Add column: ALTER TABLE "cutting_packet_session_lots" ADD CONSTRAINT "cutting_packet_session_lots_session_id_cut
+   ✅ [L2546] Add column: ALTER TABLE "cutting_packet_session_lots" ADD CONSTRAINT "cutting_packet_session_lots_component_id_c
+   ✅ [L2547] Add column: ALTER TABLE "cutting_packet_session_lots" ADD CONSTRAINT "cutting_packet_session_lots_fabric_invento
+   ✅ [L2548] Add column: ALTER TABLE "cutting_packet_sessions" ADD CONSTRAINT "cutting_packet_sessions_product_category_id_cu
+   ✅ [L2549] Add column: ALTER TABLE "cutting_product_categories" ADD CONSTRAINT "cutting_product_categories_production_line_
+   ✅ [L2550] Add column: ALTER TABLE "cutting_weekly_data" ADD CONSTRAINT "cutting_weekly_data_production_line_id_cutting_pro
+   ✅ [L2551] Add column: ALTER TABLE "cutting_weekly_data" ADD CONSTRAINT "cutting_weekly_data_product_category_id_cutting_pr
+   ✅ [L2552] Add column: ALTER TABLE "department_consumption_rates" ADD CONSTRAINT "department_consumption_rates_ag_part_numb
+   ✅ [L2553] Add column: ALTER TABLE "department_consumption_rates" ADD CONSTRAINT "department_consumption_rates_department_i
+   ✅ [L2554] Add column: ALTER TABLE "document_collection_relations" ADD CONSTRAINT "document_collection_relations_collection
+   ✅ [L2555] Add column: ALTER TABLE "document_collection_relations" ADD CONSTRAINT "document_collection_relations_document_i
+   ✅ [L2556] Add column: ALTER TABLE "document_tag_relations" ADD CONSTRAINT "document_tag_relations_document_id_documents_id
+   ✅ [L2557] Add column: ALTER TABLE "document_tag_relations" ADD CONSTRAINT "document_tag_relations_tag_id_document_tags_id_
+   ✅ [L2558] Add column: ALTER TABLE "document_version_history" ADD CONSTRAINT "document_version_history_document_id_controll
+   ✅ [L2559] Add column: ALTER TABLE "employee_audit_log" ADD CONSTRAINT "employee_audit_log_employee_id_employees_id_fk" FOR
+   ✅ [L2560] Add column: ALTER TABLE "employee_capabilities" ADD CONSTRAINT "employee_capabilities_employee_id_employees_id_f
+   ✅ [L2561] Add column: ALTER TABLE "employee_capabilities" ADD CONSTRAINT "employee_capabilities_capability_id_capabilities
+   ✅ [L2562] Add column: ALTER TABLE "employee_certifications" ADD CONSTRAINT "employee_certifications_employee_id_employees_
+   ✅ [L2563] Add column: ALTER TABLE "employee_certifications" ADD CONSTRAINT "employee_certifications_certification_id_certi
+   ✅ [L2564] Add column: ALTER TABLE "employee_documents" ADD CONSTRAINT "employee_documents_employee_id_employees_id_fk" FOR
+   ✅ [L2565] Add column: ALTER TABLE "employee_layup_settings" ADD CONSTRAINT "employee_layup_settings_employee_id_employees_
+   ✅ [L2566] Add column: ALTER TABLE "employee_quiz_attempts" ADD CONSTRAINT "employee_quiz_attempts_training_record_id_emplo
+   ✅ [L2567] Add column: ALTER TABLE "employee_quiz_attempts" ADD CONSTRAINT "employee_quiz_attempts_employee_id_employees_id
+   ✅ [L2568] Add column: ALTER TABLE "employee_quiz_attempts" ADD CONSTRAINT "employee_quiz_attempts_module_id_training_modul
+   ✅ [L2569] Add column: ALTER TABLE "employee_training_records" ADD CONSTRAINT "employee_training_records_employee_id_employ
+   ✅ [L2570] Add column: ALTER TABLE "employee_training_records" ADD CONSTRAINT "employee_training_records_module_id_training
+   ✅ [L2571] Add column: ALTER TABLE "enhanced_form_submissions" ADD CONSTRAINT "enhanced_form_submissions_form_id_enhanced_f
+   ✅ [L2572] Add column: ALTER TABLE "enhanced_form_versions" ADD CONSTRAINT "enhanced_form_versions_form_id_enhanced_forms_i
+   ✅ [L2573] Add column: ALTER TABLE "enhanced_forms" ADD CONSTRAINT "enhanced_forms_category_id_enhanced_form_categories_id_
+   ✅ [L2574] Add column: ALTER TABLE "evaluations" ADD CONSTRAINT "evaluations_employee_id_employees_id_fk" FOREIGN KEY ("emp
+   ✅ [L2575] Add column: ALTER TABLE "evaluations" ADD CONSTRAINT "evaluations_evaluator_id_employees_id_fk" FOREIGN KEY ("ev
+   ✅ [L2576] Add column: ALTER TABLE "feature_sub_categories" ADD CONSTRAINT "feature_sub_categories_category_id_feature_cate
+   ✅ [L2577] Add column: ALTER TABLE "features" ADD CONSTRAINT "features_category_feature_categories_id_fk" FOREIGN KEY ("cat
+   ✅ [L2578] Add column: ALTER TABLE "features" ADD CONSTRAINT "features_sub_category_feature_sub_categories_id_fk" FOREIGN K
+   ✅ [L2579] Add column: ALTER TABLE "form_submissions" ADD CONSTRAINT "form_submissions_form_id_forms_id_fk" FOREIGN KEY ("f
+   ✅ [L2580] Add column: ALTER TABLE "inventory_balances" ADD CONSTRAINT "inventory_balances_ag_part_number_inventory_items_a
+   ✅ [L2581] Add column: ALTER TABLE "inventory_item_cost_history" ADD CONSTRAINT "inventory_item_cost_history_inventory_item
+   ✅ [L2582] Add column: ALTER TABLE "inventory_item_cost_history" ADD CONSTRAINT "inventory_item_cost_history_vendor_id_vend
+   ✅ [L2583] Add column: ALTER TABLE "inventory_item_cost_history" ADD CONSTRAINT "inventory_item_cost_history_created_by_emp
+   ✅ [L2584] Add column: ALTER TABLE "inventory_item_groups" ADD CONSTRAINT "inventory_item_groups_item_id_inventory_items_id
+   ✅ [L2585] Add column: ALTER TABLE "inventory_item_groups" ADD CONSTRAINT "inventory_item_groups_group_id_item_groups_id_fk
+   ✅ [L2586] Add column: ALTER TABLE "inventory_items" ADD CONSTRAINT "inventory_items_vendor_id_vendors_id_fk" FOREIGN KEY (
+   ✅ [L2587] Add column: ALTER TABLE "inventory_transactions" ADD CONSTRAINT "inventory_transactions_ag_part_number_inventory
+   ✅ [L2588] Add column: ALTER TABLE "layup_schedule" ADD CONSTRAINT "layup_schedule_order_id_production_queue_order_id_fk" F
+   ✅ [L2589] Add column: ALTER TABLE "layup_schedule" ADD CONSTRAINT "layup_schedule_mold_id_molds_mold_id_fk" FOREIGN KEY ("
+   ✅ [L2590] Add column: ALTER TABLE "linked_orders" ADD CONSTRAINT "linked_orders_link_group_id_linked_order_groups_id_fk" F
+   ✅ [L2591] Add column: ALTER TABLE "maintenance_logs" ADD CONSTRAINT "maintenance_logs_schedule_id_maintenance_schedules_id
+   ✅ [L2592] Add column: ALTER TABLE "oauth_states" ADD CONSTRAINT "oauth_states_user_id_users_id_fk" FOREIGN KEY ("user_id")
+   ✅ [L2593] Add column: ALTER TABLE "orders" ADD CONSTRAINT "orders_status_id_order_status_types_id_fk" FOREIGN KEY ("status
+   ✅ [L2594] Add column: ALTER TABLE "orders" ADD CONSTRAINT "orders_current_department_id_order_department_types_id_fk" FORE
+   ✅ [L2595] Add column: ALTER TABLE "p2_employee_part_certifications" ADD CONSTRAINT "p2_employee_part_certifications_part_c
+   ✅ [L2596] Add column: ALTER TABLE "p2_employee_part_certifications" ADD CONSTRAINT "p2_employee_part_certifications_employ
+   ✅ [L2597] Add column: ALTER TABLE "p2_production_orders" ADD CONSTRAINT "p2_production_orders_p2_po_id_p2_purchase_orders_
+   ✅ [L2598] Add column: ALTER TABLE "p2_production_orders" ADD CONSTRAINT "p2_production_orders_p2_po_item_id_p2_purchase_or
+   ✅ [L2599] Add column: ALTER TABLE "p2_production_orders" ADD CONSTRAINT "p2_production_orders_bom_definition_id_bom_defini
+   ✅ [L2600] Add column: ALTER TABLE "p2_production_orders" ADD CONSTRAINT "p2_production_orders_bom_item_id_bom_items_id_fk"
+   ✅ [L2601] Add column: ALTER TABLE "p2_purchase_order_items" ADD CONSTRAINT "p2_purchase_order_items_po_id_p2_purchase_orde
+   ✅ [L2602] Add column: ALTER TABLE "p2_purchase_orders" ADD CONSTRAINT "p2_purchase_orders_customer_id_p2_customers_custome
+   ✅ [L2603] Add column: ALTER TABLE "p2_serialized_item_events" ADD CONSTRAINT "p2_serialized_item_events_serialized_item_id
+   ✅ [L2604] Add column: ALTER TABLE "p2_serialized_item_traceability" ADD CONSTRAINT "p2_serialized_item_traceability_serial
+   ✅ [L2605] Add column: ALTER TABLE "p2_serialized_items" ADD CONSTRAINT "p2_serialized_items_po_id_p2_purchase_orders_id_fk
+   ✅ [L2606] Add column: ALTER TABLE "p2_serialized_items" ADD CONSTRAINT "p2_serialized_items_po_item_id_p2_purchase_order_i
+   ✅ [L2607] Add column: ALTER TABLE "parts_requests" ADD CONSTRAINT "parts_requests_ag_part_number_inventory_items_ag_part_n
+   ✅ [L2608] Add column: ALTER TABLE "parts_requests" ADD CONSTRAINT "parts_requests_department_id_departments_id_fk" FOREIGN
+   ✅ [L2609] Add column: ALTER TABLE "parts_requests" ADD CONSTRAINT "parts_requests_vendor_po_id_vendor_pos_id_fk" FOREIGN K
+   ✅ [L2610] Add column: ALTER TABLE "payments" ADD CONSTRAINT "payments_order_id_all_orders_order_id_fk" FOREIGN KEY ("order
+   ✅ [L2611] Add column: ALTER TABLE "persistent_discounts" ADD CONSTRAINT "persistent_discounts_customer_type_id_customer_ty
+   ✅ [L2612] Add column: ALTER TABLE "po_product_selections" ADD CONSTRAINT "po_product_selections_po_product_id_po_products_
+   ✅ [L2613] Add column: ALTER TABLE "production_orders" ADD CONSTRAINT "production_orders_po_id_purchase_orders_id_fk" FOREI
+   ✅ [L2614] Add column: ALTER TABLE "production_orders" ADD CONSTRAINT "production_orders_po_item_id_purchase_order_items_id
+   ✅ [L2615] Add column: ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_po_id_purchase_orders_id_fk"
+   ✅ [L2616] Add column: ALTER TABLE "quote_line_items" ADD CONSTRAINT "quote_line_items_quote_id_quotes_id_fk" FOREIGN KEY (
+   ✅ [L2617] Add column: ALTER TABLE "rfq_risk_assessments" ADD CONSTRAINT "rfq_risk_assessments_customer_id_p2_customers_cus
+   ✅ [L2618] Add column: ALTER TABLE "rts_inventory_history" ADD CONSTRAINT "rts_inventory_history_rts_inventory_id_rts_inven
+   ✅ [L2619] Add column: ALTER TABLE "rts_sale_items" ADD CONSTRAINT "rts_sale_items_rts_sale_id_rts_sales_id_fk" FOREIGN KEY
+   ✅ [L2620] Add column: ALTER TABLE "rts_sale_items" ADD CONSTRAINT "rts_sale_items_rts_inventory_id_rts_inventory_id_fk" FO
+   ✅ [L2621] Add column: ALTER TABLE "shipment_items" ADD CONSTRAINT "shipment_items_shipment_id_shipment_records_id_fk" FORE
+   ✅ [L2622] Add column: ALTER TABLE "shipment_items" ADD CONSTRAINT "shipment_items_po_item_id_purchase_order_items_id_fk" F
+   ✅ [L2623] Add column: ALTER TABLE "training_matrix" ADD CONSTRAINT "training_matrix_employee_id_employees_id_fk" FOREIGN K
+   ✅ [L2624] Add column: ALTER TABLE "training_modules" ADD CONSTRAINT "training_modules_certification_id_certifications_id_f
+   ✅ [L2625] Add column: ALTER TABLE "training_question_options" ADD CONSTRAINT "training_question_options_question_id_traini
+   ✅ [L2626] Add column: ALTER TABLE "training_questions" ADD CONSTRAINT "training_questions_module_id_training_modules_id_fk
+   ✅ [L2627] Add column: ALTER TABLE "user_capabilities" ADD CONSTRAINT "user_capabilities_user_id_users_id_fk" FOREIGN KEY (
+   ✅ [L2628] Add column: ALTER TABLE "user_capabilities" ADD CONSTRAINT "user_capabilities_capability_id_capabilities_id_fk" 
+   ✅ [L2629] Add column: ALTER TABLE "user_integrations" ADD CONSTRAINT "user_integrations_user_id_users_id_fk" FOREIGN KEY (
+   ✅ [L2630] Add column: ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_user_id_users_id_fk" FOREIGN KEY ("user_id
+   ✅ [L2631] Add column: ALTER TABLE "users" ADD CONSTRAINT "users_employee_id_employees_id_fk" FOREIGN KEY ("employee_id") R
+   ✅ [L2632] Add column: ALTER TABLE "vendor_contacts" ADD CONSTRAINT "vendor_contacts_vendor_id_vendors_id_fk" FOREIGN KEY (
+   ✅ [L2633] Add column: ALTER TABLE "vendor_monthly_evaluations" ADD CONSTRAINT "vendor_monthly_evaluations_vendor_id_vendor
+   ✅ [L2634] Add column: ALTER TABLE "vendor_po_items" ADD CONSTRAINT "vendor_po_items_vendor_po_id_vendor_pos_id_fk" FOREIGN
+   ✅ [L2635] Add column: ALTER TABLE "vendor_po_items" ADD CONSTRAINT "vendor_po_items_ag_part_number_inventory_items_ag_part
+   ✅ [L2636] Add column: ALTER TABLE "vendor_pos" ADD CONSTRAINT "vendor_pos_vendor_id_vendors_id_fk" FOREIGN KEY ("vendor_id
+   ✅ [L2637] Add column: ALTER TABLE "vendor_parts" ADD CONSTRAINT "vendor_parts_ag_part_number_inventory_items_ag_part_numbe
+   ✅ [L2638] Add column: ALTER TABLE "vendor_parts" ADD CONSTRAINT "vendor_parts_vendor_id_vendors_id_fk" FOREIGN KEY ("vendo
+   ✅ [L2639] Add column: ALTER TABLE "vendor_scope_groups" ADD CONSTRAINT "vendor_scope_groups_vendor_id_vendors_id_fk" FOREI
+   ✅ [L2640] Add column: ALTER TABLE "vendor_scope_groups" ADD CONSTRAINT "vendor_scope_groups_group_id_item_groups_id_fk" FO
+   ✅ [L2641] Add column: ALTER TABLE "vendor_scope_items" ADD CONSTRAINT "vendor_scope_items_vendor_id_vendors_id_fk" FOREIGN
+   ✅ [L2642] Add column: ALTER TABLE "vendor_scope_items" ADD CONSTRAINT "vendor_scope_items_item_id_inventory_items_id_fk" F
+   ✅ [L2643] Add column: ALTER TABLE "weekly_schedule_assignments" ADD CONSTRAINT "weekly_schedule_assignments_po_product_id_
+   ✅ [L2644] Create index: CREATE INDEX "admin_audit_order_id_idx" ON "admin_audit_log" USING btree ("order_id");--> statement-
+   ✅ [L2645] Create index: CREATE INDEX "admin_audit_changed_by_idx" ON "admin_audit_log" USING btree ("changed_by");--> statem
+   ✅ [L2646] Create index: CREATE INDEX "admin_audit_timestamp_idx" ON "admin_audit_log" USING btree ("timestamp");--> statemen
+   ✅ [L2647] Create index: CREATE INDEX "admin_audit_order_time_idx" ON "admin_audit_log" USING btree ("order_id","timestamp");
+   ✅ [L2648] Create index: CREATE INDEX "bom_lines_rev_idx" ON "bom_lines" USING btree ("revision_id");--> statement-breakpoint
+   ✅ [L2649] Create index: CREATE INDEX "bom_lines_child_idx" ON "bom_lines" USING btree ("child_part_ag_number");--> statement
+   ✅ [L2650] Create index: CREATE INDEX "bom_rev_unique" ON "bom_revisions" USING btree ("bom_id","rev_code");--> statement-bre
+   ✅ [L2651] Create index: CREATE INDEX "boms_parent_idx" ON "boms" USING btree ("parent_part_ag_number");--> statement-breakpo
+   ✅ [L2652] Create index: CREATE INDEX "boms_code_idx" ON "boms" USING btree ("code");--> statement-breakpoint
+   ✅ [L2653] Create index: CREATE INDEX "cutting_cut_records_work_date_idx" ON "cutting_cut_records" USING btree ("work_date");
+   ✅ [L2654] Create index: CREATE INDEX "cutting_cut_records_category_idx" ON "cutting_cut_records" USING btree ("product_categ
+   ✅ [L2655] Create index: CREATE INDEX "cutting_fabric_inventory_expiration_idx" ON "cutting_fabric_inventory" USING btree ("e
+   ✅ [L2656] Create index: CREATE INDEX "p2_serialized_item_events_barcode_idx" ON "p2_serialized_item_events" USING btree ("ba
+   ✅ [L2657] Create index: CREATE INDEX "p2_serialized_item_events_item_id_idx" ON "p2_serialized_item_events" USING btree ("se
+   ✅ [L2658] Create index: CREATE INDEX "p2_serialized_item_traceability_item_id_idx" ON "p2_serialized_item_traceability" USIN
+   ✅ [L2659] Create index: CREATE INDEX "p2_serialized_item_traceability_department_idx" ON "p2_serialized_item_traceability" U
+   ✅ [L2660] Create index: CREATE INDEX "part_routings_inventory_item_idx" ON "part_routings" USING btree ("inventory_item_id")
+   ✅ [L2661] Create index: CREATE INDEX "parts_sku_idx" ON "parts" USING btree ("sku");
+   ⚠️  [L2727] Drop index: DROP INDEX IF EXISTS cutting_built_packet_sources_inventory_idx;
+   ✅ [L2744] Create index: CREATE INDEX IF NOT EXISTS cutting_built_packet_sources_inventory_idx
+   ✅ [L2758] Create table: CREATE TABLE IF NOT EXISTS job_allocations (
+   ✅ [L2836] Create table: CREATE TABLE IF NOT EXISTS p2_nonconforming_dispositions (
+   ✅ [L2856] Create table: CREATE TABLE IF NOT EXISTS p2_rmas (
+   ✅ [L2877] Add column: ALTER TABLE p2_purchase_orders ADD COLUMN scrapped_item_count INTEGER NOT NULL DEFAULT 0;
+   ✅ [L2887] Add column: ALTER TABLE p2_purchase_orders ADD COLUMN scrap_rate_percent REAL NOT NULL DEFAULT 0;
+   ✅ [L2898] Add column: ALTER TABLE production_orders ADD COLUMN p2_po_item_id INTEGER;
+   ✅ [L2903] Create table: CREATE TABLE IF NOT EXISTS quick_notes (
+   ✅ [L2916] Create table: CREATE TABLE IF NOT EXISTS quick_note_shares (
+   ✅ [L2925] Create table: CREATE TABLE IF NOT EXISTS p2_shipping_audit_log (
+   ✅ [L2983] Create table: CREATE TABLE IF NOT EXISTS schema_change_log (
+   ✅ [L3006] Create index: CREATE INDEX IF NOT EXISTS idx_schema_change_log_timestamp ON schema_change_log (timestamp DESC);
+   ✅ [L3007] Create index: CREATE INDEX IF NOT EXISTS idx_schema_change_log_table ON schema_change_log (table_name);
+   ❌ [L3048] DELETE without WHERE: DELETE FROM all_orders
+   ✅ [L3054] Create index: CREATE UNIQUE INDEX IF NOT EXISTS all_orders_order_id_unique
+   ✅ [L3083] Create table: CREATE TABLE IF NOT EXISTS bulk_payment_batches (
+   ✅ [L3105] Create table: CREATE TABLE IF NOT EXISTS receipts (
+   ✅ [L3126] Create table: CREATE TABLE IF NOT EXISTS receipt_lines (
+   ✅ [L3143] Create table: CREATE TABLE IF NOT EXISTS received_units (
+   ✅ [L3176] Create index: CREATE INDEX IF NOT EXISTS received_units_receipt_line_idx ON received_units(receipt_line_id);
+   ✅ [L3177] Create index: CREATE INDEX IF NOT EXISTS received_units_receipt_idx ON received_units(receipt_id);
+   ✅ [L3178] Create index: CREATE UNIQUE INDEX IF NOT EXISTS received_units_barcode_idx ON received_units(barcode);
+   ✅ [L3181] Create table: CREATE TABLE IF NOT EXISTS receipt_documents (
+   ✅ [L3197] Create table: CREATE TABLE IF NOT EXISTS receipt_audit_log (
+   ✅ [L3207] Create index: CREATE INDEX IF NOT EXISTS receipt_audit_log_receipt_idx ON receipt_audit_log(receipt_id);
+   ✅ [L3326] Create table: CREATE TABLE IF NOT EXISTS "routing_operations" (
+   ✅ [L3343] Create table: CREATE TABLE IF NOT EXISTS "routing_cnc_operations" (
+   ✅ [L3359] Create table: CREATE TABLE IF NOT EXISTS "routing_templates" (
+   ✅ [L3372] Create table: CREATE TABLE IF NOT EXISTS "routing_template_operations" (
+   ✅ [L3390] Create index: CREATE INDEX IF NOT EXISTS "routing_templates_routing_type_idx" ON "routing_templates" ("routing_typ
+   ✅ [L3391] Create index: CREATE INDEX IF NOT EXISTS "routing_templates_is_active_idx" ON "routing_templates" ("is_active");
+   ✅ [L3392] Create index: CREATE INDEX IF NOT EXISTS "routing_template_operations_template_id_idx" ON "routing_template_operat
+   ✅ [L3397] Create table: CREATE TABLE IF NOT EXISTS "routing_dependencies" (
+   ✅ [L3417] Create index: CREATE INDEX IF NOT EXISTS "routing_dependencies_part_routing_id_idx" ON "routing_dependencies" ("pa
+   ✅ [L3418] Create index: CREATE INDEX IF NOT EXISTS "routing_dependencies_dependency_type_idx" ON "routing_dependencies" ("de
+   ✅ [L3419] Create index: CREATE INDEX IF NOT EXISTS "routing_dependencies_required_item_id_idx" ON "routing_dependencies" ("r
+   ✅ [L3420] Create index: CREATE INDEX IF NOT EXISTS "routing_dependencies_applies_to_department_idx" ON "routing_dependencies
+   ✅ [L3426] Add column: ALTER TABLE routing_operations ADD COLUMN IF NOT EXISTS outside_process_type text;
+   ✅ [L3427] Add column: ALTER TABLE routing_operations ADD COLUMN IF NOT EXISTS expected_lead_days integer;
+   ✅ [L3428] Add column: ALTER TABLE routing_operations ADD COLUMN IF NOT EXISTS certificate_required boolean DEFAULT false;
+   ✅ [L3429] Add column: ALTER TABLE routing_operations ADD COLUMN IF NOT EXISTS receiving_inspection_required boolean DEFAUL
+   ✅ [L3432] Create table: CREATE TABLE IF NOT EXISTS "anodize_jobs" (
+   ✅ [L3460] Create index: CREATE INDEX IF NOT EXISTS "anodize_jobs_status_idx" ON "anodize_jobs" ("status");
+   ✅ [L3461] Create index: CREATE INDEX IF NOT EXISTS "anodize_jobs_traveler_id_idx" ON "anodize_jobs" ("traveler_id");
+   ✅ [L3462] Create index: CREATE INDEX IF NOT EXISTS "anodize_jobs_routing_operation_id_idx" ON "anodize_jobs" ("routing_opera
+   ✅ [L3463] Create index: CREATE INDEX IF NOT EXISTS "anodize_jobs_part_number_idx" ON "anodize_jobs" ("part_number");
+   ✅ [L3464] Create index: CREATE INDEX IF NOT EXISTS "anodize_jobs_vendor_id_idx" ON "anodize_jobs" ("vendor_id");
+   ✅ [L3469] Create table: CREATE TABLE IF NOT EXISTS "anodize_job_documents" (
+   ✅ [L3482] Create index: CREATE INDEX IF NOT EXISTS "anodize_job_documents_job_id_idx" ON "anodize_job_documents" ("anodize_j
+   ✅ [L3484] Create table: CREATE TABLE IF NOT EXISTS "anodize_job_receiving_inspections" (
+   ✅ [L3499] Create index: CREATE INDEX IF NOT EXISTS "anodize_job_receiving_inspections_job_id_idx" ON "anodize_job_receiving_
+   ✅ [L3509] Create index: CREATE INDEX IF NOT EXISTS routing_dependencies_routing_operation_id_idx
+   ✅ [L3513] Create table: CREATE TABLE IF NOT EXISTS traveler_component_associations (
+   ✅ [L3531] Create index: CREATE INDEX IF NOT EXISTS tca_parent_traveler_id_idx
+   ✅ [L3533] Create index: CREATE INDEX IF NOT EXISTS tca_parent_step_id_idx
+   ✅ [L3535] Create index: CREATE INDEX IF NOT EXISTS tca_child_traveler_id_idx
+   ✅ [L3537] Create index: CREATE INDEX IF NOT EXISTS tca_child_inventory_item_id_idx
+   ✅ [L3539] Create index: CREATE INDEX IF NOT EXISTS tca_child_part_number_idx
+   ✅ [L3541] Create index: CREATE INDEX IF NOT EXISTS tca_child_serial_number_idx
+   ✅ [L3543] Create index: CREATE INDEX IF NOT EXISTS tca_child_icn_idx
+   ✅ [L3547] Add column: ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS assigned_technician TEXT;
+   ✅ [L3663] Add column: ALTER TABLE manufacturing_queue ADD COLUMN IF NOT EXISTS released_at TIMESTAMP;
+   ⚠️  [L3775] Alter column default: ALTER TABLE ar_invoices ALTER COLUMN status SET DEFAULT 'DRAFT';
+   ✅ [L3810] Create index: RAISE NOTICE '  CREATE UNIQUE INDEX ar_invoices_packing_slip_id_uniq ON ar_invoices (packing_slip_id
+   ✅ [L3813] Create index: EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS ar_invoices_packing_slip_id_uniq
+   ✅ [L3859] Create index: CREATE INDEX IF NOT EXISTS customers_customer_key_idx
+   ✅ [L3902] Add column: ALTER TABLE employees ADD COLUMN IF NOT EXISTS pay_type TEXT;
+   ✅ [L3903] Add column: ALTER TABLE employees ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(12,2);
+   ✅ [L3904] Add column: ALTER TABLE employees ADD COLUMN IF NOT EXISTS salary NUMERIC(12,2);
+   ✅ [L3907] Create table: CREATE TABLE IF NOT EXISTS labor_posting_runs (
+   ✅ [L3918] Create table: CREATE TABLE IF NOT EXISTS labor_cost_records (
+   ✅ [L3939] Create table: CREATE TABLE IF NOT EXISTS labor_account_config (
+   ✅ [L3950] Add column: ALTER TABLE labor_cost_records ADD COLUMN IF NOT EXISTS journal_entry_id INTEGER REFERENCES journal_
+   ✅ [L3956] Create table: CREATE TABLE IF NOT EXISTS project_closings (
+   ✅ [L3971] Create index: CREATE INDEX IF NOT EXISTS project_closings_project_id_idx ON project_closings(project_id);
+   ✅ [L3973] Create table: CREATE TABLE IF NOT EXISTS project_closing_risks (
+   ✅ [L3985] Create index: CREATE INDEX IF NOT EXISTS project_closing_risks_project_id_idx ON project_closing_risks(project_id)
+   ✅ [L3986] Create index: CREATE INDEX IF NOT EXISTS project_closing_risks_closing_id_idx ON project_closing_risks(closing_id)
+   ✅ [L3988] Create table: CREATE TABLE IF NOT EXISTS project_closing_actions (
+   ✅ [L4001] Create index: CREATE INDEX IF NOT EXISTS project_closing_actions_project_id_idx ON project_closing_actions(project
+   ✅ [L4002] Create index: CREATE INDEX IF NOT EXISTS project_closing_actions_closing_id_idx ON project_closing_actions(closing
+   ✅ [L4005] Create table: CREATE TABLE IF NOT EXISTS cycle_count_sessions (
+   ✅ [L4016] Create table: CREATE TABLE IF NOT EXISTS cycle_count_lines (
+   ✅ [L4031] Create table: CREATE TABLE IF NOT EXISTS labor_charge_codes (
+   ✅ [L4048] Create table: CREATE TABLE IF NOT EXISTS labor_authorizations (
+   ✅ [L4065] Create table: CREATE TABLE IF NOT EXISTS labor_authorization_requests (
+   ✅ [L4080] Create table: CREATE TABLE IF NOT EXISTS labor_work_sessions (
+   ✅ [L4098] Create table: CREATE TABLE IF NOT EXISTS labor_time_clock_punches (
+   ✅ [L4114] Create table: CREATE TABLE IF NOT EXISTS daily_timesheets (
+   ✅ [L4130] Create table: CREATE TABLE IF NOT EXISTS labor_entry_audit (
+   ✅ [L4145] Add column: ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_charge_code_id INTEGER;
+   ✅ [L4146] Add column: ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS default_charge_code_id INTEGER;
+   ✅ [L4147] Add column: ALTER TABLE travelers ADD COLUMN IF NOT EXISTS default_charge_code_id INTEGER;
+   ✅ [L4150] Add column: ALTER TABLE travelers ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id);
+   ✅ [L4154] Add column: ALTER TABLE projects ADD CONSTRAINT fk_projects_default_charge_code
+   ✅ [L4159] Add column: ALTER TABLE production_work_orders ADD CONSTRAINT fk_pwo_default_charge_code
+   ✅ [L4164] Add column: ALTER TABLE travelers ADD CONSTRAINT fk_travelers_default_charge_code
+   ✅ [L4187] Create table: CREATE TABLE IF NOT EXISTS perm_user_capability_scopes (
+   ✅ [L4197] Create index: CREATE INDEX IF NOT EXISTS perm_ucs_user_id_idx ON perm_user_capability_scopes (user_id);
+   ✅ [L4198] Create index: CREATE INDEX IF NOT EXISTS perm_ucs_capability_id_idx ON perm_user_capability_scopes (capability_id)
+   ✅ [L4205] Create index: CREATE UNIQUE INDEX IF NOT EXISTS perm_ucs_unique_grant_idx
+   ❌ [L4263] DROP COLUMN: ALTER TABLE perm_user_capability_scopes DROP CONSTRAINT
+   ✅ [L4285] Create table: CREATE TABLE IF NOT EXISTS dcaa_audit_findings (
+   ✅ [L4300] Create index: CREATE INDEX IF NOT EXISTS dcaa_findings_rule_entity_idx ON dcaa_audit_findings (rule_id, entity_id)
+   ✅ [L4301] Create index: CREATE INDEX IF NOT EXISTS dcaa_findings_status_idx      ON dcaa_audit_findings (status);
+   ✅ [L4302] Create index: CREATE INDEX IF NOT EXISTS dcaa_findings_severity_idx    ON dcaa_audit_findings (severity);
+   ✅ [L4303] Create index: CREATE INDEX IF NOT EXISTS dcaa_findings_domain_idx      ON dcaa_audit_findings (domain);
+   ❌ [L4345] DROP TABLE: DROP TABLE IF EXISTS public.punch_events;
+   ⚠️  [L4435] Rename column: EXECUTE 'ALTER TABLE timekeeping.employees RENAME COLUMN first_name      TO first_name_deprecated';
+   ⚠️  [L4436] Rename column: EXECUTE 'ALTER TABLE timekeeping.employees RENAME COLUMN last_name       TO last_name_deprecated';
+   ⚠️  [L4437] Rename column: EXECUTE 'ALTER TABLE timekeeping.employees RENAME COLUMN employee_number TO employee_number_deprecat
+   ⚠️  [L4438] Rename column: EXECUTE 'ALTER TABLE timekeeping.employees RENAME COLUMN pin             TO pin_deprecated';
+   ⚠️  [L4439] Rename column: EXECUTE 'ALTER TABLE timekeeping.employees RENAME COLUMN timezone        TO timezone_deprecated';
+   ⚠️  [L4453] Drop index: DROP INDEX IF EXISTS perm_ucs_unique_grant_idx;
+   ✅ [L4456] Create index: CREATE UNIQUE INDEX IF NOT EXISTS perm_ucs_unique_global_idx
+   ✅ [L4461] Create index: CREATE UNIQUE INDEX IF NOT EXISTS perm_ucs_unique_dept_idx
+   ✅ [L4466] Create index: CREATE UNIQUE INDEX IF NOT EXISTS perm_ucs_unique_project_idx
+   ✅ [L4485] Create table: CREATE TABLE IF NOT EXISTS timekeeping.labor_entry_audit (
+   ⚠️  [L4510] Drop index: DROP INDEX IF EXISTS timekeeping.idx_labor_entry_audit_table_record;
+   ✅ [L4516] Create index: CREATE INDEX IF NOT EXISTS idx_labor_entry_audit_table_record
+   ✅ [L4519] Create index: CREATE INDEX IF NOT EXISTS idx_labor_entry_audit_action
+   ✅ [L4525] Create table: CREATE TABLE IF NOT EXISTS timekeeping.labor_charge_codes (
+   ✅ [L4541] Create index: CREATE INDEX IF NOT EXISTS idx_labor_charge_codes_code
+   ✅ [L4544] Create index: CREATE INDEX IF NOT EXISTS idx_labor_charge_codes_active
+   ✅ [L4549] Create table: CREATE TABLE IF NOT EXISTS timekeeping.labor_authorizations (
+   ✅ [L4565] Create index: CREATE INDEX IF NOT EXISTS idx_labor_authorizations_charge_code_id
+   ✅ [L4568] Create index: CREATE INDEX IF NOT EXISTS idx_labor_authorizations_status
+   ✅ [L4592] Add column: ALTER TABLE quotes ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id);
+   ✅ [L4609] Add column: ALTER TABLE customers ADD PRIMARY KEY (id);
+   ❌ [L4721] DROP COLUMN: ALTER TABLE p2_employee_part_certifications DROP CONSTRAINT
+   ✅ [L4826] Create table: CREATE TABLE IF NOT EXISTS public.charge_codes (
+   ✅ [L4930] Create table: CREATE TABLE IF NOT EXISTS punch_ledger (
+   ✅ [L4971] Create index: CREATE INDEX IF NOT EXISTS idx_punch_ledger_employee_id
+   ✅ [L4974] Create index: CREATE INDEX IF NOT EXISTS idx_punch_ledger_clock_in
+   ✅ [L4977] Create index: CREATE INDEX IF NOT EXISTS idx_punch_ledger_open_sessions
+   ✅ [L4981] Create index: CREATE INDEX IF NOT EXISTS idx_punch_ledger_traveler_id
+   ✅ [L4985] Create index: CREATE INDEX IF NOT EXISTS idx_punch_ledger_work_order
+   ✅ [L5017] Add column: ALTER TABLE vendor_pos ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT false;
+   ❌ [L5171] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN first_name_deprecated';
+   ❌ [L5186] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN last_name_deprecated';
+   ❌ [L5201] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN employee_number_deprecated';
+   ❌ [L5216] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN pin_deprecated';
+   ❌ [L5231] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN timezone_deprecated';
+   ✅ [L5253] Create table: CREATE TABLE IF NOT EXISTS settings (
+   ✅ [L5273] Create table: CREATE TABLE IF NOT EXISTS timekeeping.employees (
+   ✅ [L5292] Create index: CREATE INDEX IF NOT EXISTS idx_timekeeping_employees_epoch_employee_id
+   ✅ [L5297] Create table: CREATE TABLE IF NOT EXISTS timekeeping.punches (
+   ✅ [L5312] Create index: CREATE INDEX IF NOT EXISTS idx_timekeeping_punches_employee_id ON timekeeping.punches (employee_id);
+   ✅ [L5313] Create index: CREATE INDEX IF NOT EXISTS idx_timekeeping_punches_punched_at  ON timekeeping.punches (punched_at);
+   ✅ [L5316] Create table: CREATE TABLE IF NOT EXISTS timekeeping.timesheets (
+   ✅ [L5337] Create index: CREATE INDEX IF NOT EXISTS idx_timekeeping_timesheets_employee_id ON timekeeping.timesheets (employe
+   ✅ [L5338] Create index: CREATE INDEX IF NOT EXISTS idx_timekeeping_timesheets_period      ON timekeeping.timesheets (period_
+   ✅ [L5341] Create table: CREATE TABLE IF NOT EXISTS timekeeping.settings (
+   ✅ [L5363] Create table: CREATE TABLE IF NOT EXISTS timekeeping.audit_log (
+   ✅ [L5378] Create table: CREATE TABLE IF NOT EXISTS timekeeping.leave_entries (
+   ✅ [L5390] Create table: CREATE TABLE IF NOT EXISTS timekeeping.cost_codes (
+   ✅ [L5400] Create table: CREATE TABLE IF NOT EXISTS timekeeping.amendments (
+   ✅ [L5418] Create table: CREATE TABLE IF NOT EXISTS timekeeping.certifications (
+   ✅ [L5433] Create table: CREATE TABLE IF NOT EXISTS timekeeping.daily_timesheets (
+   ✅ [L5449] Create table: CREATE TABLE IF NOT EXISTS timekeeping.users (
+   ✅ [L5505] Create table: CREATE TABLE IF NOT EXISTS dcaa_scheduler_state (
+   ✅ [L5570] Create table: CREATE TABLE IF NOT EXISTS vendor_doc_migration_flags (
+   ✅ [L5580] Create table: CREATE TABLE IF NOT EXISTS cutting_documents (
+   ✅ [L5590] Create table: CREATE TABLE IF NOT EXISTS timekeeping.time_off_requests (
+   ✅ [L5608] Create table: CREATE TABLE IF NOT EXISTS vendor_po_compliance_reviews (
+   ✅ [L5628] Create index: CREATE INDEX IF NOT EXISTS vendor_po_compliance_reviews_vendor_po_id_idx
+   ✅ [L5631] Create index: CREATE INDEX IF NOT EXISTS vendor_po_compliance_reviews_review_status_idx
+   ⚠️  [L5695] Alter column type: EXECUTE 'ALTER TABLE timekeeping.salaried_timesheet_lines ALTER COLUMN traveler_id TYPE TEXT';
+   ✅ [L5749] Create table: CREATE TABLE IF NOT EXISTS procurement_compliance_effective_dates (
+   ✅ [L5931] Create table: CREATE TABLE IF NOT EXISTS proteus_prompts (
+   ✅ [L5946] Create table: CREATE TABLE IF NOT EXISTS proteus_prompt_variables (
+   ✅ [L5957] Create table: CREATE TABLE IF NOT EXISTS proteus_prompt_executions (
+   ✅ [L5971] Create table: CREATE TABLE IF NOT EXISTS proteus_prompt_results (
+   ✅ [L5980] Create table: CREATE TABLE IF NOT EXISTS proteus_prompt_tags (
+   ✅ [L5987] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_prompts_category ON proteus_prompts(category);
+   ✅ [L5988] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_prompts_usage ON proteus_prompts(usage_count DESC);
+   ✅ [L5989] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_prompts_created ON proteus_prompts(created_at DESC);
+   ✅ [L5990] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_variables_prompt ON proteus_prompt_variables(prompt_id);
+   ✅ [L5991] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_executions_prompt ON proteus_prompt_executions(prompt_id);
+   ✅ [L5992] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_executions_status ON proteus_prompt_executions(status);
+   ✅ [L5993] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_executions_at ON proteus_prompt_executions(executed_at DESC);
+   ✅ [L5994] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_results_execution ON proteus_prompt_results(execution_id);
+   ✅ [L5995] Create index: CREATE INDEX IF NOT EXISTS idx_proteus_tags_prompt ON proteus_prompt_tags(prompt_id);
+   ❌ [L6053] DROP COLUMN: ALTER TABLE proteus_prompt_executions DROP CONSTRAINT
+   ✅ [L6124] Create index: CREATE INDEX leave_entries_source_request_id_idx
+   ✅ [L6135] Create table: CREATE TABLE IF NOT EXISTS timekeeping.labor_capture_suggestions (
+   ✅ [L6188] Create index: CREATE INDEX lcs_employee_id_idx
+   ✅ [L6200] Create index: CREATE INDEX lcs_timesheet_id_idx
+   ✅ [L6212] Create index: CREATE INDEX lcs_status_expires_idx
+   ✅ [L6230] Create table: CREATE TABLE IF NOT EXISTS kiosk_pin_rate_limits (
+   ✅ [L6245] Create index: CREATE INDEX kiosk_pin_rate_limits_locked_until_idx
+   ✅ [L6251] Add column: ALTER TABLE shipment_records ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+   ✅ [L6253] Add column: ALTER TABLE vendor_po_compliance_reviews ADD COLUMN IF NOT EXISTS legacy_exception_flagged BOOLEAN N
+   ✅ [L6254] Add column: ALTER TABLE vendor_po_compliance_reviews ADD COLUMN IF NOT EXISTS legacy_exception_reason TEXT;
+   ✅ [L6256] Create table: CREATE TABLE IF NOT EXISTS labor_allocations (
+   ✅ [L6317] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_punch_ledger_id
+   ✅ [L6320] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_employee_id
+   ✅ [L6323] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_allocation_start
+   ✅ [L6326] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_charge_code_id
+   ✅ [L6329] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_traveler_id
+   ✅ [L6332] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_production_work_order_id
+   ✅ [L6335] Create index: CREATE INDEX IF NOT EXISTS idx_labor_allocations_status_open
+   ✅ [L6339] Create table: CREATE TABLE IF NOT EXISTS timekeeping.timesheet_corrections (
+   ✅ [L6357] Create index: CREATE INDEX IF NOT EXISTS idx_timesheet_corrections_timesheet_id
+   ✅ [L6360] Create index: CREATE INDEX IF NOT EXISTS idx_timesheet_corrections_status
+   ❌ [L6390] DROP COLUMN: ALTER TABLE timekeeping.timesheets DROP CONSTRAINT
+   ✅ [L6452] Create table: CREATE TABLE IF NOT EXISTS timekeeping.policy_settings (
+   ✅ [L6492] Create table: CREATE TABLE IF NOT EXISTS timekeeping.labor_entry_drafts (
+   ✅ [L6540] Create index: CREATE INDEX IF NOT EXISTS idx_labor_entry_drafts_employee_date
+   ✅ [L6544] Create index: CREATE INDEX IF NOT EXISTS idx_labor_entry_drafts_status
+
+   Summary: ✅ 486 adding  ⚠️  10 modifying  ❌ 11 removing
+
+🚨 MIGRATION BLOCKED — DESTRUCTIVE CHANGE DETECTED
+
+The following operations are not allowed:
+  - [L3048] DELETE without WHERE: DELETE FROM all_orders
+  - [L4263] DROP COLUMN: ALTER TABLE perm_user_capability_scopes DROP CONSTRAINT
+  - [L4345] DROP TABLE: DROP TABLE IF EXISTS public.punch_events;
+  - [L4721] DROP COLUMN: ALTER TABLE p2_employee_part_certifications DROP CONSTRAINT
+  - [L5171] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN first_name_deprecated';
+  - [L5186] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN last_name_deprecated';
+  - [L5201] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN employee_number_deprecated';
+  - [L5216] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN pin_deprecated';
+  - [L5231] DROP COLUMN: ALTER TABLE timekeeping.employees DROP COLUMN timezone_deprecated';
+  - [L6053] DROP COLUMN: ALTER TABLE proteus_prompt_executions DROP CONSTRAINT
+  - [L6390] DROP COLUMN: ALTER TABLE timekeeping.timesheets DROP CONSTRAINT
+
+Resolution required:
+  - Rename column to *_deprecated instead of dropping
+  - Create a forward migration that preserves existing data
+  - If the table is empty and drop is safe, explicitly set MIGRATION_SAFE_MODE=false
+
+
+❌ Pre-deploy blocked by migration safety check: Migration safety check failed: 11 destructive operation(s) blocked. Set MIGRATION_SAFE_MODE=false to override (not recommended for production).
+~/workspace$ 

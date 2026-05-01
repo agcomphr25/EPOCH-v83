@@ -2514,6 +2514,35 @@ router.post('/schedule-to-cutting', async (req, res) => {
       inventoryItemId = newItem.id;
     }
 
+    // For P2 packet scheduling with a PO reference, cancel any prior PENDING Cutting Table
+    // queue entries for the same PO + packet type combination before inserting the new one.
+    // This ensures rescheduling replaces the previous demand rather than stacking on top.
+    // Only non-P1 material types are affected; P1 (carbon_fiber, fiberglass, mesa) is untouched.
+    const p1MaterialTypes = ['carbon_fiber', 'fiberglass', 'mesa'];
+    const poNumber = req.body.poNumber;
+    if (packetName && poNumber && !p1MaterialTypes.includes(materialType || '')) {
+      try {
+        const { pool: cancelPool } = await import('../../db');
+        const cancelResult = await cancelPool.query(
+          `UPDATE manufacturing_queue
+           SET status = 'CANCELLED', updated_at = NOW()
+           WHERE department = 'Cutting Table'
+             AND status = 'PENDING'
+             AND notes IS NOT NULL
+             AND notes ~ '^\s*\{'
+             AND notes::jsonb->>'packetName' = $1
+             AND notes::jsonb->>'poNumber' = $2`,
+          [packetName, poNumber]
+        );
+        const cancelledCount = (cancelResult as any).rowCount || 0;
+        if (cancelledCount > 0) {
+          console.log(`🔄 Cancelled ${cancelledCount} prior PENDING "${packetName}" entr${cancelledCount === 1 ? 'y' : 'ies'} for PO ${poNumber} before rescheduling`);
+        }
+      } catch (cancelErr: any) {
+        console.warn('⚠️ Could not cancel prior queue entries:', cancelErr.message);
+      }
+    }
+
     // Create manufacturing queue entry
     // For P2 packets, stamp p2BackfillApplied:true so the boot backfill skips this row
     // (the order status is updated inline below, so no historical reconciliation is needed)
@@ -2525,6 +2554,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
       userNotes: notes,
       isP2Packet: source === 'P2',
       packetName,
+      poNumber: poNumber || null,
       ...(source === 'P2' ? { p2BackfillApplied: true } : {}),
     });
     const [queueItem] = await db.insert(manufacturingQueue).values({

@@ -277,8 +277,10 @@ export default function CuttingWeeklySchedule() {
 
   const p2ScheduledByName = useMemo(() => {
     const p1MaterialTypes = new Set(['carbon_fiber', 'fiberglass', 'mesa']);
+    const activeStatuses = new Set(['PENDING', 'IN_PROGRESS']);
     const result: Record<string, number> = {};
     (mfgQueueData || []).forEach((item: any) => {
+      if (!activeStatuses.has(item.status)) return;
       const materialType = item.materialType || '';
       if (p1MaterialTypes.has(materialType)) return;
       const packetName = item.packetName;
@@ -290,11 +292,11 @@ export default function CuttingWeeklySchedule() {
   }, [mfgQueueData]);
 
   const schedulePacketsMutation = useMutation({
-    mutationFn: async (data: { packetType: string; quantity: number; materialType: string; description?: string }) => {
+    mutationFn: async (data: { packetType: string; quantity: number; materialType: string; description?: string; poNumber?: string; suppressToast?: boolean }) => {
       return apiRequest('/api/cutting-table/schedule-to-cutting', {
         method: 'POST',
         body: JSON.stringify({
-          orderId: `SCHED-${data.packetType.toUpperCase()}-${Date.now()}`,
+          orderId: data.poNumber ? `P2-${data.poNumber}` : `SCHED-${data.packetType.toUpperCase()}-${Date.now()}`,
           bomId: 'generic-p2-packet',
           quantity: data.quantity,
           priority: 50,
@@ -302,14 +304,17 @@ export default function CuttingWeeklySchedule() {
           source: 'MANUAL',
           materialType: data.materialType,
           packetName: data.packetType,
-          notes: data.description || `Scheduled ${data.quantity} ${data.packetType} packets`,
+          poNumber: data.poNumber || null,
+          notes: data.description || (data.poNumber ? `PO ${data.poNumber} - ${data.quantity} ${data.packetType} packets` : `Scheduled ${data.quantity} ${data.packetType} packets`),
         }),
       });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table', 'ALL'] });
       setScheduleQuantities({});
-      toast({ title: "Scheduled", description: `${variables.quantity} ${variables.packetType} packets added to cutting queue.` });
+      if (!variables.suppressToast) {
+        toast({ title: "Scheduled", description: `${variables.quantity} ${variables.packetType} packets added to cutting queue.` });
+      }
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to schedule packets.", variant: "destructive" });
@@ -428,8 +433,21 @@ export default function CuttingWeeklySchedule() {
         });
         return;
       }
+      schedulePacketsMutation.mutate({ packetType, quantity: qty, materialType, description });
     }
-    schedulePacketsMutation.mutate({ packetType, quantity: qty, materialType, description });
+  };
+
+  // Schedule a specific packet type for a specific PO — passes PO ID so the backend can
+  // replace any prior PENDING entry for that same PO + packet type combination.
+  const handleScheduleForPO = (poId: string, packetType: string, qty: number) => {
+    if (qty <= 0) return;
+    const scheduleKey = `p2_${packetType.replace(/\s+/g, '_').toLowerCase()}`;
+    schedulePacketsMutation.mutate({
+      packetType,
+      quantity: qty,
+      materialType: scheduleKey,
+      poNumber: poId,
+    });
   };
 
   return (
@@ -700,9 +718,9 @@ export default function CuttingWeeklySchedule() {
                   .slice(0, 6);
                 const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500', 'bg-pink-600', 'bg-cyan-600', 'bg-violet-600'];
                 return sortedTypes.map(([name, count], idx) => {
-                  const scheduleKey = `p2_${name.replace(/\s+/g, '_').toLowerCase()}`;
                   const scheduledForName = p2ScheduledByName[name] || 0;
                   const remainingForName = Math.max(0, count - scheduledForName);
+                  const relevantPOs = p2Demand.filter(po => po.items.some(i => i.name === name));
                   return (
                     <div key={name} className={`p-4 ${colors[idx % colors.length]} text-white rounded-lg`}>
                       <div className="flex justify-between items-start mb-3">
@@ -715,33 +733,34 @@ export default function CuttingWeeklySchedule() {
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sm">POs: <span className="font-bold">{p2Demand.filter(po => po.items.some(i => i.name === name)).length}</span></p>
+                          <p className="text-sm">POs: <span className="font-bold">{relevantPOs.length}</span></p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity(scheduleKey, -10)}>
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={scheduleQuantities[scheduleKey] || 0}
-                          onChange={(e) => setQuantity(scheduleKey, e.target.value)}
-                          className="text-center font-bold w-20 h-8 bg-white text-black"
-                          data-testid={`input-qty-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
-                        />
-                        <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity(scheduleKey, 10)}>
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button 
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleSchedule(name, scheduleKey, `P2 ${name} packets`)}
-                          disabled={!scheduleQuantities[scheduleKey] || scheduleQuantities[scheduleKey] <= 0}
-                          data-testid={`button-schedule-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
-                        >
-                          Schedule
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          const scheduleKey = `p2_${name.replace(/\s+/g, '_').toLowerCase()}`;
+                          relevantPOs.forEach((po, idx) => {
+                            const item = po.items.find(i => i.name === name);
+                            if (item && item.qty > 0) {
+                              const isLast = idx === relevantPOs.length - 1;
+                              schedulePacketsMutation.mutate({
+                                packetType: name,
+                                quantity: item.qty,
+                                materialType: scheduleKey,
+                                poNumber: po.poId,
+                                suppressToast: !isLast,
+                              });
+                            }
+                          });
+                        }}
+                        disabled={schedulePacketsMutation.isPending || remainingForName === 0}
+                        data-testid={`button-schedule-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
+                      >
+                        <Send className="h-3 w-3 mr-1" />
+                        Schedule All POs
+                      </Button>
                     </div>
                   );
                 });
@@ -775,19 +794,34 @@ export default function CuttingWeeklySchedule() {
                       </TableHeader>
                       <TableBody>
                         {p2Demand.map(po => {
-                          const itemsByType: Record<string, number> = {};
+                          const itemsByType: Record<string, { qty: number; materialType: string }> = {};
                           po.items.forEach(item => {
-                            itemsByType[item.name] = (itemsByType[item.name] || 0) + item.qty;
+                            itemsByType[item.name] = { qty: (itemsByType[item.name]?.qty || 0) + item.qty, materialType: item.materialType };
                           });
                           return (
                             <TableRow key={po.poId}>
-                              <TableCell className="font-medium">{po.customer}</TableCell>
+                              <TableCell className="font-medium">
+                                <div>{po.customer}</div>
+                                <div className="text-xs text-muted-foreground">PO {po.poId}</div>
+                              </TableCell>
                               {packetTypesList.map((type, idx) => (
                                 <TableCell key={type} className="text-center">
-                                  {itemsByType[type] > 0 && (
-                                    <Badge variant="outline" className={badgeColors[idx % badgeColors.length]}>
-                                      {itemsByType[type]}
-                                    </Badge>
+                                  {itemsByType[type] && itemsByType[type].qty > 0 && (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <Badge variant="outline" className={badgeColors[idx % badgeColors.length]}>
+                                        {itemsByType[type].qty}
+                                      </Badge>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 text-xs px-1 py-0"
+                                        onClick={() => handleScheduleForPO(po.poId, type, itemsByType[type].qty)}
+                                        disabled={schedulePacketsMutation.isPending}
+                                        data-testid={`button-schedule-po-${po.poId}-${type.replace(/\s+/g, '-').toLowerCase()}`}
+                                      >
+                                        Schedule
+                                      </Button>
+                                    </div>
                                   )}
                                 </TableCell>
                               ))}

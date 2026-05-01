@@ -1,0 +1,291 @@
+You are performing a FULL READ-ONLY audit of the EPOCH Salaried / Indirect Labor system.
+
+🚨 CRITICAL RULES:
+- DO NOT modify any code
+- DO NOT write to the database
+- DO NOT create or update records
+- DO NOT assume anything — VERIFY everything with queries and code inspection
+- Every conclusion must be backed by actual evidence (queries, file paths, functions)
+
+---
+
+## 🎯 OBJECTIVE
+
+Verify that salaried and indirect labor:
+
+1) Enters the system correctly (manual + conversational)
+2) Passes through a draft/review layer (if implemented)
+3) Creates valid synthetic punch_ledger sessions
+4) Creates valid labor_allocations segments
+5) Integrates with approval workflows
+6) Feeds the allocation-based costing engine correctly
+7) Maintains full audit traceability
+8) Does NOT interfere with hourly labor behavior
+
+---
+
+# 🔍 STEP 1 — FEATURE INVENTORY
+
+Confirm existence of the following:
+
+- labor_entry_drafts (or equivalent)
+- conversational time entry handler / parser
+- manual salaried entry UI routes
+- synthetic session creation logic
+- allocation posting logic for salaried entries
+
+Return:
+- file paths
+- table names
+- routes
+- services
+
+---
+
+# 🔍 STEP 2 — DRAFT LAYER VALIDATION
+
+If draft system exists:
+
+Query:
+
+- count drafts by status:
+  - DRAFT
+  - NEEDS_REVIEW
+  - CONFIRMED
+  - POSTED
+
+Verify:
+
+- conversational entries land in draft first
+- drafts contain:
+  - raw_input_text
+  - parsed_segments_json
+  - confidence or validation fields
+
+Return:
+- sample 3 draft rows
+- status distribution
+
+If draft layer does NOT exist:
+- explicitly state that salaried entries bypass draft layer
+
+---
+
+# 🔍 STEP 3 — SYNTHETIC SESSION VALIDATION
+
+Query punch_ledger:
+
+Find rows where:
+
+- source IN ('SALARIED_ENTRY', 'CONVERSATIONAL_ENTRY')
+
+Return:
+
+- total count
+- sample rows
+
+Verify:
+
+- clock_in and clock_out are populated
+- duration is valid (> 0)
+- notes or metadata reference original entry
+
+Check:
+
+- any NULL clock_out → flag as issue
+- overlapping sessions for same employee/date → flag
+
+---
+
+# 🔍 STEP 4 — ALLOCATION INTEGRATION
+
+For synthetic sessions:
+
+Join:
+
+punch_ledger → labor_allocations
+
+Verify:
+
+- each synthetic session has ≥1 allocation
+- allocation_start / allocation_end align with session
+- sequence_order is valid (1..N)
+- no overlaps within session
+
+Return:
+
+- allocation counts per session
+- sample breakdowns
+
+---
+
+# 🔍 STEP 5 — TEMPORAL INTEGRITY
+
+For salaried sessions:
+
+Check:
+
+- sum(allocation durations) ≈ session duration (tolerance 1 sec)
+- no gaps > 1 second between allocations
+- no overlaps
+
+Return:
+
+- mismatch count
+- max deviation
+- sample issues
+
+---
+
+# 🔍 STEP 6 — CHARGE CODE / INDIRECT VALIDATION
+
+Check allocations where:
+
+- labor_class IN ('INDIRECT', 'OVERHEAD', 'G&A', 'ADMIN', etc.)
+
+Verify:
+
+- charge_code_id exists
+- charge_code is valid and active
+- mapping is consistent with indirect categories
+
+Return:
+
+- counts by labor_class
+- sample allocations
+
+---
+
+# 🔍 STEP 7 — APPROVAL / LOCKING
+
+Verify:
+
+- whether salaried entries go through approval workflow
+
+Check:
+
+- approval status fields
+- locked_at or equivalent
+- ability to modify after approval
+
+Return:
+
+- approval model used
+- sample approved vs unapproved entries
+
+Flag:
+
+- any ability to silently modify approved entries
+
+---
+
+# 🔍 STEP 8 — CONVERSATIONAL ENTRY VALIDATION
+
+If conversational entry exists:
+
+Verify:
+
+- raw_input_text is stored
+- parsed output is stored
+- edits are tracked
+
+Check:
+
+- whether low-confidence entries are flagged
+- whether user confirmation is required
+
+Return:
+
+- sample conversational entry
+- parsed segments
+- confidence indicators
+
+---
+
+# 🔍 STEP 9 — COSTING INTEGRATION
+
+Run costing query for a period with salaried data:
+
+Compare:
+
+- total hours from punch_ledger
+- total hours from labor_allocations
+
+Verify:
+
+- salaried synthetic sessions are included
+- costing uses allocation model when flag enabled
+- no fallback occurs
+
+Return:
+
+- totals
+- inclusion status
+
+---
+
+# 🔍 STEP 10 — EDGE CASES
+
+Check for:
+
+1) overlapping salaried entries
+2) duplicate entries for same time range
+3) missing charge codes
+4) zero-duration allocations
+5) synthetic sessions without allocations
+6) allocations without parent punch_ledger
+7) entries in locked/payroll-approved periods
+
+Return all anomalies
+
+---
+
+# 🔍 STEP 11 — HOURLY ISOLATION
+
+Verify:
+
+- hourly punch flows still work independently
+- no salaried logic interferes with:
+  - kiosk
+  - traveler switching
+  - punch_ledger overwrite behavior
+
+Return:
+- confirmation of isolation
+
+---
+
+# 🔍 STEP 12 — FINAL VERDICT
+
+Return:
+
+# EPOCH Salaried / Indirect Labor Audit Report
+
+## 1. Feature Inventory
+## 2. Draft Layer Status
+## 3. Synthetic Sessions
+## 4. Allocation Integrity
+## 5. Temporal Integrity
+## 6. Charge Code / Indirect Validation
+## 7. Approval / Locking
+## 8. Conversational Entry
+## 9. Costing Integration
+## 10. Edge Cases
+## 11. Hourly Isolation
+
+## FINAL STATUS:
+- ✅ FULLY OPERATIONAL
+- ⚠️ PARTIALLY IMPLEMENTED
+- ❌ CRITICAL GAPS
+
+---
+
+## ⚠️ FINAL INSTRUCTION
+
+Do NOT give high-level summaries.
+
+You must:
+- show counts
+- show sample rows
+- show mismatches
+- prove every claim with data or code references

@@ -2930,7 +2930,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     try {
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
-      const pos = await storage.getAllP2PurchaseOrders();
+      const allPos = await storage.getAllP2PurchaseOrders();
+      // Only surface POs that have cleared the P2 Release Gate
+      const P2_GATED_STATUSES = ['ready_for_p2_release', 'in_production'];
+      const pos = allPos.filter((po: any) => P2_GATED_STATUSES.includes(po.status));
       const serializedItems = await storage.getP2SerializedItems({});
 
       // Look up projects linked to these POs

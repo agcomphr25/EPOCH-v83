@@ -51,6 +51,7 @@ const PIPELINE_STAGE_ORDER = [
   'quote_submitted',
   'purchase_review',
   'po_received',
+  'p2_release',
   'production',
   'completed',
 ] as const;
@@ -63,7 +64,8 @@ const STAGE_GATE_LABELS: Record<string, string> = {
   quote_submitted: 'RFQ Risk Assessment',
   purchase_review: 'Quote',
   po_received: 'Purchase Review Checklist',
-  production: 'Pre-production Checklist',
+  p2_release: 'Pre-production Checklist',
+  production: 'P2 Release Gate (PO Review + WAD + Preproduction)',
   completed: 'P2 Order (and closing record)',
 };
 
@@ -73,6 +75,7 @@ const PIPELINE_STAGES = [
   { key: 'quote_submitted', label: 'Quote Submitted' },
   { key: 'purchase_review', label: 'Purchase Review' },
   { key: 'po_received', label: 'PO Received' },
+  { key: 'p2_release', label: 'P2 Release' },
   { key: 'production', label: 'Production' },
   { key: 'completed', label: 'Completed' },
 ];
@@ -83,6 +86,7 @@ const STAGE_COLORS: Record<string, string> = {
   quote_submitted: 'bg-yellow-50 border-yellow-200',
   purchase_review: 'bg-orange-50 border-orange-200',
   po_received: 'bg-blue-50 border-blue-200',
+  p2_release: 'bg-teal-50 border-teal-200',
   production: 'bg-indigo-50 border-indigo-200',
   completed: 'bg-green-50 border-green-200',
 };
@@ -93,6 +97,7 @@ const HEADER_COLORS: Record<string, string> = {
   quote_submitted: 'bg-yellow-200 text-yellow-800',
   purchase_review: 'bg-orange-200 text-orange-800',
   po_received: 'bg-blue-200 text-blue-800',
+  p2_release: 'bg-teal-200 text-teal-800',
   production: 'bg-indigo-200 text-indigo-800',
   completed: 'bg-green-200 text-green-800',
 };

@@ -57,7 +57,7 @@ const createProjectRequestSchema = z.object({
 
 const VALID_PIPELINE_STAGES = [
   'rfq_received', 'quote_preparing', 'quote_submitted', 'purchase_review',
-  'po_received', 'production', 'completed',
+  'po_received', 'p2_release', 'production', 'completed',
 ] as const;
 
 const updateProjectRequestSchema = z.object({
@@ -78,7 +78,8 @@ const STEP_TO_STAGE_MAP: Record<string, string> = {
   quote: 'quote_submitted',
   purchase_review_checklist: 'purchase_review',
   preproduction_checklist: 'po_received',
-  p2_order: 'production',
+  // p2_order intentionally omitted — advancing to production requires
+  // the explicit three-way P2 Release Gate (POST /release-to-p2)
 };
 
 const updateStepRequestSchema = z.object({
@@ -208,6 +209,7 @@ const PIPELINE_STAGE_ORDER = [
   'quote_submitted',
   'purchase_review',
   'po_received',
+  'p2_release',
   'production',
   'completed',
 ] as const;
@@ -217,7 +219,7 @@ const PIPELINE_STAGE_ORDER = [
 //              4=preproduction_checklist, 5=p2_order
 function computeMaxAllowedStageKey(maxCompletedOrder: number): string {
   if (maxCompletedOrder >= 5) return 'completed';
-  if (maxCompletedOrder >= 4) return 'production';
+  if (maxCompletedOrder >= 4) return 'p2_release';
   if (maxCompletedOrder >= 3) return 'po_received';
   if (maxCompletedOrder >= 2) return 'purchase_review';
   if (maxCompletedOrder >= 1) return 'quote_submitted';
@@ -229,7 +231,8 @@ const STAGE_GATE_LABELS: Record<string, string> = {
   quote_submitted: 'RFQ Risk Assessment',
   purchase_review: 'Quote',
   po_received: 'Purchase Review Checklist',
-  production: 'Pre-production Checklist',
+  p2_release: 'Pre-production Checklist',
+  production: 'P2 Release Gate (PO Review + WAD + Preproduction)',
   completed: 'P2 Order',
 };
 
@@ -703,6 +706,14 @@ router.patch('/:id', async (req, res) => {
 
     // Stage-gate enforcement: forward stage moves must be permitted by project_steps
     if (validatedData.currentStage) {
+      // p2_release and production can ONLY be set via POST /release-to-p2 (the three-way gate)
+      // Reject any attempt to set these stages via generic PATCH
+      if (validatedData.currentStage === 'p2_release' || validatedData.currentStage === 'production') {
+        return res.status(422).json({
+          message: `Cannot set stage to "${validatedData.currentStage}" directly. Use the P2 Release Gate endpoint (POST /api/projects/:id/release-to-p2).`,
+        });
+      }
+
       const existing = await storage.getProject(id);
       if (existing && existing.currentStage) {
         const existingIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(existing.currentStage);
@@ -912,25 +923,34 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
         });
       } else {
         const isFinalP2Order = step.stepType === 'p2_order';
-        const finalUpdate: any = {
-          currentStage: isFinalP2Order ? 'production' : 'completed',
-          stageUpdatedAt: new Date(),
-          status: isFinalP2Order ? 'won' : 'completed',
-        };
-        if (!isFinalP2Order) {
-          finalUpdate.actualShipDate = new Date().toISOString().split('T')[0];
+        if (isFinalP2Order) {
+          // p2_order links the PO and marks project won, but does NOT advance the stage.
+          // Advancing to production requires the explicit P2 Release Gate (POST /release-to-p2).
+          const poLinkUpdate: any = { status: 'won' };
+          if (updateData.linkedP2OrderId) {
+            poLinkUpdate.poId = updateData.linkedP2OrderId;
+          }
+          await storage.updateProject(projectId, poLinkUpdate);
+          await storage.createProjectActivityLog({
+            projectId,
+            activityType: 'step_completed',
+            stepType: 'p2_order',
+            description: 'P2 Order linked — use the Release Gate to advance to Production',
+          });
+        } else {
+          const finalUpdate: any = {
+            currentStage: 'completed',
+            stageUpdatedAt: new Date(),
+            status: 'completed',
+            actualShipDate: new Date().toISOString().split('T')[0],
+          };
+          await storage.updateProject(projectId, finalUpdate);
+          await storage.createProjectActivityLog({
+            projectId,
+            activityType: 'project_completed',
+            description: 'Project completed',
+          });
         }
-        if (isFinalP2Order && updateData.linkedP2OrderId) {
-          finalUpdate.poId = updateData.linkedP2OrderId;
-        }
-        await storage.updateProject(projectId, finalUpdate);
-        
-        await storage.createProjectActivityLog({
-          projectId,
-          activityType: isFinalP2Order ? 'step_completed' : 'project_completed',
-          stepType: isFinalP2Order ? 'p2_order' : undefined,
-          description: isFinalP2Order ? 'P2 Order completed — project won' : 'Project completed',
-        });
       }
     }
     
@@ -1038,6 +1058,184 @@ router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
   } catch (error) {
     console.error('Error reopening project step:', error);
     res.status(500).json({ message: 'Failed to reopen project step' });
+  }
+});
+
+// POST /api/projects/:id/release-to-p2 — P2 Release Gate endpoint
+// Three-way gate: PO Review + WAD + Preproduction must all pass
+// First call (pre-gate) → sets stage to p2_release and PO to ready_for_p2_release
+// Second call (staged) → sets stage to production and PO to in_production
+// Repeated calls once in production → 409 (idempotent-safe)
+router.post('/:id/release-to-p2', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const currentStage = project.currentStage || 'rfq_received';
+
+    // Require a linked P2 Purchase Order — PO status is the authoritative state source
+    if (!project.poId) {
+      return res.status(422).json({
+        message: 'A P2 Purchase Order must be linked to this project before it can be released to P2.',
+        code: 'PO_REQUIRED',
+      });
+    }
+
+    // Resolve current PO status (authoritative source for transition routing)
+    const poRows = await pool.query<{ status: string }>(
+      `SELECT status FROM p2_purchase_orders WHERE id = $1`,
+      [project.poId]
+    );
+    const poStatus: string | null = poRows[0]?.status ?? null;
+
+    // Guard: already fully released → reject to prevent backward regression (idempotent-safe)
+    const alreadyInProduction = poStatus === 'in_production'
+      || currentStage === 'production'
+      || currentStage === 'completed';
+    if (alreadyInProduction) {
+      return res.status(409).json({
+        message: 'Project is already in production. No further release action is required.',
+        stage: currentStage,
+        poStatus,
+      });
+    }
+
+    const steps = await storage.getProjectSteps(id);
+
+    // Check the three gate conditions
+    const poReviewStep = steps.find(s => s.stepType === 'purchase_review_checklist');
+    const preproStep = steps.find(s => s.stepType === 'preproduction_checklist');
+
+    // PO Review = APPROVED: step must be explicitly completed (skipped/N/A do not satisfy this gate)
+    const poReviewPassed = poReviewStep?.status === 'completed';
+
+    // Preproduction = COMPLETE: step must be explicitly completed (skipped/N/A do not satisfy this gate)
+    const preproductionPassed = preproStep?.status === 'completed';
+
+    // WAD = APPROVED: at least one production work order must be in an authorized state
+    // RELEASED means the WAD has been formally authorized for labor charges (DCAA requirement)
+    const WAD_APPROVED_STATUSES = ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'];
+    const workOrders = await storage.getWorkOrdersByProject(id);
+    const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
+
+    const gates = [
+      { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
+      { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
+      { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
+    ];
+
+    const failedGates = gates.filter(g => !g.passed);
+
+    if (failedGates.length > 0) {
+      return res.status(422).json({
+        message: 'P2 Release Gate not cleared',
+        gates,
+        failedGates: failedGates.map(g => g.label),
+      });
+    }
+
+    // Transition routing is exclusively driven by PO status
+    const isAlreadyStaged = poStatus === 'ready_for_p2_release';
+
+    if (isAlreadyStaged) {
+      // Second transition: PO already staged → release to production
+      await storage.updateProject(id, {
+        currentStage: 'production',
+        stageUpdatedAt: new Date(),
+        status: 'won',
+      });
+
+      await pool.query(
+        `UPDATE p2_purchase_orders SET status = 'in_production', updated_at = NOW() WHERE id = $1`,
+        [project.poId]
+      );
+
+      await storage.createProjectActivityLog({
+        projectId: id,
+        activityType: 'stage_changed',
+        description: 'Released to Production — P2 Release Gate passed (all three conditions met)',
+      });
+
+      return res.json({
+        success: true,
+        stage: 'production',
+        poStatus: 'in_production',
+        gates,
+      });
+    }
+
+    // First transition: all gates pass, PO not yet staged → set ready_for_p2_release
+    await storage.updateProject(id, {
+      currentStage: 'p2_release',
+      stageUpdatedAt: new Date(),
+    });
+
+    await pool.query(
+      `UPDATE p2_purchase_orders SET status = 'ready_for_p2_release', updated_at = NOW() WHERE id = $1`,
+      [project.poId]
+    );
+
+    await storage.createProjectActivityLog({
+      projectId: id,
+      activityType: 'stage_changed',
+      description: 'P2 Release Gate passed — project staged for P2 (PO Review ✓, WAD ✓, Preproduction ✓)',
+    });
+
+    return res.json({
+      success: true,
+      stage: 'p2_release',
+      poStatus: 'ready_for_p2_release',
+      gates,
+    });
+  } catch (error) {
+    console.error('Error in release-to-p2 gate:', error);
+    res.status(500).json({ message: 'Failed to process P2 release gate' });
+  }
+});
+
+// GET /api/projects/:id/p2-gate-status — return the current gate status for a project
+router.get('/:id/p2-gate-status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const steps = await storage.getProjectSteps(id);
+
+    const poReviewStep = steps.find(s => s.stepType === 'purchase_review_checklist');
+    const preproStep = steps.find(s => s.stepType === 'preproduction_checklist');
+
+    // PO Review = APPROVED: must be explicitly completed
+    const poReviewPassed = poReviewStep?.status === 'completed';
+
+    // Preproduction = COMPLETE: must be explicitly completed
+    const preproductionPassed = preproStep?.status === 'completed';
+
+    // WAD = APPROVED: at least one WAD must be in an authorized state (RELEASED or beyond)
+    const WAD_APPROVED_STATUSES = ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'];
+    const workOrders = await storage.getWorkOrdersByProject(id);
+    const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
+
+    const gates = [
+      { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
+      { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
+      { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
+    ];
+
+    const currentStage = project.currentStage || 'rfq_received';
+    const alreadyReleased = currentStage === 'p2_release' || currentStage === 'production' || currentStage === 'completed';
+
+    return res.json({
+      gates,
+      allPassed: gates.every(g => g.passed),
+      currentStage,
+      alreadyReleased,
+      poId: project.poId ?? null,
+    });
+  } catch (error) {
+    console.error('Error fetching P2 gate status:', error);
+    res.status(500).json({ message: 'Failed to fetch P2 gate status' });
   }
 });
 

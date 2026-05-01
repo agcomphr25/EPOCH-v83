@@ -60,7 +60,10 @@ import {
   Minus,
   ClipboardList,
   Lock,
-  BarChart2
+  BarChart2,
+  XCircle,
+  Rocket,
+  ShieldCheck
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -290,6 +293,7 @@ const STAGE_LABELS: Record<string, string> = {
   quote_submitted: 'Quote Submitted',
   purchase_review: 'Purchase Review',
   po_received: 'PO Received',
+  p2_release: 'P2 Release',
   production: 'Production',
   shipping: 'Shipping',
   completed: 'Completed',
@@ -419,6 +423,47 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/projects', id, 'traceability'],
     queryFn: () => fetch(`/api/projects/${id}/traceability`).then(r => r.json()),
     enabled: !!id,
+  });
+
+  interface GateStatus {
+    gates: { key: string; label: string; passed: boolean }[];
+    allPassed: boolean;
+    currentStage: string;
+    alreadyReleased: boolean;
+    poId: number | null;
+  }
+
+  const { data: gateStatus, refetch: refetchGateStatus } = useQuery<GateStatus>({
+    queryKey: ['/api/projects', id, 'p2-gate-status'],
+    queryFn: () => fetch(`/api/projects/${id}/p2-gate-status`).then(r => r.json()),
+    enabled: !!id && !!project && ['po_received', 'p2_release', 'purchase_review'].includes(project.currentStage || ''),
+  });
+
+  const releaseToP2Mutation = useMutation({
+    mutationFn: () => apiRequest(`/api/projects/${id}/release-to-p2`, { method: 'POST' }),
+    onSuccess: (data: any) => {
+      const isFullRelease = data?.stage === 'production';
+      toast({
+        title: isFullRelease ? 'Released to Production' : 'Staged for P2 Release',
+        description: isFullRelease
+          ? 'Project has been released to production. The PO is now active in the P2 Control Center.'
+          : 'All gates passed. Project is staged for P2 release. Click "Release to Production" to finalize.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'p2-gate-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      refetchGateStatus();
+    },
+    onError: (err: any) => {
+      const failedGates = err?.responseData?.failedGates || [];
+      toast({
+        title: 'Release Gate Not Cleared',
+        description: failedGates.length > 0
+          ? `Conditions not yet met: ${failedGates.join(', ')}`
+          : err?.message || 'Failed to release to P2.',
+        variant: 'destructive',
+      });
+    },
   });
 
   // ── Project manual document attachments ──
@@ -1180,25 +1225,25 @@ export default function ProjectDetailPage() {
           { label: 'Quote', key: 'quote' },
           { label: 'Project Start', key: 'project_start' },
           { label: 'PO Received', key: 'po_received' },
-          { label: 'WAD', key: 'wad' },
-          { label: 'Pre-Production', key: 'preprod' },
+          { label: 'P2 Release', key: 'p2_release' },
           { label: 'Production', key: 'production' },
           { label: 'Closed', key: 'closed' },
         ];
 
         const rfqStep = project.steps.find(s => s.stepType === 'rfq_risk_assessment');
         const quoteStep = project.steps.find(s => s.stepType === 'quote');
-        const p2Step = project.steps.find(s => s.stepType === 'p2_order');
         const preprodStep = project.steps.find(s => s.stepType === 'preproduction_checklist');
+
+        const STAGE_ORDER = ['rfq_received', 'quote', 'project_start', 'po_received', 'p2_release', 'production', 'closed'];
+        const curStageIdx = STAGE_ORDER.indexOf(project.currentStage || 'rfq_received');
 
         const stageComplete = [
           rfqStep?.status === 'completed',
           quoteStep?.status === 'completed',
-          true,
+          curStageIdx >= 2,
           !!project.poId,
-          p2Step?.status === 'in_progress' || p2Step?.status === 'completed',
-          preprodStep?.status === 'completed',
-          p2Step?.status === 'completed',
+          curStageIdx >= 4,
+          curStageIdx >= 5,
           project.status === 'completed',
         ];
 
@@ -1247,6 +1292,106 @@ export default function ProjectDetailPage() {
           </div>
         );
       })()}
+
+      {/* P2 Release Gate Card — shown when project is approaching or at the release gate */}
+      {project && ['purchase_review', 'po_received', 'p2_release'].includes(project.currentStage || '') && (
+        <Card className={`border-2 ${project.currentStage === 'p2_release' ? 'border-green-400 bg-green-50 dark:bg-green-950/20' : 'border-amber-300 bg-amber-50 dark:bg-amber-950/20'}`}>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className={`h-5 w-5 ${project.currentStage === 'p2_release' ? 'text-green-600' : 'text-amber-600'}`} />
+              <CardTitle className="text-base">
+                P2 Release Gate
+                {project.currentStage === 'p2_release' && (
+                  <Badge className="ml-2 bg-green-500 text-white text-xs">Staged — Ready to Release</Badge>
+                )}
+              </CardTitle>
+            </div>
+            <CardDescription>
+              All three conditions must be met before this project can enter the P2 Control Center.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Gate condition checklist */}
+            <div className="space-y-2">
+              {gateStatus?.gates ? (
+                gateStatus.gates.map((gate) => (
+                  <div key={gate.key} className="flex items-center gap-3 py-1">
+                    {gate.passed ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    )}
+                    <span className={`text-sm font-medium ${gate.passed ? 'text-green-800 dark:text-green-300' : 'text-red-700 dark:text-red-400'}`}>
+                      {gate.label}
+                    </span>
+                    <Badge variant={gate.passed ? 'default' : 'secondary'} className={`ml-auto text-xs ${gate.passed ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                      {gate.passed ? 'APPROVED' : 'PENDING'}
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="space-y-2">
+                  {['PO Review', 'WAD (Work Authorization Document)', 'Preproduction'].map(label => (
+                    <div key={label} className="flex items-center gap-3 py-1">
+                      <Clock className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      <span className="text-sm text-muted-foreground">{label}</span>
+                      <Badge variant="secondary" className="ml-auto text-xs">CHECKING...</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Blocked conditions list */}
+            {gateStatus && !gateStatus.allPassed && (
+              <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2">
+                <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">Blocking conditions:</p>
+                <ul className="text-xs text-red-600 dark:text-red-400 space-y-0.5 list-disc list-inside">
+                  {gateStatus.gates.filter(g => !g.passed).map(g => (
+                    <li key={g.key}>{g.label} must be completed</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* PO required warning */}
+            {!project.poId && (
+              <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  A P2 Purchase Order must be linked to this project before it can be released.
+                </p>
+              </div>
+            )}
+
+            {/* Release button */}
+            <div className="flex items-center gap-3 pt-1">
+              <Button
+                onClick={() => releaseToP2Mutation.mutate()}
+                disabled={!project.poId || !gateStatus?.allPassed || releaseToP2Mutation.isPending}
+                className={`${project.currentStage === 'p2_release' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                title={!project.poId ? 'Link a P2 Purchase Order before releasing' : !gateStatus?.allPassed ? 'Complete all three gate conditions to enable release' : undefined}
+              >
+                <Rocket className="h-4 w-4 mr-2" />
+                {releaseToP2Mutation.isPending
+                  ? 'Processing...'
+                  : project.currentStage === 'p2_release'
+                  ? 'Release to Production'
+                  : 'Release to P2 Control Center'}
+              </Button>
+              {project.poId && !gateStatus?.allPassed && (
+                <p className="text-xs text-muted-foreground">
+                  {gateStatus ? `${gateStatus.gates.filter(g => !g.passed).length} of ${gateStatus.gates.length} conditions pending` : 'Loading gate status...'}
+                </p>
+              )}
+              {project.poId && gateStatus?.allPassed && project.currentStage !== 'p2_release' && (
+                <p className="text-xs text-green-600 font-medium">
+                  All conditions met — ready to release
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Similar Past Projects widget */}
       {(isLoadingSimilar || similarClosings.length > 0) && (

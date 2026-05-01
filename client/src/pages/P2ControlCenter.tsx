@@ -163,7 +163,8 @@ export default function P2ControlCenter() {
   const STAGE_GATE_CEILING: Record<string, string[]> = {
     step1: ['quote_submitted'],        // Can't advance to purchase_review (needs Quote)
     step2: ['purchase_review'],        // Can't advance to po_received (needs Purchase Review)
-    step3: ['po_received'],            // Can't advance to production (needs Preproduction)
+    step3: ['po_received'],            // Can't advance to p2_release (needs Preproduction)
+    step3b: ['p2_release'],            // Can't advance to production (needs P2 Release Gate)
     step4: ['production'],             // Can't advance to completed (needs P2 Order + closing)
   };
   const gateBlockedCounts = Object.fromEntries(

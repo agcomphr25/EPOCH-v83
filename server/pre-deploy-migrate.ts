@@ -201,6 +201,12 @@ async function main() {
     console.log(`   Found ${migrationFiles.length} migration file(s): ${migrationFiles.join(', ')}`);
   }
 
+  // Compute pending files once — reused in Step 1a, governance gate, and Step 3.
+  // Must happen before Step 2 so the check runs even before the tracking table exists.
+  const pendingFiles = migrationFiles.length > 0
+    ? await getPendingMigrationFiles(migrationsDir, migrationFiles)
+    : [];
+
   // ------------------------------------------------------------------
   // STEP 1a: Fast standalone migration safety check (no DB required)
   //          Scans only PENDING migration SQL for destructive statements.
@@ -209,9 +215,9 @@ async function main() {
   //          MIGRATION_SAFE_MODE=true (default) → throws on violations.
   //          MIGRATION_SAFE_MODE=false           → warns and continues.
   // ------------------------------------------------------------------
-  if (migrationFiles.length > 0) {
-    const pendingFiles = await getPendingMigrationFiles(migrationsDir, migrationFiles);
-
+  if (pendingFiles.length === 0) {
+    console.log('✅ No pending migrations — nothing to apply');
+  } else {
     const pendingSql = pendingFiles
       .map(f => {
         const filePath = path.join(migrationsDir, f);
@@ -228,8 +234,6 @@ async function main() {
         await pool.end();
         process.exit(1);
       }
-    } else {
-      console.log('✅ No pending migrations — skipping safety check');
     }
   }
 
@@ -251,17 +255,29 @@ async function main() {
   `, 'Ensure __drizzle_migrations table');
 
   // ------------------------------------------------------------------
-  // STEP 3: Apply all discovered migration SQL files in sorted order
+  // STEP 3: Apply only PENDING migration SQL files in sorted order.
+  //         After each successful run, record the hash in
+  //         drizzle.__drizzle_migrations so future deploys skip it.
   // ------------------------------------------------------------------
 
   const appliedFiles: string[] = [];
-  for (const file of migrationFiles) {
+  for (const file of pendingFiles) {
     const filePath = path.join(migrationsDir, file);
     const sql = fs.readFileSync(filePath, 'utf-8');
     const succeeded = await runSql(sql, `Migration: ${file}`);
-    // Only record migrations that actually executed successfully
     if (succeeded) {
       appliedFiles.push(file);
+      // Record that this migration was applied so future runs skip it.
+      const hash = file.replace(/\.sql$/, '');
+      try {
+        await pool.query(
+          `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
+          [hash, Date.now()]
+        );
+      } catch (trackErr: unknown) {
+        const msg = trackErr instanceof Error ? trackErr.message : String(trackErr);
+        console.warn(`⚠️  Could not record applied hash for ${file}: ${msg}`);
+      }
     }
   }
 

@@ -11,6 +11,8 @@ import {
   maintenanceSchedules,
   productionWorkOrders,
   employees,
+  projects,
+  p2PurchaseOrders,
   insertWorkOrderSchema,
   insertWorkOrderPartSchema,
   insertWorkOrderAttachmentSchema,
@@ -1947,6 +1949,148 @@ router.post(
     }
   },
 );
+
+// ==================== WAD WIZARD ROUTES ====================
+
+const WAD_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// GET /production/:id/wizard — fetch WAD wizard data + project context for pre-population
+router.get('/production/:id/wizard', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
+  try {
+    const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
+    if (!wad) return res.status(404).json({ error: 'WAD not found' });
+
+    // Load linked project
+    const [project] = await db.select().from(projects).where(eq(projects.id, wad.projectId)).limit(1);
+
+    // Load linked PO if available
+    let po = null;
+    if (project?.poId) {
+      const [poRow] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, project.poId)).limit(1);
+      po = poRow ?? null;
+    }
+
+    return res.json({ wad, project: project ?? null, po });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[WAD Wizard] GET error:', err);
+    return res.status(500).json({ error: 'Failed to fetch WAD wizard data', message: msg });
+  }
+});
+
+// PATCH /production/:id/wizard — save/update wizard data (draft save, any step)
+router.patch('/production/:id/wizard', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
+  try {
+    const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
+    if (!wad) return res.status(404).json({ error: 'WAD not found' });
+
+    if (wad.wadStatus === 'APPROVED') {
+      return res.status(409).json({ error: 'WAD is already approved and cannot be modified' });
+    }
+
+    const { wizardData, wadStatus } = req.body as { wizardData?: Record<string, unknown>; wadStatus?: string };
+
+    const mergedWizardData = {
+      ...(wad.wizardData as Record<string, unknown> ?? {}),
+      ...(wizardData ?? {}),
+    };
+
+    const updatePayload: Partial<typeof productionWorkOrders.$inferSelect> = {
+      wizardData: mergedWizardData,
+      updatedAt: new Date(),
+    };
+
+    if (wadStatus && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(wadStatus)) {
+      (updatePayload as any).wadStatus = wadStatus;
+    }
+
+    const [updated] = await db
+      .update(productionWorkOrders)
+      .set(updatePayload as any)
+      .where(eq(productionWorkOrders.id, id))
+      .returning();
+
+    return res.json({ wad: updated });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[WAD Wizard] PATCH error:', err);
+    return res.status(500).json({ error: 'Failed to save WAD wizard data', message: msg });
+  }
+});
+
+// POST /production/:id/wizard/approve — record an approval role decision
+router.post('/production/:id/wizard/approve', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
+  try {
+    const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
+    if (!wad) return res.status(404).json({ error: 'WAD not found' });
+
+    const { role, userId, displayName, decision, comments } = req.body as {
+      role: string;
+      userId?: string;
+      displayName: string;
+      decision: 'APPROVED' | 'REJECTED';
+      comments?: string;
+    };
+
+    if (!role || !displayName || !decision) {
+      return res.status(400).json({ error: 'role, displayName, and decision are required' });
+    }
+
+    const existingData = (wad.wizardData as Record<string, unknown> ?? {});
+    const existingApprovals = (existingData.approvals as unknown[] ?? []) as Record<string, unknown>[];
+
+    const newApproval = {
+      role,
+      userId: userId ?? null,
+      displayName,
+      decision,
+      comments: comments ?? null,
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedApprovals = [
+      ...existingApprovals.filter((a) => a.role !== role),
+      newApproval,
+    ];
+
+    const updatedWizardData = { ...existingData, approvals: updatedApprovals };
+
+    // Determine required roles for full approval
+    const requiredRoles = ['project_manager', 'production_manager', 'quality', 'finance'];
+    const allApproved = requiredRoles.every((r) =>
+      updatedApprovals.some((a) => a.role === r && a.decision === 'APPROVED')
+    );
+
+    const newWadStatus = allApproved ? 'APPROVED' : wad.wadStatus;
+
+    const [updated] = await db
+      .update(productionWorkOrders)
+      .set({ wizardData: updatedWizardData as any, wadStatus: newWadStatus, updatedAt: new Date() })
+      .where(eq(productionWorkOrders.id, id))
+      .returning();
+
+    auditService.logEvent({
+      entityType: 'work_order',
+      entityId: id,
+      action: decision === 'APPROVED' ? 'WAD_APPROVAL_RECORDED' : 'WAD_REJECTION_RECORDED',
+      actor: { id: userId ? parseInt(userId) || 0 : 0, username: displayName },
+      reason: comments,
+      meta: { role, decision, allApproved },
+    }).catch((e: Error) => console.warn('[Audit] WAD approval log failed:', e?.message));
+
+    return res.json({ wad: updated, allApproved });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[WAD Wizard] approve error:', err);
+    return res.status(500).json({ error: 'Failed to record WAD approval', message: msg });
+  }
+});
 
 async function generateWorkOrderFromPM(scheduleId: number, assetId?: string, userId?: number): Promise<any> {
   try {

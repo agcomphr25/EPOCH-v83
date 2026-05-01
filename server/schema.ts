@@ -15576,6 +15576,8 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   warningThreshold: numeric('warning_threshold'),
   blockedThreshold: numeric('blocked_threshold'),
   defaultChargeCodeId: integer('default_charge_code_id').references(() => chargeCodes.id, { onDelete: 'set null' }),
+  wadStatus: text('wad_status').notNull().default('DRAFT'),
+  wizardData: jsonb('wizard_data'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
@@ -15599,6 +15601,8 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
     departmentBudgets: z.record(z.any()).optional(),
     warningThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
     blockedThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
+    wadStatus: z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED']).optional().default('DRAFT'),
+    wizardData: z.record(z.any()).optional().nullable(),
   })
   .superRefine((data, ctx) => {
     const hasWarning = data.warningThreshold != null;

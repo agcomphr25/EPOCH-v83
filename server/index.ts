@@ -411,6 +411,7 @@ async function initializeBackgroundServices() {
           '0094_labor_entry_drafts.sql',
           '0095_production_control_templates.sql',
           '0096_wad_document_links.sql',
+          '0097_wad_wizard_data.sql',
         ];
         const criticalMigrations = new Set([
           '0060_punch_ledger.sql',

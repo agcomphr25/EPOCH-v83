@@ -63,6 +63,7 @@ import MaintenancePage from './pages/MaintenancePage';
 import MaintenanceEventsPage from './pages/MaintenanceEventsPage';
 import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import ProductionWorkOrderDetailPage from './pages/ProductionWorkOrderDetailPage';
+import WADWizardPage from './pages/WADWizardPage';
 import AssetsPage from './pages/AssetsPage';
 import AssetDashboardPage from './pages/AssetDashboardPage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
@@ -756,6 +757,9 @@ function App() {
                   <Route path="/maintenance-events" component={MaintenanceEventsPage} />
                   <Route path="/maintenance-events/:id">
                     {(params) => <WorkOrderDetailPage params={params} />}
+                  </Route>
+                  <Route path="/work-orders/:id/wizard">
+                    {(params) => <WADWizardPage params={params} />}
                   </Route>
                   <Route path="/work-orders/:id">
                     {(params) => <ProductionWorkOrderDetailPage params={params} />}

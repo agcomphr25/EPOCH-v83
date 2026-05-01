@@ -5,7 +5,7 @@ import {
   ArrowLeft, Package, Calendar, TrendingUp, Briefcase, Hash, History,
   ShieldCheck, ShieldX, Clock, AlertTriangle, CheckCircle, XCircle,
   Send, RefreshCw, Loader2, Shield, Wand2, ChevronDown, ChevronUp,
-  Cpu, FileText, Route, BookOpen, ClipboardCheck,
+  Cpu, FileText, Route, BookOpen, ClipboardCheck, ClipboardList,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,8 @@ type ProductionWorkOrder = {
   warningThreshold: string | null;
   blockedThreshold: string | null;
   defaultChargeCodeId: number | null;
+  wadStatus: string;
+  wizardData: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -931,6 +933,103 @@ function Step6ProductionControlCard({ wo }: { wo: { id: string; workOrderNumber:
                 This button is disabled — supervisor or admin role required to generate artifacts for HIGH risk WADs.
               </p>
             )}
+
+// ─── WAD Wizard Summary Card ─────────────────────────────────────────────────
+
+function WADWizardSummaryCard({ wizardData, wadStatus, onOpen }: {
+  wizardData: Record<string, unknown>;
+  wadStatus: string;
+  onOpen: () => void;
+}) {
+  const step2 = wizardData.step2 as any;
+  const step3 = wizardData.step3 as any;
+  const step4 = wizardData.step4 as any;
+  const step7 = wizardData.step7 as any;
+  const step8 = wizardData.step8 as any;
+  const step9 = wizardData.step9 as any;
+  const step10 = wizardData.step10 as any;
+  const approvals = (wizardData.approvals as any[]) ?? [];
+
+  const requiredRoles = ['project_manager', 'production_manager', 'quality', 'finance'];
+  const approvedRoles = approvals.filter((a: any) => a.decision === 'APPROVED').map((a: any) => a.role);
+  const allApproved = requiredRoles.every(r => approvedRoles.includes(r));
+
+  const docsTotal = step10?.documents?.length ?? 0;
+  const docsResolved = (step10?.documents ?? []).filter((d: any) => d.status !== 'PENDING').length;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" /> WAD Authorization Summary
+          </CardTitle>
+          <Button size="sm" variant="ghost" onClick={onOpen}>
+            {wadStatus === 'APPROVED' ? 'View' : 'Edit'} →
+          </Button>
+        </div>
+        <CardDescription>
+          Work authorization wizard data collected across 12 steps
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          {step2?.buildType && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Build Type</div>
+              <div className="font-medium">{step2.buildType}</div>
+            </div>
+          )}
+          {(step2?.departments ?? []).length > 0 && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Departments</div>
+              <div className="font-medium">{step2.departments.length} selected</div>
+            </div>
+          )}
+          {(step3?.rows ?? []).length > 0 && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">WB Rows</div>
+              <div className="font-medium">{step3.rows.length} operations</div>
+            </div>
+          )}
+          {(step4?.chargeCodes ?? []).length > 0 && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Charge Codes</div>
+              <div className="font-medium">{step4.chargeCodes.length} assigned</div>
+            </div>
+          )}
+          {step7?.inspectionLevel && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Inspection Level</div>
+              <div className="font-medium">{step7.inspectionLevel}</div>
+            </div>
+          )}
+          {step8?.priority && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Priority</div>
+              <div className="font-medium">{step8.priority}</div>
+            </div>
+          )}
+          {(step9?.risks ?? []).length > 0 && (
+            <div className="bg-gray-50 rounded p-2">
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Risks</div>
+              <div className="font-medium">{step9.risks.length} documented</div>
+            </div>
+          )}
+          {docsTotal > 0 && (
+            <div className={`rounded p-2 ${docsResolved === docsTotal ? 'bg-green-50' : 'bg-yellow-50'}`}>
+              <div className="text-xs text-gray-500 uppercase tracking-wide">Documents</div>
+              <div className="font-medium">{docsResolved} / {docsTotal} resolved</div>
+            </div>
+          )}
+          <div className={`rounded p-2 ${allApproved ? 'bg-green-50' : 'bg-gray-50'}`}>
+            <div className="text-xs text-gray-500 uppercase tracking-wide">Approvals</div>
+            <div className="font-medium">{approvedRoles.length} / {requiredRoles.length} required</div>
+          </div>
+        </div>
+        {step9?.itarFlag && (
+          <div className="mt-2 flex items-center gap-1 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">
+            <AlertTriangle className="h-3 w-3" /> ITAR-controlled content
           </div>
         )}
       </CardContent>
@@ -1039,9 +1138,15 @@ export default function ProductionWorkOrderDetailPage({ params }: { params: { id
 
   const deptBudgets = wo.departmentBudgets ? Object.entries(wo.departmentBudgets) : [];
 
+  const wadStatusColors: Record<string, string> = {
+    DRAFT: 'bg-gray-100 text-gray-700',
+    PENDING_APPROVAL: 'bg-yellow-100 text-yellow-800',
+    APPROVED: 'bg-green-100 text-green-800',
+  };
+
   return (
     <div className="p-6 space-y-4 max-w-4xl">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="sm" onClick={() => setLocation('/command-center')}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Command Center
         </Button>
@@ -1049,6 +1154,20 @@ export default function ProductionWorkOrderDetailPage({ params }: { params: { id
         <Badge className={statusColors[wo.status] ?? 'bg-gray-100 text-gray-800'}>
           {wo.status.replace('_', ' ')}
         </Badge>
+        <Badge className={wadStatusColors[wo.wadStatus ?? 'DRAFT'] ?? 'bg-gray-100 text-gray-700'}>
+          WAD: {wo.wadStatus ?? 'DRAFT'}
+        </Badge>
+        <div className="ml-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setLocation(`/work-orders/${id}/wizard`)}
+            className="flex items-center gap-1"
+          >
+            <ClipboardList className="h-4 w-4" />
+            {wo.wadStatus === 'APPROVED' ? 'View WAD Wizard' : 'Edit WAD Wizard'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1119,6 +1238,10 @@ export default function ProductionWorkOrderDetailPage({ params }: { params: { id
       <Step6ProductionControlCard wo={{ id: wo.id, workOrderNumber: wo.workOrderNumber, status: wo.status }} />
 
       <LaborBudgetCard woId={id} />
+
+      {wo.wizardData && Object.keys(wo.wizardData).length > 0 && (
+        <WADWizardSummaryCard wizardData={wo.wizardData} wadStatus={wo.wadStatus ?? 'DRAFT'} onOpen={() => setLocation(`/work-orders/${id}/wizard`)} />
+      )}
 
       {deptBudgets.length > 0 && (
         <Card>

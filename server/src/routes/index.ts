@@ -2944,6 +2944,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const projectByPoId = new Map<number, string>(
         (projectRows as any[]).map((r: any) => [r.poId, r.projectId])
       );
+
+      // Sum ordered quantities from all PO line items, grouped by po_id.
+      // This ensures PO lines that haven't had serialized items generated yet
+      // are still counted in totalItems rather than being invisible on the dashboard.
+      const orderedQtyRows = poIds.length > 0
+        ? await dbPool.query(
+            `SELECT po_id AS "poId", COALESCE(SUM(quantity), 0)::int AS "orderedQty"
+             FROM p2_purchase_order_items
+             WHERE po_id = ANY($1)
+             GROUP BY po_id`,
+            [poIds]
+          )
+        : [];
+      const orderedQtyByPoId = new Map<number, number>(
+        (orderedQtyRows as any[]).map((r: any) => [r.poId, r.orderedQty])
+      );
       
       const poStatuses = pos.map((po: any) => {
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
@@ -2956,25 +2972,28 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           // In production if past Pending Layup stage
           return dept !== 'Pending Layup' && dept !== '';
         }).length;
-        const pendingItems = poItems.filter((s: any) => {
-          if (s.status !== 'ACTIVE') return false;
-          const dept = s.currentDepartment || '';
-          return dept === 'Pending Layup' || dept === '';
-        }).length;
+
+        // totalItems is the sum of ordered quantities across all line items so that
+        // lines without serialized items generated yet are still reflected on the card.
+        const totalItems = orderedQtyByPoId.get(po.id) ?? poItems.length;
+
+        // pendingItems = everything not yet completed or in-production (including
+        // line item quantities that haven't had serialized items generated yet).
+        const pendingItems = Math.max(0, totalItems - completedItems - inProductionItems);
         
         return {
           id: po.id,
           poNumber: po.poNumber,
           customerName: po.customerName || 'Unknown',
           dueDate: po.expectedDelivery,
-          totalItems: poItems.length,
+          totalItems,
           completedItems,
           inProductionItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
           projectName: po.projectName || null,
           projectId: projectByPoId.get(po.id) ?? null,
-          status: completedItems === poItems.length && poItems.length > 0 ? 'completed' : 
+          status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
                   inProductionItems > 0 ? 'in_progress' : 'pending'
         };
       });

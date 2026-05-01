@@ -8879,6 +8879,7 @@ export class DatabaseStorage implements IStorage {
         evaluationDate: 'evaluation_date',
         updatedAt: 'updated_at',
         createdAt: 'created_at',
+        approvalLevel: "CASE approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
       };
       const sortColumn = sortColMap[sortField] || 'created_at';
       const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';

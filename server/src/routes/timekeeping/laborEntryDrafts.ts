@@ -44,6 +44,10 @@ import {
 } from "../../schema/timekeeping";
 import { employees as publicEmployeesTable, users } from "../../../schema";
 import { chargeCodes } from "../../../schema";
+import {
+  parseSalariedNarrative,
+  type ConversationalSegment,
+} from "../../services/timekeeping/salariedLaborCaptureAI.service";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -449,8 +453,27 @@ router.patch(
     if (parsed.data.entryDate !== undefined) update.entryDate = parsed.data.entryDate;
     if (parsed.data.rawInputText !== undefined) update.rawInputText = parsed.data.rawInputText;
     if (parsed.data.segments !== undefined) {
-      update.parsedSegmentsJson = parsed.data.segments;
-      update.totalHours = String(computeTotalHours(parsed.data.segments));
+      if (existing.source === "CONVERSATIONAL" && Array.isArray(existing.parsedSegmentsJson)) {
+        // For conversational drafts, merge user's code-selection edits into the stored
+        // segments while preserving all AI-generated metadata (confidence, needsReview,
+        // explanation, durationHours, date, laborCategory, description) for DCAA traceability.
+        const stored = existing.parsedSegmentsJson as ConversationalSegment[];
+        const merged: ConversationalSegment[] = stored.map((storedSeg) => {
+          const edit = parsed.data.segments!.find((u) => u.id === storedSeg.id);
+          if (!edit) return storedSeg;
+          return {
+            ...storedSeg,
+            chargeCodeId: edit.chargeCodeId !== undefined ? edit.chargeCodeId : storedSeg.chargeCodeId,
+            indirectCodeId: edit.indirectCodeId !== undefined ? edit.indirectCodeId : storedSeg.indirectCodeId,
+            description: edit.notes ?? storedSeg.description,
+          };
+        });
+        update.parsedSegmentsJson = merged;
+        update.totalHours = String(merged.reduce((sum, s) => sum + s.durationHours, 0));
+      } else {
+        update.parsedSegmentsJson = parsed.data.segments;
+        update.totalHours = String(computeTotalHours(parsed.data.segments));
+      }
     }
     update.status = "DRAFT";
     update.validationErrorsJson = null;
@@ -716,6 +739,120 @@ router.post(
     }
 
     res.status(200).json(result);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /labor-entry-drafts/portal/:portalId/conversational
+// Parse a natural-language narrative via AI, create a labor_entry_drafts row
+// with source='CONVERSATIONAL', and return the draft + parsed segments.
+//
+// Body: { narrative: string, referenceDate?: string }
+// Returns: { draft, segments, validationErrors, overallConfidence, hasNeedsReview }
+// ---------------------------------------------------------------------------
+
+const conversationalBodySchema = z.object({
+  narrative: z
+    .string()
+    .min(1, "narrative is required")
+    .max(2000, "narrative must be 2000 characters or fewer"),
+  referenceDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "referenceDate must be YYYY-MM-DD")
+    .optional(),
+});
+
+router.post(
+  "/labor-entry-drafts/portal/:portalId/conversational",
+  authenticatePortalToken,
+  h(async (req, res): Promise<void> => {
+    if (!requireFlag(res)) return;
+
+    const epochEmployeeId = req.portalEmployeeId;
+    if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+
+    const isSalaried = await requireSalaryPayType(epochEmployeeId, res);
+    if (!isSalaried) return;
+
+    const tkEmpResult = await resolveTimekeepingEmployee(epochEmployeeId, res);
+    if (!tkEmpResult) return;
+
+    const userId = await resolveUserId(epochEmployeeId, res);
+    if (userId === null) return;
+
+    const parsed = conversationalBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+      return;
+    }
+
+    const { narrative, referenceDate } = parsed.data;
+    const resolvedDate = referenceDate ?? new Date().toISOString().slice(0, 10);
+
+    let parseResult: Awaited<ReturnType<typeof parseSalariedNarrative>>;
+    try {
+      parseResult = await parseSalariedNarrative(
+        tkEmpResult.tkEmployeeId,
+        narrative,
+        resolvedDate,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Parse failed";
+      const statusCode =
+        err instanceof Error && typeof (err as Record<string, unknown>)["statusCode"] === "number"
+          ? ((err as Record<string, unknown>)["statusCode"] as number)
+          : 500;
+      res.status(statusCode).json({ error: msg });
+      return;
+    }
+
+    const { segments, validationErrors, overallConfidence, hasNeedsReview, totalHours } = parseResult;
+
+    const draftStatus: "DRAFT" | "NEEDS_REVIEW" = hasNeedsReview ? "NEEDS_REVIEW" : "DRAFT";
+
+    const validationErrorsJson =
+      validationErrors.length > 0
+        ? {
+            global: validationErrors
+              .filter((e) => e.segmentIndex === -1)
+              .map((e) => e.reason),
+            segments: Object.fromEntries(
+              validationErrors
+                .filter((e) => e.segmentIndex >= 0)
+                .map((e) => [`segment_${e.segmentIndex}`, [e.reason]]),
+            ),
+          }
+        : null;
+
+    const [draft] = await db
+      .insert(laborEntryDraftsTable)
+      .values({
+        employeeId: tkEmpResult.tkEmployeeId,
+        entryDate: resolvedDate,
+        rawInputText: narrative,
+        parsedSegmentsJson: segments,
+        status: draftStatus,
+        source: "CONVERSATIONAL",
+        totalHours: totalHours > 0 ? String(totalHours.toFixed(4)) : null,
+        confidenceScore: String(overallConfidence.toFixed(4)),
+        validationErrorsJson,
+        createdBy: userId,
+      })
+      .returning();
+
+    if (!draft) {
+      res.status(500).json({ error: "Failed to create draft record." });
+      return;
+    }
+
+    res.status(201).json({
+      draft,
+      segments,
+      validationErrors,
+      overallConfidence,
+      hasNeedsReview,
+      totalHours,
+    });
   }),
 );
 

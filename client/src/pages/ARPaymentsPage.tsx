@@ -8,6 +8,8 @@ import {
   Loader2,
   CreditCard,
   Eye,
+  Paperclip,
+  FileText,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -145,6 +147,26 @@ function groupPaymentsByCustomer(payments: any[]): CustomerPaymentGroup[] {
   return Array.from(map.values());
 }
 
+function PaymentReceiptIndicator({ paymentId }: { paymentId: string }) {
+  const { data: attachments = [] } = useQuery<any[]>({
+    queryKey: ['/api/ar-payment-attachments', paymentId],
+    staleTime: 30_000,
+  });
+  if (attachments.length === 0) return null;
+  return (
+    <a
+      href={`/api/ar-payment-attachments/download/${attachments[0].id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Receipt: ${attachments[0].fileName}`}
+      className="inline-flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <FileText className="h-4 w-4" />
+    </a>
+  );
+}
+
 export default function ARPaymentsPage() {
   const { toast } = useToast();
 
@@ -162,6 +184,9 @@ export default function ARPaymentsPage() {
   const [detailPaymentId, setDetailPaymentId] = useState<string | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
+
   const { data: payments = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/ar-payments'],
   });
@@ -172,6 +197,11 @@ export default function ARPaymentsPage() {
 
   const { data: paymentDetail, isLoading: detailLoading } = useQuery<any>({
     queryKey: ['/api/ar-payments', detailPaymentId],
+    enabled: !!detailPaymentId && detailDialogOpen,
+  });
+
+  const { data: detailAttachments = [] } = useQuery<any[]>({
+    queryKey: ['/api/ar-payment-attachments', detailPaymentId],
     enabled: !!detailPaymentId && detailDialogOpen,
   });
 
@@ -232,6 +262,31 @@ export default function ARPaymentsPage() {
 
   const checkedInvoices = openInvoiceItems.filter((i) => i.checked);
 
+  const uploadReceiptPdf = async (file: File, paymentId: string) => {
+    const urlRes = await apiRequest('/api/ar-payment-attachments/request-upload-url', {
+      method: 'POST',
+      body: { name: file.name, size: file.size, paymentId },
+    });
+    const putRes = await fetch(urlRes.uploadURL, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': 'application/pdf' },
+    });
+    if (!putRes.ok) {
+      throw new Error(`Receipt upload to storage failed (${putRes.status})`);
+    }
+    await apiRequest('/api/ar-payment-attachments/complete-upload', {
+      method: 'POST',
+      body: {
+        objectPath: urlRes.objectPath,
+        paymentId,
+        originalFileName: file.name,
+        fileSize: file.size,
+      },
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/ar-payment-attachments', paymentId] });
+  };
+
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
       const result = await apiRequest('/api/ar-payments', {
@@ -245,6 +300,23 @@ export default function ARPaymentsPage() {
           notes: data.notes || null,
         },
       });
+
+      if (receiptFile) {
+        setReceiptUploading(true);
+        try {
+          await uploadReceiptPdf(receiptFile, result.id);
+        } catch (uploadErr: any) {
+          console.warn('Receipt upload failed:', uploadErr);
+          // Surface the error to the user but don't block payment success
+          toast({
+            title: 'Receipt not attached',
+            description: uploadErr?.message || 'The PDF could not be uploaded. The payment was still recorded.',
+            variant: 'destructive',
+          });
+        } finally {
+          setReceiptUploading(false);
+        }
+      }
 
       if (checkedInvoices.length > 0) {
         const paymentAmount = parseFloat(data.amount);
@@ -283,10 +355,12 @@ export default function ARPaymentsPage() {
         setPaymentForm(defaultPaymentForm());
         setOpenInvoiceItems([]);
         setAmountManuallyEdited(false);
+        setReceiptFile(null);
       } else {
         toast({ title: 'Payment recorded' });
         setCreatedPaymentId(payment.id);
         setCreateDialogOpen(false);
+        setReceiptFile(null);
 
         const openInvoices = (invoices || []).filter(
           (inv: any) => inv.status !== 'PAID' && inv.status !== 'VOID' && parseFloat(inv.balance || inv.totalAmount) > 0
@@ -490,7 +564,7 @@ export default function ARPaymentsPage() {
           <DollarSign className="h-6 w-6" />
           <h1 className="text-2xl font-bold">AR Payments</h1>
         </div>
-        <Button onClick={() => { setPaymentForm(defaultPaymentForm()); setOpenInvoiceItems([]); setAmountManuallyEdited(false); setCreateDialogOpen(true); }}>
+        <Button onClick={() => { setPaymentForm(defaultPaymentForm()); setOpenInvoiceItems([]); setAmountManuallyEdited(false); setReceiptFile(null); setCreateDialogOpen(true); }}>
           <DollarSign className="mr-2 h-4 w-4" />
           Record Payment
         </Button>
@@ -557,6 +631,7 @@ export default function ARPaymentsPage() {
                           <TableHead>Reference</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead className="text-right">Allocated</TableHead>
+                          <TableHead className="w-8"></TableHead>
                           <TableHead className="w-28"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -582,6 +657,9 @@ export default function ARPaymentsPage() {
                                     ({formatCurrency(amount - allocated)} unallocated)
                                   </span>
                                 )}
+                              </TableCell>
+                              <TableCell>
+                                <PaymentReceiptIndicator paymentId={payment.id} />
                               </TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
@@ -748,11 +826,45 @@ export default function ARPaymentsPage() {
                 rows={2}
               />
             </div>
+            <div className="space-y-2">
+              <Label>Receipt / Remittance (PDF)</Label>
+              <div className="flex items-center gap-3">
+                <label
+                  htmlFor="receipt-pdf-input"
+                  className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md cursor-pointer hover:bg-muted transition-colors"
+                >
+                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                  {receiptFile ? (
+                    <span className="text-foreground font-medium truncate max-w-[200px]">{receiptFile.name}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Choose PDF file (optional)</span>
+                  )}
+                </label>
+                <input
+                  id="receipt-pdf-input"
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                />
+                {receiptFile && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={() => setReceiptFile(null)}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmitPayment} disabled={createPaymentMutation.isPending}>
-              {createPaymentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button onClick={handleSubmitPayment} disabled={createPaymentMutation.isPending || receiptUploading}>
+              {(createPaymentMutation.isPending || receiptUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Record Payment
             </Button>
           </DialogFooter>
@@ -927,6 +1039,27 @@ export default function ARPaymentsPage() {
                   <span className="text-muted-foreground">Notes: </span>
                   <span>{paymentDetail.notes}</span>
                 </div>
+              )}
+
+              {detailAttachments.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">Attachments</p>
+                    {detailAttachments.map((att: any) => (
+                      <a
+                        key={att.id}
+                        href={`/api/ar-payment-attachments/download/${att.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        <FileText className="h-4 w-4 flex-shrink-0" />
+                        <span className="underline truncate">{att.fileName}</span>
+                      </a>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           ) : null}

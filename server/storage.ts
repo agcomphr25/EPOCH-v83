@@ -144,6 +144,7 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
+  arPaymentAttachments,
   // Gateway reports table - temporarily removed
   // PO Products table
   poProducts,
@@ -378,6 +379,8 @@ import {
   // Order attachment types
   type OrderAttachment,
   type InsertOrderAttachment,
+  type ArPaymentAttachment,
+  type InsertArPaymentAttachment,
   // Vendor PO attachment types
   type VendorPoAttachment,
   type InsertVendorPoAttachment,
@@ -2389,6 +2392,11 @@ export interface IStorage {
   ): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
+
+  // AR Payment Attachment Methods
+  getArPaymentAttachments(paymentId: string): Promise<ArPaymentAttachment[]>;
+  getArPaymentAttachment(attachmentId: string): Promise<ArPaymentAttachment | undefined>;
+  createArPaymentAttachment(data: InsertArPaymentAttachment): Promise<ArPaymentAttachment>;
 
   // Vendor PO Attachment Methods
   getVendorPoAttachments(vendorPoId: number): Promise<VendorPoAttachment[]>;
@@ -20046,6 +20054,31 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(orderAttachments)
       .where(eq(orderAttachments.id, attachmentId));
+  }
+
+  // AR Payment Attachment Methods
+  async getArPaymentAttachments(paymentId: string): Promise<ArPaymentAttachment[]> {
+    return await db
+      .select()
+      .from(arPaymentAttachments)
+      .where(eq(arPaymentAttachments.paymentId, paymentId))
+      .orderBy(desc(arPaymentAttachments.uploadedAt));
+  }
+
+  async getArPaymentAttachment(attachmentId: string): Promise<ArPaymentAttachment | undefined> {
+    const [attachment] = await db
+      .select()
+      .from(arPaymentAttachments)
+      .where(eq(arPaymentAttachments.id, attachmentId));
+    return attachment || undefined;
+  }
+
+  async createArPaymentAttachment(data: InsertArPaymentAttachment): Promise<ArPaymentAttachment> {
+    const [attachment] = await db
+      .insert(arPaymentAttachments)
+      .values(data)
+      .returning();
+    return attachment;
   }
 
   // Vendor PO Attachment Methods

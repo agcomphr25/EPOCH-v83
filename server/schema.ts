@@ -14734,6 +14734,30 @@ export const arPaymentAllocationsRelations = relations(arPaymentAllocations, ({ 
   }),
 }));
 
+// ─── AR Payment Attachments ───────────────────────────────────────────────────
+export const arPaymentAttachments = pgTable('ar_payment_attachments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  paymentId: uuid('payment_id').notNull().references(() => arPayments.id, { onDelete: 'cascade' }),
+  fileName: text('file_name').notNull(),
+  filePath: text('file_path').notNull(),
+  fileSize: integer('file_size').notNull(),
+  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+});
+
+export const insertArPaymentAttachmentSchema = createInsertSchema(arPaymentAttachments).omit({
+  id: true,
+  uploadedAt: true,
+});
+export type InsertArPaymentAttachment = z.infer<typeof insertArPaymentAttachmentSchema>;
+export type ArPaymentAttachment = typeof arPaymentAttachments.$inferSelect;
+
+export const arPaymentAttachmentsRelations = relations(arPaymentAttachments, ({ one }) => ({
+  payment: one(arPayments, {
+    fields: [arPaymentAttachments.paymentId],
+    references: [arPayments.id],
+  }),
+}));
+
 // ─── Capability-Based Permission System ───────────────────────────────────────
 // Distinct from the employee-capability system (capabilities / employeeCapabilities).
 // This drives page access, button visibility, and API enforcement for web users.

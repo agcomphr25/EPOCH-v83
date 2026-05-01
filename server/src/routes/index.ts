@@ -185,6 +185,7 @@ import emailTemplatesRoutes from './emailTemplates';
 import signOrderSettingsRoutes from './signOrderSettings';
 import arInvoicesRoutes from './arInvoices';
 import arPaymentsRoutes from './arPayments';
+import arPaymentAttachmentsRoutes from './arPaymentAttachments';
 import permissionsRoutes from './permissions';
 import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
@@ -1082,6 +1083,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/material-intelligence', materialIntelligenceRoutes);
   app.use('/api/ar-invoices', arInvoicesRoutes);
   app.use('/api/ar-payments', arPaymentsRoutes);
+  app.use('/api/ar-payment-attachments', arPaymentAttachmentsRoutes);
   app.use('/api/permissions', permissionsRoutes);
 
   app.use('/api/control-tower', controlTowerRoutes);

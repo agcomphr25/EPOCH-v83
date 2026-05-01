@@ -933,6 +933,12 @@ function Step6ProductionControlCard({ wo }: { wo: { id: string; workOrderNumber:
                 This button is disabled — supervisor or admin role required to generate artifacts for HIGH risk WADs.
               </p>
             )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // ─── WAD Wizard Summary Card ─────────────────────────────────────────────────
 

@@ -4,7 +4,8 @@ import { useLocation } from 'wouter';
 import {
   ArrowLeft, Package, Calendar, TrendingUp, Briefcase, Hash, History,
   ShieldCheck, ShieldX, Clock, AlertTriangle, CheckCircle, XCircle,
-  Send, RefreshCw, Loader2, Shield,
+  Send, RefreshCw, Loader2, Shield, Wand2, ChevronDown, ChevronUp,
+  Cpu, FileText, Route, BookOpen, ClipboardCheck,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { format, formatDistanceToNow } from 'date-fns';
 import AuditTimeline from '@/components/AuditTimeline';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -514,6 +523,421 @@ function OverrideApprovalsPanel({ woId }: { woId: string }) {
   );
 }
 
+// ─── Types for Step 6 ───────────────────────────────────────────────────────
+
+const PART_TYPES_LIST = [
+  'Composite', 'CNC Machined', 'Assembly', 'Sub-Assembly',
+  'Paint / Finish', 'Special Process', 'Shipping / Final Inspection Only',
+];
+
+const PRODUCTION_TYPES_LIST = [
+  'New Part', 'Repeat Part', 'Revision Change', 'First Article', 'Rework', 'Prototype',
+];
+
+type ControlFlags = {
+  routingRequired: boolean;
+  travelerRequired: boolean;
+  workInstructionRequired: boolean;
+  specSheetRequired: boolean;
+  finalQcOnly: boolean;
+  inProcessInspectionRequired: boolean;
+  spotCheckPlanRequired: boolean;
+  certRequired: boolean;
+};
+
+type AIRecommendation = {
+  flags: ControlFlags;
+  reason: string;
+  suggestedTemplates: Record<string, string | null>;
+  suggestedTemplatesEnriched: Record<string, { id: string; name: string; version: number; templateType: string } | null>;
+  availableTemplates: Array<{ id: string; name: string; templateType: string; routingType: string | null; version: number }>;
+  confidenceScore: number;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+};
+
+type WadProductionControls = {
+  id: string;
+  workOrderId: string;
+  partType: string;
+  productionType: string;
+  routingRequired: boolean;
+  travelerRequired: boolean;
+  workInstructionRequired: boolean;
+  specSheetRequired: boolean;
+  finalQcOnly: boolean;
+  inProcessInspectionRequired: boolean;
+  spotCheckPlanRequired: boolean;
+  certRequired: boolean;
+  aiReason: string | null;
+  aiConfidenceScore: string | null;
+  aiRiskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  selectedTemplateIds: Record<string, string | null> | null;
+  provisionedAt: string | null;
+  provisionSummary: {
+    artifacts: Array<{ type: string; id: string | null; templateName: string | null; templateVersion: number | null }>;
+  } | null;
+};
+
+const CONTROL_FLAG_LABELS: Record<keyof ControlFlags, string> = {
+  routingRequired: 'Routing Required',
+  travelerRequired: 'Traveler Required',
+  workInstructionRequired: 'Work Instruction Required',
+  specSheetRequired: 'Spec Sheet Required',
+  finalQcOnly: 'Final QC Only',
+  inProcessInspectionRequired: 'In-Process Inspection',
+  spotCheckPlanRequired: 'Spot Check Plan',
+  certRequired: 'Cert Required',
+};
+
+const CONTROL_FLAG_KEYS: (keyof ControlFlags)[] = [
+  'routingRequired', 'travelerRequired', 'workInstructionRequired', 'specSheetRequired',
+  'finalQcOnly', 'inProcessInspectionRequired', 'spotCheckPlanRequired', 'certRequired',
+];
+
+const ARTIFACT_ICONS: Record<string, typeof Route> = {
+  routing: Route,
+  traveler: FileText,
+  qc_plan: ClipboardCheck,
+  work_instruction: BookOpen,
+  spec_sheet: BookOpen,
+};
+
+const riskBadge: Record<string, string> = {
+  LOW: 'bg-green-100 text-green-800',
+  MEDIUM: 'bg-yellow-100 text-yellow-800',
+  HIGH: 'bg-red-100 text-red-800',
+};
+
+// ─── Step 6 Production Control Card ─────────────────────────────────────────
+
+const SUPERVISOR_ROLES_FE = ['ADMIN', 'OWNER', 'SUPERVISOR', 'MANAGER'];
+
+function Step6ProductionControlCard({ wo }: { wo: { id: string; workOrderNumber: string; status: string } }) {
+  const { toast } = useToast();
+  const [partType, setPartType] = useState('');
+  const [productionType, setProductionType] = useState('');
+  const [recommendation, setRecommendation] = useState<AIRecommendation | null>(null);
+  const [editingFlags, setEditingFlags] = useState(false);
+  const [overrideFlags, setOverrideFlags] = useState<ControlFlags | null>(null);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Record<string, string | null>>({});
+  const [collapsed, setCollapsed] = useState(false);
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string } | null>({
+    queryKey: ['currentUser'],
+  });
+  const isSupervisorUser = currentUser ? SUPERVISOR_ROLES_FE.includes(currentUser.role) : false;
+
+  // Check if already provisioned
+  const { data: existingControls } = useQuery<WadProductionControls | null>({
+    queryKey: ['/api/work-orders/production', wo.id, 'production-controls'],
+    queryFn: async () => {
+      const res = await fetch(`/api/work-orders/production/${wo.id}/production-controls`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error('Failed to fetch');
+      return res.json();
+    },
+    retry: false,
+  });
+
+  const recommendMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/work-orders/production/${wo.id}/production-controls/recommend`, {
+        method: 'POST',
+        body: JSON.stringify({ partType, productionType }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: (data: AIRecommendation) => {
+      setRecommendation(data);
+      setOverrideFlags({ ...data.flags });
+      setSelectedTemplateIds({ ...data.suggestedTemplates } as Record<string, string | null>);
+    },
+    onError: (e: Error) => toast({ title: 'AI recommendation failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const provisionMutation = useMutation({
+    mutationFn: () => {
+      const flags = overrideFlags ?? recommendation!.flags;
+      return apiRequest(`/api/work-orders/production/${wo.id}/production-controls`, {
+        method: 'POST',
+        body: JSON.stringify({
+          partType,
+          productionType,
+          ...flags,
+          aiReason: recommendation?.reason ?? null,
+          aiConfidenceScore: recommendation?.confidenceScore?.toFixed(2) ?? null,
+          aiRiskLevel: recommendation?.riskLevel ?? null,
+          selectedTemplateIds,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Production controls provisioned', description: 'Routing, traveler, and QC artifacts generated.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wo.id, 'production-controls'] });
+      setCollapsed(true);
+    },
+    onError: (e: Error) => {
+      let msg = e.message;
+      try { const b = JSON.parse(e.message) as { error?: string }; if (b.error) msg = b.error; } catch { /* ignore */ }
+      toast({ title: 'Provisioning failed', description: msg, variant: 'destructive' });
+    },
+  });
+
+  const flags = overrideFlags ?? recommendation?.flags;
+  const riskLevel = recommendation?.riskLevel;
+  const isHighRisk = riskLevel === 'HIGH';
+  const isPlanned = wo.status === 'PLANNED';
+  const isProvisioned = !!(existingControls?.provisionedAt);
+
+  if (existingControls?.provisionedAt) {
+    const summary = existingControls.provisionSummary;
+    return (
+      <Card className="border-green-200">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-4 w-4" /> Step 6 — Production Controls (Provisioned)
+            </CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => setCollapsed(!collapsed)}>
+              {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+            </Button>
+          </div>
+          <CardDescription>
+            {existingControls.partType} · {existingControls.productionType}
+            {existingControls.aiRiskLevel && (
+              <Badge className={`ml-2 ${riskBadge[existingControls.aiRiskLevel]}`}>
+                {existingControls.aiRiskLevel} RISK
+              </Badge>
+            )}
+          </CardDescription>
+        </CardHeader>
+        {!collapsed && (
+          <CardContent className="space-y-3">
+            {summary?.artifacts && summary.artifacts.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Generated Artifacts</p>
+                <div className="space-y-1.5">
+                  {summary.artifacts.map((a, i) => {
+                    const Icon = ARTIFACT_ICONS[a.type] ?? FileText;
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-sm bg-green-50 rounded px-3 py-2">
+                        <Icon className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                        <span className="capitalize font-medium">{a.type.replace('_', ' ')}</span>
+                        {a.templateName && (
+                          <span className="text-gray-500 text-xs">
+                            from <em>{a.templateName}</em> v{a.templateVersion}
+                          </span>
+                        )}
+                        {a.id && (
+                          <span className="font-mono text-xs text-gray-400 ml-auto truncate max-w-[140px]">{a.id}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {existingControls.aiReason && (
+              <div className="rounded bg-gray-50 px-3 py-2 text-sm text-gray-600 italic">
+                "{existingControls.aiReason}"
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+    );
+  }
+
+  if (!isPlanned) return null;
+
+  return (
+    <Card className="border-blue-200">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2 text-blue-800">
+          <Cpu className="h-4 w-4" /> Step 6 — Production Control Requirements
+        </CardTitle>
+        <CardDescription>
+          AI-assisted selection of routing, traveler, and QC templates for this WAD
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Part Type + Production Type */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">Part Type *</Label>
+            <Select value={partType} onValueChange={setPartType}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select part type" />
+              </SelectTrigger>
+              <SelectContent>
+                {PART_TYPES_LIST.map((pt) => (
+                  <SelectItem key={pt} value={pt}>{pt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Production Type *</Label>
+            <Select value={productionType} onValueChange={setProductionType}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select production type" />
+              </SelectTrigger>
+              <SelectContent>
+                {PRODUCTION_TYPES_LIST.map((pt) => (
+                  <SelectItem key={pt} value={pt}>{pt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <Button
+          variant="outline"
+          disabled={!partType || !productionType || recommendMutation.isPending}
+          onClick={() => recommendMutation.mutate()}
+          className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+        >
+          {recommendMutation.isPending
+            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Getting AI Recommendation…</>
+            : <><Wand2 className="h-4 w-4 mr-2" /> Get AI Recommendation</>}
+        </Button>
+
+        {/* Recommendation Card */}
+        {recommendation && flags && (
+          <div className="border rounded-lg p-4 space-y-4 bg-gray-50">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">AI Recommendation</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Confidence: {Math.round(recommendation.confidenceScore * 100)}%
+                </p>
+              </div>
+              <div className="flex gap-1.5">
+                <Badge className={riskBadge[recommendation.riskLevel]}>
+                  {recommendation.riskLevel} RISK
+                </Badge>
+              </div>
+            </div>
+
+            {/* Reason */}
+            {recommendation.reason && (
+              <p className="text-xs text-gray-600 bg-white rounded border px-3 py-2 italic">
+                {recommendation.reason}
+              </p>
+            )}
+
+            {/* Control Flags */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Control Flags</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-xs"
+                  onClick={() => setEditingFlags(!editingFlags)}
+                >
+                  {editingFlags ? 'Done Editing' : 'Edit Requirements'}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {CONTROL_FLAG_KEYS.map((key) => (
+                  <div key={key} className="flex items-center gap-2 text-xs bg-white rounded border px-2 py-1.5">
+                    {editingFlags ? (
+                      <Switch
+                        checked={flags[key]}
+                        onCheckedChange={(checked) => {
+                          if (overrideFlags) setOverrideFlags({ ...overrideFlags, [key]: checked });
+                        }}
+                        className="scale-75"
+                      />
+                    ) : (
+                      flags[key]
+                        ? <CheckCircle className="h-3 w-3 text-green-600 shrink-0" />
+                        : <XCircle className="h-3 w-3 text-gray-300 shrink-0" />
+                    )}
+                    <span className={flags[key] ? 'text-gray-800' : 'text-gray-400'}>{CONTROL_FLAG_LABELS[key]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Suggested Templates */}
+            {Object.keys(recommendation.suggestedTemplatesEnriched).length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Suggested Templates</p>
+                <div className="space-y-1.5">
+                  {Object.entries(recommendation.suggestedTemplatesEnriched).map(([key, tmpl]) => {
+                    const availableForType = (recommendation.availableTemplates ?? []).filter(
+                      (t) => t.templateType.toLowerCase() === key.replace('_', '').toLowerCase() ||
+                        t.templateType === key.toUpperCase() ||
+                        t.templateType === key.toUpperCase().replace('_', '_')
+                    );
+                    return (
+                      <div key={key} className="flex items-center gap-2 text-xs bg-white rounded border px-2 py-1.5">
+                        <span className="w-28 text-gray-500 capitalize shrink-0">{key.replace('_', ' ')}</span>
+                        {availableForType.length > 0 ? (
+                          <Select
+                            value={selectedTemplateIds[key] ?? ''}
+                            onValueChange={(v) => setSelectedTemplateIds((prev) => ({ ...prev, [key]: v || null }))}
+                          >
+                            <SelectTrigger className="h-6 text-xs flex-1">
+                              <SelectValue placeholder="— none —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">— none —</SelectItem>
+                              {availableForType.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name} v{t.version}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-gray-400 italic flex-1">
+                            {tmpl ? `${tmpl.name} v${tmpl.version}` : 'No matching templates'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* HIGH RISK warning — shown to all users */}
+            {isHighRisk && (
+              <div className="flex items-start gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  HIGH risk WAD — {isSupervisorUser
+                    ? 'you have supervisor authority to approve this WAD.'
+                    : 'a supervisor or admin must approve this WAD. Contact your supervisor.'}
+                </span>
+              </div>
+            )}
+
+            {/* Approve & Generate — disabled for non-supervisors on HIGH risk */}
+            <Button
+              className="w-full bg-blue-700 hover:bg-blue-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={provisionMutation.isPending || (isHighRisk && !isSupervisorUser)}
+              onClick={() => provisionMutation.mutate()}
+              title={isHighRisk && !isSupervisorUser ? 'Supervisor or admin role required for HIGH risk WADs' : undefined}
+            >
+              {provisionMutation.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…</>
+                : <><CheckCircle className="h-4 w-4 mr-2" /> Approve &amp; Generate</>}
+            </Button>
+            {isHighRisk && !isSupervisorUser && (
+              <p className="text-xs text-red-600 text-center">
+                This button is disabled — supervisor or admin role required to generate artifacts for HIGH risk WADs.
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Labor Budget Card (enhanced) ───────────────────────────────────────────
 
 function LaborBudgetCard({ woId }: { woId: string }) {
@@ -691,6 +1115,8 @@ export default function ProductionWorkOrderDetailPage({ params }: { params: { id
           </CardContent>
         </Card>
       </div>
+
+      <Step6ProductionControlCard wo={{ id: wo.id, workOrderNumber: wo.workOrderNumber, status: wo.status }} />
 
       <LaborBudgetCard woId={id} />
 

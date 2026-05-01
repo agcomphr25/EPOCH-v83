@@ -17,9 +17,18 @@ import {
   insertProductionWorkOrderSchema,
   insertLaborThresholdSettingsSchema,
   insertLaborBudgetOverrideSchema,
+  productionControlTemplates,
+  wadProductionControls,
+  wadDocumentLinks,
+  partRoutings,
+  travelers,
+  travelerSteps,
+  travelerTasks,
+  insertWadProductionControlsSchema,
   type LaborBudgetOverride,
+  type ProductionControlTemplate,
 } from '../../schema';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { authenticateToken } from '../../middleware/auth';
@@ -27,6 +36,11 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { requireScopedCapability, ScopedForbiddenError } from '../permissions';
 import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
+import {
+  getProductionControlRecommendation,
+  type WadContext,
+  type ApprovedTemplateSummary,
+} from '../services/productionControl/productionControlAI.service';
 
 const router = Router();
 
@@ -1330,6 +1344,608 @@ router.patch(
       return res.status(500).json({ error: 'Failed to resolve override request', message: msg });
     }
   }
+);
+
+// ==================== PRODUCTION CONTROLS (WAD Step 6) ====================
+
+const PRODUCTION_SUPERVISOR_ROLES = ['ADMIN', 'OWNER', 'SUPERVISOR', 'MANAGER'];
+
+function isSupervisorForProduction(user: any): boolean {
+  return user && PRODUCTION_SUPERVISOR_ROLES.includes(user.role);
+}
+
+/**
+ * POST /api/work-orders/production/:id/production-controls/recommend
+ * Fetches WAD context + APPROVED templates, calls AI, returns recommendation (no persistence).
+ */
+router.post(
+  '/production/:id/production-controls/recommend',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { partType, productionType } = req.body as { partType: string; productionType: string };
+
+      if (!partType || !productionType) {
+        return res.status(400).json({ error: 'partType and productionType are required' });
+      }
+
+      const [wad] = await db
+        .select()
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, id))
+        .limit(1);
+
+      if (!wad) return res.status(404).json({ error: 'Work order not found' });
+
+      // Fetch APPROVED templates
+      const approvedTemplates: ProductionControlTemplate[] = await db
+        .select()
+        .from(productionControlTemplates)
+        .where(eq(productionControlTemplates.approvalStatus, 'APPROVED'));
+
+      const templateSummaries: ApprovedTemplateSummary[] = approvedTemplates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        templateType: t.templateType,
+        routingType: t.routingType,
+        version: t.version,
+      }));
+
+      const wadContext: WadContext = {
+        workOrderId: wad.id,
+        workOrderNumber: wad.workOrderNumber,
+        partNumber: wad.partNumber,
+        description: wad.description,
+        quantity: wad.quantity,
+        partType,
+        productionType,
+      };
+
+      const recommendation = await getProductionControlRecommendation(wadContext, templateSummaries);
+
+      // Enrich suggested templates with name/version for display
+      const enriched: Record<string, { id: string; name: string; version: number; templateType: string } | null> = {};
+      for (const [key, templateId] of Object.entries(recommendation.suggestedTemplates)) {
+        if (!templateId) { enriched[key] = null; continue; }
+        const tmpl = approvedTemplates.find((t) => t.id === templateId);
+        enriched[key] = tmpl
+          ? { id: tmpl.id, name: tmpl.name, version: tmpl.version, templateType: tmpl.templateType }
+          : null;
+      }
+
+      return res.json({ ...recommendation, suggestedTemplatesEnriched: enriched, availableTemplates: templateSummaries });
+    } catch (err: unknown) {
+      console.error('[ProductionControls] recommend error:', err);
+      return res.status(500).json({ error: 'Failed to get recommendation' });
+    }
+  },
+);
+
+/**
+ * GET /api/work-orders/production/:id/production-controls
+ * Returns the persisted controls record for this WAD (if any).
+ */
+router.get(
+  '/production/:id/production-controls',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [controls] = await db
+        .select()
+        .from(wadProductionControls)
+        .where(eq(wadProductionControls.workOrderId, id))
+        .limit(1);
+
+      if (!controls) return res.status(404).json({ error: 'No production controls found for this WAD' });
+      return res.json(controls);
+    } catch (err: unknown) {
+      console.error('[ProductionControls] get error:', err);
+      return res.status(500).json({ error: 'Failed to fetch production controls' });
+    }
+  },
+);
+
+// Helper type for provisioning artifact summary
+type ProvisionArtifact = {
+  type: string;
+  id: string | null;
+  templateName: string | null;
+  templateVersion: number | null;
+};
+
+type ProvisionSummary = {
+  routingId?: string;
+  travelerId?: string;
+  travelerNumber?: string;
+  travelerStepsCreated?: number;
+  qcCheckpointsInjected?: number;
+  workInstructionTemplateId?: string;
+  workInstructionFileUrl?: string | null;
+  specSheetTemplateId?: string;
+  specSheetFileUrl?: string | null;
+  artifacts: ProvisionArtifact[];
+};
+
+/**
+ * POST /api/work-orders/production/:id/production-controls
+ * Persists controls, runs provisioning pipeline atomically:
+ *   (a) upsert controls record
+ *   (b) create routing from APPROVED routing template
+ *   (c) create traveler from APPROVED traveler template
+ *   (d) inject QC checkpoints from APPROVED QC template
+ *   (e) persist work instruction / spec sheet template links
+ */
+router.post(
+  '/production/:id/production-controls',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user;
+
+      const [wad] = await db
+        .select()
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, id))
+        .limit(1);
+
+      if (!wad) return res.status(404).json({ error: 'Work order not found' });
+      if (wad.status !== 'PLANNED') {
+        return res.status(400).json({ error: 'Production controls can only be set on WADs in PLANNED status' });
+      }
+
+      // Parse and validate body
+      const bodySchema = insertWadProductionControlsSchema.extend({
+        selectedTemplateIds: z.record(z.string(), z.string().nullable()).optional().nullable(),
+      });
+      const parsed = bodySchema.safeParse({ ...req.body, workOrderId: id });
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+      }
+
+      const controls = parsed.data;
+
+      // HIGH risk guard — requires supervisor role
+      if (controls.aiRiskLevel === 'HIGH' && !isSupervisorForProduction(user)) {
+        return res.status(403).json({
+          error: 'HIGH risk jobs require supervisor or admin approval before generating artifacts.',
+          riskLevel: 'HIGH',
+        });
+      }
+
+      const selectedTemplateIds = (controls.selectedTemplateIds ?? {}) as Record<string, string | null>;
+
+      // ── Pre-flight: required-control and template validation ────────────────
+      // Map from selectedTemplateIds key → expected templateType
+      const CONTROL_TYPE_MAP: Record<string, string> = {
+        routing: 'ROUTING',
+        traveler: 'TRAVELER',
+        qc: 'QC',
+        work_instruction: 'WORK_INSTRUCTION',
+        spec_sheet: 'SPEC_SHEET',
+      };
+
+      // 1) Fail fast if any required control has no template ID
+      const requiredFlags: { flag: boolean; key: string; expectedType: string }[] = [
+        { flag: controls.routingRequired, key: 'routing', expectedType: 'ROUTING' },
+        { flag: controls.travelerRequired, key: 'traveler', expectedType: 'TRAVELER' },
+        {
+          flag: controls.finalQcOnly || controls.inProcessInspectionRequired || controls.spotCheckPlanRequired,
+          key: 'qc',
+          expectedType: 'QC',
+        },
+        { flag: controls.workInstructionRequired, key: 'work_instruction', expectedType: 'WORK_INSTRUCTION' },
+        { flag: controls.specSheetRequired, key: 'spec_sheet', expectedType: 'SPEC_SHEET' },
+      ];
+      const missingRequired = requiredFlags.filter(
+        ({ flag, key }) => flag && !selectedTemplateIds[key],
+      );
+      if (missingRequired.length > 0) {
+        return res.status(400).json({
+          error: 'Missing required template selections. Select an APPROVED template for each required control.',
+          missing: missingRequired.map(({ key, expectedType }) => ({ controlKey: key, expectedType })),
+        });
+      }
+
+      // 2) Validate that every provided ID exists, is APPROVED, and matches its expected type.
+      //    Also build a versioned map so we can persist {id, version} pairs for full traceability.
+      const providedIdEntries = Object.entries(selectedTemplateIds).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0,
+      );
+      // Map from controlKey → { id, version } — populated during validation, used when persisting
+      const versionedTemplateIds: Record<string, { id: string; version: number }> = {};
+
+      if (providedIdEntries.length > 0) {
+        const fetchedTemplates = await db
+          .select({
+            id: productionControlTemplates.id,
+            version: productionControlTemplates.version,
+            approvalStatus: productionControlTemplates.approvalStatus,
+            templateType: productionControlTemplates.templateType,
+          })
+          .from(productionControlTemplates)
+          .where(inArray(productionControlTemplates.id, providedIdEntries.map(([, v]) => v)));
+
+        const fetchedMap = new Map(fetchedTemplates.map((t) => [t.id, t]));
+        const validationErrors: string[] = [];
+
+        for (const [key, templateId] of providedIdEntries) {
+          const tmpl = fetchedMap.get(templateId);
+          if (!tmpl) {
+            validationErrors.push(`Template ID ${templateId} (${key}) does not exist`);
+          } else if (tmpl.approvalStatus !== 'APPROVED') {
+            validationErrors.push(
+              `Template ${templateId} (${key}) is not APPROVED (status: ${tmpl.approvalStatus})`,
+            );
+          } else {
+            const expectedType = CONTROL_TYPE_MAP[key];
+            if (expectedType && tmpl.templateType !== expectedType) {
+              validationErrors.push(
+                `Template ${templateId} (${key}) has wrong type: expected ${expectedType}, got ${tmpl.templateType}`,
+              );
+            } else {
+              versionedTemplateIds[key] = { id: tmpl.id, version: tmpl.version ?? 1 };
+            }
+          }
+        }
+
+        if (validationErrors.length > 0) {
+          return res.status(400).json({
+            error: 'Template validation failed',
+            details: validationErrors,
+          });
+        }
+      }
+
+      // ── Phase 1: Atomic — controls record + routing + WI/SS doc links ────────
+      // Traveler creation happens in Phase 2 so it can reuse storage.generateTravelerFromRouting.
+      const provisionSummary: ProvisionSummary = { artifacts: [] };
+      let createdRoutingId: string | null = null;
+
+      await db.transaction(async (tx) => {
+        // (a) Upsert controls record
+        const [existingCtrl] = await tx
+          .select({ id: wadProductionControls.id })
+          .from(wadProductionControls)
+          .where(eq(wadProductionControls.workOrderId, id))
+          .limit(1);
+
+        const controlData = {
+          workOrderId: id,
+          partType: controls.partType,
+          productionType: controls.productionType,
+          routingRequired: controls.routingRequired,
+          travelerRequired: controls.travelerRequired,
+          workInstructionRequired: controls.workInstructionRequired,
+          specSheetRequired: controls.specSheetRequired,
+          finalQcOnly: controls.finalQcOnly,
+          inProcessInspectionRequired: controls.inProcessInspectionRequired,
+          spotCheckPlanRequired: controls.spotCheckPlanRequired,
+          certRequired: controls.certRequired,
+          aiReason: controls.aiReason ?? null,
+          aiConfidenceScore: controls.aiConfidenceScore ?? null,
+          aiRiskLevel: controls.aiRiskLevel ?? null,
+          // Store {id, version} pairs for full traceability, not bare IDs
+          selectedTemplateIds: Object.keys(versionedTemplateIds).length > 0 ? versionedTemplateIds : (controls.selectedTemplateIds ?? null),
+        };
+
+        if (existingCtrl) {
+          await tx.update(wadProductionControls).set(controlData).where(eq(wadProductionControls.workOrderId, id));
+        } else {
+          await tx.insert(wadProductionControls).values(controlData);
+        }
+
+        // (b) Create routing from APPROVED ROUTING template
+        const routingTemplateId = selectedTemplateIds['routing'] ?? null;
+
+        if (controls.routingRequired && routingTemplateId) {
+          const [tmpl] = await tx
+            .select()
+            .from(productionControlTemplates)
+            .where(
+              and(
+                eq(productionControlTemplates.id, routingTemplateId),
+                eq(productionControlTemplates.approvalStatus, 'APPROVED'),
+                eq(productionControlTemplates.templateType, 'ROUTING'),
+              ),
+            )
+            .limit(1);
+
+          if (tmpl?.data) {
+            const tmplData = tmpl.data as Record<string, unknown>;
+            const [newRouting] = await tx
+              .insert(partRoutings)
+              .values({
+                inventoryItemId: wad.partNumber,
+                partNumber: wad.partNumber,
+                partName: wad.description ?? wad.partNumber,
+                routingType: (tmplData.routingType as string) ?? 'COMPOSITE',
+                departmentSequence: (tmplData.departmentSequence as string[]) ?? [],
+                traceabilityConfig: (tmplData.traceabilityConfig ?? {}) as Record<string, unknown>,
+                departmentConfig: (tmplData.departmentConfig ?? {}) as Record<string, unknown>,
+                createdFromTemplateId: tmpl.id,
+                createdFromTemplateVersion: tmpl.version,
+                createdBy: user?.username ?? 'system',
+              })
+              .returning({ id: partRoutings.id });
+
+            createdRoutingId = newRouting.id;
+            provisionSummary.routingId = newRouting.id;
+            provisionSummary.artifacts.push({
+              type: 'routing',
+              id: newRouting.id,
+              templateName: tmpl.name,
+              templateVersion: tmpl.version,
+            });
+          }
+        }
+
+        // (e) Persist work instruction / spec sheet template links
+        const wiTemplateId = selectedTemplateIds['work_instruction'] ?? null;
+        const ssTemplateId = selectedTemplateIds['spec_sheet'] ?? null;
+
+        if (wiTemplateId) {
+          const [wiTmpl] = await tx
+            .select()
+            .from(productionControlTemplates)
+            .where(
+              and(
+                eq(productionControlTemplates.id, wiTemplateId),
+                eq(productionControlTemplates.approvalStatus, 'APPROVED'),
+                eq(productionControlTemplates.templateType, 'WORK_INSTRUCTION'),
+              ),
+            )
+            .limit(1);
+          if (wiTmpl) {
+            provisionSummary.workInstructionTemplateId = wiTmpl.id;
+            provisionSummary.workInstructionFileUrl = wiTmpl.fileUrl;
+            provisionSummary.artifacts.push({
+              type: 'work_instruction',
+              id: wiTmpl.id,
+              templateName: wiTmpl.name,
+              templateVersion: wiTmpl.version,
+            });
+            await tx.insert(wadDocumentLinks).values({
+              workOrderId: id,
+              templateId: wiTmpl.id,
+              templateVersion: wiTmpl.version,
+              templateType: 'WORK_INSTRUCTION',
+              templateName: wiTmpl.name,
+              fileUrl: wiTmpl.fileUrl ?? null,
+            });
+          }
+        }
+
+        if (ssTemplateId) {
+          const [ssTmpl] = await tx
+            .select()
+            .from(productionControlTemplates)
+            .where(
+              and(
+                eq(productionControlTemplates.id, ssTemplateId),
+                eq(productionControlTemplates.approvalStatus, 'APPROVED'),
+                eq(productionControlTemplates.templateType, 'SPEC_SHEET'),
+              ),
+            )
+            .limit(1);
+          if (ssTmpl) {
+            provisionSummary.specSheetTemplateId = ssTmpl.id;
+            provisionSummary.specSheetFileUrl = ssTmpl.fileUrl;
+            provisionSummary.artifacts.push({
+              type: 'spec_sheet',
+              id: ssTmpl.id,
+              templateName: ssTmpl.name,
+              templateVersion: ssTmpl.version,
+            });
+            await tx.insert(wadDocumentLinks).values({
+              workOrderId: id,
+              templateId: ssTmpl.id,
+              templateVersion: ssTmpl.version,
+              templateType: 'SPEC_SHEET',
+              templateName: ssTmpl.name,
+              fileUrl: ssTmpl.fileUrl ?? null,
+            });
+          }
+        }
+      });
+
+      // ── Phase 2: Traveler creation via established storage pipeline ───────────
+      // When a routing exists, delegate to storage.generateTravelerFromRouting so
+      // step-generation logic stays in one canonical place (avoids drift).
+      // When no routing was created, fall back to materialising from traveler template JSON.
+      let createdTravelerId: string | null = null;
+      const travelerTemplateId = selectedTemplateIds['traveler'] ?? null;
+
+      if (controls.travelerRequired) {
+        // Fetch the traveler template (for version stamping or JSON-fallback steps)
+        let travelerTmpl: (typeof productionControlTemplates.$inferSelect) | null = null;
+        if (travelerTemplateId) {
+          const [row] = await db
+            .select()
+            .from(productionControlTemplates)
+            .where(
+              and(
+                eq(productionControlTemplates.id, travelerTemplateId),
+                eq(productionControlTemplates.approvalStatus, 'APPROVED'),
+                eq(productionControlTemplates.templateType, 'TRAVELER'),
+              ),
+            )
+            .limit(1);
+          travelerTmpl = row ?? null;
+        }
+
+        if (createdRoutingId) {
+          // ── Primary path: reuse the established generateTravelerFromRouting pipeline
+          const generatedTraveler = await storage.generateTravelerFromRouting(createdRoutingId, {
+            quantity: wad.quantity ?? 1,
+            createdBy: user?.username ?? 'system',
+          });
+          // Link the traveler to the WAD
+          await storage.linkTravelerToProductionWorkOrder(generatedTraveler.id, wad.id);
+          createdTravelerId = generatedTraveler.id;
+
+          // Stamp traveler template traceability on the traveler if one was selected
+          if (travelerTmpl) {
+            await db
+              .update(travelers)
+              .set({
+                createdFromTemplateId: travelerTmpl.id,
+                createdFromTemplateVersion: travelerTmpl.version,
+              })
+              .where(eq(travelers.id, createdTravelerId));
+          }
+        } else if (travelerTmpl?.data) {
+          // ── Fallback: no routing — materialise steps directly from traveler template JSON
+          const travelerNumber = `T-${wad.workOrderNumber}-${Date.now().toString(36).toUpperCase()}`;
+          const [newTraveler] = await db
+            .insert(travelers)
+            .values({
+              travelerNumber,
+              partNumber: wad.partNumber,
+              partName: wad.description ?? wad.partNumber,
+              productionWorkOrderId: wad.id,
+              quantity: wad.quantity ?? 1,
+              status: 'DRAFT',
+              partRoutingId: null,
+              createdFromTemplateId: travelerTmpl.id,
+              createdFromTemplateVersion: travelerTmpl.version,
+              createdBy: user?.username ?? 'system',
+            })
+            .returning({ id: travelers.id, travelerNumber: travelers.travelerNumber });
+
+          createdTravelerId = newTraveler.id;
+
+          type TmplTask = { phase?: string; title: string; taskType?: string; instructions?: string };
+          type TmplStep = { departmentName: string; tasks?: TmplTask[] };
+          const travelerTmplData = travelerTmpl.data as { steps?: TmplStep[] };
+          const tmplSteps = travelerTmplData.steps ?? [];
+
+          for (let si = 0; si < tmplSteps.length; si++) {
+            const step = tmplSteps[si];
+            const [newStep] = await db
+              .insert(travelerSteps)
+              .values({
+                travelerId: newTraveler.id,
+                departmentName: step.departmentName,
+                stepNumber: si + 1,
+                status: 'NOT_STARTED',
+              })
+              .returning({ id: travelerSteps.id });
+
+            const stepTasks = step.tasks ?? [];
+            for (let ti = 0; ti < stepTasks.length; ti++) {
+              const task = stepTasks[ti];
+              await db.insert(travelerTasks).values({
+                travelerStepId: newStep.id,
+                taskType: task.taskType ?? 'GENERAL',
+                taskPhase: task.phase ?? 'WORK',
+                title: task.title,
+                instructions: task.instructions ?? null,
+                required: true,
+                sortOrder: ti,
+                status: 'NOT_STARTED',
+                templateSourceId: travelerTmpl.id,
+              });
+            }
+          }
+
+          provisionSummary.travelerStepsCreated = tmplSteps.length;
+        }
+
+        if (createdTravelerId) {
+          const [createdTravelerRow] = await db
+            .select({ id: travelers.id, travelerNumber: travelers.travelerNumber })
+            .from(travelers)
+            .where(eq(travelers.id, createdTravelerId))
+            .limit(1);
+          if (createdTravelerRow) {
+            provisionSummary.travelerId = createdTravelerRow.id;
+            provisionSummary.travelerNumber = createdTravelerRow.travelerNumber;
+            provisionSummary.artifacts.push({
+              type: 'traveler',
+              id: createdTravelerRow.id,
+              templateName: travelerTmpl?.name ?? null,
+              templateVersion: travelerTmpl?.version ?? null,
+            });
+          }
+
+          // ── Phase 3: QC checkpoint injection into traveler steps ─────────────
+          const qcTemplateId = selectedTemplateIds['qc'] ?? null;
+          if (qcTemplateId) {
+            const [qcTmpl] = await db
+              .select()
+              .from(productionControlTemplates)
+              .where(
+                and(
+                  eq(productionControlTemplates.id, qcTemplateId),
+                  eq(productionControlTemplates.approvalStatus, 'APPROVED'),
+                  eq(productionControlTemplates.templateType, 'QC'),
+                ),
+              )
+              .limit(1);
+
+            if (qcTmpl?.data) {
+              type QcCheckpoint = { title: string; type?: string; instructions?: string };
+              const qcData = qcTmpl.data as { checkpoints?: QcCheckpoint[] };
+              const checkpoints = qcData.checkpoints ?? [];
+
+              if (checkpoints.length > 0) {
+                const [qcStep] = await db
+                  .insert(travelerSteps)
+                  .values({
+                    travelerId: createdTravelerId,
+                    departmentName: 'QC',
+                    stepNumber: 999,
+                    status: 'NOT_STARTED',
+                  })
+                  .returning({ id: travelerSteps.id });
+
+                for (let i = 0; i < checkpoints.length; i++) {
+                  const cp = checkpoints[i];
+                  await db.insert(travelerTasks).values({
+                    travelerStepId: qcStep.id,
+                    taskType: cp.type ?? 'QC_CHECKPOINT',
+                    taskPhase: 'WORK',
+                    title: cp.title,
+                    instructions: cp.instructions ?? null,
+                    required: true,
+                    sortOrder: i,
+                    status: 'NOT_STARTED',
+                    templateSourceId: qcTmpl.id,
+                  });
+                }
+
+                provisionSummary.qcCheckpointsInjected = checkpoints.length;
+                provisionSummary.artifacts.push({
+                  type: 'qc_plan',
+                  id: qcStep.id,
+                  templateName: qcTmpl.name,
+                  templateVersion: qcTmpl.version,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // ── Final stamp: provisionedAt + summary ──────────────────────────────────
+      const [finalControls] = await db
+        .update(wadProductionControls)
+        .set({
+          provisionedAt: new Date(),
+          provisionSummary: provisionSummary as Record<string, unknown>,
+        })
+        .where(eq(wadProductionControls.workOrderId, id))
+        .returning();
+
+      return res.status(201).json({ controls: finalControls, provisionSummary });
+    } catch (err: unknown) {
+      console.error('[ProductionControls] provision error:', err);
+      return res.status(500).json({ error: 'Failed to provision production controls' });
+    }
+  },
 );
 
 async function generateWorkOrderFromPM(scheduleId: number, assetId?: string, userId?: number): Promise<any> {

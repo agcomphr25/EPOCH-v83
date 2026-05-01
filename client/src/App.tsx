@@ -187,6 +187,7 @@ import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from './pages/DocumentManagement';
 import RoutingDocumentManagement from './pages/RoutingDocumentManagement';
 import RoutingTemplates from './pages/RoutingTemplates';
+import TemplateLibraryPage from './pages/TemplateLibraryPage';
 import AnodizeJobs from './pages/AnodizeJobs';
 import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
@@ -1108,6 +1109,10 @@ function App() {
                   <Route
                     path="/routing-templates"
                     component={RoutingTemplates}
+                  />
+                  <Route
+                    path="/template-library"
+                    component={TemplateLibraryPage}
                   />
                   <Route
                     path="/anodize-jobs"

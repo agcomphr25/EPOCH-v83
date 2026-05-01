@@ -318,3 +318,32 @@ npx tsx server/scripts/phaseECostReconciliation.ts --from 2025-01-01 --to 2025-0
 
 ### Pre-requisites
 Sessions without `labor_allocations` rows (pre-dual-write historical data) show as `N/A` and are excluded from integrity checks. Run `npx tsx server/scripts/backfillLaborAllocations.ts` first to generate allocation rows for those sessions before running this report.
+
+## WAD Step 6 — AI + Template-Driven Production Control Wizard (Task #2027)
+
+### Overview
+A GPT-4o-backed production control wizard attached to WAD (Work Authorization Document) detail pages. It recommends routing, traveler, QC, and work instruction templates based on part type and production type, then runs a full provisioning pipeline.
+
+### New Tables (migration 0095)
+- `production_control_templates` — CRUD for ROUTING / TRAVELER / QC / WORK_INSTRUCTION / SPEC_SHEET templates with DRAFT → APPROVED → OBSOLETE lifecycle (four-eyes approval required)
+- `wad_production_controls` — persists the AI recommendation + operator overrides + provisioned artifacts JSON for each WAD
+
+### New Columns
+- `part_routings`: `created_from_template_id`, `created_from_template_version`
+- `travelers`: `created_from_template_id`, `created_from_template_version`
+- `traveler_tasks`: `template_source_id`
+
+### API Routes
+- `GET /api/production-control-templates` — list all templates
+- `POST /api/production-control-templates` — create (starts as DRAFT)
+- `GET /api/production-control-templates/:id` — fetch one
+- `PATCH /api/production-control-templates/:id` — update (DRAFT only)
+- `POST /api/production-control-templates/:id/approve` — approve (enforces different-user rule)
+- `POST /api/production-control-templates/:id/obsolete` — mark obsolete
+- `POST /api/work-orders/production/:id/production-controls/recommend` — AI recommendation (GPT-4o, no persistence)
+- `GET /api/work-orders/production/:id/production-controls` — fetch persisted controls
+- `POST /api/work-orders/production/:id/production-controls` — approve + run provisioning pipeline (routing → traveler → QC checkpoints → work instruction link); HIGH risk guard requires supervisor/admin role
+
+### Frontend Pages
+- `TemplateLibraryPage` (`/template-library`) — tabbed CRUD UI for all template types with approve/obsolete actions
+- `Step6ProductionControlCard` in `ProductionWorkOrderDetailPage` — AI recommendation panel, flag overrides via toggle switches, template selection dropdowns, "Approve & Generate" button, and provisioned summary read-only view

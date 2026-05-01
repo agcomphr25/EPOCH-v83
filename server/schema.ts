@@ -4912,6 +4912,9 @@ export const partRoutings = pgTable('part_routings', {
   preferredMachine: text('preferred_machine'), // Preferred CNC machine or workstation for this routing
   routingType: routingTypeEnum('routing_type').default('COMPOSITE').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
+  // Template traceability — stamped when created from a production control template
+  createdFromTemplateId: uuid('created_from_template_id'),
+  createdFromTemplateVersion: integer('created_from_template_version'),
   createdBy: text('created_by').notNull(), // Username who created routing
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -5415,6 +5418,10 @@ export const travelers = pgTable('travelers', {
   partRoutingId: varchar('part_routing_id', { length: 255 }),
   partRoutingRevision: integer('part_routing_revision'),
 
+  // Template traceability — stamped when created from a production control template
+  createdFromTemplateId: uuid('created_from_template_id'),
+  createdFromTemplateVersion: integer('created_from_template_version'),
+
   createdBy: varchar('created_by', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
@@ -5476,6 +5483,9 @@ export const travelerTasks = pgTable('traveler_tasks', {
   startedAt: timestamp('started_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   completedBy: varchar('completed_by', { length: 255 }),
+
+  // Template traceability — set when checkpoint injected from QC template
+  templateSourceId: uuid('template_source_id'),
 }, (table) => ({
   stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
   taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
@@ -16681,3 +16691,130 @@ export type InventoryAuditSettings = typeof inventoryAuditSettings.$inferSelect;
 export type InsertInventoryAuditSettings = z.infer<typeof insertInventoryAuditSettingsSchema>;
 export type InventoryAuditRecord = typeof inventoryAuditRecords.$inferSelect;
 export type InsertInventoryAuditRecord = z.infer<typeof insertInventoryAuditRecordSchema>;
+
+// ---------------------------------------------------------------------------
+// Production Control Templates — WAD Step 6
+// ---------------------------------------------------------------------------
+
+export const productionControlTemplateTypeEnum = pgEnum('production_control_template_type', [
+  'ROUTING', 'TRAVELER', 'QC', 'WORK_INSTRUCTION', 'SPEC_SHEET',
+]);
+
+export const productionControlApprovalStatusEnum = pgEnum('production_control_approval_status', [
+  'DRAFT', 'APPROVED', 'OBSOLETE',
+]);
+
+export const wadRiskLevelEnum = pgEnum('wad_risk_level', ['LOW', 'MEDIUM', 'HIGH']);
+
+export const productionControlTemplates = pgTable('production_control_templates', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  name: text('name').notNull(),
+  templateType: productionControlTemplateTypeEnum('template_type').notNull(),
+  routingType: text('routing_type'),
+  version: integer('version').notNull().default(1),
+  isActive: boolean('is_active').notNull().default(true),
+  approvalStatus: productionControlApprovalStatusEnum('approval_status').notNull().default('DRAFT'),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  approvedByUserId: integer('approved_by_user_id'),
+  data: jsonb('data'),
+  fileUrl: text('file_url'),
+  createdBy: text('created_by').notNull(),
+  createdByUserId: integer('created_by_user_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  typeStatusIdx: index('pct_type_status_idx').on(table.templateType, table.approvalStatus),
+  approvalStatusIdx: index('pct_approval_status_idx').on(table.approvalStatus),
+}));
+
+export const insertProductionControlTemplateSchema = createInsertSchema(productionControlTemplates).omit({
+  id: true,
+  createdAt: true,
+  approvedAt: true,
+}).extend({
+  name: z.string().min(1, 'Name is required'),
+  templateType: z.enum(['ROUTING', 'TRAVELER', 'QC', 'WORK_INSTRUCTION', 'SPEC_SHEET']),
+  routingType: z.string().optional().nullable(),
+  version: z.number().int().positive().default(1),
+  isActive: z.boolean().default(true),
+  approvalStatus: z.enum(['DRAFT', 'APPROVED', 'OBSOLETE']).default('DRAFT'),
+  approvedBy: z.string().optional().nullable(),
+  approvedByUserId: z.number().int().optional().nullable(),
+  data: z.any().optional().nullable(),
+  fileUrl: z.string().optional().nullable(),
+  createdBy: z.string().min(1),
+  createdByUserId: z.number().int().optional().nullable(),
+});
+
+export type ProductionControlTemplate = typeof productionControlTemplates.$inferSelect;
+export type InsertProductionControlTemplate = z.infer<typeof insertProductionControlTemplateSchema>;
+
+// ---------------------------------------------------------------------------
+// WAD Production Controls — persisted controls + provision record per WAD
+// ---------------------------------------------------------------------------
+
+export const wadProductionControls = pgTable('wad_production_controls', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: uuid('work_order_id').notNull().references(() => productionWorkOrders.id, { onDelete: 'cascade' }),
+  partType: text('part_type').notNull(),
+  productionType: text('production_type').notNull(),
+  routingRequired: boolean('routing_required').notNull().default(false),
+  travelerRequired: boolean('traveler_required').notNull().default(false),
+  workInstructionRequired: boolean('work_instruction_required').notNull().default(false),
+  specSheetRequired: boolean('spec_sheet_required').notNull().default(false),
+  finalQcOnly: boolean('final_qc_only').notNull().default(false),
+  inProcessInspectionRequired: boolean('in_process_inspection_required').notNull().default(false),
+  spotCheckPlanRequired: boolean('spot_check_plan_required').notNull().default(false),
+  certRequired: boolean('cert_required').notNull().default(false),
+  aiReason: text('ai_reason'),
+  aiConfidenceScore: numeric('ai_confidence_score', { precision: 3, scale: 2 }),
+  aiRiskLevel: wadRiskLevelEnum('ai_risk_level'),
+  selectedTemplateIds: jsonb('selected_template_ids'),
+  provisionedAt: timestamp('provisioned_at', { withTimezone: true }),
+  provisionSummary: jsonb('provision_summary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  workOrderUniqueIdx: uniqueIndex('wad_production_controls_work_order_unique').on(table.workOrderId),
+}));
+
+export const insertWadProductionControlsSchema = createInsertSchema(wadProductionControls).omit({
+  id: true,
+  createdAt: true,
+  provisionedAt: true,
+}).extend({
+  workOrderId: z.string().uuid(),
+  partType: z.string().min(1),
+  productionType: z.string().min(1),
+  routingRequired: z.boolean().default(false),
+  travelerRequired: z.boolean().default(false),
+  workInstructionRequired: z.boolean().default(false),
+  specSheetRequired: z.boolean().default(false),
+  finalQcOnly: z.boolean().default(false),
+  inProcessInspectionRequired: z.boolean().default(false),
+  spotCheckPlanRequired: z.boolean().default(false),
+  certRequired: z.boolean().default(false),
+  aiReason: z.string().optional().nullable(),
+  aiConfidenceScore: z.string().optional().nullable(),
+  aiRiskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().nullable(),
+  selectedTemplateIds: z.any().optional().nullable(),
+});
+
+export type WadProductionControls = typeof wadProductionControls.$inferSelect;
+export type InsertWadProductionControls = z.infer<typeof insertWadProductionControlsSchema>;
+
+// ---------------------------------------------------------------------------
+// WAD Document Links — per-artifact traceability for WI, spec sheets, QC, etc.
+// ---------------------------------------------------------------------------
+
+export const wadDocumentLinks = pgTable('wad_document_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: uuid('work_order_id').notNull().references(() => productionWorkOrders.id, { onDelete: 'cascade' }),
+  templateId: uuid('template_id').notNull(),
+  templateVersion: integer('template_version').notNull().default(1),
+  templateType: text('template_type').notNull(),
+  templateName: text('template_name').notNull(),
+  fileUrl: text('file_url'),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).default(sql`now()`),
+});
+
+export type WadDocumentLink = typeof wadDocumentLinks.$inferSelect;

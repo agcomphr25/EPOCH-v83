@@ -1387,6 +1387,12 @@ export default function Navigation() {
       description: 'Shop floor decision surface — WADs grouped by priority: blocked, at risk, ready, in progress, and late',
     },
     {
+      path: '/template-library',
+      label: 'Template Library',
+      icon: BookOpen,
+      description: 'Manage approved routing, traveler, QC, and work instruction templates for WAD Step 6',
+    },
+    {
       path: '/cutting-control-center',
       label: 'Cutting Table Control Center',
       icon: Scissors,

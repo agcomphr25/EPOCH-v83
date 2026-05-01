@@ -138,7 +138,7 @@ router.get('/managers', h(async (_req, res) => {
 router.get('/projects', h(async (_req, res) => {
   const result = await pool.query<ProjectRow>(`
     SELECT
-      p.id,
+      p.id::text AS "id",
       p.project_code AS "projectCode",
       p.project_name AS "projectName",
       p.status,

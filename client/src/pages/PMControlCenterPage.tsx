@@ -1050,12 +1050,12 @@ export default function PMControlCenterPage() {
 
   // Clear selection if the selected project is no longer visible in the filtered list
   useEffect(() => {
-    if (selectedProjectId && filteredProjects.length > 0 && !filteredProjects.find(p => p.id === selectedProjectId)) {
+    if (selectedProjectId && filteredProjects.length > 0 && !filteredProjects.find(p => String(p.id) === selectedProjectId)) {
       handleProjectChange('');
     }
   }, [filteredProjects, selectedProjectId]);
 
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
+  const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -1084,7 +1084,7 @@ export default function PMControlCenterPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {filteredProjects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
+                    <SelectItem key={p.id} value={String(p.id)}>
                       <span className="font-mono font-medium">{p.projectCode}</span>
                       <span className="text-muted-foreground ml-2">{p.projectName}</span>
                     </SelectItem>

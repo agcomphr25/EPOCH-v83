@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, and, asc, desc, ilike, notInArray, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, notInArray, sql, or } from 'drizzle-orm';
 import { auditService } from '../services/auditService';
 import { requirePermission } from '../../middleware/requirePermission';
 import { validateActionToken } from '../../middleware/actionToken';
@@ -29,6 +29,7 @@ import {
   inventoryItems,
   manufacturingQueue,
   productionWorkOrders,
+  cuttingBuiltPackets,
   getSupplySourceDashboard,
   supplySourceDashboardToLegacyDept,
 } from '../../schema';
@@ -2157,6 +2158,57 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       }
     }
 
+    // Pre-flight: for TRACE/TRACEABILITY tasks that include a packet barcode, validate the
+    // barcode exists in cutting_built_packets and write the allocatedToOrder link NOW — before
+    // any traveler_task_fields rows are written.  Returning 422 here ensures no field data is
+    // persisted when the barcode is unresolvable (AS9100 traceability defect guard).
+    if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
+      const preFlightFV = fieldValues || {};
+      const preFlightBarcode = preFlightFV['packetBarcode'] || preFlightFV['packet_barcode'] || '';
+      if (preFlightBarcode) {
+        const packetRecord = await db.query.cuttingBuiltPackets.findFirst({
+          where: eq(cuttingBuiltPackets.barcode, preFlightBarcode),
+        });
+
+        if (!packetRecord) {
+          console.warn(`[Packet Allocation] Packet barcode "${preFlightBarcode}" not found in cutting_built_packets — rejecting task ${taskId} completion (traveler ${travelerId})`);
+          return res.status(422).json({
+            error: `Packet barcode "${preFlightBarcode}" was not found in the cutting packet inventory. Verify the barcode is correct and that the packet has been built at the cutting table.`,
+            code: 'PACKET_BARCODE_NOT_FOUND',
+            packetBarcode: preFlightBarcode,
+          });
+        }
+
+        // Write allocatedToOrder if the packet exists and is not yet allocated.
+        if (traveler.serialNumber) {
+          // Primary: match by serialNumber.  Fallback: match by travelerBarcode for cases
+          // where the physical traveler barcode is stored as the serial number on the P2 item.
+          const p2Item = await db.query.p2SerializedItems.findFirst({
+            where: or(
+              ilike(p2SerializedItems.serialNumber, traveler.serialNumber),
+              ilike(p2SerializedItems.travelerBarcode, traveler.serialNumber),
+            ),
+          });
+
+          if (p2Item) {
+            if (!packetRecord.allocatedToOrder) {
+              const allocationTarget = p2Item.barcode || p2Item.serialNumber;
+              await db.update(cuttingBuiltPackets)
+                .set({ allocatedToOrder: allocationTarget, updatedAt: new Date() })
+                .where(eq(cuttingBuiltPackets.id, packetRecord.id));
+              console.log(`[Packet Allocation] Allocated cutting packet "${preFlightBarcode}" → "${allocationTarget}" (traveler ${travelerId})`);
+            } else {
+              console.log(`[Packet Allocation] Packet "${preFlightBarcode}" already allocated to "${packetRecord.allocatedToOrder}" — skipping overwrite`);
+            }
+          } else {
+            console.warn(`[Packet Allocation] No P2 serialized item found for serial number "${traveler.serialNumber}" (traveler ${travelerId}) — allocatedToOrder not set`);
+          }
+        } else {
+          console.warn(`[Packet Allocation] Traveler ${travelerId} has no serialNumber — cannot resolve P2 item for packet allocation`);
+        }
+      }
+    }
+
     const fields = await storage.getTravelerTaskFields(taskId);
     if (fields.length > 0) {
       const resolvedFieldValues = fieldValues || {};
@@ -2200,6 +2252,8 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       const resolvedFV = fieldValues || {};
       const packetBarcodeValue = resolvedFV['packetBarcode'] || resolvedFV['packet_barcode'] || '';
       if (packetBarcodeValue) {
+        // Note: packet existence guard and allocatedToOrder write run in the pre-flight
+        // block before the field-save loop above, so we know the packet is valid here.
         const existingFields = await storage.getTravelerTaskFields(taskId);
         const existingFieldKeys = new Set(existingFields.map((f: any) => f.fieldKey));
         const dynamicPacketFields = [

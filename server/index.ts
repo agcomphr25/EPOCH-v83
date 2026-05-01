@@ -1453,6 +1453,62 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Cutting packet traceability migration skipped:', cpTErr.message);
       }
 
+      // One-time backfill: restore allocatedToOrder on cutting_built_packets for historical Layup task completions.
+      // Finds all traveler_task_fields with fieldKey IN ('packetBarcode','packet_barcode'), resolves the
+      // traveler → P2 serialized item, and sets cutting_built_packets.allocated_to_order when it is currently NULL.
+      // Idempotent: rows with an existing allocatedToOrder are never overwritten.
+      // AS9100 evidence: each backfilled record is logged with the packet barcode and allocation target.
+      try {
+        const { sql: sqlBf } = await import('drizzle-orm');
+        const backfillResult = await pool.query(`
+          WITH packet_fields AS (
+            SELECT
+              ttf.value               AS packet_barcode,
+              t.id                    AS traveler_id,
+              t.serial_number         AS serial_number
+            FROM traveler_task_fields ttf
+            JOIN traveler_tasks       tt  ON tt.id  = ttf.traveler_task_id
+            JOIN traveler_steps       ts  ON ts.id  = tt.traveler_step_id
+            JOIN travelers            t   ON t.id   = ts.traveler_id
+            WHERE ttf.field_key IN ('packetBarcode', 'packet_barcode')
+              AND ttf.value IS NOT NULL
+              AND ttf.value <> ''
+          ),
+          with_p2 AS (
+            SELECT
+              pf.packet_barcode,
+              pf.traveler_id,
+              COALESCE(p2.barcode, p2.serial_number) AS allocation_target
+            FROM packet_fields pf
+            JOIN p2_serialized_items p2
+              ON (
+                LOWER(p2.serial_number) = LOWER(pf.serial_number)
+                OR LOWER(p2.traveler_barcode) = LOWER(pf.serial_number)
+              )
+            WHERE pf.serial_number IS NOT NULL
+          )
+          UPDATE cutting_built_packets cbp
+          SET
+            allocated_to_order = w.allocation_target,
+            updated_at = NOW()
+          FROM with_p2 w
+          WHERE cbp.barcode = w.packet_barcode
+            AND (cbp.allocated_to_order IS NULL OR cbp.allocated_to_order = '')
+          RETURNING cbp.barcode, cbp.allocated_to_order
+        `);
+        const backfilledRows = backfillResult.rows || [];
+        if (backfilledRows.length > 0) {
+          console.log(`✅ Packet allocation backfill: restored ${backfilledRows.length} allocatedToOrder link(s) — AS9100 traceability restored`);
+          backfilledRows.forEach((r: any) => {
+            console.log(`  [Packet Allocation Backfill] "${r.barcode}" → "${r.allocated_to_order}"`);
+          });
+        } else {
+          console.log('✅ Packet allocation backfill: no unallocated historical packet fields found — already up-to-date');
+        }
+      } catch (packetBfErr: any) {
+        console.warn('⚠️ Packet allocation backfill skipped:', packetBfErr.message);
+      }
+
       // Ensure p2_shipping_audit_log table exists (CMMC/DCAA compliant shipping override history)
       try {
         const { sql: sqlP2Audit } = await import('drizzle-orm');

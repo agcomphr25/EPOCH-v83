@@ -161,6 +161,7 @@ import tkDashboardRoutes from './timekeeping/dashboard';
 import tkDailyCertificationRoutes from './timekeeping/daily-certification';
 import tkTimeOffRoutes from './timekeeping/timeoff';
 import tkSalariedTimesheetsRoutes from './timekeeping/salariedTimesheets';
+import tkLaborEntryDraftsRoutes from './timekeeping/laborEntryDrafts';
 import tkLaborApprovalsRoutes from './timekeeping/laborApprovals';
 import tkLaborCaptureRoutes from './timekeeping/laborCapture';
 import tkCorrectionsRoutes from './timekeeping/corrections';
@@ -345,6 +346,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/timekeeping', tkTimeOffRoutes);
   // Tier 4 — Salaried timesheet system (Phase 1: read-only, feature-flagged)
   app.use('/api/timekeeping', tkSalariedTimesheetsRoutes);
+  // Tier 4b — Salaried manual draft time entry (Phase 3, feature-flagged)
+  app.use('/api/timekeeping', tkLaborEntryDraftsRoutes);
   app.use('/api/timekeeping', tkLaborApprovalsRoutes);
   // Tier 5 — Labor Capture AI Suggestion engine (Phase B Prompt 1)
   app.use('/api/timekeeping', tkLaborCaptureRoutes);

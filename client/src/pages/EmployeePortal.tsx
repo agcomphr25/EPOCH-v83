@@ -292,6 +292,12 @@ export default function EmployeePortal() {
 
   const isSalariedEmployee = employee?.payType?.toUpperCase() === 'SALARY';
 
+  const { data: draftFeatureFlagData } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/timekeeping/labor-entry-drafts/feature-enabled'],
+    staleTime: 5 * 60 * 1000,
+  });
+  const draftFeatureEnabled = draftFeatureFlagData?.enabled === true;
+
   const { data: salariedTimesheetView, isLoading: salariedLoading } =
     useQuery<SalariedTimesheetView>({
       queryKey: ['/api/timekeeping/salaried-timesheet', portalId, currentWeekStart],
@@ -863,32 +869,52 @@ export default function EmployeePortal() {
           <div className="mb-8">
             <Card className="bg-white/80 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <ClipboardList className="w-5 h-5 text-indigo-600" />
-                  <span>Salaried Timesheet</span>
-                  {salariedTimesheetView && (() => {
-                    const s = salariedTimesheetView.timesheet.status;
-                    const colors: Record<string, string> = {
-                      OPEN: 'bg-blue-100 text-blue-700',
-                      REOPENED: 'bg-orange-100 text-orange-700',
-                      SUBMITTED: 'bg-yellow-100 text-yellow-800',
-                      SUPERVISOR_APPROVED: 'bg-purple-100 text-purple-800',
-                      PAYROLL_APPROVED: 'bg-green-100 text-green-800',
-                    };
-                    return (
-                      <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${colors[s] ?? 'bg-gray-100 text-gray-700'}`}>
-                        {s.replace('_', ' ')}
-                      </span>
-                    );
-                  })()}
-                </CardTitle>
-                <CardDescription>
-                  Week of {currentWeekStart} — {(() => {
-                    const d = new Date(currentWeekStart);
-                    d.setDate(d.getDate() + 6);
-                    return d.toISOString().slice(0, 10);
-                  })()}
-                </CardDescription>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="flex items-center space-x-2">
+                      <ClipboardList className="w-5 h-5 text-indigo-600" />
+                      <span>Salaried Timesheet</span>
+                      {salariedTimesheetView && (() => {
+                        const s = salariedTimesheetView.timesheet.status;
+                        const colors: Record<string, string> = {
+                          OPEN: 'bg-blue-100 text-blue-700',
+                          REOPENED: 'bg-orange-100 text-orange-700',
+                          SUBMITTED: 'bg-yellow-100 text-yellow-800',
+                          SUPERVISOR_APPROVED: 'bg-purple-100 text-purple-800',
+                          PAYROLL_APPROVED: 'bg-green-100 text-green-800',
+                        };
+                        return (
+                          <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${colors[s] ?? 'bg-gray-100 text-gray-700'}`}>
+                            {s.replace('_', ' ')}
+                          </span>
+                        );
+                      })()}
+                    </CardTitle>
+                    <CardDescription>
+                      Week of {currentWeekStart} — {(() => {
+                        const d = new Date(currentWeekStart);
+                        d.setDate(d.getDate() + 6);
+                        return d.toISOString().slice(0, 10);
+                      })()}
+                    </CardDescription>
+                  </div>
+                  {portalId && draftFeatureEnabled && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Link href={`/employee-portal/${portalId}/drafts`}>
+                        <button className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
+                          <ClipboardList className="w-3 h-3" />
+                          My Drafts
+                        </button>
+                      </Link>
+                      <Link href={`/employee-portal/${portalId}/time-entry`}>
+                        <button className="inline-flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 transition-colors">
+                          <Plus className="w-3 h-3" />
+                          Enter Time
+                        </button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {salariedLoading ? (

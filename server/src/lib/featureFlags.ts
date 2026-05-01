@@ -26,3 +26,11 @@ export const laborAllocationsEnabled: boolean = envBool('LABOR_ALLOCATIONS_ENABL
  * Set USE_ALLOCATION_COSTING_READ=true to enable.
  */
 export const useAllocationCostingRead: boolean = envBool('USE_ALLOCATION_COSTING_READ', false);
+
+/**
+ * Gates the salaried manual draft time entry UI and API.
+ * When ON, salaried employees can create/edit/confirm labor_entry_drafts records
+ * via the employee portal without touching the hourly punch_ledger flow.
+ * Set SALARIED_DRAFT_ENTRY_ENABLED=true to enable.
+ */
+export const salariedDraftEntryEnabled: boolean = envBool('SALARIED_DRAFT_ENTRY_ENABLED', false);

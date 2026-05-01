@@ -68,6 +68,8 @@ import AssetDashboardPage from './pages/AssetDashboardPage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import KioskPage from './pages/timekeeping/KioskPage';
 import TimeClockAdminPage from './pages/timekeeping/TimeClockAdminPage';
+import SalariedTimeEntryPage from './pages/timekeeping/SalariedTimeEntryPage';
+import SalariedDraftListPage from './pages/timekeeping/SalariedDraftListPage';
 import Module8TestPage from './pages/Module8TestPage';
 import CommunicationInboxPage from './pages/CommunicationInboxPage';
 import MarketingCommunications from './pages/MarketingCommunications';
@@ -779,6 +781,18 @@ function App() {
                   <Route
                     path="/employee-portal/:portalId"
                     component={EmployeePortal}
+                  />
+                  <Route
+                    path="/employee-portal/:portalId/drafts"
+                    component={SalariedDraftListPage}
+                  />
+                  <Route
+                    path="/employee-portal/:portalId/time-entry/:draftId"
+                    component={SalariedTimeEntryPage}
+                  />
+                  <Route
+                    path="/employee-portal/:portalId/time-entry"
+                    component={SalariedTimeEntryPage}
                   />
                   <Route
                     path="/employee-dashboard"

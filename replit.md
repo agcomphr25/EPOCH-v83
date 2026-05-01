@@ -30,6 +30,35 @@ Both hourly and salaried timesheets now require explicit employee certification 
 - **Cert cleared on reopen**: `rejectTimesheet` (hourly) and the salaried reopen endpoint clear `certificationStatement`, `certificationVersion`, `certifiedAt`, and `certifiedBy`.
 - **Schema**: `timesheets` table has `certifiedByUserId`, `certificationStatement`, `certificationVersion` columns; `salaried_timesheets` has `certificationStatement`, `certificationVersion` columns (plus existing `certifiedAt`/`certifiedBy`). Inline `ALTER TABLE … IF NOT EXISTS` migration blocks added to `server/index.ts`.
 
+## Salaried Manual Draft Time Entry — Phase 3 (Task #1991)
+
+Salaried employees can now manually enter time segments via the employee portal into a `labor_entry_drafts` intermediary layer before anything touches `punch_ledger` or `labor_allocations`.
+
+**Feature flag**: `SALARIED_DRAFT_ENTRY_ENABLED=true` (defaults to `false`). All API endpoints and the UI gate on this flag.
+
+**API routes** (`server/src/routes/timekeeping/laborEntryDrafts.ts`, mounted at `/api/timekeeping`):
+- `POST /labor-entry-drafts/portal/:portalId` — create a new DRAFT
+- `GET /labor-entry-drafts/portal/:portalId` — list drafts (default: current week; query `?from=&to=` for custom range)
+- `GET /labor-entry-drafts/portal/:portalId/:id` — fetch single draft
+- `PATCH /labor-entry-drafts/portal/:portalId/:id` — update segments on a DRAFT/NEEDS_REVIEW draft
+- `POST /labor-entry-drafts/portal/:portalId/:id/confirm` — validate and move to CONFIRMED
+- `GET /labor-entry-drafts/portal/:portalId/charge-codes` — active DIRECT charge codes
+- `GET /labor-entry-drafts/portal/:portalId/indirect-codes` — active indirect codes
+
+**Confirm validation** (server-side, fail → NEEDS_REVIEW + `validation_errors_json`):
+1. Each segment: start < end, duration > 0, one of chargeCodeId OR indirectCodeId (not both, not neither), indirect code must be active and have a chargeCodeId mapping.
+2. No overlapping time ranges within the draft.
+3. Entry date not within a PAYROLL_APPROVED salaried timesheet period.
+4. Entry date has no locked salaried_timesheet_lines for this employee.
+
+**UI pages**:
+- `client/src/pages/timekeeping/SalariedDraftListPage.tsx` → `/employee-portal/:portalId/drafts` — weekly draft list with status badges (Draft, Needs Review, Ready to Submit, Submitted), week navigation, link to edit each entry.
+- `client/src/pages/timekeeping/SalariedTimeEntryPage.tsx` → `/employee-portal/:portalId/time-entry` (new) and `/employee-portal/:portalId/time-entry/:draftId` (edit) — date picker, multi-segment rows (start/end time, charge/indirect code dropdown, notes, remove), running total, Save Draft + Submit buttons, inline validation error display.
+
+**Navigation**: "Enter Time" and "My Drafts" buttons added to the salaried timesheet card in `client/src/pages/EmployeePortal.tsx` for `SALARY` pay-type employees.
+
+**Data requirements**: Portal employee must have both a `timekeeping.employees` record (linked via `epochEmployeeId`) and a `users` record (linked via `users.employeeId`) for `createdBy` FK. Returns a 403 with a clear message if either is missing.
+
 ## WAD-Based Labor Charging Enforcement (Task #1235 — Phase 1 WARN)
 
 When a technician starts a traveler step or clocks in via a traveler barcode, the system now:

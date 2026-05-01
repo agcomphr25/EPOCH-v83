@@ -1,8 +1,8 @@
 import { db } from "../../../db";
 import { pool } from "../../../db";
-import { timesheetsTable, punchesTable } from "../../schema/timekeeping";
-import { eq, and, gte, lte, isNull, or } from "drizzle-orm";
-import type { Timesheet } from "../../schema/timekeeping";
+import { timesheetsTable, punchesTable, salariedTimesheetsTable } from "../../schema/timekeeping";
+import { eq, and, gte, lte, isNull, isNotNull, or } from "drizzle-orm";
+import type { Timesheet, SalariedTimesheet } from "../../schema/timekeeping";
 import { listResolvedEmployees, resolveByTimekeepingId } from "../../lib/timekeepingEmployeeResolver";
 import {
   computeHoursFromPunches,
@@ -802,6 +802,42 @@ export async function findFinalizedTimesheetForPunch(
         lte(timesheetsTable.periodStart, dateStr),
         gte(timesheetsTable.periodEnd, dateStr)
       )
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
+/**
+ * Check whether the given entry date falls inside a PAYROLL_APPROVED salaried timesheet
+ * for the given public employee id.  A salaried timesheet is payroll-approved when
+ * payroll_approved_at IS NOT NULL.
+ *
+ * Used to block admin edits/deletes of SALARIED_ENTRY punch_ledger rows and to block
+ * retroactive posting of labor entry drafts into already-approved periods.
+ *
+ * @param publicEmployeeId  public.employees.id
+ * @param entryDate         any value that can be converted to a YYYY-MM-DD string
+ */
+export async function findPayrollApprovedSalariedTimesheetForPunch(
+  publicEmployeeId: number,
+  entryDate: Date | string,
+): Promise<SalariedTimesheet | null> {
+  const dateStr =
+    entryDate instanceof Date
+      ? entryDate.toISOString().slice(0, 10)
+      : String(entryDate).slice(0, 10);
+
+  const [row] = await db
+    .select()
+    .from(salariedTimesheetsTable)
+    .where(
+      and(
+        eq(salariedTimesheetsTable.employeeId, publicEmployeeId),
+        isNotNull(salariedTimesheetsTable.payrollApprovedAt),
+        lte(salariedTimesheetsTable.periodStart, dateStr),
+        gte(salariedTimesheetsTable.periodEnd, dateStr),
+      ),
     )
     .limit(1);
 

@@ -10,11 +10,12 @@ import {
 } from "../../lib/timekeeping-zod";
 import { db as nativeDb } from "../../../db";
 import { chargeCodes, employees, auditEvents, users, kioskPinRateLimits } from "../../../schema";
+import { salariedTimesheetAuditTable } from "../../schema/timekeeping";
 import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
-import { findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod } from "../../services/timekeeping/timesheets.service";
+import { findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
 import { checkActivePTOForEmployee } from "../../services/timekeeping/timeoff.service";
 import { authenticateToken, requireRole, optionalAuth } from "../../../middleware/auth";
 import * as ledger from "../../lib/punchLedger";
@@ -1017,6 +1018,34 @@ const handleAdminPunchUpdate = h(async (req: Request, res: Response): Promise<vo
     return;
   }
 
+  if (existing.source === "SALARIED_ENTRY") {
+    const salariedLockedSheet = await findPayrollApprovedSalariedTimesheetForPunch(
+      existing.employeeId,
+      new Date(existing.clockIn),
+    );
+    if (salariedLockedSheet) {
+      await nativeDb.insert(salariedTimesheetAuditTable).values({
+        timesheetId: salariedLockedSheet.id,
+        lineId: null,
+        action: "EDIT_BLOCKED_PAYROLL_APPROVED",
+        actorId: (req.user as { id?: number } | undefined)?.id ?? null,
+        actorName: actorFromUser(req.user ?? null, req.ip ?? null).email ?? null,
+        actorRole: actorFromUser(req.user ?? null, req.ip ?? null).role ?? null,
+        beforeState: null,
+        afterState: { punchLedgerId: p.data.id },
+        reason: "Admin punch edit blocked: timesheet PAYROLL_APPROVED",
+        source: "ADMIN_PUNCH_EDIT",
+        ipAddress: req.ip ?? null,
+      });
+      res.status(409).json({
+        error: `[DCAA TK-002] This salaried entry falls within PAYROLL_APPROVED timesheet #${salariedLockedSheet.id} ` +
+          `(${salariedLockedSheet.periodStart}–${salariedLockedSheet.periodEnd}) and cannot be edited directly. ` +
+          `Submit a correction request via the Corrections workflow for timesheet #${salariedLockedSheet.id}.`,
+      });
+      return;
+    }
+  }
+
   const resolvedChargeCodeId = body.data.chargeCodeId !== undefined ? body.data.chargeCodeId : undefined;
   const ts = new Date(body.data.punchedAt);
 
@@ -1112,6 +1141,35 @@ router.delete("/punches/:id", authenticateToken, requireRole('ADMIN', 'OWNER'), 
         `Submit a correction request via the Corrections workflow for timesheet #${lockedSheet.id}.`,
     });
     return;
+  }
+
+  if (existing.source === "SALARIED_ENTRY") {
+    const salariedLockedSheet = await findPayrollApprovedSalariedTimesheetForPunch(
+      existing.employeeId,
+      new Date(existing.clockIn),
+    );
+    if (salariedLockedSheet) {
+      const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+      await nativeDb.insert(salariedTimesheetAuditTable).values({
+        timesheetId: salariedLockedSheet.id,
+        lineId: null,
+        action: "EDIT_BLOCKED_PAYROLL_APPROVED",
+        actorId: (req.user as { id?: number } | undefined)?.id ?? null,
+        actorName: actor.email ?? null,
+        actorRole: actor.role ?? null,
+        beforeState: null,
+        afterState: { punchLedgerId: p.data.id },
+        reason: "Admin punch edit blocked: timesheet PAYROLL_APPROVED",
+        source: "ADMIN_PUNCH_DELETE",
+        ipAddress: req.ip ?? null,
+      });
+      res.status(409).json({
+        error: `[DCAA TK-002] This salaried entry falls within PAYROLL_APPROVED timesheet #${salariedLockedSheet.id} ` +
+          `(${salariedLockedSheet.periodStart}–${salariedLockedSheet.periodEnd}) and cannot be deleted directly. ` +
+          `Submit a correction request via the Corrections workflow for timesheet #${salariedLockedSheet.id}.`,
+      });
+      return;
+    }
   }
 
   await storage.deletePunchLedgerEntry(p.data.id);

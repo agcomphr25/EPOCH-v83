@@ -8,6 +8,8 @@
  *     clock_out = clock_in + total_hours, labor_class='REGULAR'.
  *   - One labor_allocations row per segment: source='SALARIED_ENTRY', status='CLOSED',
  *     allocation_start/end derived from entry_date + segment HH:MM times.
+ *     labor_class is derived per-segment from laborCategory via mapLaborCategoryToClass
+ *     (DIRECT→REGULAR, INDIRECT/ADMIN/etc.→INDIRECT, PTO→PTO).
  *   - Draft updated to status='POSTED', posted_at=now.
  *   - Audit record written to timekeeping.salaried_timesheet_audit.
  *
@@ -36,6 +38,7 @@ import {
   salariedTimesheetAuditTable,
 } from "../../schema/timekeeping";
 import { eq, and } from "drizzle-orm";
+import { findPayrollApprovedSalariedTimesheetForPunch } from "./timesheets.service";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,6 +67,7 @@ interface DraftSegment {
   chargeCodeId?: number | null;
   indirectCodeId?: number | null;
   notes?: string | null;
+  laborCategory?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +98,27 @@ function toUtcTimestamp(dateStr: string, timeStr: string): Date {
  */
 function segmentDurationHours(seg: DraftSegment): number {
   return (parseTimeToMinutes(seg.endTime) - parseTimeToMinutes(seg.startTime)) / 60;
+}
+
+/**
+ * Map a segment's laborCategory string to the canonical labor_class value
+ * stored in labor_allocations.
+ *
+ * - DIRECT                                                          → REGULAR
+ * - INDIRECT / ADMIN / G&A / MEETING / TRAINING / MAINTENANCE /
+ *   QUOTING / CUSTOMER_SERVICE / VENDOR_MANAGEMENT                  → INDIRECT
+ * - PTO                                                             → PTO
+ * - any unrecognised value                                          → REGULAR (safe default)
+ */
+function mapLaborCategoryToClass(laborCategory: string): string {
+  const upper = laborCategory.toUpperCase();
+  if (upper === "PTO") return "PTO";
+  const indirectCategories = new Set([
+    "INDIRECT", "ADMIN", "G&A", "MEETING", "TRAINING",
+    "MAINTENANCE", "QUOTING", "CUSTOMER_SERVICE", "VENDOR_MANAGEMENT",
+  ]);
+  if (indirectCategories.has(upper)) return "INDIRECT";
+  return "REGULAR";
 }
 
 /**
@@ -276,7 +301,11 @@ export async function postLaborEntryDraft(
   // ── 1. Pre-flight load (outside transaction) for fast idempotency path ───
   // This avoids an unnecessary transaction start when the draft is already POSTED.
   const [preflight] = await db
-    .select({ status: laborEntryDraftsTable.status })
+    .select({
+      status: laborEntryDraftsTable.status,
+      employeeId: laborEntryDraftsTable.employeeId,
+      entryDate: laborEntryDraftsTable.entryDate,
+    })
     .from(laborEntryDraftsTable)
     .where(eq(laborEntryDraftsTable.id, draftId))
     .limit(1);
@@ -307,6 +336,48 @@ export async function postLaborEntryDraft(
       ),
       { statusCode: 422 },
     );
+  }
+
+  // ── 1b. Payroll-approved period guard (before transaction starts) ────────
+  // Resolve the timekeeping employee → public employee id, then check whether
+  // the entry date falls inside a PAYROLL_APPROVED salaried timesheet period.
+  {
+    const [tkEmpPreflight] = await db
+      .select({ epochEmployeeId: employeesTable.epochEmployeeId })
+      .from(employeesTable)
+      .where(eq(employeesTable.id, preflight.employeeId))
+      .limit(1);
+
+    if (tkEmpPreflight?.epochEmployeeId != null) {
+      const lockedSheet = await findPayrollApprovedSalariedTimesheetForPunch(
+        tkEmpPreflight.epochEmployeeId,
+        preflight.entryDate as string,
+      );
+      if (lockedSheet) {
+        await db.insert(salariedTimesheetAuditTable).values({
+          timesheetId: lockedSheet.id,
+          lineId: null,
+          action: "POST_BLOCKED_PAYROLL_APPROVED",
+          actorId: postedByUserId,
+          actorName: null,
+          actorRole: null,
+          beforeState: null,
+          afterState: { draftId, entryDate: preflight.entryDate },
+          reason: `Labor entry draft ${draftId} post blocked: timesheet PAYROLL_APPROVED`,
+          source: "SALARIED_ENTRY",
+          ipAddress: null,
+        });
+        throw Object.assign(
+          new Error(
+            `[DCAA TK-003] Draft ${draftId} entry date (${preflight.entryDate}) falls within ` +
+            `PAYROLL_APPROVED salaried timesheet #${lockedSheet.id} ` +
+            `(${lockedSheet.periodStart}–${lockedSheet.periodEnd}). ` +
+            `Submit a correction request via the Corrections workflow for timesheet #${lockedSheet.id}.`,
+          ),
+          { statusCode: 409 },
+        );
+      }
+    }
   }
 
   // ── 2. Execute entire posting operation inside a transaction ────────────
@@ -486,7 +557,7 @@ export async function postLaborEntryDraft(
           projectId: null,
           department: null,
           operation: null,
-          laborClass: "REGULAR",
+          laborClass: mapLaborCategoryToClass(seg.laborCategory ?? "DIRECT"),
           status: "CLOSED",
           certificationStatus: null,
           isOverrun: false,

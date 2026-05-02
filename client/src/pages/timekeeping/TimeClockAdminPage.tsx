@@ -1049,7 +1049,11 @@ export default function TimeClockAdminPage() {
   });
 
   const [editPunch, setEditPunch] = useState<Punch | null>(null);
-  const [editPunchedAt, setEditPunchedAt] = useState('');
+  const [editEmployeeName, setEditEmployeeName] = useState('');
+  const [editPunchDate, setEditPunchDate] = useState('');
+  const [editPayDate, setEditPayDate] = useState('');
+  const [editPunchTime, setEditPunchTime] = useState('');
+  const [editPunchAmPm, setEditPunchAmPm] = useState<'AM' | 'PM'>('AM');
   const [editNote, setEditNote] = useState('');
   const [editCostCode, setEditCostCode] = useState('');
 
@@ -1079,7 +1083,11 @@ export default function TimeClockAdminPage() {
     onSuccess: () => {
       toast({ title: 'Punch updated', description: 'The punch has been corrected.' });
       setEditPunch(null);
-      setEditPunchedAt('');
+      setEditEmployeeName('');
+      setEditPunchDate('');
+      setEditPayDate('');
+      setEditPunchTime('');
+      setEditPunchAmPm('AM');
       setEditNote('');
       setEditCostCode('');
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches'] });
@@ -1091,13 +1099,24 @@ export default function TimeClockAdminPage() {
     }),
   });
 
-  function openEditPunch(p: Punch) {
+  function openEditPunch(p: Punch, employeeName?: string) {
     setEditPunch(p);
-    const parsed = p.punchedAt ? new Date(p.punchedAt) : null;
-    const local = parsed && !isNaN(parsed.getTime())
-      ? parsed.toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setEditPunchedAt(local);
+    setEditEmployeeName(employeeName ?? `Employee #${p.employeeId}`);
+    const parsed = p.punchedAt ? new Date(p.punchedAt) : new Date();
+    const dt = isNaN(parsed.getTime()) ? new Date() : parsed;
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const hours24 = dt.getHours();
+    const minutes = dt.getMinutes();
+    const ampm: 'AM' | 'PM' = hours24 >= 12 ? 'PM' : 'AM';
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+    const timeStr = `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    setEditPunchDate(dateStr);
+    setEditPayDate(dateStr);
+    setEditPunchTime(timeStr);
+    setEditPunchAmPm(ampm);
     setEditNote('');
     setEditCostCode(p.costCode ?? '');
   }
@@ -2040,7 +2059,7 @@ export default function TimeClockAdminPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => openEditPunch(p)}
+                                onClick={() => openEditPunch(p, empName)}
                               >
                                 <Edit2 className="h-3 w-3" />
                               </Button>
@@ -3166,25 +3185,78 @@ export default function TimeClockAdminPage() {
       </Dialog>
 
       {/* Edit Punch Dialog */}
-      <Dialog open={!!editPunch} onOpenChange={(o) => { if (!o) { setEditPunch(null); setEditCostCode(''); } }}>
+      <Dialog open={!!editPunch} onOpenChange={(o) => { if (!o) { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditNote(''); setEditCostCode(''); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Edit {editPunch?.type === 'clock_out' ? 'Clock-Out' : editPunch?.type === 'break_end' ? 'Break End' : editPunch?.type === 'break_start' ? 'Break Start' : 'Clock-In'} Time
+              {editPunch?.type === 'clock_out' ? 'Clock-Out' : editPunch?.type === 'break_end' ? 'Break End' : editPunch?.type === 'break_start' ? 'Break Start' : 'Clock-In'}
+              {editEmployeeName ? ` — ${editEmployeeName}` : ''}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
               An edit note is required for all punch corrections (DCAA audit trail). If you change the charge code, it must be in the active registry.
             </p>
+
+            {/* Punch Date */}
             <div className="space-y-1">
-              <Label>{(editPunch?.type === 'clock_out' || editPunch?.type === 'break_end') ? 'Clock-Out Time (local)' : 'Clock-In Time (local)'}</Label>
+              <Label>Punch Date</Label>
               <Input
-                type="datetime-local"
-                value={editPunchedAt}
-                onChange={e => setEditPunchedAt(e.target.value)}
+                type="date"
+                value={editPunchDate}
+                onChange={e => setEditPunchDate(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                If correcting a missed clock-out from the previous day, set Punch Date to yesterday.
+              </p>
             </div>
+
+            {/* Pay Date */}
+            <div className="space-y-1">
+              <Label>Pay Date</Label>
+              <Input
+                type="date"
+                value={editPayDate}
+                onChange={e => setEditPayDate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                The payroll period date this punch should count toward. Usually the same as Punch Date.
+              </p>
+            </div>
+
+            {/* Time */}
+            <div className="space-y-1">
+              <Label>Time</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  placeholder="hh:mm"
+                  value={editPunchTime}
+                  onChange={e => {
+                    let v = e.target.value.replace(/[^0-9:]/g, '');
+                    if (v.length === 2 && !v.includes(':') && editPunchTime.length === 1) v = v + ':';
+                    if (v.length > 5) v = v.slice(0, 5);
+                    setEditPunchTime(v);
+                  }}
+                  className="w-24"
+                  maxLength={5}
+                />
+                <Select value={editPunchAmPm} onValueChange={(v) => setEditPunchAmPm(v as 'AM' | 'PM')}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                </span>
+              </div>
+            </div>
+
+            {/* Charge Code */}
             <div className="space-y-1">
               <Label>Charge Code</Label>
               <Select value={editCostCode || '__none__'} onValueChange={(v) => setEditCostCode(v === '__none__' ? '' : v)}>
@@ -3208,6 +3280,8 @@ export default function TimeClockAdminPage() {
               </Select>
               <p className="text-xs text-muted-foreground">Only active charge codes are shown. Inactive codes will be rejected.</p>
             </div>
+
+            {/* Edit Note */}
             <div className="space-y-1">
               <Label>Edit Note <span className="text-red-500">*</span></Label>
               <Textarea
@@ -3220,24 +3294,40 @@ export default function TimeClockAdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditPunch(null); setEditCostCode(''); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditNote(''); setEditCostCode(''); }}>Cancel</Button>
             <Button
-              disabled={!editNote.trim() || !editPunchedAt || updatePunchMutation.isPending}
+              disabled={!editNote.trim() || !editPunchDate || !editPunchTime || !editPayDate || updatePunchMutation.isPending}
               onClick={() => {
                 if (!editPunch) return;
-                const parsedEdit = editPunchedAt ? new Date(editPunchedAt) : null;
-                if (!parsedEdit || isNaN(parsedEdit.getTime())) {
-                  toast({ title: 'Invalid date', description: 'Please enter a valid punch date and time.', variant: 'destructive' });
+                const timeMatch = editPunchTime.match(/^(\d{1,2}):(\d{2})$/);
+                if (!timeMatch) {
+                  toast({ title: 'Invalid time', description: 'Please enter a valid time in hh:mm format.', variant: 'destructive' });
                   return;
                 }
+                let hours = parseInt(timeMatch[1], 10);
+                const mins = parseInt(timeMatch[2], 10);
+                if (hours < 1 || hours > 12 || mins < 0 || mins > 59) {
+                  toast({ title: 'Invalid time', description: 'Please enter a valid 12-hour time.', variant: 'destructive' });
+                  return;
+                }
+                if (editPunchAmPm === 'AM') {
+                  if (hours === 12) hours = 0;
+                } else {
+                  if (hours !== 12) hours += 12;
+                }
+                const combinedIso = new Date(`${editPunchDate}T${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:00`).toISOString();
                 const resolvedChargeCodeId = editCostCode
                   ? (chargeCodes.find(cc => cc.code === editCostCode)?.id ?? null)
                   : null;
+                let finalNote = editNote.trim();
+                if (editPayDate && editPayDate !== editPunchDate) {
+                  finalNote = `${finalNote}\nPay Date: ${editPayDate}`;
+                }
                 updatePunchMutation.mutate({
                   id: editPunch.id,
                   punchType: editPunch.type,
-                  punchedAt: parsedEdit.toISOString(),
-                  note: editNote.trim(),
+                  punchedAt: combinedIso,
+                  note: finalNote,
                   chargeCodeId: resolvedChargeCodeId,
                 });
               }}

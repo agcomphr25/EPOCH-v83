@@ -10,6 +10,7 @@ import {
   Eye,
   Paperclip,
   FileText,
+  Pencil,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -186,6 +187,17 @@ export default function ARPaymentsPage() {
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploading, setReceiptUploading] = useState(false);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editPayment, setEditPayment] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<Omit<PaymentFormData, 'customerId'>>({
+    paymentDate: '',
+    paymentMethod: '',
+    referenceNumber: '',
+    amount: '',
+    notes: '',
+  });
+  const [editError, setEditError] = useState<string | null>(null);
 
   const { data: payments = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/ar-payments'],
@@ -434,6 +446,62 @@ export default function ARPaymentsPage() {
     },
   });
 
+  const editMutation = useMutation({
+    mutationFn: (data: { id: string } & Omit<PaymentFormData, 'customerId'>) =>
+      apiRequest(`/api/ar-payments/${data.id}`, {
+        method: 'PUT',
+        body: {
+          paymentDate: data.paymentDate,
+          paymentMethod: data.paymentMethod,
+          referenceNumber: data.referenceNumber || null,
+          amount: data.amount,
+          notes: data.notes || null,
+        },
+      }),
+    onSuccess: () => {
+      toast({ title: 'Payment updated' });
+      setEditDialogOpen(false);
+      setEditPayment(null);
+      setEditError(null);
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) && (
+            query.queryKey[0] === '/api/ar-payments' || query.queryKey[0] === '/api/ar-invoices'
+          ),
+      });
+    },
+    onError: (error: any) => {
+      setEditError(error.message || 'Failed to update payment');
+    },
+  });
+
+  const handleOpenEditDialog = (payment: any) => {
+    setEditPayment(payment);
+    setEditForm({
+      paymentDate: payment.paymentDate ? payment.paymentDate.split('T')[0] : '',
+      paymentMethod: payment.paymentMethod || '',
+      referenceNumber: payment.referenceNumber || '',
+      amount: payment.amount || '',
+      notes: payment.notes || '',
+    });
+    setEditError(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleSubmitEdit = () => {
+    if (!editPayment) return;
+    if (!editForm.paymentMethod) {
+      setEditError('Payment method is required.');
+      return;
+    }
+    if (!editForm.amount || parseFloat(editForm.amount) <= 0) {
+      setEditError('Amount must be greater than zero.');
+      return;
+    }
+    setEditError(null);
+    editMutation.mutate({ id: editPayment.id, ...editForm });
+  };
+
   const handleSubmitPayment = () => {
     if (!paymentForm.customerId) {
       toast({ title: 'Validation', description: 'Customer is required.', variant: 'destructive' });
@@ -663,6 +731,14 @@ export default function ARPaymentsPage() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleOpenEditDialog(payment)}
+                                    title="Edit payment"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -1066,6 +1142,94 @@ export default function ARPaymentsPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) { setEditPayment(null); setEditError(null); } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Payment</DialogTitle>
+            {editPayment && (
+              <DialogDescription>
+                {editPayment.customerName || editPayment.customerId} — editing payment details
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="space-y-4">
+            {editPayment && (
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-sm">Customer</Label>
+                <p className="text-sm font-medium">{editPayment.customerName || editPayment.customerId}</p>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Payment Date</Label>
+              <Input
+                type="date"
+                value={editForm.paymentDate}
+                onChange={(e) => setEditForm((f) => ({ ...f, paymentDate: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Payment Method</Label>
+              <Select
+                value={editForm.paymentMethod}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, paymentMethod: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Reference Number</Label>
+              <Input
+                value={editForm.referenceNumber}
+                onChange={(e) => setEditForm((f) => ({ ...f, referenceNumber: e.target.value }))}
+                placeholder="Check #, wire ref, etc."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.amount}
+                onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                placeholder="0.00"
+              />
+              {editPayment && parseFloat(editPayment.allocatedAmount || '0') > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Already allocated: {formatCurrency(editPayment.allocatedAmount)} — amount cannot go below this.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={editForm.notes}
+                onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="Optional notes..."
+                rows={2}
+              />
+            </div>
+            {editError && (
+              <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{editError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmitEdit} disabled={editMutation.isPending}>
+              {editMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

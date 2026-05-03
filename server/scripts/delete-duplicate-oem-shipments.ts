@@ -28,12 +28,14 @@ const KEEP_IDS = [
 ];
 
 async function run() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
+  const connectionString =
+    process.env.FORCE_DATABASE_URL ||
+    process.env.DATABASE_URL;
+  if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is required');
   }
 
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool = new Pool({ connectionString });
   const client = await pool.connect();
 
   try {

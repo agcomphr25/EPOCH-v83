@@ -1,3 +1,10 @@
+console.log("=== ENV DEBUG START ===");
+console.log("DATABASE_URL:", process.env.DATABASE_URL);
+console.log("PGHOST:", process.env.PGHOST);
+console.log("PGUSER:", process.env.PGUSER);
+console.log("PGDATABASE:", process.env.PGDATABASE);
+console.log("=== ENV DEBUG END ===");
+
 import express, { type Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';

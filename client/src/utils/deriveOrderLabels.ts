@@ -60,11 +60,15 @@ const MATERIAL_PREFIX_MAP: Record<string, string> = {
   fg_: 'Fiberglass',
   m1a_: 'M1A',
   apr_: 'APR',
-  mesa_: 'Fiberglass',
 };
 
 function deriveMaterial(order: any, debugReasons: string[]): string {
   const features = order.features || {};
+
+  if (order.materialCanonical) {
+    debugReasons.push(`material from materialCanonical: "${order.materialCanonical}"`);
+    return normalizeMaterialLabel(order.materialCanonical);
+  }
 
   if (features.material) {
     debugReasons.push(`material from features.material: "${features.material}"`);
@@ -99,6 +103,11 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
   }
 
   const lowerModelId = modelId.toLowerCase();
+
+  if (lowerModelId === 'mesa_universal' || lowerModelId === 'mesa_tikka' || lowerModelId === 'mesa_adjustable') {
+    debugReasons.push(`material inferred from specific mesa model → Carbon Fiber: "${modelId}"`);
+    return 'Carbon Fiber';
+  }
 
   // Tikka variants: FG ones end with _fg, all others (non-Mesa) are Carbon Fiber
   if (lowerModelId.includes('tikka')) {
@@ -140,7 +149,7 @@ function deriveMaterial(order: any, debugReasons: string[]): string {
 
 function normalizeMaterialLabel(raw: string): string {
   const lower = raw.toLowerCase().trim();
-  if (lower === 'carbon fiber' || lower === 'carbon' || lower === 'cf') return 'Carbon Fiber';
+  if (lower === 'carbon fiber' || lower === 'carbon fibre' || lower === 'carbon_fiber' || lower === 'carbon_fibre' || lower === 'carbon' || lower === 'cf') return 'Carbon Fiber';
   if (lower === 'fiberglass' || lower === 'fg') return 'Fiberglass';
   if (lower === 'm1a') return 'M1A';
   if (lower === 'apr') return 'APR';

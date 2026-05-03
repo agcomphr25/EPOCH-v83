@@ -83,6 +83,7 @@ interface BuiltPacket {
 interface ValidationResult {
   valid: boolean;
   status?: string;
+  icnSource?: 'built_packet' | 'planned_materials' | 'backfilled_from_queue';
   message?: string;
   lot?: MaterialLot;
   warnings?: string[];
@@ -170,6 +171,12 @@ export default function MaterialScanner({
       // Packet barcode: auto-associate all fabric rolls to the traveler
       if (result.status === 'PACKET' && result.packet && result.fabricRolls) {
         const { packet, fabricRolls } = result;
+        if (result.icnSource === 'planned_materials') {
+          toast(
+            'No built packet found — materials shown are from the planned order, not a scanned packet. Verify before submitting.',
+            { icon: '⚠️' }
+          );
+        }
         fabricRolls.forEach((roll, idx) => {
           const rollFallbackIcn = `${packet.barcode}-roll-${idx + 1}`;
           const icn =
@@ -205,9 +212,11 @@ export default function MaterialScanner({
             },
           });
         });
-        toast.success(
-          `Packet ${packet.barcode} linked — ${fabricRolls.length} roll${fabricRolls.length !== 1 ? 's' : ''} recorded`
-        );
+        if (result.icnSource !== 'planned_materials') {
+          toast.success(
+            `Packet ${packet.barcode} linked — ${fabricRolls.length} roll${fabricRolls.length !== 1 ? 's' : ''} recorded`
+          );
+        }
         resetScanner();
         return;
       }

@@ -54,6 +54,7 @@ interface P2POItemsManagerProps {
 interface P2POItem {
   id: number;
   poId: number;
+  inventoryItemId?: number | null;
   partNumber: string;
   partName: string;
   quantity: number;
@@ -78,6 +79,7 @@ export function P2POItemsManager({
     unitPrice: 0,
     specifications: '',
     notes: '',
+    inventoryItemId: null as number | null,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -119,7 +121,7 @@ export function P2POItemsManager({
       setDialogOpen(false);
       resetForm();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to add item',
@@ -152,7 +154,7 @@ export function P2POItemsManager({
       setEditingItem(null);
       resetForm();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to update item',
@@ -175,7 +177,7 @@ export function P2POItemsManager({
         description: 'Item deleted successfully',
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete item',
@@ -198,7 +200,7 @@ export function P2POItemsManager({
         description: `Generated ${data.count} serialized items in Pending Layup status`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to generate serialized items',
@@ -221,7 +223,7 @@ export function P2POItemsManager({
         description: `${data.count} items sent to Layup Scheduler`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to send items to Layup',
@@ -238,6 +240,7 @@ export function P2POItemsManager({
       unitPrice: 0,
       specifications: '',
       notes: '',
+      inventoryItemId: null,
     });
     setEditingItem(null);
   };
@@ -256,6 +259,7 @@ export function P2POItemsManager({
       unitPrice: item.unitPrice,
       specifications: item.specifications || '',
       notes: item.notes || '',
+      inventoryItemId: item.inventoryItemId ?? null,
     });
     setDialogOpen(true);
   };
@@ -342,6 +346,7 @@ export function P2POItemsManager({
                                     ...formData,
                                     partNumber: item.agPartNumber,
                                     partName: item.name,
+                                    inventoryItemId: item.id,
                                   });
                                   setPartNumberOpen(false);
                                 }}
@@ -368,7 +373,7 @@ export function P2POItemsManager({
                   <Input
                     id="customPartNumber"
                     value={formData.partNumber}
-                    onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, partNumber: e.target.value, inventoryItemId: null })}
                     placeholder="Or type custom part number..."
                     className="mt-2"
                   />

@@ -17,6 +17,7 @@ import {
   ExternalLink,
   CreditCard,
   Loader2,
+  Bell,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -46,6 +47,7 @@ interface RefundRequest {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  lastRemindedAt?: string;
   // Joined data
   customerName?: string;
   orderDate?: string;
@@ -388,6 +390,15 @@ export default function RefundQueue() {
                         <div data-testid={`request-by-${request.id}`}>
                           Requested by: {request.requestedBy}
                         </div>
+                        {request.lastRemindedAt && (
+                          <div
+                            className="flex items-center gap-1 text-orange-600"
+                            data-testid={`request-last-reminded-${request.id}`}
+                          >
+                            <Bell className="h-3 w-3" />
+                            Last reminded: {formatDate(request.lastRemindedAt)}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">

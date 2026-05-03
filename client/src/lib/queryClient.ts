@@ -11,7 +11,6 @@ async function throwIfResNotOk(res: Response) {
         errorMessage = errorData.error;
       }
     } catch {
-      // If JSON parsing fails, fall back to text
       try {
         const text = await res.text();
         if (text) {
@@ -34,26 +33,132 @@ async function throwIfResNotOk(res: Response) {
 
 interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   body?: any;
-  timeout?: number; // Custom timeout in milliseconds
-  idempotencyKey?: string; // Optional idempotency key for order creation endpoints
+  timeout?: number;
+  idempotencyKey?: string;
+  _isRetry?: boolean;
 }
 
 export function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+// ─── Session expiry handler ───────────────────────────────────────────────────
+// Called when a 401/403 is confirmed to be a genuine session expiry.
+// Shows a toast and redirects to /login after a brief delay.
+// Kiosk/floor pages are exempt — they use badge auth, not session auth.
+let sessionExpiryNotified = false;
+
+// Routes that run on the production floor as badge-authenticated kiosks.
+// A session expiry on these pages should silently clear tokens but NOT
+// redirect to /login — that would disrupt workers mid-task.
+const KIOSK_ROUTES = [
+  '/p2-traveler',
+  '/p2-traveler-viewer',
+  '/traveler',
+  '/production/timers',
+  '/badge-scan',
+];
+
+function isKioskRoute(): boolean {
+  const path = window.location.pathname;
+  return KIOSK_ROUTES.some(r => path === r || path.startsWith(r + '/'));
+}
+
+function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
+  if (sessionExpiryNotified) return;
+  sessionExpiryNotified = true;
+
+  // Clear stored tokens regardless of page type
+  localStorage.removeItem('sessionToken');
+  localStorage.removeItem('jwtToken');
+
+  // On kiosk/floor pages: silently drop the expired session without
+  // redirecting — the badge scan flow still works without a session.
+  if (isKioskRoute()) {
+    console.warn(`[AUTH] Session ${reason} on kiosk page — tokens cleared, no redirect`);
+    sessionExpiryNotified = false;
+    return;
+  }
+
+  console.warn(`[AUTH] Session ${reason} — redirecting to login`);
+
+  // Show toast via a custom event so we don't depend on a specific toast library import here
+  window.dispatchEvent(
+    new CustomEvent('session:expired', { detail: { reason } })
+  );
+
+  // Redirect after a brief pause so the toast is visible
+  setTimeout(() => {
+    sessionExpiryNotified = false;
+    const current = window.location.pathname + window.location.search;
+    const loginUrl =
+      current && current !== '/' && current !== '/login'
+        ? `/login?redirect=${encodeURIComponent(current)}`
+        : '/login';
+    window.location.href = loginUrl;
+  }, 2000);
+}
+
+// Reset the notification flag when the user navigates to login (e.g., after manual logout)
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    if (window.location.pathname === '/login') {
+      sessionExpiryNotified = false;
+    }
+  });
+}
+
+// ─── Session refresh helper ───────────────────────────────────────────────────
+// Calls /api/auth/session to confirm whether the session is still valid.
+// Returns true if the session is still alive, false otherwise.
+async function checkSessionAlive(): Promise<boolean> {
+  try {
+    const storedToken = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    const res = await fetch('/api/auth/session', {
+      credentials: 'include',
+      headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+    });
+    if (res.ok) return true;
+    console.warn(`[AUTH] Session check returned ${res.status} — session is gone`);
+    return false;
+  } catch {
+    // Network error — treat as unknown; don't wipe the session
+    return true;
+  }
+}
+
+// ─── 401/403 interceptor ─────────────────────────────────────────────────────
+// Invoked by apiRequest and getQueryFn when a session-gated endpoint returns
+// 401 or 403.  Attempts one session refresh before giving up.
+// Returns true if the caller should retry the original request, false otherwise.
+async function handleAuthError(status: number, url: string): Promise<boolean> {
+  console.warn(`[AUTH] ${status} on ${url} — checking session state`);
+
+  // Skip interception for auth endpoints themselves to avoid infinite loops
+  if (url.includes('/api/auth/')) return false;
+
+  const alive = await checkSessionAlive();
+  if (!alive) {
+    // Session is genuinely gone — notify and redirect
+    handleSessionExpiry(status === 403 ? 'unauthorized' : 'expired');
+    return false;
+  }
+
+  // Session is still alive — this was likely a transient auth desync.
+  // Signal the caller to retry the original request once.
+  console.warn(`[AUTH] Session alive — retrying ${url} once after ${status}`);
+  return true;
+}
+
 export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = `${baseUrl}${url}`;
 
-  // Check if we're on a deployment site
   const isDeployment =
     window.location.hostname.includes('.replit.app') ||
     window.location.hostname.includes('.repl.co') ||
     window.location.hostname.includes('agcompepoch.xyz');
 
-  // Use reasonable timeout for deployments (allow for database latency with large datasets)
-  // Allow custom timeout override for slow operations like AI generation
   const defaultTimeout = isDeployment ? 15000 : 120000;
   const timeoutDuration = options.timeout ?? defaultTimeout;
 
@@ -61,21 +166,25 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     `🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`
   );
 
-  // Don't set Content-Type for FormData - browser will set it automatically with correct boundary
+  const storedToken =
+    localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+  const authHeader: HeadersInit = storedToken
+    ? { Authorization: `Bearer ${storedToken}` }
+    : {};
+
   const isFormData = options.body instanceof FormData;
   const defaultHeaders: HeadersInit = isFormData
-    ? { ...options.headers }
+    ? { ...authHeader, ...options.headers }
     : {
         'Content-Type': 'application/json',
+        ...authHeader,
         ...options.headers,
       };
   
-  // Add idempotency key header if provided (for order creation endpoints)
   if (options.idempotencyKey) {
     (defaultHeaders as any)['x-idempotency-key'] = options.idempotencyKey;
   }
 
-  // Add timeout protection
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     console.error(
@@ -84,26 +193,24 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     controller.abort();
   }, timeoutDuration);
 
+  const { _isRetry, ...fetchOptions } = options;
+
   const config: RequestInit = {
-    ...options,
+    ...fetchOptions,
     headers: defaultHeaders,
-    credentials: 'include', // Include cookies for session-based auth
+    credentials: 'include',
     signal: controller.signal,
   };
 
-  // Handle different body types
   if (isFormData) {
-    // FormData: pass as-is, browser handles everything
     config.body = options.body;
   } else if (
     options.body &&
     typeof options.body === 'object' &&
     !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')
   ) {
-    // JSON objects: stringify
     config.body = JSON.stringify(options.body);
   } else if (typeof options.body === 'string') {
-    // String body: pass as-is
     config.body = options.body;
   }
 
@@ -113,6 +220,14 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     console.log(`✅ API Response from ${url}: ${response.status}`);
 
     if (!response.ok) {
+      // ── 401/403 recovery ──────────────────────────────────────────────────
+      if ((response.status === 401 || response.status === 403) && !_isRetry) {
+        const shouldRetry = await handleAuthError(response.status, url);
+        if (shouldRetry) {
+          return apiRequest(url, { ...options, _isRetry: true });
+        }
+      }
+
       const text = await response.text();
       console.error("API error raw body:", text);
       
@@ -123,7 +238,6 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         // Not JSON
       }
       
-      // Build error message from various possible formats
       const errorMessage =
         data?.message ||
         data?.error ||
@@ -136,7 +250,6 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         text ||
         `Request failed (${response.status})`;
 
-      // Special handling for deployment database timeouts
       if (response.status === 408 || errorMessage.includes('timeout')) {
         throw new Error(
           'Request timed out - possible database connectivity issues. Please try again.'
@@ -151,7 +264,6 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
       throw err;
     }
 
-    // Handle empty responses (like 204 No Content)
     if (
       response.status === 204 ||
       response.headers.get('content-length') === '0'
@@ -164,13 +276,11 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
       return response.json();
     }
 
-    // For non-JSON responses, return text
     return response.text();
   } catch (error: any) {
     clearTimeout(timeoutId);
     console.error(`💥 API Request failed for ${url}:`, error);
 
-    // Enhanced error handling for deployments
     if (error.name === 'AbortError') {
       if (isDeployment) {
         throw new Error(
@@ -193,13 +303,12 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    // Deployment-aware timeout to prevent hanging
     const isDeployment =
       typeof window !== 'undefined' &&
       (window.location.hostname.includes('.replit.app') ||
         window.location.hostname.includes('.repl.co') ||
         window.location.hostname.includes('agcompepoch.xyz'));
-    const timeoutDuration = isDeployment ? 45000 : 30000; // 45 seconds for deployment (handle cold starts), 30 for dev
+    const timeoutDuration = isDeployment ? 45000 : 30000;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -209,15 +318,48 @@ export const getQueryFn: <T>(options: {
       controller.abort();
     }, timeoutDuration);
 
+    const url = queryKey.join('/') as string;
+
     try {
-      const res = await fetch(queryKey.join('/') as string, {
+      const storedToken =
+        typeof window !== 'undefined'
+          ? (localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken'))
+          : null;
+
+      const headers: HeadersInit = storedToken
+        ? { Authorization: `Bearer ${storedToken}` }
+        : {};
+
+      const res = await fetch(url, {
         credentials: 'include',
         signal: controller.signal,
+        headers,
       });
       clearTimeout(timeoutId);
 
       if (unauthorizedBehavior === 'returnNull' && res.status === 401) {
         return null;
+      }
+
+      // ── 401/403 recovery (for TanStack Query fetches) ──────────────────────
+      if ((res.status === 401 || res.status === 403) && !url.includes('/api/auth/')) {
+        console.warn(`[AUTH] Query returned ${res.status} for ${url}`);
+        const shouldRetry = await handleAuthError(res.status, url);
+        if (shouldRetry) {
+          // One automatic retry after confirming session is alive
+          const retryHeaders: HeadersInit = storedToken
+            ? { Authorization: `Bearer ${storedToken}` }
+            : {};
+          const retryRes = await fetch(url, {
+            credentials: 'include',
+            headers: retryHeaders,
+          });
+          await throwIfResNotOk(retryRes);
+          return await retryRes.json();
+        }
+        // Session gone — handleAuthError already fired the redirect
+        await throwIfResNotOk(res);
+        return await res.json();
       }
 
       await throwIfResNotOk(res);
@@ -244,12 +386,15 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: 'throw' }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: 60000, // 1 minute instead of Infinity for better data freshness
+      staleTime: 60000,
       retry: (failureCount: number, error: any) => {
         if (error?.message?.includes('Not authenticated') || error?.message?.includes('Session expired')) {
           return false;
         }
         if (error?.status === 429) {
+          return false;
+        }
+        if (error?.status === 401 || error?.status === 403) {
           return false;
         }
         return failureCount < 1;

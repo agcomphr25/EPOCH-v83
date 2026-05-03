@@ -18,14 +18,17 @@ export interface FulfillmentStats {
 
 /**
  * Returns true when a production order row counts as fulfilled for P1 queue purposes.
- * An order is fulfilled if it is Shipped, Completed, or currently sitting in Shipping QC
- * (meaning production is done — it is awaiting final inspection before ship-out).
+ * An order is fulfilled only when it is Shipped or Completed.
+ *
+ * RC-5 FIX: Shipping QC has been intentionally removed from this check. Previously,
+ * units arriving at Shipping QC were treated as fulfilled, which caused PO items to
+ * disappear from the release list prematurely. If QC rejects a unit for rework, the
+ * PO item must remain releasable — so only terminal shipped/completed states count.
  */
 export function isProductionOrderFulfilled(row: ProductionOrderRow): boolean {
   return (
     row.production_status === 'Shipped' ||
-    row.production_status === 'Completed' ||
-    row.current_department === 'Shipping QC'
+    row.production_status === 'Completed'
   );
 }
 

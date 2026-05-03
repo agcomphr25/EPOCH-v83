@@ -16,14 +16,12 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  AlertTriangle,
-  FileText,
-  Eye,
-  TrendingDown,
   Zap,
   Wrench,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
@@ -31,6 +29,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import OrderActionButtons from '@/components/OrderActionButtons';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import { useRepairOrders } from '@/hooks/useRepairOrders';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
@@ -46,6 +45,11 @@ export default function PaintQueuePage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
   // Get repair order information
   const { isRepairOrder, repairNotesMap } = useRepairOrders();
 
@@ -59,6 +63,7 @@ export default function PaintQueuePage() {
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
@@ -403,6 +408,8 @@ export default function PaintQueuePage() {
         </CardContent>
       </Card>
 
+      <ReturnsRepairsSection repairDepartment="Paint" />
+
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Previous Department Count */}
@@ -612,53 +619,15 @@ export default function PaintQueuePage() {
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <Badge
-                              variant="outline"
-                              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs ml-1 border-blue-300 text-blue-700 dark:text-blue-300"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSalesOrderView(order.orderId);
-                              }}
-                            >
-                              <Eye className="w-3 h-3" />
-                            </Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleKickbackClick(order.orderId);
-                              }}
-                              title="Report Kickback"
-                              className="h-6 w-6 p-0"
-                            >
-                              <TrendingDown className="h-3 w-3" />
-                            </Button>
-                            {hasKickbacks(order.orderId) && (
-                              <Badge
-                                variant="destructive"
-                                className={`cursor-pointer hover:opacity-80 transition-opacity text-xs px-1 py-0 ${
-                                  getKickbackStatus(order.orderId) ===
-                                  'CRITICAL'
-                                    ? 'bg-red-600 hover:bg-red-700'
-                                    : getKickbackStatus(order.orderId) ===
-                                        'HIGH'
-                                      ? 'bg-orange-600 hover:bg-orange-700'
-                                      : getKickbackStatus(order.orderId) ===
-                                          'MEDIUM'
-                                        ? 'bg-yellow-600 hover:bg-yellow-700'
-                                        : 'bg-gray-600 hover:bg-gray-700'
-                                }`}
-                                onClick={() =>
-                                  handleKickbackClick(order.orderId)
-                                }
-                              >
-                                <AlertTriangle className="w-3 h-3 mr-1" />
-                                Kickback
-                              </Badge>
-                            )}
-                          </div>
+                          <OrderActionButtons
+                            orderId={order.orderId}
+                            onSalesOrderView={handleSalesOrderView}
+                            onReportKickback={handleKickbackClick}
+                            hasKickbacks={hasKickbacks(order.orderId)}
+                            kickbackStatus={getKickbackStatus(order.orderId)}
+                            onKickbackBadgeClick={handleKickbackClick}
+                            showReassignButton={isAdmin}
+                          />
                         </div>
                       </div>
 

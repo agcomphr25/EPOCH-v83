@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
+import { requirePermission } from '../../middleware/requirePermission';
 import { 
   preproductionTemplates, 
   preproductionTemplateSections, 
@@ -9,6 +10,7 @@ import {
   preproductionChecklistTasks,
   employees,
   users,
+  p2PurchaseOrders,
   insertPreproductionTemplateSchema,
   insertPreproductionChecklistSchema,
 } from '../../schema';
@@ -423,6 +425,14 @@ router.patch('/:id', async (req: Request, res: Response) => {
     if (!checklist) {
       return res.status(404).json({ error: 'Checklist not found' });
     }
+
+    // When checklist is marked completed, advance the linked P2 PO to READY_FOR_PRODUCTION
+    if (updateData.status === 'completed' && checklist.poNumber) {
+      await db
+        .update(p2PurchaseOrders)
+        .set({ status: 'READY_FOR_PRODUCTION', updatedAt: new Date() })
+        .where(eq(p2PurchaseOrders.poNumber, checklist.poNumber));
+    }
     
     res.json(checklist);
   } catch (error) {
@@ -762,7 +772,7 @@ router.get('/my-tasks/:employeeId/history', async (req: Request, res: Response) 
 });
 
 // Sign off checklist
-router.post('/:id/sign-off', async (req: Request, res: Response) => {
+router.post('/:id/sign-off', requirePermission('travelers.sign_qc_preproduction'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { signatureData, signedBy } = req.body;
@@ -778,6 +788,14 @@ router.post('/:id/sign-off', async (req: Request, res: Response) => {
       })
       .where(eq(preproductionChecklists.id, id))
       .returning();
+
+    // Advance the linked P2 PO to READY_FOR_PRODUCTION
+    if (checklist?.poNumber) {
+      await db
+        .update(p2PurchaseOrders)
+        .set({ status: 'READY_FOR_PRODUCTION', updatedAt: new Date() })
+        .where(eq(p2PurchaseOrders.poNumber, checklist.poNumber));
+    }
     
     res.json(checklist);
   } catch (error) {
@@ -802,7 +820,8 @@ router.get('/employees/list', async (req: Request, res: Response) => {
   }
 });
 
-// Seed default template from existing checklist structure
+// Seed default template — not available in production
+if (process.env.NODE_ENV !== 'production') {
 router.post('/templates/seed-default', async (req: Request, res: Response) => {
   try {
     // Check if default template already exists
@@ -957,5 +976,6 @@ router.post('/templates/seed-default', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to seed default template' });
   }
 });
+} // end NODE_ENV !== 'production'
 
 export default router;

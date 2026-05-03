@@ -1,0 +1,55 @@
+index-C-NKcBeb.js:5436 React initialized: Object
+index-C-NKcBeb.js:5436 React hooks: Object
+index-C-NKcBeb.js:5436 [EPOCH SYNC] Sync engine starting
+index-C-NKcBeb.js:5436 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-C-NKcBeb.js:5433 App component is rendering...
+index-C-NKcBeb.js:5433 Environment: production
+index-C-NKcBeb.js:5433 Base URL: /
+index-C-NKcBeb.js:4876 🛒 P1 Purchase Orders received: Object
+index-C-NKcBeb.js:4876 🔍 Fetching production queue...
+index-C-NKcBeb.js:235 🌐 API Request to /api/production-queue/prioritized (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 🌐 API Request to /api/p1-po-queue/stuck-counts (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 🌐 API Request to /api/production-queue/attention (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:1705 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-C-NKcBeb.js:1705 [EPOCH] Install prompt captured and ready
+department-queue/production-queue:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-C-NKcBeb.js:235 ✅ API Response from /api/production-queue/attention: 200
+index-C-NKcBeb.js:235 ✅ API Response from /api/p1-po-queue/stuck-counts: 200
+index-C-NKcBeb.js:4876 🛒 P1 Purchase Orders received: Object
+index-C-NKcBeb.js:4876 🛒 P1 Purchase Orders received: Object
+index-C-NKcBeb.js:4876 🛒 P1 Purchase Orders received: Object
+index-C-NKcBeb.js:235 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+index-C-NKcBeb.js:4876 🛒 P1 Purchase Orders received: Object
+index-C-NKcBeb.js:235 ✅ API Response from /api/production-queue/prioritized: 200
+index-C-NKcBeb.js:4876 🔍 Production queue result: 154 orders
+index-C-NKcBeb.js:4876 🛒 P1 Purchase Orders received: Object
+index-C-NKcBeb.js:2151 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-C-NKcBeb.js:235 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/nonconformance?limit=100: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/tickets/by-orders (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/tickets/by-orders: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/nonconformance?limit=100: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/nonconformance?limit=100: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/nonconformance?limit=100 (timeout: 15000ms, deployment: true)
+index-C-NKcBeb.js:235 ✅ API Response from /api/nonconformance?limit=100: 200
+index-C-NKcBeb.js:235 🌐 API Request to /api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc (timeout: 15000ms, deployment: true)
+api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc:1  Failed to load resource: the server responded with a status of 500 ()
+index-C-NKcBeb.js:235 ✅ API Response from /api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc: 500
+index-C-NKcBeb.js:5436 API error raw body: {"_error":"Failed to return shipment to QC","details":"Cannot read properties of undefined (reading '0')"}
+console.error @ index-C-NKcBeb.js:5436
+index-C-NKcBeb.js:5436 💥 API Request failed for /api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc: Error: {"_error":"Failed to return shipment to QC","details":"Cannot read properties of undefined (reading '0')"}
+    at Se (index-C-NKcBeb.js:235:6500)
+    at async Object.mutationFn (index-C-NKcBeb.js:4468:6765)
+console.error @ index-C-NKcBeb.js:5436
+index-C-NKcBeb.js:235 🌐 API Request to /api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc (timeout: 15000ms, deployment: true)
+api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc:1  Failed to load resource: the server responded with a status of 500 ()
+index-C-NKcBeb.js:235 ✅ API Response from /api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc: 500
+index-C-NKcBeb.js:5436 API error raw body: {"_error":"Failed to return shipment to QC","details":"Cannot read properties of undefined (reading '0')"}
+console.error @ index-C-NKcBeb.js:5436
+index-C-NKcBeb.js:5436 💥 API Request failed for /api/po-orders/oem-shipments/853b044f-2eaa-4fc9-8e40-d8101448edad/return-to-qc: Error: {"_error":"Failed to return shipment to QC","details":"Cannot read properties of undefined (reading '0')"}
+    at Se (index-C-NKcBeb.js:235:6500)
+    at async Object.mutationFn (index-C-NKcBeb.js:4468:6765)
+console.error @ index-C-NKcBeb.js:5436

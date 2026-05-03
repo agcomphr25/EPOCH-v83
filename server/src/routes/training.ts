@@ -1,9 +1,14 @@
 import { Router } from 'express';
+import { requirePermission } from '../../middleware/requirePermission';
 import multer from 'multer';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import { db } from '../../db';
+
+// Drizzle client union type: works for both the top-level db instance and a
+// transaction sub-client returned by db.transaction().
+type DrizzleClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Direct pg Pool for raw SQL queries (bypasses Neon serverless driver issues)
 const pgPool = new Pool({
@@ -180,23 +185,25 @@ function convertContentToHtml(content: string): string {
 }
 
 // Helper function to grant P2 certification capability to employee
+// Accepts an optional transaction client so it can be used inside db.transaction().
 async function grantP2CertificationCapability(
   employeeId: number,
   partNumber: string,
-  department: string
+  department: string,
+  client: DrizzleClient = db
 ) {
   // Create capability name: P2_CERT_PARTNUMBER_DEPARTMENT
   const capabilityName = `P2_CERT_${partNumber.replace(/[^a-zA-Z0-9]/g, '_')}_${department.replace(/[^a-zA-Z0-9]/g, '_')}`;
   const displayName = `P2 Certification: ${partNumber} - ${department}`;
   
   // Find or create capability
-  let [capability] = await db
+  let [capability] = await client
     .select()
     .from(capabilities)
     .where(eq(capabilities.name, capabilityName));
   
   if (!capability) {
-    [capability] = await db
+    [capability] = await client
       .insert(capabilities)
       .values({
         name: capabilityName,
@@ -209,7 +216,7 @@ async function grantP2CertificationCapability(
   }
   
   // Grant capability to employee if not already granted
-  const [existing] = await db
+  const [existing] = await client
     .select()
     .from(employeeCapabilities)
     .where(
@@ -220,7 +227,7 @@ async function grantP2CertificationCapability(
     );
   
   if (!existing) {
-    await db
+    await client
       .insert(employeeCapabilities)
       .values({
         employeeId,
@@ -235,20 +242,22 @@ async function grantP2CertificationCapability(
 }
 
 // Helper function to revoke P2 certification capability from employee
+// Accepts an optional transaction client so it can be used inside db.transaction().
 async function revokeP2CertificationCapability(
   employeeId: number,
   partNumber: string,
-  department: string
+  department: string,
+  client: DrizzleClient = db
 ) {
   const capabilityName = `P2_CERT_${partNumber.replace(/[^a-zA-Z0-9]/g, '_')}_${department.replace(/[^a-zA-Z0-9]/g, '_')}`;
   
-  const [capability] = await db
+  const [capability] = await client
     .select()
     .from(capabilities)
     .where(eq(capabilities.name, capabilityName));
   
   if (capability) {
-    await db
+    await client
       .delete(employeeCapabilities)
       .where(
         and(
@@ -324,7 +333,7 @@ router.get('/modules/:id', async (req, res) => {
 });
 
 // Create training module
-router.post('/modules', async (req, res) => {
+router.post('/modules', requirePermission('training.manage_content'), async (req, res) => {
   try {
     const validatedData = insertTrainingModuleSchema.parse(req.body);
 
@@ -341,7 +350,7 @@ router.post('/modules', async (req, res) => {
 });
 
 // Update training module
-router.patch('/modules/:id', async (req, res) => {
+router.patch('/modules/:id', requirePermission('training.manage_content'), async (req, res) => {
   try {
     const moduleId = parseInt(req.params.id);
     const validatedData = insertTrainingModuleSchema.partial().parse(req.body);
@@ -788,7 +797,7 @@ Focus on the most important points, safety requirements, and critical procedures
 });
 
 // Delete training module
-router.delete('/modules/:id', async (req, res) => {
+router.delete('/modules/:id', requirePermission('training.manage_content'), async (req, res) => {
   try {
     const moduleId = parseInt(req.params.id);
 
@@ -1177,7 +1186,7 @@ router.get('/employee/:employeeId/records', async (req, res) => {
 });
 
 // Create employee training record
-router.post('/employee/records', async (req, res) => {
+router.post('/employee/records', requirePermission('training.record_completion'), async (req, res) => {
   try {
     const validatedData = insertEmployeeTrainingRecordSchema.parse(req.body);
 
@@ -1219,7 +1228,7 @@ router.patch('/employee/records/:id', async (req, res) => {
 });
 
 // Submit quiz attempt
-router.post('/quiz/submit', async (req, res) => {
+router.post('/quiz/submit', requirePermission('training.record_completion'), async (req, res) => {
   try {
     const validatedData = insertEmployeeQuizAttemptSchema.parse(req.body);
 
@@ -2151,22 +2160,27 @@ router.post('/p2-employee-certifications', async (req, res) => {
         ? new Date()
         : null;
 
-    const [newCertification] = await db
-      .insert(p2EmployeePartCertifications)
-      .values({
-        ...validatedData,
-        certifiedDate,
-      } as InsertP2EmployeePartCertification)
-      .returning();
+    const newCertification = await db.transaction(async (tx) => {
+      const [record] = await tx
+        .insert(p2EmployeePartCertifications)
+        .values({
+          ...validatedData,
+          certifiedDate,
+        } as InsertP2EmployeePartCertification)
+        .returning();
 
-    // Grant P2 certification capability ONLY if all three checkboxes are true
-    if (certifiedDate) {
-      await grantP2CertificationCapability(
-        validatedData.employeeId,
-        validatedData.partNumber,
-        validatedData.department
-      );
-    }
+      // Grant P2 certification capability ONLY if all three checkboxes are true
+      if (certifiedDate) {
+        await grantP2CertificationCapability(
+          validatedData.employeeId,
+          validatedData.partNumber,
+          validatedData.department,
+          tx
+        );
+      }
+
+      return record;
+    });
 
     res.status(201).json(newCertification);
   } catch (error: any) {
@@ -2184,7 +2198,7 @@ router.patch('/p2-employee-certifications/:id', async (req, res) => {
     const certId = parseInt(req.params.id);
     const validatedData = insertP2EmployeePartCertificationSchema.partial().parse(req.body);
 
-    // Get existing record to check checkbox status
+    // Get existing record to check checkbox status (outside transaction for the early 404)
     const [existing] = await db
       .select()
       .from(p2EmployeePartCertifications)
@@ -2213,52 +2227,55 @@ router.patch('/p2-employee-certifications/:id', async (req, res) => {
         ? (validatedData.certifiedDate ?? existing.certifiedDate ?? new Date())
         : null;
 
-    const [updatedCertification] = await db
-      .update(p2EmployeePartCertifications)
-      .set({
-        ...validatedData,
-        certifiedDate,
-        updatedAt: new Date(),
-      })
-      .where(eq(p2EmployeePartCertifications.id, certId))
-      .returning();
+    const updatedCertification = await db.transaction(async (tx) => {
+      const [record] = await tx
+        .update(p2EmployeePartCertifications)
+        .set({
+          ...validatedData,
+          certifiedDate,
+          updatedAt: new Date(),
+        })
+        .where(eq(p2EmployeePartCertifications.id, certId))
+        .returning();
 
-    // Handle capability changes based on state transitions
-    if (partNumberChanged || departmentChanged) {
-      // Revoke old capability (if it existed)
-      if (wasFullyCertified) {
-        await revokeP2CertificationCapability(
-          existing.employeeId,
-          existing.partNumber,
-          existing.department
-        );
+      // Handle capability changes based on state transitions — all inside the transaction
+      if (partNumberChanged || departmentChanged) {
+        if (wasFullyCertified) {
+          await revokeP2CertificationCapability(
+            existing.employeeId,
+            existing.partNumber,
+            existing.department,
+            tx
+          );
+        }
+        if (isNowFullyCertified) {
+          await grantP2CertificationCapability(
+            existing.employeeId,
+            validatedData.partNumber || existing.partNumber,
+            validatedData.department || existing.department,
+            tx
+          );
+        }
+      } else {
+        if (!wasFullyCertified && isNowFullyCertified) {
+          await grantP2CertificationCapability(
+            existing.employeeId,
+            existing.partNumber,
+            existing.department,
+            tx
+          );
+        } else if (wasFullyCertified && !isNowFullyCertified) {
+          await revokeP2CertificationCapability(
+            existing.employeeId,
+            existing.partNumber,
+            existing.department,
+            tx
+          );
+        }
       }
-      // Grant new capability (if fully certified)
-      if (isNowFullyCertified) {
-        await grantP2CertificationCapability(
-          existing.employeeId,
-          validatedData.partNumber || existing.partNumber,
-          validatedData.department || existing.department
-        );
-      }
-    } else {
-      // Just checkbox state changed
-      if (!wasFullyCertified && isNowFullyCertified) {
-        // Grant capability when certification becomes complete
-        await grantP2CertificationCapability(
-          existing.employeeId,
-          existing.partNumber,
-          existing.department
-        );
-      } else if (wasFullyCertified && !isNowFullyCertified) {
-        // Revoke capability when certification becomes incomplete
-        await revokeP2CertificationCapability(
-          existing.employeeId,
-          existing.partNumber,
-          existing.department
-        );
-      }
-    }
+
+      return record;
+    });
 
     res.json(updatedCertification);
   } catch (error: any) {
@@ -2273,6 +2290,12 @@ router.patch('/p2-employee-certifications/:id', async (req, res) => {
 // Migrate existing P2 certifications to capabilities (one-time migration endpoint)
 router.post('/p2-employee-certifications/migrate-capabilities', async (req, res) => {
   try {
+    const user = (req as any).user;
+    const userRole: string = user?.role ?? 'EMPLOYEE';
+    if (userRole !== 'ADMIN' && userRole !== 'OWNER') {
+      return res.status(403).json({ error: 'Admin access is required to run capability migration.' });
+    }
+
     console.log('🔄 Migrating existing P2 certifications to capabilities...');
     
     // Get all fully certified employees
@@ -2312,6 +2335,62 @@ router.post('/p2-employee-certifications/migrate-capabilities', async (req, res)
     res.json({ success: true, granted, skipped, total: certifications.length });
   } catch (error: any) {
     console.error('Migration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin endpoint: re-grant capabilities for all employees currently fully certified.
+// Safe to run multiple times; already-granted capabilities are skipped.
+router.post('/p2-certifications/repair-capabilities', async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const userRole: string = user?.role ?? 'EMPLOYEE';
+    if (userRole !== 'ADMIN' && userRole !== 'OWNER') {
+      return res.status(403).json({ error: 'Admin access is required to run capability repair.' });
+    }
+
+    console.log('🔧 Repairing P2 certification capabilities...');
+
+    const certifications = await db
+      .select()
+      .from(p2EmployeePartCertifications)
+      .where(
+        and(
+          eq(p2EmployeePartCertifications.drawingKnowledge, true),
+          eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
+          eq(p2EmployeePartCertifications.procedureCompletion, true)
+        )
+      );
+
+    console.log(`Found ${certifications.length} fully certified employee record(s)`);
+
+    let granted = 0;
+    const errors: string[] = [];
+
+    for (const cert of certifications) {
+      try {
+        await grantP2CertificationCapability(
+          cert.employeeId,
+          cert.partNumber,
+          cert.department
+        );
+        granted++;
+        console.log(`✅ Ensured capability: ${cert.employeeName} - ${cert.partNumber} - ${cert.department}`);
+      } catch (err: any) {
+        errors.push(`${cert.employeeName} / ${cert.partNumber} / ${cert.department}: ${err.message}`);
+        console.error(`❌ Error granting capability for cert ${cert.id}:`, err.message);
+      }
+    }
+
+    console.log(`✅ Repair complete. Processed: ${certifications.length}, Ensured: ${granted}, Errors: ${errors.length}`);
+    res.json({
+      success: errors.length === 0,
+      total: certifications.length,
+      granted,
+      errors,
+    });
+  } catch (error: any) {
+    console.error('Repair error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2914,13 +2993,14 @@ router.post('/programs/:programId/assignments', async (req, res) => {
 router.patch('/assignments/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { trainerId, status, dueDate, notes } = req.body;
+    const { trainerId, status, dueDate, notes, partNumber } = req.body;
 
     const updateData: any = { updatedAt: new Date() };
     if (trainerId !== undefined) updateData.trainerId = trainerId || null;
     if (status) updateData.status = status;
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
     if (notes !== undefined) updateData.notes = notes;
+    if (partNumber !== undefined) updateData.partNumber = partNumber || null;
     if (status === 'completed') updateData.completedAt = new Date();
 
     const [updated] = await db
@@ -4364,6 +4444,20 @@ router.post('/certifications', async (req, res) => {
     if (data.expiresAt && typeof data.expiresAt === 'string') {
       data.expiresAt = new Date(data.expiresAt);
     }
+
+    // Auto-derive partNumber from the assignment chain when not explicitly supplied.
+    // This ensures every new certification carries the correct part scope so that
+    // checkEmployeeHasValidTrainingCertification can filter by part number as intended.
+    if (!data.partNumber && data.assignmentId) {
+      const [assignment] = await db
+        .select({ partNumber: trainingAssignments.partNumber })
+        .from(trainingAssignments)
+        .where(eq(trainingAssignments.id, data.assignmentId));
+      if (assignment?.partNumber) {
+        data.partNumber = assignment.partNumber;
+      }
+    }
+
     const parsed = insertTrainingCertificationSchema.safeParse(data);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.message });
@@ -4372,6 +4466,53 @@ router.post('/certifications', async (req, res) => {
     res.status(201).json(certification);
   } catch (error: any) {
     console.error('Error creating certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin: backfill part_number on existing training_certifications from their assignments.
+// Runs as a single SQL UPDATE...FROM for deterministic performance on large datasets.
+// Certifications that already have a part_number are left unchanged.
+router.post('/certifications/backfill-part-numbers', async (req, res) => {
+  try {
+    const result = await pgPool.query(`
+      UPDATE training_certifications tc
+      SET part_number = ta.part_number,
+          updated_at  = now()
+      FROM training_assignments ta
+      WHERE tc.assignment_id = ta.id
+        AND ta.part_number IS NOT NULL
+        AND tc.part_number IS NULL
+    `);
+    const updated = result.rowCount ?? 0;
+    res.json({ updated, message: `Backfilled part_number on ${updated} certification record(s).` });
+  } catch (error: any) {
+    console.error('Error backfilling certification part numbers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Status check: how many certified records still have a NULL part_number.
+// Use after backfill to verify the QC gate is fully part-specific.
+router.get('/certifications/part-number-status', async (req, res) => {
+  try {
+    const result = await pgPool.query(`
+      SELECT
+        COUNT(*)                                              AS total_certified,
+        COUNT(*) FILTER (WHERE part_number IS NULL)          AS null_part_number,
+        COUNT(*) FILTER (WHERE part_number IS NOT NULL)      AS has_part_number
+      FROM training_certifications
+      WHERE status = 'certified'
+    `);
+    const row = result.rows[0];
+    res.json({
+      totalCertified: parseInt(row.total_certified, 10),
+      nullPartNumber:  parseInt(row.null_part_number, 10),
+      hasPartNumber:   parseInt(row.has_part_number, 10),
+      fullyPartSpecific: parseInt(row.null_part_number, 10) === 0,
+    });
+  } catch (error: any) {
+    console.error('Error fetching certification part number status:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -7225,6 +7366,68 @@ router.get('/epoch/traveler-authorizations/:employeeId', async (req, res) => {
     res.json(authorizations);
   } catch (error: any) {
     console.error('Error fetching traveler authorizations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a traveler authorization for an employee (admin action)
+router.post('/epoch/traveler-authorizations', async (req, res) => {
+  try {
+    const { employeeId, partNumber, department, productionLine, expiresAt, authorizedBy } = req.body;
+    if (!employeeId || !partNumber) {
+      return res.status(400).json({ error: 'employeeId and partNumber are required' });
+    }
+    const [record] = await db
+      .insert(travelerAuthorizations)
+      .values({
+        employeeId: parseInt(employeeId),
+        partNumber,
+        department: department || null,
+        productionLine: productionLine || null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        authorizedBy: authorizedBy ? parseInt(authorizedBy) : null,
+        isActive: true,
+      })
+      .returning();
+    res.status(201).json(record);
+  } catch (error: any) {
+    console.error('Error creating traveler authorization:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Deactivate (soft-delete) a traveler authorization
+router.patch('/epoch/traveler-authorizations/:id', async (req, res) => {
+  try {
+    const authId = parseInt(req.params.id);
+    const { isActive, productionLine, department, expiresAt } = req.body;
+    const patch: Partial<{ isActive: boolean; productionLine: string; department: string; expiresAt: Date | null }> = {};
+    if (typeof isActive === 'boolean') patch.isActive = isActive;
+    if (productionLine !== undefined) patch.productionLine = productionLine;
+    if (department !== undefined) patch.department = department;
+    if (expiresAt !== undefined) patch.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+    const [record] = await db
+      .update(travelerAuthorizations)
+      .set(patch)
+      .where(eq(travelerAuthorizations.id, authId))
+      .returning();
+    if (!record) return res.status(404).json({ error: 'Authorization not found' });
+    res.json(record);
+  } catch (error: any) {
+    console.error('Error updating traveler authorization:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Hard-delete a traveler authorization
+router.delete('/epoch/traveler-authorizations/:id', async (req, res) => {
+  try {
+    const authId = parseInt(req.params.id);
+    await db.delete(travelerAuthorizations).where(eq(travelerAuthorizations.id, authId));
+    res.status(204).end();
+  } catch (error: any) {
+    console.error('Error deleting traveler authorization:', error);
     res.status(500).json({ error: error.message });
   }
 });

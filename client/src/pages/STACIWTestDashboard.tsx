@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ import WatchRuleCards from '@/components/WatchRuleCards';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function STACIWTestDashboard() {
+  const [, setLocation] = useLocation();
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
@@ -44,7 +46,7 @@ export default function STACIWTestDashboard() {
       localStorage.removeItem('jwtToken');
 
       // Redirect to login page
-      window.location.href = '/login';
+      setLocation('/login');
     }
   };
 

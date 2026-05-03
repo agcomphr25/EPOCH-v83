@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Package, ArrowLeft, CheckCircle, AlertTriangle, Zap, TrendingDown } from 'lucide-react';
+import { Package, ArrowLeft, CheckCircle, Zap } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
+import OrderActionButtons from '@/components/OrderActionButtons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { format } from 'date-fns';
 import { useLocation } from 'wouter';
 
@@ -70,13 +73,32 @@ export default function ShippingQueuePage() {
   const [, setLocation] = useLocation();
 
   // Get current user information
-  const { data: currentUser } = useQuery({
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
     queryKey: ['currentUser'],
   });
+  const isAdmin = isAdminUser(currentUser);
 
-  // Get all orders from production pipeline with payment status
+  // Fetch only Shipping-department orders with payment status.
+  // Using ?department=Shipping bypasses the row-count cap applied to the
+  // all-orders view, so every order in Shipping is returned regardless of
+  // how many total orders exist in the database.
+  // NOTE: queryKey includes 'Shipping' to keep this cache entry separate from
+  // the generic ['/api/orders/with-payment-status'] entries used by other
+  // pages. Cache invalidation uses prefix matching so invalidating
+  // ['/api/orders/with-payment-status'] still clears this entry.
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/with-payment-status'],
+    queryKey: ['/api/orders/with-payment-status', 'Shipping'],
+    queryFn: () => apiRequest('/api/orders/with-payment-status?department=Shipping'),
+    staleTime: 0,
+  });
+
+  // Fetch Shipping QC orders separately to count the previous-department widget.
+  // allOrders above is filtered to 'Shipping' only, so we need a dedicated query
+  // for the 'Shipping QC' count shown on the dashboard widget.
+  const { data: shippingQCOrders = [] } = useQuery({
+    queryKey: ['/api/orders/with-payment-status', 'Shipping QC'],
+    queryFn: () => apiRequest('/api/orders/with-payment-status?department=Shipping%20QC'),
+    staleTime: 0,
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -84,6 +106,7 @@ export default function ShippingQueuePage() {
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
 
   // Fetch RTS inventory items in shipping department
   const { data: rtsItemsInShipping = [] } = useQuery({
@@ -395,15 +418,10 @@ export default function ShippingQueuePage() {
     };
   }, [shippingOrders]);
 
-  // Count orders in previous department (Shipping QC)
-  const shippingQCCount = useMemo(() => {
-    const orders = allOrders as any[];
-    return orders.filter(
-      (order: any) =>
-        order.currentDepartment === 'QC' ||
-        (order.department === 'QC' && order.status === 'IN_PROGRESS')
-    ).length;
-  }, [allOrders]);
+  // Count orders in previous department (Shipping QC).
+  // Derived directly from the dedicated shippingQCOrders query — allOrders is
+  // filtered to 'Shipping' only so we cannot reuse it here.
+  const shippingQCCount = shippingQCOrders.length;
 
   // Get stock models for display names
   const { data: stockModels = [] } = useQuery({
@@ -949,6 +967,8 @@ export default function ShippingQueuePage() {
         </CardContent>
       </Card>
 
+      <ReturnsRepairsSection repairDepartment="Shipping" />
+
       {/* Floating Bulk Fulfill Actions */}
       {selectedOrders.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
@@ -1482,49 +1502,20 @@ export default function ShippingQueuePage() {
             </div>
           )}
 
-          {/* Report Kickback Button */}
+          {/* Action Buttons */}
           <div className="mb-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedOrderForKickback({
-                  orderId: order.orderId,
-                  department: 'Shipping'
-                });
+            <OrderActionButtons
+              orderId={order.orderId}
+              onReportKickback={(id) => {
+                setSelectedOrderForKickback({ orderId: id, department: 'Shipping' });
                 setKickbackModalOpen(true);
               }}
-              title="Report Kickback"
-              className="h-6 px-2 text-xs"
-              data-testid={`button-report-kickback-${order.orderId}`}
-            >
-              <TrendingDown className="h-3 w-3 mr-1" />
-              Report Kickback
-            </Button>
+              hasKickbacks={hasKickbacks(order.orderId)}
+              kickbackStatus={getKickbackStatus(order.orderId)}
+              onKickbackBadgeClick={handleKickbackClick}
+              showReassignButton={isAdmin}
+            />
           </div>
-
-          {/* Show Kickback Badge if order has kickbacks */}
-          {hasKickbacks(order.orderId) && (
-            <div className="mb-2">
-              <Badge
-                variant="destructive"
-                className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                  getKickbackStatus(order.orderId) === 'CRITICAL'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : getKickbackStatus(order.orderId) === 'HIGH'
-                      ? 'bg-orange-600 hover:bg-orange-700'
-                      : getKickbackStatus(order.orderId) === 'MEDIUM'
-                        ? 'bg-yellow-600 hover:bg-yellow-700'
-                        : 'bg-gray-600 hover:bg-gray-700'
-                }`}
-                onClick={() => handleKickbackClick(order.orderId)}
-              >
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                Kickback
-              </Badge>
-            </div>
-          )}
 
           {/* Quick Action Buttons */}
           <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">

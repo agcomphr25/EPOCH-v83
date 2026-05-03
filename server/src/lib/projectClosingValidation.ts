@@ -25,10 +25,11 @@ export function validateProjectClosing(closing: ProjectClosing): ClosingValidati
   };
 }
 
-export type ClosingStatus = 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
+export type ClosingStatus = 'MISSING' | 'INCOMPLETE' | 'COMPLETE' | 'APPROVED';
 
 export function deriveClosingStatus(closing: ProjectClosing | null | undefined): ClosingStatus {
   if (!closing) return 'MISSING';
   const { valid } = validateProjectClosing(closing);
-  return valid ? 'COMPLETE' : 'INCOMPLETE';
+  if (!valid) return 'INCOMPLETE';
+  return closing.approvedBy ? 'APPROVED' : 'COMPLETE';
 }

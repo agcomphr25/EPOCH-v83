@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { eq, and, lt, gt, sql } from 'drizzle-orm';
 
 import { db } from './db';
-import { users, userSessions, employeeAuditLog } from './schema';
+import { users, userSessions, employeeAuditLog, auditEvents } from './schema';
 
 const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -151,6 +151,23 @@ export class AuthService {
       .set({ expiresAt: newExpiresAt })
       .where(eq(userSessions.id, session.id));
 
+    // Emit SESSION_EXTENDED audit event (best-effort; never block validation on failure)
+    try {
+      const [u] = await db.select({ role: users.role }).from(users).where(eq(users.id, session.userId));
+      await db.insert(auditEvents).values({
+        entityType: 'user_session',
+        entityId: String(session.id),
+        action: 'SESSION_EXTENDED',
+        actorId: null,
+        actorName: session.username,
+        actorRole: u?.role ?? 'EMPLOYEE',
+        reason: 'Session extended on active use',
+        meta: { userId: session.userId, newExpiresAt: newExpiresAt.toISOString() },
+      });
+    } catch (auditErr) {
+      console.error('[SessionAudit] Failed to emit SESSION_EXTENDED for session', session.id, auditErr);
+    }
+
     return {
       userId: session.userId,
       sessionToken: session.sessionToken,
@@ -175,15 +192,60 @@ export class AuthService {
   }
 
   /**
-   * Clean up expired sessions from the database
-   * This should be called periodically to remove old sessions
+   * Clean up expired sessions from the database.
+   * Emits SESSION_EXPIRED audit events for each session before removing it.
    */
   static async cleanupExpiredSessions(): Promise<void> {
     const now = new Date();
-    const result = await db
+
+    // Fetch expiring sessions before deletion so we can audit them
+    const expiringSessions = await db
+      .select({
+        id: userSessions.id,
+        userId: userSessions.userId,
+        username: userSessions.username,
+        expiresAt: userSessions.expiresAt,
+      })
+      .from(userSessions)
+      .where(sql`${userSessions.expiresAt} < ${now} AND ${userSessions.isActive} = true`);
+
+    // Emit SESSION_EXPIRED audit event for each expired session
+    if (expiringSessions.length > 0) {
+      // Look up roles for each user in one query to avoid N+1
+      const userIds = [...new Set(expiringSessions.map(s => s.userId))];
+      const roleMap: Record<number, string> = {};
+      for (const uid of userIds) {
+        const [u] = await db.select({ role: users.role }).from(users).where(eq(users.id, uid));
+        if (u) roleMap[uid] = u.role;
+      }
+
+      for (const session of expiringSessions) {
+        try {
+          await db.insert(auditEvents).values({
+            entityType: 'user_session',
+            entityId: String(session.id),
+            action: 'SESSION_EXPIRED',
+            actorId: null,
+            actorName: session.username,
+            actorRole: roleMap[session.userId] ?? 'EMPLOYEE',
+            reason: 'Session reached its expiry timestamp',
+            meta: { userId: session.userId, expiresAt: session.expiresAt },
+          });
+        } catch (auditErr) {
+          console.error('[SessionAudit] Failed to emit SESSION_EXPIRED for session', session.id, auditErr);
+        }
+      }
+    }
+
+    await db
       .delete(userSessions)
       .where(sql`${userSessions.expiresAt} < ${now}`);
-    console.log(`🧹 Cleaned up expired sessions`);
+
+    if (expiringSessions.length > 0) {
+      console.log(`🧹 Cleaned up ${expiringSessions.length} expired sessions (SESSION_EXPIRED events emitted)`);
+    } else {
+      console.log(`🧹 Cleaned up expired sessions (none found)`);
+    }
   }
 
   static async authenticate(
@@ -355,7 +417,7 @@ export class AuthService {
 
   static async validatePortalToken(
     portalToken: string
-  ): Promise<{ employeeId: number; isValid: boolean }> {
+  ): Promise<{ employeeId: number; isValid: boolean; reason?: string }> {
     const { storage } = await import('./storage');
     return storage.validatePortalToken(portalToken);
   }

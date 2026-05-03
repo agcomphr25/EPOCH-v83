@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -441,10 +442,10 @@ export default function PartRoutingManagement() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
-            <a href="/routing-templates">
+            <Link href="/routing-templates">
               <BookTemplate className="h-4 w-4 mr-2" />
               Templates
-            </a>
+            </Link>
           </Button>
           <Button onClick={() => handleOpenWizard(null)} data-testid="button-create-routing">
             <Plus className="h-4 w-4 mr-2" />

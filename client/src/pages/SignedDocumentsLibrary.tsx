@@ -352,10 +352,10 @@ export default function SignedDocumentsLibrary() {
                   Download
                 </Button>
                 <Button variant="outline" asChild>
-                  <a href={`/${previewDocument.media.storagePath}`} target="_blank" rel="noopener noreferrer">
+                  <Link href={`/${previewDocument.media.storagePath}`} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Open in New Tab
-                  </a>
+                  </Link>
                 </Button>
                 <Button variant="outline" onClick={() => handleEdit(previewDocument)}>
                   <Edit className="h-4 w-4 mr-2" />

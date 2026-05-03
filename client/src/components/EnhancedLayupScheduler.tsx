@@ -78,12 +78,21 @@ interface ScheduleEntry {
   employeeAssignments: any[];
 }
 
+interface PTOEntry {
+  id: number;
+  employeeId: number;
+  employeeFirstName: string | null;
+  employeeLastName: string | null;
+  leaveType: string;
+}
+
 interface DayCellProps {
   date: Date;
   orders: ProductionOrder[];
   isWorkDay: boolean;
   onMoveOrder: (orderId: string, targetDate: string) => void;
   onRemoveOrder: (orderId: string) => void;
+  ptoOnDay?: PTOEntry[];
 }
 
 function SortableOrder({
@@ -156,6 +165,7 @@ function DayCell({
   isWorkDay,
   onMoveOrder,
   onRemoveOrder,
+  ptoOnDay = [],
 }: DayCellProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -190,6 +200,16 @@ function DayCell({
           <Badge className="bg-blue-500 text-white text-xs">Work Day</Badge>
         )}
       </div>
+      {ptoOnDay.length > 0 && (
+        <div className="mb-2 space-y-0.5">
+          {ptoOnDay.map((pto) => (
+            <div key={pto.id} className="text-xs bg-emerald-100 text-emerald-800 rounded px-1.5 py-0.5 flex items-center gap-1">
+              <span>🏖</span>
+              <span>{pto.employeeFirstName} {pto.employeeLastName} — {pto.leaveType.toUpperCase()}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <DndContext
         sensors={sensors}
@@ -254,6 +274,32 @@ export default function EnhancedLayupScheduler() {
     queryKey: ['/api/production-queue/prioritized'],
     queryFn: () => apiRequest('/api/production-queue/prioritized'),
   });
+
+  // Get approved PTO for planning visibility
+  const { data: approvedPTO = [] } = useQuery<(PTOEntry & { startDate: string; endDate: string })[]>({
+    queryKey: ['/api/timekeeping/time-off/approved'],
+    queryFn: async () => {
+      const r = await fetch('/api/timekeeping/time-off/approved', { credentials: 'include' });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Build a dateKey → PTO array map for quick lookup
+  const ptoByDate = useMemo(() => {
+    const map: Record<string, PTOEntry[]> = {};
+    for (const pto of approvedPTO) {
+      const start = new Date(pto.startDate);
+      const end = new Date(pto.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().split('T')[0];
+        if (!map[key]) map[key] = [];
+        map[key].push(pto);
+      }
+    }
+    return map;
+  }, [approvedPTO]);
 
   // Get employee settings
   const { data: employeeSettings = [] } = useQuery({
@@ -878,6 +924,7 @@ export default function EnhancedLayupScheduler() {
                   isWorkDay={isWorkDay}
                   onMoveOrder={moveOrder}
                   onRemoveOrder={removeOrderFromSchedule}
+                  ptoOnDay={ptoByDate[dateKey] ?? []}
                 />
               );
             })}

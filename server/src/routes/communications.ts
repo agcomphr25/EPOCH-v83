@@ -41,20 +41,22 @@ const smsSchema = z.object({
   orderId: z.string().optional().nullable(),
 });
 
-// Diagnostic endpoint to confirm email config
-router.get('/email/test', async (req, res) => {
-  try {
-    res.json({
-      SENDGRID_API_KEY: !!process.env.SENDGRID_API_KEY,
-      SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL || 'NOT SET',
-      EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'sendgrid (default)',
-      status: "Email service reachable",
-      nextStep: "Try sending a test email via POST /api/communications/email"
-    });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
+// Diagnostic endpoint to confirm email config — not mounted in production
+if (process.env.NODE_ENV !== 'production') {
+  router.get('/email/test', async (req, res) => {
+    try {
+      res.json({
+        SENDGRID_API_KEY: !!process.env.SENDGRID_API_KEY,
+        SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL || 'NOT SET',
+        EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'sendgrid (default)',
+        status: "Email service reachable",
+        nextStep: "Try sending a test email via POST /api/communications/email"
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+}
 
 // Send email via SendGrid or Microsoft Graph
 router.post('/email', async (req, res) => {
@@ -517,7 +519,8 @@ router.get('/customer/:customerId/history', async (req, res) => {
   }
 });
 
-// Test SendGrid configuration - bypasses order logic to validate email delivery
+// Test SendGrid configuration — not mounted in production
+if (process.env.NODE_ENV !== 'production') {
 router.post('/test-sendgrid', async (req, res) => {
   try {
     const { testEmail } = req.body;
@@ -610,9 +613,10 @@ router.post('/test-sendgrid', async (req, res) => {
     });
   }
 });
+}
 
-// DIAGNOSTIC: Test email endpoint using same path as tracking notifications
-// GET /api/debug/email-test - Hard-coded to send to glenn@agcomposites.com
+// DIAGNOSTIC: Hard-coded debug email test — not mounted in production
+if (process.env.NODE_ENV !== 'production') {
 router.get('/debug/email-test', async (req, res) => {
   console.log('='.repeat(60));
   console.log('[DEBUG EMAIL TEST] Starting diagnostic email test');
@@ -694,6 +698,7 @@ router.get('/debug/email-test', async (req, res) => {
     });
   }
 });
+}
 
 // Get all communication logs (admin view)
 router.get('/logs', async (req, res) => {

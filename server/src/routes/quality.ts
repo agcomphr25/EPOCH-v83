@@ -7,6 +7,7 @@ import {
 } from '@shared/schema';
 
 import { storage } from '../../storage';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ router.get('/definitions/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/definitions', async (req: Request, res: Response) => {
+router.post('/definitions', requirePermission('quality.manage_definitions'), async (req: Request, res: Response) => {
   try {
     const definitionData = insertQcDefinitionSchema.parse(req.body);
     const newDefinition = await storage.createQcDefinition(definitionData);
@@ -51,7 +52,7 @@ router.post('/definitions', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/definitions/:id', async (req: Request, res: Response) => {
+router.put('/definitions/:id', requirePermission('quality.manage_definitions'), async (req: Request, res: Response) => {
   try {
     const definitionId = parseInt(req.params.id);
     const updates = req.body;
@@ -66,7 +67,7 @@ router.put('/definitions/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/definitions/:id', async (req: Request, res: Response) => {
+router.delete('/definitions/:id', requirePermission('quality.manage_definitions'), async (req: Request, res: Response) => {
   try {
     const definitionId = parseInt(req.params.id);
     await storage.deleteQcDefinition(definitionId);

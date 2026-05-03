@@ -242,6 +242,12 @@ router.get('/callback', async (req: Request, res: Response) => {
       userId = dbUser.id;
       username = dbUser.username;
       role = dbUser.role || 'EMPLOYEE';
+
+      // Mark existing users as Microsoft-federated on first OAuth sign-in
+      await pool.query(
+        `UPDATE users SET auth_provider = 'microsoft' WHERE id = $1 AND (auth_provider IS NULL OR auth_provider != 'microsoft')`,
+        [userId]
+      );
     } else {
       // Auto-create user account for new Microsoft sign-ins
       const generatedUsername = email.split('@')[0];
@@ -250,8 +256,8 @@ router.get('/callback', async (req: Request, res: Response) => {
       const passwordHash = await bcrypt.hash(randomPassword, 12);
 
       const insertResult = await pool.query(
-        `INSERT INTO users (username, email, password_hash, role, is_active) 
-         VALUES ($1, $2, $3, $4, true) 
+        `INSERT INTO users (username, email, password_hash, role, is_active, auth_provider) 
+         VALUES ($1, $2, $3, $4, true, 'microsoft') 
          RETURNING id, username, role`,
         [generatedUsername, email, passwordHash, 'EMPLOYEE']
       );
@@ -272,16 +278,60 @@ router.get('/callback', async (req: Request, res: Response) => {
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Store session in database
+    // ── Concurrent session enforcement (Microsoft OAuth) ─────────────────────
+    // Keep newest (maxSessions - 1) existing sessions; deactivate oldest overflow.
+    const oauthMaxSessionsByRole: Record<string, number> = { ADMIN: 1, OWNER: 1, EMPLOYEE: 1 };
+    const oauthMaxSessions = oauthMaxSessionsByRole[role] ?? 1;
+    const oauthExistingResult = await pool.query(
+      `SELECT id FROM user_sessions WHERE user_id = $1 AND is_active = true AND expires_at > NOW() ORDER BY created_at ASC`,
+      [userId]
+    );
+    const oauthExistingRows: Array<{ id: number }> = oauthExistingResult.rows ?? oauthExistingResult ?? [];
+    const oauthAllowedToKeep = Math.max(0, oauthMaxSessions - 1);
+    const oauthToDeactivate = oauthExistingRows.length > oauthAllowedToKeep
+      ? oauthExistingRows.slice(0, oauthExistingRows.length - oauthAllowedToKeep)
+      : [];
+    for (const old of oauthToDeactivate) {
+      await pool.query(`UPDATE user_sessions SET is_active = false WHERE id = $1`, [old.id]);
+      await pool.query(
+        `INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, actor_role, meta, created_at)
+         VALUES ('user_session', $1, 'SESSION_SUPERSEDED', $2, $3, $4, $5, NOW())`,
+        [String(old.id), userId, username, role, JSON.stringify({ reason: 'Microsoft OAuth login exceeded concurrent session limit', maxSessions: oauthMaxSessions })]
+      );
+    }
+
+    // Store session in database — OAuth login IS credential verification
+    const oauthIpAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
+    const oauthUserAgent = req.headers['user-agent'] || null;
     await pool.query(
-      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active) 
-       VALUES ($1, $2, $3, $4, true)
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, last_credential_verified_at) 
+       VALUES ($1, $2, $3, $4, true, $5, $6, NOW())
        ON CONFLICT (session_token) DO UPDATE 
-       SET expires_at = $4, is_active = true`,
-      [sessionToken, userId, username, expiresAt]
+       SET expires_at = $4, is_active = true, ip_address = $5, user_agent = $6, last_credential_verified_at = NOW()`,
+      [sessionToken, userId, username, expiresAt, oauthIpAddress, oauthUserAgent]
     );
 
     console.log('✅ Microsoft OAuth session saved for user:', username, email);
+
+    // Emit SESSION_CREATED audit event for Microsoft OAuth login
+    {
+      const oauthSessionRow = await pool.query(
+        `SELECT id FROM user_sessions WHERE session_token = $1`,
+        [sessionToken]
+      );
+      const oauthSessionId = oauthSessionRow.rows?.[0]?.id ?? oauthSessionRow[0]?.id;
+      if (oauthSessionId) {
+        try {
+          await pool.query(
+            `INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, actor_role, meta, created_at)
+             VALUES ('user_session', $1, 'SESSION_CREATED', $2, $3, $4, $5, NOW())`,
+            [String(oauthSessionId), userId, username, role, JSON.stringify({ loginMethod: 'microsoft_oauth', email, expiresAt: expiresAt.toISOString() })]
+          );
+        } catch (auditErr) {
+          console.error('[SessionAudit] Failed to emit SESSION_CREATED for Microsoft OAuth session', oauthSessionId, auditErr);
+        }
+      }
+    }
 
     // Set HTTP-only cookie
     const isProduction =

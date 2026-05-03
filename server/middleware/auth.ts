@@ -15,6 +15,13 @@ declare global {
         isActive: boolean;
       };
       portalEmployeeId?: number;
+      /**
+       * Set by attemptBadgeOrTokenAuth when a badge code is present in the request
+       * but resolves to no employee in the database.  requirePermission reads this flag
+       * to return a descriptive "Badge not recognised" 401 instead of the generic
+       * "Authentication required" message.
+       */
+      badgeLookupFailed?: boolean;
     }
   }
 }
@@ -72,6 +79,14 @@ export async function authenticateToken(
           user = dbUser;
         }
       }
+    }
+
+    // Second fallback: Bearer value may be a plain session token (not JWT).
+    // This handles cases where the browser sends its sessionToken as both a
+    // Bearer header and a cookie (e.g. third-party cookie restrictions on production
+    // domains like agcompepoch.xyz where the cookie may not be transmitted).
+    if (!user && bearerToken) {
+      user = await AuthService.getUserBySession(bearerToken);
     }
 
     // Fallback to session-based authentication (for cookies)
@@ -168,7 +183,8 @@ export async function authenticatePortalToken(
 
     const validation = await AuthService.validatePortalToken(token);
     if (!validation.isValid) {
-      return res.status(403).json({ error: 'Invalid or expired portal token' });
+      const message = validation.reason ?? 'Invalid or expired portal token';
+      return res.status(403).json({ error: message });
     }
 
     // Attach employee data to request for portal access
@@ -196,16 +212,70 @@ export function requireRecentAuth(maxAge: number = 15 * 60 * 1000) {
       return next();
     }
 
-    // In production, implement re-authentication check:
-    // const lastAuth = await AuthService.getLastAuthenticationTime(req.user.id);
-    // if (Date.now() - lastAuth > maxAge) {
-    //   return res.status(401).json({
-    //     error: 'Recent authentication required',
-    //     requireReauth: true
-    //   });
-    // }
-
     next();
+  };
+}
+
+/**
+ * Step-up re-authentication middleware for CUI/ITAR-classified resources.
+ * Verifies that the user re-entered their credentials within the configured
+ * threshold (default: 30 minutes). If not, returns 401 with WWW-Authenticate: StepUp
+ * so the client can prompt the user to re-enter their password.
+ *
+ * Apply this gate to any endpoint that serves controlled/sensitive documents.
+ * Example: router.get('/documents/:id/download', requireStepUp(), handler)
+ */
+export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Skip in dev bypass mode
+    if (process.env.DEV_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production') {
+      return next();
+    }
+
+    try {
+      const { pool } = await import('../db');
+      // Prefer the cookie session token over the Authorization bearer value.
+      // Bearer tokens may be JWTs (not session tokens), so looking them up in
+      // user_sessions would always fail. Cookie tokens are always real session rows.
+      const sessionToken =
+        req.cookies?.sessionToken ||
+        (req.headers['authorization'] as string | undefined)?.replace('Bearer ', '');
+
+      if (!sessionToken) {
+        res.setHeader('WWW-Authenticate', 'StepUp');
+        return res.status(401).json({ error: 'Step-up authentication required', requireStepUp: true });
+      }
+
+      const result = await pool.query(
+        `SELECT last_credential_verified_at FROM user_sessions WHERE session_token = $1 AND is_active = true`,
+        [sessionToken]
+      );
+      const row = result.rows?.[0] ?? result[0];
+
+      if (!row || !row.last_credential_verified_at) {
+        res.setHeader('WWW-Authenticate', 'StepUp');
+        return res.status(401).json({ error: 'Step-up authentication required', requireStepUp: true });
+      }
+
+      const verifiedAt = new Date(row.last_credential_verified_at).getTime();
+      if (Date.now() - verifiedAt > maxAgeMs) {
+        res.setHeader('WWW-Authenticate', 'StepUp');
+        return res.status(401).json({
+          error: 'Credential verification has expired. Please re-authenticate.',
+          requireStepUp: true,
+        });
+      }
+
+      next();
+    } catch (err) {
+      console.error('requireStepUp error:', err);
+      res.setHeader('WWW-Authenticate', 'StepUp');
+      return res.status(401).json({ error: 'Step-up authentication required', requireStepUp: true });
+    }
   };
 }
 
@@ -313,6 +383,11 @@ export async function sessionAwareAuth(
         }
       }
 
+      // Second fallback: Bearer value may be a plain session token (not JWT).
+      if (!user && bearerToken) {
+        user = await AuthService.getUserBySession(bearerToken);
+      }
+
       // Fallback to session-based authentication (for cookies)
       if (!user && cookieToken) {
         user = await AuthService.getUserBySession(cookieToken);
@@ -389,6 +464,15 @@ export async function optionalAuth(
           req.user = dbUser;
           return next();
         }
+      }
+    }
+
+    // Second fallback: Bearer value may be a plain session token (not JWT).
+    if (bearerToken) {
+      const user = await AuthService.getUserBySession(bearerToken);
+      if (user) {
+        req.user = user;
+        return next();
       }
     }
 

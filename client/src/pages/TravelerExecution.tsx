@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { runSignBadgeLookup, fetchResolveBadge } from '@/lib/signBadgeHandlers';
+import SignBadgeScanSection from '@/components/SignBadgeScanSection';
 import { useToast } from '@/hooks/use-toast';
+import { useActionAuth } from '@/hooks/useActionAuth';
 import { ToastAction } from '@/components/ui/toast';
-import { useParams, Link } from 'wouter';
+import { useParams, useSearch, Link } from 'wouter';
 import FabricInventoryPicker from '@/components/FabricInventoryPicker';
 import {
   Card,
@@ -65,6 +68,8 @@ import {
   Wrench,
   Flag,
   Shield,
+  ShieldCheck,
+  ShieldAlert,
   BookOpen,
   Lightbulb,
   ImageIcon,
@@ -244,6 +249,8 @@ const PHASE_ORDER: TaskPhase[] = ['START', 'WORK', 'FINISH'];
 export default function TravelerExecution() {
   const params = useParams();
   const travelerId = params.id;
+  const searchString = useSearch();
+  const { getAuthHeaders } = useActionAuth();
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [showInventoryPicker, setShowInventoryPicker] = useState(false);
@@ -268,10 +275,15 @@ export default function TravelerExecution() {
   } | null>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
-  const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
+  const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found' | 'error'>('idle');
   const [stepNotes, setStepNotes] = useState('');
-  const [resolvedEmployee, setResolvedEmployee] = useState<{ name: string; employeeCode: string; department: string | null } | null>(null);
+  const [resolvedEmployee, setResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
+  const [nameLookupPending, setNameLookupPending] = useState(false);
   const badgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [signBadgeLookupStatus, setSignBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
+  const [signResolvedEmployee, setSignResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
+  const signBadgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [blockReason, setBlockReason] = useState('');
@@ -281,6 +293,27 @@ export default function TravelerExecution() {
   const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [timerStartedForStep, setTimerStartedForStep] = useState<Record<string, boolean>>({});
+
+  // ── Labor budget override request (shown when WAD budget is BLOCKED) ──────
+  const [overrideForm, setOverrideForm] = useState({ operatorEmployeeId: '', operatorDisplayName: '', requestedHours: '2', note: '' });
+  const [overrideSubmittedId, setOverrideSubmittedId] = useState<number | null>(null);
+  const [overrideCanonicalOpId, setOverrideCanonicalOpId] = useState<string | null>(null);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Job-switch scan (barcode-driven auto job-switch) ────────────────────
+  const [jobSwitchEmployeeId, setJobSwitchEmployeeId] = useState('');
+  const [jobSwitchStatus, setJobSwitchStatus] = useState<'idle' | 'transitioning' | 'success' | 'error'>('idle');
+  interface JobSwitchApiResult {
+    switched?: boolean;
+    closed?: { id: number; chargeCode?: string | null; travelerId?: string | null } | null;
+    created?: { id: number; chargeCode?: string | null };
+    entry?: { id: number; chargeCode?: string | null };
+    chargeContext: { chargeCode: string; travelerNumber: string; wadNumber: string };
+    warning?: string;
+  }
+  const [jobSwitchResult, setJobSwitchResult] = useState<JobSwitchApiResult | null>(null);
+  const [jobSwitchError, setJobSwitchError] = useState<string | null>(null);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const { data: activeTimerData, refetch: refetchActiveTimer } = useQuery<{ run: any; program: any }>({
     queryKey: ['/api/production/timers/runs/active', currentStepId],
@@ -311,36 +344,109 @@ export default function TravelerExecution() {
   const [qcApproverName, setQcApproverName] = useState('');
   const [qcApprovalNotes, setQcApprovalNotes] = useState('');
 
+  // ── WAD labor context — charge code, cert badge, budget warnings (Task #1235) ──
+  const [laborWarnAcknowledged, setLaborWarnAcknowledged] = useState(false);
+  const [certWarnAcknowledged, setCertWarnAcknowledged] = useState(false);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
   const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
 
+  // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)
+  interface LaborContext {
+    chargeCode: string | null;
+    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'department_match' | null;
+    chargeCodeError: string | null;
+    isOverrun: boolean;
+    nearlyExhausted: boolean;
+    overrunReason: string | null;
+    percentUsed: number | null;
+    projectId: string | null;
+    wadId: string | null;
+    department: string | null;
+    // Cert requirement info (resolved from routing op)
+    requiresCertification: boolean;
+    certificationName: string | null;
+    // Cert status — only populated when employeeId query param is provided (post-badge-scan)
+    certificationStatus: 'VALID' | 'EXPIRED' | 'MISSING' | 'UNKNOWN' | null;
+    certReason: string | null;
+  }
+
+  // When badge is scanned, use the resolved employee's id to get actual cert status
+  const laborContextEmployeeId = resolvedEmployee?.id ?? null;
+
+  const { data: laborContext } = useQuery<LaborContext | null>({
+    queryKey: ['/api/travelers', travelerId, 'steps', currentStepId, 'labor-context', laborContextEmployeeId],
+    queryFn: () => {
+      const url = new URL(`/api/travelers/${travelerId}/steps/${currentStepId}/labor-context`, window.location.origin);
+      if (laborContextEmployeeId) url.searchParams.set('employeeId', String(laborContextEmployeeId));
+      return fetch(url.toString()).then(async (res) => {
+        if (!res.ok) return null;
+        return res.json();
+      });
+    },
+    enabled: !!travelerId && !!currentStepId,
+    staleTime: 30_000,
+  });
+
+  // Reset acknowledgment state when switching steps
+  useEffect(() => {
+    setLaborWarnAcknowledged(false);
+    setCertWarnAcknowledged(false);
+  }, [currentStepId]);
+
   const handleBadgeScanInput = (value: string) => {
     setSignatureData((prev) => ({ ...prev, badgeScan: value }));
     setResolvedEmployee(null);
+    setNameLookupPending(false);
     setBadgeLookupStatus('idle');
 
     if (badgeLookupTimerRef.current) {
       clearTimeout(badgeLookupTimerRef.current);
     }
 
-    if (value.trim().length >= 8) {
+    if (value.trim().length >= 3) {
       setBadgeLookupStatus('loading');
       badgeLookupTimerRef.current = setTimeout(async () => {
         try {
-          const resp = await fetch(`/api/employee-badges/resolve-badge/${encodeURIComponent(value.trim())}`);
+          const resp = await fetch(`/api/p2-traveler/badge-lookup/${encodeURIComponent(value.trim())}`);
           if (resp.ok) {
             const emp = await resp.json();
-            setResolvedEmployee({ name: emp.name, employeeCode: emp.employeeCode, department: emp.department });
+            setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
             setSignatureData((prev) => ({ ...prev, signedByName: emp.name }));
             setBadgeLookupStatus('found');
-          } else {
+          } else if (resp.status === 404) {
             setBadgeLookupStatus('not_found');
+          } else {
+            setBadgeLookupStatus('error');
           }
         } catch {
-          setBadgeLookupStatus('not_found');
+          setBadgeLookupStatus('error');
         }
+      }, 300);
+    }
+  };
+
+  const handleSignBadgeScanInput = (value: string) => {
+    setSignatureData((prev) => ({ ...prev, signedBy: value, badgeScan: value, signedByName: '' }));
+    setSignResolvedEmployee(null);
+    setSignBadgeLookupStatus('idle');
+
+    if (signBadgeLookupTimerRef.current) {
+      clearTimeout(signBadgeLookupTimerRef.current);
+    }
+
+    if (value.trim().length >= 8) {
+      setSignBadgeLookupStatus('loading');
+      signBadgeLookupTimerRef.current = setTimeout(async () => {
+        await runSignBadgeLookup(value.trim(), {
+          resolveBadge: fetchResolveBadge,
+          setSignedByName: (name) => setSignatureData((prev) => ({ ...prev, signedByName: name })),
+          setSignResolvedEmployee,
+          setSignBadgeLookupStatus,
+        });
       }, 300);
     }
   };
@@ -379,6 +485,65 @@ export default function TravelerExecution() {
   });
 
   const { traveler, steps = [], events = [] } = travelerData || {};
+
+  // Labor budget status for the WAD linked to this traveler
+  const { data: wadLaborStatus } = useQuery<{ status: string; totalHours: number; totalBudget: number | null; percentUsed: number | null } | null>({
+    queryKey: ['/api/work-orders', traveler?.workOrderId, 'labor-status'],
+    queryFn: async () => {
+      const res = await fetch(`/api/work-orders/${traveler!.workOrderId}/labor-status`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!traveler?.workOrderId,
+    refetchInterval: 30000,
+  });
+
+  interface OverrideStatusItem { id: number; status: string; expiresAt: string | null; supervisorNote: string | null }
+  interface OverrideCreateResponse { override: { id: number; operatorEmployeeId: string } }
+
+  // Override request mutation for blocked WAD budget
+  const overrideMutation = useMutation<OverrideCreateResponse, Error, typeof overrideForm>({
+    mutationFn: async (data) => {
+      return await apiRequest(`/api/work-orders/production/${traveler!.workOrderId}/budget-overrides`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: (result) => {
+      const ov = result.override;
+      setOverrideSubmittedId(ov?.id ?? null);
+      setOverrideCanonicalOpId(ov?.operatorEmployeeId ?? overrideForm.operatorEmployeeId);
+      toast({ title: 'Override request submitted', description: 'Waiting for supervisor approval.' });
+    },
+    onError: (err) => {
+      let msg = err.message;
+      try {
+        const b = JSON.parse(err.message) as { message?: string; existingOverride?: { id: number; operatorEmployeeId: string } };
+        if (b?.message) msg = b.message;
+        if (b?.existingOverride) { setOverrideSubmittedId(b.existingOverride.id); setOverrideCanonicalOpId(b.existingOverride.operatorEmployeeId); return; }
+      } catch { /* ignore */ }
+      toast({ title: 'Override request failed', description: msg, variant: 'destructive' });
+    },
+  });
+
+  // Poll for override approval status
+  const { data: overrideStatusList } = useQuery<OverrideStatusItem[]>({
+    queryKey: ['/api/work-orders/production', traveler?.workOrderId, 'budget-overrides', overrideCanonicalOpId],
+    queryFn: async () => {
+      const res = await fetch(`/api/work-orders/production/${traveler!.workOrderId}/budget-overrides?operatorEmployeeId=${encodeURIComponent(overrideCanonicalOpId!)}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!overrideSubmittedId && !!overrideCanonicalOpId && !!traveler?.workOrderId,
+    refetchInterval: (query) => {
+      const list = query.state.data ?? [];
+      const ov = list.find(o => o.id === overrideSubmittedId);
+      return ov?.status === 'PENDING' ? 3000 : false;
+    },
+  });
+
+  const submittedOverride = overrideStatusList?.find(o => o.id === overrideSubmittedId);
 
   interface PartRoutingData {
     id: string;
@@ -512,6 +677,37 @@ export default function TravelerExecution() {
     },
   });
 
+  const switchJobMutation = useMutation({
+    mutationFn: async ({ employeeId, travelerNumber }: { employeeId: string; travelerNumber: string }) => {
+      const res = await fetch('/api/time-clock/clock-in/traveler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scanValue: travelerNumber, employeeId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const errMsg = data?.message ?? data?.error ?? 'Switch failed';
+        const err = Object.assign(new Error(errMsg), { data });
+        throw err;
+      }
+      return data as JobSwitchApiResult;
+    },
+    onMutate: () => {
+      setJobSwitchStatus('transitioning');
+      setJobSwitchError(null);
+      setJobSwitchResult(null);
+    },
+    onSuccess: (data) => {
+      setJobSwitchResult(data);
+      setJobSwitchStatus('success');
+    },
+    onError: (err: any) => {
+      const errData = err?.data ?? {};
+      setJobSwitchError(errData?.message ?? err?.message ?? 'Failed to switch job. Please try again.');
+      setJobSwitchStatus('error');
+    },
+  });
+
   const [scanValue, setScanValue] = useState('');
   interface ScanResult {
     candidateFound: boolean;
@@ -577,6 +773,25 @@ export default function TravelerExecution() {
     return meaningfulTasks.length === 0;
   };
 
+  // Seed activeBadge from ?badge= query param passed by the P2 traveler flow
+  useEffect(() => {
+    if (!searchString) return;
+    const params = new URLSearchParams(searchString);
+    const badgeParam = params.get('badge');
+    if (badgeParam && badgeParam.trim()) {
+      const badge = badgeParam.trim();
+      if (!activeBadge) {
+        setActiveBadge(badge);
+        setSignatureData((prev) => ({
+          ...prev,
+          signedBy: prev.signedBy || badge,
+          badgeScan: prev.badgeScan || badge,
+        }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchString]);
+
   useEffect(() => {
     if (steps.length > 0 && !currentStepId) {
       const inProgressStep = steps.find((s) => s.status === 'IN_PROGRESS');
@@ -585,8 +800,9 @@ export default function TravelerExecution() {
       if (inProgressStep?.startedBy && !activeBadge) {
         const stored = inProgressStep.startedBy;
         const isRawCode = /^EMP\d+$/i.test(stored);
-        setActiveBadge(stored);
-        if (!isRawCode) {
+        if (isRawCode) {
+          setActiveBadge(stored);
+        } else {
           setActiveTechName(stored);
         }
       }
@@ -594,22 +810,51 @@ export default function TravelerExecution() {
   }, [steps, currentStepId]);
 
   const startStepMutation = useMutation({
-    mutationFn: ({ stepId, badge, techName }: { stepId: string; badge: string; techName: string }) =>
+    mutationFn: ({ stepId, badge, techName, employeeId }: { stepId: string; badge: string; techName: string; employeeId?: number }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge }),
+        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge, employeeId }),
         headers: { 'Content-Type': 'application/json' },
       }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (data: any, variables) => {
       setActiveBadge(variables.badge);
       setActiveTechName(variables.techName);
+      setLaborWarnAcknowledged(false);
+      setCertWarnAcknowledged(false);
+
+      // Surface WAD labor context warnings (Task #1235)
+      const wad = data?.wadLaborContext;
+      if (wad) {
+        if (wad.certificationStatus === 'EXPIRED') {
+          toast({
+            title: 'Certification Expired',
+            description: wad.certReason ?? 'Your certification for this step has expired. Notify your supervisor.',
+            variant: 'destructive',
+          });
+        } else if (wad.certificationStatus === 'MISSING') {
+          toast({
+            title: 'Certification Not Found',
+            description: wad.certReason ?? 'No certification record found for this step. Notify your supervisor.',
+            variant: 'destructive',
+          });
+        } else if (wad.isOverrun) {
+          toast({
+            title: 'Budget Warning Recorded',
+            description: 'Session started — budget overrun has been flagged for supervisor review.',
+            variant: 'destructive',
+          });
+        }
+      }
+
       toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
       refetch();
     },
     onError: (error: any, variables) => {
-      const reason = error.reason ?? error.responseData?.reason;
+      const gateKey: string | undefined = error.gate ?? error.responseData?.gate;
+      const detail: string | undefined = error.detail ?? error.responseData?.detail;
+      const reason: string | undefined = detail ?? error.reason ?? error.responseData?.reason;
       const description = reason ? `${error.message}: ${reason}` : error.message;
-      const isGateBlock = error.message?.toLowerCase().includes('gate') || reason?.toLowerCase().includes('gate') || description?.toLowerCase().includes('gate');
+      const isGateBlock = !!gateKey || error.message?.toLowerCase().includes('gate') || reason?.toLowerCase().includes('gate') || description?.toLowerCase().includes('gate');
       toast({
         title: 'Cannot Start Step',
         description,
@@ -658,7 +903,8 @@ export default function TravelerExecution() {
       refetch();
     },
     onError: (error: any) => {
-      const reason = error.reason ?? error.responseData?.reason;
+      const detail: string | undefined = error.detail ?? error.responseData?.detail;
+      const reason: string | undefined = detail ?? error.reason ?? error.responseData?.reason;
       const description = reason ? `${error.message}: ${reason}` : error.message;
       toast({ title: 'Override Failed', description, variant: 'destructive' });
     },
@@ -670,8 +916,11 @@ export default function TravelerExecution() {
       fieldVals?: Record<string, string>;
       fieldValidations?: Record<string, any>;
       toleranceApproval?: { approvedBy: string; notes: string };
-    }) =>
-      apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
+    }) => {
+      const badgeHeader: Record<string, string> = activeBadge
+        ? { 'X-Badge-Code': activeBadge }
+        : {};
+      return apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
         method: 'POST',
         body: JSON.stringify({
           completedBy: activeTechName || activeBadge || 'operator',
@@ -679,8 +928,9 @@ export default function TravelerExecution() {
           fieldValidations,
           toleranceApproval,
         }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
+        headers: { 'Content-Type': 'application/json', ...badgeHeader },
+      });
+    },
     onSuccess: () => {
       toast({ title: 'Task Completed', description: 'Task has been marked complete' });
       setShowQcApprovalDialog(false);
@@ -707,6 +957,9 @@ export default function TravelerExecution() {
       const drawnSignature = sigPadRef.current && !sigPadRef.current.isEmpty()
         ? sigPadRef.current.toDataURL('image/png')
         : null;
+      const badgeHeader: Record<string, string> = activeBadge
+        ? { 'X-Badge-Code': activeBadge }
+        : {};
       return apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/sign`, {
         method: 'POST',
         body: JSON.stringify({
@@ -715,7 +968,7 @@ export default function TravelerExecution() {
           taskId: taskId || undefined,
           signatureRole: role || undefined,
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...badgeHeader, ...getAuthHeaders() },
       });
     },
     onSuccess: () => {
@@ -734,10 +987,13 @@ export default function TravelerExecution() {
         signatureData: '',
       });
       if (sigPadRef.current) sigPadRef.current.clear();
+      setSignBadgeLookupStatus('idle');
+      setSignResolvedEmployee(null);
       refetch();
     },
     onError: (error: any) => {
-      const reason = error.reason ?? error.responseData?.reason;
+      const detail: string | undefined = error.detail ?? error.responseData?.detail;
+      const reason: string | undefined = detail ?? error.reason ?? error.responseData?.reason;
       const description = reason ? `${error.message}: ${reason}` : error.message;
       toast({ title: 'Cannot Sign Step', description, variant: 'destructive' });
     },
@@ -778,12 +1034,16 @@ export default function TravelerExecution() {
   });
 
   const completeTravelerMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/travelers/${travelerId}/complete`, {
+    mutationFn: () => {
+      const badgeHeader: Record<string, string> = activeBadge
+        ? { 'X-Badge-Code': activeBadge }
+        : {};
+      return apiRequest(`/api/travelers/${travelerId}/complete`, {
         method: 'POST',
         body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator' }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
+        headers: { 'Content-Type': 'application/json', ...badgeHeader },
+      });
+    },
     onSuccess: () => {
       toast({ title: 'Traveler Completed', description: 'All work has been completed' });
       refetch();
@@ -1041,6 +1301,19 @@ export default function TravelerExecution() {
             Back to List
           </Button>
         </Link>
+        <div className="ml-auto">
+          {activeBadge || activeTechName ? (
+            <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium">
+              <User className="h-3.5 w-3.5 shrink-0" />
+              {activeTechName || activeBadge}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-sm text-muted-foreground">
+              <User className="h-3.5 w-3.5 shrink-0" />
+              No operator — scan your badge
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -1065,8 +1338,94 @@ export default function TravelerExecution() {
                 <div>
                   <span className="text-muted-foreground">Work Order:</span>
                   <p className="font-medium">{traveler.workOrderId}</p>
+                  {wadLaborStatus?.status === 'BLOCKED' && (
+                    <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-medium">
+                      Labor Budget Exhausted — Clock-in Blocked
+                    </span>
+                  )}
                 </div>
               )}
+
+              {/* ── Labor budget override request panel ──────────────────── */}
+              {traveler.workOrderId && wadLaborStatus?.status === 'BLOCKED' && (
+                <div className="col-span-2">
+                  {overrideSubmittedId && submittedOverride ? (
+                    <div className={`rounded border px-3 py-2 text-sm ${
+                      submittedOverride.status === 'APPROVED'
+                        ? 'bg-green-50 border-green-200 text-green-800'
+                        : submittedOverride.status === 'DENIED'
+                        ? 'bg-red-50 border-red-200 text-red-800'
+                        : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                    }`}>
+                      {submittedOverride.status === 'PENDING' && (
+                        <p className="flex items-center gap-1 font-medium">
+                          <span className="animate-spin inline-block w-3 h-3 border border-yellow-600 border-t-transparent rounded-full" />
+                          Waiting for supervisor approval…
+                        </p>
+                      )}
+                      {submittedOverride.status === 'APPROVED' && (
+                        <p className="font-medium">Supervisor approved — you may clock in</p>
+                      )}
+                      {submittedOverride.status === 'DENIED' && (
+                        <>
+                          <p className="font-medium">Override request denied</p>
+                          {submittedOverride.supervisorNote && <p className="text-xs mt-0.5">"{submittedOverride.supervisorNote}"</p>}
+                          <button
+                            className="mt-1 text-xs underline text-red-700"
+                            onClick={() => setOverrideSubmittedId(null)}
+                          >
+                            Submit a new request
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded border border-orange-200 bg-orange-50 p-3 space-y-2">
+                      <p className="text-sm font-medium text-orange-800">Request Supervisor Override to Clock In</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-orange-700 block mb-0.5">Your Employee ID *</label>
+                          <input
+                            className="w-full text-sm border rounded px-2 py-1"
+                            value={overrideForm.operatorEmployeeId}
+                            onChange={e => setOverrideForm(f => ({ ...f, operatorEmployeeId: e.target.value }))}
+                            placeholder="EMP-001"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-orange-700 block mb-0.5">Your Name *</label>
+                          <input
+                            className="w-full text-sm border rounded px-2 py-1"
+                            value={overrideForm.operatorDisplayName}
+                            onChange={e => setOverrideForm(f => ({ ...f, operatorDisplayName: e.target.value }))}
+                            placeholder="First Last"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <label className="text-xs text-orange-700 block mb-0.5">Additional hours needed</label>
+                          <input
+                            type="number" min="0.5" max="24" step="0.5"
+                            className="w-24 text-sm border rounded px-2 py-1"
+                            value={overrideForm.requestedHours}
+                            onChange={e => setOverrideForm(f => ({ ...f, requestedHours: e.target.value }))}
+                          />
+                        </div>
+                        <button
+                          className="mt-4 px-3 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded disabled:opacity-50"
+                          disabled={!overrideForm.operatorEmployeeId.trim() || !overrideForm.operatorDisplayName.trim() || overrideMutation.isPending}
+                          onClick={() => overrideMutation.mutate(overrideForm)}
+                        >
+                          {overrideMutation.isPending ? 'Submitting…' : 'Request Override'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* ─────────────────────────────────────────────────────────── */}
+
               {traveler.serialNumber && (
                 <div>
                   <span className="text-muted-foreground">Serial Number:</span>
@@ -1101,6 +1460,100 @@ export default function TravelerExecution() {
               </div>
             </CardContent>
           </Card>
+
+          {/* ── Barcode-driven job switch ─────────────────────────────── */}
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Switch Labor to This Traveler
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {jobSwitchStatus === 'transitioning' ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-blue-700 text-xs">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Switching job session…</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Closing current session and opening{' '}
+                    <span className="font-mono font-medium">{traveler.travelerNumber}</span>…
+                  </div>
+                </div>
+              ) : jobSwitchStatus === 'success' && jobSwitchResult ? (
+                <div className="space-y-2">
+                  {jobSwitchResult.switched && jobSwitchResult.closed && (
+                    <div className="rounded bg-gray-50 border px-2 py-1 text-xs">
+                      <span className="font-medium text-red-600">Closed:</span>{' '}
+                      {jobSwitchResult.closed.chargeCode ?? 'prior session'} (entry #{jobSwitchResult.closed.id})
+                    </div>
+                  )}
+                  <div className="rounded bg-green-50 border border-green-200 px-2 py-1.5 text-xs text-green-800 font-medium">
+                    Active charge: {jobSwitchResult.chargeContext.chargeCode}{(jobSwitchResult.created ?? jobSwitchResult.entry) ? ` (entry #${(jobSwitchResult.created ?? jobSwitchResult.entry)!.id})` : ''}
+                  </div>
+                  {jobSwitchResult.warning && (
+                    <div className="rounded bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-700 flex items-start gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                      {jobSwitchResult.warning}
+                    </div>
+                  )}
+                  <button
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => { setJobSwitchStatus('idle'); setJobSwitchResult(null); setJobSwitchEmployeeId(''); }}
+                  >
+                    Switch again
+                  </button>
+                </div>
+              ) : jobSwitchStatus === 'error' ? (
+                <div className="space-y-2">
+                  <div className="rounded bg-red-50 border border-red-200 px-2 py-1 text-xs text-red-700">
+                    {jobSwitchError}
+                  </div>
+                  <button
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => { setJobSwitchStatus('idle'); setJobSwitchError(null); }}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Clock in to{' '}
+                    <span className="font-mono font-medium">{traveler.travelerNumber}</span>.
+                    If already on another job, that session closes automatically.
+                  </p>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-0.5">Employee ID or Badge Code</label>
+                    <Input
+                      className="h-7 text-xs"
+                      placeholder="EMP-001 or badge code"
+                      value={jobSwitchEmployeeId}
+                      onChange={e => setJobSwitchEmployeeId(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && jobSwitchEmployeeId.trim()) {
+                          switchJobMutation.mutate({ employeeId: jobSwitchEmployeeId.trim(), travelerNumber: traveler.travelerNumber });
+                        }
+                      }}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full h-7 text-xs"
+                    disabled={!jobSwitchEmployeeId.trim() || switchJobMutation.isPending}
+                    onClick={() => switchJobMutation.mutate({ employeeId: jobSwitchEmployeeId.trim(), travelerNumber: traveler.travelerNumber })}
+                  >
+                    {switchJobMutation.isPending
+                      ? <><Loader2 className="h-3 w-3 animate-spin mr-1" />Switching…</>
+                      : <><Clock className="h-3 w-3 mr-1" />Switch to This Traveler</>
+                    }
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          {/* ─────────────────────────────────────────────────────────── */}
 
           {depStatus && depStatus.totalDependencies > 0 && (
             <Card>
@@ -1531,11 +1984,192 @@ export default function TravelerExecution() {
                         </p>
                       </div>
                     )}
+
+                    {/* WAD labor context info panel (Task #1235) */}
+                    {laborContext && (
+                      <div className="mb-4 mx-auto max-w-sm space-y-2">
+                        {/* Charge code badge */}
+                        <div className="flex items-center justify-center gap-2">
+                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                          {laborContext.chargeCode ? (
+                            <span className="text-xs text-muted-foreground">
+                              Charge code:{' '}
+                              <span className="font-mono font-semibold text-foreground">{laborContext.chargeCode}</span>
+                              <span className="ml-1 text-[10px] text-muted-foreground">
+                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : 'dept match'})
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-amber-600 font-medium">No charge code resolved</span>
+                          )}
+                        </div>
+
+                        {/* Cert requirement badge — shows VALID/EXPIRED/MISSING after badge scan */}
+                        {laborContext.requiresCertification && (
+                          <div className="flex items-center justify-center gap-2">
+                            {laborContext.certificationStatus === 'VALID' ? (
+                              <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
+                            ) : laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING' ? (
+                              <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                            ) : (
+                              <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {laborContext.certificationName
+                                ? <>Cert: <span className="font-semibold text-foreground">{laborContext.certificationName}</span></>
+                                : 'Certification required for this step'
+                              }
+                              {laborContext.certificationStatus && laborContext.certificationStatus !== 'UNKNOWN' && (
+                                <span className={`ml-1.5 font-semibold text-xs px-1.5 py-0.5 rounded ${
+                                  laborContext.certificationStatus === 'VALID'
+                                    ? 'bg-green-100 text-green-700'
+                                    : laborContext.certificationStatus === 'EXPIRED'
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-red-100 text-red-700'
+                                }`}>
+                                  {laborContext.certificationStatus}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Cert warning — inline warning + ack (Task #1235 WARN) */}
+                        {laborContext.requiresCertification && (
+                          <div className={`p-3 border rounded-lg text-left ${
+                            laborContext.certificationStatus === 'VALID'
+                              ? 'bg-green-50 border-green-200'
+                              : 'bg-amber-50 border-amber-200'
+                          }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              {laborContext.certificationStatus === 'VALID' ? (
+                                <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                              ) : (
+                                <ShieldAlert className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                              )}
+                              <span className={`text-sm font-semibold ${laborContext.certificationStatus === 'VALID' ? 'text-green-800' : 'text-amber-800'}`}>
+                                {laborContext.certificationStatus === 'VALID'
+                                  ? 'Certification Valid'
+                                  : laborContext.certificationStatus === 'EXPIRED'
+                                    ? 'Certification Expired'
+                                    : laborContext.certificationStatus === 'MISSING'
+                                      ? 'Certification Missing'
+                                      : 'Certification Required'
+                                }
+                              </span>
+                            </div>
+                            {laborContext.certificationStatus === 'VALID' ? (
+                              <p className="text-xs text-green-700">Your certification is current. It will be recorded on the punch ledger at step start.</p>
+                            ) : laborContext.certReason ? (
+                              <p className="text-xs text-amber-700">{laborContext.certReason}</p>
+                            ) : (
+                              <p className="text-xs text-amber-700">
+                                {laborContext.certificationName
+                                  ? <>This step requires <span className="font-semibold">{laborContext.certificationName}</span>. Scan your badge to verify cert status.</>
+                                  : 'This step requires an operator certification. Scan your badge to verify your status.'
+                                }
+                              </p>
+                            )}
+                            {laborContext.certificationStatus !== 'VALID' && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Phase 1 policy: expired or missing certs are flagged for supervisor review, not blocked.
+                              </p>
+                            )}
+                            {/* Acknowledgment checkbox only required for non-VALID cert status */}
+                            {(laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') && (
+                              !certWarnAcknowledged ? (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Checkbox
+                                    id="cert-warn-ack"
+                                    checked={certWarnAcknowledged}
+                                    onCheckedChange={(v) => setCertWarnAcknowledged(!!v)}
+                                  />
+                                  <label htmlFor="cert-warn-ack" className="text-xs text-amber-700 cursor-pointer">
+                                    I understand my certification status will be flagged for supervisor review
+                                  </label>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 mt-2 text-xs text-green-700">
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  Acknowledged
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
+
+                        {/* Near-exhausted budget warning (WARNING status — informational, no ack needed) */}
+                        {!laborContext.isOverrun && laborContext.nearlyExhausted && laborContext.overrunReason && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-left">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                              <span className="text-sm font-semibold text-amber-800">Budget Nearly Exhausted</span>
+                            </div>
+                            <p className="text-xs text-amber-700">{laborContext.overrunReason}</p>
+                          </div>
+                        )}
+
+                        {/* Budget overrun warning (BLOCKED status — WARN: ack required) */}
+                        {laborContext.isOverrun && (
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-left">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                              <span className="text-sm font-semibold text-red-800">Budget Overrun</span>
+                            </div>
+                            <p className="text-xs text-red-700">{laborContext.overrunReason}</p>
+                            <p className="text-xs text-red-600 mt-1">
+                              Phase 1 policy: session will be recorded and flagged for supervisor review.
+                            </p>
+                            {!laborWarnAcknowledged && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <Checkbox
+                                  id="labor-warn-ack"
+                                  checked={laborWarnAcknowledged}
+                                  onCheckedChange={(v) => setLaborWarnAcknowledged(!!v)}
+                                />
+                                <label htmlFor="labor-warn-ack" className="text-xs text-red-700 cursor-pointer">
+                                  I understand this session will be flagged for review
+                                </label>
+                              </div>
+                            )}
+                            {laborWarnAcknowledged && (
+                              <div className="flex items-center gap-1.5 mt-2 text-xs text-green-700">
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                Acknowledged
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <ScanBarcode className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-muted-foreground mb-4">
                       Scan your badge to start this step
                     </p>
-                    <div className="max-w-xs mx-auto space-y-3">
+                    <form
+                      className="max-w-xs mx-auto space-y-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (
+                          startStepMutation.isPending ||
+                          !(signatureData.badgeScan || activeBadge) ||
+                          (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
+                          badgeLookupStatus === 'error' ||
+                          nameLookupPending ||
+                          (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||
+                          (!!laborContext?.requiresCertification &&
+                            (laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') &&
+                            !certWarnAcknowledged)
+                        ) return;
+                        startStepMutation.mutate({
+                          stepId: currentStep.id,
+                          badge: signatureData.badgeScan || activeBadge,
+                          techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
+                          employeeId: resolvedEmployee?.id,
+                        });
+                      }}
+                    >
                       <div className="space-y-1">
                         <Label htmlFor="step-badge-scan" className="text-sm">Scan Badge</Label>
                         <Input
@@ -1567,17 +2201,61 @@ export default function TravelerExecution() {
                                 name="tech-name-fallback"
                                 placeholder="Enter your full name..."
                                 value={signatureData.signedByName}
-                                onChange={(e) =>
-                                  setSignatureData({ ...signatureData, signedByName: e.target.value })
-                                }
+                                onChange={(e) => {
+                                  const name = e.target.value;
+                                  setSignatureData({ ...signatureData, signedByName: name });
+                                  setResolvedEmployee(null);
+                                  setNameLookupPending(false);
+                                  if (nameLookupTimerRef.current) clearTimeout(nameLookupTimerRef.current);
+                                  if (name.trim().length >= 2) {
+                                    setNameLookupPending(true);
+                                    nameLookupTimerRef.current = setTimeout(async () => {
+                                      try {
+                                        const resp = await fetch(`/api/p2-traveler/employee-lookup?name=${encodeURIComponent(name.trim())}`);
+                                        if (resp.ok) {
+                                          const emp = await resp.json();
+                                          setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
+                                        }
+                                      } catch {
+                                        // name lookup failure is non-fatal; operator continues with typed name only
+                                      } finally {
+                                        setNameLookupPending(false);
+                                      }
+                                    }, 400);
+                                  }
+                                }}
                                 data-testid="input-tech-name-fallback"
                               />
+                              {nameLookupPending && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Looking up employee...
+                                </div>
+                              )}
                             </div>
+                          </div>
+                        )}
+                        {badgeLookupStatus === 'error' && (
+                          <div className="mt-1 space-y-1">
+                            <p className="text-xs text-amber-600">
+                              Could not reach the badge reader. Check your connection and try scanning again.
+                            </p>
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 underline"
+                              onClick={() => {
+                                setBadgeLookupStatus('idle');
+                                setNameLookupPending(false);
+                                setSignatureData((prev) => ({ ...prev, badgeScan: '' }));
+                              }}
+                            >
+                              Retry
+                            </button>
                           </div>
                         )}
                       </div>
 
-                      {badgeLookupStatus === 'found' && resolvedEmployee && (
+                      {(badgeLookupStatus === 'found' || (badgeLookupStatus === 'not_found' && resolvedEmployee)) && resolvedEmployee && (
                         <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                           <div className="flex items-center gap-2">
                             <User className="h-5 w-5 text-green-600" />
@@ -1592,13 +2270,39 @@ export default function TravelerExecution() {
                         </div>
                       )}
 
+                      {badgeLookupStatus === 'idle' && !signatureData.badgeScan && activeBadge && activeTechName && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <User className="h-5 w-5 text-green-600" />
+                            <div>
+                              <p className="font-medium text-green-800">{activeTechName}</p>
+                            </div>
+                            <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
+                          </div>
+                        </div>
+                      )}
+
                       <Button
+                        type="button"
                         onClick={() => startStepMutation.mutate({
                           stepId: currentStep.id,
-                          badge: signatureData.badgeScan,
-                          techName: resolvedEmployee?.name || signatureData.signedByName,
+                          badge: signatureData.badgeScan || activeBadge,
+                          techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
+                          employeeId: resolvedEmployee?.id,
                         })}
-                        disabled={startStepMutation.isPending || !signatureData.badgeScan || (badgeLookupStatus === 'not_found' && !signatureData.signedByName)}
+                        disabled={
+                          startStepMutation.isPending ||
+                          !(signatureData.badgeScan || activeBadge) ||
+                          (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
+                          badgeLookupStatus === 'error' ||
+                          nameLookupPending ||
+                          // Require acknowledgment when budget is overrun (Task #1235)
+                          (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||
+                          // Require cert acknowledgment only when cert is EXPIRED or MISSING (Task #1235 WARN)
+                          (!!laborContext?.requiresCertification &&
+                            (laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') &&
+                            !certWarnAcknowledged)
+                        }
                         data-testid="button-start-step"
                       >
                         {startStepMutation.isPending ? (
@@ -1608,7 +2312,7 @@ export default function TravelerExecution() {
                         )}
                         Start Step
                       </Button>
-                    </div>
+                    </form>
 
                     {stepGates.length > 0 && (
                       <div className="mt-6 max-w-sm mx-auto">
@@ -2359,6 +3063,13 @@ export default function TravelerExecution() {
                                                       signedByName: activeTechName || prev.signedByName,
                                                       badgeScan: activeBadge || prev.badgeScan,
                                                     }));
+                                                    if (activeBadge && resolvedEmployee) {
+                                                      setSignResolvedEmployee(resolvedEmployee);
+                                                      setSignBadgeLookupStatus('found');
+                                                    } else {
+                                                      setSignResolvedEmployee(null);
+                                                      setSignBadgeLookupStatus('idle');
+                                                    }
                                                     setShowSignDialog(true);
                                                   }}
                                                   disabled={!phaseUnlocked}
@@ -2486,6 +3197,13 @@ export default function TravelerExecution() {
                               signedByName: activeTechName || prev.signedByName,
                               badgeScan: activeBadge || prev.badgeScan,
                             }));
+                            if (activeBadge && resolvedEmployee) {
+                              setSignResolvedEmployee(resolvedEmployee);
+                              setSignBadgeLookupStatus('found');
+                            } else {
+                              setSignResolvedEmployee(null);
+                              setSignBadgeLookupStatus('idle');
+                            }
                             setShowSignDialog(true);
                           }}
                           disabled={!canSignStep}
@@ -2576,7 +3294,15 @@ export default function TravelerExecution() {
 
       <Dialog open={showSignDialog} onOpenChange={(open) => {
         setShowSignDialog(open);
-        if (!open && sigPadRef.current) sigPadRef.current.clear();
+        if (!open) {
+          if (sigPadRef.current) sigPadRef.current.clear();
+          if (signBadgeLookupTimerRef.current) {
+            clearTimeout(signBadgeLookupTimerRef.current);
+            signBadgeLookupTimerRef.current = null;
+          }
+          setSignBadgeLookupStatus('idle');
+          setSignResolvedEmployee(null);
+        }
       }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -2591,36 +3317,14 @@ export default function TravelerExecution() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="sign-badge">Employee ID / Badge *</Label>
-                <Input
-                  id="sign-badge"
-                  name="sign-badge"
-                  type="password"
-                  value={signatureData.signedBy}
-                  onChange={(e) =>
-                    setSignatureData({ ...signatureData, signedBy: e.target.value })
-                  }
-                  placeholder="Scan badge..."
-                  autoComplete="new-password"
-                  data-testid="input-sign-badge"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sign-name">Full Name</Label>
-                <Input
-                  id="sign-name"
-                  name="sign-name"
-                  value={signatureData.signedByName}
-                  onChange={(e) =>
-                    setSignatureData({ ...signatureData, signedByName: e.target.value })
-                  }
-                  placeholder="Your full name"
-                  data-testid="input-sign-name"
-                />
-              </div>
-            </div>
+            <SignBadgeScanSection
+              badgeValue={signatureData.signedBy}
+              signedByName={signatureData.signedByName}
+              lookupStatus={signBadgeLookupStatus}
+              resolvedEmployee={signResolvedEmployee}
+              onBadgeChange={handleSignBadgeScanInput}
+              onNameChange={(name) => setSignatureData({ ...signatureData, signedByName: name })}
+            />
 
             <div className="space-y-2">
               <Label>Signature *</Label>
@@ -2675,13 +3379,26 @@ export default function TravelerExecution() {
             </div>
           </div>
 
+          {!signatureData.signedBy && signBadgeLookupStatus === 'idle' && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Scan or enter your badge / employee code before signing.
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSignDialog(false)}>
               Cancel
             </Button>
             <Button
               onClick={() => currentStep && signStepMutation.mutate({ stepId: currentStep.id, taskId: signingTaskId, role: signingRole })}
-              disabled={signStepMutation.isPending || !signatureData.signedBy || !signatureData.signatureData}
+              disabled={
+                signStepMutation.isPending ||
+                !signatureData.signedBy ||
+                !signatureData.signatureData ||
+                signBadgeLookupStatus === 'loading' ||
+                (signBadgeLookupStatus === 'not_found' && !signatureData.signedByName.trim())
+              }
               data-testid="button-confirm-sign"
             >
               {signStepMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

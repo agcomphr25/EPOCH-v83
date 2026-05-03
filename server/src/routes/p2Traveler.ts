@@ -39,31 +39,72 @@ function getDepartmentVariants(department: string): string[] {
 router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) => {
   try {
     const { employeeCode } = req.params;
-    // Normalize input: strip hyphens so badges printed with/without hyphens both work
+    // Normalize: strip dashes so UUID badges work whether or not they include hyphens.
     const normalized = employeeCode.replace(/-/g, '');
 
-    // Try badge_scan_code first (what physical badges encode), then employee_code fallback
-    let employee = await db.query.employees.findFirst({
-      where: sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`,
-    });
+    const cols = {
+      id: employees.id,
+      name: employees.name,
+      employeeCode: employees.employeeCode,
+    };
 
-    if (!employee) {
-      employee = await db.query.employees.findFirst({
-        where: eq(employees.employeeCode, employeeCode),
-      });
+    // Try badge_scan_code first (REPLACE strips dashes on both sides), then employee_code
+    let rows = await db
+      .select(cols)
+      .from(employees)
+      .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`)
+      .limit(1);
+
+    if (!rows.length) {
+      rows = await db
+        .select(cols)
+        .from(employees)
+        .where(sql`LOWER(${employees.employeeCode}) = LOWER(${employeeCode})`)
+        .limit(1);
     }
 
-    if (!employee) {
+    if (!rows.length) {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    const emp = rows[0];
     res.json({
-      id: employee.id,
-      employeeCode: employee.employeeCode,
-      name: employee.name || employee.employeeCode,
+      id: emp.id,
+      employeeCode: emp.employeeCode,
+      name: emp.name || emp.employeeCode,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Badge lookup failed' });
+  }
+});
+
+// GET /api/p2-traveler/employee-lookup?name=John+Smith
+// Public name-based employee lookup for manual fallback on the traveler execute page.
+// Returns 404 when not found, 409 when multiple employees share the same name.
+router.get('/employee-lookup', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.query;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'name parameter is required' });
+    }
+
+    const rows = await db
+      .select({ id: employees.id, name: employees.name, employeeCode: employees.employeeCode })
+      .from(employees)
+      .where(sql`LOWER(${employees.name}) = LOWER(${name.trim()})`)
+      .limit(2);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    if (rows.length > 1) {
+      return res.status(409).json({ error: 'Multiple employees found with that name' });
+    }
+
+    const emp = rows[0];
+    res.json({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Employee lookup failed' });
   }
 });
 
@@ -74,16 +115,22 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     const { employeeCode } = req.params;
     const barcode = decodeURIComponent(req.params.barcode).trim();
 
-    // Get employee — check badge_scan_code (what physical badges encode) then employee_code
+    // Get employee — check badge_scan_code (REPLACE strips dashes) then employee_code fallback
     const normalized = employeeCode.replace(/-/g, '');
-    let employee = await db.query.employees.findFirst({
-      where: sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`,
-    });
-    if (!employee) {
-      employee = await db.query.employees.findFirst({
-        where: eq(employees.employeeCode, employeeCode),
-      });
+    const empCols = { id: employees.id, name: employees.name, employeeCode: employees.employeeCode };
+    let empRows = await db
+      .select(empCols)
+      .from(employees)
+      .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalized}`)
+      .limit(1);
+    if (!empRows.length) {
+      empRows = await db
+        .select(empCols)
+        .from(employees)
+        .where(sql`LOWER(${employees.employeeCode}) = LOWER(${employeeCode})`)
+        .limit(1);
     }
+    const employee = empRows[0] ?? null;
 
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -169,7 +216,10 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       where: and(
         eq(p2EmployeePartCertifications.employeeId, employee.id),
         eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
-        inArray(p2EmployeePartCertifications.department, deptVariants),
+        or(
+          inArray(p2EmployeePartCertifications.department, deptVariants),
+          sql`lower(trim(${p2EmployeePartCertifications.department})) = lower(trim(${nextDepartment}))`
+        ),
         eq(p2EmployeePartCertifications.drawingKnowledge, true),
         eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
         eq(p2EmployeePartCertifications.procedureCompletion, true)
@@ -525,7 +575,10 @@ router.post('/start-task', async (req: Request, res: Response) => {
       where: and(
         eq(p2EmployeePartCertifications.employeeId, parseInt(employeeId)),
         eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
-        inArray(p2EmployeePartCertifications.department, startDeptVariants),
+        or(
+          inArray(p2EmployeePartCertifications.department, startDeptVariants),
+          sql`lower(trim(${p2EmployeePartCertifications.department})) = lower(trim(${department}))`
+        ),
         eq(p2EmployeePartCertifications.drawingKnowledge, true),
         eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
         eq(p2EmployeePartCertifications.procedureCompletion, true)

@@ -53,6 +53,7 @@ import {
   Plus,
   ArrowUpDown,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import type { ManufacturingQueue, InsertManufacturingQueue } from '@shared/schema';
 
 type QueueItemWithInventory = ManufacturingQueue & {
@@ -72,6 +73,7 @@ export default function ManufacturingQueue() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('Cutting Table');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
 
   // Fetch queue items
   const { data: queueItems = [], isLoading } = useQuery<QueueItemWithInventory[]>({
@@ -100,10 +102,10 @@ export default function ManufacturingQueue() {
         description: 'The queue item status has been updated successfully.',
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: 'Failed to update status. Please try again.',
+        description: error.message || 'Failed to update status. Please try again.',
         variant: 'destructive',
       });
     },
@@ -123,10 +125,10 @@ export default function ManufacturingQueue() {
         description: 'The queue item has been removed.',
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: 'Failed to delete item. Please try again.',
+        description: error.message || 'Failed to delete item. Please try again.',
         variant: 'destructive',
       });
     },
@@ -178,6 +180,8 @@ export default function ManufacturingQueue() {
           onOpenChange={setIsAddDialogOpen}
         />
       </div>
+
+      <ReturnsRepairsSection repairDepartment="P1 Production Queue" />
 
       <Card className="dark:bg-gray-900 dark:border-gray-800">
         <CardHeader>
@@ -336,10 +340,10 @@ function AddQueueItemDialog({ isOpen, onOpenChange }: { isOpen: boolean; onOpenC
         status: 'PENDING',
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: 'Failed to add item to queue. Please try again.',
+        description: error.message || 'Failed to add item to queue. Please try again.',
         variant: 'destructive',
       });
     },

@@ -72,6 +72,20 @@ import { useLocation } from 'wouter';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 
+type TraceabilityVisibility = 'required' | 'optional' | 'hidden';
+type TraceabilityFieldConfig = Record<string, TraceabilityVisibility>;
+
+const TRACEABILITY_CONFIG_FIELDS: { key: string; label: string; type: 'text' | 'date' }[] = [
+  { key: 'lotNumber', label: 'Lot Number', type: 'text' },
+  { key: 'batchNumber', label: 'Batch Number', type: 'text' },
+  { key: 'serialNumber', label: 'Serial Number', type: 'text' },
+  { key: 'expirationDate', label: 'Expiration Date', type: 'date' },
+  { key: 'manufactureDate', label: 'Manufacture Date', type: 'date' },
+  { key: 'heatLot', label: 'Heat Lot', type: 'text' },
+  { key: 'rollNumber', label: 'Roll Number', type: 'text' },
+  { key: 'certReference', label: 'Cert Reference', type: 'text' },
+];
+
 interface InventoryFormData {
   agPartNumber: string;
   sku: string;
@@ -106,6 +120,7 @@ interface InventoryFormData {
   utilizedInPL3: boolean;
   traceabilityRequired: boolean;
   traceabilityFields: string[];
+  traceabilityFieldConfig: TraceabilityFieldConfig;
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
@@ -145,6 +160,7 @@ const InventoryForm = ({
   isTraceabilityModalOpen,
   onCloseTraceabilityModal,
   onSaveTraceabilityFields,
+  onTraceabilityConfigChange,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -173,6 +189,7 @@ const InventoryForm = ({
   isTraceabilityModalOpen: boolean;
   onCloseTraceabilityModal: () => void;
   onSaveTraceabilityFields: (fields: string[]) => void;
+  onTraceabilityConfigChange: (config: TraceabilityFieldConfig) => void;
 }) => {
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
@@ -488,6 +505,47 @@ const InventoryForm = ({
           />
           <Label htmlFor="isFabric" className="cursor-pointer">Fabric (Cutting Table)</Label>
         </div>
+      </div>
+    </div>
+
+    {/* Traceability Fields Configuration */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">Traceability Fields</h4>
+      <p className="text-sm text-muted-foreground">
+        Configure which fields operators must fill in during receiving. Required fields block saving if blank; Optional fields can be left empty; Not Captured fields are hidden entirely.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {TRACEABILITY_CONFIG_FIELDS.map((field) => {
+          const current: TraceabilityVisibility = (formData.traceabilityFieldConfig?.[field.key] as TraceabilityVisibility) || 'optional';
+          return (
+            <div key={field.key} className="flex flex-col gap-1">
+              <span className="text-sm font-medium">{field.label}</span>
+              <div className="flex rounded-md border overflow-hidden text-xs">
+                {(['required', 'optional', 'hidden'] as TraceabilityVisibility[]).map((vis) => (
+                  <button
+                    key={vis}
+                    type="button"
+                    className={`flex-1 px-2 py-1.5 transition-colors ${
+                      current === vis
+                        ? vis === 'required'
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold'
+                          : vis === 'optional'
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold'
+                          : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400 font-semibold'
+                        : 'bg-white text-gray-500 dark:bg-gray-800 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                    onClick={() => {
+                      const updated = { ...formData.traceabilityFieldConfig, [field.key]: vis };
+                      onTraceabilityConfigChange(updated);
+                    }}
+                  >
+                    {vis === 'required' ? 'Required' : vis === 'optional' ? 'Optional' : 'Not Captured'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
 
@@ -1137,6 +1195,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInPL3: false,
     traceabilityRequired: false,
     traceabilityFields: [],
+    traceabilityFieldConfig: {},
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
@@ -1577,7 +1636,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       });
       
       if (!response.ok) {
-        throw new Error('Failed to update inventory item');
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || 'Failed to update inventory item');
       }
       
       return response.json();
@@ -1594,7 +1654,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         queryKey: ['/api/enhanced/inventory/items'],
       });
     },
-    onError: () => toast.error('Failed to update inventory item'),
+    onError: (error: any) => toast.error(error instanceof Error ? error.message : 'Failed to update inventory item'),
   });
 
   const deleteMutation = useMutation({
@@ -1751,6 +1811,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInPL3: false,
       traceabilityRequired: false,
       traceabilityFields: [],
+      traceabilityFieldConfig: {},
       utilizedInFacilities: false,
       utilizedInAdmin: false,
       utilizedInServices: false,
@@ -1811,6 +1872,13 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       ...prev,
       traceabilityRequired: true,
       traceabilityFields: fields,
+    }));
+  }, []);
+
+  const handleTraceabilityConfigChange = useCallback((config: TraceabilityFieldConfig) => {
+    setFormData((prev) => ({
+      ...prev,
+      traceabilityFieldConfig: config,
     }));
   }, []);
 
@@ -1899,6 +1967,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInPL3: formData.utilizedInPL3,
         traceabilityRequired: formData.traceabilityRequired,
         traceabilityFields: formData.traceabilityFields,
+        traceabilityFieldConfig: Object.keys(formData.traceabilityFieldConfig).length > 0 ? formData.traceabilityFieldConfig : null,
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
@@ -1967,6 +2036,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInPL3: item.utilizedInPL3 || false,
       traceabilityRequired: item.traceabilityRequired || false,
       traceabilityFields: (item as any).traceabilityFields || [],
+      traceabilityFieldConfig: (item as any).traceabilityFieldConfig || {},
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
@@ -2236,6 +2306,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 isTraceabilityModalOpen={isTraceabilityModalOpen}
                 onCloseTraceabilityModal={handleCloseTraceabilityModal}
                 onSaveTraceabilityFields={handleSaveTraceabilityFields}
+                onTraceabilityConfigChange={handleTraceabilityConfigChange}
               />
             </DialogContent>
           </Dialog>
@@ -2652,6 +2723,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   Asset
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
+                  Traceability
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
               </tr>
@@ -2738,6 +2812,22 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm">
                       {(item as any).assignedToAsset || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {(() => {
+                        const cfg = (item as any).traceabilityFieldConfig as Record<string,string> | null | undefined;
+                        if (!cfg || Object.keys(cfg).length === 0) return <span className="text-xs text-muted-foreground">Default</span>;
+                        const reqFields = TRACEABILITY_CONFIG_FIELDS.filter(f => cfg[f.key] === 'required');
+                        const optCount = TRACEABILITY_CONFIG_FIELDS.filter(f => (cfg[f.key] ?? 'optional') === 'optional').length;
+                        return (
+                          <div className="flex flex-wrap gap-0.5">
+                            {reqFields.map(f => (
+                              <span key={f.key} className="px-1.5 py-0.5 text-[10px] bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded font-medium">{f.label}</span>
+                            ))}
+                            {optCount > 0 && reqFields.length === 0 && <span className="text-xs text-muted-foreground">{optCount} optional</span>}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex space-x-2">
@@ -2857,6 +2947,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                               <th className="h-9 px-4 text-left font-medium">Name</th>
                               <th className="h-9 px-4 text-left font-medium">Level</th>
                               <th className="h-9 px-4 text-left font-medium">Utilized In</th>
+                              <th className="h-9 px-4 text-left font-medium">Traceability</th>
                               <th className="h-9 px-4 text-left font-medium">Current Qty</th>
                               <th className="h-9 px-4 text-left font-medium">Actions</th>
                             </tr>
@@ -2864,7 +2955,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                           <tbody>
                             {catItems.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="py-6 text-center text-gray-500 text-xs">
+                                <td colSpan={7} className="py-6 text-center text-gray-500 text-xs">
                                   No {CATEGORY_DISPLAY_NAMES[category]} items
                                   {(searchTerm || utilizedFilter !== 'all') && ' matching filters'}
                                 </td>
@@ -2891,6 +2982,22 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                       {item.utilizedInServices && <span className="px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 rounded">Services</span>}
                                       {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInPL3 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && '—'}
                                     </div>
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    {(() => {
+                                      const cfg = (item as any).traceabilityFieldConfig as Record<string,string> | null | undefined;
+                                      if (!cfg || Object.keys(cfg).length === 0) return <span className="text-xs text-muted-foreground">Default</span>;
+                                      const reqFields = TRACEABILITY_CONFIG_FIELDS.filter(f => cfg[f.key] === 'required');
+                                      const optCount = TRACEABILITY_CONFIG_FIELDS.filter(f => (cfg[f.key] ?? 'optional') === 'optional').length;
+                                      return (
+                                        <div className="flex flex-wrap gap-0.5">
+                                          {reqFields.map(f => (
+                                            <span key={f.key} className="px-1.5 py-0.5 text-[10px] bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded font-medium">{f.label}</span>
+                                          ))}
+                                          {optCount > 0 && reqFields.length === 0 && <span className="text-xs text-muted-foreground">{optCount} optional</span>}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   <td className="px-4 py-2 font-medium">
                                     {balancesByPart[item.agPartNumber] != null ? balancesByPart[item.agPartNumber] : 0}
@@ -3037,6 +3144,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             isTraceabilityModalOpen={isTraceabilityModalOpen}
             onCloseTraceabilityModal={handleCloseTraceabilityModal}
             onSaveTraceabilityFields={handleSaveTraceabilityFields}
+            onTraceabilityConfigChange={handleTraceabilityConfigChange}
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">

@@ -26,8 +26,11 @@ import {
   FileWarning,
   Printer,
   QrCode,
+  Shuffle,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
@@ -61,6 +64,11 @@ export default function CNCQueuePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
   // Prevent unwanted navigation when barcode scanning
   React.useEffect(() => {
     const preventNavigation = (e: PopStateEvent) => {
@@ -84,6 +92,7 @@ export default function CNCQueuePage() {
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
@@ -769,6 +778,8 @@ export default function CNCQueuePage() {
         </CardContent>
       </Card>
 
+      <ReturnsRepairsSection repairDepartment="CNC" />
+
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Previous Department Count */}
@@ -997,6 +1008,21 @@ export default function CNCQueuePage() {
                           >
                             <TrendingDown className="h-3 w-3" />
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLocation(`/order-department-transfer?orderId=${encodeURIComponent(order.orderId)}`);
+                              }}
+                              title="Reassign Department"
+                              className="h-6 w-6 p-0 text-purple-600 border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                              data-testid={`button-reassign-dept-${order.orderId}`}
+                            >
+                              <Shuffle className="h-3 w-3" />
+                            </Button>
+                          )}
                           {hasKickbacks(order.orderId) && (
                             <Badge
                               variant="destructive"

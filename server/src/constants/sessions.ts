@@ -1,0 +1,2 @@
+export const DEFAULT_SESSIONS_LIMIT = 200;
+export const MAX_SESSIONS_LIMIT = 1000;

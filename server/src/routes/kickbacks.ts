@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { insertKickbackSchema } from '../../schema';
 import { z } from 'zod';
+import { pool } from '../../db';
 
 const router = Router();
 
@@ -127,8 +128,70 @@ router.put('/:id', async (req: Request, res: Response) => {
     const updateSchema = insertKickbackSchema.partial();
     const validatedData = updateSchema.parse(req.body);
 
+    // Fetch existing kickback before update so we have the orderId
+    const existingKickback = await storage.getKickback(id);
+
     const kickback = await storage.updateKickback(id, validatedData);
-    res.json(kickback);
+
+    // When a kickback is resolved, reset the order status to FINALIZED if it is
+    // currently IN_PROGRESS in the P1 Production Queue so the order becomes visible
+    // in the queue again. All kickbacks by definition return orders to P1 Production Queue.
+    let statusResetWarning: string | undefined;
+    if (validatedData.status === 'RESOLVED' && existingKickback?.orderId) {
+      try {
+        const changedBy = (req.user as { username?: string } | undefined)?.username ?? 'SYSTEM';
+        const userRole = (req.user as { role?: string } | undefined)?.role ?? 'SYSTEM';
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const { rows } = await client.query<{ status: string; current_department: string }>(
+            `SELECT status, current_department FROM all_orders WHERE order_id = $1 LIMIT 1`,
+            [existingKickback.orderId]
+          );
+          const order = rows[0];
+
+          if (order?.status === 'IN_PROGRESS' && order.current_department === 'P1 Production Queue') {
+            await client.query(
+              `UPDATE all_orders SET status = 'FINALIZED', updated_at = NOW() WHERE order_id = $1`,
+              [existingKickback.orderId]
+            );
+            await client.query(
+              `INSERT INTO admin_audit_log
+                 (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+               VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+              [
+                existingKickback.orderId,
+                'status',
+                'Order Status',
+                JSON.stringify('IN_PROGRESS'),
+                JSON.stringify('FINALIZED'),
+                changedBy,
+                userRole,
+                'KICKBACK_STATUS_RESET',
+                `Automatic status reset to FINALIZED on kickback resolution (kickback ID: ${id}) — order returned to P1 Production Queue`,
+                req.ip ?? null,
+                req.headers['user-agent'] ?? null,
+              ]
+            );
+            console.log(
+              `✅ KICKBACK RESOLVE: Reset order ${existingKickback.orderId} status IN_PROGRESS → FINALIZED on kickback #${id} resolution`
+            );
+          }
+          await client.query('COMMIT');
+        } catch (txErr) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw txErr;
+        } finally {
+          client.release();
+        }
+      } catch (resetErr) {
+        const msg = resetErr instanceof Error ? resetErr.message : String(resetErr);
+        console.error(`KICKBACK RESOLVE: Failed to reset order status for ${existingKickback.orderId}:`, resetErr);
+        statusResetWarning = `Kickback resolved but order status reset failed: ${msg}. The order may still appear as IN_PROGRESS in the P1 queue until manually corrected.`;
+      }
+    }
+
+    res.json(statusResetWarning ? { ...kickback, _warning: statusResetWarning } : kickback);
   } catch (error) {
     console.error('Update kickback error:', error);
     if (error instanceof z.ZodError) {

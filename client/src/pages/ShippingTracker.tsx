@@ -161,7 +161,7 @@ export default function ShippingTracker() {
     },
     onSuccess: () => {
       toast({ title: 'Tracking Updated', description: 'Tracking information has been updated successfully.' });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/fulfilled-shipped'] });
       setEditingOrder(null);
     },
     onError: (error: Error) => {
@@ -179,7 +179,7 @@ export default function ShippingTracker() {
     },
     onSuccess: () => {
       toast({ title: 'Tracking Deleted', description: 'Tracking information has been removed.' });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/fulfilled-shipped'] });
     },
     onError: (error: Error) => {
       toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
@@ -309,7 +309,7 @@ export default function ShippingTracker() {
         description: data.message || `Customer notified via ${data.methods?.join(' and ')}`,
       });
       // Invalidate queries to refresh the data
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/fulfilled-shipped'] });
     },
     onError: (error: Error, orderId) => {
       console.error('[UI ERROR] Failed notification for order:', orderId, error);
@@ -321,14 +321,13 @@ export default function ShippingTracker() {
     },
   });
 
-  // Fetch all fulfilled orders
-  const { data: orders, isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
-    queryFn: async () => {
-      const response = await fetch('/api/orders/with-payment-status');
-      if (!response.ok) throw new Error('Failed to fetch orders');
-      return response.json();
-    },
+  // Fetch fulfilled + shipped orders from dedicated endpoint
+  // This endpoint sorts by shippedDate DESC and applies a generous row limit,
+  // so recent shipments are always included regardless of order creation date.
+  const { data: orders, isLoading, isError: ordersError } = useQuery<Order[]>({
+    queryKey: ['/api/orders/fulfilled-shipped'],
+    retry: 2,
+    refetchInterval: 30000,
   });
 
   // Fetch customers for name search
@@ -369,12 +368,11 @@ export default function ShippingTracker() {
   }, [dateRangeMode, selectedYear, selectedMonth, selectedQuarter, selectedWeek]);
 
   // Filter orders by search term (order number or customer name) and date range
+  // Note: status === 'FULFILLED' filter is not needed here; the endpoint already guarantees it.
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
 
-    const fulfilled = orders.filter((order) => order.status === 'FULFILLED');
-
-    let filtered = fulfilled;
+    let filtered = orders;
 
     if (isAdmin && dateRangeMode !== 'week' && getDateRangeForMode && !searchTerm) {
       const { start, end } = getDateRangeForMode;
@@ -508,6 +506,18 @@ export default function ShippingTracker() {
           Track stocks shipped by company week (Wednesday - Tuesday)
         </p>
       </div>
+
+      {ordersError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700">
+          <XCircle className="h-5 w-5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Failed to load shipment data</p>
+            <p className="text-sm text-red-600 mt-0.5">
+              The server could not load fulfilled/shipped orders. Check your connection and try refreshing.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="shipping-tracker" className="w-full">
         <TabsList className="mb-6">

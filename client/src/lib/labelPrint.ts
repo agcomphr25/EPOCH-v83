@@ -50,14 +50,31 @@ export function openLabelPrintWindow(
     return;
   }
 
+  // UPS GIF labels are delivered in landscape orientation (6" wide × 4" tall).
+  // jsPDF's `format` array is [height, width] when orientation is 'landscape',
+  // so [4, 6] here sets a 4"-tall × 6"-wide page — matching the physical stock.
+  // The image is placed at origin (0, 0) spanning the full 6"×4" page area.
+  //
+  // Expected behavior on common 4×6 thermal label printers:
+  //   - Zebra ZP450 / ZD420 / GK420d: set paper size to "4x6" in the print dialog;
+  //     the label should appear right-side up and fill the entire stock with no
+  //     rotation or scaling required.
+  //   - Dymo 4XL: select "4 x 6 in" label in Dymo Connect; the carrier logo,
+  //     barcode, and address block should all print within the label boundaries.
+  //   - Generic thermal / inkjet on 4×6 cut sheets: choose "Actual size" (not
+  //     "Fit to page") in the browser print dialog to avoid re-scaling.
+  //
+  // If the label prints sideways, verify the printer driver is NOT applying an
+  // additional 90-degree rotation on top of the landscape orientation already
+  // embedded in the PDF.
   const pdf = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'in',
     format: [4, 6],
   });
 
   const imageDataUrl = `data:image/gif;base64,${labelBase64}`;
-  pdf.addImage(imageDataUrl, 'GIF', 0, 0, 4, 6);
+  pdf.addImage(imageDataUrl, 'GIF', 0, 0, 6, 4);
 
   const pdfBlob = pdf.output('blob');
   const pdfBlobUrl = URL.createObjectURL(pdfBlob);

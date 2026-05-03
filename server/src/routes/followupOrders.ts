@@ -1796,25 +1796,27 @@ router.post('/:orderId/send-updated-order', async (req, res) => {
   }
 });
 
-// POST /api/followup-orders/test-reminder - Manually trigger the 5-day reminder check
-router.post('/test-reminder', async (req, res) => {
-  try {
-    console.log('🧪 Manual trigger: Running follow-up order reminder check...');
-    
-    const result = await sendReminderForOverdueOrders();
-    
-    res.json({
-      success: true,
-      message: `Reminder check completed. ${result.sent} reminder(s) sent.`,
-      details: result,
-    });
-  } catch (error) {
-    console.error('Error running reminder check:', error);
-    res.status(500).json({ 
-      error: 'Failed to run reminder check',
-      details: error instanceof Error ? error.message : 'Unknown error' 
-    });
-  }
-});
+// Test route — not mounted in production
+if (process.env.NODE_ENV !== 'production') {
+  router.post('/test-reminder', async (req, res) => {
+    try {
+      console.log('🧪 Manual trigger: Running follow-up order reminder check...');
+      
+      const result = await sendReminderForOverdueOrders();
+      
+      res.json({
+        success: true,
+        message: `Reminder check completed. ${result.sent} reminder(s) sent.`,
+        details: result,
+      });
+    } catch (error) {
+      console.error('Error running reminder check:', error);
+      res.status(500).json({ 
+        error: 'Failed to run reminder check',
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+}
 
 export default router;

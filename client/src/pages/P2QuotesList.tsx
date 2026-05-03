@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -12,14 +14,24 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Search, Eye, FileText } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Search, Eye, FileText, FolderOpen, Plus } from 'lucide-react';
 import { Link } from 'wouter';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 interface Quote {
   id: string;
   quoteNumber: string;
   customerName: string;
+  customerId: string | null;
   description: string;
   totalAmount: number;
   status: string;
@@ -30,15 +42,26 @@ interface Quote {
   attachments?: string[];
 }
 
-export default function P2QuotesList() {
-  const [searchTerm, setSearchTerm] = useState('');
+interface CreatedProject {
+  id: string;
+  projectCode: string;
+  projectName: string;
+}
 
-  // Fetch all quotes
+export default function P2QuotesList() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [startProjectDialogOpen, setStartProjectDialogOpen] = useState(false);
+  const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
+  const [projectName, setProjectName] = useState('');
+  const [targetShipDate, setTargetShipDate] = useState('');
+
   const { data: quotes = [], isLoading } = useQuery<Quote[]>({
     queryKey: ['/api/quotes'],
   });
 
-  // Filter quotes based on search term
   const filteredQuotes = quotes.filter((quote) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
@@ -49,6 +72,63 @@ export default function P2QuotesList() {
       quote.quotedBy?.toLowerCase().includes(searchLower)
     );
   });
+
+  const startProjectMutation = useMutation<CreatedProject, Error, { projectName: string; customerId: string; customerNameSnapshot: string; description: string; targetShipDate: string; quoteId: string }>({
+    mutationFn: async (data) => {
+      return apiRequest('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectName: data.projectName,
+          customerId: data.customerId || 'UNKNOWN',
+          customerNameSnapshot: data.customerNameSnapshot || undefined,
+          description: data.description,
+          targetShipDate: data.targetShipDate || undefined,
+          reminderDays: 3,
+          quoteId: data.quoteId || undefined,
+        }),
+      });
+    },
+    onSuccess: (newProject) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      setStartProjectDialogOpen(false);
+      toast({
+        title: 'Project Created',
+        description: `Project "${projectName}" has been created successfully.`,
+      });
+      setLocation(`/projects/${newProject.id}`);
+    },
+    onError: (err) => {
+      toast({
+        title: 'Failed to Create Project',
+        description: err?.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleStartProject = (quote: Quote) => {
+    setSelectedQuote(quote);
+    setProjectName(`${quote.quoteNumber} – ${quote.customerName}`);
+    // Pre-fill target ship date from quote's validUntil (derived from quote, not user-entered)
+    setTargetShipDate(quote.validUntil ? quote.validUntil.split('T')[0] : '');
+    setStartProjectDialogOpen(true);
+  };
+
+  const handleConfirmStartProject = () => {
+    if (!selectedQuote) return;
+    if (!projectName.trim()) {
+      toast({ title: 'Project name required', description: 'Please enter a project name.', variant: 'destructive' });
+      return;
+    }
+    startProjectMutation.mutate({
+      projectName: projectName.trim(),
+      customerId: selectedQuote.customerId || '',
+      customerNameSnapshot: selectedQuote.customerName || '',
+      description: `From quote ${selectedQuote.quoteNumber}`,
+      targetShipDate,
+      quoteId: selectedQuote.id,
+    });
+  };
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -65,10 +145,11 @@ export default function P2QuotesList() {
     }
   };
 
+  const canStartProject = (status: string) => status === 'ACCEPTED' || status === 'SENT';
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <Link href="/p2-forms">
@@ -92,7 +173,6 @@ export default function P2QuotesList() {
           </Link>
         </div>
 
-        {/* Search and Filter */}
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="relative">
@@ -108,7 +188,6 @@ export default function P2QuotesList() {
           </CardContent>
         </Card>
 
-        {/* Quotes Table */}
         <Card>
           <CardHeader>
             <CardTitle>
@@ -183,17 +262,31 @@ export default function P2QuotesList() {
                           {format(new Date(quote.createdAt), 'MM/dd/yyyy')}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Link href={`/p2-quote-form?id=${quote.id}`}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex items-center gap-1"
-                              data-testid={`button-view-${quote.id}`}
-                            >
-                              <Eye className="h-3 w-3" />
-                              View
-                            </Button>
-                          </Link>
+                          <div className="flex flex-col items-center gap-1">
+                            <Link href={`/p2-quote-form?id=${quote.id}`}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-1 w-full"
+                                data-testid={`button-view-${quote.id}`}
+                              >
+                                <Eye className="h-3 w-3" />
+                                View
+                              </Button>
+                            </Link>
+                            {canStartProject(quote.status) && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="flex items-center gap-1 w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                data-testid={`button-start-project-${quote.id}`}
+                                onClick={() => handleStartProject(quote)}
+                              >
+                                <FolderOpen className="h-3 w-3" />
+                                Start Project
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -204,6 +297,66 @@ export default function P2QuotesList() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={startProjectDialogOpen} onOpenChange={setStartProjectDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-blue-600" />
+              Start New Project from Quote
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {selectedQuote && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-sm">
+                <p className="font-medium text-blue-800">Quote: {selectedQuote.quoteNumber}</p>
+                <p className="text-blue-700">Customer: {selectedQuote.customerName}</p>
+                <p className="text-blue-700">Amount: ${(selectedQuote.totalAmount || 0).toFixed(2)}</p>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="dialog-project-name">Project Name</Label>
+              <Input
+                id="dialog-project-name"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Enter project name"
+                className="mt-1"
+                data-testid="input-project-name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="dialog-ship-date">
+                Target Ship Date
+                {selectedQuote?.validUntil && (
+                  <span className="ml-1 text-xs text-muted-foreground font-normal">(pre-filled from quote valid-until)</span>
+                )}
+              </Label>
+              <Input
+                id="dialog-ship-date"
+                type="date"
+                value={targetShipDate}
+                onChange={(e) => setTargetShipDate(e.target.value)}
+                className="mt-1"
+                data-testid="input-target-ship-date"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStartProjectDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmStartProject}
+              disabled={startProjectMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              data-testid="button-confirm-start-project"
+            >
+              {startProjectMutation.isPending ? 'Creating…' : 'Create Project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

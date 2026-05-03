@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db';
 import { storage } from '../../storage';
+import { DEFAULT_ESTIMATING_RFQS_LIMIT, MAX_ESTIMATING_RFQS_LIMIT } from '../constants/estimating';
 import {
   insertEstimatingRfqSchema,
   insertEstimatingRfqPartSchema,
@@ -14,7 +15,12 @@ const router = Router();
 
 router.get('/rfqs', async (req, res) => {
   try {
-    const { status, customerId, limit = '50', offset = '0' } = req.query;
+    const { status, customerId, limit = String(DEFAULT_ESTIMATING_RFQS_LIMIT), offset = '0' } = req.query;
+
+    const parsedLimit = parseInt(String(limit), 10);
+    const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, MAX_ESTIMATING_RFQS_LIMIT)
+      : DEFAULT_ESTIMATING_RFQS_LIMIT;
 
     let query = `
       SELECT r.*,
@@ -38,7 +44,7 @@ router.get('/rfqs', async (req, res) => {
     }
 
     query += ` GROUP BY r.id ORDER BY r.created_at DESC LIMIT $${n + 1} OFFSET $${n + 2}`;
-    params.push(Number(limit), Number(offset));
+    params.push(effectiveLimit, Number(offset));
 
     const rows = await pool.query(query, params);
     res.json(rows);
@@ -77,6 +83,29 @@ router.get('/rfqs/:id', async (req, res) => {
     ]);
 
     res.json({ ...rfq, parts, tooling });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Lookup RFQ by rfqNumber ───────────────────────────────────────────────────
+
+router.get('/rfqs/by-rfq-number/:rfqNumber', async (req, res) => {
+  try {
+    const { rfqNumber } = req.params;
+    const rows = await pool.query(
+      `SELECT r.*, json_agg(p.* ORDER BY p.line_number) FILTER (WHERE p.id IS NOT NULL) AS parts
+       FROM estimating_rfqs r
+       LEFT JOIN estimating_rfq_parts p ON p.rfq_id = r.id
+       WHERE r.rfq_number = $1
+       GROUP BY r.id
+       LIMIT 1`,
+      [rfqNumber]
+    );
+    if (!rows || (rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'No estimating RFQ found for this RFQ number' });
+    }
+    res.json((rows as any[])[0]);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -411,6 +440,8 @@ router.post('/rfqs/:id/create-draft-quote', async (req, res) => {
       validUntil,
       quotedBy: null,
       notes: `Generated from RFQ ${rfq.rfqNumber}. Assumptions: ${rfq.assumptions ?? 'N/A'}.`,
+      // Carry the integer FK directly from the RFQ so the customer link is explicit
+      customersIntegerId: rfq.customerId ?? null,
     });
 
     res.json({ quoteId: quote.id, quoteNumber: quote.quoteNumber });

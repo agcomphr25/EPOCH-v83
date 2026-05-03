@@ -667,7 +667,7 @@ export default function P2TravelerPage() {
             description: `Opening traveler ${travelerResult.travelerNumber}`,
           });
 
-          navigate(`/travelers/${travelerResult.travelerId}/execute`);
+          navigate(`/travelers/${travelerResult.travelerId}/execute?badge=${encodeURIComponent(badgeInput.trim())}`);
           return;
         } catch (genError: any) {
           console.warn('Could not generate traveler from routing, falling back to simple mode:', genError);
@@ -1743,7 +1743,7 @@ export default function P2TravelerPage() {
                   <Timer className="h-4 w-4 mr-2" />
                   Production Timer
                 </Button>
-                {verificationData?.departmentConfig.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
+                {verificationData?.departmentConfig?.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
                   <Button
                     variant="outline"
                     className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-100"
@@ -1941,7 +1941,7 @@ export default function P2TravelerPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {verificationData?.departmentConfig.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
+          {verificationData?.departmentConfig?.ovenCuringSteps && verificationData.departmentConfig.ovenCuringSteps.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-md p-3 space-y-1">
               <p className="text-xs font-semibold text-orange-700 uppercase">Required Cure Parameters</p>
               {verificationData.departmentConfig.ovenCuringSteps.map((step, idx) => (

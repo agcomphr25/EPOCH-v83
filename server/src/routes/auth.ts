@@ -2,10 +2,64 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 import { eq, sql } from 'drizzle-orm';
 
 import { pool, db } from '../../db';
-import { users } from '../../schema';
+import { users, employees } from '../../schema';
+import { authenticateToken } from '../../middleware/auth';
+
+// ─── Session Hardening Types ──────────────────────────────────────────────────
+/** Minimal row shape returned by concurrent-session overflow queries */
+interface ActiveSessionIdRow { id: number; session_token?: string }
+
+// ─── Session Hardening Constants ─────────────────────────────────────────────
+// Maximum concurrent active sessions per role.
+// Override per role via env vars: SESSION_MAX_ADMIN, SESSION_MAX_OWNER, SESSION_MAX_EMPLOYEE.
+// Override default (any unlisted role) via SESSION_MAX_DEFAULT.
+// Defaults to 5 to allow multiple tabs / devices without unexpected eviction.
+const DEFAULT_MAX_SESSIONS = parseInt(process.env.SESSION_MAX_DEFAULT ?? '5', 10) || 5;
+const MAX_SESSIONS_BY_ROLE: Record<string, number> = {
+  ADMIN:    parseInt(process.env.SESSION_MAX_ADMIN    ?? '5', 10) || 5,
+  OWNER:    parseInt(process.env.SESSION_MAX_OWNER    ?? '5', 10) || 5,
+  EMPLOYEE: parseInt(process.env.SESSION_MAX_EMPLOYEE ?? '5', 10) || 5,
+};
+
+// Step-up re-auth threshold: credentials must be re-verified within this window for CUI access.
+// Override via STEP_UP_MAX_AGE_MINUTES (default: 30).
+export const STEP_UP_MAX_AGE_MS =
+  (parseInt(process.env.STEP_UP_MAX_AGE_MINUTES ?? '30', 10) || 30) * 60 * 1000;
+
+// ─── Session Audit Helper ─────────────────────────────────────────────────────
+async function logSessionAuditEvent(
+  action: string,
+  sessionId: string,
+  userId: number,
+  username: string,
+  role: string,
+  meta: Record<string, unknown> = {},
+  ipAddress?: string,
+  userAgent?: string
+): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, actor_role, meta, ip_address, user_agent, created_at)
+       VALUES ('user_session', $1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        sessionId,
+        action,
+        userId,
+        username,
+        role,
+        JSON.stringify(meta),
+        ipAddress ?? null,
+        userAgent ?? null,
+      ]
+    );
+  } catch (err) {
+    console.error('[SessionAudit] Failed to write audit event:', action, err);
+  }
+}
 
 const router = Router();
 
@@ -358,12 +412,14 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Employee code is required' });
     }
 
-    // Look up employee by badge_scan_code first, then fall back to employee_code
+    // Look up employee by badge_scan_code first (REPLACE strips dashes on both sides),
+    // then fall back to employee_code exact match.
+    const normalizedBadge = String(employeeCode).replace(/-/g, '');
     let employeeResult = await pool.query(
       `SELECT id, employee_code as "employeeCode", name, email, user_role as "userRole", is_active as "isActive"
       FROM employees
-      WHERE badge_scan_code = $1`,
-      [employeeCode]
+      WHERE REPLACE(COALESCE(badge_scan_code, ''), '-', '') = $1`,
+      [normalizedBadge]
     );
 
     if (!employeeResult || employeeResult.length === 0) {
@@ -480,13 +536,38 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Store session in database using the linked user's credentials
+    // ── Concurrent session enforcement (badge login) ─────────────────────────
+    const badgeMaxSessions = MAX_SESSIONS_BY_ROLE[sessionUser.role] ?? DEFAULT_MAX_SESSIONS;
+    const badgeExistingSessions = await pool.query(
+      `SELECT id FROM user_sessions WHERE user_id = $1 AND is_active = true AND expires_at > NOW() ORDER BY created_at ASC`,
+      [sessionUser.id]
+    );
+    const badgeSessionRows: ActiveSessionIdRow[] = badgeExistingSessions.rows ?? badgeExistingSessions ?? [];
+    const badgeAllowedToKeep = Math.max(0, badgeMaxSessions - 1);
+    const badgeSessionsToDeactivate = badgeSessionRows.length > badgeAllowedToKeep
+      ? badgeSessionRows.slice(0, badgeSessionRows.length - badgeAllowedToKeep)
+      : [];
+    for (const old of badgeSessionsToDeactivate) {
+      await pool.query(`UPDATE user_sessions SET is_active = false WHERE id = $1`, [old.id]);
+      await logSessionAuditEvent(
+        'SESSION_SUPERSEDED',
+        String(old.id),
+        sessionUser.id,
+        sessionUser.username,
+        sessionUser.role,
+        { reason: 'Badge login exceeded concurrent session limit', maxSessions: badgeMaxSessions }
+      );
+    }
+
+    // Store session in database — badge authentication IS credential verification
+    const badgeIpAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
+    const badgeUserAgent = req.headers['user-agent'] || null;
     await pool.query(
-      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active)
-      VALUES ($1, $2, $3, $4, true)
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, last_credential_verified_at)
+      VALUES ($1, $2, $3, $4, true, $5, $6, NOW())
       ON CONFLICT (session_token) DO UPDATE
-      SET expires_at = $4, is_active = true`,
-      [sessionToken, sessionUser.id, sessionUser.username, expiresAt]
+      SET expires_at = $4, is_active = true, ip_address = $5, user_agent = $6, last_credential_verified_at = NOW()`,
+      [sessionToken, sessionUser.id, sessionUser.username, expiresAt, badgeIpAddress, badgeUserAgent]
     );
 
     // SESSION HYDRATION INVARIANT: Validate session can be hydrated before returning success
@@ -539,6 +620,29 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       success: true,
       failureReason: null,
     });
+
+    // Emit SESSION_CREATED audit event for badge login
+    {
+      const badgeSessionRow = await pool.query(
+        `SELECT id FROM user_sessions WHERE session_token = $1`,
+        [sessionToken]
+      );
+      const badgeSessionId = badgeSessionRow.rows?.[0]?.id ?? badgeSessionRow[0]?.id;
+      if (badgeSessionId) {
+        const badgeIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress;
+        const badgeUa = req.headers['user-agent'];
+        await logSessionAuditEvent(
+          'SESSION_CREATED',
+          String(badgeSessionId),
+          sessionUser.id,
+          sessionUser.username,
+          sessionUser.role,
+          { loginMethod: 'badge', expiresAt: expiresAt.toISOString() },
+          badgeIp ?? undefined,
+          badgeUa ?? undefined
+        );
+      }
+    }
 
     res.json({
       success: true,
@@ -635,14 +739,54 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     // Generate session token
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
+    const userAgent = req.headers['user-agent'] || null;
+
+    // ── Concurrent session enforcement ──────────────────────────────────────
+    // Keep the newest (maxSessions - 1) existing sessions; deactivate older overflow.
+    // After inserting the new session, total active count will be exactly maxSessions.
+    const maxSessions = MAX_SESSIONS_BY_ROLE[user.role] ?? DEFAULT_MAX_SESSIONS;
+    const existingSessions = await pool.query(
+      `SELECT id, session_token FROM user_sessions WHERE user_id = $1 AND is_active = true AND expires_at > NOW() ORDER BY created_at ASC`,
+      [user.id]
+    );
+    const sessionRows: ActiveSessionIdRow[] = existingSessions.rows ?? existingSessions ?? [];
+    const allowedToKeep = Math.max(0, maxSessions - 1);
+    const sessionsToDeactivate = sessionRows.length > allowedToKeep
+      ? sessionRows.slice(0, sessionRows.length - allowedToKeep)
+      : [];
+    for (const old of sessionsToDeactivate) {
+      await pool.query(`UPDATE user_sessions SET is_active = false WHERE id = $1`, [old.id]);
+      await logSessionAuditEvent(
+        'SESSION_SUPERSEDED',
+        String(old.id),
+        user.id,
+        user.username,
+        user.role,
+        { reason: 'New login exceeded concurrent session limit', maxSessions },
+        ipAddress ?? undefined,
+        userAgent ?? undefined
+      );
+    }
 
     // Store session in database for persistence
-    await pool.query(
-      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active) 
-       VALUES ($1, $2, $3, $4, true)
-       ON CONFLICT (session_token) DO UPDATE 
-       SET expires_at = $4, is_active = true`,
-      [sessionToken, user.id, user.username, expiresAt]
+    const insertResult = await pool.query(
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, last_credential_verified_at) 
+       VALUES ($1, $2, $3, $4, true, $5, $6, NOW())
+       RETURNING id`,
+      [sessionToken, user.id, user.username, expiresAt, ipAddress, userAgent]
+    );
+    const newSessionId = String(insertResult.rows?.[0]?.id ?? insertResult[0]?.id ?? 'unknown');
+
+    await logSessionAuditEvent(
+      'SESSION_CREATED',
+      newSessionId,
+      user.id,
+      user.username,
+      user.role,
+      { loginMethod: 'password' },
+      ipAddress ?? undefined,
+      userAgent ?? undefined
     );
 
     console.log('✅ Session saved to database for user:', user.username);
@@ -692,10 +836,32 @@ router.post('/logout', async (req, res) => {
       req.headers.authorization?.replace('Bearer ', '');
 
     if (sessionToken) {
-      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [
+      const sessionResult = await pool.query(
+        `SELECT id, user_id, username, (SELECT role FROM users WHERE id = user_id) as role
+         FROM user_sessions WHERE session_token = $1 AND is_active = true`,
+        [sessionToken]
+      );
+      const sessionRow = sessionResult.rows?.[0] ?? sessionResult[0];
+
+      await pool.query('UPDATE user_sessions SET is_active = false WHERE session_token = $1', [
         sessionToken,
       ]);
-      console.log('✅ Session deleted from database');
+
+      if (sessionRow) {
+        const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress;
+        const userAgent = req.headers['user-agent'];
+        await logSessionAuditEvent(
+          'SESSION_TERMINATED_BY_USER',
+          String(sessionRow.id),
+          sessionRow.user_id,
+          sessionRow.username,
+          sessionRow.role ?? 'EMPLOYEE',
+          { method: 'explicit_logout' },
+          ipAddress,
+          userAgent
+        );
+      }
+      console.log('✅ Session deactivated in database');
     }
 
     res.clearCookie('sessionToken');
@@ -717,9 +883,9 @@ router.get('/validate', async (req, res) => {
       return res.status(401).json({ valid: false });
     }
 
-    // Query database for session
+    // Query database for session (include id so we can emit SESSION_EXPIRED before deletion)
     const result = await pool.query(
-      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
+      'SELECT id, user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
       [sessionToken]
     );
 
@@ -729,18 +895,26 @@ router.get('/validate', async (req, res) => {
 
     const session = result[0];
 
-    // Check if session is expired
+    // Check if session is expired — emit SESSION_EXPIRED audit before removing
     if (new Date(session.expires_at) < new Date()) {
-      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [
-        sessionToken,
-      ]);
+      const roleRow = await pool.query(`SELECT role FROM users WHERE id = $1`, [session.user_id]);
+      const expiredRole = roleRow[0]?.role ?? 'EMPLOYEE';
+      await logSessionAuditEvent(
+        'SESSION_EXPIRED',
+        String(session.id),
+        session.user_id,
+        session.username,
+        expiredRole,
+        { reason: 'Session found expired during /validate', expiresAt: session.expires_at }
+      );
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ valid: false });
     }
 
     // FIXED: Use user_id as source of truth instead of username
     // This eliminates username casing, rename, and drift issues
     const dbUserResult = await pool.query(
-      `SELECT id, username, role FROM users WHERE id = $1 AND is_active = true`,
+      `SELECT id, username, role, employee_id as "employeeId" FROM users WHERE id = $1 AND is_active = true`,
       [session.user_id]
     );
 
@@ -769,6 +943,7 @@ router.get('/validate', async (req, res) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        employeeId: user.employeeId ?? null,
       },
     });
   } catch (error) {
@@ -777,8 +952,9 @@ router.get('/validate', async (req, res) => {
   }
 });
 
-// Get current user session
-router.get('/session', async (req, res) => {
+// ─── Shared session-user handler ────────────────────────────────────────────
+// Single implementation used by both GET /session and GET /me to prevent drift.
+async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
   try {
     const isProduction = process.env.NODE_ENV === 'production';
     const bypassEnabled = process.env.DEV_AUTH_BYPASS === 'true';
@@ -801,9 +977,8 @@ router.get('/session', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    // Query database for session
     const result = await pool.query(
-      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
+      'SELECT id, user_id, username, expires_at FROM user_sessions WHERE session_token = $1 AND is_active = true',
       [sessionToken]
     );
 
@@ -813,16 +988,23 @@ router.get('/session', async (req, res) => {
 
     const session = result[0];
 
-    // Check if session is expired
+    // Check if session is expired — emit SESSION_EXPIRED audit before removing
     if (new Date(session.expires_at) < new Date()) {
-      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [
-        sessionToken,
-      ]);
+      const roleRow = await pool.query(`SELECT role FROM users WHERE id = $1`, [session.user_id]);
+      const expiredRole = roleRow[0]?.role ?? 'EMPLOYEE';
+      await logSessionAuditEvent(
+        'SESSION_EXPIRED',
+        String(session.id),
+        session.user_id,
+        session.username,
+        expiredRole,
+        { reason: `Session found expired during ${endpoint}`, expiresAt: session.expires_at }
+      );
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    // FIXED: Use user_id as source of truth instead of username
-    // This eliminates username casing, rename, and drift issues
+    // Use user_id as source of truth to eliminate username casing / rename drift
     const dbUserResult = await pool.query(
       `SELECT u.id, u.username, u.first_name, u.last_name, u.role, u.employee_id,
               e.name as employee_name
@@ -837,17 +1019,12 @@ router.get('/session', async (req, res) => {
     if (dbUserResult && dbUserResult.length > 0) {
       user = dbUserResult[0];
     } else {
-      // Fall back to hardcoded users only if user_id matches
       const hardcodedUser = Array.from(USERS.values()).find(u => u.id === session.user_id);
-      if (hardcodedUser) {
-        user = hardcodedUser;
-      }
+      if (hardcodedUser) user = hardcodedUser;
     }
 
     if (!user) {
-      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [
-        sessionToken,
-      ]);
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
       return res.status(401).json({ error: 'User not found' });
     }
 
@@ -872,10 +1049,21 @@ router.get('/session', async (req, res) => {
       employeeId: user.employee_id,
     });
   } catch (error) {
-    console.error('Get session error:', error);
+    console.error(`[AUTH] ${endpoint} error:`, error);
     res.status(500).json({ error: 'Failed to get session' });
   }
-});
+}
+
+// GET /api/auth/session — primary session endpoint
+router.get('/session', (req, res) => handleGetCurrentSession(req, res, '/session'));
+
+/**
+ * GET /api/auth/me
+ * Alias for /api/auth/session — returns the currently authenticated user.
+ * Eliminates 404s for any frontend code that calls /api/auth/me.
+ * Both routes share the same handler to prevent behavioural drift.
+ */
+router.get('/me', (req, res) => handleGetCurrentSession(req, res, '/me'));
 
 /**
  * POST /api/auth/validate-credentials
@@ -894,7 +1082,8 @@ router.post('/validate-credentials', loginRateLimiter, async (req, res) => {
                 u.id as user_id, u.username, u.role
          FROM employees e
          LEFT JOIN users u ON u.employee_id = e.id AND u.is_active = true
-         WHERE (LOWER(e.employee_code) = LOWER($1) OR LOWER(e.badge_scan_code) = LOWER($1))
+         WHERE (LOWER(e.employee_code) = LOWER($1)
+                OR REPLACE(COALESCE(e.badge_scan_code, ''), '-', '') = REPLACE($1, '-', ''))
            AND e.is_active = true
          LIMIT 1`,
         [employeeCode]
@@ -1007,6 +1196,314 @@ router.post('/validate-credentials', loginRateLimiter, async (req, res) => {
   } catch (error) {
     console.error('Validate credentials error:', error);
     res.status(500).json({ error: 'Failed to validate credentials' });
+  }
+});
+
+// ─── Session Management Endpoints ────────────────────────────────────────────
+
+/**
+ * GET /api/auth/sessions
+ * List active sessions for the current user.
+ * Shows device, IP, and login time for each session.
+ */
+router.get('/sessions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const currentToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+
+    interface SessionRow {
+      id: number;
+      session_token: string;
+      ip_address: string | null;
+      user_agent: string | null;
+      last_credential_verified_at: string | null;
+      created_at: string;
+      expires_at: string;
+    }
+
+    const result = await pool.query(
+      `SELECT id, session_token, ip_address, user_agent, last_credential_verified_at, created_at, expires_at
+       FROM user_sessions
+       WHERE user_id = $1 AND is_active = true AND expires_at > NOW()
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+    const rows: SessionRow[] = result.rows ?? result;
+
+    const sessions = rows.map((s: SessionRow) => ({
+      id: s.id,
+      isCurrent: s.session_token === currentToken,
+      ipAddress: s.ip_address,
+      userAgent: s.user_agent,
+      lastCredentialVerifiedAt: s.last_credential_verified_at,
+      createdAt: s.created_at,
+      expiresAt: s.expires_at,
+    }));
+
+    res.json(sessions);
+  } catch (error) {
+    console.error('Get sessions error:', error);
+    res.status(500).json({ error: 'Failed to retrieve sessions' });
+  }
+});
+
+/**
+ * DELETE /api/auth/sessions/:sessionId
+ * Terminate a specific session. Users can only terminate their own sessions.
+ */
+router.delete('/sessions/:sessionId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const username = req.user?.username ?? 'unknown';
+    const role = req.user?.role ?? 'EMPLOYEE';
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { sessionId } = req.params;
+
+    const sessionResult = await pool.query(
+      `SELECT id, user_id, session_token FROM user_sessions WHERE id = $1 AND is_active = true`,
+      [sessionId]
+    );
+    const session = sessionResult.rows?.[0] ?? sessionResult[0];
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (session.user_id !== userId) return res.status(403).json({ error: 'Cannot terminate another user\'s session' });
+
+    await pool.query(`UPDATE user_sessions SET is_active = false WHERE id = $1`, [sessionId]);
+
+    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    await logSessionAuditEvent(
+      'SESSION_TERMINATED_BY_USER',
+      String(sessionId),
+      userId,
+      username,
+      role,
+      { method: 'remote_revoke' },
+      ipAddress,
+      userAgent
+    );
+
+    if (session.session_token === (req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', ''))) {
+      res.clearCookie('sessionToken');
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Terminate session error:', error);
+    res.status(500).json({ error: 'Failed to terminate session' });
+  }
+});
+
+/**
+ * POST /api/auth/step-up
+ * Re-authenticate by verifying current password.
+ * Updates lastCredentialVerifiedAt on the active session without issuing a new token.
+ * Used as gate before accessing CUI/ITAR-classified resources.
+ */
+router.post('/step-up', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const username = req.user?.username ?? 'unknown';
+    const role = req.user?.role ?? 'EMPLOYEE';
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password is required' });
+
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    // Validate active session row FIRST — before touching password material
+    const sessionResult = await pool.query(
+      `SELECT id FROM user_sessions WHERE session_token = $1 AND is_active = true AND expires_at > NOW()`,
+      [sessionToken]
+    );
+    const sessionRow = sessionResult.rows?.[0] ?? sessionResult[0];
+
+    if (!sessionRow) {
+      return res.status(401).json({ error: 'No active session found. Please log in again.' });
+    }
+    const sessionId = String(sessionRow.id);
+
+    const dbUserResult = await pool.query(
+      `SELECT id, password_hash AS "passwordHash", auth_provider FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    let isValid = false;
+    let isFederatedUser = false;
+    const dbUserRow = dbUserResult.rows?.[0] ?? dbUserResult[0];
+    if (dbUserRow) {
+      const dbUser = dbUserRow as { id: number; passwordHash: string; auth_provider: string | null };
+      // Detect federated-only users by their explicit auth_provider field (set during OAuth login).
+      isFederatedUser = dbUser.auth_provider === 'microsoft';
+      isValid = await bcrypt.compare(password, dbUser.passwordHash);
+    } else {
+      const hardcodedUser = Array.from(USERS.values()).find(u => u.id === userId);
+      if (hardcodedUser) {
+        isValid = await bcrypt.compare(password, hardcodedUser.password);
+      }
+    }
+
+    if (!isValid) {
+      await logSessionAuditEvent(
+        'STEP_UP_DENIED',
+        sessionId,
+        userId,
+        username,
+        role,
+        { reason: isFederatedUser ? 'Federated user — no local password' : 'Invalid password' },
+        ipAddress,
+        userAgent
+      );
+      if (isFederatedUser) {
+        return res.status(422).json({
+          error: 'Your account uses Microsoft sign-in. Please sign out and sign back in via Microsoft to verify your identity.',
+          requiresFederatedReauth: true,
+        });
+      }
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    await pool.query(
+      `UPDATE user_sessions SET last_credential_verified_at = NOW() WHERE session_token = $1 AND is_active = true`,
+      [sessionToken]
+    );
+
+    await logSessionAuditEvent(
+      'STEP_UP_GRANTED',
+      sessionId,
+      userId,
+      username,
+      role,
+      {},
+      ipAddress,
+      userAgent
+    );
+
+    res.json({ success: true, verifiedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('Step-up auth error:', error);
+    res.status(500).json({ error: 'Step-up authentication failed' });
+  }
+});
+
+// ─── Admin Session Management ─────────────────────────────────────────────────
+
+/**
+ * GET /api/auth/admin/sessions
+ * List all active sessions across all users. Admin only.
+ * Optionally filter by ?userId=<id>
+ */
+router.get('/admin/sessions', authenticateToken, async (req, res) => {
+  try {
+    const requestingUser = req.user;
+    if (!requestingUser || !['ADMIN', 'OWNER'].includes(requestingUser.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    interface AdminSessionRow {
+      id: number;
+      user_id: number;
+      username: string;
+      ip_address: string | null;
+      user_agent: string | null;
+      last_credential_verified_at: string | null;
+      created_at: string;
+      expires_at: string;
+      role: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }
+
+    const { userId } = req.query;
+    let query = `
+      SELECT s.id, s.user_id, s.username, s.ip_address, s.user_agent,
+             s.last_credential_verified_at, s.created_at, s.expires_at,
+             u.role, u.first_name, u.last_name
+      FROM user_sessions s
+      LEFT JOIN users u ON u.id = s.user_id
+      WHERE s.is_active = true AND s.expires_at > NOW()
+    `;
+    const params: (string | number)[] = [];
+
+    if (userId) {
+      params.push(String(userId));
+      query += ` AND s.user_id = $${params.length}`;
+    }
+    query += ` ORDER BY s.created_at DESC`;
+
+    const result = await pool.query(query, params);
+    const rows: AdminSessionRow[] = result.rows ?? result;
+
+    res.json(rows.map((s: AdminSessionRow) => ({
+      id: s.id,
+      userId: s.user_id,
+      username: s.username,
+      firstName: s.first_name,
+      lastName: s.last_name,
+      role: s.role,
+      ipAddress: s.ip_address,
+      userAgent: s.user_agent,
+      lastCredentialVerifiedAt: s.last_credential_verified_at,
+      createdAt: s.created_at,
+      expiresAt: s.expires_at,
+    })));
+  } catch (error) {
+    console.error('Admin get sessions error:', error);
+    res.status(500).json({ error: 'Failed to retrieve sessions' });
+  }
+});
+
+/**
+ * DELETE /api/auth/admin/sessions/:sessionId
+ * Admin: forcibly terminate any user's session.
+ */
+router.delete('/admin/sessions/:sessionId', authenticateToken, async (req, res) => {
+  try {
+    const requestingUser = req.user;
+    if (!requestingUser || !['ADMIN', 'OWNER'].includes(requestingUser.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { sessionId } = req.params;
+    const sessionResult = await pool.query(
+      `SELECT id, user_id, username, (SELECT role FROM users WHERE id = user_id) as role
+       FROM user_sessions WHERE id = $1 AND is_active = true`,
+      [sessionId]
+    );
+    const session = sessionResult.rows?.[0] ?? sessionResult[0];
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    await pool.query(`UPDATE user_sessions SET is_active = false WHERE id = $1`, [sessionId]);
+
+    const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    // actor = the admin who performed the action; target user goes in meta for traceability
+    await logSessionAuditEvent(
+      'SESSION_TERMINATED_BY_ADMIN',
+      String(sessionId),
+      requestingUser.id,
+      requestingUser.username,
+      requestingUser.role ?? 'ADMIN',
+      {
+        targetUserId: session.user_id,
+        targetUsername: session.username,
+        targetRole: session.role ?? 'EMPLOYEE',
+      },
+      ipAddress,
+      userAgent
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Admin terminate session error:', error);
+    res.status(500).json({ error: 'Failed to terminate session' });
   }
 });
 

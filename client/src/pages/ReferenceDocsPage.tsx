@@ -470,7 +470,7 @@ export default function ReferenceDocsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => window.open(`/${doc.storagePath}`, '_blank')}
+                            onClick={() => window.open(`/api/media/${doc.id}/download`, '_blank')}
                             data-testid={`view-doc-${doc.id}`}
                           >
                             <Eye className="h-4 w-4" />
@@ -478,7 +478,14 @@ export default function ReferenceDocsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => window.open(`/${doc.storagePath}`, '_blank')}
+                            onClick={() => {
+                              const a = document.createElement('a');
+                              a.href = `/api/media/${doc.id}/download`;
+                              a.download = doc.filename || 'document.pdf';
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                            }}
                             data-testid={`download-doc-${doc.id}`}
                           >
                             <Download className="h-4 w-4" />

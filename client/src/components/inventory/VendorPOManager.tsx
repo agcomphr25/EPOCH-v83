@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Card,
   CardContent,
@@ -64,7 +65,22 @@ import {
   AlertTriangle,
   RefreshCw,
   Paperclip,
+  Clock,
+  Archive,
+  ArchiveRestore,
+  ThumbsDown,
+  Timer,
+  ThumbsUp,
+  ChevronDown,
+  ChevronRight,
+  Truck,
+  ClipboardList,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'react-hot-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import VendorPOItemSelector from './VendorPOItemSelector';
@@ -78,6 +94,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { getResendConfirmationKey, getSendRFQInvalidationKeys } from '@/lib/vendorPOInvalidation';
 
 // Helper function to format numbers with commas
 function formatNumber(value: number | undefined | null, decimals: number = 2): string {
@@ -178,6 +195,9 @@ type VendorPO = {
   status:
     | 'Draft'
     | 'RFQ Sent'
+    | 'Quote Received'
+    | 'Declined'
+    | 'Expired'
     | 'Sent'
     | 'Partially Received'
     | 'Fully Received'
@@ -202,6 +222,22 @@ type VendorPO = {
   issuedWithoutEmailAt?: string | null;
   // External / legacy reference
   externalPoNumber?: string | null;
+  // Receiving progress (aggregated from line items by the list endpoint)
+  totalLines?: number;
+  receivedLines?: number;
+  // Vendor confirmation badge (augmented by the list endpoint, no extra per-row calls)
+  // null = non-issued PO; 'no_link' = issued but no confirmation email ever sent
+  confirmationBadge?: 'confirmed' | 'awaiting' | 'expired' | 'no_link' | null;
+  // ISO timestamp of when the vendor clicked the confirmation link (only set when confirmationBadge === 'confirmed')
+  confirmationUsedAt?: string | null;
+  // ISO timestamp of when the confirmation link expires (set for 'awaiting' and 'expired' badges)
+  confirmationExpiresAt?: string | null;
+  // Archived flag
+  archived?: boolean;
+  // RFQ outcome notes (set when status is Declined or Expired)
+  rfqOutcomeNotes?: string | null;
+  // Compliance review status (augmented by list endpoint)
+  complianceStatus?: 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention';
 };
 
 type VendorPOItem = {
@@ -360,12 +396,18 @@ function getStatusColor(status: VendorPO['status']) {
       return 'bg-gray-100 text-gray-800';
     case 'RFQ Sent':
       return 'bg-orange-100 text-orange-800';
+    case 'Quote Received':
+      return 'bg-green-100 text-green-800';
+    case 'Declined':
+      return 'bg-red-100 text-red-800';
+    case 'Expired':
+      return 'bg-slate-100 text-slate-600';
     case 'Sent':
       return 'bg-blue-100 text-blue-800';
     case 'Partially Received':
       return 'bg-yellow-100 text-yellow-800';
     case 'Fully Received':
-      return 'bg-green-100 text-green-800';
+      return 'bg-emerald-100 text-emerald-800';
     case 'Cancelled':
       return 'bg-red-100 text-red-800';
     default:
@@ -648,6 +690,7 @@ function VendorPOCard({
   onIssuePO,
   onCreateRevision,
   onViewPDF,
+  onReviewCompliance,
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
@@ -656,6 +699,7 @@ function VendorPOCard({
   onIssuePO: (id: number, skipEmail?: boolean) => void;
   onCreateRevision: (vendorPo: VendorPO) => void;
   onViewPDF: (vendorPo: VendorPO) => void;
+  onReviewCompliance?: (id: number) => void;
 }) {
   // Check if PO is formally issued (cannot be directly edited) — RFQ Sent remains editable
   const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
@@ -776,6 +820,19 @@ function VendorPOCard({
               Edit
             </Button>
           )}
+          {/* Compliance Review button for non-issued POs that haven't been reviewed */}
+          {!isIssued && onReviewCompliance && vendorPo.complianceStatus !== 'Reviewed' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onReviewCompliance(vendorPo.id)}
+              className="text-amber-700 hover:text-amber-900 border-amber-300 hover:border-amber-400"
+              data-testid={`button-compliance-review-${vendorPo.id}`}
+            >
+              <Shield className="w-4 h-4 mr-1" />
+              Compliance Review
+            </Button>
+          )}
           {/* Show Create Revision button for issued POs */}
           {isIssued && vendorPo.isCurrentRevision !== false && (
             <Button
@@ -867,7 +924,7 @@ function VendorPOForm({
 
   // Fetch vendors for the dropdown
   const { data: vendorsResponse } = useQuery<{ data: any[]; meta: any }>({
-    queryKey: ['/api/vendors'],
+    queryKey: ['/api/vendors?pageSize=1000'],
   });
   const vendors = (vendorsResponse?.data || []).slice().sort((a: any, b: any) =>
     a.name.localeCompare(b.name)
@@ -1042,8 +1099,1076 @@ function VendorPOForm({
   );
 }
 
+// Small self-contained badge that opens a resend popover for 'awaiting' and 'expired' states
+export function ConfirmationBadgeResend({ vendorPo }: { vendorPo: VendorPO }) {
+  const [open, setOpen] = useState(false);
+
+  const { data: confirmationInfo } = useQuery<{
+    found: boolean;
+    email?: string;
+    expiresAt?: string;
+    usedAt?: string | null;
+  }>({
+    queryKey: ['/api/vendor-pos', vendorPo.id, 'confirmation'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/confirmation`),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const resendMutation = useMutation<
+    { message?: string; emailSent: boolean; emailRecipient: string },
+    Error
+  >({
+    mutationFn: () =>
+      apiRequest(`/api/vendor-pos/${vendorPo.id}/resend`, { method: 'POST' }),
+    onSuccess: (data) => {
+      toast.success(data?.message ?? 'Confirmation email resent successfully.');
+      setOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPo.id, 'confirmation'] });
+    },
+    onError: (err) => {
+      toast.error(err?.message ?? 'Failed to resend confirmation email.');
+    },
+  });
+
+  const isAwaiting = vendorPo.confirmationBadge === 'awaiting';
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
+          className={cn(
+            'inline-flex items-center gap-1 text-xs font-medium cursor-pointer hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded',
+            isAwaiting
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'text-red-600 dark:text-red-400'
+          )}
+        >
+          {isAwaiting ? (
+            <>
+              <Clock className="w-3.5 h-3.5" />
+              Awaiting
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Link Expired
+            </>
+          )}
+        </span>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-64 p-3"
+        side="top"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-medium">
+            {isAwaiting ? 'Awaiting vendor confirmation' : 'Confirmation link expired'}
+          </p>
+          {confirmationInfo?.found && confirmationInfo.email ? (
+            <p className="text-xs text-muted-foreground">
+              Last link sent to{' '}
+              <span className="font-medium text-foreground">{confirmationInfo.email}</span>
+              .
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Resend the confirmation link to{' '}
+              <span className="font-medium">{vendorPo.vendorName ?? 'the vendor'}</span>
+              .
+            </p>
+          )}
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={resendMutation.isPending}
+            onClick={() => resendMutation.mutate()}
+          >
+            {resendMutation.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                Resending…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                Resend Confirmation
+              </>
+            )}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Vendor Confirmation card content ──────────────────────────────────────────
+// Exported so automated tests can render it in isolation without needing the
+// entire VendorPOManager context.
+
+export type ConfirmationStatus = {
+  found: boolean;
+  email?: string;
+  usedAt?: string | null;
+  expiresAt?: string | null;
+};
+
+export interface VendorConfirmationCardContentProps {
+  isLoading: boolean;
+  confirmationStatus: ConfirmationStatus | undefined | null;
+  isPending: boolean;
+  onResend: () => void;
+}
+
+export function VendorConfirmationCardContent({
+  isLoading,
+  confirmationStatus,
+  isPending,
+  onResend,
+  confirmationUsedAt,
+}: VendorConfirmationCardContentProps & { confirmationUsedAt?: string | null }) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading confirmation status…
+      </div>
+    );
+  }
+
+  if (!confirmationStatus || !confirmationStatus.found) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground italic">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          No confirmation link on record for this PO.
+        </div>
+        <div className="pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onResend}
+            disabled={isPending}
+            data-testid="button-send-confirmation-link"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
+            {isPending ? 'Sending…' : 'Send Confirmation Link'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (confirmationStatus.usedAt) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+          <CheckCircle className="h-4 w-4 shrink-0" />
+          Confirmed
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {(() => {
+            const usedAt = confirmationUsedAt || confirmationStatus.usedAt;
+            const d = new Date(usedAt!);
+            const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            return <>Confirmed on{' '}<span className="font-medium text-foreground">{datePart} at {timePart}</span></>;
+          })()}
+        </div>
+        <div className="text-sm text-muted-foreground">
+          Link sent to{' '}
+          <span className="font-medium text-foreground">
+            {confirmationStatus.email}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        Awaiting confirmation
+      </div>
+      <div className="text-sm text-muted-foreground">
+        Link sent to{' '}
+        <span className="font-medium text-foreground">
+          {confirmationStatus.email}
+        </span>
+      </div>
+      {confirmationStatus.expiresAt && (
+        <div className="text-sm text-muted-foreground">
+          Link expires{' '}
+          <span
+            className={`font-medium ${
+              new Date(confirmationStatus.expiresAt) < new Date()
+                ? 'text-red-600 dark:text-red-400'
+                : 'text-foreground'
+            }`}
+          >
+            {new Date(confirmationStatus.expiresAt) < new Date()
+              ? `expired on ${new Date(confirmationStatus.expiresAt).toLocaleString()}`
+              : new Date(confirmationStatus.expiresAt).toLocaleString()}
+          </span>
+        </div>
+      )}
+      <div className="pt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onResend}
+          disabled={isPending}
+          data-testid="button-resend-confirmation-link"
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
+          {isPending ? 'Resending…' : 'Resend Link'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function NoLinkBadgeSend({ vendorPo }: { vendorPo: VendorPO }) {
+  const [open, setOpen] = useState(false);
+
+  const sendMutation = useMutation<
+    { message?: string; emailSent: boolean; emailRecipient: string },
+    Error
+  >({
+    mutationFn: () =>
+      apiRequest(`/api/vendor-pos/${vendorPo.id}/resend`, { method: 'POST' }),
+    onSuccess: (data) => {
+      toast.success(data?.message ?? 'Confirmation email sent successfully.');
+      setOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+    },
+    onError: (err) => {
+      toast.error(err?.message ?? 'Failed to send confirmation email.');
+    },
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground cursor-pointer hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
+        >
+          <XCircle className="w-3.5 h-3.5" />
+          No Link
+        </span>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-64 p-3"
+        side="top"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-medium">No confirmation sent yet</p>
+          <p className="text-xs text-muted-foreground">
+            Send the first confirmation link to{' '}
+            <span className="font-medium text-foreground">
+              {vendorPo.vendorName ?? 'the vendor'}
+            </span>
+            .
+          </p>
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={sendMutation.isPending}
+            onClick={() => sendMutation.mutate()}
+          >
+            {sendMutation.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                Send Confirmation
+              </>
+            )}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Receipt history types ──────────────────────────────────────────────────────
+
+type ReceiptSummary = {
+  id: number;
+  receiptNumber: string;
+  receiptDate: string;
+  receivedAt?: string | null;
+  receiverDisplayName?: string | null;
+  carrier?: string | null;
+  trackingNumber?: string | null;
+  packingSlipNumber?: string | null;
+  conditionOnArrival?: string | null;
+  status: string;
+  notes?: string | null;
+  vendorPoId?: number | null;
+};
+
+type ReceiptLineDetail = {
+  id: number;
+  agPartNumber?: string | null;
+  description?: string | null;
+  orderedQty?: string | null;
+  receivedQty: string;
+  uom?: string | null;
+  isPartial?: boolean | null;
+  isOver?: boolean | null;
+};
+
+type ReceiptDetail = ReceiptSummary & {
+  lines: ReceiptLineDetail[];
+};
+
+function conditionLabel(condition: string | null | undefined): string {
+  switch (condition) {
+    case 'good': return 'Good';
+    case 'damaged': return 'Damaged';
+    case 'partial': return 'Partial';
+    case 'refused': return 'Refused';
+    default: return condition ?? '—';
+  }
+}
+
+function conditionBadgeClass(condition: string | null | undefined): string {
+  switch (condition) {
+    case 'good': return 'bg-green-100 text-green-800';
+    case 'damaged': return 'bg-red-100 text-red-800';
+    case 'partial': return 'bg-yellow-100 text-yellow-800';
+    case 'refused': return 'bg-red-200 text-red-900';
+    default: return 'bg-gray-100 text-gray-700';
+  }
+}
+
+function receiptStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'complete': return 'bg-emerald-100 text-emerald-800';
+    case 'in_progress': return 'bg-blue-100 text-blue-800';
+    case 'cancelled': return 'bg-red-100 text-red-800';
+    default: return 'bg-gray-100 text-gray-700';
+  }
+}
+
+function receiptStatusLabel(status: string): string {
+  switch (status) {
+    case 'complete': return 'Complete';
+    case 'in_progress': return 'In Progress';
+    case 'cancelled': return 'Cancelled';
+    default: return status;
+  }
+}
+
+// A single expandable receipt card
+function ReceiptCard({ receipt }: { receipt: ReceiptSummary }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: detail, isLoading: isLoadingDetail } = useQuery<ReceiptDetail>({
+    queryKey: ['/api/receipts', receipt.id],
+    queryFn: () => apiRequest(`/api/receipts/${receipt.id}`),
+    enabled: expanded,
+  });
+
+  const dateStr = (() => {
+    const src = receipt.receivedAt ?? receipt.receiptDate;
+    if (!src) return '—';
+    const d = new Date(src);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  })();
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <div
+        className="flex items-start gap-3 p-4 cursor-pointer hover:bg-muted/40 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="mt-0.5 text-muted-foreground shrink-0">
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </div>
+        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm">{receipt.receiptNumber}</span>
+            <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', receiptStatusBadgeClass(receipt.status))}>
+              {receiptStatusLabel(receipt.status)}
+            </span>
+          </div>
+          <div className="text-sm text-muted-foreground sm:text-right">{dateStr}</div>
+          {receipt.receiverDisplayName && (
+            <div className="text-sm text-muted-foreground col-span-full sm:col-span-1">
+              Received by: <span className="text-foreground font-medium">{receipt.receiverDisplayName}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 col-span-full sm:col-span-1 sm:justify-end">
+            {receipt.carrier && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Truck className="h-3 w-3" />
+                {receipt.carrier}
+              </span>
+            )}
+            {receipt.packingSlipNumber && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <ClipboardList className="h-3 w-3" />
+                Slip: {receipt.packingSlipNumber}
+              </span>
+            )}
+            {receipt.conditionOnArrival && (
+              <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', conditionBadgeClass(receipt.conditionOnArrival))}>
+                {conditionLabel(receipt.conditionOnArrival)}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t px-4 pb-4 pt-3 bg-muted/20">
+          {isLoadingDetail ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-5/6" />
+            </div>
+          ) : detail?.lines && detail.lines.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-muted-foreground border-b">
+                  <th className="text-left py-1.5 pr-4 font-medium">Part #</th>
+                  <th className="text-left py-1.5 pr-4 font-medium">Description</th>
+                  <th className="text-right py-1.5 pr-2 font-medium">Ordered</th>
+                  <th className="text-right py-1.5 font-medium">Received</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.lines.map((line) => (
+                  <tr key={line.id} className="border-b last:border-0">
+                    <td className="py-1.5 pr-4 font-mono text-xs">{line.agPartNumber ?? '—'}</td>
+                    <td className="py-1.5 pr-4 text-muted-foreground">{line.description ?? '—'}</td>
+                    <td className="py-1.5 pr-2 text-right whitespace-nowrap">
+                      {line.orderedQty != null ? `${line.orderedQty} ${line.uom ?? ''}`.trim() : '—'}
+                    </td>
+                    <td className="py-1.5 text-right whitespace-nowrap">
+                      <span className={cn(
+                        'font-medium',
+                        line.isOver ? 'text-orange-600' : line.isPartial ? 'text-yellow-600' : 'text-green-700'
+                      )}>
+                        {line.receivedQty} {line.uom ?? ''}
+                      </span>
+                      {line.isOver && <span className="ml-1 text-xs text-orange-500">(over)</span>}
+                      {line.isPartial && !line.isOver && <span className="ml-1 text-xs text-yellow-500">(partial)</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No line items recorded for this receipt.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Receipts tab content for a given PO
+function ReceiptHistoryTab({ vendorPoId }: { vendorPoId: number }) {
+  const { data: receipts = [], isLoading } = useQuery<ReceiptSummary[]>({
+    queryKey: ['/api/receipts', { vendorPoId }],
+    queryFn: () => apiRequest(`/api/receipts?vendorPoId=${vendorPoId}`),
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (receipts.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-sm text-muted-foreground italic">No receipts recorded for this PO yet.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Receipt History</CardTitle>
+        <CardDescription>
+          All material receipts recorded against this purchase order
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {receipts.map((r) => (
+          <ReceiptCard key={r.id} receipt={r} />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Compliance Summary Card — shows all compliance fields at a glance in the PO detail view
+function ComplianceSummaryCard({
+  vendorPoId,
+  onOpenModal,
+}: {
+  vendorPoId: number;
+  onOpenModal: () => void;
+}) {
+  const { data: review, isLoading } = useQuery<ComplianceReviewData>({
+    queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/compliance-review`),
+  });
+
+  const BoolField = ({ label, value }: { label: string; value: boolean }) => (
+    <div className="flex items-center justify-between py-1.5 border-b last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className={`text-sm font-medium ${value ? 'text-green-700 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
+        {value ? 'Yes' : 'No'}
+      </span>
+    </div>
+  );
+
+  const status = review?.reviewStatus ?? 'pending';
+  const isPending = !review || status === 'pending';
+  const isRequiresAttention = status === 'requires_attention';
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-muted-foreground" />
+            <CardTitle>Procurement Compliance Summary</CardTitle>
+          </div>
+          <ComplianceBadge status={
+            status === 'reviewed' ? 'Reviewed'
+              : status === 'blocked' ? 'Blocked'
+              : status === 'requires_attention' ? 'Requires Attention'
+              : 'Pending Review'
+          } />
+        </div>
+        {isRequiresAttention && (
+          <div className="mt-2 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2">
+            <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>This PO changed after compliance review. Re-review is required before issue.</span>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-4 bg-muted rounded animate-pulse" />
+            ))}
+          </div>
+        ) : isPending ? (
+          <div className="text-center py-4 space-y-3">
+            <p className="text-sm text-muted-foreground">No compliance review has been completed for this PO.</p>
+            <Button size="sm" onClick={onOpenModal}>
+              <Shield className="w-4 h-4 mr-2" />
+              Complete Compliance Review
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-0">
+              <BoolField label="Government Contract" value={review!.governmentContract} />
+              <BoolField label="FAR/DFARS Required" value={review!.farRequired} />
+              <BoolField label="DPAS Required" value={review!.dpasRequired} />
+              <BoolField label="COC Required" value={review!.cocRequired} />
+              <BoolField label="MTR Required" value={review!.mtrRequired} />
+              <BoolField label="Source Inspection Required" value={review!.sourceInspectionRequired} />
+              <BoolField label="Second-Party Approval Complete" value={review!.secondPartyComplete} />
+              <BoolField label="Vendor Approved" value={review!.vendorApproved} />
+            </div>
+            {review!.reviewNotes && (
+              <div className="pt-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Compliance Notes</p>
+                <p className="text-sm">{review!.reviewNotes}</p>
+              </div>
+            )}
+            <div className="pt-1 text-xs text-muted-foreground space-y-0.5">
+              {review!.reviewedByDisplayName && (
+                <p>Reviewed by: <span className="font-medium text-foreground">{review!.reviewedByDisplayName}</span></p>
+              )}
+              {review!.reviewedAt && (
+                <p>Reviewed at: <span className="font-medium text-foreground">{new Date(review!.reviewedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></p>
+              )}
+            </div>
+            <div className="pt-2">
+              <Button size="sm" variant={isRequiresAttention ? 'default' : 'outline'} onClick={onOpenModal}>
+                <ShieldCheck className="w-4 h-4 mr-2" />
+                {isRequiresAttention ? 'Reopen Compliance Review' : 'Update Compliance Review'}
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Compliance status badge helper
+function ComplianceBadge({ status, onClick }: { status?: string; onClick?: () => void }) {
+  const isActionable = onClick && (!status || status === 'Pending Review' || status === 'Requires Attention');
+  const baseClick = isActionable ? onClick : undefined;
+  const hoverClass = isActionable ? 'cursor-pointer hover:opacity-80 active:opacity-60' : '';
+
+  if (!status || status === 'Pending Review') {
+    return (
+      <span onClick={baseClick} className={`inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full ${hoverClass}`} title={isActionable ? 'Click to start compliance review' : undefined}>
+        <Shield className="w-3 h-3" />
+        Pending Review
+      </span>
+    );
+  }
+  if (status === 'Reviewed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+        <ShieldCheck className="w-3 h-3" />
+        Reviewed
+      </span>
+    );
+  }
+  if (status === 'Blocked') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
+        <ShieldX className="w-3 h-3" />
+        Blocked
+      </span>
+    );
+  }
+  return (
+    <span onClick={baseClick} className={`inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full ${hoverClass}`} title={isActionable ? 'Click to re-do compliance review' : undefined}>
+      <ShieldAlert className="w-3 h-3" />
+      Requires Attention
+    </span>
+  );
+}
+
+type OptionalSetting = {
+  id: number;
+  name: string;
+  statement: string;
+};
+
+type ComplianceReviewData = {
+  governmentContract: boolean;
+  farRequired: boolean;
+  dpasRequired: boolean;
+  cocRequired: boolean;
+  mtrRequired: boolean;
+  sourceInspectionRequired: boolean;
+  secondPartyComplete: boolean;
+  vendorApproved: boolean;
+  reviewNotes: string;
+  reviewStatus: string;
+  reviewedByDisplayName?: string | null;
+  reviewedAt?: string | null;
+  blockingReasons?: string[];
+};
+
+type ComplianceSaveResult = ComplianceReviewData & {
+  blockingReasons: string[];
+};
+
+function ComplianceReviewModal({
+  vendorPoId,
+  isOpen,
+  onClose,
+  onComplianceApproved,
+  allOptionalSettings,
+  currentOptionalSettingIds,
+  onAutoSelectOptionals,
+}: {
+  vendorPoId: number;
+  isOpen: boolean;
+  onClose: () => void;
+  onComplianceApproved: () => void;
+  allOptionalSettings: OptionalSetting[];
+  currentOptionalSettingIds: number[];
+  onAutoSelectOptionals: (ids: number[]) => Promise<void>;
+}) {
+  const [form, setForm] = useState<ComplianceReviewData>({
+    governmentContract: false,
+    farRequired: false,
+    dpasRequired: false,
+    cocRequired: false,
+    mtrRequired: false,
+    sourceInspectionRequired: false,
+    secondPartyComplete: false,
+    vendorApproved: false,
+    reviewNotes: '',
+    reviewStatus: 'reviewed',
+  });
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [blockingReasons, setBlockingReasons] = useState<string[]>([]);
+
+  const { data: existingReview, isLoading: isLoadingReview } = useQuery<ComplianceReviewData>({
+    queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/compliance-review`),
+    enabled: isOpen && !!vendorPoId,
+  });
+
+  useEffect(() => {
+    if (existingReview && isOpen) {
+      setForm({
+        governmentContract: existingReview.governmentContract ?? false,
+        farRequired: existingReview.farRequired ?? false,
+        dpasRequired: existingReview.dpasRequired ?? false,
+        cocRequired: existingReview.cocRequired ?? false,
+        mtrRequired: existingReview.mtrRequired ?? false,
+        sourceInspectionRequired: existingReview.sourceInspectionRequired ?? false,
+        secondPartyComplete: existingReview.secondPartyComplete ?? false,
+        vendorApproved: existingReview.vendorApproved ?? false,
+        reviewNotes: existingReview.reviewNotes ?? '',
+        reviewStatus: existingReview.reviewStatus ?? 'reviewed',
+      });
+      setBlockingReasons(existingReview.blockingReasons ?? []);
+    }
+  }, [existingReview, isOpen]);
+
+  const saveMutation = useMutation<ComplianceSaveResult, Error, ComplianceReviewData>({
+    mutationFn: (data: ComplianceReviewData) =>
+      apiRequest(`/api/vendor-pos/${vendorPoId}/compliance-review`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...data, reviewStatus: 'reviewed' }),
+      }) as Promise<ComplianceSaveResult>,
+    onSuccess: async (saved: ComplianceSaveResult) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+
+      // If the saved review is blocked, record it for audit trail but do NOT proceed to issue
+      if (saved.reviewStatus === 'blocked' || saved.blockingReasons.length > 0) {
+        setBlockingReasons(saved.blockingReasons);
+        toast.error(
+          'Compliance review saved (blocked). Resolve the issues below before issuing the PO.'
+        );
+        return; // modal stays open so user can fix issues
+      }
+
+      // Review is approved — auto-select optional statements based on compliance flags
+      const autoSelectIds = [...currentOptionalSettingIds];
+      const toastLines: string[] = [];
+
+      const findOptionalByKeyword = (keyword: string): OptionalSetting | undefined =>
+        allOptionalSettings.find(
+          (s) =>
+            s.name?.toLowerCase().includes(keyword.toLowerCase()) ||
+            s.statement?.toLowerCase().includes(keyword.toLowerCase())
+        );
+
+      const autoSelect = (flag: boolean, keyword: string, label: string) => {
+        if (!flag) return;
+        const match = findOptionalByKeyword(keyword);
+        if (match && !autoSelectIds.includes(match.id)) {
+          autoSelectIds.push(match.id);
+          toastLines.push(label);
+        }
+      };
+
+      autoSelect(saved.farRequired, 'FAR', 'FAR/DFARS');
+      autoSelect(saved.dpasRequired, 'DPAS', 'DPAS');
+      autoSelect(saved.cocRequired, 'CoC', 'Certificate of Conformance');
+      autoSelect(saved.mtrRequired, 'MTR', 'Material Test Report');
+
+      if (toastLines.length > 0) {
+        // Await auto-selection before proceeding so optional settings are committed
+        // before the issue flow begins (prevents race condition on PO issue).
+        await onAutoSelectOptionals(autoSelectIds);
+        toast.success(`Auto-selected optional statements: ${toastLines.join(', ')}`);
+      }
+
+      toast.success('Compliance review approved. Proceeding to issue PO.');
+      onComplianceApproved();
+      onClose();
+    },
+    onError: (error: Error) => {
+      toast.error(error?.message || 'Failed to save compliance review');
+    },
+  });
+
+  const handleBooleanField = (field: keyof ComplianceReviewData, value: boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setValidationErrors([]);
+  };
+
+  const handleSave = () => {
+    const errors: string[] = [];
+    if (!form.reviewNotes.trim()) errors.push('Justification is required');
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    saveMutation.mutate(form);
+  };
+
+  const BooleanToggle = ({
+    label,
+    field,
+    trueLabel = 'Yes',
+    falseLabel = 'No',
+    trueDescription,
+  }: {
+    label: string;
+    field: keyof ComplianceReviewData;
+    trueLabel?: string;
+    falseLabel?: string;
+    trueDescription?: string;
+  }) => {
+    const value = form[field] as boolean;
+    return (
+      <div className="flex items-start justify-between gap-4 py-2 border-b last:border-0">
+        <div className="flex-1">
+          <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</div>
+          {trueDescription && value && (
+            <div className="text-xs text-blue-600 mt-0.5">{trueDescription}</div>
+          )}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleBooleanField(field, true)}
+            className={cn(
+              'px-3 py-1 text-xs rounded-l-md border font-medium transition-colors',
+              value
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600'
+            )}
+          >
+            {trueLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleBooleanField(field, false)}
+            className={cn(
+              'px-3 py-1 text-xs rounded-r-md border-t border-r border-b font-medium transition-colors',
+              !value
+                ? 'bg-gray-600 text-white border-gray-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600'
+            )}
+          >
+            {falseLabel}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-blue-600" />
+            Compliance Review — Required Before Issue
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Complete all 8 compliance questions and provide a justification. PO cannot be issued
+            if second-party approval or vendor approval is missing.
+          </p>
+        </DialogHeader>
+
+        {isLoadingReview ? (
+          <div className="flex items-center gap-2 py-8 justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Loading existing review...</span>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+            <div className="rounded-lg border p-3 space-y-1">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Contract & Regulatory</h4>
+              <BooleanToggle
+                label="Government contract applies to this PO"
+                field="governmentContract"
+              />
+              <BooleanToggle
+                label="FAR/DFARS flowdown required"
+                field="farRequired"
+                trueLabel="Required"
+                falseLabel="Not Required"
+                trueDescription="FAR/DFARS optional statement will be auto-selected"
+              />
+              <BooleanToggle
+                label="DPAS rating required"
+                field="dpasRequired"
+                trueLabel="Required"
+                falseLabel="Not Required"
+                trueDescription="DPAS optional statement will be auto-selected"
+              />
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Quality & Certification</h4>
+              <BooleanToggle
+                label="Certificate of Conformance (CoC) required"
+                field="cocRequired"
+                trueLabel="Required"
+                falseLabel="Not Required"
+                trueDescription="CoC optional statement will be auto-selected"
+              />
+              <BooleanToggle
+                label="Material Test Report (MTR) required"
+                field="mtrRequired"
+                trueLabel="Required"
+                falseLabel="Not Required"
+                trueDescription="MTR optional statement will be auto-selected"
+              />
+              <BooleanToggle
+                label="Source inspection required"
+                field="sourceInspectionRequired"
+              />
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Approval Gates</h4>
+              <BooleanToggle
+                label="Second-party approval complete"
+                field="secondPartyComplete"
+                trueLabel="Complete"
+                falseLabel="Not Complete"
+              />
+              <BooleanToggle
+                label="Vendor is approved for this purchase"
+                field="vendorApproved"
+                trueLabel="Approved"
+                falseLabel="Not Approved"
+              />
+            </div>
+
+            {/* Blocking warnings */}
+            {(!form.secondPartyComplete || !form.vendorApproved) && (
+              <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950 p-3">
+                <div className="flex items-start gap-2">
+                  <ShieldX className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium text-red-700 dark:text-red-400">PO cannot be issued</div>
+                    <ul className="mt-1 text-xs text-red-600 dark:text-red-400 space-y-0.5">
+                      {!form.secondPartyComplete && <li>• Second-party approval is not complete</li>}
+                      {!form.vendorApproved && <li>• Vendor is not approved</li>}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Saved blocking reasons from previous save attempt */}
+            {blockingReasons.length > 0 && form.secondPartyComplete && form.vendorApproved && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950 p-3">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-0.5">
+                    {blockingReasons.map((r, i) => <li key={i}>• {r}</li>)}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* Justification */}
+            <div className="space-y-1.5">
+              <Label htmlFor="review-notes" className="text-sm font-medium">
+                Compliance Justification <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="review-notes"
+                placeholder="Describe the compliance rationale for this purchase (required)..."
+                value={form.reviewNotes}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, reviewNotes: e.target.value }));
+                  setValidationErrors([]);
+                }}
+                className="min-h-[80px] text-sm"
+              />
+              {validationErrors.map((err, i) => (
+                <p key={i} className="text-xs text-red-600">{err}</p>
+              ))}
+            </div>
+
+            {existingReview?.reviewedByDisplayName && existingReview?.reviewedAt && (
+              <p className="text-xs text-muted-foreground">
+                Last reviewed by {existingReview.reviewedByDisplayName} on{' '}
+                {new Date(existingReview.reviewedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="pt-2 border-t">
+          <Button variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saveMutation.isPending || isLoadingReview}
+            className={(!form.secondPartyComplete || !form.vendorApproved)
+              ? 'bg-amber-600 hover:bg-amber-700'
+              : 'bg-blue-600 hover:bg-blue-700'}
+          >
+            {saveMutation.isPending ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+            ) : (!form.secondPartyComplete || !form.vendorApproved) ? (
+              <><ShieldAlert className="w-4 h-4 mr-2" />Save Blocked Review</>
+            ) : (
+              <><ShieldCheck className="w-4 h-4 mr-2" />Save Review & Issue PO</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Main component
-export default function VendorPOManager() {
+export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?: number } = {}) {
   const [selectedVendorPO, setSelectedVendorPO] = useState<VendorPO | null>(
     null
   );
@@ -1051,12 +2176,16 @@ export default function VendorPOManager() {
   const [showDetailView, setShowDetailView] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [listTab, setListTab] = useState<'active' | 'closed' | 'archived'>('active');
+  const [statusFilter, setStatusFilter] = useState<string>('any');
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>('');
   const [noEmailMode, setNoEmailMode] = useState(false);
   const [noEmailReason, setNoEmailReason] = useState('');
   const [noEmailConfirmed, setNoEmailConfirmed] = useState(false);
+  const [showRfqOutcomeDialog, setShowRfqOutcomeDialog] = useState(false);
+  const [pendingRfqStatus, setPendingRfqStatus] = useState<'Declined' | 'Expired' | null>(null);
+  const [rfqOutcomeNote, setRfqOutcomeNote] = useState('');
 
   // Recipient picker state (shared across Issue / RFQ / Resend dialogs)
   const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
@@ -1074,19 +2203,87 @@ export default function VendorPOManager() {
   const [revisionReason, setRevisionReason] = useState('');
   const [revisionPO, setRevisionPO] = useState<VendorPO | null>(null);
 
+  // Compliance review modal state
+  const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const [compliancePoId, setCompliancePoId] = useState<number | null>(null);
+  // Track current optional setting IDs for the PO being compliance-reviewed
+  const [compliancePoOptionalIds, setCompliancePoOptionalIds] = useState<number[]>([]);
+
   const queryClient = useQueryClient();
 
-  // Fetch vendor POs
+  // Fetch all optional settings (needed for compliance auto-selection)
+  const { data: allOptionalSettings = [] } = useQuery<OptionalSetting[]>({
+    queryKey: ['/api/vendor-pos/optional-settings'],
+    queryFn: () => apiRequest('/api/vendor-pos/optional-settings') as Promise<OptionalSetting[]>,
+  });
+
+  // Fetch vendor POs — archived param changes based on the selected tab
+  const archivedQueryParam = listTab === 'archived' ? 'true' : 'false';
   const {
     data: vendorPOsResponse,
     isLoading,
     error,
   } = useQuery<{ data: VendorPO[]; meta?: any }>({
-    queryKey: ['/api/vendor-pos'],
-    queryFn: () => apiRequest('/api/vendor-pos'),
+    queryKey: ['/api/vendor-pos', { archived: archivedQueryParam }],
+    queryFn: () => apiRequest(`/api/vendor-pos?archived=${archivedQueryParam}`),
   });
 
   const vendorPOs = vendorPOsResponse?.data || [];
+
+  // Fetch tab counts for Active / Closed / Archived badges.
+  // Key is nested under '/api/vendor-pos' so existing broad invalidations refresh it automatically.
+  const { data: tabCounts } = useQuery<{ active: number; closed: number; archived: number }>({
+    queryKey: ['/api/vendor-pos', 'counts'],
+    queryFn: () => apiRequest('/api/vendor-pos/counts'),
+    staleTime: 30_000,
+  });
+
+  // Fetch the selected PO's detail directly so progress counts stay accurate
+  // even if the list omits those fields or hasn't loaded yet.
+  const { data: selectedVendorPODetail } = useQuery<VendorPO>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}`),
+    enabled: !!selectedVendorPO,
+  });
+
+  const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
+  const { data: confirmationStatus, isLoading: isConfirmationLoading } = useQuery<{
+    found: boolean;
+    email?: string;
+    expiresAt?: string;
+    usedAt?: string | null;
+  }>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'confirmation'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/confirmation`),
+    enabled: !!selectedVendorPO && issuedStatuses.includes(selectedVendorPO.status),
+  });
+
+  // Merge per-PO detail (totalLines / receivedLines / status) into selected state
+  // whenever the dedicated query returns fresher data.
+  useEffect(() => {
+    if (!selectedVendorPODetail || !selectedVendorPO) return;
+    if (
+      selectedVendorPODetail.totalLines !== selectedVendorPO.totalLines ||
+      selectedVendorPODetail.receivedLines !== selectedVendorPO.receivedLines ||
+      selectedVendorPODetail.status !== selectedVendorPO.status
+    ) {
+      setSelectedVendorPO((prev) =>
+        prev ? { ...prev, ...selectedVendorPODetail } : prev
+      );
+    }
+  }, [selectedVendorPODetail]);
+
+  // Auto-select and open a PO when navigated here with ?poId=X
+  const [preSelectApplied, setPreSelectApplied] = useState(false);
+  useEffect(() => {
+    if (!preSelectedPoId || preSelectApplied || vendorPOs.length === 0) return;
+    const match = vendorPOs.find((po) => po.id === preSelectedPoId);
+    if (match) {
+      setSelectedVendorPO(match);
+      setShowDetailView(true);
+      setPreSelectApplied(true);
+    }
+  }, [preSelectedPoId, vendorPOs, preSelectApplied]);
 
   // Create mutation
   const createMutation = useMutation({
@@ -1233,8 +2430,10 @@ export default function VendorPOManager() {
         method: 'POST',
         body: JSON.stringify({ recipients }),
       }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+    onSuccess: (data: any, variables) => {
+      getSendRFQInvalidationKeys(variables.id).forEach((key) =>
+        queryClient.invalidateQueries({ queryKey: key }),
+      );
       if (data.emailSent) {
         toast.success(`RFQ sent to ${data.emailRecipient}`);
       } else {
@@ -1256,7 +2455,8 @@ export default function VendorPOManager() {
         method: 'POST',
         body: JSON.stringify({ recipients }),
       }),
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, variables) => {
+      queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
       if (data.emailSent) {
         toast.success(`PO resent! Confirmation email sent to ${data.emailRecipient}`);
       } else {
@@ -1269,7 +2469,48 @@ export default function VendorPOManager() {
     },
   });
 
+  // RFQ lifecycle transition mutation (Quote Received / Declined / Expired)
+  const rfqTransitionMutation = useMutation({
+    mutationFn: ({ id, status, rfqOutcomeNotes }: { id: number; status: 'Quote Received' | 'Declined' | 'Expired'; rfqOutcomeNotes?: string }) =>
+      apiRequest(`/api/vendor-pos/${id}/rfq-transition`, {
+        method: 'POST',
+        body: JSON.stringify({ status, rfqOutcomeNotes }),
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success(`RFQ marked as ${data.status}`);
+      if (selectedVendorPO) {
+        setSelectedVendorPO({ ...selectedVendorPO, status: data.status, rfqOutcomeNotes: data.rfqOutcomeNotes ?? null });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update RFQ status');
+    },
+  });
+
+  // Archive / unarchive mutation
+  const archiveMutation = useMutation({
+    mutationFn: ({ id, archived }: { id: number; archived: boolean }) =>
+      apiRequest(`/api/vendor-pos/${id}/archive`, {
+        method: 'POST',
+        body: JSON.stringify({ archived }),
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success(data.archived ? 'RFQ archived' : 'RFQ unarchived');
+      if (selectedVendorPO) {
+        setSelectedVendorPO({ ...selectedVendorPO, archived: data.archived });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update archive status');
+    },
+  });
+
   // Filter vendor POs
+  const ACTIVE_STATUSES = ['Draft', 'RFQ Sent', 'Quote Received', 'Sent', 'Partially Received'];
+  const CLOSED_STATUSES = ['Declined', 'Expired', 'Cancelled', 'Fully Received'];
+
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
       (vendorPo.poNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1277,9 +2518,21 @@ export default function VendorPOManager() {
       vendorPo.vendorName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       `Draft #${vendorPo.id}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       false;
-    const matchesStatus =
-      statusFilter === 'all' || vendorPo.status === statusFilter;
-    return matchesSearch && matchesStatus;
+
+    // Tab-level filter
+    let matchesTab: boolean;
+    if (listTab === 'active') {
+      matchesTab = ACTIVE_STATUSES.includes(vendorPo.status);
+    } else if (listTab === 'closed') {
+      matchesTab = CLOSED_STATUSES.includes(vendorPo.status);
+    } else {
+      matchesTab = true; // archived tab shows all archived records
+    }
+
+    // Per-status sub-filter within the tab
+    const matchesStatus = statusFilter === 'any' || vendorPo.status === statusFilter;
+
+    return matchesSearch && matchesTab && matchesStatus;
   });
 
   // Event handlers
@@ -1345,22 +2598,55 @@ export default function VendorPOManager() {
     loadRecipientsForPO(selectedVendorPO.id);
   };
 
+  const openComplianceModal = async (poId: number) => {
+    setCompliancePoId(poId);
+    // Pre-fetch current optional settings for auto-selection logic
+    try {
+      const currentOpts = await apiRequest(`/api/vendor-pos/${poId}/optional-settings`) as OptionalSetting[];
+      setCompliancePoOptionalIds(currentOpts.map((s) => s.id));
+    } catch {
+      setCompliancePoOptionalIds([]);
+    }
+    setShowComplianceModal(true);
+  };
+
+  const handleComplianceApproved = () => {
+    if (!compliancePoId) return;
+    // Find the PO in the list to ensure selectedVendorPO is set
+    const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === compliancePoId);
+    if (poFromList) setSelectedVendorPO(poFromList);
+    // Now proceed to show the email/issue dialog
+    setNoEmailMode(false);
+    setNoEmailReason('');
+    setNoEmailConfirmed(false);
+    setPendingStatus('Sent');
+    setShowStatusChangeDialog(true);
+    loadRecipientsForPO(compliancePoId);
+  };
+
+  const handleAutoSelectOptionals = async (newIds: number[]) => {
+    if (!compliancePoId) return;
+    try {
+      await apiRequest(`/api/vendor-pos/${compliancePoId}/optional-settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ optionalSettingIds: newIds }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', compliancePoId, 'optional-settings'] });
+    } catch {
+      // Non-fatal
+    }
+  };
+
   const handleIssuePO = (id: number, _skipEmail: boolean = false) => {
     // Find the PO in the list so it can be set as selectedVendorPO (list-view entry point)
     const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === id);
     if (poFromList) {
       setSelectedVendorPO(poFromList);
     }
-    // Navigate into detail view so the AlertDialog is mounted
+    // Navigate into detail view so we have full PO context
     setShowDetailView(true);
-    // Always open the unified AlertDialog — no window.confirm
-    setNoEmailMode(false);
-    setNoEmailReason('');
-    setNoEmailConfirmed(false);
-    setPendingStatus('Sent');
-    setShowStatusChangeDialog(true);
-    // Load recipients for the picker
-    loadRecipientsForPO(id);
+    // Show compliance review modal first before proceeding to issue
+    openComplianceModal(id);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -1393,11 +2679,13 @@ export default function VendorPOManager() {
   };
 
   const handleStatusChange = (newStatus: string) => {
+    if (newStatus === 'Sent' && selectedVendorPO) {
+      // Intercept Issue PO to show compliance review modal first
+      openComplianceModal(selectedVendorPO.id);
+      return;
+    }
     setPendingStatus(newStatus);
     setShowStatusChangeDialog(true);
-    if (newStatus === 'Sent' && selectedVendorPO) {
-      loadRecipientsForPO(selectedVendorPO.id);
-    }
   };
 
   const confirmStatusChange = (skipEmail: boolean = false) => {
@@ -1905,6 +3193,8 @@ export default function VendorPOManager() {
         return 'Sent';
       case 'RFQ Sent':
         return 'Sent';
+      case 'Quote Received':
+        return 'Sent';
       case 'Sent':
         return 'Partially Received';
       case 'Partially Received':
@@ -1944,15 +3234,27 @@ export default function VendorPOManager() {
     );
   }
 
-  const statusOptions = [
-    'all',
-    'Draft',
-    'RFQ Sent',
-    'Sent',
-    'Partially Received',
-    'Fully Received',
-    'Cancelled',
+  const activeStatusOptions = [
+    { value: 'any', label: 'All Active' },
+    { value: 'Draft', label: 'Draft' },
+    { value: 'RFQ Sent', label: 'RFQ Sent' },
+    { value: 'Quote Received', label: 'Quote Received' },
+    { value: 'Sent', label: 'Sent' },
+    { value: 'Partially Received', label: 'Partially Received' },
   ];
+  const closedStatusOptions = [
+    { value: 'any', label: 'All Closed' },
+    { value: 'Declined', label: 'Declined' },
+    { value: 'Expired', label: 'Expired' },
+    { value: 'Cancelled', label: 'Cancelled' },
+    { value: 'Fully Received', label: 'Fully Received' },
+  ];
+  const statusOptions = listTab === 'active' ? activeStatusOptions : listTab === 'closed' ? closedStatusOptions : [];
+
+  const handleListTabChange = (tab: 'active' | 'closed' | 'archived') => {
+    setListTab(tab);
+    setStatusFilter('any');
+  };
 
   // Show detail view if a PO is selected
   if (showDetailView && selectedVendorPO) {
@@ -1991,13 +3293,34 @@ export default function VendorPOManager() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {['Sent', 'Partially Received', 'Fully Received'].includes(selectedVendorPO.status) &&
+              (selectedVendorPO.totalLines ?? 0) > 0 && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="detail-receiving-progress">
+                  <div className="w-24 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-emerald-500"
+                      style={{
+                        width: `${Math.min(100, Math.round(((selectedVendorPO.receivedLines ?? 0) / (selectedVendorPO.totalLines ?? 1)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <span>
+                    {selectedVendorPO.receivedLines ?? 0} / {selectedVendorPO.totalLines} lines fully received
+                  </span>
+                </div>
+              )}
             <Badge
               className={getStatusColor(selectedVendorPO.status)}
               data-testid="detail-status"
             >
               {selectedVendorPO.status}
             </Badge>
-            
+            {/* Compliance status badge in detail view — clickable to open review modal */}
+            <ComplianceBadge
+              status={selectedVendorPO.complianceStatus}
+              onClick={() => openComplianceModal(selectedVendorPO.id)}
+            />
+
             {/* Send RFQ Button (only for Draft) */}
             {selectedVendorPO.status === 'Draft' && (
               <Button
@@ -2011,6 +3334,53 @@ export default function VendorPOManager() {
                 <Send className="w-4 h-4 mr-2" />
                 {sendRFQMutation.isPending ? 'Sending...' : 'Send RFQ'}
               </Button>
+            )}
+
+            {/* RFQ Lifecycle Transition Buttons (only when RFQ Sent) */}
+            {selectedVendorPO.status === 'RFQ Sent' && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => rfqTransitionMutation.mutate({ id: selectedVendorPO.id, status: 'Quote Received' })}
+                  disabled={rfqTransitionMutation.isPending}
+                  className="text-green-700 hover:text-green-900 border-green-300 hover:border-green-400"
+                  data-testid="button-rfq-quote-received"
+                >
+                  <ThumbsUp className="w-4 h-4 mr-2" />
+                  Quote Received
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPendingRfqStatus('Declined');
+                    setRfqOutcomeNote('');
+                    setShowRfqOutcomeDialog(true);
+                  }}
+                  disabled={rfqTransitionMutation.isPending}
+                  className="text-red-600 hover:text-red-800 border-red-300 hover:border-red-400"
+                  data-testid="button-rfq-declined"
+                >
+                  <ThumbsDown className="w-4 h-4 mr-2" />
+                  Declined
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPendingRfqStatus('Expired');
+                    setRfqOutcomeNote('');
+                    setShowRfqOutcomeDialog(true);
+                  }}
+                  disabled={rfqTransitionMutation.isPending}
+                  className="text-slate-600 hover:text-slate-800 border-slate-300 hover:border-slate-400"
+                  data-testid="button-rfq-expired"
+                >
+                  <Timer className="w-4 h-4 mr-2" />
+                  Expired
+                </Button>
+              </>
             )}
 
             {/* Status Workflow Buttons */}
@@ -2043,8 +3413,8 @@ export default function VendorPOManager() {
               </Button>
             )}
 
-            {/* Cancel Button (only for Draft, RFQ Sent, or Sent) */}
-            {(['Draft', 'RFQ Sent', 'Sent'].includes(selectedVendorPO.status)) && (
+            {/* Cancel Button (only for Draft, RFQ Sent, Quote Received, or Sent) */}
+            {(['Draft', 'RFQ Sent', 'Quote Received', 'Sent'].includes(selectedVendorPO.status)) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -2054,6 +3424,35 @@ export default function VendorPOManager() {
                 <XCircle className="w-4 h-4 mr-2" />
                 Cancel PO
               </Button>
+            )}
+
+            {/* Archive / Unarchive Button for closed-state records */}
+            {(['Quote Received', 'Declined', 'Expired', 'Cancelled'].includes(selectedVendorPO.status)) && (
+              selectedVendorPO.archived ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => archiveMutation.mutate({ id: selectedVendorPO.id, archived: false })}
+                  disabled={archiveMutation.isPending}
+                  className="text-slate-600 hover:text-slate-800"
+                  data-testid="button-unarchive"
+                >
+                  <ArchiveRestore className="w-4 h-4 mr-2" />
+                  {archiveMutation.isPending ? 'Saving...' : 'Unarchive'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => archiveMutation.mutate({ id: selectedVendorPO.id, archived: true })}
+                  disabled={archiveMutation.isPending}
+                  className="text-slate-600 hover:text-slate-800"
+                  data-testid="button-archive"
+                >
+                  <Archive className="w-4 h-4 mr-2" />
+                  {archiveMutation.isPending ? 'Saving...' : 'Archive'}
+                </Button>
+              )
             )}
             
             {/* PDF Download Button */}
@@ -2068,6 +3467,27 @@ export default function VendorPOManager() {
             </Button>
           </div>
         </div>
+
+        {/* Archived Banner */}
+        {selectedVendorPO.archived && (
+          <div className="flex items-start gap-3 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+            <Archive className="w-4 h-4 mt-0.5 shrink-0 text-slate-500" />
+            <div>
+              <span className="font-semibold">Archived</span>
+              {' — this RFQ is archived and hidden from the default list. Use the Unarchive button to make it active again.'}
+            </div>
+          </div>
+        )}
+
+        {/* RFQ Outcome Notes Banner (shown when Declined or Expired) */}
+        {(['Declined', 'Expired'].includes(selectedVendorPO.status)) && selectedVendorPO.rfqOutcomeNotes && (
+          <div className="flex items-start gap-3 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+            <div>
+              <span className="font-semibold">Outcome note:</span>{' '}
+              <span className="italic">{selectedVendorPO.rfqOutcomeNotes}</span>
+            </div>
+          </div>
+        )}
 
         {/* Internal Issuance Banner */}
         {selectedVendorPO.issuedWithoutEmail && (
@@ -2085,6 +3505,80 @@ export default function VendorPOManager() {
             </div>
           </div>
         )}
+
+        {/* RFQ Outcome Dialog (Declined / Expired) */}
+        <Dialog
+          open={showRfqOutcomeDialog}
+          onOpenChange={(open) => {
+            setShowRfqOutcomeDialog(open);
+            if (!open) {
+              setPendingRfqStatus(null);
+              setRfqOutcomeNote('');
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                Mark RFQ as {pendingRfqStatus}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <p className="text-sm text-muted-foreground">
+                {pendingRfqStatus === 'Declined'
+                  ? 'Optionally record why the vendor declined this RFQ (e.g. pricing, lead time, capacity).'
+                  : 'Optionally record why this RFQ expired without a response.'}
+              </p>
+              <div className="space-y-1">
+                <Label htmlFor="rfq-outcome-note" className="text-sm">
+                  Reason / Notes <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <Textarea
+                  id="rfq-outcome-note"
+                  placeholder="e.g. Pricing too high, no response after 2 weeks…"
+                  value={rfqOutcomeNote}
+                  onChange={(e) => setRfqOutcomeNote(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowRfqOutcomeDialog(false);
+                  setPendingRfqStatus(null);
+                  setRfqOutcomeNote('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={pendingRfqStatus === 'Declined' ? 'destructive' : 'default'}
+                disabled={rfqTransitionMutation.isPending}
+                onClick={() => {
+                  if (!selectedVendorPO || !pendingRfqStatus) return;
+                  rfqTransitionMutation.mutate(
+                    {
+                      id: selectedVendorPO.id,
+                      status: pendingRfqStatus,
+                      rfqOutcomeNotes: rfqOutcomeNote.trim() || undefined,
+                    },
+                    {
+                      onSettled: () => {
+                        setShowRfqOutcomeDialog(false);
+                        setPendingRfqStatus(null);
+                        setRfqOutcomeNote('');
+                      },
+                    }
+                  );
+                }}
+              >
+                {rfqTransitionMutation.isPending ? 'Saving…' : `Confirm ${pendingRfqStatus}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Status Change / Issue PO Confirmation Dialog */}
         <AlertDialog
@@ -2318,6 +3812,9 @@ export default function VendorPOManager() {
             <TabsTrigger value="items" data-testid="tab-items">
               Line Items
             </TabsTrigger>
+            <TabsTrigger value="receipts" data-testid="tab-receipts">
+              Receipts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4">
@@ -2339,6 +3836,11 @@ export default function VendorPOManager() {
               </CardContent>
             </Card>
 
+            <ComplianceSummaryCard
+              vendorPoId={selectedVendorPO.id}
+              onOpenModal={() => openComplianceModal(selectedVendorPO.id)}
+            />
+
             <Card>
               <CardHeader>
                 <CardTitle>Attachments</CardTitle>
@@ -2350,6 +3852,59 @@ export default function VendorPOManager() {
                 <VendorPOAttachments vendorPoId={selectedVendorPO.id} />
               </CardContent>
             </Card>
+
+            {!issuedStatuses.includes(selectedVendorPO.status) && selectedVendorPO.confirmationUsedAt && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-muted-foreground" />
+                    Vendor Confirmation
+                  </CardTitle>
+                  <CardDescription>
+                    This PO has a recorded vendor confirmation date
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+                      <CheckCircle className="h-4 w-4 shrink-0" />
+                      Confirmed
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {(() => {
+                        const d = new Date(selectedVendorPO.confirmationUsedAt!);
+                        const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        return <>Confirmed on{' '}<span className="font-medium text-foreground">{datePart} at {timePart}</span></>;
+                      })()}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {issuedStatuses.includes(selectedVendorPO.status) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-muted-foreground" />
+                    Vendor Confirmation
+                  </CardTitle>
+                  <CardDescription>
+                    Whether the vendor has acknowledged receipt of this purchase order
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <VendorConfirmationCardContent
+                    isLoading={isConfirmationLoading}
+                    confirmationStatus={confirmationStatus}
+                    isPending={resendPOMutation.isPending}
+                    onResend={handleOpenResendDialog}
+                    confirmationUsedAt={selectedVendorPO.confirmationUsedAt}
+                  />
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="items" className="space-y-4">
@@ -2364,7 +3919,27 @@ export default function VendorPOManager() {
               }}
             />
           </TabsContent>
+
+          <TabsContent value="receipts" className="space-y-4">
+            <ReceiptHistoryTab vendorPoId={selectedVendorPO.id} />
+          </TabsContent>
         </Tabs>
+
+        {/* Compliance Review Modal — hoisted here so it's mounted in detail-view branch */}
+        {showComplianceModal && compliancePoId != null && (
+          <ComplianceReviewModal
+            vendorPoId={compliancePoId}
+            isOpen={showComplianceModal}
+            onClose={() => {
+              setShowComplianceModal(false);
+              setCompliancePoId(null);
+            }}
+            onComplianceApproved={handleComplianceApproved}
+            allOptionalSettings={allOptionalSettings}
+            currentOptionalSettingIds={compliancePoOptionalIds}
+            onAutoSelectOptionals={handleAutoSelectOptionals}
+          />
+        )}
       </div>
     );
   }
@@ -2390,8 +3965,73 @@ export default function VendorPOManager() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
+      {/* Tab Filter Bar */}
+      <div className="flex items-center gap-2">
+        <div className="flex rounded-lg border bg-muted p-1 gap-1">
+          <button
+            onClick={() => handleListTabChange('active')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              listTab === 'active'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            data-testid="tab-active"
+          >
+            Active
+            {tabCounts !== undefined && (
+              <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
+                listTab === 'active'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted-foreground/20 text-muted-foreground'
+              }`}>
+                {tabCounts.active}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => handleListTabChange('closed')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              listTab === 'closed'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            data-testid="tab-closed"
+          >
+            Fulfilled
+            {tabCounts !== undefined && (
+              <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
+                listTab === 'closed'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted-foreground/20 text-muted-foreground'
+              }`}>
+                {tabCounts.closed}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => handleListTabChange('archived')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              listTab === 'archived'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            data-testid="tab-archived"
+          >
+            <Archive className="w-3.5 h-3.5" />
+            Archived
+            {tabCounts !== undefined && (
+              <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
+                listTab === 'archived'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted-foreground/20 text-muted-foreground'
+              }`}>
+                {tabCounts.archived}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Search */}
         <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -2404,18 +4044,22 @@ export default function VendorPOManager() {
             />
           </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48" data-testid="select-status-filter">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {statusOptions.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status === 'all' ? 'All Statuses' : status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+
+        {/* Per-status sub-filter (not shown on archived tab) */}
+        {listTab !== 'archived' && (
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-48" data-testid="select-status-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Vendor PO List */}
@@ -2464,12 +4108,105 @@ export default function VendorPOManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    {['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status) &&
+                      (vendorPo.totalLines ?? 0) > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="w-20 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-emerald-500"
+                              style={{
+                                width: `${Math.round(((vendorPo.receivedLines ?? 0) / (vendorPo.totalLines ?? 1)) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                          <span>
+                            {vendorPo.receivedLines ?? 0} / {vendorPo.totalLines} lines
+                          </span>
+                        </div>
+                      )}
                     <Badge className={getStatusColor(vendorPo.status)}>
                       {vendorPo.status}
                     </Badge>
+                    {vendorPo.confirmationBadge === 'confirmed' && (
+                      <TooltipProvider>
+                        <Tooltip className="inline-flex w-auto">
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 cursor-default">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              Confirmed
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="w-auto px-3 py-1.5 text-xs">
+                            {vendorPo.confirmationUsedAt
+                              ? `Vendor confirmed on ${new Date(vendorPo.confirmationUsedAt).toLocaleString()}`
+                              : 'Vendor confirmed'}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    {(vendorPo.confirmationBadge === 'awaiting' ||
+                      vendorPo.confirmationBadge === 'expired') &&
+                      (['Sent', 'Partially Received'].includes(vendorPo.status) ? (
+                        <ConfirmationBadgeResend vendorPo={vendorPo} />
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className={cn(
+                                  'inline-flex items-center gap-1 text-xs font-medium',
+                                  vendorPo.confirmationBadge === 'awaiting'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                )}
+                              >
+                                {vendorPo.confirmationBadge === 'awaiting' ? (
+                                  <>
+                                    <Clock className="w-3.5 h-3.5" />
+                                    Awaiting
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    Link Expired
+                                  </>
+                                )}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="w-auto px-3 py-1.5 text-xs">
+                              {vendorPo.confirmationBadge === 'awaiting'
+                                ? 'Awaiting vendor confirmation'
+                                : 'Confirmation link expired'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ))}
+                    {vendorPo.confirmationBadge === 'no_link' &&
+                      (['Sent', 'Partially Received'].includes(vendorPo.status) ? (
+                        <NoLinkBadgeSend vendorPo={vendorPo} />
+                      ) : (
+                        <span
+                          title="No confirmation link sent — send not available for fully received POs"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          No Link
+                        </span>
+                      ))}
+                    {/* Compliance status badge — shown for all POs at all statuses */}
+                    <ComplianceBadge
+                      status={vendorPo.complianceStatus}
+                      onClick={() => openComplianceModal(vendorPo.id)}
+                    />
                     {vendorPo.isCurrentRevision === false && (
                       <Badge className="bg-gray-200 text-gray-600 text-xs">
                         Superseded
+                      </Badge>
+                    )}
+                    {vendorPo.archived && (
+                      <Badge className="bg-slate-100 text-slate-500 text-xs flex items-center gap-1">
+                        <Archive className="w-3 h-3" />
+                        Archived
                       </Badge>
                     )}
                   </div>
@@ -2484,6 +4221,7 @@ export default function VendorPOManager() {
                   onIssuePO={handleIssuePO}
                   onCreateRevision={handleCreateRevision}
                   onViewPDF={handleDownloadPDF}
+                  onReviewCompliance={(id) => openComplianceModal(id)}
                 />
               </AccordionContent>
             </AccordionItem>
@@ -2548,6 +4286,22 @@ export default function VendorPOManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Compliance Review Modal */}
+      {showComplianceModal && compliancePoId != null && (
+        <ComplianceReviewModal
+          vendorPoId={compliancePoId}
+          isOpen={showComplianceModal}
+          onClose={() => {
+            setShowComplianceModal(false);
+            setCompliancePoId(null);
+          }}
+          onComplianceApproved={handleComplianceApproved}
+          allOptionalSettings={allOptionalSettings}
+          currentOptionalSettingIds={compliancePoOptionalIds}
+          onAutoSelectOptionals={handleAutoSelectOptionals}
+        />
+      )}
     </div>
   );
 }

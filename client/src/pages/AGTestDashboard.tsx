@@ -63,7 +63,7 @@ export default function AGTestDashboard() {
       localStorage.removeItem('jwtToken');
 
       // Redirect to login page
-      window.location.href = '/login';
+      setLocation('/login');
     }
   };
 

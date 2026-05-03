@@ -9,6 +9,7 @@ import {
 } from '../../schema';
 import path from 'path';
 import fs from 'fs';
+import { authenticateToken, requireStepUp } from '../../middleware/auth';
 
 const router = express.Router();
 
@@ -254,7 +255,10 @@ router.delete('/:id', async (req, res) => {
 });
 
 // GET /api/documents/:id/download - Download document file
-router.get('/:id/download', async (req, res) => {
+// Step-up re-auth is applied to all downloads because all documents managed in this
+// system are CUI/ITAR-controlled by default (CMMC Level 2 / NIST 800-171 §3.5).
+// Credentials must have been verified within the last STEP_UP_MAX_AGE_MINUTES minutes.
+router.get('/:id/download', authenticateToken, requireStepUp(), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {

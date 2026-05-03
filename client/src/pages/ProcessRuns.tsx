@@ -1,3 +1,4 @@
+import { Link } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -283,9 +284,9 @@ function RunDetailDialog({ programRunId }: { programRunId: string }) {
                         </Badge>
                         <span className="font-mono text-sm">{link.entityLabel || link.entityId}</span>
                         {entityLink && (
-                          <a href={entityLink} className="text-primary hover:underline">
+                          <Link href={entityLink} className="text-primary hover:underline">
                             <ExternalLink className="w-3 h-3" />
-                          </a>
+                          </Link>
                         )}
                       </div>
                       <Button

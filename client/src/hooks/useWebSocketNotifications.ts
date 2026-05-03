@@ -1,13 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-
-interface NotificationPayload {
-  type: string;
-  title: string;
-  message: string;
-  data?: Record<string, any>;
-  timestamp: string;
-}
+import { handleWebSocketMessage } from '@/lib/punchNotificationHandlers';
 
 function getSessionToken(): string | null {
   const fromStorage = localStorage.getItem('sessionToken');
@@ -43,30 +36,11 @@ export function useWebSocketNotifications() {
 
       ws.onmessage = (event) => {
         try {
-          const payload: NotificationPayload = JSON.parse(event.data);
-
-          if (payload.type === 'connected') return;
-
-          if (payload.type === 'ticket_assigned') {
-            toast({
-              title: payload.title || 'Ticket Assigned',
-              description: payload.message,
-              duration: 8000,
-            });
-          } else if (payload.type === 'ticket_unassigned') {
-            toast({
-              title: payload.title || 'Ticket Update',
-              description: payload.message,
-              duration: 5000,
-            });
-          } else {
-            toast({
-              title: payload.title || 'Notification',
-              description: payload.message,
-              duration: 5000,
-            });
-          }
-        } catch (err) {
+          handleWebSocketMessage(event.data as string, {
+            dispatchEvent: (e) => window.dispatchEvent(e),
+            toast,
+          });
+        } catch {
         }
       };
 

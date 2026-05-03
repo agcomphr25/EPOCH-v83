@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { apiRequest } from '@/lib/queryClient';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -63,6 +64,7 @@ import {
   Settings,
   RotateCcw,
 } from 'lucide-react';
+import OrderActionButtons from '@/components/OrderActionButtons';
 import type { P1POQueueCustomer } from '@shared/schema';
 import { LayupSchedulePreview } from './LayupSchedulePreview';
 import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
@@ -112,6 +114,11 @@ export default function ProductionQueueManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
 
   // Helper function to check if order has rush fees
   const hasRushFee = (order: ProductionQueueOrder, feeType: 'rush_fee1' | 'rush_fee2') => {
@@ -1861,6 +1868,10 @@ export default function ProductionQueueManager() {
                                 >
                                   <ArrowDown className="w-3 h-3" />
                                 </Button>
+                                <OrderActionButtons
+                                  orderId={order.orderId}
+                                  showReassignButton={isAdmin}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>

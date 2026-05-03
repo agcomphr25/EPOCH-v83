@@ -327,6 +327,31 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
     const line = await assertLineOwnership(receiptId, lineId);
     if (!line) return res.status(404).json({ error: 'Receipt line not found or does not belong to this receipt' });
 
+    // Server-side traceability field config enforcement
+    const TRACE_FIELDS = ['lotNumber','batchNumber','serialNumber','expirationDate','manufactureDate','heatLot','rollNumber','certReference'] as const;
+    if (line.agPartNumber) {
+      const [invItem] = await db.select({ traceabilityFieldConfig: inventoryItems.traceabilityFieldConfig })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, line.agPartNumber))
+        .limit(1);
+      const fieldConfig = invItem?.traceabilityFieldConfig as Record<string, string> | null | undefined;
+      if (fieldConfig && Object.keys(fieldConfig).length > 0) {
+        // Validate required fields
+        const missingRequired = TRACE_FIELDS.filter(
+          f => (fieldConfig[f] ?? 'optional') === 'required' && !req.body[f]?.toString().trim()
+        );
+        if (missingRequired.length > 0) {
+          return res.status(422).json({ error: `Required traceability fields missing: ${missingRequired.join(', ')}` });
+        }
+        // Strip hidden fields from payload before saving
+        for (const f of TRACE_FIELDS) {
+          if ((fieldConfig[f] ?? 'optional') === 'hidden') {
+            delete req.body[f];
+          }
+        }
+      }
+    }
+
     const unitSequence = await getNextUnitSequence(receiptId);
     const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
 
@@ -365,6 +390,36 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
     console.error('POST unit:', err);
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
     res.status(500).json({ error: 'Failed to add received unit' });
+  }
+});
+
+// ── DELETE /api/receipts/:id/units/:unitId ────────────────────────────────────
+// Only pending_inspection units may be deleted; accepted/quarantine/rejected are locked.
+router.delete('/:id/units/:unitId', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+    const user = req.user;
+
+    const unit = await assertUnitOwnership(receiptId, unitId);
+    if (!unit) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
+
+    if (unit.disposition !== 'pending_inspection') {
+      return res.status(422).json({
+        error: `Cannot remove a unit that has already been dispositioned as "${unit.disposition}". Only pending_inspection units can be deleted.`,
+      });
+    }
+
+    await db.delete(receivedUnits).where(eq(receivedUnits.id, unitId));
+
+    await logAudit(receiptId, 'unit_deleted', user?.employeeId, actorName(user), {
+      unitId, barcode: unit.barcode, unitSequence: unit.unitSequence,
+    });
+
+    res.status(204).end();
+  } catch (err: any) {
+    console.error('DELETE unit:', err);
+    res.status(500).json({ error: 'Failed to delete unit' });
   }
 });
 
@@ -850,16 +905,37 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
 }
 
 // ── POST /api/receipts/:id/lines/:lineId/split ────────────────────────────────
-// Split a receipt line into N equal units. Body: { count: number, templateFields?: Partial<InsertReceivedUnit> }
+// Split a receipt line into N units.
+// Equal-split mode (default): Body: { count: number, templateFields?: Partial<InsertReceivedUnit> }
+// Roll-based mode (array): Body: { count: number, sqmPerRollArray: number[], templateFields?: Partial<InsertReceivedUnit> }
+//   Each unit gets the corresponding sqmPerRollArray[i] as its quantity; receivedQty is updated to the array sum.
+// Roll-based mode (legacy scalar): Body: { count: number, sqmPerRoll: number, templateFields?: Partial<InsertReceivedUnit> }
+//   All units share the same quantity; receivedQty updated to count × sqmPerRoll.
 router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Request, res: Response) => {
   try {
     const receiptId = parseInt(req.params.id);
     const lineId = parseInt(req.params.lineId);
     const user = req.user;
-    const { count, templateFields } = req.body as { count: number; templateFields?: Record<string, unknown> };
+    const { count, sqmPerRoll, sqmPerRollArray, templateFields } = req.body as {
+      count: number;
+      sqmPerRoll?: number;
+      sqmPerRollArray?: number[];
+      templateFields?: Record<string, unknown>;
+    };
 
     if (!count || count < 2 || count > 200) {
       return res.status(400).json({ error: 'count must be between 2 and 200' });
+    }
+
+    if (sqmPerRollArray !== undefined) {
+      if (!Array.isArray(sqmPerRollArray) || sqmPerRollArray.length !== count) {
+        return res.status(400).json({ error: `sqmPerRollArray must have exactly ${count} entries` });
+      }
+      if (sqmPerRollArray.some(v => typeof v !== 'number' || !Number.isFinite(v) || v <= 0)) {
+        return res.status(400).json({ error: 'Every entry in sqmPerRollArray must be a finite positive number' });
+      }
+    } else if (sqmPerRoll !== undefined && (typeof sqmPerRoll !== 'number' || !Number.isFinite(sqmPerRoll) || sqmPerRoll <= 0)) {
+      return res.status(400).json({ error: 'sqmPerRoll must be a positive number' });
     }
 
     const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
@@ -868,13 +944,27 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
     const line = await assertLineOwnership(receiptId, lineId);
     if (!line) return res.status(404).json({ error: 'Receipt line not found' });
 
-    // Distribute receivedQty equally across units
-    const totalQty = parseFloat(String(line.receivedQty ?? '0')) || parseFloat(String(line.orderedQty ?? '1'));
-    const qtyPerUnit = totalQty / count;
-    const units: ReceivedUnit[] = [];
+    const isRollArray = sqmPerRollArray !== undefined;
+    const isRollScalar = !isRollArray && sqmPerRoll !== undefined;
+    const isRollBased = isRollArray || isRollScalar;
 
+    // Build unit rows first so we can validate before writing
+    const unitBodies = [];
+    // Fetch the starting sequence once so every unit in the batch gets a unique value.
+    // Calling getNextUnitSequence inside the loop would return the same MAX+1 every
+    // iteration because no units are inserted until the transaction below.
+    let nextSequence = await getNextUnitSequence(receiptId);
     for (let i = 0; i < count; i++) {
-      const unitSequence = await getNextUnitSequence(receiptId);
+      let qtyForUnit: number;
+      if (isRollArray) {
+        qtyForUnit = sqmPerRollArray![i];
+      } else if (isRollScalar) {
+        qtyForUnit = sqmPerRoll!;
+      } else {
+        const totalQty = parseFloat(String(line.receivedQty ?? '0')) || parseFloat(String(line.orderedQty ?? '1'));
+        qtyForUnit = totalQty / count;
+      }
+      const unitSequence = nextSequence++;
       const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
       const body = insertReceivedUnitSchema.parse({
         ...(templateFields ?? {}),
@@ -882,15 +972,52 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
         receiptLineId: lineId,
         unitSequence,
         barcode,
-        quantity: String(qtyPerUnit),
+        quantity: String(qtyForUnit),
         uom: line.uom ?? 'EA',
       });
-      const [unit] = await db.insert(receivedUnits).values(body).returning();
-      units.push(unit);
+      unitBodies.push(body);
     }
 
+    // Wrap line-qty update + all unit inserts in a single transaction for roll mode
+    // so a partial failure never leaves the line quantity updated without units
+    const units: ReceivedUnit[] = await db.transaction(async (tx) => {
+      if (isRollBased) {
+        const newReceivedQty = isRollArray
+          ? sqmPerRollArray!.reduce((s, v) => s + v, 0)
+          : count * sqmPerRoll!;
+        await tx.update(receiptLines).set({
+          receivedQty: String(newReceivedQty),
+          updatedAt: new Date(),
+        }).where(eq(receiptLines.id, lineId));
+      }
+      const inserted: ReceivedUnit[] = [];
+      for (const body of unitBodies) {
+        const [unit] = await tx.insert(receivedUnits).values(body).returning();
+        inserted.push(unit);
+      }
+      return inserted;
+    });
+
+    const totalQtyForAudit = isRollArray
+      ? sqmPerRollArray!.reduce((s, v) => s + v, 0)
+      : isRollScalar
+        ? count * sqmPerRoll!
+        : undefined;
+
     await logAudit(receiptId, 'line_split', user?.employeeId, actorName(user), {
-      lineId, count, qtyPerUnit: String(qtyPerUnit), unitIds: units.map(u => u.id),
+      lineId,
+      count,
+      mode: isRollBased ? 'by_rolls' : 'equal',
+      ...(isRollArray ? {
+        sqmPerRollArray: sqmPerRollArray!.map(String),
+        totalQty: String(totalQtyForAudit),
+      } : isRollScalar ? {
+        sqmPerRoll: String(sqmPerRoll),
+        totalQty: String(totalQtyForAudit),
+      } : {
+        qtyPerUnit: String(unitBodies[0]?.quantity),
+      }),
+      unitIds: units.map(u => u.id),
     });
 
     res.status(201).json(units);

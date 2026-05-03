@@ -88,6 +88,7 @@ export default function ShippingManagement() {
     refetch,
   } = useQuery({
     queryKey: ['/api/shipping/ready-for-shipping'],
+    refetchInterval: 30000,
   });
 
   // Mark order as shipped mutation

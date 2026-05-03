@@ -6,13 +6,14 @@ const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
 //
 // Can be flexibly defined according to the use case.
 //
-// Examples:
-// - USER_LIST: the users from a list stored in the database;
-// - EMAIL_DOMAIN: the users whose email is in a specific domain;
-// - GROUP_MEMBER: the users who are members of a specific group;
-// - SUBSCRIBER: the users who are subscribers of a specific service / content
-//   creator.
-export enum ObjectAccessGroupType {}
+// - USER_LIST: the users from a user list stored in vault_access_grants for a document;
+// - PROJECT: the users who are members of a specific project;
+// - DEPARTMENT: the users who belong to a specific department.
+export enum ObjectAccessGroupType {
+  USER_LIST = "USER_LIST",
+  PROJECT = "PROJECT",
+  DEPARTMENT = "DEPARTMENT",
+}
 
 // The logic user group that can access the object.
 export interface ObjectAccessGroup {
@@ -82,24 +83,93 @@ abstract class BaseObjectAccessGroup implements ObjectAccessGroup {
   public abstract hasMember(userId: string): Promise<boolean>;
 }
 
+// USER_LIST group: checks vault_access_grants for the given document id.
+// The group id is the vault document id (as a string).
+class UserListAccessGroup extends BaseObjectAccessGroup {
+  constructor(id: string) {
+    super(ObjectAccessGroupType.USER_LIST, id);
+  }
+
+  public async hasMember(userId: string): Promise<boolean> {
+    try {
+      const { pool } = await import('../../db');
+      const rows = await pool.query(
+        `SELECT 1 FROM vault_access_grants WHERE document_id = $1 AND granted_to_user_id = $2 LIMIT 1`,
+        [parseInt(this.id), parseInt(userId)]
+      ) as any[];
+      return rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// PROJECT group: checks if a user belongs to a project.
+// The group id is the project id (uuid string).
+class ProjectAccessGroup extends BaseObjectAccessGroup {
+  constructor(id: string) {
+    super(ObjectAccessGroupType.PROJECT, id);
+  }
+
+  public async hasMember(userId: string): Promise<boolean> {
+    try {
+      const { pool } = await import('../../db');
+      const rows = await pool.query(
+        `SELECT 1 FROM perm_user_capability_scopes
+         WHERE user_id = $1 AND scope_type = 'PROJECT' AND project_id = $2 LIMIT 1`,
+        [parseInt(userId), this.id]
+      ) as any[];
+      return rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// DEPARTMENT group: checks if a user belongs to a department via scoped grants.
+// The group id is the department name.
+class DepartmentAccessGroup extends BaseObjectAccessGroup {
+  constructor(id: string) {
+    super(ObjectAccessGroupType.DEPARTMENT, id);
+  }
+
+  public async hasMember(userId: string): Promise<boolean> {
+    try {
+      const { pool } = await import('../../db');
+      const rows = await pool.query(
+        `SELECT 1 FROM perm_user_capability_scopes
+         WHERE user_id = $1 AND scope_type = 'DEPARTMENT' AND department = $2 LIMIT 1`,
+        [parseInt(userId), this.id]
+      ) as any[];
+      return rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function createObjectAccessGroup(
   group: ObjectAccessGroup,
 ): BaseObjectAccessGroup {
   switch (group.type) {
-    // Implement the case for each type of access group to instantiate.
-    //
-    // For example:
-    // case "USER_LIST":
-    //   return new UserListAccessGroup(group.id);
-    // case "EMAIL_DOMAIN":
-    //   return new EmailDomainAccessGroup(group.id);
-    // case "GROUP_MEMBER":
-    //   return new GroupMemberAccessGroup(group.id);
-    // case "SUBSCRIBER":
-    //   return new SubscriberAccessGroup(group.id);
+    case ObjectAccessGroupType.USER_LIST:
+      return new UserListAccessGroup(group.id);
+    case ObjectAccessGroupType.PROJECT:
+      return new ProjectAccessGroup(group.id);
+    case ObjectAccessGroupType.DEPARTMENT:
+      return new DepartmentAccessGroup(group.id);
     default:
       throw new Error(`Unknown access group type: ${group.type}`);
   }
+}
+
+/**
+ * Build the serialized ACL policy metadata entry without writing it.
+ * Use this when you need to merge ACL policy with other custom metadata
+ * in a single consolidated setMetadata call to avoid GCS patch overwriting.
+ */
+export function buildAclPolicyMetadata(aclPolicy: ObjectAclPolicy): Record<string, string> {
+  return { [ACL_POLICY_METADATA_KEY]: JSON.stringify(aclPolicy) };
 }
 
 // Sets the ACL policy to the object metadata.
@@ -113,9 +183,7 @@ export async function setObjectAclPolicy(
   }
 
   await objectFile.setMetadata({
-    metadata: {
-      [ACL_POLICY_METADATA_KEY]: JSON.stringify(aclPolicy),
-    },
+    metadata: buildAclPolicyMetadata(aclPolicy),
   });
 }
 

@@ -6,8 +6,131 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
-import { CheckCircle2, XCircle, Mail, Calendar, FileText, HardDrive, Sheet } from 'lucide-react';
-import { Link } from 'wouter';
+import { CheckCircle2, XCircle, Mail, Calendar, FileText, HardDrive, Sheet, Monitor, Smartphone, Globe, LogOut, ShieldAlert } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
+
+interface SessionInfo {
+  id: number;
+  isCurrent: boolean;
+  ipAddress: string | null;
+  userAgent: string | null;
+  lastCredentialVerifiedAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+function parseDeviceFromUserAgent(ua: string | null): { name: string; icon: typeof Monitor } {
+  if (!ua) return { name: 'Unknown Device', icon: Globe };
+  const lower = ua.toLowerCase();
+  if (lower.includes('mobile') || lower.includes('android') || lower.includes('iphone')) {
+    return { name: 'Mobile Device', icon: Smartphone };
+  }
+  if (lower.includes('windows')) return { name: 'Windows PC', icon: Monitor };
+  if (lower.includes('mac')) return { name: 'Mac', icon: Monitor };
+  if (lower.includes('linux')) return { name: 'Linux', icon: Monitor };
+  return { name: 'Desktop Browser', icon: Monitor };
+}
+
+function parseBrowserFromUserAgent(ua: string | null): string {
+  if (!ua) return 'Unknown Browser';
+  if (ua.includes('Chrome') && !ua.includes('Edg')) return 'Chrome';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari';
+  if (ua.includes('Edg')) return 'Edge';
+  return 'Browser';
+}
+
+function SessionsPanel() {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+
+  const { data: sessions = [], isLoading } = useQuery<SessionInfo[]>({
+    queryKey: ['/api/auth/sessions'],
+  });
+
+  const terminateMutation = useMutation({
+    mutationFn: async (sessionId: number) => {
+      return apiRequest(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
+    },
+    onSuccess: (_data, sessionId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/sessions'] });
+      const terminated = sessions.find(s => s.id === sessionId);
+      if (terminated?.isCurrent) {
+        toast({ title: 'Signed out', description: 'Your current session has been terminated. Please log in again.' });
+        setLocation('/login');
+      } else {
+        toast({ title: 'Session terminated', description: 'The session has been signed out.' });
+      }
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to terminate session', variant: 'destructive' });
+    },
+  });
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-muted-foreground">Loading sessions...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <ShieldAlert className="h-4 w-4 text-amber-500" />
+        <p className="text-sm text-muted-foreground dark:text-gray-400">
+          If you see a session you don't recognize, terminate it immediately and change your password.
+        </p>
+      </div>
+      {sessions.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No active sessions found.</p>
+      ) : (
+        sessions.map((session) => {
+          const device = parseDeviceFromUserAgent(session.userAgent);
+          const DeviceIcon = device.icon;
+          const browser = parseBrowserFromUserAgent(session.userAgent);
+          return (
+            <Card key={session.id} className={`dark:bg-gray-900 dark:border-gray-800 ${session.isCurrent ? 'border-green-400 dark:border-green-700' : ''}`}>
+              <CardContent className="pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <DeviceIcon className="h-6 w-6 mt-0.5 text-muted-foreground" />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium dark:text-white">{device.name}</span>
+                        <span className="text-muted-foreground text-sm">&mdash; {browser}</span>
+                        {session.isCurrent && (
+                          <Badge variant="default" className="bg-green-500 text-xs">Current</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                        {session.ipAddress && <div>IP: {session.ipAddress}</div>}
+                        <div>Signed in: {new Date(session.createdAt).toLocaleString()}</div>
+                        <div>Expires: {new Date(session.expiresAt).toLocaleString()}</div>
+                        {session.lastCredentialVerifiedAt && (
+                          <div>
+                            Last verified: {new Date(session.lastCredentialVerifiedAt).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => terminateMutation.mutate(session.id)}
+                    disabled={terminateMutation.isPending}
+                    className="shrink-0 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950"
+                  >
+                    <LogOut className="h-3.5 w-3.5 mr-1" />
+                    {session.isCurrent ? 'Sign Out' : 'Terminate'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+    </div>
+  );
+}
 
 interface UserIntegration {
   id: number;
@@ -217,6 +340,9 @@ export default function Settings() {
             <TabsTrigger value="integrations" data-testid="tab-integrations">
               Integrations
             </TabsTrigger>
+            <TabsTrigger value="sessions" data-testid="tab-sessions">
+              Sessions
+            </TabsTrigger>
             <TabsTrigger value="account" data-testid="tab-account">
               Account
             </TabsTrigger>
@@ -328,6 +454,20 @@ export default function Settings() {
                 })}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="sessions" className="space-y-6">
+            <Card className="dark:bg-gray-900 dark:border-gray-800">
+              <CardHeader>
+                <CardTitle className="dark:text-white">My Active Sessions</CardTitle>
+                <CardDescription className="dark:text-gray-400">
+                  These are all currently active login sessions for your account. You can sign out of any session remotely.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SessionsPanel />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="account" className="space-y-6">

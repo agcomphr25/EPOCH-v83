@@ -12,6 +12,7 @@ vi.mock('../storage', () => ({
   storage: {
     getLaborHoursByWorkOrder: vi.fn<(id: string) => Promise<number>>(),
     getLaborHoursByWorkOrderAndDepartment: vi.fn<(id: string, dept: string) => Promise<number>>(),
+    getLaborThresholdSettings: vi.fn().mockResolvedValue(null),
   },
 }));
 

@@ -4,11 +4,14 @@ import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 
 import { storage } from '../../storage';
 import { authenticateToken } from '../../middleware/auth';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
+import { objectStorageClient } from '../../replit_integrations/object_storage/objectStorage';
+import { setObjectAclPolicy } from '../../replit_integrations/object_storage/objectAcl';
+import { auditService } from '../services/auditService';
 
 const router = Router();
 
@@ -32,21 +35,9 @@ if (!fs.existsSync(vendorDocumentsDir)) {
   fs.mkdirSync(vendorDocumentsDir, { recursive: true });
 }
 
-// Configure multer for vendor approval PDFs
-const vendorApprovalStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, vendorApprovalsDir);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const hash = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `vendor_approval_${timestamp}_${hash}${ext}`);
-  },
-});
-
+// Configure multer for vendor approval PDFs (memory storage for object storage upload)
 const vendorApprovalUpload = multer({
-  storage: vendorApprovalStorage,
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -59,21 +50,9 @@ const vendorApprovalUpload = multer({
   },
 });
 
-// Configure multer for vendor document PDFs
-const vendorDocumentStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, vendorDocumentsDir);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const hash = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
-    cb(null, `vendor_document_${timestamp}_${hash}${ext}`);
-  },
-});
-
+// Configure multer for vendor document PDFs (memory storage for object storage upload)
 const vendorDocumentUpload = multer({
-  storage: vendorDocumentStorage,
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -86,28 +65,233 @@ const vendorDocumentUpload = multer({
   },
 });
 
-// Helper function to sync vendor-level scores from quarterly evaluations
+// Helper: parse a GCS bucket path (e.g. /bucket-name/a/b → { bucketName, objectName })
+function parseGcsPath(fullPath: string): { bucketName: string; objectName: string } {
+  const normalized = fullPath.startsWith('/') ? fullPath : `/${fullPath}`;
+  const parts = normalized.split('/');
+  return { bucketName: parts[1], objectName: parts.slice(2).join('/') };
+}
+
+// One-time startup migration: upload legacy local vendor documents to object storage
+// and normalize any full GCS URLs already stored in the DB.
+//
+// Uses a persisted completion flag (vendor_doc_migration_flags table) so that:
+//   - On subsequent restarts after full migration, the function exits after a single
+//     fast flag lookup — no full vendor table scan.
+//   - If new un-migrated records appear (re-upload), the flag is cleared and migration
+//     runs again for only those records.
+export async function migrateVendorDocumentUrls(): Promise<void> {
+  const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+  if (!privateObjectDir) {
+    console.log('[vendor-doc-migration] PRIVATE_OBJECT_DIR not set — skipping migration');
+    return;
+  }
+
+  try {
+    const alreadyComplete = await storage.getVendorDocMigrationComplete();
+
+    let withDocs = await storage.getVendorsWithUnmigratedDocuments();
+
+    if (alreadyComplete) {
+      // Fast path: migration was completed on a previous run.
+      // The targeted query above already tells us whether any new un-migrated records exist.
+      if (withDocs.length === 0) {
+        console.log('[vendor-doc-migration] Migration flag is set and no un-migrated records found — skipping');
+        return;
+      }
+      // New un-migrated records detected (e.g. re-upload); clear the flag and re-run.
+      console.log(`[vendor-doc-migration] Found ${withDocs.length} un-migrated record(s) after previous completion — clearing flag and re-running`);
+      await storage.setVendorDocMigrationComplete(false);
+    }
+
+    if (withDocs.length === 0) {
+      console.log('[vendor-doc-migration] No un-migrated vendor documents found — marking complete');
+      await storage.setVendorDocMigrationComplete(true);
+      return;
+    }
+
+    let migrated = 0;
+    let normalized = 0;
+    let missing = 0;
+    let skipped = 0;
+
+    let approvalMigrated = 0;
+    let approvalNormalized = 0;
+    let approvalMissing = 0;
+    let approvalSkipped = 0;
+
+    for (const vendor of withDocs) {
+      // --- mainDocumentUrl ---
+      const url = vendor.mainDocumentUrl?.trim();
+      if (url) {
+        // Already in /objects/ format — nothing to do
+        if (url.startsWith('/objects/')) {
+          skipped++;
+        } else if (url.startsWith('https://storage.googleapis.com/')) {
+          // Normalize full GCS URL → /objects/ path
+          try {
+            const parsed = new URL(url);
+            const rawPath = parsed.pathname; // /<bucket>/...
+            const entityDir = privateObjectDir.endsWith('/') ? privateObjectDir : `${privateObjectDir}/`;
+            if (rawPath.startsWith(entityDir)) {
+              const entityId = rawPath.slice(entityDir.length);
+              const newUrl = `/objects/${entityId}`;
+              await storage.updateVendor(vendor.id, { mainDocumentUrl: newUrl });
+              normalized++;
+              console.log(`[vendor-doc-migration] Normalized GCS URL for vendor ${vendor.id} → ${newUrl}`);
+            } else {
+              skipped++;
+            }
+          } catch (e) {
+            console.warn(`[vendor-doc-migration] Could not normalize GCS URL for vendor ${vendor.id}: ${e}`);
+            skipped++;
+          }
+        } else if (url.startsWith('/uploads/vendor-documents/')) {
+          // Legacy local upload path: /uploads/vendor-documents/<filename>
+          const filename = url.split('/').pop() || '';
+          const localPath = path.join(process.cwd(), 'uploads', 'vendor-documents', filename);
+          if (!fs.existsSync(localPath)) {
+            console.warn(`[vendor-doc-migration] Local file missing for vendor ${vendor.id} (${filename}) — clearing dead URL`);
+            await storage.updateVendor(vendor.id, { mainDocumentUrl: null });
+            missing++;
+            try {
+              await auditService.logEvent({
+                entityType: 'vendor',
+                entityId: String(vendor.id),
+                action: 'VENDOR_DOCUMENT_CLEARED',
+                reason: `Startup migration cleared a missing vendor document (${filename}) for vendor "${vendor.name || vendor.id}". Purchasing staff should re-upload the document.`,
+                meta: { vendorName: vendor.name, clearedFilename: filename, clearedUrl: url, source: 'vendor-doc-migration' },
+              });
+            } catch (auditErr) {
+              console.error(`[vendor-doc-migration] Failed to write audit log for vendor ${vendor.id}: ${auditErr}`);
+            }
+          } else {
+            try {
+              const buffer = fs.readFileSync(localPath);
+              const objectId = randomUUID();
+              const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+              const objectKey = `vendor-documents/${objectId}-${safeFilename}`;
+              const fullPath = `${privateObjectDir}/${objectKey}`;
+              const { bucketName, objectName } = parseGcsPath(fullPath);
+              const bucket = objectStorageClient.bucket(bucketName);
+              const file = bucket.file(objectName);
+              await file.save(buffer, { contentType: 'application/pdf', metadata: { cacheControl: 'public, max-age=86400' } });
+              await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
+              const newUrl = `/objects/${objectKey}`;
+              await storage.updateVendor(vendor.id, { mainDocumentUrl: newUrl });
+              migrated++;
+              console.log(`[vendor-doc-migration] Migrated vendor ${vendor.id} (${vendor.name}) → ${newUrl}`);
+            } catch (e) {
+              console.error(`[vendor-doc-migration] Failed to migrate vendor ${vendor.id}: ${e}`);
+            }
+          }
+        } else {
+          // Unknown format — skip
+          skipped++;
+        }
+      }
+
+      // --- approvalPdfUrl ---
+      const approvalUrl = vendor.approvalPdfUrl?.trim();
+      if (approvalUrl) {
+        // Already in /objects/ format — nothing to do
+        if (approvalUrl.startsWith('/objects/')) {
+          approvalSkipped++;
+        } else if (approvalUrl.startsWith('https://storage.googleapis.com/')) {
+          // Normalize full GCS URL → /objects/ path
+          try {
+            const parsed = new URL(approvalUrl);
+            const rawPath = parsed.pathname;
+            const entityDir = privateObjectDir.endsWith('/') ? privateObjectDir : `${privateObjectDir}/`;
+            if (rawPath.startsWith(entityDir)) {
+              const entityId = rawPath.slice(entityDir.length);
+              const newUrl = `/objects/${entityId}`;
+              await storage.updateVendor(vendor.id, { approvalPdfUrl: newUrl });
+              approvalNormalized++;
+              console.log(`[vendor-doc-migration] Normalized approval GCS URL for vendor ${vendor.id} → ${newUrl}`);
+            } else {
+              approvalSkipped++;
+            }
+          } catch (e) {
+            console.warn(`[vendor-doc-migration] Could not normalize approval GCS URL for vendor ${vendor.id}: ${e}`);
+            approvalSkipped++;
+          }
+        } else if (approvalUrl.startsWith('/uploads/vendor-approvals/')) {
+          // Legacy local upload path: /uploads/vendor-approvals/<filename>
+          const filename = approvalUrl.split('/').pop() || '';
+          const localPath = path.join(process.cwd(), 'uploads', 'vendor-approvals', filename);
+          if (!fs.existsSync(localPath)) {
+            console.warn(`[vendor-doc-migration] Local approval file missing for vendor ${vendor.id} (${filename}) — clearing dead URL`);
+            await storage.updateVendor(vendor.id, { approvalPdfUrl: null });
+            approvalMissing++;
+            try {
+              await auditService.logEvent({
+                entityType: 'vendor',
+                entityId: String(vendor.id),
+                action: 'VENDOR_APPROVAL_DOCUMENT_CLEARED',
+                reason: `Startup migration cleared a missing vendor approval document (${filename}) for vendor "${vendor.name || vendor.id}". Purchasing staff should re-upload the document.`,
+                meta: { vendorName: vendor.name, clearedFilename: filename, clearedUrl: approvalUrl, source: 'vendor-doc-migration' },
+              });
+            } catch (auditErr) {
+              console.error(`[vendor-doc-migration] Failed to write audit log for vendor ${vendor.id}: ${auditErr}`);
+            }
+          } else {
+            try {
+              const buffer = fs.readFileSync(localPath);
+              const objectId = randomUUID();
+              const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+              const objectKey = `vendor-approvals/${objectId}-${safeFilename}`;
+              const fullPath = `${privateObjectDir}/${objectKey}`;
+              const { bucketName, objectName } = parseGcsPath(fullPath);
+              const bucket = objectStorageClient.bucket(bucketName);
+              const file = bucket.file(objectName);
+              await file.save(buffer, { contentType: 'application/pdf', metadata: { cacheControl: 'public, max-age=86400' } });
+              await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
+              const newUrl = `/objects/${objectKey}`;
+              await storage.updateVendor(vendor.id, { approvalPdfUrl: newUrl });
+              approvalMigrated++;
+              console.log(`[vendor-doc-migration] Migrated approval PDF for vendor ${vendor.id} (${vendor.name}) → ${newUrl}`);
+            } catch (e) {
+              console.error(`[vendor-doc-migration] Failed to migrate approval PDF for vendor ${vendor.id}: ${e}`);
+            }
+          }
+        } else {
+          // Unknown format — skip
+          approvalSkipped++;
+        }
+      }
+    }
+
+    console.log(
+      `[vendor-doc-migration] mainDocumentUrl — migrated: ${migrated}, normalized: ${normalized}, cleared (local file missing): ${missing}, skipped: ${skipped}`,
+    );
+    console.log(
+      `[vendor-doc-migration] approvalPdfUrl — migrated: ${approvalMigrated}, normalized: ${approvalNormalized}, cleared (local file missing): ${approvalMissing}, skipped: ${approvalSkipped}`,
+    );
+
+    await storage.setVendorDocMigrationComplete(true);
+    console.log('[vendor-doc-migration] Completion flag saved — migration will be skipped on next startup');
+  } catch (err) {
+    console.error('[vendor-doc-migration] Migration failed:', err);
+  }
+}
+
+// Helper function to sync vendor-level scores from annual evaluations
 async function syncVendorScoresFromEvaluations(vendorId: number) {
-  // Get current quarter and year
+  // Get current year
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
-  // Quarters are stored by their start month: Q1=1, Q2=4, Q3=7, Q4=10
-  const currentQuarterStartMonth = currentMonth <= 3 ? 1 : currentMonth <= 6 ? 4 : currentMonth <= 9 ? 7 : 10;
   
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
   
-  // Check if there's an evaluation record for the CURRENT quarter
-  // A vendor is considered "evaluated" if they have any evaluation record for the current quarter,
+  // Check if there's any evaluation record for the CURRENT calendar year
+  // A vendor is considered "evaluated" if they have any evaluation record for the current year,
   // even if all scores are N/A (null) - the record existence is what matters
-  const currentQuarterEval = allEvaluations.find(ev => 
-    ev.year === currentYear && 
-    ev.month === currentQuarterStartMonth
-  );
+  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear);
   
-  // Set evaluated=true if current quarter has ANY evaluation record (scores or N/A)
-  const isEvaluated = !!currentQuarterEval;
+  // Set evaluated=true if current year has ANY evaluation record (scores or N/A)
+  const isEvaluated = !!currentYearEval;
   
   // Get the latest evaluation for displaying scores (not necessarily current month)
   const evaluationsWithScores = allEvaluations.filter(ev => 
@@ -120,23 +304,35 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
     return b.month - a.month;
   });
   
+  // When vendor is evaluated (current-year record exists), evaluationDate MUST
+  // reflect the current year so ERDI's 365-day lookback counts correctly.
+  // Display scores may still come from the latest scored record (could be prior year).
+  const evaluationDate = isEvaluated ? `${currentYear}-01-01` : null;
+
   if (evaluationsWithScores.length > 0) {
     const latestEval = evaluationsWithScores[0];
     
-    // Format evaluation date as YYYY-MM-DD
-    const evalDate = `${latestEval.year}-${String(latestEval.month).padStart(2, '0')}-01`;
-    
-    // Update vendor: latest scores but evaluated status based on current month
+    // Update vendor: latest scores but evaluated status and date based on current year record existence
     await storage.updateVendor(vendorId, {
       qualityScore: latestEval.qualityScore,
       costScore: latestEval.costScore,
       deliveryScore: latestEval.deliveryScore,
       responseScore: latestEval.responseScore,
       evaluated: isEvaluated,
-      evaluationDate: evalDate,
+      evaluationDate,
+    });
+  } else if (isEvaluated) {
+    // Current year has an evaluation record but all scores are N/A — still mark as evaluated
+    await storage.updateVendor(vendorId, {
+      qualityScore: null,
+      costScore: null,
+      deliveryScore: null,
+      responseScore: null,
+      evaluated: true,
+      evaluationDate,
     });
   } else {
-    // No evaluations with scores, clear vendor scores
+    // No evaluations at all — clear vendor scores and evaluated flag
     await storage.updateVendor(vendorId, {
       qualityScore: null,
       costScore: null,
@@ -174,6 +370,24 @@ router.get('/', async (req: Request, res: Response) => {
         .json({ error: 'Invalid query parameters', details: error.errors });
     }
     res.status(500).json({ error: 'Failed to fetch vendors' });
+  }
+});
+
+// GET /api/vendors/documents/all - Get all vendors that have an uploaded document
+router.get('/documents/all', async (req: Request, res: Response) => {
+  try {
+    const result = await storage.getAllVendors({ pageSize: 10000 });
+    const withDocs = result.data
+      .filter((v) => v.mainDocumentUrl && v.mainDocumentUrl.trim().length > 0)
+      .map((v) => ({
+        id: v.id,
+        name: v.name,
+        mainDocumentUrl: v.mainDocumentUrl,
+      }));
+    res.json(withDocs);
+  } catch (error) {
+    console.error('Get vendor documents error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor documents' });
   }
 });
 
@@ -506,18 +720,45 @@ router.delete(
   }
 );
 
-// POST /api/vendors/upload/approval - Upload vendor approval PDF
+// POST /api/vendors/upload/approval - Upload vendor approval PDF to object storage
 router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const fileUrl = `/uploads/vendor-approvals/${req.file.filename}`;
-    
+    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+    if (!privateObjectDir) {
+      console.error('PRIVATE_OBJECT_DIR not set — cannot upload vendor approval PDF to object storage');
+      return res.status(500).json({ error: 'Object storage not configured' });
+    }
+
+    const objectId = randomUUID();
+    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const objectKey = `vendor-approvals/${objectId}-${safeFilename}`;
+    const fullPath = `${privateObjectDir}/${objectKey}`;
+
+    const parts = fullPath.replace(/^\//, '').split('/');
+    const bucketName = parts[0];
+    const objectName = parts.slice(1).join('/');
+
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    await file.save(req.file.buffer, {
+      contentType: 'application/pdf',
+      metadata: {
+        cacheControl: 'public, max-age=86400',
+      },
+    });
+
+    await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
+
+    const objectPath = `/objects/${objectKey}`;
+
     res.status(200).json({
-      url: fileUrl,
-      filename: req.file.filename,
+      url: objectPath,
+      filename: `${objectId}-${safeFilename}`,
       originalName: req.file.originalname,
       size: req.file.size,
     });
@@ -527,18 +768,45 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
   }
 });
 
-// POST /api/vendors/upload/document - Upload vendor main document PDF
+// POST /api/vendors/upload/document - Upload vendor main document PDF to object storage
 router.post('/upload/document', vendorDocumentUpload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const fileUrl = `/uploads/vendor-documents/${req.file.filename}`;
-    
+    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+    if (!privateObjectDir) {
+      console.error('PRIVATE_OBJECT_DIR not set — cannot upload vendor document to object storage');
+      return res.status(500).json({ error: 'Object storage not configured' });
+    }
+
+    const objectId = randomUUID();
+    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const objectKey = `vendor-documents/${objectId}-${safeFilename}`;
+    const fullPath = `${privateObjectDir}/${objectKey}`;
+
+    const parts = fullPath.replace(/^\//, '').split('/');
+    const bucketName = parts[0];
+    const objectName = parts.slice(1).join('/');
+
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    await file.save(req.file.buffer, {
+      contentType: 'application/pdf',
+      metadata: {
+        cacheControl: 'public, max-age=86400',
+      },
+    });
+
+    await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
+
+    const objectPath = `/objects/${objectKey}`;
+
     res.status(200).json({
-      url: fileUrl,
-      filename: req.file.filename,
+      url: objectPath,
+      filename: `${objectId}-${safeFilename}`,
       originalName: req.file.originalname,
       size: req.file.size,
     });
@@ -566,7 +834,7 @@ router.get('/evaluations/ytd-summary', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/vendors/:vendorId/evaluations - Get quarterly evaluations for a vendor
+// GET /api/vendors/:vendorId/evaluations - Get annual evaluations for a vendor
 router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
   try {
     const vendorId = parseInt(req.params.vendorId);
@@ -602,7 +870,7 @@ router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/vendors/:vendorId/evaluations - Create or update a quarterly evaluation
+// POST /api/vendors/:vendorId/evaluations - Create or update an annual evaluation
 router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
   try {
     const vendorId = parseInt(req.params.vendorId);
@@ -764,60 +1032,48 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
 
       results.matched++;
 
-      // Extract quarterly scores from CSV columns (stored by quarter start month)
+      // Extract annual scores from CSV columns (stored with month=1 for the full year)
       const importYear = new Date().getFullYear();
-      const quarters = [
-        { name: 'Q1', num: 1 },  // stored as month=1
-        { name: 'Q2', num: 4 },  // stored as month=4
-        { name: 'Q3', num: 7 },  // stored as month=7
-        { name: 'Q4', num: 10 }, // stored as month=10
-      ];
+      const annualMonth = 1; // Annual evaluation stored as month=1
 
-      for (const quarter of quarters) {
-        const qualityKey = `${quarter.name}- Quality`;
-        const costKey = `${quarter.name}- Cost`;
-        const deliveryKey = `${quarter.name}- Delivery`;
-        const responseKey = `${quarter.name}- Response`;
+      const qualityScore = row['Annual- Quality'] ? parseInt(row['Annual- Quality']) : null;
+      const costScore = row['Annual- Cost'] ? parseInt(row['Annual- Cost']) : null;
+      const deliveryScore = row['Annual- Delivery'] ? parseInt(row['Annual- Delivery']) : null;
+      const responseScore = row['Annual- Response'] ? parseInt(row['Annual- Response']) : null;
 
-        const qualityScore = row[qualityKey] ? parseInt(row[qualityKey]) : null;
-        const costScore = row[costKey] ? parseInt(row[costKey]) : null;
-        const deliveryScore = row[deliveryKey] ? parseInt(row[deliveryKey]) : null;
-        const responseScore = row[responseKey] ? parseInt(row[responseKey]) : null;
+      // Only create if at least one score is present
+      if (qualityScore || costScore || deliveryScore || responseScore) {
+        try {
+          // Check if evaluation already exists
+          const existing = await storage.getVendorMonthlyEvaluation(matchedVendor.id, annualMonth, importYear);
 
-        // Only create if at least one score is present
-        if (qualityScore || costScore || deliveryScore || responseScore) {
-          try {
-            // Check if evaluation already exists
-            const existing = await storage.getVendorMonthlyEvaluation(matchedVendor.id, quarter.num, importYear);
-
-            if (existing) {
-              // Update existing
-              await storage.updateVendorMonthlyEvaluation(existing.id, {
-                qualityScore,
-                costScore,
-                deliveryScore,
-                responseScore,
-              });
-            } else {
-              // Create new
-              await storage.createVendorMonthlyEvaluation({
-                vendorId: matchedVendor.id,
-                month: quarter.num,
-                year: importYear,
-                qualityScore,
-                costScore,
-                deliveryScore,
-                responseScore,
-              });
-              results.created++;
-            }
-          } catch (error) {
-            results.errors.push({
-              vendor: vendorName,
-              quarter: quarter.name,
-              error: error instanceof Error ? error.message : 'Unknown error',
+          if (existing) {
+            // Update existing
+            await storage.updateVendorMonthlyEvaluation(existing.id, {
+              qualityScore,
+              costScore,
+              deliveryScore,
+              responseScore,
             });
+          } else {
+            // Create new
+            await storage.createVendorMonthlyEvaluation({
+              vendorId: matchedVendor.id,
+              month: annualMonth,
+              year: importYear,
+              qualityScore,
+              costScore,
+              deliveryScore,
+              responseScore,
+            });
+            results.created++;
           }
+        } catch (error) {
+          results.errors.push({
+            vendor: vendorName,
+            period: `Annual ${importYear}`,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       }
     }
@@ -829,10 +1085,10 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/vendors/reset-monthly-evaluations - Manually reset all vendor quarterly evaluations
+// POST /api/vendors/reset-monthly-evaluations - Manually reset all vendor annual evaluations
 router.post('/reset-monthly-evaluations', async (req: Request, res: Response) => {
   try {
-    console.log('🔄 Manual vendor evaluation reset requested...');
+    console.log('🔄 Manual vendor annual evaluation reset requested...');
     
     // Get all vendors (use a large page size to get all)
     const { data: allVendors } = await storage.getAllVendors({ 
@@ -853,7 +1109,7 @@ router.post('/reset-monthly-evaluations', async (req: Request, res: Response) =>
     
     await Promise.all(resetPromises);
     
-    console.log(`✅ Manual reset complete. Reset ${allVendors.length} vendors.`);
+    console.log(`✅ Manual annual evaluation reset complete. Reset ${allVendors.length} vendors.`);
     
     res.json({
       success: true,

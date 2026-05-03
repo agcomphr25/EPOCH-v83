@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { compareReceiptLines } from '@/lib/receiptLineSort';
 import { toast } from 'react-hot-toast';
 import { Link } from 'wouter';
 import { jsPDF } from 'jspdf';
@@ -69,11 +70,38 @@ import {
   Building2,
   ExternalLink,
   Download,
+  Trash2,
+  Settings,
+  ChevronUp,
+  Pencil,
+  Save,
 } from 'lucide-react';
 
 import { getTraceabilityFields } from '@/lib/traceabilityFields';
+import { getRccCompleteInvalidationKeys } from '@/lib/rccInvalidation';
+
+// Canonical list of per-field traceability config fields (matches received_units columns)
+const TRACE_CONFIG_FIELDS = [
+  { key: 'lotNumber', label: 'Lot Number', type: 'text' },
+  { key: 'batchNumber', label: 'Batch Number', type: 'text' },
+  { key: 'serialNumber', label: 'Serial Number', type: 'text' },
+  { key: 'expirationDate', label: 'Exp Date', type: 'date' },
+  { key: 'manufactureDate', label: 'Mfg Date', type: 'date' },
+  { key: 'heatLot', label: 'Heat Lot', type: 'text' },
+  { key: 'rollNumber', label: 'Roll Number', type: 'text' },
+  { key: 'certReference', label: 'Cert Reference', type: 'text' },
+] as const;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface InventoryDepartment {
+  id: number;
+  name: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  defaultReceivingLocation?: string | null;
+  defaultReceivingFreezer?: number | null;
+}
 
 interface VendorPO {
   id: number;
@@ -113,6 +141,7 @@ interface Receipt {
   conditionOnArrival?: string;
   status: string;
   notes?: string;
+  departmentId?: number | null;
   lines?: ReceiptLine[];
   units?: ReceivedUnit[];
   documents?: ReceiptDocument[];
@@ -256,6 +285,141 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
   );
 }
 
+// ── Department Defaults Manager ────────────────────────────────────────────────
+
+function DepartmentDefaultsManager() {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editLocation, setEditLocation] = useState('');
+  const [editFreezer, setEditFreezer] = useState('');
+
+  const { data: departments = [], isLoading } = useQuery<InventoryDepartment[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Record<string, any> }) =>
+      apiRequest(`/api/inventory/departments/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/departments'] });
+      setEditingId(null);
+      toast.success('Department defaults saved');
+    },
+    onError: () => toast.error('Failed to save department defaults'),
+  });
+
+  const startEdit = (dept: InventoryDepartment) => {
+    setEditingId(dept.id);
+    setEditLocation(dept.defaultReceivingLocation ?? '');
+    setEditFreezer(dept.defaultReceivingFreezer != null ? String(dept.defaultReceivingFreezer) : '');
+  };
+
+  const saveEdit = (dept: InventoryDepartment) => {
+    updateMutation.mutate({
+      id: dept.id,
+      updates: {
+        name: dept.name,
+        defaultReceivingLocation: editLocation.trim() || null,
+        defaultReceivingFreezer: editFreezer ? parseInt(editFreezer, 10) : null,
+      },
+    });
+  };
+
+  return (
+    <div className="border-t">
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <span className="flex items-center gap-1.5">
+          <Settings className="w-3.5 h-3.5" />
+          Dept. Receiving Defaults
+        </span>
+        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2 bg-gray-50 dark:bg-gray-900">
+          <div className="text-xs text-gray-400 pt-1">
+            Set default location and freezer number per department. These auto-fill during putaway.
+          </div>
+          {isLoading && <div className="text-xs text-gray-400 py-1">Loading…</div>}
+          {departments.map(dept => (
+            <div key={dept.id} className="border rounded p-2 bg-white dark:bg-gray-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{dept.name}</span>
+                {editingId !== dept.id && (
+                  <button
+                    className="text-gray-400 hover:text-gray-600 p-0.5"
+                    onClick={() => startEdit(dept)}
+                    title="Edit defaults"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              {editingId === dept.id ? (
+                <div className="space-y-1.5">
+                  <div>
+                    <Label className="text-xs">Default Location</Label>
+                    <Input
+                      className="h-6 text-xs mt-0.5"
+                      value={editLocation}
+                      onChange={e => setEditLocation(e.target.value)}
+                      placeholder="Shelf, bin, rack..."
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Default Freezer #</Label>
+                    <Input
+                      className="h-6 text-xs mt-0.5"
+                      type="number"
+                      min={1}
+                      value={editFreezer}
+                      onChange={e => setEditFreezer(e.target.value)}
+                      placeholder="e.g. 2"
+                    />
+                  </div>
+                  <div className="flex gap-1 mt-1">
+                    <Button
+                      size="sm"
+                      className="h-6 text-xs flex-1"
+                      onClick={() => saveEdit(dept)}
+                      disabled={updateMutation.isPending}
+                    >
+                      {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-xs"
+                      onClick={() => setEditingId(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500 space-y-0.5">
+                  <div>Location: <span className="text-gray-700 dark:text-gray-300">{dept.defaultReceivingLocation || <em className="text-gray-400">not set</em>}</span></div>
+                  <div>Freezer: <span className="text-gray-700 dark:text-gray-300">{dept.defaultReceivingFreezer != null ? dept.defaultReceivingFreezer : <em className="text-gray-400">not set</em>}</span></div>
+                </div>
+              )}
+            </div>
+          ))}
+          {departments.length === 0 && !isLoading && (
+            <div className="text-xs text-gray-400">No departments configured.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Left Panel: Expected Receipts ─────────────────────────────────────────────
 
 function LeftPanel({
@@ -266,6 +430,11 @@ function LeftPanel({
   activeReceiptId: number | null;
 }) {
   const [search, setSearch] = useState('');
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdminOrOwner = ['admin', 'owner'].includes((currentUser?.role ?? '').toLowerCase());
 
   const { data: sentPOsResponse, isLoading: isLoadingSent } = useQuery<{ data: VendorPO[] }>({
     queryKey: ['/api/vendor-pos', 'Sent'],
@@ -287,6 +456,9 @@ function LeftPanel({
   const allPOs = [...(sentPOsResponse?.data ?? []), ...(partialPOsResponse?.data ?? [])];
   const seenIds = new Set<number>();
   const sentPOs = allPOs.filter(po => { if (seenIds.has(po.id)) return false; seenIds.add(po.id); return true; });
+
+  // Set of PO IDs that have at least one partially-received line (status = "Partially Received")
+  const partialPoIds = new Set<number>((partialPOsResponse?.data ?? []).map(p => p.id));
 
   const filteredPOs = sentPOs.filter(po =>
     po.poNumber?.toLowerCase().includes(search.toLowerCase()) ||
@@ -346,12 +518,18 @@ function LeftPanel({
             {group.pos.map(po => {
               const pending = pendingByPo?.[po.id];
               const isResuming = !!(pending || (po.pendingReceiptCount && po.pendingReceiptCount > 0));
+              const isPartial = partialPoIds.has(po.id);
               return (
                 <div key={po.id} className="p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
+                      <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1 flex-wrap">
                         {po.poNumber}
+                        {isPartial && (
+                          <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-400/20 text-amber-700 border border-amber-400 dark:bg-amber-400/10 dark:text-amber-400 dark:border-amber-500 ml-1">
+                            Partial
+                          </span>
+                        )}
                         {isResuming && (
                           <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 ml-1">
                             In Progress
@@ -386,6 +564,134 @@ function LeftPanel({
           </div>
         )}
       </div>
+      {isAdminOrOwner && <DepartmentDefaultsManager />}
+    </div>
+  );
+}
+
+// ── Line Status Badge ──────────────────────────────────────────────────────────
+
+export type LineStatus = 'pending' | 'partial' | 'complete' | 'over' | 'manual';
+
+export interface LineStatusInfo {
+  status: LineStatus;
+  isOver: boolean;
+  isPartial: boolean;
+  isComplete: boolean;
+  isPending: boolean;
+  isManual: boolean;
+  rowClassName: string;
+  badgeLabel: string;
+  badgeClassName: string;
+}
+
+export function getLineStatus(orderedQty: string | number | null | undefined, receivedQty: string | number | null | undefined): LineStatusInfo {
+  const ord = Number(orderedQty ?? 0);
+  const rcv = Number(receivedQty ?? 0);
+  const isOver = rcv > ord && ord > 0;
+  const isPartial = rcv < ord && rcv > 0;
+  const isComplete = ord > 0 && rcv >= ord && !isOver;
+  const isPending = ord > 0 && rcv === 0;
+  const isManual = ord === 0;
+
+  let status: LineStatus;
+  let badgeLabel: string;
+  let badgeClassName: string;
+  let rowClassName: string;
+
+  if (isOver) {
+    status = 'over';
+    badgeLabel = 'Over';
+    badgeClassName = 'bg-orange-100 text-orange-700 text-xs border-orange-200';
+    rowClassName = '';
+  } else if (isPartial) {
+    status = 'partial';
+    badgeLabel = 'Partial';
+    badgeClassName = 'bg-yellow-100 text-yellow-700 text-xs border-yellow-200';
+    rowClassName = '';
+  } else if (isComplete) {
+    status = 'complete';
+    badgeLabel = 'Fully Received';
+    badgeClassName = 'bg-green-100 text-green-700 text-xs border-green-200';
+    rowClassName = 'bg-green-50/60 dark:bg-green-900/10';
+  } else if (isPending) {
+    status = 'pending';
+    badgeLabel = 'Pending';
+    badgeClassName = 'bg-gray-100 text-gray-500 text-xs border-gray-200';
+    rowClassName = '';
+  } else {
+    status = 'manual';
+    badgeLabel = 'Manual';
+    badgeClassName = '';
+    rowClassName = '';
+  }
+
+  return { status, isOver, isPartial, isComplete, isPending, isManual, rowClassName, badgeLabel, badgeClassName };
+}
+
+export function LineStatusBadge({ orderedQty, receivedQty }: { orderedQty: string | number | null | undefined; receivedQty: string | number | null | undefined }) {
+  const info = getLineStatus(orderedQty, receivedQty);
+  if (info.isManual) {
+    return <Badge variant="outline" className="text-xs" data-testid="line-status-badge">{info.badgeLabel}</Badge>;
+  }
+  return <Badge className={info.badgeClassName} data-testid="line-status-badge">{info.badgeLabel}</Badge>;
+}
+
+// ── Receiving Progress Bar ─────────────────────────────────────────────────────
+
+export function ReceivingProgressBar({ lines }: { lines: ReceiptLine[] }) {
+  const totalLines = lines.length;
+  if (totalLines === 0) return null;
+
+  const fullLines = lines.filter((l) => {
+    const ord = Number(l.orderedQty ?? 0);
+    const rcv = Number(l.receivedQty ?? 0);
+    return ord > 0 && rcv >= ord;
+  }).length;
+
+  const partialLines = lines.filter((l) => {
+    const ord = Number(l.orderedQty ?? 0);
+    const rcv = Number(l.receivedQty ?? 0);
+    return ord > 0 && rcv > 0 && rcv < ord;
+  }).length;
+
+  const openLines = totalLines - fullLines - partialLines;
+  const hasPartials = partialLines > 0;
+
+  // When partials exist, cap fullPct at 99 so the amber segment always has room.
+  const fullPct = hasPartials
+    ? Math.min(99, Math.round((fullLines / totalLines) * 100))
+    : Math.min(100, Math.round((fullLines / totalLines) * 100));
+  // Guarantee at least 1% width for the amber segment when partials are present.
+  const partialPct = hasPartials
+    ? Math.max(1, Math.min(100 - fullPct, Math.round((partialLines / totalLines) * 100)))
+    : 0;
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="rcc-receiving-progress">
+      <div className="w-24 h-1.5 rounded-full bg-gray-200 overflow-hidden flex">
+        <div
+          className="h-full bg-emerald-500"
+          style={{ width: `${fullPct}%` }}
+          data-testid="rcc-progress-full"
+        />
+        <div
+          className="h-full bg-amber-400"
+          style={{ width: `${partialPct}%` }}
+          data-testid="rcc-progress-partial"
+        />
+      </div>
+      {hasPartials ? (
+        <span>
+          <span data-testid="rcc-full-count">{fullLines} full</span>
+          {' · '}
+          <span data-testid="rcc-partial-count">{partialLines} partial</span>
+          {' · '}
+          <span data-testid="rcc-open-count">{openLines} open</span>
+        </span>
+      ) : (
+        <span>{fullLines} / {totalLines} lines received</span>
+      )}
     </div>
   );
 }
@@ -411,6 +717,8 @@ function CenterPanel({
     );
   }
 
+  const lines = receipt.lines ?? [];
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="p-3 border-b bg-white dark:bg-gray-950">
@@ -423,9 +731,12 @@ function CenterPanel({
               {receipt.vendorName ?? 'Manual Receipt'} {receipt.vendorPoNumber ? `· PO ${receipt.vendorPoNumber}` : ''}
             </p>
           </div>
-          <Badge variant={receipt.status === 'complete' ? 'default' : 'outline'} className="text-xs">
-            {receipt.status === 'complete' ? 'Complete' : receipt.status === 'in_progress' ? 'In Progress' : receipt.status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <ReceivingProgressBar lines={lines} />
+            <Badge variant={receipt.status === 'complete' ? 'default' : 'outline'} className="text-xs">
+              {receipt.status === 'complete' ? 'Complete' : receipt.status === 'in_progress' ? 'In Progress' : receipt.status}
+            </Badge>
+          </div>
         </div>
         <StepIndicator currentStep={step} totalSteps={5} />
         <div className="text-xs text-gray-500 font-medium">{STEP_LABELS[step]}</div>
@@ -591,6 +902,59 @@ function ShipmentInfoStep({ receipt, onNext, onUpdate }: {
   );
 }
 
+// ── Line Items Banner ─────────────────────────────────────────────────────────
+
+export function LineItemsBanner({ lines }: { lines: ReceiptLine[] }) {
+  const allReceived =
+    lines.length > 0 &&
+    lines.every(line => {
+      const ord = Number(line.orderedQty ?? 0);
+      const rcv = Number(line.receivedQty ?? 0);
+      return ord > 0 && rcv >= ord;
+    });
+
+  const overReceivedCount = lines.filter(line => {
+    const ord = Number(line.orderedQty ?? 0);
+    const rcv = Number(line.receivedQty ?? 0);
+    return ord > 0 && rcv > ord;
+  }).length;
+
+  const fullyReceivedCount = lines.filter(line => {
+    const ord = Number(line.orderedQty ?? 0);
+    const rcv = Number(line.receivedQty ?? 0);
+    return ord > 0 && rcv === ord;
+  }).length;
+
+  const bannerText = (() => {
+    if (!allReceived) return null;
+    if (overReceivedCount === 0) {
+      return `All ${lines.length} line${lines.length !== 1 ? 's' : ''} fully received — ready to finalize`;
+    }
+    const parts: string[] = [];
+    if (fullyReceivedCount > 0)
+      parts.push(`${fullyReceivedCount} line${fullyReceivedCount !== 1 ? 's' : ''} fully received`);
+    parts.push(`${overReceivedCount} line${overReceivedCount !== 1 ? 's' : ''} over-received`);
+    return `${parts.join(', ')} — ready to finalize`;
+  })();
+
+  return (
+    <>
+      {allReceived && (
+        <div data-testid="line-items-completion-banner" className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/20 dark:border-green-700 px-3 py-2 text-green-800 dark:text-green-300 text-xs font-medium">
+          <Check className="w-3.5 h-3.5 shrink-0" />
+          {bannerText}
+        </div>
+      )}
+      {overReceivedCount > 0 && (
+        <div data-testid="line-items-over-received-warning" className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2 text-amber-800 dark:text-amber-300 text-xs font-medium">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          {overReceivedCount} line{overReceivedCount !== 1 ? 's' : ''} received more than ordered — verify quantities before finalizing
+        </div>
+      )}
+    </>
+  );
+}
+
 // Step 2: Line Items
 interface PurchasedItem {
   agPartNumber: string;
@@ -598,7 +962,7 @@ interface PurchasedItem {
   purchaseUnit: string | null;
 }
 
-function LineItemsStep({ receipt, onNext, onUpdate }: {
+export function LineItemsStep({ receipt, onNext, onUpdate }: {
   receipt: Receipt;
   onNext: () => void;
   onUpdate: (r: Receipt) => void;
@@ -610,6 +974,48 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
   const [newLine, setNewLine] = useState({ agPartNumber: '', description: '', orderedQty: '', receivedQty: '', uom: 'EA' });
   const [partComboOpen, setPartComboOpen] = useState(false);
   const [partSearch, setPartSearch] = useState('');
+  type SortCol = 'partNumber' | 'description' | 'ordered' | 'received' | 'status';
+  const SORT_COL_KEY = 'receivingLines_sortCol';
+  const SORT_DIR_KEY = 'receivingLines_sortDir';
+  const [sortCol, setSortColState] = useState<SortCol | null>(() => {
+    const stored = localStorage.getItem(SORT_COL_KEY);
+    return (stored as SortCol | null) ?? null;
+  });
+  const [sortDir, setSortDirState] = useState<'asc' | 'desc'>(() => {
+    const stored = localStorage.getItem(SORT_DIR_KEY);
+    return stored === 'desc' ? 'desc' : 'asc';
+  });
+
+  function setSortCol(col: SortCol | null) {
+    setSortColState(col);
+    if (col === null) {
+      localStorage.removeItem(SORT_COL_KEY);
+    } else {
+      localStorage.setItem(SORT_COL_KEY, col);
+    }
+  }
+
+  function setSortDir(dir: 'asc' | 'desc' | ((prev: 'asc' | 'desc') => 'asc' | 'desc')) {
+    setSortDirState(prev => {
+      const next = typeof dir === 'function' ? dir(prev) : dir;
+      localStorage.setItem(SORT_DIR_KEY, next);
+      return next;
+    });
+  }
+
+  function handleHeaderClick(col: SortCol) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
+  }
+
+  function SortIcon({ col }: { col: SortCol }) {
+    if (sortCol !== col) return <span className="ml-1 opacity-30">↕</span>;
+    return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  }
 
   const { data: purchasedItems = [] } = useQuery<PurchasedItem[]>({
     queryKey: ['/api/inventory/items/purchased'],
@@ -655,35 +1061,59 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
 
   return (
     <div className="space-y-3">
+      <LineItemsBanner lines={lines} />
       {lines.length > 0 && (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-xs">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="text-left p-2 font-medium">Part #</th>
-                <th className="text-left p-2 font-medium">Description</th>
-                <th className="text-right p-2 font-medium">Ordered</th>
-                <th className="text-right p-2 font-medium">Received</th>
-                <th className="text-center p-2 font-medium">Status</th>
+                <th className="text-left p-2 font-medium">
+                  <button className="flex items-center hover:text-blue-600 transition-colors" onClick={() => handleHeaderClick('partNumber')}>
+                    Part #<SortIcon col="partNumber" />
+                  </button>
+                </th>
+                <th className="text-left p-2 font-medium">
+                  <button className="flex items-center hover:text-blue-600 transition-colors" onClick={() => handleHeaderClick('description')}>
+                    Description<SortIcon col="description" />
+                  </button>
+                </th>
+                <th className="text-right p-2 font-medium">
+                  <button className="flex items-center justify-end w-full hover:text-blue-600 transition-colors" onClick={() => handleHeaderClick('ordered')}>
+                    Ordered<SortIcon col="ordered" />
+                  </button>
+                </th>
+                <th className="text-right p-2 font-medium">
+                  <button className="flex items-center justify-end w-full hover:text-blue-600 transition-colors" onClick={() => handleHeaderClick('received')}>
+                    Received<SortIcon col="received" />
+                  </button>
+                </th>
+                <th className="text-center p-2 font-medium">
+                  <button className="flex items-center justify-center w-full hover:text-blue-600 transition-colors" onClick={() => handleHeaderClick('status')}>
+                    Status<SortIcon col="status" />
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {lines.map(line => {
+              {[...lines].sort((a, b) => compareReceiptLines(a, b, { sortCol, sortDir })).map(line => {
+                const statusInfo = getLineStatus(line.orderedQty, line.receivedQty);
+                const { isComplete, rowClassName } = statusInfo;
                 const ord = Number(line.orderedQty ?? 0);
                 const rcv = Number(line.receivedQty ?? 0);
-                const isOver = rcv > ord && ord > 0;
-                const isPartial = rcv < ord && rcv > 0;
-                const isComplete = ord > 0 && rcv >= ord;
                 const isEditing = editingLineId === line.id;
                 return (
-                  <tr key={line.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="p-2 font-mono text-blue-600">{line.agPartNumber}</td>
-                    <td className="p-2 text-gray-700 dark:text-gray-300 max-w-[100px] truncate">{line.description}</td>
-                    <td className="p-2 text-right">{ord > 0 ? `${ord} ${line.uom}` : '—'}</td>
+                  <tr
+                    key={line.id}
+                    className={`border-t hover:bg-gray-50 dark:hover:bg-gray-800/50 ${rowClassName}`}
+                  >
+                    <td className={`p-2 font-mono text-blue-600 ${isComplete ? 'opacity-60' : ''}`}>{line.agPartNumber}</td>
+                    <td className={`p-2 text-gray-700 dark:text-gray-300 max-w-[100px] truncate ${isComplete ? 'opacity-60' : ''}`}>{line.description}</td>
+                    <td className={`p-2 text-right ${isComplete ? 'opacity-60' : ''}`}>{ord > 0 ? `${ord} ${line.uom}` : '—'}</td>
                     <td className="p-2 text-right">
                       {isEditing ? (
                         <div className="flex items-center gap-1 justify-end">
                           <Input
+                            data-testid={`line-edit-input-${line.id}`}
                             className="h-5 w-16 text-xs text-right p-1"
                             type="number"
                             step="0.001"
@@ -691,16 +1121,17 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
                             onChange={e => setEditQty(e.target.value)}
                             autoFocus
                           />
-                          <Button size="sm" className="h-5 w-5 p-0" onClick={() => updateReceivedQtyMutation.mutate({ lineId: line.id, receivedQty: editQty, orderedQty: line.orderedQty ?? undefined })}>
+                          <Button data-testid={`line-edit-save-${line.id}`} size="sm" className="h-5 w-5 p-0" onClick={() => updateReceivedQtyMutation.mutate({ lineId: line.id, receivedQty: editQty, orderedQty: line.orderedQty ?? undefined })}>
                             <Check className="w-2.5 h-2.5" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={() => setEditingLineId(null)}>
+                          <Button data-testid={`line-edit-cancel-${line.id}`} size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={() => setEditingLineId(null)}>
                             <X className="w-2.5 h-2.5" />
                           </Button>
                         </div>
                       ) : (
                         <span
-                          className="cursor-pointer hover:underline"
+                          data-testid={`line-qty-display-${line.id}`}
+                          className={`cursor-pointer hover:underline ${isComplete ? 'opacity-60' : ''}`}
                           onClick={() => { setEditingLineId(line.id); setEditQty(String(rcv)); }}
                           title="Click to edit received qty"
                         >
@@ -709,10 +1140,7 @@ function LineItemsStep({ receipt, onNext, onUpdate }: {
                       )}
                     </td>
                     <td className="p-2 text-center">
-                      {isOver && <Badge className="bg-orange-100 text-orange-700 text-xs">Over</Badge>}
-                      {isPartial && <Badge className="bg-yellow-100 text-yellow-700 text-xs">Partial</Badge>}
-                      {isComplete && <Badge className="bg-green-100 text-green-700 text-xs">Complete</Badge>}
-                      {!ord && <Badge variant="outline" className="text-xs">Manual</Badge>}
+                      <LineStatusBadge orderedQty={line.orderedQty} receivedQty={line.receivedQty} />
                     </td>
                   </tr>
                 );
@@ -881,14 +1309,57 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
     inventoryItem?.traceabilityRequired
   );
 
+  // New per-field config takes priority over legacy traceabilityFields when present
+  const rawFieldConfig: Record<string, 'required' | 'optional' | 'hidden'> | null =
+    inventoryItem?.traceabilityFieldConfig && Object.keys(inventoryItem.traceabilityFieldConfig).length > 0
+      ? inventoryItem.traceabilityFieldConfig
+      : null;
+
+  const configuredFields = rawFieldConfig
+    ? TRACE_CONFIG_FIELDS.filter(f => (rawFieldConfig[f.key] ?? 'optional') !== 'hidden').map(f => ({
+        ...f,
+        required: (rawFieldConfig[f.key] ?? 'optional') === 'required',
+      }))
+    : null; // null = fall back to legacy traceFields behavior
+
   const [splitCount, setSplitCount] = useState('2');
   const [showSplitDialog, setShowSplitDialog] = useState(false);
+  const [splitMode, setSplitMode] = useState<'equal' | 'by_rolls'>('equal');
+  const [rollSqms, setRollSqms] = useState<string[]>(['', '']);
+  const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
+
+  const deleteUnitMutation = useMutation({
+    mutationFn: (unitId: number) => apiRequest(`/api/receipts/${receipt.id}/units/${unitId}`, {
+      method: 'DELETE',
+    }),
+    onSuccess: async () => {
+      const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+      onUpdate(updated);
+      setConfirmDeleteUnitId(null);
+      toast.success('Unit removed');
+    },
+    onError: (err: any) => {
+      setConfirmDeleteUnitId(null);
+      toast.error(err?.message ?? 'Failed to remove unit');
+    },
+  });
 
   const addUnitMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/receipts/${receipt.id}/lines/${selectedLineId}/units`, {
-      method: 'POST',
-      body: JSON.stringify(unitForm),
-    }),
+    mutationFn: () => {
+      // Strip hidden fields from payload before sending to avoid persisting data the part config excludes
+      const payload: Record<string, string> = { ...unitForm };
+      if (rawFieldConfig && Object.keys(rawFieldConfig).length > 0) {
+        for (const f of TRACE_CONFIG_FIELDS) {
+          if ((rawFieldConfig[f.key] ?? 'optional') === 'hidden') {
+            delete payload[f.key];
+          }
+        }
+      }
+      return apiRequest(`/api/receipts/${receipt.id}/lines/${selectedLineId}/units`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
     onSuccess: async () => {
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
@@ -899,15 +1370,26 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
   });
 
   const splitLineMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/receipts/${receipt.id}/lines/${selectedLineId}/split`, {
-      method: 'POST',
-      body: JSON.stringify({ count: parseInt(splitCount, 10) }),
-    }),
+    mutationFn: () => {
+      const payload: Record<string, unknown> = { count: parseInt(splitCount, 10) };
+      if (splitMode === 'by_rolls') {
+        payload.sqmPerRollArray = rollSqms.map(v => parseFloat(v));
+      }
+      return apiRequest(`/api/receipts/${receipt.id}/lines/${selectedLineId}/split`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
     onSuccess: async () => {
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
       setShowSplitDialog(false);
-      toast.success(`Line split into ${splitCount} equal units`);
+      if (splitMode === 'by_rolls') {
+        const totalSqm = rollSqms.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+        toast.success(`Created ${splitCount} roll units — ${totalSqm.toFixed(3)} ${selectedLine?.uom ?? ''} total`);
+      } else {
+        toast.success(`Line split into ${splitCount} equal units`);
+      }
     },
     onError: (err: any) => toast.error(err?.message ?? 'Failed to split line'),
   });
@@ -955,6 +1437,8 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       <div className="space-y-1">
         {lineUnits.map(unit => {
           const expStatus = getExpirationStatus(unit.expirationDate);
+          const isPending = unit.disposition === 'pending_inspection';
+          const isConfirmingDelete = confirmDeleteUnitId === unit.id;
           return (
             <div key={unit.id} className={`flex items-center justify-between border rounded p-2 text-xs ${expStatus === 'expired' ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : expStatus === 'near_expiry' ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : ''}`}>
               <div className="flex-1 min-w-0">
@@ -970,14 +1454,43 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
               </div>
               <div className="flex items-center gap-1 ml-2">
                 <DispositionBadge disposition={unit.disposition} />
-                <Button
-                  variant="ghost" size="sm" className="h-5 px-1 text-xs"
-                  title="Clone unit"
-                  onClick={() => cloneUnitMutation.mutate(unit.id)}
-                  disabled={cloneUnitMutation.isPending}
-                >
-                  <Plus className="w-2.5 h-2.5" />
-                </Button>
+                {isConfirmingDelete ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-red-600 text-xs">Remove?</span>
+                    <Button
+                      variant="destructive" size="sm" className="h-5 px-1.5 text-xs"
+                      onClick={() => deleteUnitMutation.mutate(unit.id)}
+                      disabled={deleteUnitMutation.isPending}
+                    >
+                      {deleteUnitMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : 'Yes'}
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm" className="h-5 px-1 text-xs"
+                      onClick={() => setConfirmDeleteUnitId(null)}
+                    >
+                      No
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant="ghost" size="sm" className="h-5 px-1 text-xs"
+                      title="Clone unit"
+                      onClick={() => cloneUnitMutation.mutate(unit.id)}
+                      disabled={cloneUnitMutation.isPending}
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm" className="h-5 px-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title={isPending ? 'Remove unit' : 'Cannot remove — unit has been dispositioned'}
+                      onClick={() => isPending && setConfirmDeleteUnitId(unit.id)}
+                      disabled={!isPending || cloneUnitMutation.isPending}
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -987,32 +1500,126 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       {/* Split line helper */}
       {selectedLineId && !showAddUnit && (
         <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setShowSplitDialog(true)}>
-          <ChevronDown className="w-3 h-3 mr-1" /> Split Line into Equal Units
+          <ChevronDown className="w-3 h-3 mr-1" /> Split Line into Units
         </Button>
       )}
 
       {/* Split dialog */}
-      <Dialog open={showSplitDialog} onOpenChange={setShowSplitDialog}>
+      <Dialog open={showSplitDialog} onOpenChange={open => { setShowSplitDialog(open); if (!open) { setSplitMode('equal'); setSplitCount('2'); setRollSqms(['', '']); } }}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-sm">Split Line into Units</DialogTitle>
             <DialogDescription className="text-xs">
-              Divides the received quantity equally across N units, each with a unique barcode.
+              Choose how to split this line into individual traceable units.
             </DialogDescription>
           </DialogHeader>
-          <div>
-            <Label className="text-xs">Number of units</Label>
-            <Input
-              type="number" min="2" max="200"
-              className="h-8 text-xs mt-1"
-              value={splitCount}
-              onChange={e => setSplitCount(e.target.value)}
-            />
+          <div className="space-y-3">
+            {/* Mode selector */}
+            <div>
+              <Label className="text-xs">Split mode</Label>
+              <Select value={splitMode} onValueChange={v => {
+                const next = v as 'equal' | 'by_rolls';
+                setSplitMode(next);
+                if (next === 'by_rolls') {
+                  const n = Math.max(2, Math.min(200, parseInt(splitCount, 10) || 2));
+                  setRollSqms(prev => {
+                    const arr = Array(n).fill('');
+                    for (let i = 0; i < Math.min(prev.length, n); i++) arr[i] = prev[i];
+                    return arr;
+                  });
+                }
+              }}>
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="equal">Equal split — divide total quantity evenly</SelectItem>
+                  <SelectItem value="by_rolls">By rolls — enter SQM per roll</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {splitMode === 'equal' ? (
+              <div>
+                <Label className="text-xs">Number of units</Label>
+                <Input
+                  type="number" min="2" max="200"
+                  className="h-8 text-xs mt-1"
+                  value={splitCount}
+                  onChange={e => setSplitCount(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Each unit will receive {selectedLine ? (parseFloat(selectedLine.receivedQty || '0') / (parseInt(splitCount, 10) || 1)).toFixed(3) : '—'} {selectedLine?.uom ?? ''}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Number of rolls</Label>
+                  <Input
+                    type="number" min="2" max="200"
+                    className="h-8 text-xs mt-1"
+                    value={splitCount}
+                    onChange={e => {
+                      const n = Math.max(2, Math.min(200, parseInt(e.target.value, 10) || 2));
+                      setSplitCount(String(n));
+                      setRollSqms(prev => {
+                        const next = Array(n).fill('');
+                        for (let i = 0; i < Math.min(prev.length, n); i++) next[i] = prev[i];
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {rollSqms.map((val, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Label className="text-xs w-14 shrink-0">Roll {idx + 1}</Label>
+                      <Input
+                        type="number" min="0.001" step="0.001"
+                        className="h-7 text-xs"
+                        placeholder="e.g. 50"
+                        value={val}
+                        onChange={e => setRollSqms(prev => {
+                          const next = [...prev];
+                          next[idx] = e.target.value;
+                          return next;
+                        })}
+                      />
+                      <span className="text-xs text-gray-400 shrink-0">{selectedLine?.uom ?? ''}</span>
+                    </div>
+                  ))}
+                </div>
+                {(() => {
+                  const total = rollSqms.reduce((sum, v) => {
+                    const n = parseFloat(v);
+                    return sum + (Number.isFinite(n) && n > 0 ? n : 0);
+                  }, 0);
+                  return (
+                    <p className="text-xs text-gray-500">
+                      Total: {total.toFixed(3)} {selectedLine?.uom ?? ''} across {rollSqms.length} rolls
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowSplitDialog(false)}>Cancel</Button>
-            <Button size="sm" onClick={() => splitLineMutation.mutate()} disabled={splitLineMutation.isPending || parseInt(splitCount) < 2}>
-              {splitLineMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : `Create ${splitCount} Units`}
+            <Button
+              size="sm"
+              onClick={() => splitLineMutation.mutate()}
+              disabled={
+                splitLineMutation.isPending ||
+                parseInt(splitCount, 10) < 2 ||
+                (splitMode === 'by_rolls' && rollSqms.some(v => { const n = parseFloat(v); return !Number.isFinite(n) || n <= 0; }))
+              }
+            >
+              {splitLineMutation.isPending
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : splitMode === 'by_rolls'
+                  ? `Create ${splitCount} Roll Units`
+                  : `Create ${splitCount} Equal Units`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1043,8 +1650,34 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
             </div>
           </div>
 
-          {/* Dynamic traceability fields */}
-          {traceFields.length > 0 && (
+          {/* Traceability fields — per-field config takes priority over legacy */}
+          {configuredFields !== null ? (
+            configuredFields.length > 0 ? (
+              <div className="border-t pt-2 mt-2">
+                <div className="text-xs font-medium text-gray-600 mb-2">Traceability Fields</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {configuredFields.map(field => (
+                    <div key={field.key}>
+                      <Label className="text-xs">
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </Label>
+                      <Input
+                        className="h-7 text-xs mt-0.5"
+                        type={field.type}
+                        value={unitForm[field.key] ?? ''}
+                        onChange={e => setUnitForm(f => ({ ...f, [field.key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="border-t pt-2 mt-2 text-xs text-muted-foreground">
+                All traceability fields are set to Not Captured for this part.
+              </div>
+            )
+          ) : traceFields.length > 0 ? (
             <div className="border-t pt-2 mt-2">
               <div className="text-xs font-medium text-gray-600 mb-2">Traceability Fields</div>
               <div className="grid grid-cols-2 gap-2">
@@ -1061,10 +1694,7 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                 ))}
               </div>
             </div>
-          )}
-
-          {/* Manual traceability fields if no config */}
-          {traceFields.length === 0 && (
+          ) : (
             <div className="grid grid-cols-2 gap-2">
               {[
                 { key: 'lotNumber', label: 'Lot #', type: 'text' },
@@ -1083,7 +1713,22 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
           )}
 
           <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" onClick={() => addUnitMutation.mutate()} disabled={addUnitMutation.isPending}>
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                if (configuredFields !== null) {
+                  const missing = configuredFields
+                    .filter(f => f.required && !unitForm[f.key]?.trim())
+                    .map(f => f.label);
+                  if (missing.length > 0) {
+                    toast.error(`Required fields missing: ${missing.join(', ')}`);
+                    return;
+                  }
+                }
+                addUnitMutation.mutate();
+              }}
+              disabled={addUnitMutation.isPending}>
               {addUnitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add Unit'}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAddUnit(false)}>Cancel</Button>
@@ -1269,18 +1914,85 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
 }
 
 // Step 5: Putaway
-function PutawayStep({ receipt, onComplete, onUpdate }: {
+export function PutawayStep({ receipt, onComplete, onUpdate }: {
   receipt: Receipt;
   onComplete: () => void;
   onUpdate: (r: Receipt) => void;
 }) {
   const units = receipt.units ?? [];
+  const queryClient = useQueryClient();
+
+  const NONE_SENTINEL = '__none__';
 
   const [batchLocation, setBatchLocation] = useState('');
   const [batchFreezer, setBatchFreezer] = useState('');
   const [batchAllocType, setBatchAllocType] = useState('stock');
   const [batchAllocId, setBatchAllocId] = useState('');
   const [batchPending, setBatchPending] = useState(false);
+  const [selectedDeptId, setSelectedDeptId] = useState(
+    receipt.departmentId ? String(receipt.departmentId) : NONE_SENTINEL,
+  );
+  const [deptApplyPending, setDeptApplyPending] = useState(false);
+
+  const { data: departments = [] } = useQuery<InventoryDepartment[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
+
+  const applyDeptDefaults = async (dept: InventoryDepartment | null, newLocation: string | null, newFreezer: number | null, silent = false) => {
+    if (!dept || (newLocation == null && newFreezer == null)) return;
+    const unitsToFill = units.filter(u => (newLocation != null && !u.location) || (newFreezer != null && u.freezerNumber == null));
+    if (unitsToFill.length === 0) return;
+    setDeptApplyPending(true);
+    try {
+      await Promise.all(unitsToFill.map(u =>
+        apiRequest(`/api/receipts/${receipt.id}/units/${u.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            location: newLocation,
+            freezerNumber: newFreezer,
+          }),
+        })
+      ));
+      const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+      onUpdate(updated);
+      if (!silent) toast.success(`Applied department defaults to ${unitsToFill.length} unit(s)`);
+    } catch {
+      if (!silent) toast.error('Failed to apply department defaults to units');
+    } finally {
+      setDeptApplyPending(false);
+    }
+  };
+
+  // Auto-apply defaults on mount if receipt already has an associated department
+  useEffect(() => {
+    if (!receipt.departmentId || departments.length === 0) return;
+    const dept = departments.find(d => d.id === receipt.departmentId);
+    if (!dept) return;
+    const loc = dept.defaultReceivingLocation ?? null;
+    const frz = dept.defaultReceivingFreezer ?? null;
+    setBatchLocation(loc ?? '');
+    setBatchFreezer(frz != null ? String(frz) : '');
+    applyDeptDefaults(dept, loc, frz, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departments]);
+
+  const handleDeptChange = async (deptId: string) => {
+    setSelectedDeptId(deptId);
+    const dept = deptId === NONE_SENTINEL ? null : departments.find(d => String(d.id) === deptId) ?? null;
+    const newLocation = dept?.defaultReceivingLocation ?? null;
+    const newFreezer = dept?.defaultReceivingFreezer ?? null;
+
+    setBatchLocation(newLocation ?? '');
+    setBatchFreezer(newFreezer != null ? String(newFreezer) : '');
+
+    await Promise.all([
+      apiRequest(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ departmentId: dept ? dept.id : null }),
+      }),
+      applyDeptDefaults(dept, newLocation, newFreezer),
+    ]);
+  };
 
   const updateUnitMutation = useMutation({
     mutationFn: ({ unitId, updates }: { unitId: number; updates: Record<string, any> }) =>
@@ -1329,6 +2041,9 @@ function PutawayStep({ receipt, onComplete, onUpdate }: {
     }),
     onSuccess: (data) => {
       onUpdate({ ...receipt, ...data });
+      for (const key of getRccCompleteInvalidationKeys(receipt.vendorPoId)) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
       onComplete();
     },
     onError: () => toast.error('Failed to complete receipt'),
@@ -1336,6 +2051,42 @@ function PutawayStep({ receipt, onComplete, onUpdate }: {
 
   return (
     <div className="space-y-3">
+      {/* Department auto-fill selector */}
+      {departments.length > 0 && (
+        <div className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-900 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">Department Defaults</div>
+            {deptApplyPending && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+          </div>
+          <div>
+            <Label className="text-xs">Select Department to Auto-fill Location &amp; Freezer</Label>
+            <Select value={selectedDeptId} onValueChange={handleDeptChange} disabled={deptApplyPending}>
+              <SelectTrigger className="h-7 text-xs mt-0.5">
+                <SelectValue placeholder="Choose department..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_SENTINEL}>None</SelectItem>
+                {departments.map(dept => (
+                  <SelectItem key={dept.id} value={String(dept.id)}>
+                    {dept.name}
+                    {(dept.defaultReceivingLocation || dept.defaultReceivingFreezer != null) && (
+                      <span className="text-gray-400 ml-1">
+                        ({[dept.defaultReceivingLocation, dept.defaultReceivingFreezer != null ? `Freezer ${dept.defaultReceivingFreezer}` : null].filter(Boolean).join(', ')})
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedDeptId !== NONE_SENTINEL && (
+            <div className="text-xs text-gray-400">
+              Defaults applied to all pending units. Override individual units below if needed.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Batch assign controls */}
       {units.length > 1 && (
         <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950 space-y-2">

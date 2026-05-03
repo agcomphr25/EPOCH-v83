@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -51,7 +52,6 @@ import {
   AlertTriangle,
   FileText,
   Eye,
-  TrendingDown,
   Edit,
   Zap,
   ExternalLink,
@@ -61,6 +61,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { format, isAfter } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
@@ -69,6 +70,7 @@ import { useLocation, Link } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
+import OrderActionButtons from '@/components/OrderActionButtons';
 import { deriveOrderLabels, logBarcodeDebug } from '@/utils/deriveOrderLabels';
 
 // Kickback form validation schema
@@ -127,6 +129,11 @@ export default function BarcodeQueuePage() {
   });
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -325,7 +332,7 @@ export default function BarcodeQueuePage() {
       cleanedName = cleanedName.replace(/-Tikka$/i, '').replace(/\s+Tikka$/i, '');
 
       const labels = deriveOrderLabels(order);
-      const materialLabel = order.materialCanonical || labels.materialLabel;
+      const materialLabel = labels.materialLabel;
       const actionLabelPart = labels.actionLengthRaw !== 'unknown' ? labels.actionLabel : '';
       const categoryKey = actionLabelPart
         ? `${cleanedName} - ${actionLabelPart}`
@@ -839,6 +846,8 @@ export default function BarcodeQueuePage() {
       {/* Barcode Scanner */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
+      <ReturnsRepairsSection repairDepartment="Barcode" />
+
       {/* Order Search Box */}
       <Card>
         <CardContent className="p-4">
@@ -922,7 +931,7 @@ export default function BarcodeQueuePage() {
               const orderLabels = deriveOrderLabels(order);
               const actionLength = orderLabels.actionLengthRaw;
               const isTikka = orderLabels.isTikka;
-              const materialType = order.materialCanonical || orderLabels.materialLabel;
+              const materialType = orderLabels.materialLabel;
               const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
               const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
               const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
@@ -994,12 +1003,12 @@ export default function BarcodeQueuePage() {
                             <Link href={`/order-entry?draft=${order.orderId}`}>
                               <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order"><Edit className="h-3 w-3" /></Button>
                             </Link>
-                            <Button variant="outline" size="sm" className="h-6 w-6 p-0 ml-1" title="View Sales Order" onClick={(e) => { e.stopPropagation(); handleSalesOrderView(order.orderId); }}>
-                              <FileText className="w-3 h-3" />
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-6 w-6 p-0 ml-1" title="Report Kickback" onClick={(e) => { e.stopPropagation(); handleKickbackClick(order.orderId); }}>
-                              <TrendingDown className="h-3 w-3" />
-                            </Button>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                            />
                           </div>
                         </div>
                       </div>
@@ -1040,7 +1049,7 @@ export default function BarcodeQueuePage() {
                     const orderLabels = deriveOrderLabels(order);
                     const actionLength = orderLabels.actionLengthRaw;
                     const isTikka = orderLabels.isTikka;
-                    const materialType = order.materialCanonical || orderLabels.materialLabel;
+                    const materialType = orderLabels.materialLabel;
                     const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                     const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                     const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
@@ -1114,12 +1123,12 @@ export default function BarcodeQueuePage() {
                                 <Edit className="h-3 w-3" />
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Sales Order" onClick={(e) => { e.stopPropagation(); handleSalesOrderView(order.orderId); }}>
-                              <FileText className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Kickback" onClick={(e) => { e.stopPropagation(); handleKickbackClick(order.orderId); }}>
-                              <TrendingDown className="h-3 w-3" />
-                            </Button>
+                            <OrderActionButtons
+                              orderId={order.orderId}
+                              onSalesOrderView={handleSalesOrderView}
+                              onReportKickback={handleKickbackClick}
+                              showReassignButton={isAdmin}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -1209,7 +1218,7 @@ export default function BarcodeQueuePage() {
                       const orderLabels = deriveOrderLabels(order);
                       const actionLength = orderLabels.actionLengthRaw;
                       const isTikka = orderLabels.isTikka;
-                      const materialType = order.materialCanonical || orderLabels.materialLabel;
+                      const materialType = orderLabels.materialLabel;
                       const lopVal = (() => { const l = order.features?.length_of_pull; return l?.includes('lop_adj_') ? (l.match(/lop_adj_([\d.]+)/)?.[1] ?? null) : null; })();
                       const hasHeavyFill = (() => { const f = order.features; if (!f) return false; const opts = f.other_options; if (Array.isArray(opts) && opts.includes('heavy_fill')) return true; const v = f.heavy_fill || f.heavyFill || f.heavy_fill_option; return v === 'true' || v === true || v === 'yes' || v === 'heavy_fill'; })();
                       const hasADL = typeof order.features?.bottom_metal === 'string' && order.features.bottom_metal.toLowerCase().includes('adl');
@@ -1424,30 +1433,12 @@ export default function BarcodeQueuePage() {
                                                 <Edit className="h-3 w-3" />
                                               </Button>
                                             </Link>
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="h-6 w-6 p-0 ml-1"
-                                              title="View Sales Order"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleSalesOrderView(order.orderId);
-                                              }}
-                                            >
-                                              <FileText className="w-3 h-3" />
-                                            </Button>
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleKickbackClick(order.orderId);
-                                              }}
-                                              title="Report Kickback"
-                                              className="h-6 w-6 p-0 ml-1"
-                                            >
-                                              <TrendingDown className="h-3 w-3" />
-                                            </Button>
+                                            <OrderActionButtons
+                                              orderId={order.orderId}
+                                              onSalesOrderView={handleSalesOrderView}
+                                              onReportKickback={handleKickbackClick}
+                                              showReassignButton={isAdmin}
+                                            />
                                           </div>
                                         </div>
                                       </AccordionContent>
@@ -1552,7 +1543,7 @@ export default function BarcodeQueuePage() {
                             const orderLabels2 = deriveOrderLabels(order);
                             const actionLength = orderLabels2.actionLengthRaw;
                             const isTikka = orderLabels2.isTikka;
-                            const materialType = order.materialCanonical || orderLabels2.materialLabel;
+                            const materialType = orderLabels2.materialLabel;
 
                             // Check if this is a PO order (no label printing needed)
                             const isPOOrder = order.orderId.startsWith('PO-');
@@ -1687,30 +1678,11 @@ export default function BarcodeQueuePage() {
                                             <Edit className="h-3 w-3" />
                                           </Button>
                                         </Link>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-6 w-6 p-0 ml-1"
-                                          title="View Sales Order"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleSalesOrderView(order.orderId);
-                                          }}
-                                        >
-                                          <FileText className="w-3 h-3" />
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleKickbackClick(order.orderId);
-                                          }}
-                                          title="Report Kickback"
-                                          className="h-6 w-6 p-0 ml-1"
-                                        >
-                                          <TrendingDown className="h-3 w-3" />
-                                        </Button>
+                                        <OrderActionButtons
+                                          orderId={order.orderId}
+                                          onSalesOrderView={handleSalesOrderView}
+                                          onReportKickback={handleKickbackClick}
+                                        />
                                       </div>
 
                                       <div className="flex items-center gap-2">

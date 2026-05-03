@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import useScanner from '../hooks/useScanner';
@@ -21,6 +22,7 @@ import { useBarcodeInput } from '@/hooks/useBarcodeInput';
 import { CameraScanner } from '@/components/CameraScanner';
 
 export default function InventoryScanner() {
+  const [, setLocation] = useLocation();
   const scannedCode = useScanner();
   const queryClient = useQueryClient();
   const [showCameraScanner, setShowCameraScanner] = useState(false);
@@ -69,7 +71,7 @@ export default function InventoryScanner() {
         toast('Redirecting to Order Scanner...', { icon: '🔄' });
         // Redirect to barcode scanner page with the scanned code
         setTimeout(() => {
-          window.location.href = `/barcode-scanner?scan=${encodeURIComponent(scannedBarcode)}`;
+          setLocation(`/barcode-scanner?scan=${encodeURIComponent(scannedBarcode)}`);
         }, 1000);
       } else {
         // Regular inventory item

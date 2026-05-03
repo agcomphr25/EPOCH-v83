@@ -38,7 +38,8 @@ import {
   ChevronDown,
   ChevronRight,
   Filter,
-  X
+  X,
+  Lock
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -102,11 +103,16 @@ interface PartRouting {
 }
 
 export default function P2ControlCenter() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;
   const unitsFromUrl = urlParams.get('units') || undefined;
+  const searchFromUrl = urlParams.get('search') || '';
+  // WAD context: passed from project workflow card
+  const wadProjectId = urlParams.get('projectId') || '';
+  const wadProjectName = urlParams.get('projectName') || '';
+  const wadPoId = urlParams.get('poId') || '';
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
 
   useEffect(() => {
@@ -131,7 +137,46 @@ export default function P2ControlCenter() {
     refetchInterval: 30000,
   });
 
-  const { data: allPOStatuses = [] } = useQuery<{ id: number; poNumber: string; customerName: string; status: string }[]>({
+  const { data: pipelineProjects = [] } = useQuery<{
+    projectId: string;
+    projectCode: string;
+    projectName: string;
+    currentStage: string;
+    maxAllowedStageKey?: string;
+    closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
+  }[]>({
+    queryKey: ['/api/projects/pipeline'],
+    refetchInterval: 60000,
+  });
+
+  const closingAggregate = pipelineProjects.reduce(
+    (acc, p) => {
+      const s = p.closingStatus ?? 'MISSING';
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  // Per-step gate lock counts: projects at their maxAllowedStageKey ceiling (can't advance)
+  // Maps conceptual Control Center step → which pipeline stage(s) to check
+  const STAGE_GATE_CEILING: Record<string, string[]> = {
+    step1: ['quote_submitted'],        // Can't advance to purchase_review (needs Quote)
+    step2: ['purchase_review'],        // Can't advance to po_received (needs Purchase Review)
+    step3: ['po_received'],            // Can't advance to p2_release (needs Preproduction)
+    step3b: ['p2_release'],            // Can't advance to production (needs P2 Release Gate)
+    step4: ['production'],             // Can't advance to completed (needs P2 Order + closing)
+  };
+  const gateBlockedCounts = Object.fromEntries(
+    Object.entries(STAGE_GATE_CEILING).map(([step, stages]) => {
+      const count = pipelineProjects.filter(
+        (p) => stages.includes(p.currentStage) && p.maxAllowedStageKey === p.currentStage
+      ).length;
+      return [step, count];
+    })
+  );
+
+  const { data: allPOStatuses = [] } = useQuery<{ id: number; poNumber: string; customerName: string; status: string; projectId: string | null }[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
     refetchInterval: 30000,
   });
@@ -235,6 +280,21 @@ export default function P2ControlCenter() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {wadProjectId && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 px-4 py-3">
+          <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+          <div className="flex-1 text-sm">
+            <span className="font-medium text-blue-800 dark:text-blue-200">WAD context:</span>
+            <span className="ml-2 text-blue-700 dark:text-blue-300">{wadProjectName || 'Project'}</span>
+            {wadPoId && <span className="ml-2 text-blue-600 dark:text-blue-400">· PO ID {wadPoId}</span>}
+          </div>
+          <Link href={`/projects/${wadProjectId}`}>
+            <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-100">
+              Back to Project
+            </Button>
+          </Link>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">P2 Control Center</h1>
@@ -243,6 +303,20 @@ export default function P2ControlCenter() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {(() => {
+            if (selectedPOIds.length !== 1) return null;
+            const selectedPO = allPOStatuses.find(po => po.id === selectedPOIds[0]);
+            if (!selectedPO?.projectId) return null;
+            return (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/pm-control-center?project=${selectedPO.projectId}`)}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                PM Dashboard
+              </Button>
+            );
+          })()}
           <Link href="/p2-forms">
             <Button variant="outline" data-testid="button-p2-forms">
               <ClipboardList className="h-4 w-4 mr-2" />
@@ -268,6 +342,12 @@ export default function P2ControlCenter() {
                 <div className="text-sm">
                   <div className="font-medium">1. Create PO</div>
                   <div className="text-xs text-muted-foreground">{stats?.openPOs || 0} active</div>
+                  {(gateBlockedCounts['step1'] ?? 0) > 0 && (
+                    <div className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      <Lock className="h-2.5 w-2.5" />
+                      <span>{gateBlockedCounts['step1']} gate blocked</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -278,6 +358,12 @@ export default function P2ControlCenter() {
                 <div className="text-sm">
                   <div className="font-medium">2. Configure BOM</div>
                   <div className="text-xs text-muted-foreground">{stats?.pendingBOMs || 0} pending</div>
+                  {(gateBlockedCounts['step2'] ?? 0) > 0 && (
+                    <div className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      <Lock className="h-2.5 w-2.5" />
+                      <span>{gateBlockedCounts['step2']} gate blocked</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -288,6 +374,12 @@ export default function P2ControlCenter() {
                 <div className="text-sm">
                   <div className="font-medium">3. Schedule</div>
                   <div className="text-xs text-muted-foreground">{stats?.scheduledItems || 0} scheduled</div>
+                  {(gateBlockedCounts['step3'] ?? 0) > 0 && (
+                    <div className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      <Lock className="h-2.5 w-2.5" />
+                      <span>{gateBlockedCounts['step3']} gate blocked</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -298,6 +390,12 @@ export default function P2ControlCenter() {
                 <div className="text-sm">
                   <div className="font-medium">4. Production</div>
                   <div className="text-xs text-muted-foreground">{stats?.inProduction || 0} in progress</div>
+                  {(gateBlockedCounts['step4'] ?? 0) > 0 && (
+                    <div className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      <Lock className="h-2.5 w-2.5" />
+                      <span>{gateBlockedCounts['step4']} gate blocked</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -308,6 +406,51 @@ export default function P2ControlCenter() {
                 <div className="text-sm">
                   <div className="font-medium">5. Complete</div>
                   <div className="text-xs text-muted-foreground">{stats?.completedThisWeek || 0} this week</div>
+                  {pipelineProjects.length > 0 && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {(closingAggregate['COMPLETE'] ?? 0) > 0 && (
+                        <span className="text-[10px] px-1 py-0 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 font-medium">
+                          {closingAggregate['COMPLETE']} Complete
+                        </span>
+                      )}
+                      {(closingAggregate['INCOMPLETE'] ?? 0) > 0 && (
+                        <span className="text-[10px] px-1 py-0 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 font-medium">
+                          {closingAggregate['INCOMPLETE']} Incomplete
+                        </span>
+                      )}
+                      {(closingAggregate['MISSING'] ?? 0) > 0 && (
+                        <span className="text-[10px] px-1 py-0 rounded bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 font-medium">
+                          {closingAggregate['MISSING']} Missing
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {(() => {
+                    const needAttention = pipelineProjects.filter(
+                      p => (p.closingStatus ?? 'MISSING') !== 'COMPLETE'
+                    );
+                    if (needAttention.length === 0) {
+                      return (
+                        <Link href="/projects/pipeline" className="text-[10px] text-primary underline-offset-2 hover:underline mt-0.5 inline-block">
+                          View closing records →
+                        </Link>
+                      );
+                    }
+                    return (
+                      <div className="mt-0.5 space-y-0.5">
+                        {needAttention.slice(0, 3).map(p => (
+                          <Link key={p.projectId} href={`/projects/${p.projectId}/closing`} className="block text-[10px] text-primary underline-offset-2 hover:underline truncate max-w-[120px]">
+                            {p.projectCode} closing →
+                          </Link>
+                        ))}
+                        {needAttention.length > 3 && (
+                          <Link href="/projects/pipeline" className="block text-[10px] text-muted-foreground underline-offset-2 hover:underline">
+                            +{needAttention.length - 3} more →
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -536,7 +679,7 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex flex-wrap w-full">
+        <TabsList className="flex flex-wrap w-full sticky top-0 z-20 bg-background border-b border-border shadow-sm">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
@@ -620,6 +763,7 @@ export default function P2ControlCenter() {
             <P2POManager 
               onManageItems={(poId, poNumber) => setPOItemsView({ poId, poNumber })}
               selectedPOIds={selectedPOIds}
+              initialSearch={searchFromUrl}
             />
           )}
         </TabsContent>

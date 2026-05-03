@@ -2761,7 +2761,8 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
   }
 });
 
-// Diagnostic endpoint to test UPS credentials
+// Diagnostic endpoint to test UPS credentials — not available in production
+if (process.env.NODE_ENV !== 'production') {
 router.get('/test-ups-credentials', async (req: Request, res: Response) => {
   try {
     console.log('Testing UPS credentials...');
@@ -2782,6 +2783,7 @@ router.get('/test-ups-credentials', async (req: Request, res: Response) => {
     });
   }
 });
+} // end NODE_ENV !== 'production'
 
 // API route to update tracking information manually
 router.post(
@@ -2883,7 +2885,8 @@ router.get('/tracking/:orderId', async (req: Request, res: Response) => {
   }
 });
 
-// Debug endpoint for UPS troubleshooting
+// Debug endpoint for UPS troubleshooting — not available in production
+if (process.env.NODE_ENV !== 'production') {
 router.post('/debug-ups-auth', async (req: Request, res: Response) => {
   try {
     console.log('🔍 UPS DEBUG: Starting authentication troubleshooting...');
@@ -2978,6 +2981,7 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
     });
   }
 });
+} // end NODE_ENV !== 'production'
 
 async function addSummaryPage(pdfDoc: any, upsLabels: any[]) {
   const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label

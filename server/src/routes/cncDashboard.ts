@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { pool } from '../../db';
+import { requirePermission } from '../../middleware/requirePermission';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import {
   insertCncScheduleSettingsSchema,
@@ -373,7 +374,7 @@ router.delete('/programs/:id', async (req, res) => {
   }
 });
 
-router.post('/programs/:id/approve', async (req, res) => {
+router.post('/programs/:id/approve', requirePermission('travelers.sign_qc'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const user = (req as any).user;

@@ -55,8 +55,15 @@ async function runSql(sql: string, label: string): Promise<boolean> {
  * Strategy: compare the explicit migration file list against the hashes already
  * recorded in drizzle.__drizzle_migrations. A migration is "pending" if its
  * filename-derived hash is not present in that table OR the table doesn't exist yet.
+ *
+ * BASELINE: All migrations through BASELINE_APPLIED_THROUGH are treated as
+ * already applied unconditionally. These ran before hash-tracking was added
+ * so they have no records in drizzle.__drizzle_migrations, but they are
+ * confirmed applied on production.
  */
 async function getPendingMigrationFiles(migrationsDir: string, knownFiles: string[]): Promise<string[]> {
+  const BASELINE_APPLIED_THROUGH = '0094_labor_entry_drafts.sql';
+
   let appliedHashes: Set<string> = new Set();
   try {
     const result = await pool.query(`SELECT hash FROM drizzle.__drizzle_migrations`);
@@ -67,6 +74,8 @@ async function getPendingMigrationFiles(migrationsDir: string, knownFiles: strin
 
   const pending: string[] = [];
   for (const file of knownFiles) {
+    if (file <= BASELINE_APPLIED_THROUGH) continue;
+
     const filePath = path.join(migrationsDir, file);
     if (!fs.existsSync(filePath)) continue;
     // Use the bare filename (without .sql) as the hash key — matches drizzle-kit convention
@@ -201,28 +210,39 @@ async function main() {
     console.log(`   Found ${migrationFiles.length} migration file(s): ${migrationFiles.join(', ')}`);
   }
 
+  // Compute pending files once — reused in Step 1a, governance gate, and Step 3.
+  // Must happen before Step 2 so the check runs even before the tracking table exists.
+  const pendingFiles = migrationFiles.length > 0
+    ? await getPendingMigrationFiles(migrationsDir, migrationFiles)
+    : [];
+
   // ------------------------------------------------------------------
   // STEP 1a: Fast standalone migration safety check (no DB required)
-  //          Scans all migration SQL for destructive statements and
-  //          logs a human-readable schema diff before any DB contact.
+  //          Scans only PENDING migration SQL for destructive statements.
+  //          Historical (already-applied) migrations are intentionally
+  //          excluded — they were approved at the time they ran.
   //          MIGRATION_SAFE_MODE=true (default) → throws on violations.
   //          MIGRATION_SAFE_MODE=false           → warns and continues.
   // ------------------------------------------------------------------
-  if (migrationFiles.length > 0) {
-    const allMigrationSql = migrationFiles
+  if (pendingFiles.length === 0) {
+    console.log('✅ No pending migrations — nothing to apply');
+  } else {
+    const pendingSql = pendingFiles
       .map(f => {
         const filePath = path.join(migrationsDir, f);
         return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
       })
       .join('\n');
 
-    try {
-      runMigrationSafetyCheck(allMigrationSql, migrationFiles.join(', '));
-    } catch (safetyErr: unknown) {
-      const message = safetyErr instanceof Error ? safetyErr.message : String(safetyErr);
-      console.error(`\n❌ Pre-deploy blocked by migration safety check: ${message}`);
-      await pool.end();
-      process.exit(1);
+    if (pendingSql.trim().length > 0) {
+      try {
+        runMigrationSafetyCheck(pendingSql, pendingFiles.join(', '));
+      } catch (safetyErr: unknown) {
+        const message = safetyErr instanceof Error ? safetyErr.message : String(safetyErr);
+        console.error(`\n❌ Pre-deploy blocked by migration safety check: ${message}`);
+        await pool.end();
+        process.exit(1);
+      }
     }
   }
 
@@ -244,17 +264,29 @@ async function main() {
   `, 'Ensure __drizzle_migrations table');
 
   // ------------------------------------------------------------------
-  // STEP 3: Apply all discovered migration SQL files in sorted order
+  // STEP 3: Apply only PENDING migration SQL files in sorted order.
+  //         After each successful run, record the hash in
+  //         drizzle.__drizzle_migrations so future deploys skip it.
   // ------------------------------------------------------------------
 
   const appliedFiles: string[] = [];
-  for (const file of migrationFiles) {
+  for (const file of pendingFiles) {
     const filePath = path.join(migrationsDir, file);
     const sql = fs.readFileSync(filePath, 'utf-8');
     const succeeded = await runSql(sql, `Migration: ${file}`);
-    // Only record migrations that actually executed successfully
     if (succeeded) {
       appliedFiles.push(file);
+      // Record that this migration was applied so future runs skip it.
+      const hash = file.replace(/\.sql$/, '');
+      try {
+        await pool.query(
+          `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
+          [hash, Date.now()]
+        );
+      } catch (trackErr: unknown) {
+        const msg = trackErr instanceof Error ? trackErr.message : String(trackErr);
+        console.warn(`⚠️  Could not record applied hash for ${file}: ${msg}`);
+      }
     }
   }
 
@@ -283,6 +315,37 @@ async function main() {
     CREATE UNIQUE INDEX IF NOT EXISTS rail_demands_order_rail_unique
     ON rail_demands (order_id, rail_sku)
   `, 'Ensure rail_demands unique index');
+
+  await runSql(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'audit_frequency') THEN
+        CREATE TYPE audit_frequency AS ENUM ('daily', 'weekly', 'bi_weekly', 'monthly');
+      END IF;
+    END $$;
+  `, 'Ensure audit_frequency enum');
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS inventory_audit_settings (
+      id SERIAL PRIMARY KEY,
+      frequency audit_frequency NOT NULL DEFAULT 'weekly',
+      next_audit_date TIMESTAMP,
+      last_audit_date TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `, 'Ensure inventory_audit_settings table');
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS inventory_audit_records (
+      id SERIAL PRIMARY KEY,
+      packet_id INTEGER NOT NULL REFERENCES inventory_items(id),
+      audit_date TIMESTAMP NOT NULL DEFAULT NOW(),
+      system_qty INTEGER NOT NULL,
+      actual_qty INTEGER NOT NULL,
+      variance INTEGER NOT NULL,
+      audited_by TEXT,
+      notes TEXT
+    )
+  `, 'Ensure inventory_audit_records table');
 
   // ------------------------------------------------------------------
   // STEP 4: Quick verification — report remaining integer→uuid mismatches

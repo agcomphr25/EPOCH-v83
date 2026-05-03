@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 import { seedOrderReferenceTables } from '../../seeds/orderReferenceTables';
 import { pool } from '../../db';
 import { DEPARTMENTS } from '../constants/departments';
@@ -10,6 +11,7 @@ import { repairPipelineDrift, batchRepairPipelineDrift } from '../services/pipel
 import { forecastActiveOrders, forecastOrder, simulateNewOrder } from '../services/productionForecastService';
 import { simulateFactoryCompletion, invalidateSimulationCache } from '../services/productionSimulator';
 import { normalizeToTuesday } from '@shared/utils/dateNormalization';
+import { syncEmployeeRoles, findRoleMismatches } from '../migrations/syncEmployeeRoles';
 
 const router = Router();
 
@@ -1471,7 +1473,7 @@ router.get(
 );
 
 // Order → Item Code Lookup
-router.get('/order-lookup', async (req: Request, res: Response) => {
+router.get('/order-lookup', authenticateToken, requirePermission('admin.order_lookup'), async (req: Request, res: Response) => {
   try {
     const { orderId } = req.query as { orderId?: string };
     if (!orderId) return res.status(400).json({ error: 'orderId is required' });
@@ -1935,4 +1937,373 @@ router.post(
   }
 );
 
+
+// ---------------------------------------------------------------------------
+// Role-sync endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/admin/sync-employee-roles
+ * Preview: returns all linked employee↔user pairs where the roles currently differ.
+ * Does NOT write anything.
+ */
+router.get(
+  '/sync-employee-roles',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const mismatches = await findRoleMismatches();
+      res.json({
+        success: true,
+        mismatchCount: mismatches.length,
+        mismatches,
+        message:
+          mismatches.length === 0
+            ? 'All linked user accounts already have the correct role — no action needed.'
+            : `${mismatches.length} mismatch(es) found. POST to this endpoint to apply the fix.`,
+      });
+    } catch (err: any) {
+      console.error('[sync-employee-roles] Error during preview:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/sync-employee-roles
+ * Apply: updates users.role to match employees.user_role for every mismatched pair.
+ * Idempotent — safe to call multiple times.
+ *
+ * Optional body: { dryRun: true } to log but not write.
+ */
+router.post(
+  '/sync-employee-roles',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    try {
+      const dryRun = req.body?.dryRun === true;
+      const result = await syncEmployeeRoles(dryRun);
+      res.json({
+        success: true,
+        dryRun: result.dryRun,
+        mismatchCount: result.mismatches.length,
+        fixed: result.fixed,
+        mismatches: result.mismatches,
+        message: result.dryRun
+          ? `Dry run complete — ${result.mismatches.length} mismatch(es) found, nothing written.`
+          : `Sync complete — ${result.fixed} of ${result.mismatches.length} user account(s) updated.`,
+      });
+    } catch (err: any) {
+      console.error('[sync-employee-roles] Error during apply:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
+// ─── Kiosk User-Link Audit ───────────────────────────────────────────────────
+// GET /api/admin/kiosk/user-link-audit
+// Returns every active employee with their user-account link status so an admin
+// can spot and fix any employees that are invisible on the kiosk.
+// Status values: 'linked' | 'unlinked' | 'inactive_user' | 'multiple_matches'
+// Returns exactly one row per active employee; aggregates linked users.
+router.get(
+  '/kiosk/user-link-audit',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      // Aggregate all users linked to each employee so we can detect
+      // multiple-match situations (more than one active user for an employee).
+      const rows = await pool.query(`
+        SELECT
+          e.id                                    AS "employeeId",
+          e.name                                  AS "employeeName",
+          e.job_title                             AS "jobTitle",
+          COUNT(u.id) FILTER (WHERE u.is_active = true)    AS "activeUserCount",
+          COUNT(u.id) FILTER (WHERE u.is_active = false)   AS "inactiveUserCount",
+          -- Aggregate usernames for display / remediation
+          json_agg(
+            json_build_object('userId', u.id, 'username', u.username, 'isActive', u.is_active)
+          ) FILTER (WHERE u.id IS NOT NULL)       AS "linkedUsers"
+        FROM employees e
+        LEFT JOIN users u ON u.employee_id = e.id
+        WHERE e.is_active = true
+        GROUP BY e.id, e.name, e.job_title
+        ORDER BY e.name
+      `);
+
+      const result = rows.map((row: any) => {
+        const activeCount   = parseInt(row.activeUserCount ?? '0', 10);
+        const inactiveCount = parseInt(row.inactiveUserCount ?? '0', 10);
+        const linkedUsers: { userId: number; username: string; isActive: boolean }[] =
+          row.linkedUsers ?? [];
+
+        let status: 'linked' | 'unlinked' | 'inactive_user' | 'multiple_matches';
+        if (activeCount > 1) {
+          status = 'multiple_matches';
+        } else if (activeCount === 1) {
+          status = 'linked';
+        } else if (inactiveCount > 0) {
+          status = 'inactive_user';
+        } else {
+          status = 'unlinked';
+        }
+
+        const activeUser = linkedUsers.find(u => u.isActive) ?? null;
+
+        return {
+          employeeId:   row.employeeId,
+          employeeName: row.employeeName,
+          jobTitle:     row.jobTitle,
+          status,
+          userId:       activeUser?.userId ?? null,
+          username:     activeUser?.username ?? null,
+          // Included for multiple_matches remediation
+          allLinkedUsers: status === 'multiple_matches' ? linkedUsers : undefined,
+        };
+      });
+
+      const summary = {
+        total:           result.length,
+        linked:          result.filter((r: any) => r.status === 'linked').length,
+        unlinked:        result.filter((r: any) => r.status === 'unlinked').length,
+        inactiveUser:    result.filter((r: any) => r.status === 'inactive_user').length,
+        multipleMatches: result.filter((r: any) => r.status === 'multiple_matches').length,
+      };
+
+      res.json({ summary, employees: result });
+    } catch (err: any) {
+      console.error('[kiosk/user-link-audit] Error:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
+// ─── Identity Diagnostic ──────────────────────────────────────────────────────
+
+type DiagnosticStatus = 'HEALTHY' | 'ORPHANED_USER' | 'DEAD_LINK' | 'DUPLICATE_LINK' | 'ROLE_MISMATCH' | 'EMAIL_MISMATCH';
+
+interface DiagnosticQueryRow {
+  userId: number;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+  userRole: string;
+  userEmail: string | null;
+  employeeId: number | null;
+  isActive: boolean;
+  employeeName: string | null;
+  employeeCode: string | null;
+  employeeUserRole: string | null;
+  employeeIsActive: boolean | null;
+  employeeDepartment: string | null;
+  employeeEmail: string | null;
+}
+
+router.get(
+  '/identity-diagnostic',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      // Find which employeeIds have multiple user accounts linked (duplicate links)
+      const dupRows: Array<{ employee_id: number }> = await pool.query(
+        `SELECT employee_id
+           FROM users
+          WHERE employee_id IS NOT NULL
+          GROUP BY employee_id
+         HAVING COUNT(*) > 1`,
+        []
+      );
+      const duplicateEmployeeIds = new Set<number>(dupRows.map((r) => r.employee_id));
+
+      // Main query: all users with their linked employee
+      const rows: DiagnosticQueryRow[] = await pool.query(
+        `SELECT
+           u.id              AS "userId",
+           u.username,
+           u.first_name      AS "firstName",
+           u.last_name       AS "lastName",
+           u.role            AS "userRole",
+           u.email           AS "userEmail",
+           u.employee_id     AS "employeeId",
+           u.is_active       AS "isActive",
+           e.name            AS "employeeName",
+           e.employee_code   AS "employeeCode",
+           e.user_role       AS "employeeUserRole",
+           e.is_active       AS "employeeIsActive",
+           e.department      AS "employeeDepartment",
+           e.email           AS "employeeEmail"
+         FROM users u
+         LEFT JOIN employees e ON e.id = u.employee_id
+         ORDER BY u.username ASC`,
+        []
+      );
+
+      type EnrichedRow = DiagnosticQueryRow & { status: DiagnosticStatus };
+
+      const enriched: EnrichedRow[] = rows.map((row) => {
+        let status: DiagnosticStatus = 'HEALTHY';
+
+        if (!row.employeeId) {
+          status = 'ORPHANED_USER';
+        } else if (!row.employeeIsActive || row.employeeName == null) {
+          status = 'DEAD_LINK';
+        } else if (duplicateEmployeeIds.has(row.employeeId)) {
+          status = 'DUPLICATE_LINK';
+        } else if (row.userRole && row.employeeUserRole && row.userRole !== row.employeeUserRole) {
+          status = 'ROLE_MISMATCH';
+        } else if (
+          row.userEmail && row.employeeEmail &&
+          row.userEmail.toLowerCase() !== row.employeeEmail.toLowerCase()
+        ) {
+          status = 'EMAIL_MISMATCH';
+        }
+
+        return { ...row, status };
+      });
+
+      const summary = {
+        total: enriched.length,
+        healthy: enriched.filter((r) => r.status === 'HEALTHY').length,
+        warnings: enriched.filter((r) => ['ROLE_MISMATCH', 'EMAIL_MISMATCH'].includes(r.status)).length,
+        critical: enriched.filter((r) => ['ORPHANED_USER', 'DEAD_LINK', 'DUPLICATE_LINK'].includes(r.status)).length,
+      };
+
+      res.json({ summary, rows: enriched });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[identity-diagnostic] Error:', err);
+      res.status(500).json({ success: false, error: msg });
+    }
+  }
+);
+
+// GET available employees for reassignment (not linked to any active user)
+router.get(
+  '/identity-diagnostic/employees',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const rows: Array<{ id: number; name: string; employeeCode: string | null }> = await pool.query(
+        `SELECT e.id, e.name, e.employee_code AS "employeeCode"
+           FROM employees e
+          WHERE e.is_active = true
+            AND NOT EXISTS (
+              SELECT 1 FROM users u
+               WHERE u.employee_id = e.id AND u.is_active = true
+            )
+          ORDER BY e.name ASC`,
+        []
+      );
+      res.json(rows);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[identity-diagnostic/employees] Error:', err);
+      res.status(500).json({ success: false, error: msg });
+    }
+  }
+);
+
+// PATCH /api/admin/users/:userId/employee-link — reassign or unlink an employee from a user
+router.patch(
+  '/users/:userId/employee-link',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    const userId = parseInt(req.params.userId, 10);
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: 'Invalid userId' });
+    }
+
+    // Require explicit `employeeId` key — undefined (missing key) is rejected
+    if (!Object.prototype.hasOwnProperty.call(req.body, 'employeeId')) {
+      return res.status(400).json({ error: 'Request body must include an employeeId field (use null to unlink)' });
+    }
+
+    const { employeeId } = req.body as { employeeId: number | null };
+
+    // employeeId must be a positive integer or explicit null to unlink
+    if (employeeId !== null && (typeof employeeId !== 'number' || !Number.isInteger(employeeId) || employeeId < 1)) {
+      return res.status(400).json({ error: 'employeeId must be a positive integer or null' });
+    }
+
+    try {
+      if (employeeId != null) {
+        // Validate the target employee exists
+        const empRows: Array<{ id: number }> = await pool.query(
+          `SELECT id FROM employees WHERE id = $1`,
+          [employeeId]
+        );
+        if (empRows.length === 0) {
+          return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        // Check the employee is not already linked to a different active user
+        const conflictRows: Array<{ id: number }> = await pool.query(
+          `SELECT id FROM users WHERE employee_id = $1 AND id <> $2 AND is_active = true`,
+          [employeeId, userId]
+        );
+        if (conflictRows.length > 0) {
+          return res.status(409).json({ error: 'This employee is already linked to another user account' });
+        }
+      }
+
+      const updateResult: Array<{ id: number }> = await pool.query(
+        `UPDATE users SET employee_id = $1 WHERE id = $2 RETURNING id`,
+        [employeeId ?? null, userId]
+      );
+
+      if (updateResult.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.json({ success: true, userId, employeeId: employeeId ?? null });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[users/:userId/employee-link] Error:', err);
+      res.status(500).json({ success: false, error: msg });
+    }
+  }
+);
+
+// ─── Identity Matrix: Employee / User Roster ──────────────────────────────────
+
+router.get(
+  '/identity-matrix/roster',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const rows = await pool.query(
+        `SELECT
+           e.id              AS "employeeId",
+           e.employee_code   AS "employeeCode",
+           e.name,
+           e.department,
+           e.user_role       AS "userRole",
+           CASE WHEN e.badge_scan_code IS NOT NULL THEN true ELSE false END AS "hasBadge",
+           CASE WHEN e.timekeeper_pin   IS NOT NULL THEN true ELSE false END AS "hasPin",
+           CASE WHEN e.portal_token     IS NOT NULL THEN true ELSE false END AS "hasPortalToken",
+           e.canonical_id    AS "canonicalId",
+           u.id              AS "userId",
+           u.username,
+           u.role            AS "userRoleFromUser"
+         FROM employees e
+         LEFT JOIN users u ON u.employee_id = e.id
+         ORDER BY e.id ASC`,
+        []
+      );
+      res.json(rows);
+    } catch (err: any) {
+      console.error('[identity-matrix/roster] Error:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
 export default router;
+

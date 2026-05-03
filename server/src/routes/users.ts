@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { pool } from '../../db';
 import { storage } from '../../storage';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = express.Router();
 
@@ -25,9 +26,9 @@ const updateUserSchema = createUserSchema.partial().extend({
 });
 
 // Apply authentication to ALL user management routes
-// Only ADMIN users can manage other users
+// ADMIN and OWNER roles can manage users; specific mutations are further gated by requirePermission
 router.use(authenticateToken);
-router.use(requireRole('ADMIN'));
+router.use(requireRole('ADMIN', 'OWNER'));
 
 // User Capability Management Routes (MUST be before /:id to avoid route collision)
 router.get('/:id/capabilities', async (req, res) => {
@@ -105,13 +106,14 @@ router.get('/', async (req, res) => {
         u.password_changed_at as "passwordChangedAt",
         u.locked_until as "lockedUntil",
         u.can_create_vendor_pos as "canCreateVendorPOs",
-        e.is_finish_technician as "isFinishTechnician"
+        e.is_finish_technician as "isFinishTechnician",
+        e.name as "employeeDisplayName"
       FROM users u
       LEFT JOIN employees e ON u.employee_id = e.id
       ORDER BY u.username
     `);
 
-    res.json(result.rows);
+    res.json(result);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -119,7 +121,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST create new user
-router.post('/', async (req, res) => {
+router.post('/', requirePermission('admin.manage_users'), async (req, res) => {
   try {
     const validation = createUserSchema.safeParse(req.body);
     if (!validation.success) {
@@ -218,7 +220,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT update user
-router.put('/:id', async (req, res) => {
+router.put('/:id', requirePermission('admin.manage_users'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -327,7 +329,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE user (soft delete by setting isActive to false)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission('admin.manage_users'), async (req, res) => {
   try {
     const { id } = req.params;
 

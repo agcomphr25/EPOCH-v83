@@ -52,6 +52,8 @@ import {
   Lock,
   LockOpen,
   FolderOpen,
+  Search,
+  Eye,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
@@ -111,14 +113,16 @@ interface P2PurchaseOrder
 interface P2POManagerProps {
   onManageItems?: (poId: number, poNumber: string) => void;
   selectedPOIds?: number[];
+  initialSearch?: string;
 }
 
-export function P2POManager({ onManageItems, selectedPOIds = [] }: P2POManagerProps) {
+export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch = '' }: P2POManagerProps) {
   const [selectedPO, setSelectedPO] = useState<P2PurchaseOrder | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [generatingPoId, setGeneratingPoId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -506,9 +510,19 @@ export function P2POManager({ onManageItems, selectedPOIds = [] }: P2POManagerPr
     }
   };
 
-  const filteredPurchaseOrders = selectedPOIds.length > 0
+  const baseFilteredPOs = selectedPOIds.length > 0
     ? purchaseOrders.filter((po) => selectedPOIds.includes(po.id))
     : purchaseOrders;
+
+  const lowerSearch = searchTerm.trim().toLowerCase();
+  const filteredPurchaseOrders = lowerSearch
+    ? baseFilteredPOs.filter(
+        (po) =>
+          po.poNumber.toLowerCase().includes(lowerSearch) ||
+          po.customerName.toLowerCase().includes(lowerSearch) ||
+          (po.projectName || '').toLowerCase().includes(lowerSearch)
+      )
+    : baseFilteredPOs;
 
   const sortedPurchaseOrders = [...filteredPurchaseOrders].sort((a, b) => {
     if (sortBy === 'default') return 0;
@@ -537,6 +551,15 @@ export function P2POManager({ onManageItems, selectedPOIds = [] }: P2POManagerPr
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search POs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 w-48"
+            />
+          </div>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
             <SelectTrigger className="w-44" data-testid="select-sort-by">
               <SelectValue placeholder="Sort by..." />
@@ -877,6 +900,16 @@ export function P2POManager({ onManageItems, selectedPOIds = [] }: P2POManagerPr
               </Button>
             </CardContent>
           </Card>
+        ) : sortedPurchaseOrders.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Search className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No results found</h3>
+              <p className="text-muted-foreground text-center">
+                No purchase orders match &ldquo;{searchTerm}&rdquo;
+              </p>
+            </CardContent>
+          </Card>
         ) : (
           sortedPurchaseOrders.map((po) => (
             <Card key={po.id}>
@@ -944,6 +977,16 @@ export function P2POManager({ onManageItems, selectedPOIds = [] }: P2POManagerPr
                     data-testid={`button-manage-items-${po.id}`}
                   >
                     Manage Items
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/p2/purchase-orders/${po.id}/preview`, '_blank')}
+                    data-testid={`button-preview-po-${po.id}`}
+                    title="Preview and print this purchase order"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview PO
                   </Button>
                   {po.status === 'OPEN' && (
                     <>

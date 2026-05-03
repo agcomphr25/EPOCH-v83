@@ -230,6 +230,7 @@ interface PartRouting {
   traceabilityConfig: Record<string, string[]>; // Item-level traceability for manufactured item
   departmentMaterials?: Record<string, MaterialRequirement[]>; // Materials used in each department
   departmentConfig?: Record<string, DepartmentConfiguration>; // Complete department configuration
+  isActive?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -427,10 +428,18 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     }
   }, [selectedDepartments, open]);
 
-  // Fetch all P2 PO items for step 1 (part selection)
-  const { data: p2PoItems = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2-purchase-order-items'],
+  // Fetch inventory parts list for step 1 (part selection) — same source as Inventory Manager
+  const { data: inventoryPartsList = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/inventory/items'],
     enabled: open && step === 1,
+    select: (data: any[]) => data
+      .filter((item: any) => item.itemType === 'MANUFACTURED')
+      .map((item: any) => ({
+        id: String(item.id),
+        agPartNumber: item.agPartNumber,
+        name: item.name,
+        description: item.notes || '',
+      })),
   });
 
   // Fetch inventory items for step 3 (materials selection)
@@ -439,13 +448,19 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     enabled: open && step === 3,
   });
 
-  // Transform P2 PO items to match InventoryItem interface for the UI
-  const displayItems: InventoryItem[] = p2PoItems.map((item: any) => ({
-    id: String(item.id),
-    agPartNumber: item.partNumber,
-    name: item.partName,
-    description: item.specifications || '',
-  }));
+  // Fetch existing routings to show which parts already have a routing in the part picker
+  const { data: existingRoutings = [] } = useQuery<PartRouting[]>({
+    queryKey: ['/api/part-routings'],
+    enabled: open && step === 1,
+  });
+
+  // Build a set of inventoryItemIds that already have at least one active routing
+  const itemsWithRoutings = new Set(
+    existingRoutings.filter((r) => r.isActive !== false).map((r) => r.inventoryItemId)
+  );
+
+  // Use inventory parts list directly for step 1 display
+  const displayItems: InventoryItem[] = inventoryPartsList;
 
   // Fetch employees for technician assignment
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -538,8 +553,18 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     (item.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
-  // Selected inventory item
-  const selectedItem = displayItems.find(item => item.id === selectedItemId);
+  // Selected inventory item — falls back to editRouting data when the ID doesn't match
+  // any current inventory item (e.g. legacy routings linked to PO-item IDs).
+  const selectedItem: InventoryItem | undefined =
+    displayItems.find(item => item.id === selectedItemId) ||
+    (selectedItemId && editRouting
+      ? {
+          id: selectedItemId,
+          agPartNumber: editRouting.partNumber,
+          name: editRouting.partName,
+          description: undefined,
+        }
+      : undefined);
 
   // Create/Update mutation
   const saveMutation = useMutation({
@@ -615,7 +640,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     if (step === 1 && !selectedItemId) {
       toast({
         title: 'Selection Required',
-        description: 'Please select a P2 product',
+        description: 'Please select an inventory part',
         variant: 'destructive',
       });
       return;
@@ -1590,25 +1615,30 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Step 1: Select P2 Product</h3>
+                <h3 className="text-lg font-semibold mb-2">Step 1: Select Inventory Part</h3>
                 <p className="text-sm text-muted-foreground">
-                  Choose the P2 product that needs a custom routing workflow
+                  Choose the inventory part that needs a custom routing workflow
                 </p>
               </div>
 
               <div>
-                <Label htmlFor="product-select">P2 Product</Label>
+                <Label htmlFor="product-select">Inventory Part</Label>
                 <Select
                   value={selectedItemId}
                   onValueChange={(value) => setSelectedItemId(value)}
                 >
                   <SelectTrigger id="product-select" data-testid="select-p2-product">
-                    <SelectValue placeholder="Select a P2 product..." />
+                    <SelectValue placeholder="Select an inventory part..." />
                   </SelectTrigger>
                   <SelectContent>
                     {displayItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
-                        {item.agPartNumber} - {item.name}
+                        <span className="flex items-center gap-2">
+                          <span>{item.agPartNumber} — {item.name}</span>
+                          {itemsWithRoutings.has(item.id) && (
+                            <Badge variant="secondary" className="text-xs shrink-0">Has Active Routing</Badge>
+                          )}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1621,10 +1651,16 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-muted-foreground" />
                       <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
-                      <span className="text-sm">- {selectedItem.name}</span>
+                      <span className="text-sm">— {selectedItem.name}</span>
                     </div>
                     {selectedItem.description && (
                       <p className="text-xs text-muted-foreground mt-2">{selectedItem.description}</p>
+                    )}
+                    {itemsWithRoutings.has(selectedItem.id) && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        This part already has an active routing. Continuing will create an additional routing for it.
+                      </p>
                     )}
                   </CardContent>
                 </Card>
@@ -1648,7 +1684,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-muted-foreground" />
                       <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
-                      <span className="text-sm">- {selectedItem.name}</span>
+                      <span className="text-sm">— {selectedItem.name}</span>
                     </div>
                   </CardContent>
                 </Card>

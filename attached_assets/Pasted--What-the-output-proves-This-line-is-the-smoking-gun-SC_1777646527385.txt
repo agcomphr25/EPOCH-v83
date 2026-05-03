@@ -1,0 +1,78 @@
+💥 What the output proves
+This line is the smoking gun:
+📋 SCHEMA DIFF (0000..., 0001..., ...0094...)
+That means:
+👉 The system is still building SQL from all 98 files, not just pending ones 
+
+🧠 So what’s actually happening
+There are only two possibilities:
+❌ Possibility 1 (most likely)
+runMigrationSafetyCheck() is internally scanning all migrations again
+👉 Your fix is correct
+👉 But the safety checker re-reads everything anyway
+
+❌ Possibility 2
+You have multiple entry points calling the old logic
+
+✅ We fix this the right way (no guessing)
+We are going to prove where the all-files scan is happening
+
+🔍 Step 1 — Confirm where SCHEMA DIFF is generated
+Run:
+grep -RIn "SCHEMA DIFF" server
+Paste output.
+
+🔍 Step 2 — Check safety checker internals
+Open:
+server/utils/migrationSafetyCheck.ts
+Look for anything like:
+
+
+reading migration directory
+
+
+looping files
+
+
+concatenating SQL internally
+
+
+
+⚠️ I’m 95% sure this is the issue:
+Inside migrationSafetyCheck.ts you likely have something like:
+// BAD — re-reads everythingconst allSql = fs.readDir(...).map(...).join()
+So even though you pass pendingSql, it ignores it.
+
+🧨 Why your current behavior is wrong
+Right now your system is doing:
+pre-deploy → pending migrations ✅↓safety check → ALL migrations ❌
+So it’s double-reading incorrectly
+
+✅ Correct architecture (what we enforce)
+pre-deploy:  getPendingMigrations()  build SQL ONLY from those  pass into safety check  safety check DOES NOT read files
+
+🔥 Fix (once we confirm)
+If I’m right, we’ll change:
+runMigrationSafetyCheck(sql, files)
+to ONLY operate on:
+sql
+and remove any internal file scanning.
+
+🚀 Quick sanity check (you can run now)
+Add this temporary log in pre-deploy-migrate.ts:
+console.log('PENDING FILES:', pendingFiles);
+Then run:
+npm run db:push
+
+If you see:
+PENDING FILES: []
+But still get 98 files in diff → 100% confirmed internal bug
+
+🧠 Bottom line
+You did the right fix — but:
+👉 The safety check function is still overriding it
+
+Next step
+Run:
+grep -RIn "SCHEMA DIFF" server
+Paste result — I’ll give you the exact surgical fix (no guessing, no breaking audit system).

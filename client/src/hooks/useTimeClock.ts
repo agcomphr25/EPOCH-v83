@@ -10,6 +10,7 @@ interface TimeClockStatus {
   clockOut: string | null;
   activeJobId: number | null;
   activeJobLabel: string | null;
+  activeChargeCode: string | null;
 }
 
 export interface UseTimeClockReturn {
@@ -21,6 +22,7 @@ export interface UseTimeClockReturn {
   lastPunchTime: string | null;
   activeJobId: number | null;
   activeJobLabel: string | null;
+  activeChargeCode: string | null;
   clockIn: (jobId: string) => Promise<void>;
   clockOut: () => Promise<void>;
   startBreak: () => Promise<void>;
@@ -36,6 +38,7 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
   const [lastPunchTime, setLastPunchTime] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const [activeJobLabel, setActiveJobLabel] = useState<string | null>(null);
+  const [activeChargeCode, setActiveChargeCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshStatus = useCallback(async () => {
@@ -48,6 +51,7 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
       setLastPunchTime(data.lastPunch?.punchTime ?? null);
       setActiveJobId(data.activeJobId ?? null);
       setActiveJobLabel(data.activeJobLabel ?? null);
+      setActiveChargeCode(data.activeChargeCode ?? null);
     } catch (err) {
       console.error('[useTimeClock] Failed to fetch status', err);
     } finally {
@@ -87,6 +91,7 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     setClockOutTime(ts);
     setActiveJobId(null);
     setActiveJobLabel(null);
+    setActiveChargeCode(null);
     try {
       await punch('clock_out');
     } catch (err) {
@@ -130,6 +135,7 @@ export default function useTimeClock(_employeeId: string): UseTimeClockReturn {
     lastPunchTime,
     activeJobId,
     activeJobLabel,
+    activeChargeCode,
     clockIn,
     clockOut,
     startBreak,

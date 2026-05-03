@@ -28,12 +28,15 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/queue-integrity',
   '/admin/control-tower',
   '/admin/shipping-status-audit',
+  '/system-audits',
   '/admin/monitored-links',
   '/admin/communication-logs',
   '/email-templates',
   '/sign-order-page-settings',
   '/admin/qr-codes',
   '/admin/checklist-management',
+  '/admin/continuity',
+  '/proteus-labs',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',
@@ -66,6 +69,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/business-review',
   '/business-review/sessions',
   '/finance/ap',
+  '/finance/ap-journal',
   '/finance/ar',
   '/finance/ar-journal',
   '/finance/ar-aging',
@@ -74,6 +78,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/finance/bulk-payment',
   '/finance/bulk-payment-history',
   '/finance/cogs',
+  '/finance/cogs-report',
   '/finance/cost-accounting',
   '/finance/cost-centers',
   '/finance/dashboard',
@@ -82,6 +87,9 @@ export const VALID_NAVBAR_ROUTES = [
   '/finance/shipped-discounts',
   '/finance/invoice-breakdown',
   '/finance/scrap-report',
+  '/finance/charge-codes',
+  '/finance/accounting',
+  '/finance/payment-reconciliation',
   '/payment-analytics',
   '/historical-data',
   '/finish-qc-completed-report',
@@ -111,6 +119,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/orders-list',
   '/orders-management',
   '/p2-control-center',
+  '/pm-control-center',
   '/payment-management',
   '/pdf-templates',
   '/fillable-pdf-templates',
@@ -133,6 +142,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/training/work-instructions',
   '/training/quizzes',
   '/training/daily-quizzes',
+  '/skill-matrix',
   '/user-management',
   '/vendor-pos',
   '/vendors',
@@ -597,6 +607,7 @@ export function hasRouteAccess(
  */
 export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
+  '/system-audits': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
   '/metrics-sandbox': ['ADMIN', 'OWNER'],
   '/due-date-capacity': ['ADMIN', 'OWNER'],
@@ -613,18 +624,22 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/finance/accounting': ['ADMIN'],
   '/finance/bulk-payment': ['ADMIN', 'OWNER'],
   '/finance/bulk-payment-history': ['ADMIN', 'OWNER'],
+  '/finance/payment-reconciliation': ['ADMIN', 'OWNER'],
   '/finance/ap': ['ADMIN', 'OWNER'],
+  '/finance/ap-journal': ['ADMIN', 'OWNER'],
   '/finance/ar': ['ADMIN', 'OWNER'],
   '/finance/ar-journal': ['ADMIN', 'OWNER'],
   '/finance/ar-aging': ['ADMIN', 'OWNER'],
   '/finance/ar-payments': ['ADMIN', 'OWNER'],
   '/finance/invoices': ['ADMIN', 'OWNER'],
   '/finance/cogs': ['ADMIN', 'OWNER'],
+  '/finance/cogs-report': ['ADMIN', 'OWNER'],
   '/finance/monthly-fulfilled': ['ADMIN', 'OWNER'],
   '/finance/monthly-shipped': ['ADMIN', 'OWNER'],
   '/finance/shipped-discounts': ['ADMIN', 'OWNER'],
   '/finance/invoice-breakdown': ['ADMIN', 'OWNER'],
   '/finance/scrap-report': ['ADMIN', 'OWNER'],
+  '/finance/charge-codes': ['ADMIN', 'OWNER'],
   '/payment-analytics': ['ADMIN', 'OWNER'],
   '/refund-queue': ['ADMIN', 'OWNER'],
   '/credit-memo': ['ADMIN', 'OWNER'],
@@ -643,6 +658,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/stock-models': ['ADMIN', 'OWNER'],
   '/robust-bom-administration': ['ADMIN', 'OWNER'],
   '/p2-control-center': ['ADMIN', 'OWNER'],
+  '/pm-control-center': ['ADMIN', 'OWNER', 'PROJECT_MANAGER'],
   '/manufacturing-queue': ['ADMIN', 'OWNER'],
   '/po-products': ['ADMIN', 'OWNER'],
   '/product-labels': ['ADMIN', 'OWNER'],
@@ -659,6 +675,10 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/reference-docs': ['ADMIN', 'OWNER'],
   '/admin/qr-codes': ['ADMIN', 'OWNER'],
   '/admin/checklist-management': ['ADMIN', 'OWNER'],
+  '/admin/edri': ['ADMIN', 'OWNER'],
+  '/admin/dcaa-findings': ['ADMIN', 'OWNER'],
+  '/admin/continuity': ['ADMIN', 'OWNER'],
+  '/proteus-labs': ['ADMIN', 'OWNER'],
 };
 
 /**
@@ -723,4 +743,20 @@ export function getUserDashboardRoute(username: string): string {
  */
 export function isUserInPermissionsList(username: string): boolean {
   return username.toLowerCase() in USER_PERMISSIONS;
+}
+
+/**
+ * Determine whether the given user should be treated as an admin for UI gating.
+ * Matches the isAdmin logic used across queue pages to show/hide the
+ * "Reassign Department" (Shuffle) button.
+ *
+ * Returns true when:
+ *  - role is 'ADMIN'
+ *  - role is 'OWNER'
+ *  - username appears in the full-access whitelist via hasFullAccess()
+ */
+export function isAdminUser(user: { role?: string; username?: string } | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+  return hasFullAccess(user.username ?? '');
 }

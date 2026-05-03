@@ -1187,7 +1187,7 @@ export default function CNCDashboardPage() {
                           ? <><b className="text-blue-700">{travelerInfo.travelerNumber}</b><span className="ml-1 text-[10px] bg-blue-50 text-blue-500 px-1 rounded">{travelerInfo.status}</span></>
                           : <span className="text-gray-500">Traveler linked</span>
                         }
-                        <a href={`/travelers/${selectedJob.linkedTravelerId}`} target="_blank" rel="noopener noreferrer" className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800">Open ↗</a>
+                        <Link href={`/travelers/${selectedJob.linkedTravelerId}`} target="_blank" rel="noopener noreferrer" className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800">Open ↗</Link>
                       </span>
                     )}
                     {selectedJob.customerPo && (

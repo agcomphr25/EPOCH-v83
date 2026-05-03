@@ -56,7 +56,14 @@ import {
   FileText,
   X,
   RefreshCw,
+  ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 import Papa from 'papaparse';
 import {
   AlertDialog,
@@ -78,7 +85,6 @@ import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 import VendorScopeSelector from '@/components/VendorScopeSelector';
 import MediaLibraryPicker from '@/components/MediaLibraryPicker';
-import AddressValidationModal from '@/components/AddressValidationModal';
 import { FolderOpen } from 'lucide-react';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
@@ -159,6 +165,7 @@ export default function VendorManagement() {
   const [sort, setSort] = useState('createdAt:desc');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10000);
+  const [activePageTab, setActivePageTab] = useState('vendors');
 
   const [vendorAddress, setVendorAddress] = useState<AddressData>({
     street: '',
@@ -167,9 +174,6 @@ export default function VendorManagement() {
     zipCode: '',
     country: 'United States',
   });
-
-  const [addressValidationError, setAddressValidationError] = useState<any>(null);
-  const [pendingSubmitData, setPendingSubmitData] = useState<VendorFormData | null>(null);
 
   const form = useForm<VendorFormData>({
     resolver: zodResolver(vendorFormSchema),
@@ -293,12 +297,24 @@ export default function VendorManagement() {
     },
   });
 
+  // Fetch all vendors with documents
+  const { data: vendorDocuments = [], isLoading: docsLoading } = useQuery<
+    { id: number; name: string; mainDocumentUrl: string }[]
+  >({
+    queryKey: ['/api/vendors/documents/all'],
+    queryFn: async () => {
+      const res = await fetch('/api/vendors/documents/all');
+      if (!res.ok) throw new Error('Failed to fetch vendor documents');
+      return res.json();
+    },
+  });
+
   // Create vendor mutation
   const createVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
       const vendor = (await apiRequest('/api/vendors', {
         method: 'POST',
-        body: { ...data, skipValidation: true }, // TODO: re-enable address validation when ready
+        body: { ...data, skipValidation: true },
       })) as Vendor;
 
       // Create pending contacts if any
@@ -324,17 +340,14 @@ export default function VendorManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors/documents/all'] });
       toast({ title: 'Vendor created successfully' });
       clearDraft();
       setIsModalOpen(false);
       setPendingContacts([]);
       form.reset();
     },
-    onError: (error: any) => {
-      if (error.responseData?.validationStatus && error.status === 400) {
-        setAddressValidationError(error.responseData);
-        return;
-      }
+    onError: () => {
       toast({ title: 'Failed to create vendor', variant: 'destructive' });
     },
   });
@@ -344,21 +357,18 @@ export default function VendorManagement() {
     mutationFn: async ({ id, data }: { id: number; data: VendorFormData }) => {
       return await apiRequest(`/api/vendors/${id}`, {
         method: 'PUT',
-        body: { ...data, skipValidation: true }, // TODO: re-enable address validation when ready
+        body: { ...data, skipValidation: true },
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors/documents/all'] });
       toast({ title: 'Vendor updated successfully' });
       setIsModalOpen(false);
       setEditingVendor(null);
       form.reset();
     },
-    onError: (error: any) => {
-      if (error.responseData?.validationStatus && error.status === 400) {
-        setAddressValidationError(error.responseData);
-        return;
-      }
+    onError: () => {
       toast({ title: 'Failed to update vendor', variant: 'destructive' });
     },
   });
@@ -378,7 +388,7 @@ export default function VendorManagement() {
     },
   });
 
-  // Reset monthly evaluations mutation
+  // Reset annual evaluations mutation
   const resetEvaluationsMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest('/api/vendors/reset-monthly-evaluations', {
@@ -388,7 +398,7 @@ export default function VendorManagement() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
       toast({ 
-        title: 'Monthly evaluations reset', 
+        title: 'Annual evaluations reset', 
         description: `Successfully reset ${data.vendorsReset} vendors` 
       });
     },
@@ -900,7 +910,7 @@ export default function VendorManagement() {
       console.error('CSV import error:', error);
       toast({
         title: 'Import failed',
-        description: 'Failed to import monthly evaluations',
+        description: 'Failed to import annual evaluations',
         variant: 'destructive',
       });
     } finally {
@@ -932,7 +942,6 @@ export default function VendorManagement() {
 
   const onSubmit = (data: VendorFormData) => {
     const normalizedData = buildNormalizedData(data);
-    setPendingSubmitData(data);
 
     if (editingVendor) {
       updateVendorMutation.mutate({
@@ -941,31 +950,6 @@ export default function VendorManagement() {
       });
     } else {
       createVendorMutation.mutate(normalizedData);
-    }
-  };
-
-  const handleUseSuggestedAddress = (suggested: { street: string; city: string; state: string; zipCode: string }) => {
-    setVendorAddress((prev) => ({ ...prev, ...suggested }));
-    setAddressValidationError(null);
-    if (pendingSubmitData) {
-      const normalizedData = buildNormalizedData(pendingSubmitData, suggested);
-      if (editingVendor) {
-        updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
-      } else {
-        createVendorMutation.mutate(normalizedData);
-      }
-    }
-  };
-
-  const handleOverrideAddress = (reason: string) => {
-    setAddressValidationError(null);
-    if (pendingSubmitData) {
-      const normalizedData = buildNormalizedData(pendingSubmitData, { allowOverride: true, overrideReason: reason });
-      if (editingVendor) {
-        updateVendorMutation.mutate({ id: editingVendor.id, data: normalizedData });
-      } else {
-        createVendorMutation.mutate(normalizedData);
-      }
     }
   };
 
@@ -1221,6 +1205,22 @@ export default function VendorManagement() {
                       <p className="text-xs text-muted-foreground">
                         Upload a W-9, agreement, or other vendor document
                       </p>
+                      {editingVendor?.approved && !form.watch('mainDocumentUrl') && !mainDocFile && (
+                        <Alert variant="destructive" className="border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-600">
+                          <AlertTriangle className="h-4 w-4 !text-amber-600 dark:!text-amber-400" />
+                          <AlertTitle className="text-amber-800 dark:text-amber-300">Document missing</AlertTitle>
+                          <AlertDescription className="text-amber-700 dark:text-amber-400">
+                            <span>This approved vendor's document was cleared and needs to be re-uploaded.</span>
+                            <Label
+                              htmlFor="main-doc-upload"
+                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-500 dark:hover:bg-amber-800"
+                            >
+                              <Upload className="h-3 w-3" />
+                              Upload replacement
+                            </Label>
+                          </AlertDescription>
+                        </Alert>
+                      )}
                       {!mainDocFile && !form.watch('mainDocumentUrl') ? (
                         <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
                           <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
@@ -1822,15 +1822,59 @@ export default function VendorManagement() {
                             </Button>
                           </div>
                           {form.watch('approvalPdfUrl') && (
-                            <a
-                              href={form.watch('approvalPdfUrl')}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
                               data-testid="link-view-pdf"
+                              onClick={async () => {
+                                const url = form.getValues('approvalPdfUrl');
+                                const newWindow = window.open('', '_blank', 'noopener,noreferrer');
+                                try {
+                                  const res = await fetch(url, { method: 'HEAD' });
+                                  if (res.ok) {
+                                    if (newWindow) {
+                                      newWindow.location.href = url;
+                                    } else {
+                                      toast({
+                                        title: 'Pop-up blocked',
+                                        description: 'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  } else {
+                                    if (newWindow) newWindow.close();
+                                    if (res.status === 404) {
+                                      toast({
+                                        title: 'Document not found',
+                                        description: 'The approval PDF could not be located. It may have been deleted.',
+                                        variant: 'destructive',
+                                      });
+                                    } else if (res.status === 503) {
+                                      toast({
+                                        title: 'Storage temporarily unavailable',
+                                        description: 'The document storage is temporarily unavailable. Please try again in a moment.',
+                                        variant: 'destructive',
+                                      });
+                                    } else {
+                                      toast({
+                                        title: 'Unable to open document',
+                                        description: 'An error occurred while trying to open the approval PDF. Please try again.',
+                                        variant: 'destructive',
+                                      });
+                                    }
+                                  }
+                                } catch {
+                                  if (newWindow) newWindow.close();
+                                  toast({
+                                    title: 'Unable to reach storage',
+                                    description: 'Could not connect to document storage. Please check your connection and try again.',
+                                    variant: 'destructive',
+                                  });
+                                }
+                              }}
                             >
                               View PDF
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}
@@ -1906,16 +1950,16 @@ export default function VendorManagement() {
                 {form.watch('approvalLevel') === 'A' ? (
                   <>
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4 mb-4">
-                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Quarterly Vendor Evaluations</h4>
+                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Annual Vendor Evaluation</h4>
                       <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Track quarterly performance scores for Quality, Cost, Delivery, and Response (1-5 scale). Evaluations are due each quarter (Q1: Jan–Mar, Q2: Apr–Jun, Q3: Jul–Sep, Q4: Oct–Dec).
+                        Track annual performance scores for Quality, Cost, Delivery, and Response (1-5 scale). One evaluation is due per calendar year.
                       </p>
                     </div>
                     {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
                   </>
                 ) : (
                   <div className="bg-muted/50 border border-dashed rounded-md p-4 text-sm text-muted-foreground">
-                    Monthly evaluations are only required for <strong>Approval Level A</strong> vendors. This vendor is currently set to Level <strong>{form.watch('approvalLevel') || '—'}</strong>.
+                    Annual evaluations are only required for <strong>Approval Level A</strong> vendors. This vendor is currently set to Level <strong>{form.watch('approvalLevel') || '—'}</strong>.
                   </div>
                 )}
 
@@ -1973,8 +2017,18 @@ export default function VendorManagement() {
           </DialogContent>
       </Dialog>
 
-      {/* Filters */}
-      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6 space-y-4">
+      <Tabs value={activePageTab} onValueChange={setActivePageTab} className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="vendors">Vendors</TabsTrigger>
+          <TabsTrigger value="documents" className="flex items-center gap-1">
+            <FileText className="w-4 h-4" />
+            Vendor Documents
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="vendors">
+          {/* Filters */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6 space-y-4">
         <div className="grid md:grid-cols-6 grid-cols-2 gap-3">
           <div className="col-span-2">
             <Label htmlFor="search">Search</Label>
@@ -2179,7 +2233,21 @@ export default function VendorManagement() {
                       className="px-4 py-3 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100"
                       data-testid={`text-vendor-name-${vendor.id}`}
                     >
-                      {vendor.name}
+                      <div className="flex items-center gap-2">
+                        {vendor.name}
+                        {vendor.approved && !vendor.mainDocumentUrl?.trim() && (
+                          <span
+                            tabIndex={0}
+                            role="img"
+                            aria-label="Missing document: this approved vendor has no main document on file"
+                            title="Missing document: this approved vendor has no main document on file"
+                            className="text-amber-500 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
+                            data-testid={`icon-missing-doc-${vendor.id}`}
+                          >
+                            <AlertTriangle className="w-4 h-4" />
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                       {vendor.approvalLevel || '—'}
@@ -2242,6 +2310,71 @@ export default function VendorManagement() {
           </table>
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="documents">
+          <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-900">
+            {docsLoading ? (
+              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                Loading documents...
+              </div>
+            ) : vendorDocuments.length === 0 ? (
+              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                No vendor documents uploaded yet. Open a vendor record and upload a document to see it here.
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Vendor
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Document
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                  {vendorDocuments.map((vd) => {
+                    const filename = vd.mainDocumentUrl.split('/').pop() || 'document.pdf';
+                    return (
+                      <tr key={vd.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
+                          {vd.name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate max-w-xs">{filename}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <a
+                            href={vd.mainDocumentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button variant="outline" size="sm" className="gap-1">
+                              <ExternalLink className="w-4 h-4" />
+                              Open
+                            </Button>
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            {vendorDocuments.length} vendor{vendorDocuments.length !== 1 ? 's' : ''} with documents
+          </div>
+        </TabsContent>
+      </Tabs>
 
 
       {/* Delete Vendor Confirmation Dialog */}
@@ -2379,11 +2512,11 @@ export default function VendorManagement() {
               </div>
             </div>
 
-            {/* Monthly Evaluations Import */}
+            {/* Annual Evaluations Import */}
             <div className="border border-blue-300 dark:border-blue-600 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
-              <h3 className="font-semibold mb-2">Import Monthly Evaluations</h3>
+              <h3 className="font-semibold mb-2">Import Annual Evaluations</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                CSV should include vendor names and monthly scores (Jan-Quality, Jan-Cost, etc.). Vendor names must match existing vendors.
+                CSV should include vendor names and annual scores (Annual- Quality, Annual- Cost, Annual- Delivery, Annual- Response). Vendor names must match existing vendors.
               </p>
               <div className="border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center bg-white dark:bg-gray-900">
                 <Upload className="w-10 h-10 mx-auto mb-2 text-blue-400" />
@@ -2432,39 +2565,25 @@ export default function VendorManagement() {
         title="Select Vendor Document from Library"
       />
 
-      <AddressValidationModal
-        open={!!addressValidationError}
-        onOpenChange={(open) => { if (!open) setAddressValidationError(null); }}
-        validationError={addressValidationError}
-        onUseSuggested={handleUseSuggestedAddress}
-        onOverride={handleOverrideAddress}
-        onEdit={() => setAddressValidationError(null)}
-      />
     </div>
   );
 }
 
-// Monthly Evaluations Table Component
+// Annual Evaluations Table Component
 function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
   const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [editingCell, setEditingCell] = useState<{month: number; field: string} | null>(null);
-  const [cellValue, setCellValue] = useState('');
-  const [pendingChanges, setPendingChanges] = useState<Map<string, any>>(new Map());
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<Record<string, number | null>>({});
 
-  // Quarters represented by their starting month (Jan=1, Apr=4, Jul=7, Oct=10)
-  const quarters = [
-    { name: 'Q1', num: 1, label: 'Jan–Mar' },
-    { name: 'Q2', num: 4, label: 'Apr–Jun' },
-    { name: 'Q3', num: 7, label: 'Jul–Sep' },
-    { name: 'Q4', num: 10, label: 'Oct–Dec' },
-  ];
+  // Annual evaluation is stored using month=1 as the canonical slot
+  const ANNUAL_MONTH = 1;
 
-  // Fetch quarterly evaluations
-  const { data: evaluations = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ['/api/vendors', vendorId, 'evaluations', selectedYear],
+  // Fetch all evaluations for this vendor (no year filter — we need history too)
+  const { data: allEvaluations = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/vendors', vendorId, 'evaluations'],
     queryFn: async () => {
-      const res = await fetch(`/api/vendors/${vendorId}/evaluations?year=${selectedYear}`, {
+      const res = await fetch(`/api/vendors/${vendorId}/evaluations`, {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch evaluations');
@@ -2472,141 +2591,96 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     },
   });
 
-  // Save all evaluations mutation
-  const saveAllEvaluationsMutation = useMutation({
-    mutationFn: async (changes: Map<string, any>) => {
-      const promises = Array.from(changes.values()).map(data =>
-        apiRequest(`/api/vendors/${vendorId}/evaluations`, {
-          method: 'POST',
-          body: data,
-        })
-      );
-      return await Promise.all(promises);
+  // Current year's annual evaluation (month=1)
+  const currentYearEval = allEvaluations.find(
+    (e: any) => e.year === selectedYear && e.month === ANNUAL_MONTH
+  );
+
+  // Historical quarterly records: rows from prior years with quarter-start months (1,4,7,10)
+  // Group by year, show as read-only history
+  const historicalYears = Array.from(
+    new Set(
+      allEvaluations
+        .filter((e: any) => e.year < selectedYear)
+        .map((e: any) => e.year)
+    )
+  ).sort((a, b) => b - a);
+
+  const getHistoricalRowsForYear = (year: number) =>
+    allEvaluations
+      .filter((e: any) => e.year === year)
+      .sort((a: any, b: any) => a.month - b.month);
+
+  const quarterLabel = (month: number) => {
+    const map: Record<number, string> = { 1: 'Q1 / Annual', 4: 'Q2', 7: 'Q3', 10: 'Q4' };
+    return map[month] ?? `Month ${month}`;
+  };
+
+  // Save mutation
+  const saveMutation = useMutation({
+    mutationFn: async (data: Record<string, number | null>) => {
+      return apiRequest(`/api/vendors/${vendorId}/evaluations`, {
+        method: 'POST',
+        body: {
+          month: ANNUAL_MONTH,
+          year: selectedYear,
+          ...data,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendorId, 'evaluations'] });
-      setPendingChanges(new Map());
-      toast({ title: 'Success', description: 'All evaluations saved successfully' });
+      setPendingChanges({});
+      toast({ title: 'Success', description: 'Annual evaluation saved successfully' });
     },
     onError: () => {
-      setPendingChanges(new Map());
-      toast({ title: 'Error', description: 'Failed to save evaluations', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to save evaluation', variant: 'destructive' });
     },
   });
 
-  const getEvaluationForMonth = (month: number) => {
-    const key = `${month}`;
-    if (pendingChanges.has(key)) {
-      return pendingChanges.get(key);
-    }
-    return evaluations.find((e: any) => e.month === month && e.year === selectedYear);
+  const getDisplayValue = (field: string) => {
+    if (field in pendingChanges) return pendingChanges[field];
+    return currentYearEval?.[field] ?? null;
   };
 
-  const handleCellClick = (month: number, field: string) => {
-    const evaluation = getEvaluationForMonth(month);
-    const value = evaluation?.[field];
-    setCellValue(value ? value.toString() : 'na');
-    setEditingCell({ month, field });
+  const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+  const handleFieldSelect = (field: string, rawValue: string) => {
+    const numValue = rawValue === 'na' ? null : parseInt(rawValue);
+    setPendingChanges(prev => ({ ...prev, [field]: numValue }));
+    setEditingField(null);
   };
 
-  const handleCellUpdate = (month: number, field: string) => {
-    const numValue = cellValue ? parseInt(cellValue) : null;
-
-    if (numValue !== null && (numValue < 1 || numValue > 5)) {
-      toast({ title: 'Error', description: 'Score must be between 1 and 5', variant: 'destructive' });
-      setEditingCell(null);
-      return;
-    }
-
-    const key = `${month}`;
-    
-    // Start with existing pending changes if any, otherwise use saved evaluation
-    let baseData: any;
-    if (pendingChanges.has(key)) {
-      // Use existing pending changes as the base
-      baseData = { ...pendingChanges.get(key) };
-    } else {
-      // Use saved evaluation as the base
-      const evaluation = evaluations.find((e: any) => e.month === month && e.year === selectedYear);
-      baseData = {
-        month,
-        year: selectedYear,
-        qualityScore: evaluation?.qualityScore ?? null,
-        costScore: evaluation?.costScore ?? null,
-        deliveryScore: evaluation?.deliveryScore ?? null,
-        responseScore: evaluation?.responseScore ?? null,
-      };
-    }
-
-    // Update only the field being edited
-    baseData[field] = numValue;
-
-    const newPendingChanges = new Map(pendingChanges);
-    newPendingChanges.set(key, baseData);
-    setPendingChanges(newPendingChanges);
-    setEditingCell(null);
+  const handleSave = async () => {
+    const base: Record<string, number | null> = {
+      qualityScore: currentYearEval?.qualityScore ?? null,
+      costScore: currentYearEval?.costScore ?? null,
+      deliveryScore: currentYearEval?.deliveryScore ?? null,
+      responseScore: currentYearEval?.responseScore ?? null,
+    };
+    await saveMutation.mutateAsync({ ...base, ...pendingChanges });
   };
 
-  const handleSaveAll = async () => {
-    if (pendingChanges.size === 0) return;
-    await saveAllEvaluationsMutation.mutateAsync(pendingChanges);
-  };
-
-  const handleDiscardChanges = () => {
-    setPendingChanges(new Map());
+  const handleDiscard = () => {
+    setPendingChanges({});
+    setEditingField(null);
     toast({ title: 'Changes discarded' });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent, month: number, field: string) => {
-    if (e.key === 'Enter') {
-      handleCellUpdate(month, field);
-    } else if (e.key === 'Escape') {
-      setEditingCell(null);
-    }
-  };
-
-  const renderCell = (month: number, field: string) => {
-    const evaluation = getEvaluationForMonth(month);
-    const key = `${month}`;
-    const hasChanges = pendingChanges.has(key);
-    
-    // Use pending value if there's a pending change, otherwise use saved value
-    const pendingData = pendingChanges.get(key);
-    const value = hasChanges ? pendingData?.[field] : evaluation?.[field];
-    
-    const isEditing = editingCell?.month === month && editingCell?.field === field;
+  const renderEditableCell = (field: string) => {
+    const value = getDisplayValue(field);
+    const isPending = field in pendingChanges;
+    const isEditing = editingField === field;
 
     if (isEditing) {
       return (
         <Select
-          value={cellValue}
-          onValueChange={(newValue) => {
-            setCellValue(newValue);
-            // Auto-save on selection
-            const numValue = newValue === 'na' ? null : parseInt(newValue);
-            const evaluation = getEvaluationForMonth(month);
-            const existingPending = pendingChanges.get(key);
-            const baseData: any = existingPending || {
-              vendorId,
-              month,
-              year: selectedYear,
-              qualityScore: evaluation?.qualityScore ?? null,
-              costScore: evaluation?.costScore ?? null,
-              deliveryScore: evaluation?.deliveryScore ?? null,
-              responseScore: evaluation?.responseScore ?? null,
-            };
-            baseData[field] = numValue;
-            const newPendingChanges = new Map(pendingChanges);
-            newPendingChanges.set(key, baseData);
-            setPendingChanges(newPendingChanges);
-            setEditingCell(null);
-          }}
+          defaultValue={value !== null && value !== undefined ? value.toString() : 'na'}
+          onValueChange={(v) => handleFieldSelect(field, v)}
           open={true}
-          onOpenChange={(open) => {
-            if (!open) setEditingCell(null);
-          }}
+          onOpenChange={(open) => { if (!open) setEditingField(null); }}
         >
-          <SelectTrigger className="w-16 h-8 text-center p-1" data-testid={`select-${field}-${month}`}>
+          <SelectTrigger className="w-20 h-8 text-center p-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -2621,132 +2695,159 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
       );
     }
 
-    // Display the value - show 'N/A' for null values when there's a pending change
-    const displayValue = value !== null && value !== undefined ? value : (hasChanges ? 'N/A' : '-');
-
+    const displayValue = value !== null && value !== undefined ? value : (isPending ? 'N/A' : '-');
     return (
       <div
-        onClick={() => handleCellClick(month, field)}
+        onClick={() => setEditingField(field)}
         className={cn(
-          "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 h-8 flex items-center justify-center rounded",
-          hasChanges && "bg-yellow-100 dark:bg-yellow-900/30"
+          "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 h-8 flex items-center justify-center rounded text-sm",
+          isPending && "bg-yellow-100 dark:bg-yellow-900/30 font-medium"
         )}
-        data-testid={`cell-${field}-${month}`}
       >
         {displayValue}
       </div>
     );
   };
 
+  const computeTotal = (ev: any, overrides?: Record<string, number | null>) => {
+    const scores = ['qualityScore', 'costScore', 'deliveryScore', 'responseScore'].map(f =>
+      overrides && f in overrides ? overrides[f] : ev?.[f] ?? null
+    ).filter(s => s !== null && s !== undefined);
+    return scores.length > 0 ? (scores as number[]).reduce((a, b) => a + b, 0) : null;
+  };
+
   if (isLoading) {
     return <div className="text-center py-4">Loading evaluations...</div>;
   }
 
+  const currentTotal = computeTotal(currentYearEval, pendingChanges);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Year selector */}
       <div className="flex justify-between items-center">
         <div>
           <Label>Select Year</Label>
-          <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+          <Select value={selectedYear.toString()} onValueChange={(v) => { setSelectedYear(parseInt(v)); setPendingChanges({}); setEditingField(null); }}>
             <SelectTrigger className="w-32" data-testid="select-year">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+              {[new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
                 <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        {pendingChanges.size > 0 && (
+        {hasPendingChanges && (
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDiscardChanges}
-              data-testid="button-discard-changes"
-            >
+            <Button variant="outline" size="sm" onClick={handleDiscard} data-testid="button-discard-changes">
               Discard Changes
             </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveAll}
-              disabled={saveAllEvaluationsMutation.isPending}
-              data-testid="button-save-all"
-            >
-              {saveAllEvaluationsMutation.isPending ? 'Saving...' : `Save All (${pendingChanges.size} quarter${pendingChanges.size > 1 ? 's' : ''})`}
+            <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save-all">
+              {saveMutation.isPending ? 'Saving...' : 'Save Annual Evaluation'}
             </Button>
           </div>
         )}
       </div>
 
+      {/* Annual evaluation grid for the selected year */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 text-sm">
           <thead>
             <tr className="bg-gray-100 dark:bg-gray-800">
               <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Criteria</th>
-              {quarters.map((q) => (
-                <th key={q.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center w-28">
-                  <div className="font-semibold">{q.name}</div>
-                  <div className="text-xs font-normal text-gray-500 dark:text-gray-400">{q.label}</div>
-                </th>
-              ))}
+              <th className="border border-gray-300 dark:border-gray-600 p-2 text-center w-40">
+                <div className="font-semibold">{selectedYear} Annual Score</div>
+                <div className="text-xs font-normal text-gray-500 dark:text-gray-400">Click to edit (1–5)</div>
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Quality</td>
-              {quarters.map((q) => (
-                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(q.num, 'qualityScore')}
+            {[
+              { label: 'Quality', field: 'qualityScore' },
+              { label: 'Cost', field: 'costScore' },
+              { label: 'Delivery', field: 'deliveryScore' },
+              { label: 'Response', field: 'responseScore' },
+            ].map(({ label, field }, idx) => (
+              <tr key={field} className={idx % 2 === 1 ? 'bg-gray-50 dark:bg-gray-900/50' : ''}>
+                <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">{label}</td>
+                <td className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderEditableCell(field)}
                 </td>
-              ))}
-            </tr>
-            <tr className="bg-gray-50 dark:bg-gray-900/50">
-              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Cost</td>
-              {quarters.map((q) => (
-                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(q.num, 'costScore')}
-                </td>
-              ))}
-            </tr>
-            <tr>
-              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Delivery</td>
-              {quarters.map((q) => (
-                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(q.num, 'deliveryScore')}
-                </td>
-              ))}
-            </tr>
-            <tr className="bg-gray-50 dark:bg-gray-900/50">
-              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Response</td>
-              {quarters.map((q) => (
-                <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
-                  {renderCell(q.num, 'responseScore')}
-                </td>
-              ))}
-            </tr>
+              </tr>
+            ))}
             <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
               <td className="border border-gray-300 dark:border-gray-600 p-2">Total</td>
-              {quarters.map((q) => {
-                const evaluation = getEvaluationForMonth(q.num);
-                const total = evaluation?.totalScore || 0;
-                return (
-                  <td key={q.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center" data-testid={`total-${q.num}`}>
-                    {total > 0 ? total : '-'}
-                  </td>
-                );
-              })}
+              <td className="border border-gray-300 dark:border-gray-600 p-2 text-center" data-testid="total-annual">
+                {currentTotal !== null ? currentTotal : '-'}
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div className="text-xs text-gray-500 dark:text-gray-400">
-        <p>• Click any cell to edit the score (1-5)</p>
-        <p>• Scores represent the full quarter (Q1 = Jan–Mar, etc.)</p>
+      <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+        <p>• Click any score cell to edit (1–5 scale)</p>
+        <p>• One annual evaluation is recorded per calendar year</p>
         <p>• Total score is calculated automatically</p>
       </div>
+
+      {/* Historical (quarterly) records — read-only */}
+      {historicalYears.length > 0 && (
+        <div className="space-y-3">
+          <h5 className="text-sm font-semibold text-gray-600 dark:text-gray-400 border-t pt-4">
+            Historical Records (Read-Only)
+          </h5>
+          {historicalYears.map(year => {
+            const rows = getHistoricalRowsForYear(year);
+            return (
+              <div key={year}>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{year}</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-800/50">
+                        <th className="border border-gray-200 dark:border-gray-700 p-1.5 text-left text-xs">Criteria</th>
+                        {rows.map((row: any) => (
+                          <th key={row.month} className="border border-gray-200 dark:border-gray-700 p-1.5 text-center text-xs w-24">
+                            {quarterLabel(row.month)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Quality', field: 'qualityScore' },
+                        { label: 'Cost', field: 'costScore' },
+                        { label: 'Delivery', field: 'deliveryScore' },
+                        { label: 'Response', field: 'responseScore' },
+                      ].map(({ label, field }, idx) => (
+                        <tr key={field} className={idx % 2 === 1 ? 'bg-gray-50 dark:bg-gray-900/30' : ''}>
+                          <td className="border border-gray-200 dark:border-gray-700 p-1.5 text-xs font-medium">{label}</td>
+                          {rows.map((row: any) => (
+                            <td key={row.month} className="border border-gray-200 dark:border-gray-700 p-1.5 text-center text-xs text-gray-600 dark:text-gray-400">
+                              {row[field] ?? '–'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      <tr className="font-semibold bg-gray-100 dark:bg-gray-800/50">
+                        <td className="border border-gray-200 dark:border-gray-700 p-1.5 text-xs">Total</td>
+                        {rows.map((row: any) => (
+                          <td key={row.month} className="border border-gray-200 dark:border-gray-700 p-1.5 text-center text-xs">
+                            {row.totalScore > 0 ? row.totalScore : '–'}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

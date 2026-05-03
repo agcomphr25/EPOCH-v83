@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { manufacturingQueue, inventoryItems, supplySourceDashboardToLegacyDept, getDashboardCategories } from '../../schema';
 import type { SupplySourceDashboard } from '../../schema';
 import { eq, and, or, desc, inArray } from 'drizzle-orm';
@@ -102,7 +102,46 @@ router.get('/', async (req, res) => {
       ? await baseQuery.where(whereClause).orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate)
       : await baseQuery.orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
 
-    res.json(items);
+    if (items.length === 0) {
+      res.json(items);
+      return;
+    }
+
+    const ids = items.map((i: any) => i.id);
+
+    // Enrich with project context (via p2_po_id → projects.po_id)
+    const projectRows = await pool.query<{ id: number; projectId: string; projectCode: string }>(
+      `SELECT mq.id, p.id AS "projectId", p.project_code AS "projectCode"
+       FROM manufacturing_queue mq
+       JOIN projects p ON p.po_id = mq.p2_po_id
+       WHERE mq.id = ANY($1)`,
+      [ids]
+    );
+    const projectByItemId = new Map<number, { projectId: string; projectCode: string }>();
+    for (const r of projectRows) {
+      projectByItemId.set(r.id, { projectId: r.projectId, projectCode: r.projectCode });
+    }
+
+    // Enrich with work order context (via source_id where source_type = 'production_work_order')
+    const woRows = await pool.query<{ id: number; workOrderId: string; workOrderNumber: string }>(
+      `SELECT mq.id, wo.id AS "workOrderId", wo.work_order_number AS "workOrderNumber"
+       FROM manufacturing_queue mq
+       JOIN production_work_orders wo ON wo.id::text = mq.source_id
+       WHERE mq.source_type = 'production_work_order' AND mq.id = ANY($1)`,
+      [ids]
+    );
+    const woByItemId = new Map<number, { workOrderId: string; workOrderNumber: string }>();
+    for (const r of woRows) {
+      woByItemId.set(r.id, { workOrderId: r.workOrderId, workOrderNumber: r.workOrderNumber });
+    }
+
+    const enriched = items.map((item: any) => ({
+      ...item,
+      ...(projectByItemId.get(item.id) ?? {}),
+      ...(woByItemId.get(item.id) ?? {}),
+    }));
+
+    res.json(enriched);
   } catch (error) {
     console.error('Error fetching manufacturing queue:', error);
     res.status(500).json({ error: 'Failed to fetch manufacturing queue' });
@@ -169,9 +208,42 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
       .where(whereClause)
       .orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
 
-    res.json(items.map(item => ({
+    if (items.length === 0) {
+      res.json(items);
+      return;
+    }
+
+    const ids = items.map((i: any) => i.id);
+
+    const projectRows = await pool.query<{ id: number; projectId: string; projectCode: string }>(
+      `SELECT mq.id, p.id AS "projectId", p.project_code AS "projectCode"
+       FROM manufacturing_queue mq
+       JOIN projects p ON p.po_id = mq.p2_po_id
+       WHERE mq.id = ANY($1)`,
+      [ids]
+    );
+    const projectByItemId = new Map<number, { projectId: string; projectCode: string }>();
+    for (const r of projectRows) {
+      projectByItemId.set(r.id, { projectId: r.projectId, projectCode: r.projectCode });
+    }
+
+    const woRows = await pool.query<{ id: number; workOrderId: string; workOrderNumber: string }>(
+      `SELECT mq.id, wo.id AS "workOrderId", wo.work_order_number AS "workOrderNumber"
+       FROM manufacturing_queue mq
+       JOIN production_work_orders wo ON wo.id::text = mq.source_id
+       WHERE mq.source_type = 'production_work_order' AND mq.id = ANY($1)`,
+      [ids]
+    );
+    const woByItemId = new Map<number, { workOrderId: string; workOrderNumber: string }>();
+    for (const r of woRows) {
+      woByItemId.set(r.id, { workOrderId: r.workOrderId, workOrderNumber: r.workOrderNumber });
+    }
+
+    res.json(items.map((item: any) => ({
       ...item,
       supplySourceDashboard: dashboard,
+      ...(projectByItemId.get(item.id) ?? {}),
+      ...(woByItemId.get(item.id) ?? {}),
     })));
   } catch (error) {
     console.error('Error fetching manufacturing queue by dashboard:', error);

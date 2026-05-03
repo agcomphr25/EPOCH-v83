@@ -10,6 +10,8 @@ import {
   cuttingBuiltPackets,
   cuttingBuiltPacketFabricSources,
   cuttingFabricInventory,
+  cuttingPacketBOMs,
+  cuttingPacketCompositions,
   manufacturingQueue,
   allocationRequirements,
   materialLots,
@@ -20,7 +22,7 @@ import {
   inventoryBalances,
 } from '../../schema';
 import { db } from '../../db';
-import { eq, sql, and } from 'drizzle-orm';
+import { eq, sql, and, like, desc } from 'drizzle-orm';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 
 const router = Router();
@@ -30,6 +32,126 @@ type MaterialLotStatus = 'RECEIVED' | 'ACCEPTED' | 'ISSUED' | 'EXPIRED' | 'QUARA
 
 function createTransaction(data: Omit<InsertMaterialLotTransaction, 'wasOverride'> & { wasOverride?: boolean }): InsertMaterialLotTransaction {
   return { ...data, wasOverride: data.wasOverride ?? false };
+}
+
+/**
+ * Backfills a cutting_built_packets record (and its fabric sources) from the
+ * planned-materials fallback data stored in manufacturing_queue.materialDetails.
+ *
+ * AS9100 note: productCategoryId is NOT NULL on the target table. If it cannot
+ * be resolved accurately from the queue's inventory item we skip the backfill
+ * entirely rather than persist an incorrect category reference.
+ *
+ * Returns:
+ *   'created'  — packet was newly inserted and sources were recorded
+ *   'existed'  — barcode already in the DB (concurrent request or prior backfill)
+ *   'skipped'  — productCategoryId could not be resolved; no insert attempted
+ */
+async function backfillPacketRecord(
+  queueItem: typeof manufacturingQueue.$inferSelect,
+  barcode: string,
+  packetNumber: number,
+  fabricRolls: any[]
+): Promise<'created' | 'existed' | 'skipped'> {
+  try {
+    // --- Resolve productCategoryId (required, NOT NULL) ---
+    // Attempt 1: via cutting_packet_boms.inventory_item_id
+    let productCategoryId: string | null = null;
+    if (queueItem.inventoryItemId) {
+      const [bom] = await db
+        .select({ productCategoryId: cuttingPacketBOMs.productCategoryId })
+        .from(cuttingPacketBOMs)
+        .where(eq(cuttingPacketBOMs.inventoryItemId, queueItem.inventoryItemId))
+        .limit(1);
+      if (bom?.productCategoryId) {
+        productCategoryId = bom.productCategoryId;
+      }
+    }
+
+    // Attempt 2: via cutting_packet_compositions.inventory_item_id
+    if (!productCategoryId && queueItem.inventoryItemId) {
+      const [comp] = await db
+        .select({ productCategoryId: cuttingPacketCompositions.productCategoryId })
+        .from(cuttingPacketCompositions)
+        .where(eq(cuttingPacketCompositions.inventoryItemId, queueItem.inventoryItemId))
+        .limit(1);
+      if (comp?.productCategoryId) {
+        productCategoryId = comp.productCategoryId;
+      }
+    }
+
+    if (!productCategoryId) {
+      console.warn(
+        `[backfillPacketRecord] Skipping backfill for barcode ${barcode}: ` +
+        `productCategoryId could not be resolved for inventoryItemId ${queueItem.inventoryItemId}`
+      );
+      return 'skipped';
+    }
+
+    // --- Insert packet record (idempotent — on conflict barcode unique key do nothing) ---
+    const buildDate = queueItem.completedAt ?? queueItem.startedAt ?? new Date();
+    // Resolve the best available order linkage for AS9100 traceability
+    const orderRef = queueItem.parentProductionOrderId ?? queueItem.sourceId ?? null;
+    const buildDateObj = buildDate instanceof Date ? buildDate : new Date(buildDate);
+    const sourceValues = fabricRolls.map((roll: any, idx: number) => ({
+      fabricInventoryId: roll.fabricInventoryId ?? null,
+      fabricType: roll.fabricType ?? null,
+      lotNumber: roll.lotNumber ?? null,
+      batchNumber: roll.batchNumber ?? null,
+      rollNumber: roll.rollNumber ?? null,
+      supplierPartNumber: roll.supplierPartNumber ?? null,
+      internalControlNumber: roll.internalControlNumber ?? null,
+      expirationDate: roll.expirationDate ?? null,
+      quantityUsed: roll.quantityUsed != null ? Math.round(Number(roll.quantityUsed)) : 1,
+      isPrimary: roll.isPrimary ?? (idx === 0),
+    }));
+
+    // --- Atomic insert: packet + sources in a single transaction ---
+    // If the source insert fails, the packet insert is rolled back, preventing
+    // a partial record that would appear as a real packet with no traceability data.
+    const result = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(cuttingBuiltPackets)
+        .values({
+          barcode,
+          packetNumber,
+          productCategoryId,
+          buildDate: buildDateObj,
+          status: 'AVAILABLE',
+          isMixedFabric: fabricRolls.length > 1,
+          fabricSourceCount: fabricRolls.length,
+          allocatedToOrder: orderRef,
+          notes: `Backfilled from queue item #${queueItem.id} on first barcode scan`,
+          createdBy: 'system:backfill',
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      if (inserted.length === 0) {
+        return 'existed' as const;
+      }
+
+      const packetId = inserted[0].id;
+      if (sourceValues.length > 0) {
+        await tx.insert(cuttingBuiltPacketFabricSources).values(
+          sourceValues.map((s) => ({ ...s, builtPacketId: packetId }))
+        );
+      }
+
+      return 'created' as const;
+    });
+
+    if (result === 'created') {
+      console.log(
+        `[backfillPacketRecord] Backfilled packet ${barcode} ` +
+        `with ${fabricRolls.length} source(s) from queue item #${queueItem.id}`
+      );
+    }
+    return result;
+  } catch (err: any) {
+    console.error(`[backfillPacketRecord] Failed to backfill barcode ${barcode}:`, err.message);
+    return 'skipped';
+  }
 }
 
 router.use((req: Request, res: Response, next: NextFunction) => {
@@ -178,6 +300,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         return res.json({
           valid: true,
           status: 'PACKET',
+          icnSource: 'built_packet',
           message: `Packet ${packet.barcode} found with ${fabricRolls.length} fabric roll(s)`,
           packet: {
             id: packet.id,
@@ -202,6 +325,121 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           .limit(1);
 
         if (queueItem) {
+          // First: check if a built packet exists for this queue ID.
+          // Built packets have the authoritative ICNs from cutting_built_packet_fabric_sources.
+          // Strategy: (1) exact barcode match within this branch (handles normalisation differences
+          //   where the first exact lookup at line 121 may have missed due to format); (2) match by
+          //   queue-ID prefix + packet-number when the scanned barcode includes a sequence component;
+          //   (3) broadest queue-ID-prefix-only match ordered by most recent build.
+          const parsedPacketNumber = mfgMatch[3] ? parseInt(mfgMatch[3], 10) : null;
+
+          let builtPacketForQueue: typeof cuttingBuiltPackets.$inferSelect | undefined;
+
+          // Attempt 1: exact barcode (catches format-normalised duplicates missed by outer lookup)
+          const [exactPacket] = await db
+            .select()
+            .from(cuttingBuiltPackets)
+            .where(eq(cuttingBuiltPackets.barcode, icn))
+            .limit(1);
+          builtPacketForQueue = exactPacket;
+
+          // Attempt 2: queue-ID prefix + packet-number for deterministic match when seq is present
+          if (!builtPacketForQueue && parsedPacketNumber !== null) {
+            const [seqPacket] = await db
+              .select()
+              .from(cuttingBuiltPackets)
+              .where(
+                and(
+                  like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`),
+                  eq(cuttingBuiltPackets.packetNumber, parsedPacketNumber)
+                )
+              )
+              .limit(1);
+            builtPacketForQueue = seqPacket;
+          }
+
+          // Attempt 3: broadest queue-ID prefix fallback — most recently built packet wins
+          if (!builtPacketForQueue) {
+            const [latestPacket] = await db
+              .select()
+              .from(cuttingBuiltPackets)
+              .where(like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`))
+              .orderBy(desc(cuttingBuiltPackets.id))
+              .limit(1);
+            builtPacketForQueue = latestPacket;
+          }
+
+          if (builtPacketForQueue) {
+            // Use the actual fabric sources from the built packet — these are the real ICNs
+            const sources = await db
+              .select({
+                sourceId: cuttingBuiltPacketFabricSources.id,
+                fabricInventoryId: cuttingBuiltPacketFabricSources.fabricInventoryId,
+                fabricType: cuttingBuiltPacketFabricSources.fabricType,
+                lotNumber: cuttingBuiltPacketFabricSources.lotNumber,
+                batchNumber: cuttingBuiltPacketFabricSources.batchNumber,
+                rollNumber: cuttingBuiltPacketFabricSources.rollNumber,
+                supplierPartNumber: cuttingBuiltPacketFabricSources.supplierPartNumber,
+                internalControlNumber: cuttingBuiltPacketFabricSources.internalControlNumber,
+                expirationDate: cuttingBuiltPacketFabricSources.expirationDate,
+                quantityUsed: cuttingBuiltPacketFabricSources.quantityUsed,
+                isPrimary: cuttingBuiltPacketFabricSources.isPrimary,
+                invId: cuttingFabricInventory.id,
+                invSource: cuttingFabricInventory.source,
+                invFabric: cuttingFabricInventory.fabric,
+                invFabricPartNumber: cuttingFabricInventory.fabricPartNumber,
+                invSupplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+                invInternalControlNumber: cuttingFabricInventory.internalControlNumber,
+                invLotNumber: cuttingFabricInventory.lotNumber,
+                invBatchNumber: cuttingFabricInventory.batchNumber,
+                invRollNumber: cuttingFabricInventory.rollNumber,
+                invExpirationDate: cuttingFabricInventory.expirationDate,
+                invReceivedDate: cuttingFabricInventory.receivedDate,
+                invSquareMeters: cuttingFabricInventory.squareMeters,
+                invLocation: cuttingFabricInventory.location,
+              })
+              .from(cuttingBuiltPacketFabricSources)
+              .leftJoin(
+                cuttingFabricInventory,
+                eq(cuttingBuiltPacketFabricSources.fabricInventoryId, cuttingFabricInventory.id)
+              )
+              .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, builtPacketForQueue.id));
+
+            const fabricRolls = sources.map(s => ({
+              fabricInventoryId: s.fabricInventoryId,
+              fabricType: s.fabricType || s.invFabric,
+              lotNumber: s.lotNumber || s.invLotNumber,
+              batchNumber: s.batchNumber || s.invBatchNumber,
+              rollNumber: s.rollNumber || s.invRollNumber,
+              supplierPartNumber: s.supplierPartNumber || s.invSupplierPartNumber || s.invFabricPartNumber,
+              internalControlNumber: s.internalControlNumber || s.invInternalControlNumber,
+              expirationDate: s.expirationDate || s.invExpirationDate,
+              quantityUsed: s.quantityUsed,
+              isPrimary: s.isPrimary,
+              source: s.invSource,
+              location: s.invLocation,
+              squareMeters: s.invSquareMeters,
+              receivedDate: s.invReceivedDate,
+            }));
+
+            return res.json({
+              valid: true,
+              status: 'PACKET',
+              icnSource: 'built_packet',
+              message: `Manufacturing packet ${icn} linked — ${fabricRolls.length} fabric roll(s)`,
+              packet: {
+                id: builtPacketForQueue.id,
+                barcode: builtPacketForQueue.barcode,
+                packetNumber: builtPacketForQueue.packetNumber,
+                buildDate: builtPacketForQueue.buildDate,
+                status: builtPacketForQueue.status,
+                isMixedFabric: builtPacketForQueue.isMixedFabric,
+              },
+              fabricRolls,
+            });
+          }
+
+          // No built packet found — fall back to materialDetails JSON (planned materials)
           let fabricRolls: any[] = [];
 
           // Parse stored fabric sources from materialDetails JSON
@@ -239,14 +477,26 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
             }];
           }
 
+          const packetNumber = parseInt(mfgMatch[3] || '1', 10);
+
+          // Attempt to backfill a real packet record so subsequent scans resolve directly
+          let icnSource: 'planned_materials' | 'backfilled_from_queue' = 'planned_materials';
+          if (fabricRolls.length > 0) {
+            const backfillResult = await backfillPacketRecord(queueItem, icn, packetNumber, fabricRolls);
+            if (backfillResult === 'created' || backfillResult === 'existed') {
+              icnSource = 'backfilled_from_queue';
+            }
+          }
+
           return res.json({
             valid: true,
             status: 'PACKET',
+            icnSource,
             message: `Manufacturing packet ${icn} linked — ${fabricRolls.length} fabric roll(s)`,
             packet: {
               id: queueItem.id,
               barcode: icn,
-              packetNumber: parseInt(mfgMatch[3] || '1', 10),
+              packetNumber,
               buildDate: queueItem.completedAt || queueItem.startedAt || new Date().toISOString(),
               status: queueItem.status,
               isMixedFabric: fabricRolls.length > 1,

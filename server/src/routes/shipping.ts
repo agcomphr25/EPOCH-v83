@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { auditService } from '../services/auditService';
+import { requirePermission } from '../../middleware/requirePermission';
 import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots, stockModels } from '../../schema';
 import { recordShippingUpdate } from '../services/orderActivityService';
 import { v4 as uuidv4 } from 'uuid';
@@ -341,7 +342,7 @@ router.get('/ready-for-shipping', async (req: Request, res: Response) => {
 });
 
 // Mark order as shipped
-router.post('/mark-shipped/:orderId', async (req: Request, res: Response) => {
+router.post('/mark-shipped/:orderId', requirePermission('shipping.mark_shipped'), async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const {
@@ -802,7 +803,7 @@ function buildUPSShipmentPayload(details: any) {
 }
 
 // Create shipping label using UPS API
-router.post('/create-label', async (req: Request, res: Response) => {
+router.post('/create-label', requirePermission('shipping.create_label'), async (req: Request, res: Response) => {
   try {
     const { 
       orderId, 
@@ -1419,7 +1420,8 @@ router.post('/get-rates', async (req: Request, res: Response) => {
   }
 });
 
-// Test UPS shipment creation endpoint
+// Test UPS shipment creation endpoint — not available in production
+if (process.env.NODE_ENV !== 'production') {
 router.post('/test-ups-shipment', async (req: Request, res: Response) => {
   try {
     const { createShipment } = await import('../utils/upsShipping');
@@ -1456,6 +1458,7 @@ router.post('/test-ups-shipment', async (req: Request, res: Response) => {
     });
   }
 });
+} // end NODE_ENV !== 'production'
 
 // UPS OAuth 2.0 Authentication (2024+ API)
 async function getUPSOAuthToken(

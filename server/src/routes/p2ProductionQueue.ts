@@ -63,6 +63,19 @@ router.get('/', async (req, res) => {
       );
 
     const filters = [];
+
+    // Gate: only surface orders whose parent PO has been cleared for production.
+    // POs advance to READY_FOR_PRODUCTION when the pre-production checklist is signed off.
+    // Allow broader statuses so orders already in-flight are not hidden mid-run.
+    filters.push(
+      inArray(p2PurchaseOrders.status, [
+        'READY_FOR_PRODUCTION',
+        'IN_PRODUCTION',
+        'COMPLETED',
+        'SHIPPED',
+      ])
+    );
+
     if (status && typeof status === 'string' && status !== 'all' && status !== 'undefined') {
       filters.push(eq(p2ProductionOrders.status, status));
     }

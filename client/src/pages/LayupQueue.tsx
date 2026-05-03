@@ -60,6 +60,7 @@ import {
   Info,
   Unlock,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 
 type LayupQueueItem = {
   id: number;
@@ -369,6 +370,7 @@ export default function LayupQueue() {
     },
   });
 
+
   const filteredItems = (() => {
     let items = rawItems;
     if (selectedReadiness !== 'ALL') {
@@ -454,6 +456,8 @@ export default function LayupQueue() {
             Readiness gating for layup jobs — verify prepreg fabric, resin, and consumables before release. Lot compliance (expiration, out-time) is enforced.
           </p>
         </div>
+
+        <ReturnsRepairsSection repairDepartment="Layup/Plugging" />
 
         <Card className="dark:bg-gray-900 dark:border-gray-800">
           <CardHeader>

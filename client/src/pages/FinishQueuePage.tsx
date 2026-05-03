@@ -19,12 +19,11 @@ import {
   CheckSquare,
   Square,
   CheckCircle,
-  AlertTriangle,
-  FileText,
   Zap,
-  TrendingDown,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAdminUser } from '@/config/userPermissions';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { apiRequest } from '@/lib/queryClient';
@@ -34,6 +33,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import KickbackReportModal from '@/components/KickbackReportModal';
+import OrderActionButtons from '@/components/OrderActionButtons';
 
 // ── Due-date bucket colours ───────────────────────────────────────────────────
 const BUCKET_STYLES: Record<
@@ -168,6 +168,11 @@ export default function FinishQueuePage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+  const isAdmin = isAdminUser(currentUser);
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: finishTechniciansData = [] } = useQuery({
     queryKey: ['/api/employees/finish-technicians'],
@@ -186,6 +191,7 @@ export default function FinishQueuePage() {
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000,
   });
+
 
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
@@ -398,50 +404,21 @@ export default function FinishQueuePage() {
               {order.isPaid && (
                 <Badge variant="secondary" className="text-xs">PAID</Badge>
               )}
-              <Badge
-                variant="outline"
-                className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs border-blue-300 text-blue-700 dark:text-blue-300"
-                onClick={() => {
-                  setSelectedOrderId(order.orderId);
+              <OrderActionButtons
+                orderId={order.orderId}
+                onSalesOrderView={(id) => {
+                  setSelectedOrderId(id);
                   setSalesOrderModalOpen(true);
                 }}
-              >
-                <FileText className="w-3 h-3 mr-1" />
-                Sales Order
-              </Badge>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedOrderForKickback({ orderId: order.orderId, department: 'Finish' });
+                onReportKickback={(id) => {
+                  setSelectedOrderForKickback({ orderId: id, department: 'Finish' });
                   setKickbackModalOpen(true);
                 }}
-                className="h-6 px-2 text-xs"
-              >
-                <TrendingDown className="h-3 w-3 mr-1" />
-                Report Kickback
-              </Button>
-
-              {hasKickbacks(order.orderId) && (
-                <Badge
-                  variant="destructive"
-                  className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                    kickbackStatus === 'CRITICAL'
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : kickbackStatus === 'HIGH'
-                      ? 'bg-orange-600 hover:bg-orange-700'
-                      : kickbackStatus === 'MEDIUM'
-                      ? 'bg-yellow-600 hover:bg-yellow-700'
-                      : 'bg-gray-600 hover:bg-gray-700'
-                  }`}
-                  onClick={() => setLocation('/kickback-tracking')}
-                >
-                  <AlertTriangle className="w-3 h-3 mr-1" />
-                  Kickback
-                </Badge>
-              )}
+                hasKickbacks={hasKickbacks(order.orderId)}
+                kickbackStatus={kickbackStatus}
+                onKickbackBadgeClick={() => setLocation('/kickback-tracking')}
+                showReassignButton={isAdmin}
+              />
             </div>
           </CardContent>
         </Card>
@@ -511,6 +488,8 @@ export default function FinishQueuePage() {
           </div>
         </CardContent>
       </Card>
+
+      <ReturnsRepairsSection repairDepartment="Finish" />
 
       {/* Department Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

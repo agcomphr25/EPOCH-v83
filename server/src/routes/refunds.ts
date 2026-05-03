@@ -6,11 +6,56 @@ import {
   customers,
   payments,
   creditCardTransactions,
+  internalMessages,
+  messageRecipients,
 } from '../../schema';
 import { insertRefundRequestSchema } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { refundTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 import { auditService } from '../services/auditService';
+
+const GLENNJ_USER_ID = 13;
+const SYSTEM_SENDER_ID = 0;
+const SYSTEM_SENDER_NAME = 'System';
+
+export async function sendRefundInboxNotification(opts: {
+  customerName: string;
+  refundAmount: number;
+  refundRequestId: number;
+  isReminder?: boolean;
+}) {
+  const { customerName, refundAmount, refundRequestId, isReminder = false } = opts;
+  const formattedAmount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(refundAmount);
+  const subject = isReminder
+    ? 'Reminder: Refund Request Still Awaiting Approval'
+    : 'New Refund Request Pending Approval';
+  const messageBody = isReminder
+    ? `This is a reminder that refund request #${refundRequestId} for ${customerName} (${formattedAmount}) is still awaiting your action.\n\nPlease review the request at /refund-queue.`
+    : `A new refund request (#${refundRequestId}) has been submitted and requires your approval.\n\nCustomer: ${customerName}\nRefund Amount: ${formattedAmount}\n\nPlease review and take action at /refund-queue.`;
+
+  const [msg] = await db
+    .insert(internalMessages)
+    .values({
+      senderId: SYSTEM_SENDER_ID,
+      senderName: SYSTEM_SENDER_NAME,
+      recipientType: 'user',
+      recipientUserId: GLENNJ_USER_ID,
+      recipientName: 'glennj',
+      subject,
+      message: messageBody,
+      isUrgent: false,
+    })
+    .returning();
+
+  await db.insert(messageRecipients).values({
+    messageId: msg.id,
+    userId: GLENNJ_USER_ID,
+    isRead: false,
+    isAccomplished: false,
+  });
+
+  return msg;
+}
 
 const router = Router();
 
@@ -110,6 +155,7 @@ router.get('/', async (req: Request, res: Response) => {
         authNetTransactionId: refundRequests.authNetTransactionId,
         authNetRefundId: refundRequests.authNetRefundId,
         originalTransactionId: refundRequests.originalTransactionId,
+        lastRemindedAt: refundRequests.lastRemindedAt,
         customerName: customers.name,
       })
       .from(refundRequests)
@@ -191,6 +237,27 @@ router.post('/', async (req: Request, res: Response) => {
       console.error('[Audit] Failed to log refund request:', auditError);
     }
 
+    // Notify @glennj (user ID 13) in the internal inbox
+    try {
+      let customerName = 'Unknown Customer';
+      if (validatedData.customerId) {
+        const [customer] = await db
+          .select({ name: customers.name })
+          .from(customers)
+          .where(eq(customers.id, parseInt(validatedData.customerId)));
+        if (customer?.name) customerName = customer.name;
+      }
+      await sendRefundInboxNotification({
+        customerName,
+        refundAmount: validatedData.refundAmount || validatedData.amount || 0,
+        refundRequestId: newRequest.id,
+        isReminder: false,
+      });
+      console.log(`📬 Inbox notification sent to glennj for refund request ${newRequest.id}`);
+    } catch (notifyError) {
+      console.error('[Refund Notify] Failed to send inbox notification:', notifyError);
+    }
+
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('❌ Error creating refund request:', error);
@@ -226,6 +293,7 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
         status: 'APPROVED',
         approvedBy,
         approvedAt: new Date(),
+        lastRemindedAt: null,
         updatedAt: new Date(),
       })
       .where(eq(refundRequests.id, parseInt(id)))
@@ -294,6 +362,7 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
         approvedBy,
         approvedAt: new Date(),
         rejectionReason: rejectionReason.trim(),
+        lastRemindedAt: null,
         updatedAt: new Date(),
       })
       .where(eq(refundRequests.id, parseInt(id)))

@@ -29,6 +29,7 @@ import {
   insertCuttingPacketBOMSchema,
   insertCuttingPacketBOMMaterialSchema,
   insertCuttingPacketBOMCutSchema,
+  type CuttingFabricInventoryTransaction,
 } from '../../schema';
 
 const router = Router();
@@ -874,6 +875,14 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
       depletedBy: depletedBy,
       quantityInStock: 0,
     });
+
+    await storage.createCuttingFabricInventoryTransaction({
+      fabricInventoryId: rollId,
+      changeType: 'ADJUSTMENT',
+      quantityDelta: 0,
+      performedBy: depletedBy,
+      notes: 'Roll marked as depleted',
+    });
     
     res.json({ 
       success: true, 
@@ -907,7 +916,15 @@ router.post('/fabric-inventory/:id/reactivate', async (req, res) => {
       }
     }
 
-    const inventory = await storage.updateCuttingFabricInventory(rollId, updateData);
+    await storage.updateCuttingFabricInventory(rollId, updateData);
+
+    await storage.createCuttingFabricInventoryTransaction({
+      fabricInventoryId: rollId,
+      changeType: 'ADJUSTMENT',
+      quantityDelta: 0,
+      performedBy: reactivatedBy,
+      notes: 'Roll reactivated',
+    });
 
     res.json({
       success: true,
@@ -918,6 +935,56 @@ router.post('/fabric-inventory/:id/reactivate', async (req, res) => {
   } catch (error) {
     console.error('Error reactivating fabric roll:', error);
     res.status(500).json({ error: 'Failed to reactivate fabric roll' });
+  }
+});
+
+router.get('/fabric-inventory/:id/history', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const [roll, transactions] = await Promise.all([
+      storage.getCuttingFabricInventory(rollId),
+      storage.getCuttingFabricInventoryTransactionsByInventory(rollId),
+    ]);
+
+    if (!roll) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+
+    let history = [...transactions];
+
+    // If the roll has depleted_by/depleted_at metadata but no matching ADJUSTMENT transaction,
+    // inject a synthetic entry for historical records.
+    if (roll.depletedBy && roll.depletedAt) {
+      const hasDepletionTx = transactions.some(
+        (t) => t.changeType === 'ADJUSTMENT' && t.notes?.toLowerCase().includes('depleted')
+      );
+      if (!hasDepletionTx) {
+        const syntheticEntry: CuttingFabricInventoryTransaction = {
+          id: `synthetic-depletion-${rollId}`,
+          fabricInventoryId: rollId,
+          sessionLotId: null,
+          changeType: 'ADJUSTMENT',
+          quantityDelta: 0,
+          performedBy: roll.depletedBy,
+          notes: 'Roll marked as depleted (historical record)',
+          createdAt: roll.depletedAt,
+          updatedAt: roll.depletedAt,
+        };
+        history.push(syntheticEntry);
+      }
+    }
+
+    // Sort newest first
+    history.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching fabric inventory history:', error);
+    res.status(500).json({ error: 'Failed to fetch roll history' });
   }
 });
 
@@ -2057,7 +2124,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         FROM all_orders o
         LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
         WHERE o.current_department = 'P1 Production Queue'
-          AND o.status IN ('FINALIZED', 'Active')
+          AND o.status IN ('FINALIZED', 'Active', 'IN_PROGRESS')
           AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
           AND o.model_id IS NOT NULL 
           AND o.model_id != '' 
@@ -2447,7 +2514,49 @@ router.post('/schedule-to-cutting', async (req, res) => {
       inventoryItemId = newItem.id;
     }
 
+    // For P2 packet scheduling with a PO reference, cancel any prior PENDING Cutting Table
+    // queue entries for the same PO + packet type combination before inserting the new one.
+    // This ensures rescheduling replaces the previous demand rather than stacking on top.
+    // Only non-P1 material types are affected; P1 (carbon_fiber, fiberglass, mesa) is untouched.
+    const p1MaterialTypes = ['carbon_fiber', 'fiberglass', 'mesa'];
+    const poNumber = req.body.poNumber;
+    if (packetName && poNumber && !p1MaterialTypes.includes(materialType || '')) {
+      try {
+        const { pool: cancelPool } = await import('../../db');
+        const cancelResult = await cancelPool.query(
+          `UPDATE manufacturing_queue
+           SET status = 'CANCELLED', updated_at = NOW()
+           WHERE department = 'Cutting Table'
+             AND status = 'PENDING'
+             AND notes IS NOT NULL
+             AND notes ~ '^\s*\{'
+             AND notes::jsonb->>'packetName' = $1
+             AND notes::jsonb->>'poNumber' = $2`,
+          [packetName, poNumber]
+        );
+        const cancelledCount = (cancelResult as any).rowCount || 0;
+        if (cancelledCount > 0) {
+          console.log(`🔄 Cancelled ${cancelledCount} prior PENDING "${packetName}" entr${cancelledCount === 1 ? 'y' : 'ies'} for PO ${poNumber} before rescheduling`);
+        }
+      } catch (cancelErr: any) {
+        console.warn('⚠️ Could not cancel prior queue entries:', cancelErr.message);
+      }
+    }
+
     // Create manufacturing queue entry
+    // For P2 packets, stamp p2BackfillApplied:true so the boot backfill skips this row
+    // (the order status is updated inline below, so no historical reconciliation is needed)
+    const queueNotes = JSON.stringify({
+      orderId,
+      source,
+      materialType,
+      bomId: validBomId,
+      userNotes: notes,
+      isP2Packet: source === 'P2',
+      packetName,
+      poNumber: poNumber || null,
+      ...(source === 'P2' ? { p2BackfillApplied: true } : {}),
+    });
     const [queueItem] = await db.insert(manufacturingQueue).values({
       inventoryItemId,
       department: 'Cutting Table',
@@ -2456,11 +2565,45 @@ router.post('/schedule-to-cutting', async (req, res) => {
       priority: priority || 50,
       status: 'PENDING',
       dueDate: dueDate ? new Date(dueDate) : null,
-      notes: JSON.stringify({ orderId, source, materialType, bomId: validBomId, userNotes: notes, isP2Packet: source === 'P2', packetName }),
+      notes: queueNotes,
       requestedBy: 'system',
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
+
+    // For P2 items, update the source production order status so it no longer appears as open demand
+    if (source === 'P2' && orderId) {
+      try {
+        // orderId format is either "PO-{poNumber}-{id}" or "P2-{id}" — the last segment is always the DB id
+        const idParts = String(orderId).split('-');
+        const p2OrderId = parseInt(idParts[idParts.length - 1], 10);
+        if (!isNaN(p2OrderId)) {
+          const orderRows = await pool.query(
+            `SELECT id, quantity FROM p2_production_orders WHERE id = $1`,
+            [p2OrderId]
+          );
+          const orderRow = (orderRows as any).rows?.[0] || (orderRows as any[])[0];
+          if (orderRow) {
+            const remaining = (orderRow.quantity || 0) - quantity;
+            if (remaining <= 0) {
+              await pool.query(
+                `UPDATE p2_production_orders SET status = 'scheduled', updated_at = NOW() WHERE id = $1`,
+                [p2OrderId]
+              );
+              console.log(`✅ P2 production order ${p2OrderId} fully scheduled — status → scheduled`);
+            } else {
+              await pool.query(
+                `UPDATE p2_production_orders SET quantity = $1, updated_at = NOW() WHERE id = $2`,
+                [remaining, p2OrderId]
+              );
+              console.log(`✅ P2 production order ${p2OrderId} partially scheduled — remaining quantity: ${remaining}`);
+            }
+          }
+        }
+      } catch (p2UpdateErr: any) {
+        console.warn('⚠️ Could not update P2 production order status after scheduling:', p2UpdateErr.message);
+      }
+    }
 
     res.status(201).json({
       ...queueItem,
@@ -2474,6 +2617,95 @@ router.post('/schedule-to-cutting', async (req, res) => {
     res.status(500).json({ error: 'Failed to schedule to cutting queue' });
   }
 });
+
+// Backfill endpoint: reconcile historical manufacturing_queue P2 entries to their source production orders
+router.post('/backfill-p2-scheduled-status', async (req, res) => {
+  try {
+    const { pool: bfPool } = await import('../../db');
+    const summary = await runP2ScheduledBackfill(bfPool);
+    res.json({ success: true, ...summary });
+  } catch (err: any) {
+    console.error('❌ P2 backfill endpoint error:', err.message);
+    res.status(500).json({ error: 'Backfill failed', detail: err.message });
+  }
+});
+
+// Shared backfill logic — also called at boot
+// Idempotent: once a queue row is processed its notes are stamped with p2BackfillApplied:true
+// so re-running on the next restart never double-subtracts quantity.
+export async function runP2ScheduledBackfill(pool: any): Promise<{ updated: number; partial: number; skipped: number }> {
+  // Only fetch rows that have NOT already been processed by a previous backfill run
+  const queueResult = await pool.query(`
+    SELECT id, notes, quantity_requested
+    FROM manufacturing_queue
+    WHERE department = 'Cutting Table'
+      AND notes IS NOT NULL
+      AND notes::text LIKE '%"isP2Packet":true%'
+      AND notes::text NOT LIKE '%"p2BackfillApplied":true%'
+  `);
+  const queueRows = (queueResult as any).rows || (queueResult as any[]) || [];
+
+  let updated = 0;
+  let partial = 0;
+  let skipped = 0;
+
+  for (const row of queueRows) {
+    try {
+      let parsedNotes: any = {};
+      try { parsedNotes = JSON.parse(row.notes); } catch (_) { skipped++; continue; }
+      const orderId = parsedNotes?.orderId;
+      if (!orderId) { skipped++; continue; }
+
+      // Parse orderId: "PO-{poNumber}-{id}" or "P2-{id}" — last segment is DB id
+      const idParts = String(orderId).split('-');
+      const p2OrderId = parseInt(idParts[idParts.length - 1], 10);
+      if (isNaN(p2OrderId)) { skipped++; continue; }
+
+      const orderResult = await pool.query(
+        `SELECT id, quantity, status FROM p2_production_orders WHERE id = $1`,
+        [p2OrderId]
+      );
+      const orderRow = (orderResult as any).rows?.[0] || (orderResult as any[])[0];
+      if (!orderRow) { skipped++; continue; }
+
+      // Skip orders already moved past pending
+      if (orderRow.status === 'scheduled' || orderRow.status === 'completed' || orderRow.status === 'cancelled') {
+        skipped++;
+        continue;
+      }
+
+      const scheduledQty = row.quantity_requested || 0;
+      const remaining = (orderRow.quantity || 0) - scheduledQty;
+
+      if (remaining <= 0) {
+        await pool.query(
+          `UPDATE p2_production_orders SET status = 'scheduled', updated_at = NOW() WHERE id = $1`,
+          [p2OrderId]
+        );
+        updated++;
+      } else {
+        await pool.query(
+          `UPDATE p2_production_orders SET quantity = $1, updated_at = NOW() WHERE id = $2`,
+          [remaining, p2OrderId]
+        );
+        partial++;
+      }
+
+      // Stamp this queue row so the backfill never processes it again (idempotency guard)
+      parsedNotes.p2BackfillApplied = true;
+      await pool.query(
+        `UPDATE manufacturing_queue SET notes = $1 WHERE id = $2`,
+        [JSON.stringify(parsedNotes), row.id]
+      );
+    } catch (rowErr: any) {
+      console.warn(`⚠️ P2 backfill: error processing queue row ${row.id}:`, rowErr.message);
+      skipped++;
+    }
+  }
+
+  console.log(`✅ P2 backfill complete — fully scheduled: ${updated}, partial qty reduced: ${partial}, skipped: ${skipped}`);
+  return { updated, partial, skipped };
+}
 
 // ========== Packet BOM Endpoints ==========
 
@@ -3060,5 +3292,139 @@ router.delete('/packet-bom-parts/:partId', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete part' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Inventory Audit endpoints
+// ---------------------------------------------------------------------------
+
+router.get('/inventory-audit/settings', async (req, res) => {
+  try {
+    const settings = await storage.getInventoryAuditSettings();
+    res.json(settings ?? null);
+  } catch (error) {
+    console.error('Error fetching inventory audit settings:', error);
+    res.status(500).json({ error: 'Failed to fetch audit settings' });
+  }
+});
+
+router.put('/inventory-audit/settings', async (req, res) => {
+  try {
+    const { frequency, nextAuditDate, lastAuditDate } = req.body;
+
+    if (!frequency) {
+      return res.status(400).json({ error: 'frequency is required' });
+    }
+
+    const nextDate = nextAuditDate ? new Date(nextAuditDate) : computeNextAuditDate(frequency);
+    const settings = await storage.upsertInventoryAuditSettings({
+      frequency,
+      nextAuditDate: nextDate,
+      lastAuditDate: lastAuditDate ? new Date(lastAuditDate) : undefined,
+    });
+    res.json(settings);
+  } catch (error) {
+    console.error('Error saving inventory audit settings:', error);
+    res.status(500).json({ error: 'Failed to save audit settings' });
+  }
+});
+
+router.get('/inventory-audit/packets', async (req, res) => {
+  try {
+    const allItems = await storage.getAllInventoryItems();
+    const packets = allItems.filter((item: any) => item.isPacket === true);
+    const result = await Promise.all(
+      packets.map(async (p) => {
+        const latest = await storage.getLatestAuditRecordByPacket(p.id);
+        return {
+          id: p.id,
+          agPartNumber: p.agPartNumber,
+          name: p.name,
+          systemQty: p.onHand ?? p.quantityInStock ?? 0,
+          lastAuditRecord: latest ?? null,
+        };
+      })
+    );
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching audit packets:', error);
+    res.status(500).json({ error: 'Failed to fetch packets' });
+  }
+});
+
+router.post('/inventory-audit/submit', async (req, res) => {
+  try {
+    const { entries, auditedBy } = req.body as {
+      entries: { packetId: number; actualQty: number }[];
+      auditedBy?: string;
+    };
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({ error: 'entries array is required' });
+    }
+
+    const allItems = await storage.getAllInventoryItems();
+    const packets = allItems.filter((item: any) => item.isPacket === true);
+    const packetMap = new Map(packets.map((p) => [p.id, p]));
+
+    const records = [];
+    for (const entry of entries) {
+      const packet = packetMap.get(entry.packetId);
+      if (!packet) continue;
+      const systemQty = (packet as any).onHand ?? (packet as any).quantityInStock ?? 0;
+      const variance = entry.actualQty - systemQty;
+      const record = await storage.createInventoryAuditRecord({
+        packetId: entry.packetId,
+        systemQty,
+        actualQty: entry.actualQty,
+        variance,
+        auditedBy: auditedBy ?? null,
+      });
+      records.push(record);
+
+      // Update inventory item on-hand quantity so demand cards reflect the audited actuals
+      await storage.updateInventoryItem(entry.packetId, {
+        onHand: entry.actualQty,
+        quantityInStock: entry.actualQty,
+      });
+    }
+
+    const now = new Date();
+    const existing = await storage.getInventoryAuditSettings();
+    if (existing) {
+      const nextDate = computeNextAuditDate(existing.frequency, now);
+      await storage.upsertInventoryAuditSettings({
+        frequency: existing.frequency,
+        lastAuditDate: now,
+        nextAuditDate: nextDate,
+      });
+    }
+
+    res.json({ success: true, count: records.length });
+  } catch (error) {
+    console.error('Error submitting inventory audit:', error);
+    res.status(500).json({ error: 'Failed to submit audit' });
+  }
+});
+
+function computeNextAuditDate(frequency: string, from: Date = new Date()): Date {
+  const next = new Date(from);
+  switch (frequency) {
+    case 'daily':
+      next.setDate(next.getDate() + 1);
+      break;
+    case 'weekly':
+      next.setDate(next.getDate() + 7);
+      break;
+    case 'bi_weekly':
+      next.setDate(next.getDate() + 14);
+      break;
+    case 'monthly':
+      next.setMonth(next.getMonth() + 1);
+      break;
+    default:
+      next.setDate(next.getDate() + 7);
+  }
+  return next;
+}
 
 export default router;

@@ -225,13 +225,16 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
 
     // Get traveler steps linked to this serialized item via serial number
     let travelerStepData: any[] = [];
+    let activeTravelerId: string | null = null;
     const linkedTravelers = await db.query.travelers.findMany({
       where: eq(travelers.serialNumber, serializedItem.serialNumber),
+      orderBy: [asc(travelers.createdAt)],
     });
     if (linkedTravelers.length > 0) {
       const activeTraveler = linkedTravelers.find(t => t.status === 'IN_PROGRESS') 
         || linkedTravelers.find(t => t.status === 'COMPLETED')
         || linkedTravelers[linkedTravelers.length - 1];
+      activeTravelerId = activeTraveler.id;
       
       travelerStepData = await db.select()
         .from(travelerSteps)
@@ -942,6 +945,13 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
 
     return res.json({
       serializedItem,
+      travelerId: activeTravelerId,
+      allTravelerIds: linkedTravelers.map((t, i) => ({
+        id: t.id,
+        status: t.status,
+        createdAt: t.createdAt,
+        cycleNumber: i + 1,
+      })),
       purchaseOrder,
       poItem,
       routing: routing ? {

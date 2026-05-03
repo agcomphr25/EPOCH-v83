@@ -20,7 +20,7 @@ function matchesMetal(value: string): boolean {
   return METAL_ACCESSORY_PREFIXES.some((p) => norm.startsWith(p));
 }
 
-function isMetalAccessorySku(itemName: string, itemId: string, itemType?: string): boolean {
+export function isMetalAccessorySku(itemName: string, itemId: string, itemType?: string): boolean {
   if (itemType && itemType.toLowerCase() !== 'stock_model') return true;
   if (itemName && matchesMetal(itemName)) return true;
   if (itemId && matchesMetal(itemId)) return true;
@@ -266,6 +266,7 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     }
 
     const scheduledOrders: string[] = [];
+    const skippedOrders: Array<{ orderId: string; reason: string }> = [];
     const metalDemandOrderIds: string[] = [];
     const metalDemandSkus: string[] = [];
     const warnings: Array<{ poProductId: number; warning: string }> = [];
@@ -462,9 +463,12 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
               targetDepartment,
             ]);
 
-            // Only proceed with downstream inserts/audit for rows that were actually inserted
+            // RC-3 FIX: Only proceed with downstream inserts/audit for rows that were actually
+            // inserted. When ON CONFLICT DO NOTHING fires (order already exists), track the
+            // skip explicitly so operators see an accurate count in the API response.
             if (!allOrderResult.rows || allOrderResult.rows.length === 0) {
               console.warn(`⚠️  P1 PO Schedule: order ${orderId} already exists in all_orders, skipping`);
+              skippedOrders.push({ orderId, reason: 'already_exists' });
               continue;
             }
 
@@ -565,15 +569,24 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
             scheduledOrders.push(orderId);
           }
 
-          // Atomically update order_count by only the number of rows actually inserted
-          if (insertedCount > 0) {
-            const updatePOQuery = `
-              UPDATE purchase_order_items
-              SET order_count = COALESCE(order_count, 0) + $1, updated_at = NOW()
-              WHERE id = $2
-            `;
-            await client.query(updatePOQuery, [insertedCount, poItemId]);
-          }
+          // RC-4 FIX: Recompute order_count from the real production_orders count rather than
+          // accumulating it additively. Additive updates drift when partial failures occur
+          // (e.g., the all_orders insert succeeds but production_orders fails), causing the
+          // pre-release guard to wrongly skip creation of remaining orders on the next attempt.
+          const recomputedCountRow = await client.query(
+            `SELECT COUNT(*) AS cnt
+             FROM production_orders
+             WHERE po_item_id = $1
+               AND production_status != 'CANCELLED'`,
+            [poItemId]
+          );
+          const recomputedCount = parseInt(recomputedCountRow.rows?.[0]?.cnt ?? '0', 10);
+          await client.query(
+            `UPDATE purchase_order_items
+             SET order_count = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [recomputedCount, poItemId]
+          );
 
           await client.query('COMMIT');
         } catch (txError) {
@@ -593,16 +606,49 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
     }
 
     console.log(`📅 P1 PO Schedule: Created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue`);
+    if (skippedOrders.length > 0) {
+      console.warn(`⚠️  P1 PO Schedule: Skipped ${skippedOrders.length} order(s) that already existed in all_orders`);
+    }
     if (metalDemandOrderIds.length > 0) {
       console.log(`🔩 P1 PO Schedule: Routed ${metalDemandOrderIds.length} custom_model item(s) to metal tracker (SKUs: ${metalDemandSkus.join(', ')})`);
     }
 
+    // RC-6 FIX: Trigger syncP1OrdersToProductionQueue synchronously after scheduling so
+    // newly created production orders appear in the unified queue view immediately,
+    // instead of waiting for the next background poll cycle.
+    let syncWarning: string | undefined;
+    if (scheduledOrders.length > 0) {
+      try {
+        await storage.syncP1OrdersToProductionQueue();
+        console.log(`✅ P1 PO Schedule: Synced ${scheduledOrders.length} new order(s) to production queue`);
+      } catch (syncErr: any) {
+        syncWarning = `Orders were scheduled but the unified queue sync failed: ${syncErr.message}. Orders may not appear in the department queue immediately — a manual refresh or the next background sync (every 5 minutes) will correct this.`;
+        console.warn(`⚠️  P1 PO Schedule: syncP1OrdersToProductionQueue failed:`, syncErr.message);
+      }
+    }
+
+    const skippedMessage = skippedOrders.length > 0
+      ? ` (${skippedOrders.length} skipped — already existed)`
+      : '';
+
+    // Determine overall success state:
+    //   success=true       — all items processed without errors
+    //   partialSuccess=true — some items scheduled but at least one per-item error occurred
+    //   success=false      — nothing was scheduled (all items failed)
+    const hasPerItemErrors = errors.length > 0;
+    const anyScheduled = scheduledOrders.length > 0 || metalDemandOrderIds.length > 0;
+    const isPartialSuccess = hasPerItemErrors && anyScheduled;
+    const isFullFailure = hasPerItemErrors && !anyScheduled;
+
     const responseBody = {
-      success: true,
+      success: !isFullFailure,
+      partialSuccess: isPartialSuccess || undefined,
       batchId,
       targetWeek: targetWeek || 'Current Week',
       selectionCount: selections.length,
       scheduledCount: scheduledOrders.length,
+      skippedCount: skippedOrders.length,
+      skippedOrders: skippedOrders.length > 0 ? skippedOrders : undefined,
       metalDemandCount: metalDemandOrderIds.length,
       metalDemandSkus: metalDemandSkus.length > 0 ? metalDemandSkus : undefined,
       metalDemandOrderIds: metalDemandOrderIds.length > 0 ? metalDemandOrderIds : undefined,
@@ -611,7 +657,10 @@ router.post('/schedule', idempotencyMiddleware(), async (req: Request, res: Resp
       orderIds: scheduledOrders,
       warnings: warnings.length > 0 ? warnings : undefined,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue${metalDemandOrderIds.length > 0 ? ` and routed ${metalDemandOrderIds.length} item(s) to metal tracker` : ''}`,
+      syncWarning,
+      message: isFullFailure
+        ? `Scheduling failed: ${errors.length} error(s) — no orders were created`
+        : `Successfully created ${scheduledOrders.length} Production-Only Orders in P1 Production Queue${skippedMessage}${metalDemandOrderIds.length > 0 ? ` and routed ${metalDemandOrderIds.length} item(s) to metal tracker` : ''}${isPartialSuccess ? ` (${errors.length} item(s) failed — see errors)` : ''}`,
     };
 
     // Record idempotency for successful request (if idempotency key was provided).

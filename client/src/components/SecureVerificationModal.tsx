@@ -152,7 +152,10 @@ export default function SecureVerificationModal({
           )}
 
           {step === 1 && (
-            <div className="space-y-4">
+            <form
+              onSubmit={(e) => { e.preventDefault(); handlePasswordVerification(); }}
+              className="space-y-4"
+            >
               <div className="text-center">
                 <h3 className="text-lg font-semibold">
                   Step 1: Admin Password
@@ -170,14 +173,12 @@ export default function SecureVerificationModal({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter admin password"
-                  onKeyPress={(e) =>
-                    e.key === 'Enter' && handlePasswordVerification()
-                  }
                 />
               </div>
 
               <div className="flex gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={handleClose}
                   className="flex-1"
@@ -185,14 +186,14 @@ export default function SecureVerificationModal({
                   Cancel
                 </Button>
                 <Button
-                  onClick={handlePasswordVerification}
+                  type="submit"
                   disabled={!password || isVerifying}
                   className="flex-1"
                 >
                   {isVerifying ? 'Verifying...' : 'Verify Password'}
                 </Button>
               </div>
-            </div>
+            </form>
           )}
 
           {step === 2 && (

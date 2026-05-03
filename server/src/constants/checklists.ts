@@ -1,0 +1,2 @@
+export const DEFAULT_CHECKLISTS_LIMIT = 50;
+export const MAX_CHECKLISTS_LIMIT = 1000;

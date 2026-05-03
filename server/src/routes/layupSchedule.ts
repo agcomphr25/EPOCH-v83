@@ -16,7 +16,8 @@ function normalizeMaterial(raw: string): string {
 
 const router = Router();
 
-// Debug endpoint to check raw mold data
+// Debug endpoint to check raw mold data — not available in production
+if (process.env.NODE_ENV !== 'production') {
 router.get('/debug-molds', async (req: Request, res: Response) => {
   try {
     const result = await rawSql`SELECT mold_id, stock_models FROM molds WHERE mold_id = 'Mesa Universal-1' LIMIT 1`;
@@ -32,6 +33,7 @@ router.get('/debug-molds', async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 });
+} // end NODE_ENV !== 'production'
 
 // Get all molds with their settings
 router.get('/molds', async (req: Request, res: Response) => {

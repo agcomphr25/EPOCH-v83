@@ -117,7 +117,11 @@ export class ObjectStorageService {
       stream.on("error", (err) => {
         console.error("Stream error:", err);
         if (!res.headersSent) {
-          res.status(500).json({ error: "Error streaming file" });
+          const status = isTransientStorageError(err) ? 503 : 500;
+          const message = status === 503
+            ? "Storage temporarily unavailable, please try again later"
+            : "Error streaming file";
+          res.status(status).json({ error: message });
         }
       });
 
@@ -125,9 +129,23 @@ export class ObjectStorageService {
     } catch (error) {
       console.error("Error downloading file:", error);
       if (!res.headersSent) {
-        res.status(500).json({ error: "Error downloading file" });
+        const status = isTransientStorageError(error) ? 503 : 500;
+        const message = status === 503
+          ? "Storage temporarily unavailable, please try again later"
+          : "Error downloading file";
+        res.status(status).json({ error: message });
       }
     }
+  }
+
+  // Gets a presigned GET URL for downloading an object after server-side ACL check.
+  async getObjectEntityDownloadURL(file: File, ttlSec: number = 900): Promise<string> {
+    return signObjectURL({
+      bucketName: file.bucket.name,
+      objectName: file.name,
+      method: "GET",
+      ttlSec,
+    });
   }
 
   // Gets the upload URL for an object entity.
@@ -239,7 +257,7 @@ export class ObjectStorageService {
   }
 
   // Uploads a buffer to object storage and returns the normalized path
-  async uploadBuffer(buffer: Buffer, filename: string, contentType: string = 'application/octet-stream'): Promise<string> {
+  async uploadBuffer(buffer: Buffer, filename: string, contentType: string = 'application/octet-stream', prefix: string = 'pdf-templates'): Promise<string> {
     try {
       const privateObjectDir = this.getPrivateObjectDir();
       if (!privateObjectDir) {
@@ -248,7 +266,7 @@ export class ObjectStorageService {
 
       const objectId = randomUUID();
       const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fullPath = `${privateObjectDir}/pdf-templates/${objectId}-${safeFilename}`;
+      const fullPath = `${privateObjectDir}/${prefix}/${objectId}-${safeFilename}`;
 
       const { bucketName, objectName } = parseObjectPath(fullPath);
       const bucket = objectStorageClient.bucket(bucketName);
@@ -262,10 +280,20 @@ export class ObjectStorageService {
       });
 
       // Return normalized path that can be used with getObjectEntityFile
-      return `/objects/pdf-templates/${objectId}-${safeFilename}`;
+      return `/objects/${prefix}/${objectId}-${safeFilename}`;
     } catch (error) {
       console.error('[ObjectStorage] Error uploading buffer:', error);
       throw error;
+    }
+  }
+
+  // Deletes an object from storage by its /objects/... path (best-effort, does not throw)
+  async deleteByStoragePath(storagePath: string): Promise<void> {
+    try {
+      const file = await this.getObjectEntityFile(storagePath);
+      await file.delete();
+    } catch (err) {
+      console.warn('[ObjectStorage] deleteByStoragePath — object may already be gone:', err instanceof Error ? err.message : err);
     }
   }
 
@@ -296,6 +324,23 @@ export class ObjectStorageService {
       throw error;
     }
   }
+}
+
+function isTransientStorageError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: string | number; message?: string };
+  const transientCodes = [503, "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "UNAVAILABLE"];
+  if (err.code !== undefined && transientCodes.includes(err.code as string)) return true;
+  const msg = (err.message ?? "").toLowerCase();
+  return (
+    msg.includes("econnrefused") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout") ||
+    msg.includes("enotfound") ||
+    msg.includes("unavailable") ||
+    msg.includes("service unavailable") ||
+    msg.includes("connection refused")
+  );
 }
 
 function parseObjectPath(path: string): {

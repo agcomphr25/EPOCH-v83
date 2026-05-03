@@ -230,14 +230,29 @@ export function LinkedOrdersManager({ orderId, currentUser = 'System' }: LinkedO
                   {requiresApproval && (
                     <div>
                       <Label htmlFor="approval-code">Approval Code</Label>
-                      <Input
-                        id="approval-code"
-                        data-testid="input-approval-code"
-                        type="password"
-                        placeholder="Enter approval code"
-                        value={approvalCode}
-                        onChange={(e) => setApprovalCode(e.target.value)}
-                      />
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!createGroupMutation.isPending && approvalCode) {
+                            createGroupMutation.mutate({
+                              name: newGroupName || '',
+                              notes: newGroupNotes || '',
+                              requiresApprovalToSeparate: requiresApproval,
+                              approvalCode,
+                              createdBy: currentUser || 'System',
+                            });
+                          }
+                        }}
+                      >
+                        <Input
+                          id="approval-code"
+                          data-testid="input-approval-code"
+                          type="password"
+                          placeholder="Enter approval code"
+                          value={approvalCode}
+                          onChange={(e) => setApprovalCode(e.target.value)}
+                        />
+                      </form>
                     </div>
                   )}
                 </div>
@@ -365,7 +380,17 @@ export function LinkedOrdersManager({ orderId, currentUser = 'System' }: LinkedO
                       </AlertDescription>
                     </Alert>
                   )}
-                  <div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!linkGroup || unlinkOrderMutation.isPending || !unlinkApprovalCode) return;
+                      unlinkOrderMutation.mutate({
+                        groupId: linkGroup.id,
+                        orderId,
+                        approvalCode: unlinkApprovalCode,
+                      });
+                    }}
+                  >
                     <Label htmlFor="unlink-approval">
                       {linkGroup?.requiresApprovalToSeparate ? 'Approval Code' : 'Confirmation'}
                     </Label>
@@ -377,7 +402,7 @@ export function LinkedOrdersManager({ orderId, currentUser = 'System' }: LinkedO
                       value={unlinkApprovalCode}
                       onChange={(e) => setUnlinkApprovalCode(e.target.value)}
                     />
-                  </div>
+                  </form>
                   <DialogFooter>
                     <Button
                       data-testid="button-submit-unlink"

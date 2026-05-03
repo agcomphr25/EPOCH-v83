@@ -1,0 +1,1221 @@
+// timekeeping/punches.ts
+// Live punch flows (Kiosk, Employee Portal) write exclusively to public.punch_ledger.
+// employeeId values are public.employees.id integers throughout.
+
+import { Router, type IRouter, type Request, type Response, type NextFunction, type RequestHandler } from "express";
+import {
+  GetCurrentPunchStatusParams,
+  ListPunchesQueryParams,
+  KioskPunchBody,
+} from "../../lib/timekeeping-zod";
+import { db as nativeDb } from "../../../db";
+import { chargeCodes, employees, auditEvents, users, kioskPinRateLimits } from "../../../schema";
+import { salariedTimesheetAuditTable } from "../../schema/timekeeping";
+import bcrypt from "bcryptjs";
+import { eq, and } from "drizzle-orm";
+import { z } from "zod";
+import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
+import { findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
+import { checkActivePTOForEmployee } from "../../services/timekeeping/timeoff.service";
+import { authenticateToken, requireRole, optionalAuth } from "../../../middleware/auth";
+import * as ledger from "../../lib/punchLedger";
+import { dualWriteUpdateAllocation } from "../../lib/laborAllocationDualWrite";
+import { resolveTravelerBarcode } from "../../helpers/travelerBarcodeResolver";
+import { storage } from "../../../storage";
+import { notificationManager } from "../../services/notificationManager";
+
+const router: IRouter = Router();
+
+// ---------------------------------------------------------------------------
+// PIN brute-force protection — DB-backed rate limiter for /kiosk/identify
+// State is persisted to kiosk_pin_rate_limits so lockouts survive restarts.
+// ---------------------------------------------------------------------------
+
+function safeEnvInt(name: string, defaultValue: number): number {
+  const parsed = parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
+
+const IDENTIFY_MAX_FAILURES = safeEnvInt("KIOSK_PIN_MAX_FAILURES", 10);
+const IDENTIFY_WINDOW_MS    = safeEnvInt("KIOSK_PIN_WINDOW_MS",    60_000);   // 1 minute
+const IDENTIFY_LOCKOUT_MS   = safeEnvInt("KIOSK_PIN_LOCKOUT_MS",   300_000);  // 5 minutes
+
+function getClientIp(req: Request): string {
+  return req.ip ?? "unknown";
+}
+
+async function checkPinRateLimit(ip: string): Promise<{ allowed: boolean; retryAfterMs: number }> {
+  const now = Date.now();
+  const [entry] = await nativeDb
+    .select()
+    .from(kioskPinRateLimits)
+    .where(eq(kioskPinRateLimits.ip, ip))
+    .limit(1);
+
+  if (!entry) return { allowed: true, retryAfterMs: 0 };
+
+  const windowStartMs = entry.windowStart.getTime();
+  const lockedUntilMs = entry.lockedUntil?.getTime() ?? null;
+
+  // Still within lockout period?
+  if (lockedUntilMs !== null && now < lockedUntilMs) {
+    return { allowed: false, retryAfterMs: lockedUntilMs - now };
+  }
+
+  // Window expired — delete stale row and treat as fresh slate
+  if (now - windowStartMs > IDENTIFY_WINDOW_MS) {
+    await nativeDb.delete(kioskPinRateLimits).where(eq(kioskPinRateLimits.ip, ip));
+    return { allowed: true, retryAfterMs: 0 };
+  }
+
+  // Within window — check failure count.
+  // Lockout triggers when failures EXCEED the configured maximum so that
+  // exactly IDENTIFY_MAX_FAILURES bad attempts are allowed before the
+  // (N+1)-th attempt is blocked.
+  // Only write a new lockedUntil when transitioning into lockout for the first
+  // time (lockedUntil is null). If the lockout already expired while the window
+  // is still open we do NOT re-extend, so we let the request through and allow
+  // recordPinFailure to start fresh accumulation on the next failure.
+  if (entry.failures > IDENTIFY_MAX_FAILURES && entry.lockedUntil === null) {
+    const lockedUntil = new Date(now + IDENTIFY_LOCKOUT_MS);
+    await nativeDb
+      .update(kioskPinRateLimits)
+      .set({ lockedUntil })
+      .where(eq(kioskPinRateLimits.ip, ip));
+    return { allowed: false, retryAfterMs: IDENTIFY_LOCKOUT_MS };
+  }
+
+  return { allowed: true, retryAfterMs: 0 };
+}
+
+async function recordPinFailure(ip: string): Promise<{ failures: number; lockedUntil: Date | null }> {
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  const [existing] = await nativeDb
+    .select()
+    .from(kioskPinRateLimits)
+    .where(eq(kioskPinRateLimits.ip, ip))
+    .limit(1);
+
+  let failures: number;
+  let lockedUntil: Date | null = null;
+
+  if (!existing || nowMs - existing.windowStart.getTime() > IDENTIFY_WINDOW_MS) {
+    // Start a fresh window
+    failures = 1;
+    await nativeDb
+      .insert(kioskPinRateLimits)
+      .values({ ip, failures: 1, windowStart: now, lockedUntil: null })
+      .onConflictDoUpdate({
+        target: kioskPinRateLimits.ip,
+        set: { failures: 1, windowStart: now, lockedUntil: null },
+      });
+  } else {
+    failures = existing.failures + 1;
+    if (failures >= IDENTIFY_MAX_FAILURES) {
+      lockedUntil = new Date(nowMs + IDENTIFY_LOCKOUT_MS);
+    }
+    await nativeDb
+      .update(kioskPinRateLimits)
+      .set({ failures, lockedUntil })
+      .where(eq(kioskPinRateLimits.ip, ip));
+  }
+
+  return { failures, lockedUntil };
+}
+
+async function resetPinFailures(ip: string): Promise<void> {
+  await nativeDb.delete(kioskPinRateLimits).where(eq(kioskPinRateLimits.ip, ip));
+}
+
+/** Wraps an async route handler so uncaught errors return 500 instead of crashing the process. */
+function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
+  return (req, res, next) => fn(req, res, next).catch((err) => {
+    console.error("[timekeeping/punches]", err?.message ?? err);
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error" });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Kiosk endpoints — intentionally public (PIN auth handled in business logic)
+// Rewired to punch_ledger — employeeId is now public.employees.id
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/timekeeping/kiosk/punches/employee/:employeeId/current
+ *
+ * Returns the current punch-ledger status for a kiosk employee.
+ * :employeeId is public.employees.id (returned from /kiosk/login).
+ */
+router.get("/kiosk/punches/employee/:employeeId/current", h(async (req, res): Promise<void> => {
+  const id = parseInt(req.params.employeeId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid employee id" }); return; }
+
+  const openSession = await ledger.getOpenSession(id);
+  const status = ledger.deriveStatus(openSession);
+  const hoursToday = await ledger.computeHoursToday(id);
+
+  res.json({
+    employeeId: id,
+    status,
+    clockedInAt: openSession?.clockIn?.toISOString() ?? null,
+    hoursToday,
+    openEntry: openSession ?? null,
+  });
+}));
+
+// GET /api/timekeeping/kiosk/employees — returns active employees with linked active user accounts.
+// Intentionally public (no auth required — kiosk terminal is unauthenticated at HTTP level).
+router.get("/kiosk/employees", h(async (req, res): Promise<void> => {
+  const rows = await nativeDb
+    .select({
+      id: employees.id,
+      name: employees.name,
+      jobTitle: employees.jobTitle,
+    })
+    .from(employees)
+    .innerJoin(users, and(eq(users.employeeId, employees.id), eq(users.isActive, true)))
+    .where(eq(employees.isActive, true));
+
+  const result = rows.map(row => {
+    const nameParts = (row.name ?? "Employee").trim().split(/\s+/);
+    return {
+      id: row.id,
+      firstName: nameParts[0] ?? "Employee",
+      lastName: nameParts.slice(1).join(" "),
+      jobTitle: row.jobTitle ?? null,
+    };
+  });
+
+  result.sort((a, b) => {
+    const lastCmp = (a.lastName || "").localeCompare(b.lastName || "");
+    return lastCmp !== 0 ? lastCmp : a.firstName.localeCompare(b.firstName);
+  });
+
+  res.json(result);
+}));
+
+// POST /api/timekeeping/kiosk/login — authenticates via employeeId + PIN (EPOCH password hash).
+// Returns public.employees.id which punch_ledger uses as its employee FK.
+router.post("/kiosk/login", h(async (req, res): Promise<void> => {
+  const { employeeId, pin } = req.body ?? {};
+  if (!employeeId || typeof employeeId !== "number") {
+    res.status(400).json({ error: "employeeId is required" });
+    return;
+  }
+  if (!pin || typeof pin !== "string") {
+    res.status(400).json({ error: "PIN is required" });
+    return;
+  }
+
+  // Fetch employee first to confirm they're active
+  const [emp] = await nativeDb
+    .select({
+      id: employees.id,
+      name: employees.name,
+      jobTitle: employees.jobTitle,
+      isActive: employees.isActive,
+    })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (!emp || !emp.isActive) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  // Look up the linked active user account
+  const [userRow] = await nativeDb
+    .select({
+      id: users.id,
+      passwordHash: users.passwordHash,
+      isActive: users.isActive,
+    })
+    .from(users)
+    .where(and(eq(users.employeeId, employeeId), eq(users.isActive, true)))
+    .limit(1);
+
+  if (!userRow) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const pinValid = await bcrypt.compare(pin, userRow.passwordHash);
+  if (!pinValid) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const nameParts = (emp.name ?? "Employee").trim().split(/\s+/);
+  res.json({
+    id: emp.id,
+    firstName: nameParts[0] ?? "Employee",
+    lastName: nameParts.slice(1).join(" "),
+    jobTitle: emp.jobTitle ?? null,
+  });
+}));
+
+// POST /api/timekeeping/kiosk/identify — PIN-only kiosk identification.
+// Accepts a raw 4-digit PIN, iterates all active employees who have timekeeper_pin set,
+// bcrypt-compares against each stored hash, and returns the matched employee or 401.
+// Rate-limited: returns 429 after KIOSK_PIN_MAX_FAILURES failures within KIOSK_PIN_WINDOW_MS.
+router.post("/kiosk/identify", h(async (req, res): Promise<void> => {
+  const clientIp = getClientIp(req);
+
+  // --- Rate-limit check (before any PIN comparison) ---
+  const rl = await checkPinRateLimit(clientIp);
+  if (!rl.allowed) {
+    const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
+
+    // Audit-log each lockout-blocked attempt for complete abuse traceability
+    logAction({
+      tableName: "kiosk_pin_attempts",
+      recordId: 0,
+      action: "INSERT",
+      oldValues: null,
+      newValues: {
+        event: "KIOSK_PIN_BLOCKED",
+        ip: clientIp,
+        retryAfterSeconds: retryAfterSec,
+      },
+      actor: { id: null, email: null, role: null, ip: clientIp },
+    }).catch((err) => {
+      console.warn("[kiosk/identify] audit log write failed:", err?.message ?? err);
+    });
+
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.status(429).json({
+      error: "Too many failed PIN attempts. Please wait before trying again.",
+      retryAfterSeconds: retryAfterSec,
+    });
+    return;
+  }
+
+  const { pin } = req.body ?? {};
+  if (!pin || typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+    res.status(400).json({ error: "A 4-digit PIN is required" });
+    return;
+  }
+
+  // Fetch all active employees that have a timekeeper_pin set
+  const candidates = await nativeDb
+    .select({
+      id: employees.id,
+      name: employees.name,
+      jobTitle: employees.jobTitle,
+      timekeeperPin: employees.timekeeperPin,
+    })
+    .from(employees)
+    .where(and(eq(employees.isActive, true)));
+
+  // bcrypt-compare each hash — short-circuit on first match
+  for (const emp of candidates) {
+    if (!emp.timekeeperPin) continue;
+    const match = await bcrypt.compare(pin, emp.timekeeperPin);
+    if (match) {
+      // Successful identification — clear accumulated failures for this IP
+      await resetPinFailures(clientIp);
+
+      const nameParts = (emp.name ?? "Employee").trim().split(/\s+/);
+
+      // Resolve current punch status so the confirm screen can render immediately
+      const openSession = await ledger.getOpenSession(emp.id);
+      const status = ledger.deriveStatus(openSession);
+      const hoursToday = await ledger.computeHoursToday(emp.id);
+
+      res.json({
+        id: emp.id,
+        firstName: nameParts[0] ?? "Employee",
+        lastName: nameParts.slice(1).join(" "),
+        jobTitle: emp.jobTitle ?? null,
+        punchStatus: {
+          employeeId: emp.id,
+          status,
+          clockedInAt: openSession?.clockIn?.toISOString() ?? null,
+          hoursToday,
+        },
+      });
+      return;
+    }
+  }
+
+  // No match — record the failure and write to audit trail
+  const { failures: totalFailures, lockedUntil: newLockedUntil } = await recordPinFailure(clientIp);
+  // Lockout after the (N+1)-th bad attempt — IDENTIFY_MAX_FAILURES bad
+  // attempts are permitted before the first block.
+  const isNowLocked = totalFailures > IDENTIFY_MAX_FAILURES;
+
+  logAction({
+    tableName: "kiosk_pin_attempts",
+    recordId: 0,
+    action: "INSERT",
+    oldValues: null,
+    newValues: {
+      event: isNowLocked ? "KIOSK_PIN_LOCKOUT" : "KIOSK_PIN_FAILURE",
+      ip: clientIp,
+      failureCount: totalFailures,
+      maxAllowed: IDENTIFY_MAX_FAILURES,
+      windowMs: IDENTIFY_WINDOW_MS,
+      lockedUntil: newLockedUntil?.toISOString() ?? null,
+    },
+    actor: { id: null, email: null, role: null, ip: clientIp },
+  }).catch((err) => {
+    console.warn("[kiosk/identify] audit log write failed:", err?.message ?? err);
+  });
+
+  if (isNowLocked) {
+    const retryAfterSec = Math.ceil(IDENTIFY_LOCKOUT_MS / 1000);
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.status(429).json({
+      error: "Too many failed PIN attempts. Please wait before trying again.",
+      retryAfterSeconds: retryAfterSec,
+    });
+    return;
+  }
+
+  res.status(401).json({ error: "PIN not recognised. Please try again." });
+}));
+
+// GET /api/timekeeping/kiosk/charge-codes — returns active charge codes for kiosk dropdown.
+// Intentionally public (no auth required — kiosk terminal is unauthenticated at HTTP level).
+router.get("/kiosk/charge-codes", h(async (req, res): Promise<void> => {
+  const codes = await nativeDb
+    .select({
+      id: chargeCodes.id,
+      code: chargeCodes.code,
+      description: chargeCodes.description,
+      type: chargeCodes.type,
+    })
+    .from(chargeCodes)
+    .where(eq(chargeCodes.active, true))
+    .orderBy(chargeCodes.code);
+  res.json(codes);
+}));
+
+// POST /api/timekeeping/kiosk/punch — records kiosk clock_in/out events into punch_ledger.
+// break_start and break_end are not valid kiosk actions; on_break is treated as clock_out.
+// employeeId in body is public.employees.id.
+router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
+  const body = KioskPunchBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const { employeeId, timezone, requestedAction, costCode, travelerId } = body.data;
+
+  // Resolve employee identity — employeeId is public.employees.id (resolved at login step)
+  if (employeeId == null) {
+    res.status(400).json({ error: "employeeId is required" });
+    return;
+  }
+
+  let resolvedEmployeeId: number;
+  let firstName = "Employee";
+  let lastName = "";
+
+  const [row] = await nativeDb
+    .select({ id: employees.id, name: employees.name, isActive: employees.isActive })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+  if (!row) { res.status(404).json({ error: "Employee not found" }); return; }
+  if (!row.isActive) { res.status(403).json({ error: "Employee is not active" }); return; }
+  resolvedEmployeeId = row.id;
+  const nameParts = (row.name ?? "Employee").trim().split(/\s+/);
+  firstName = nameParts[0] ?? "Employee";
+  lastName = nameParts.slice(1).join(" ");
+
+  // Resolve charge context from traveler barcode if provided
+  let chargeCodeId: number | null = null;
+  let chargeCodeStr: string | null = null;
+  let travellerIdResolved: string | null = null;
+  let productionWorkOrderId: string | null = null;
+  let department: string | null = null;
+  let operation: string | null = null;
+  let laborApprovalId: number | null = null;
+  let laborBudgetOverrideId: number | null = null;
+  let approvalStatus = "AUTO";
+
+  if (travelerId) {
+    const chargeCtx = await resolveTravelerBarcode(travelerId);
+    if (!chargeCtx.ok) { res.status(422).json({ error: `Could not resolve charge code from traveler: ${chargeCtx.error.message}` }); return; }
+    const ctx = chargeCtx.context;
+    travellerIdResolved = ctx.travelerId ?? null;
+    productionWorkOrderId = ctx.productionWorkOrderId ?? null;
+    chargeCodeStr = ctx.chargeCode ?? null;
+    department = ctx.department ?? null;
+    operation = ctx.operation ?? null;
+    laborApprovalId = ctx.laborApprovalId ?? null;
+    laborBudgetOverrideId = ctx.laborBudgetOverrideId ?? null;
+    approvalStatus = ctx.approvalStatus ?? "AUTO";
+    // Resolve chargeCodeId from chargeCodeStr
+    if (chargeCodeStr) {
+      const [ccRow] = await nativeDb
+        .select({ id: chargeCodes.id })
+        .from(chargeCodes)
+        .where(and(eq(chargeCodes.code, chargeCodeStr), eq(chargeCodes.active, true)))
+        .limit(1);
+      chargeCodeId = ccRow?.id ?? null;
+    }
+  } else if (costCode) {
+    const normalized = costCode.trim();
+    if (normalized) {
+      const [ccRow] = await nativeDb
+        .select({ id: chargeCodes.id })
+        .from(chargeCodes)
+        .where(and(eq(chargeCodes.code, normalized), eq(chargeCodes.active, true)))
+        .limit(1);
+      if (!ccRow) { res.status(400).json({ error: `Charge code '${normalized}' is not in the active charge code registry.` }); return; }
+      chargeCodeId = ccRow.id;
+      chargeCodeStr = normalized;
+    }
+  }
+
+  // Determine the action to take
+  const openSession = await ledger.getOpenSession(resolvedEmployeeId);
+  const currentStatus = ledger.deriveStatus(openSession);
+
+  // Resolve action: use requestedAction if provided, otherwise infer from status.
+  // on_break is treated as clock_out (breaks are not tracked via kiosk).
+  let action = requestedAction;
+  if (!action) {
+    if (currentStatus === "clocked_out") action = "clock_in";
+    else action = "clock_out"; // covers clocked_in and on_break
+  }
+
+  // Normalise on_break punches to clock_out
+  if (action === "clock_out" && currentStatus === "on_break") {
+    // fall through — closeSession handles open break sessions correctly
+  }
+
+  let entry;
+  let message = "";
+
+  switch (action) {
+    case "clock_in": {
+      if (currentStatus !== "clocked_out") {
+        res.status(409).json({ error: `Employee is already ${currentStatus === "clocked_in" ? "clocked in" : "on break"}. Clock out first.` });
+        return;
+      }
+      // PTO block: refuse clock-in on approved PTO days (kiosk path).
+      // Admin override is possible when an ADMIN/OWNER user supplies their JWT in the
+      // Authorization header along with adminPtoOverride=true and adminOverrideReason.
+      // optionalAuth middleware (applied to this route) populates req.user when a valid
+      // token is present; unauthenticated kiosk sessions leave req.user undefined.
+      const kioskToday = new Date().toISOString().slice(0, 10);
+      const kioskPtoBlock = await checkActivePTOForEmployee(resolvedEmployeeId, kioskToday);
+      if (kioskPtoBlock) {
+        const kioskAdminOverride = req.body?.adminPtoOverride === true;
+        const kioskOverrideReason = typeof req.body?.adminOverrideReason === "string" ? req.body.adminOverrideReason.trim() : null;
+        const kioskIsAdmin = req.user?.role === "ADMIN" || req.user?.role === "OWNER";
+        if (kioskAdminOverride && kioskIsAdmin && kioskOverrideReason) {
+          await logAction({
+            tableName: "leave_entries",
+            recordId: kioskPtoBlock.leaveEntryId,
+            action: "UPDATE",
+            oldValues: null,
+            newValues: {
+              ptoClockInOverride: true,
+              overrideActorId: req.user?.id ?? null,
+              overrideReason: kioskOverrideReason,
+              overrideTimestamp: new Date().toISOString(),
+              source: "KIOSK",
+            },
+            actor: actorFromUser(req.user ?? null, req.ip ?? null),
+          });
+        } else {
+          res.status(422).json({
+            error: "PTO_DAY_BLOCK",
+            message: "This employee has approved PTO for today. Clock-in is not permitted.",
+            leaveEntryId: kioskPtoBlock.leaveEntryId,
+          });
+          return;
+        }
+      }
+      entry = await ledger.openSession({
+        employeeId: resolvedEmployeeId,
+        source: "KIOSK",
+        laborClass: "REGULAR",
+        travelerId: travellerIdResolved,
+        productionWorkOrderId,
+        chargeCodeId,
+        department,
+        operation,
+        approvalStatus,
+        laborApprovalId,
+        laborBudgetOverrideId,
+      });
+      message = `Welcome, ${firstName}! You are now clocked in.`;
+      break;
+    }
+    case "clock_out": {
+      if (currentStatus === "clocked_out") {
+        res.status(409).json({ error: "Employee is not clocked in." });
+        return;
+      }
+      entry = await ledger.closeSession(resolvedEmployeeId);
+      message = `Goodbye, ${firstName}! You have clocked out.`;
+      break;
+    }
+    default: {
+      res.status(400).json({ error: `Invalid punch action for kiosk: ${action}. Only clock_in and clock_out are supported.` });
+      return;
+    }
+  }
+
+  notificationManager.broadcast({
+    type: 'punch_recorded',
+    title: 'Punch recorded',
+    message: `${firstName} ${lastName}`.trim(),
+    data: { employeeId: resolvedEmployeeId, action },
+    timestamp: new Date().toISOString(),
+  });
+
+  res.status(201).json({
+    entry,
+    action,
+    employeeId: resolvedEmployeeId,
+    message,
+    status: ledger.deriveStatus(action === "clock_out" ? null : entry),
+  });
+}));
+
+// ---------------------------------------------------------------------------
+// Session-scoped "my" endpoints — employee self-service via Employee Portal
+// Rewired to punch_ledger — uses req.user.employeeId (public.employees.id) directly.
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/timekeeping/punches/my/current
+ *
+ * Returns punch_ledger status for the authenticated employee.
+ * No timekeepingId resolution needed — req.user.employeeId is epochEmployeeId.
+ */
+router.get("/punches/my/current", authenticateToken, h(async (req, res): Promise<void> => {
+  const epochEmployeeId = req.user?.employeeId ?? null;
+  if (!epochEmployeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+
+  const openSession = await ledger.getOpenSession(epochEmployeeId);
+  const status = ledger.deriveStatus(openSession);
+  const hoursToday = await ledger.computeHoursToday(epochEmployeeId);
+
+  res.json({
+    employeeId: epochEmployeeId,
+    status,
+    clockedInAt: openSession?.clockIn?.toISOString() ?? null,
+    hoursToday,
+    openEntry: openSession ?? null,
+  });
+}));
+
+/**
+ * POST /api/timekeeping/punches/my
+ *
+ * Records a portal punch into punch_ledger.
+ * Supports clock_in / clock_out / break_start / break_end.
+ */
+router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const epochEmployeeId = req.user?.employeeId ?? null;
+  if (!epochEmployeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+
+  const { type, costCode, travelerId } = req.body ?? {};
+  const validTypes = ["clock_in", "clock_out", "break_start", "break_end"];
+  if (!type || !validTypes.includes(type)) {
+    res.status(400).json({ error: `type must be one of: ${validTypes.join(", ")}` });
+    return;
+  }
+
+  const nowLockCheck = new Date();
+  const periodLockedPortal = await isInFinalizedTimesheetPeriod(epochEmployeeId, nowLockCheck);
+  if (periodLockedPortal) {
+    res.status(409).json({
+      error: "This date falls within a finalized (certified, locked, or under active correction) timesheet period. Punch cannot be recorded via portal.",
+    });
+    return;
+  }
+
+  // Resolve charge context from traveler barcode if provided
+  let chargeCodeId: number | null = null;
+  let chargeCodeStr: string | null = null;
+  let travellerIdResolved: string | null = null;
+  let productionWorkOrderId: string | null = null;
+  let department: string | null = null;
+  let operation: string | null = null;
+  let laborApprovalId: number | null = null;
+  let laborBudgetOverrideId: number | null = null;
+  let approvalStatus = "AUTO";
+
+  if (travelerId) {
+    const chargeCtx = await resolveTravelerBarcode(travelerId);
+    if (!chargeCtx.ok) { res.status(422).json({ error: `Could not resolve charge code from traveler: ${chargeCtx.error.message}` }); return; }
+    const ctx = chargeCtx.context;
+    travellerIdResolved = ctx.travelerId ?? null;
+    productionWorkOrderId = ctx.productionWorkOrderId ?? null;
+    chargeCodeStr = ctx.chargeCode ?? null;
+    department = ctx.department ?? null;
+    operation = ctx.operation ?? null;
+    laborApprovalId = ctx.laborApprovalId ?? null;
+    laborBudgetOverrideId = ctx.laborBudgetOverrideId ?? null;
+    approvalStatus = ctx.approvalStatus ?? "AUTO";
+    if (chargeCodeStr) {
+      const [ccRow] = await nativeDb
+        .select({ id: chargeCodes.id })
+        .from(chargeCodes)
+        .where(and(eq(chargeCodes.code, chargeCodeStr), eq(chargeCodes.active, true)))
+        .limit(1);
+      chargeCodeId = ccRow?.id ?? null;
+    }
+  } else if (costCode) {
+    const normalized = costCode.trim();
+    if (normalized) {
+      const [ccRow] = await nativeDb
+        .select({ id: chargeCodes.id })
+        .from(chargeCodes)
+        .where(and(eq(chargeCodes.code, normalized), eq(chargeCodes.active, true)))
+        .limit(1);
+      if (!ccRow) { res.status(400).json({ error: `Charge code '${normalized}' is not in the active charge code registry.` }); return; }
+      chargeCodeId = ccRow.id;
+      chargeCodeStr = normalized;
+    }
+  }
+
+  const openSession = await ledger.getOpenSession(epochEmployeeId);
+  const currentStatus = ledger.deriveStatus(openSession);
+
+  let entry;
+
+  switch (type as string) {
+    case "clock_in": {
+      if (currentStatus !== "clocked_out") {
+        res.status(409).json({ error: `Already ${currentStatus === "clocked_in" ? "clocked in" : "on break"}` });
+        return;
+      }
+      // PTO block: refuse clock-in on approved PTO days (portal path)
+      // ADMIN/OWNER callers may bypass with adminPtoOverride=true + adminOverrideReason
+      const portalToday = new Date().toISOString().slice(0, 10);
+      const portalPtoBlock = await checkActivePTOForEmployee(epochEmployeeId, portalToday);
+      if (portalPtoBlock) {
+        const adminPtoOverride = req.body?.adminPtoOverride === true;
+        const adminOverrideReason = typeof req.body?.adminOverrideReason === "string" ? req.body.adminOverrideReason : null;
+        const isAdminOrOwner = req.user?.role === "ADMIN" || req.user?.role === "OWNER";
+        if (adminPtoOverride && isAdminOrOwner && adminOverrideReason) {
+          await logAction({
+            tableName: "leave_entries",
+            recordId: portalPtoBlock.leaveEntryId,
+            action: "UPDATE",
+            oldValues: null,
+            newValues: {
+              ptoClockInOverride: true,
+              overrideActorId: req.user?.id ?? null,
+              overrideReason: adminOverrideReason,
+              overrideTimestamp: new Date().toISOString(),
+            },
+            actor: actorFromUser(req.user ?? null, req.ip ?? null),
+          });
+        } else {
+          res.status(422).json({
+            error: "PTO_DAY_BLOCK",
+            message: "This employee has approved PTO for today. Clock-in is not permitted.",
+            leaveEntryId: portalPtoBlock.leaveEntryId,
+          });
+          return;
+        }
+      }
+      entry = await ledger.openSession({
+        employeeId: epochEmployeeId,
+        source: "PORTAL",
+        laborClass: "REGULAR",
+        travelerId: travellerIdResolved,
+        productionWorkOrderId,
+        chargeCodeId,
+        department,
+        operation,
+        approvalStatus,
+        laborApprovalId,
+        laborBudgetOverrideId,
+      });
+      break;
+    }
+    case "clock_out": {
+      if (currentStatus === "clocked_out") {
+        res.status(409).json({ error: "Not clocked in" });
+        return;
+      }
+      entry = await ledger.closeSession(epochEmployeeId);
+      break;
+    }
+    case "break_start": {
+      if (currentStatus !== "clocked_in") {
+        res.status(409).json({ error: currentStatus === "on_break" ? "Already on break" : "Not clocked in" });
+        return;
+      }
+      await ledger.closeSession(epochEmployeeId);
+      entry = await ledger.openSession({ employeeId: epochEmployeeId, source: "PORTAL", laborClass: "BREAK" });
+      break;
+    }
+    case "break_end": {
+      if (currentStatus !== "on_break") {
+        res.status(409).json({ error: "Not on break" });
+        return;
+      }
+      await ledger.closeSession(epochEmployeeId);
+      entry = await ledger.openSession({
+        employeeId: epochEmployeeId,
+        source: "PORTAL",
+        laborClass: "REGULAR",
+        travelerId: travellerIdResolved,
+        productionWorkOrderId,
+        chargeCodeId,
+        department,
+        operation,
+        approvalStatus,
+        laborApprovalId,
+        laborBudgetOverrideId,
+      });
+      break;
+    }
+    default:
+      res.status(400).json({ error: "Invalid type" });
+      return;
+  }
+
+  notificationManager.broadcast({
+    type: 'punch_recorded',
+    title: 'Punch recorded',
+    message: `Employee ${epochEmployeeId} — ${type}`,
+    data: { employeeId: epochEmployeeId, action: type },
+    timestamp: new Date().toISOString(),
+  });
+
+  res.status(201).json({ entry, type });
+}));
+
+// ---------------------------------------------------------------------------
+// Admin punch_ledger endpoints
+// All writes target public.punch_ledger exclusively.
+// GETs also query punch_ledger. The legacy timekeeping.punches table is
+// read-only archive; no new data is written to it.
+// ---------------------------------------------------------------------------
+
+// Zod schemas for admin punch_ledger routes
+const AdminPunchIdParams = z.object({ id: z.coerce.number().int().positive() });
+
+const AdminCreatePunchBody = z.object({
+  employeeId: z.string(), // public.employees.id (numeric string) or employee code
+  type: z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']),
+  punchedAt: z.string().datetime().optional(),
+  costCode: z.string().optional().nullable(),
+  chargeCodeId: z.number().int().optional().nullable(), // FK-safe; takes precedence over costCode
+  travelerId: z.string().optional().nullable(),
+  note: z.string().optional().nullable(),
+});
+
+const AdminUpdatePunchBody = z.object({
+  which: z.enum(['clockIn', 'clockOut']),
+  punchedAt: z.string().datetime({ message: "punchedAt must be an ISO-8601 datetime" }),
+  chargeCodeId: z.number().int().optional().nullable(),
+  travelerId: z.string().optional().nullable(),
+  editNote: z.string().min(1, "[DCAA TK-004] editNote is required for all punch edits"),
+});
+
+// GET /punches — list punch_ledger entries with optional employee/date filters
+// Returns event-shaped rows (one per clock-in/out event) so the Punch Review UI
+// can render a human-readable "Punched At" timestamp and punch type badge.
+router.get("/punches", authenticateToken, h(async (req, res): Promise<void> => {
+  const q = ListPunchesQueryParams.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
+  const sessions = await ledger.listSessions({
+    employeeId: q.data.employeeId ?? undefined,
+    from: q.data.from ? new Date(q.data.from) : undefined,
+    to: q.data.to ? new Date(q.data.to) : undefined,
+  });
+
+  // Expand each session into 1 or 2 event rows that the Punch Review UI expects.
+  type PunchEvent = {
+    id: number;
+    sessionId: number;
+    employeeId: number;
+    type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+    punchedAt: string;
+    source: string;
+    isEdited: boolean;
+    editNote: string | null;
+    costCode: string | null;
+    note: string | null;
+    hasMissingClockOut: boolean;
+  };
+
+  const events: PunchEvent[] = [];
+  for (const s of sessions) {
+    const inType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_start' : 'clock_in';
+    const outType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
+    const missingOut = s.clockOut == null;
+
+    events.push({
+      id: s.id,
+      sessionId: s.id,
+      employeeId: s.employeeId,
+      type: inType,
+      punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
+      source: s.source,
+      isEdited: s.isEdited ?? false,
+      editNote: s.editNote ?? null,
+      costCode: s.chargeCode ?? null,
+      note: null,
+      hasMissingClockOut: missingOut,
+    });
+
+    if (!missingOut && s.clockOut != null) {
+      events.push({
+        id: s.id,
+        sessionId: s.id,
+        employeeId: s.employeeId,
+        type: outType,
+        punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
+        source: s.source,
+        isEdited: s.isEdited ?? false,
+        editNote: s.editNote ?? null,
+        costCode: s.chargeCode ?? null,
+        note: null,
+        hasMissingClockOut: false,
+      });
+    }
+  }
+
+  // Sort ascending by punchedAt so the table reads chronologically
+  events.sort((a, b) => a.punchedAt.localeCompare(b.punchedAt));
+
+  res.json(events);
+}));
+
+// POST /punches — admin creates a punch_ledger entry (admin correction / manual punch)
+// employeeId must resolve to public.employees.id; clock-in opens a session, clock-out closes it.
+router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(async (req, res): Promise<void> => {
+  const body = AdminCreatePunchBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const { employeeId: rawEmpId, type, punchedAt, costCode, travelerId } = body.data;
+  const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+
+  // Resolve to public.employees.id integer
+  const resolvedId = await ledger.resolveEmployeeId(rawEmpId);
+  if (!resolvedId) {
+    res.status(404).json({ error: `Employee '${rawEmpId}' not found in public.employees` });
+    return;
+  }
+
+  const punchTime = punchedAt ? new Date(punchedAt) : new Date();
+  const lockedSheetForCreate = await findFinalizedTimesheetForPunch(resolvedId, punchTime);
+  if (lockedSheetForCreate) {
+    res.status(409).json({
+      error: `[DCAA TK-001] The requested punch time falls within ${lockedSheetForCreate.status} timesheet #${lockedSheetForCreate.id} ` +
+        `(${lockedSheetForCreate.periodStart}–${lockedSheetForCreate.periodEnd}) and cannot be added directly. ` +
+        `Submit a correction request via the Corrections workflow for timesheet #${lockedSheetForCreate.id}.`,
+    });
+    return;
+  }
+
+  // Resolve chargeCodeId FK: explicit chargeCodeId takes precedence; fallback to text lookup
+  let resolvedChargeCodeId = body.data.chargeCodeId !== undefined ? body.data.chargeCodeId : undefined;
+  if (resolvedChargeCodeId === undefined && costCode) {
+    const [cc] = await nativeDb
+      .select({ id: chargeCodes.id })
+      .from(chargeCodes)
+      .where(and(eq(chargeCodes.code, costCode), eq(chargeCodes.active, true)))
+      .limit(1);
+    if (!cc) {
+      res.status(422).json({ error: `Charge code '${costCode}' is not active or does not exist` });
+      return;
+    }
+    resolvedChargeCodeId = cc.id;
+  }
+
+  let entry;
+
+  const clockInTs = punchedAt ? new Date(punchedAt) : undefined;
+  const actorId = actor.id ?? null;
+  const actorLabel = actor.email ?? null;
+
+  if (type === 'clock_in') {
+    entry = await ledger.openSession({
+      employeeId: resolvedId,
+      source: 'PORTAL',
+      laborClass: 'REGULAR',
+      clockIn: clockInTs,
+      chargeCodeId: resolvedChargeCodeId ?? null,
+      travelerId: travelerId ?? null,
+      createdBy: actorId,
+      createdByDisplayName: actorLabel,
+    });
+  } else if (type === 'clock_out') {
+    entry = await ledger.closeSession(resolvedId, actorId, actorLabel);
+    if (!entry) { res.status(409).json({ error: 'No open session found for this employee' }); return; }
+  } else if (type === 'break_start') {
+    await ledger.closeSession(resolvedId, actorId, actorLabel);
+    entry = await ledger.openSession({ employeeId: resolvedId, source: 'PORTAL', laborClass: 'BREAK', clockIn: clockInTs });
+  } else {
+    await ledger.closeSession(resolvedId, actorId, actorLabel);
+    entry = await ledger.openSession({ employeeId: resolvedId, source: 'PORTAL', laborClass: 'REGULAR', clockIn: clockInTs });
+  }
+
+  res.status(201).json(entry);
+}));
+
+// GET /punches/employee/:employeeId/current — current punch status from punch_ledger
+router.get("/punches/employee/:employeeId/current", authenticateToken, h(async (req, res): Promise<void> => {
+  const p = GetCurrentPunchStatusParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
+  // employeeId is already a coerced integer (public.employees.id) — no further resolution needed
+  const resolvedId = p.data.employeeId;
+  const openSession = await ledger.getOpenSession(resolvedId);
+  const status = ledger.deriveStatus(openSession);
+  const hoursToday = await ledger.computeHoursToday(resolvedId);
+  res.json({
+    employeeId: resolvedId,
+    status: status === 'clocked_in' ? 'clocked_in' : status === 'on_break' ? 'on_break' : 'clocked_out',
+    clockedInAt: openSession?.clockIn?.toISOString() ?? null,
+    hoursToday,
+    openEntry: openSession ?? null,
+  });
+}));
+
+// GET /punches/:id — fetch single punch_ledger entry by integer ID
+router.get("/punches/:id", authenticateToken, h(async (req, res): Promise<void> => {
+  const p = AdminPunchIdParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
+  const row = await storage.getPunchLedgerEntryById(p.data.id);
+  if (!row) { res.status(404).json({ error: "Punch not found" }); return; }
+  res.json(row);
+}));
+
+// PATCH/PUT /punches/:id — admin edit of punch_ledger entry (DCAA-audited, FK-enforced)
+const handleAdminPunchUpdate = h(async (req: Request, res: Response): Promise<void> => {
+  const p = AdminPunchIdParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
+  const body = AdminUpdatePunchBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+  const existing = await storage.getPunchLedgerEntryById(p.data.id);
+  if (!existing) { res.status(404).json({ error: "Punch not found" }); return; }
+
+  const lockedSheet = await findFinalizedTimesheetForPunch(
+    existing.employeeId,
+    new Date(existing.clockIn)
+  );
+  if (lockedSheet) {
+    res.status(409).json({
+      error: `[DCAA TK-001] This session falls within ${lockedSheet.status} timesheet #${lockedSheet.id} ` +
+        `(${lockedSheet.periodStart}–${lockedSheet.periodEnd}) and cannot be edited directly. ` +
+        `Submit a correction request via the Corrections workflow for timesheet #${lockedSheet.id}.`,
+    });
+    return;
+  }
+
+  if (existing.source === "SALARIED_ENTRY") {
+    const salariedLockedSheet = await findPayrollApprovedSalariedTimesheetForPunch(
+      existing.employeeId,
+      new Date(existing.clockIn),
+    );
+    if (salariedLockedSheet) {
+      await nativeDb.insert(salariedTimesheetAuditTable).values({
+        timesheetId: salariedLockedSheet.id,
+        lineId: null,
+        action: "EDIT_BLOCKED_PAYROLL_APPROVED",
+        actorId: (req.user as { id?: number } | undefined)?.id ?? null,
+        actorName: actorFromUser(req.user ?? null, req.ip ?? null).email ?? null,
+        actorRole: actorFromUser(req.user ?? null, req.ip ?? null).role ?? null,
+        beforeState: null,
+        afterState: { punchLedgerId: p.data.id },
+        reason: "Admin punch edit blocked: timesheet PAYROLL_APPROVED",
+        source: "ADMIN_PUNCH_EDIT",
+        ipAddress: req.ip ?? null,
+      });
+      res.status(409).json({
+        error: `[DCAA TK-002] This salaried entry falls within PAYROLL_APPROVED timesheet #${salariedLockedSheet.id} ` +
+          `(${salariedLockedSheet.periodStart}–${salariedLockedSheet.periodEnd}) and cannot be edited directly. ` +
+          `Submit a correction request via the Corrections workflow for timesheet #${salariedLockedSheet.id}.`,
+      });
+      return;
+    }
+  }
+
+  const resolvedChargeCodeId = body.data.chargeCodeId !== undefined ? body.data.chargeCodeId : undefined;
+  const ts = new Date(body.data.punchedAt);
+
+  // Guard: clock-out must not be set to a time before the session's clock-in.
+  if (body.data.which === 'clockOut' && existing.clockIn && ts <= existing.clockIn) {
+    res.status(422).json({
+      error: `Clock-out time (${ts.toISOString()}) must be after the session's clock-in (${existing.clockIn.toISOString()}).`,
+    });
+    return;
+  }
+
+  // Use `which` as the authoritative discriminator — only the specified timestamp
+  // column is touched regardless of what else appears in the body.
+  const timestampPatch = body.data.which === 'clockIn'
+    ? { clockIn: ts }
+    : { clockOut: ts };
+
+  const updated = await storage.updatePunchLedgerEntry(p.data.id, {
+    ...timestampPatch,
+    ...(resolvedChargeCodeId !== undefined ? { chargeCodeId: resolvedChargeCodeId } : {}),
+    ...(body.data.travelerId !== undefined ? { travelerId: body.data.travelerId ?? null } : {}),
+    isEdited: true,
+    editNote: body.data.editNote,
+    updatedBy: (req.user as { employeeId?: number | null } | undefined)?.employeeId ?? null,
+    updatedByDisplayName: actor.email ?? null,
+  });
+
+  // DCAA audit trail — written only after successful punch_ledger update
+  const fieldsChanged: Record<string, { from: unknown; to: unknown }> = {
+    [body.data.which]: {
+      from: body.data.which === 'clockIn' ? existing.clockIn : existing.clockOut,
+      to: body.data.punchedAt,
+    },
+  };
+  if (resolvedChargeCodeId !== undefined) {
+    fieldsChanged.chargeCodeId = { from: existing.chargeCodeId, to: resolvedChargeCodeId };
+  }
+  if (body.data.travelerId !== undefined) {
+    fieldsChanged.travelerId = { from: existing.travelerId, to: body.data.travelerId ?? null };
+  }
+  await nativeDb.insert(auditEvents).values({
+    entityType: 'time_entry',
+    entityId: String(p.data.id),
+    action: 'ENTRY_UPDATED',
+    actorId: actor.id ?? null,
+    actorName: actor.email ?? null,
+    actorRole: actor.role ?? null,
+    reason: body.data.editNote,
+    fieldsChanged,
+    meta: {
+      source: 'punch_ledger',
+      correctionRoute: '/api/timekeeping/punches/:id',
+      previousIsEdited: existing.isEdited,
+      newIsEdited: true,
+    },
+    ipAddress: req.ip ?? null,
+    userAgent: req.headers['user-agent'] ?? null,
+  });
+
+  // Mirror the edit into labor_allocations — warn-only, never blocks the admin operation
+  try {
+    await dualWriteUpdateAllocation(updated);
+  } catch (err) {
+    console.warn('[dualWrite] Failed to update labor_allocations after admin punch edit', err);
+  }
+
+  res.json(updated);
+});
+
+router.patch("/punches/:id", authenticateToken, requireRole('ADMIN', 'OWNER'), handleAdminPunchUpdate);
+router.put("/punches/:id", authenticateToken, requireRole('ADMIN', 'OWNER'), handleAdminPunchUpdate);
+
+// DELETE /punches/:id — admin removes a punch_ledger entry (DCAA: editNote required)
+router.delete("/punches/:id", authenticateToken, requireRole('ADMIN', 'OWNER'), h(async (req, res): Promise<void> => {
+  const p = AdminPunchIdParams.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: p.error.message }); return; }
+  const { editNote } = req.body ?? {};
+  if (!editNote || !String(editNote).trim()) {
+    res.status(400).json({ error: "[DCAA TK-004] An edit reason (editNote) is required when deleting a punch record." });
+    return;
+  }
+  const existing = await storage.getPunchLedgerEntryById(p.data.id);
+  if (!existing) { res.status(404).json({ error: "Punch not found" }); return; }
+
+  const lockedSheet = await findFinalizedTimesheetForPunch(
+    existing.employeeId,
+    new Date(existing.clockIn)
+  );
+  if (lockedSheet) {
+    res.status(409).json({
+      error: `[DCAA TK-001] This session falls within ${lockedSheet.status} timesheet #${lockedSheet.id} ` +
+        `(${lockedSheet.periodStart}–${lockedSheet.periodEnd}) and cannot be deleted directly. ` +
+        `Submit a correction request via the Corrections workflow for timesheet #${lockedSheet.id}.`,
+    });
+    return;
+  }
+
+  if (existing.source === "SALARIED_ENTRY") {
+    const salariedLockedSheet = await findPayrollApprovedSalariedTimesheetForPunch(
+      existing.employeeId,
+      new Date(existing.clockIn),
+    );
+    if (salariedLockedSheet) {
+      const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+      await nativeDb.insert(salariedTimesheetAuditTable).values({
+        timesheetId: salariedLockedSheet.id,
+        lineId: null,
+        action: "EDIT_BLOCKED_PAYROLL_APPROVED",
+        actorId: (req.user as { id?: number } | undefined)?.id ?? null,
+        actorName: actor.email ?? null,
+        actorRole: actor.role ?? null,
+        beforeState: null,
+        afterState: { punchLedgerId: p.data.id },
+        reason: "Admin punch edit blocked: timesheet PAYROLL_APPROVED",
+        source: "ADMIN_PUNCH_DELETE",
+        ipAddress: req.ip ?? null,
+      });
+      res.status(409).json({
+        error: `[DCAA TK-002] This salaried entry falls within PAYROLL_APPROVED timesheet #${salariedLockedSheet.id} ` +
+          `(${salariedLockedSheet.periodStart}–${salariedLockedSheet.periodEnd}) and cannot be deleted directly. ` +
+          `Submit a correction request via the Corrections workflow for timesheet #${salariedLockedSheet.id}.`,
+      });
+      return;
+    }
+  }
+
+  await storage.deletePunchLedgerEntry(p.data.id);
+  const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+  await nativeDb.insert(auditEvents).values({
+    entityType: 'time_entry',
+    entityId: String(p.data.id),
+    action: 'ENTRY_DELETED',
+    actorId: actor.id ?? null,
+    actorName: actor.email ?? null,
+    actorRole: actor.role ?? null,
+    reason: String(editNote).trim(),
+    fieldsChanged: null,
+    meta: {
+      source: 'punch_ledger',
+      correctionRoute: '/api/timekeeping/punches/:id',
+      deletedSessionId: existing.id,
+      deletedEmployeeId: existing.employeeId,
+      deletedClockIn: existing.clockIn ?? null,
+      deletedClockOut: existing.clockOut ?? null,
+      deletedTravelerId: existing.travelerId ?? null,
+      deletedChargeCodeId: existing.chargeCodeId ?? null,
+    },
+    ipAddress: req.ip ?? null,
+    userAgent: req.headers['user-agent'] ?? null,
+  });
+  res.sendStatus(204);
+}));
+
+// ---------------------------------------------------------------------------
+// Active charge codes — used by supervisor and admin forms to show valid options
+// ---------------------------------------------------------------------------
+
+router.get("/charge-codes", authenticateToken, h(async (req, res): Promise<void> => {
+  const codes = await nativeDb
+    .select({
+      id: chargeCodes.id,
+      code: chargeCodes.code,
+      description: chargeCodes.description,
+      department: chargeCodes.department,
+      type: chargeCodes.type,
+    })
+    .from(chargeCodes)
+    .where(eq(chargeCodes.active, true))
+    .orderBy(chargeCodes.code);
+  res.json(codes);
+}));
+
+export default router;

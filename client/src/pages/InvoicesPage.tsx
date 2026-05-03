@@ -70,6 +70,9 @@ type Invoice = {
   pricingMismatch?: boolean;
   pricingAmbiguous?: boolean;
   autoCreated?: boolean;
+  poId?: number | null;
+  poOverride?: string | null;
+  poNumber?: string | null;
 };
 
 type Customer = {
@@ -141,6 +144,12 @@ function getFlagBadges(invoice: Invoice) {
     );
   }
   return badges;
+}
+
+function getPoDisplay(invoice: Invoice): string | null {
+  if (invoice.poNumber) return invoice.poNumber;
+  if (invoice.poOverride) return invoice.poOverride;
+  return null;
 }
 
 function formatCurrency(amount: string | number) {
@@ -306,6 +315,7 @@ function FlatInvoiceTable({
         <TableRow>
           <TableHead>Invoice #</TableHead>
           <TableHead>Customer</TableHead>
+          <TableHead>PO #</TableHead>
           <TableHead>Invoice Date</TableHead>
           <TableHead>Due Date</TableHead>
           <TableHead className="text-right">Amount</TableHead>
@@ -323,6 +333,9 @@ function FlatInvoiceTable({
             <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
             <TableCell className="text-sm text-muted-foreground">
               {invoice.customerName || invoice.customerId}
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {getPoDisplay(invoice) ?? '—'}
             </TableCell>
             <TableCell className="text-sm">
               {invoice.invoiceDate
@@ -691,6 +704,7 @@ export default function InvoicesPage() {
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead>Invoice #</TableHead>
+                                      <TableHead>PO #</TableHead>
                                       <TableHead>Invoice Date</TableHead>
                                       <TableHead>Due Date</TableHead>
                                       <TableHead className="text-right">
@@ -711,6 +725,9 @@ export default function InvoicesPage() {
                                         onClick={() => setLocation(`/finance/invoices/${invoice.id}`)}
                                       >
                                         <TableCell>{invoice.invoiceNumber}</TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                          {getPoDisplay(invoice) ?? '—'}
+                                        </TableCell>
                                         <TableCell>
                                           {invoice.invoiceDate
                                             ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')

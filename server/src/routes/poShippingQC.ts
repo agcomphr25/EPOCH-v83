@@ -6,6 +6,7 @@ import { auditUpdateOrders } from '../services/orderAuditWrapper';
 import { auditService } from '../services/auditService';
 import { generatePoPackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
+import { groupItemsByDescription, resolvePackingSlipDescription } from '../helpers/packingSlipHelper';
 
 const router = Router();
 
@@ -215,44 +216,16 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
         ? await storage.getCustomerDefaultAddress(String(customerId))
         : null;
 
-      // Generate invoice number (used as packing slip number for P1)
-      const invoiceNumber = await storage.getNextInvoiceNumber(
-        String(customerId || '0'),
-        customerName
-      );
-
-      // Collect unit numbers across all items in this PO group to derive sticker range
-      const unitNumbers: number[] = items.map((item) => {
-        const rawUnit =
-          item.order?.unitNumber ||
-          (() => {
-            if (!item.order?.orderId) return 1;
-            const unitMatch = item.order.orderId.match(/-(\d+)$/);
-            return unitMatch ? parseInt(unitMatch[1]) : 1;
-          })();
-        return typeof rawUnit === 'number' ? rawUnit : parseInt(String(rawUnit), 10) || 1;
-      });
-
-      const minUnit = Math.min(...unitNumbers);
-      const maxUnit = Math.max(...unitNumbers);
-      const stickerRange =
-        unitNumbers.length === 0
-          ? ''
-          : minUnit === maxUnit
-          ? String(minUnit)
-          : `${minUnit}-${maxUnit}`;
-
-      // Try to fetch shipment data to populate weeklyBoxNumber / shipmentNumber
+      // Fetch shipment data to populate weeklyBoxNumber / shipmentNumber + existing invoice_number
       let weeklyBoxNumber: string | undefined;
       let shipmentNumber: string | undefined;
       let trackingNumber: string | undefined;
+      let existingInvoiceNumber: string | null = null;
+      let shipmentRecordId: string | null = null;
 
       try {
-        const shipmentRows = await pool.query<{
-          reference: string | null;
-          master_tracking_number: string | null;
-        }>(
-          `SELECT sr.reference, sr.master_tracking_number
+        const shipmentRows = await pool.query(
+          `SELECT sr.id, sr.reference, sr.master_tracking_number, sr.invoice_number
            FROM shipment_records sr
            JOIN shipment_items si ON si.shipment_id = sr.id
            WHERE si.po_number = $1
@@ -260,35 +233,40 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
            LIMIT 1`,
           [poNumber]
         );
-
-        // pool.query returns an array directly (not { rows: [...] })
         if (shipmentRows.length > 0) {
           const sr = shipmentRows[0];
+          shipmentRecordId = sr.id || null;
           shipmentNumber = sr.reference || undefined;
           trackingNumber = sr.master_tracking_number || undefined;
+          existingInvoiceNumber = sr.invoice_number || null;
         }
       } catch (shipErr: any) {
         console.warn(`⚠️ Could not fetch shipment data for PO ${poNumber}: ${shipErr.message}`);
       }
 
-      // Map assembled order data to PackingSlipData (one aggregated row per PO group)
-      const stockModelCode =
-        items[0].poItem.stockModelId ||
-        items[0].poItem.itemName ||
-        items[0].poItem.stockModelName ||
-        'N/A';
+      // Resolve invoice number for the PDF — reuse if already stored, otherwise generate a new one.
+      // Persistence of a newly generated number is deferred until after matchedItemIds are collected
+      // so the shipment_record_id is guaranteed even if the PO-based lookup above found nothing.
+      let invoiceNumber: string;
+      let newlyGeneratedInvoice = false;
+      if (existingInvoiceNumber) {
+        invoiceNumber = existingInvoiceNumber;
+        console.log(`♻️ Reusing existing invoice number ${invoiceNumber} for PO ${poNumber}`);
+      } else {
+        invoiceNumber = await storage.getNextInvoiceNumber(
+          String(customerId || '0'),
+          customerName
+        );
+        newlyGeneratedInvoice = true;
+        console.log(`🆕 Generated new invoice number ${invoiceNumber} for PO ${poNumber}`);
+      }
 
-      const slipItems: PackingSlipItem[] = [
-        {
-          partNumber: poNumber,
-          description: stockModelCode,
-          contents: stockModelCode,
-          stickerRange,
-          quantity: items.length,
-          weeklyBoxNumber,
-          shipmentNumber,
-        },
-      ];
+      // Map assembled order data to PackingSlipData (one row per distinct description)
+      const slipItems = groupItemsByDescription(items, {
+        partNumber: poNumber,
+        weeklyBoxNumber,
+        shipmentNumber,
+      });
 
       const slipData: PackingSlipData = {
         packingSlipNumber: invoiceNumber,
@@ -347,6 +325,54 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           [pdfBase64, itemId]
         );
         console.log(`✅ Packing slip persisted to shipment_item id=${itemId} (poNumber=${poNumber})`);
+      }
+
+      // Persist invoice_number to shipment_records now that we have the full item context.
+      // If the initial PO-based lookup found a shipment_record, use that id; otherwise find
+      // the record via a fresh join so order_id-matched shipments are also covered.
+      if (newlyGeneratedInvoice) {
+        try {
+          if (!shipmentRecordId) {
+            // Fallback: resolve shipment_record via order_id if PO-based lookup missed
+            for (const item of items) {
+              const fallbackOrderId = item.order?.orderId || item.order?.order_id;
+              if (!fallbackOrderId) continue;
+              const fallbackRows = await pool.query(
+                `SELECT sr.id FROM shipment_records sr
+                 JOIN shipment_items si ON si.shipment_id = sr.id
+                 WHERE si.order_id = $1
+                 ORDER BY sr.shipped_at DESC LIMIT 1`,
+                [fallbackOrderId]
+              );
+              if (fallbackRows.length > 0) {
+                shipmentRecordId = fallbackRows[0].id || null;
+                break;
+              }
+            }
+          }
+          if (shipmentRecordId) {
+            const saveResult = await pool.query(
+              `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
+              [invoiceNumber, shipmentRecordId]
+            );
+            if (saveResult.length > 0) {
+              console.log(`💾 Saved invoice number ${invoiceNumber} to shipment_record id=${shipmentRecordId}`);
+            } else {
+              // Concurrent write won; read back the winning value so the PDF and DB agree
+              const reRead = await pool.query(
+                `SELECT invoice_number FROM shipment_records WHERE id = $1`,
+                [shipmentRecordId]
+              );
+              if (reRead[0]?.invoice_number && reRead[0].invoice_number !== invoiceNumber) {
+                console.log(`♻️ Concurrent write detected — DB has ${reRead[0].invoice_number}, PDF used ${invoiceNumber} for PO ${poNumber}`);
+              }
+            }
+          } else {
+            console.warn(`⚠️ Could not find shipment_record for PO ${poNumber} — invoice number ${invoiceNumber} not persisted`);
+          }
+        } catch (saveErr: any) {
+          console.warn(`⚠️ Could not persist invoice number to shipment_record for PO ${poNumber}: ${saveErr.message}`);
+        }
       }
 
       pdfs.push({
@@ -738,7 +764,8 @@ router.get('/oem-shipments', async (req, res) => {
       conditions.push(`(
         sr.customer_name ILIKE $${paramIndex} OR
         sr.master_tracking_number ILIKE $${paramIndex} OR
-        sr.reference ILIKE $${paramIndex}
+        sr.reference ILIKE $${paramIndex} OR
+        sr.invoice_number ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
       paramIndex++;
@@ -769,6 +796,7 @@ router.get('/oem-shipments', async (req, res) => {
           sr.package_count,
           sr.bill_type,
           sr.reference,
+          sr.invoice_number,
           sr.created_at,
           sr.created_by,
           sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
@@ -949,8 +977,10 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
         si.order_id,
         si.quantity,
         si.description,
+        sr.id AS shipment_record_id,
         sr.master_tracking_number AS tracking_number,
         sr.ship_to_snapshot,
+        sr.invoice_number AS shipment_invoice_number,
         poi.item_id AS poi_item_id,
         poi.item_name AS poi_item_name,
         poi.stock_model_name AS poi_stock_model_name,
@@ -969,6 +999,12 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
     }
 
     let packingSlipBase64: string = item.packing_slip_base64;
+
+    if (packingSlipBase64 && item.shipment_invoice_number) {
+      console.log(`📄 Packing slip exists — serving stored PDF (no-op reuse) for itemId=${itemId}, invoice=${item.shipment_invoice_number}`);
+    } else if (packingSlipBase64) {
+      console.log(`📄 Packing slip exists (no stored invoice #) — serving stored PDF for itemId=${itemId}`);
+    }
 
     if (!packingSlipBase64) {
       console.log(`⚙️ Packing slip missing — regenerating for item: ${itemId}`);
@@ -1028,33 +1064,56 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
             : `${minUnit}-${maxUnit}`;
 
         const firstSibling = siblingRows[0] || item;
-        const stockModelCode =
-          firstSibling.poi_stock_model_id ||
-          firstSibling.poi_item_name ||
-          firstSibling.poi_stock_model_name ||
-          item.poi_item_name ||
-          item.poi_stock_model_name ||
-          item.description ||
-          'N/A';
 
         // Use shipment reference from query result (sr.reference)
         const shipmentRef = firstSibling.shipment_reference || undefined;
 
         const { storage: slipStorage } = await import('../../storage');
 
-        // Require a proper PP-style invoice number — do not fall back to PS- placeholder
-        const invoiceNumber = await slipStorage.getNextInvoiceNumber('0', customerName);
+        // Resolve invoice number: reuse stored value, or generate + persist a new one
+        let invoiceNumber: string;
+        if (item.shipment_invoice_number) {
+          invoiceNumber = item.shipment_invoice_number;
+          console.log(`♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`);
+        } else {
+          invoiceNumber = await slipStorage.getNextInvoiceNumber('0', customerName);
+          console.log(`🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`);
+          if (item.shipment_record_id) {
+            try {
+              const saveResult = await pool.query(
+                `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
+                [invoiceNumber, item.shipment_record_id]
+              );
+              if (saveResult.length > 0) {
+                console.log(`💾 Saved invoice number ${invoiceNumber} to shipment_record id=${item.shipment_record_id}`);
+              } else {
+                const reRead = await pool.query(
+                  `SELECT invoice_number FROM shipment_records WHERE id = $1`,
+                  [item.shipment_record_id]
+                );
+                if (reRead[0]?.invoice_number) {
+                  invoiceNumber = reRead[0].invoice_number;
+                  console.log(`♻️ Concurrent write detected — using pre-existing invoice number ${invoiceNumber} for itemId=${itemId}`);
+                }
+              }
+            } catch (saveErr: any) {
+              console.warn(`⚠️ Could not save invoice number to shipment_record: ${saveErr.message}`);
+            }
+          }
+        }
 
-        const slipItems: PackingSlipItem[] = [
-          {
-            partNumber: poNumberForSlip,
-            description: stockModelCode,
-            contents: stockModelCode,
-            stickerRange,
-            quantity: totalQty,
-            shipmentNumber: shipmentRef,
-          },
-        ];
+        const slipItems = groupItemsByDescription(
+          siblingRows.map((r) => ({
+            poItem: {
+              stockModelName: r.poi_stock_model_name ?? null,
+              itemName: r.poi_item_name ?? null,
+              stockModelId: r.poi_stock_model_id ?? null,
+            },
+            order: { orderId: r.order_id ?? null },
+            quantity: r.quantity ?? 1,
+          })),
+          { partNumber: poNumberForSlip, shipmentNumber: shipmentRef }
+        );
 
         console.log(
           `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${invoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
@@ -1311,32 +1370,20 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
 
     let totalUpdated = 0;
 
-    // Update purchase_order_items.stock_status back to null (ready for shipping QC)
-    // Guard: skip items that have already reached a terminal SHIPPED or FULFILLED status.
-    // NULL stock_status rows must be explicitly included via IS NULL because SQL's NOT IN
-    // returns UNKNOWN (not TRUE) for NULL values, which would incorrectly exclude them.
+    // Update purchase_order_items.stock_status back to null (ready for shipping QC).
+    // The explicit return-to-QC action is itself the business authorization to reverse any
+    // prior shipped status, so we clear stock_status unconditionally for all items in this
+    // shipment — including metal accessories that have no production order and whose Shipping
+    // QC visibility depends entirely on stock_status being NULL.
     if (uniquePoItemIds.length > 0) {
       const poItemResult = await pool.query(`
         UPDATE purchase_order_items 
         SET stock_status = NULL,
             updated_at = NOW()
         WHERE id = ANY($1::int[])
-          AND (stock_status IS NULL OR stock_status NOT IN ('SHIPPED', 'FULFILLED'))
         RETURNING id, stock_status
       `, [uniquePoItemIds]);
       const poItemsUpdated = poItemResult.rows || poItemResult;
-
-      // Count items that were skipped because they are in a terminal status
-      const terminalCheckResult = await pool.query(`
-        SELECT COUNT(*)::int AS count
-        FROM purchase_order_items
-        WHERE id = ANY($1::int[])
-          AND stock_status IN ('SHIPPED', 'FULFILLED')
-      `, [uniquePoItemIds]);
-      const terminalSkipped = terminalCheckResult.rows[0]?.count ?? 0;
-      if (terminalSkipped > 0) {
-        console.warn(`⚠️ Skipped ${terminalSkipped} purchase_order_items that are already SHIPPED or FULFILLED — their status was not cleared.`);
-      }
       console.log(`✅ Updated ${poItemsUpdated.length} purchase_order_items to null stock_status`);
       totalUpdated += poItemsUpdated.length;
     }
@@ -2069,42 +2116,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           groupCustomerName
         );
 
-        const unitNumbers: number[] = groupItems.map((gi) => {
-          const rawUnit =
-            gi.order?.unitNumber ||
-            (() => {
-              if (!gi.order?.orderId) return 1;
-              const unitMatch = gi.order.orderId.match(/-(\d+)$/);
-              return unitMatch ? parseInt(unitMatch[1]) : 1;
-            })();
-          return typeof rawUnit === 'number' ? rawUnit : parseInt(String(rawUnit), 10) || 1;
+        const slipItems = groupItemsByDescription(groupItems, {
+          partNumber: groupPoNumber,
+          shipmentNumber: referenceNumber || undefined,
         });
-
-        const minUnit = Math.min(...unitNumbers);
-        const maxUnit = Math.max(...unitNumbers);
-        const stickerRange =
-          unitNumbers.length === 0
-            ? ''
-            : minUnit === maxUnit
-            ? String(minUnit)
-            : `${minUnit}-${maxUnit}`;
-
-        const stockModelCode =
-          groupItems[0].poItem.stockModelId ||
-          groupItems[0].poItem.itemName ||
-          groupItems[0].poItem.stockModelName ||
-          'N/A';
-
-        const slipItems: PackingSlipItem[] = [
-          {
-            partNumber: groupPoNumber,
-            description: stockModelCode,
-            contents: stockModelCode,
-            stickerRange,
-            quantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
-            shipmentNumber: referenceNumber || undefined,
-          },
-        ];
 
         const slipData: PackingSlipData = {
           packingSlipNumber: invoiceNumber,
@@ -2192,7 +2207,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
         const shipmentItemsData = orderDetails.map((detail) => {
           const itemPoNumber = detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '';
-          const itemDescription = detail.order.itemName || detail.order.item_name || detail.poItem?.stockModelName || detail.poItem?.stock_model_name || detail.poItem?.itemName || detail.poItem?.item_name || '';
+          const itemDescription = resolvePackingSlipDescription({
+            stockModelName: detail.poItem?.stockModelName || detail.poItem?.stock_model_name,
+            itemName: detail.order.itemName || detail.order.item_name || detail.poItem?.itemName || detail.poItem?.item_name,
+            stockModelId: detail.poItem?.stockModelId || detail.poItem?.stock_model_id,
+          });
           const itemOrderId = detail.order.orderId || detail.order.order_id || '';
           const packingSlipBase64 = poSlipMap.get(itemPoNumber) || undefined;
 

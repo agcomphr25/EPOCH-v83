@@ -11,6 +11,7 @@ import { useWebSocketNotifications } from './hooks/useWebSocketNotifications';
 import NotFound from './pages/not-found';
 import AccessDenied from './pages/AccessDenied';
 import RouteGuard from './components/auth/RouteGuard';
+import SessionExpiryListener from './components/SessionExpiryListener';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagement';
 import OrdersManagementPage from './pages/OrdersManagementPage';
@@ -40,6 +41,7 @@ import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
 import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
 import AuditSettings from './pages/AuditSettings';
+import VaultPage from './pages/VaultPage';
 import OrderTimeline from './pages/OrderTimeline';
 import MediaLibrary from './pages/MediaLibrary';
 import SignPDFPage from './pages/SignPDFPage';
@@ -60,10 +62,15 @@ import PDFSignatureTool from './pages/PDFSignatureTool';
 import MaintenancePage from './pages/MaintenancePage';
 import MaintenanceEventsPage from './pages/MaintenanceEventsPage';
 import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
+import ProductionWorkOrderDetailPage from './pages/ProductionWorkOrderDetailPage';
+import WADWizardPage from './pages/WADWizardPage';
 import AssetsPage from './pages/AssetsPage';
 import AssetDashboardPage from './pages/AssetDashboardPage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
-import TimeClockAdminPage from './pages/TimeClockAdminPage';
+import KioskPage from './pages/timekeeping/KioskPage';
+import TimeClockAdminPage from './pages/timekeeping/TimeClockAdminPage';
+import SalariedTimeEntryPage from './pages/timekeeping/SalariedTimeEntryPage';
+import SalariedDraftListPage from './pages/timekeeping/SalariedDraftListPage';
 import Module8TestPage from './pages/Module8TestPage';
 import CommunicationInboxPage from './pages/CommunicationInboxPage';
 import MarketingCommunications from './pages/MarketingCommunications';
@@ -117,6 +124,7 @@ import AssemblyQueue from './pages/AssemblyQueue';
 import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
+import P2POViewer from './pages/P2POViewer';
 import P2CertificateViewer from './pages/P2CertificateViewer';
 import P2RmaDetailPage from './pages/P2RmaDetailPage';
 import P2ShipmentDetail from './pages/P2ShipmentDetail';
@@ -143,6 +151,8 @@ import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
 import ProductionCommandCenter from './pages/ProductionCommandCenter';
 import ProductionControlCenter from './pages/ProductionControlCenter';
+import ProductionControlCenterLive from './pages/ProductionControlCenterLive';
+import DailyThroughputBoard from './pages/DailyThroughputBoard';
 import JOHNLTestDashboard from './pages/JOHNLTestDashboard';
 import JENSTestDashboard from './pages/JENSTestDashboard';
 import STACIWTestDashboard from './pages/STACIWTestDashboard';
@@ -178,6 +188,7 @@ import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from './pages/DocumentManagement';
 import RoutingDocumentManagement from './pages/RoutingDocumentManagement';
 import RoutingTemplates from './pages/RoutingTemplates';
+import TemplateLibraryPage from './pages/TemplateLibraryPage';
 import AnodizeJobs from './pages/AnodizeJobs';
 import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
@@ -198,6 +209,7 @@ import {
 } from '@/modules/training-builder';
 import ImportCertifications from '@/pages/ImportCertifications';
 import CertificationBacklog from '@/pages/CertificationBacklog';
+import SkillMatrixPage from '@/pages/SkillMatrixPage';
 import Calendar from './pages/Calendar';
 import EmailInbox from './pages/EmailInbox';
 import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
@@ -234,6 +246,7 @@ import HistoricalDataEntry from './pages/HistoricalDataEntry';
 import ShippedOrderDiscountsPage from './pages/ShippedOrderDiscountsPage';
 import InvoiceCategoryBreakdownPage from './pages/InvoiceCategoryBreakdownPage';
 import ScrapReportPage from './pages/ScrapReportPage';
+import ChargeCodeManagerPage from './pages/finance/ChargeCodeManagerPage';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
 import RMAFormPage from './pages/RMAFormPage';
@@ -255,6 +268,7 @@ import CommunicationLogsPage from './pages/CommunicationLogsPage';
 import MonitoredLinksManager from './pages/MonitoredLinksManager';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
+import VendorPOComplianceBackfillPage from './pages/VendorPOComplianceBackfillPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
 import CuttingTableControlCenter from './pages/CuttingTableControlCenter';
 import CuttingControlCenterLayout from './pages/cutting/CuttingControlCenterLayout';
@@ -262,12 +276,16 @@ import FabricInventoryPage from './pages/FabricInventoryPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
+import VendorConfirmPage from './pages/VendorConfirmPage';
 import FillAndSignPage from './pages/FillAndSignPage';
 import QRCodeAdminPage from './pages/QRCodeAdminPage';
 import QRErrorPage from './pages/QRErrorPage';
 import AttentionDashboard from './pages/AttentionDashboard';
 import FillablePdfTemplatesAdmin from './pages/FillablePdfTemplatesAdmin';
 import VisualFieldEditor from './pages/VisualFieldEditor';
+import PdfFormsPage from './pages/PdfFormsPage';
+import PdfFormsEditorPage from './pages/PdfFormsEditorPage';
+import PdfFormsFillPage from './pages/PdfFormsFillPage';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
 import MetricsSandbox from './pages/MetricsSandbox';
@@ -275,7 +293,9 @@ import MetricDirectory from './pages/MetricDirectory';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
+import ProjectClosingRecordPage from './pages/ProjectClosingRecordPage';
 import P2PipelineBoardPage from './pages/P2PipelineBoardPage';
+import PMControlCenterPage from './pages/PMControlCenterPage';
 import HelpCenter from './pages/HelpCenter';
 import P2OrderGuide from './pages/P2OrderGuide';
 import TravelerManagement from './pages/TravelerManagement';
@@ -292,6 +312,28 @@ import OrderHeatMap from './pages/OrderHeatMap';
 import QuickNotesPage from './pages/QuickNotesPage';
 import RFQListPage from './pages/RFQListPage';
 import RFQBuilderPage from './pages/RFQBuilderPage';
+import SystemAuditsPage from './pages/SystemAuditsPage';
+import CommandCenter from './pages/CommandCenter';
+import EdriDashboard from './pages/admin/EdriDashboard';
+import EdriDomainDetail from './pages/admin/EdriDomainDetail';
+import EdriRedFlags from './pages/admin/EdriRedFlags';
+import EdriRemediation from './pages/admin/EdriRemediation';
+import EdriHeatmap from './pages/admin/EdriHeatmap';
+import EdriMissingEvidence from './pages/admin/EdriMissingEvidence';
+import EdriHistory from './pages/admin/EdriHistory';
+import EdriEvidence from './pages/admin/EdriEvidence';
+import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
+import DcaaFindings from './pages/admin/DcaaFindings';
+import EdriExecutiveMatrix from './pages/admin/EdriExecutiveMatrix';
+import SecureVaultPage from './pages/admin/SecureVaultPage';
+import CmmcDashboard from './pages/admin/CmmcDashboard';
+import BusinessContinuityDashboard from './pages/admin/BusinessContinuityDashboard';
+import IdentityMatrixPage from './pages/IdentityMatrixPage';
+import IdentityDiagnosticPage from './pages/IdentityDiagnosticPage';
+import ProteusLabsDashboard from './pages/proteus-labs/ProteusLabsDashboard';
+import ProteusPromptBuilder from './pages/proteus-labs/ProteusPromptBuilder';
+import ProteusPromptDetail from './pages/proteus-labs/ProteusPromptDetail';
+import ProteusExecutionHistory from './pages/proteus-labs/ProteusExecutionHistory';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -308,8 +350,9 @@ function ConditionalOfflineIndicator() {
 
 function ConditionalMainWrapper({ children }: { children: React.ReactNode }) {
   const isEmbed = useIsEmbedMode();
-  if (isEmbed) {
-    return <div className="w-full h-screen overflow-auto">{children}</div>;
+  const [location] = useLocation();
+  if (isEmbed || location.startsWith('/kiosk') || location.startsWith('/vendor-confirm')) {
+    return <div className="w-full min-h-screen overflow-auto">{children}</div>;
   }
   return <main className="container mx-auto px-4 py-8">{children}</main>;
 }
@@ -326,8 +369,10 @@ function ConditionalNavigation() {
     location === '/login' ||
     location.startsWith('/sign-order') || // Hide navigation on customer sign order page
     location.startsWith('/fill-and-sign') || // Hide navigation on customer fill-and-sign page
+    location.startsWith('/vendor-confirm') || // Hide navigation on vendor PO confirmation page
     location.startsWith('/tv-display') || // Hide navigation on TV display page
-    location.startsWith('/tv-timer-board'); // Hide navigation on timer board page
+    location.startsWith('/tv-timer-board') || // Hide navigation on timer board page
+    location.startsWith('/kiosk'); // Hide navigation on time-clock kiosk (PIN-based, no EPOCH nav)
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -399,11 +444,41 @@ function WebSocketNotifications() {
   return null;
 }
 
+/**
+ * Renders the MessageNotificationPopup only when there is a confirmed active user session.
+ *
+ * The component itself guards its internal unread-count query with `enabled: !!currentUser?.id`,
+ * but it still fires the /api/auth/session query unconditionally on mount.  For unauthenticated
+ * floor operators viewing traveler execution pages that query always returns 401, producing
+ * console noise.  By querying the session here first and short-circuiting when unauthenticated,
+ * we prevent both the session query noise and any accidental future regressions in the inner
+ * guard from surfacing hard-auth 401 errors on public floor-operator routes.
+ */
+function SessionAwareMessageNotificationPopup() {
+  const { data: sessionUser, isLoading: sessionLoading } = useQuery<{ id: number } | null>({
+    queryKey: ['/api/auth/session'],
+    retry: false,
+  });
+
+  // While the session request is in flight avoid a flash — render nothing.
+  // Once settled, only render the popup when a real authenticated user is present.
+  if (sessionLoading || !sessionUser?.id) return null;
+  return <MessageNotificationPopup />;
+}
+
 function RedirectToShippingTracker() {
   const [, setLocation] = useLocation();
   React.useEffect(() => {
     setLocation('/shipping-tracker');
   }, [setLocation]);
+  return null;
+}
+
+function Redirect({ to }: { to: string }) {
+  const [, setLocation] = useLocation();
+  React.useEffect(() => {
+    setLocation(to, { replace: true });
+  }, [to, setLocation]);
   return null;
 }
 
@@ -537,10 +612,13 @@ function App() {
                   <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/admin/shipping-status-audit" component={ShippingStatusAuditPage} />
                   <Route path="/admin/control-tower" component={ProductionControlTower} />
+                  <Route path="/admin/secure-vault" component={SecureVaultPage} />
                   <Route path="/admin/inventory-reconciliation" component={InventoryReconciliationPage} />
+                  <Route path="/system-audits" component={SystemAuditsPage} />
                   <Route path="/admin/locate-order" component={LocateOrder} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
+                  <Route path="/vault" component={VaultPage} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />
                   <Route path="/sign-pdf" component={SignPDFPage} />
@@ -566,6 +644,7 @@ function App() {
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />
                   <Route path="/vendors" component={VendorManagement} />
+                  <Route path="/vendor-pos/compliance-backfill" component={VendorPOComplianceBackfillPage} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
                   
                   {/* Cost Accounting Routes */}
@@ -575,6 +654,11 @@ function App() {
                   <Route path="/pdf-templates" component={PDFTemplateManager} />
                   <Route path="/fillable-pdf-templates" component={FillablePdfTemplatesAdmin} />
                   <Route path="/fillable-pdf-templates/:id/editor" component={VisualFieldEditor} />
+
+                  {/* PDF Forms Module */}
+                  <Route path="/pdf-forms" component={PdfFormsPage} />
+                  <Route path="/pdf-forms/editor/:id" component={PdfFormsEditorPage} />
+                  <Route path="/pdf-forms/fill/:id" component={PdfFormsFillPage} />
                   
                   {/* Item Groups Management */}
                   <Route path="/manage-groups" component={ManageGroups} />
@@ -585,8 +669,8 @@ function App() {
                     path="/p1-purchase-orders"
                     component={PurchaseOrders}
                   />
-                  <Route path="/p2-purchase-orders">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
-                  <Route path="/p2-department-manager">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/p2-purchase-orders"><Redirect to="/p2-control-center" /></Route>
+                  <Route path="/p2-department-manager"><Redirect to="/p2-control-center" /></Route>
                   <Route path="/po-products" component={POProductsPage} />
                   <Route path="/product-labels" component={ProductLabelsPage} />
 
@@ -674,6 +758,12 @@ function App() {
                   <Route path="/maintenance-events/:id">
                     {(params) => <WorkOrderDetailPage params={params} />}
                   </Route>
+                  <Route path="/work-orders/:id/wizard">
+                    {(params) => <WADWizardPage params={params} />}
+                  </Route>
+                  <Route path="/work-orders/:id">
+                    {(params) => <ProductionWorkOrderDetailPage params={params} />}
+                  </Route>
                   <Route path="/assets" component={AssetsPage} />
                   <Route path="/asset-dashboard" component={AssetDashboardPage} />
 
@@ -698,6 +788,18 @@ function App() {
                     component={EmployeePortal}
                   />
                   <Route
+                    path="/employee-portal/:portalId/drafts"
+                    component={SalariedDraftListPage}
+                  />
+                  <Route
+                    path="/employee-portal/:portalId/time-entry/:draftId"
+                    component={SalariedTimeEntryPage}
+                  />
+                  <Route
+                    path="/employee-portal/:portalId/time-entry"
+                    component={SalariedTimeEntryPage}
+                  />
+                  <Route
                     path="/employee-dashboard"
                     component={EmployeeDashboard}
                   />
@@ -709,6 +811,7 @@ function App() {
                     path="/employee-portal-new"
                     component={EmployeePortal}
                   />
+                  <Route path="/kiosk" component={KioskPage} />
                   <Route
                     path="/time-clock-admin"
                     component={TimeClockAdminPage}
@@ -723,6 +826,8 @@ function App() {
                   {/* User Dashboard Routes */}
                   <Route path="/production-command-center" component={ProductionCommandCenter} />
                   <Route path="/production-control-center" component={ProductionControlCenter} />
+                  <Route path="/production-control-center-live" component={ProductionControlCenterLive} />
+                  <Route path="/daily-throughput-board" component={DailyThroughputBoard} />
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
                   <Route
                     path="/admin-dashboard"
@@ -778,8 +883,8 @@ function App() {
                   <Route path="/cutting-control-center/:rest*" component={CuttingControlCenterLayout} />
                   <Route path="/cutting-control-center" component={CuttingControlCenterLayout} />
                   <Route path="/cutting-table-legacy" component={CuttingTableControlCenter} />
-                  <Route path="/cutting-table">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
-                  <Route path="/cutting-dashboard">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
+                  <Route path="/cutting-table"><Redirect to="/cutting-control-center" /></Route>
+                  <Route path="/cutting-dashboard"><Redirect to="/cutting-control-center" /></Route>
                   <Route path="/fabric-inventory" component={FabricInventoryPage} />
 
                   {/* Employee Badge Routes */}
@@ -892,6 +997,10 @@ function App() {
                     path="/finance/scrap-report"
                     component={ScrapReportPage}
                   />
+                  <Route
+                    path="/finance/charge-codes"
+                    component={ChargeCodeManagerPage}
+                  />
 
                   {/* Refund Management Routes */}
                   <Route path="/refund-request" component={RefundRequest} />
@@ -928,22 +1037,23 @@ function App() {
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
                   <Route path="/p2/packing-slip/:id" component={P2PackingSlipViewer} />
+                  <Route path="/p2/purchase-orders/:id/preview" component={P2POViewer} />
                   <Route path="/p2/rma/:id" component={P2RmaDetailPage} />
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
                   <Route path="/p2/shipments" component={P2ShipmentHistory} />
                   <Route path="/p2/shipments/:lotId" component={P2ShipmentDetail} />
                   <Route path="/p2/ready-to-ship" component={P2ReadyToShipDashboard} />
                   <Route path="/p2/test-report/:id" component={P2TestReportViewer} />
-                  <Route path="/p2-production-queue">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
-                  <Route path="/cutting-table-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
+                  <Route path="/p2-production-queue"><Redirect to="/p2-control-center" /></Route>
+                  <Route path="/cutting-table-queue"><Redirect to="/cutting-control-center" /></Route>
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
                   <Route path="/kits-queue" component={KitsQueue} />
                   <Route path="/layup-queue" component={LayupQueue} />
                   <Route path="/core-queue" component={CoreQueue} />
                   <Route path="/sub-assembly-queue" component={SubAssemblyQueue} />
                   <Route path="/assembly-queue" component={AssemblyQueue} />
-                  <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
-                  <Route path="/part-routing-management">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/cutting-table-mfg-queue"><Redirect to="/cutting-control-center" /></Route>
+                  <Route path="/part-routing-management"><Redirect to="/p2-control-center" /></Route>
                   
                   {/* Traveler System - AS9100 compliant production travelers */}
                   <Route path="/travelers" component={TravelerManagement} />
@@ -983,8 +1093,10 @@ function App() {
                   />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/preproduction-checklists" component={PreproductionChecklistPage} />
+                  <Route path="/pm-control-center" component={PMControlCenterPage} />
                   <Route path="/projects" component={ProjectsPage} />
                   <Route path="/projects/pipeline" component={P2PipelineBoardPage} />
+                  <Route path="/projects/:id/closing" component={ProjectClosingRecordPage} />
                   <Route path="/projects/:id" component={ProjectDetailPage} />
                   <Route
                     path="/kickback-tracking"
@@ -1003,6 +1115,10 @@ function App() {
                     component={RoutingTemplates}
                   />
                   <Route
+                    path="/template-library"
+                    component={TemplateLibraryPage}
+                  />
+                  <Route
                     path="/anodize-jobs"
                     component={AnodizeJobs}
                   />
@@ -1013,14 +1129,15 @@ function App() {
 
                   {/* Training Routes */}
                   <Route path="/training-control-center" component={TrainingControlCenter} />
-                  <Route path="/training">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
-                  <Route path="/training-management">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
-                  <Route path="/training-matrix">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
-                  <Route path="/training-matrix-import">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
-                  <Route path="/training-matrix-manage">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
+                  <Route path="/training"><Redirect to="/training-control-center" /></Route>
+                  <Route path="/training-management"><Redirect to="/training-control-center" /></Route>
+                  <Route path="/training-matrix"><Redirect to="/training-control-center" /></Route>
+                  <Route path="/training-matrix-import"><Redirect to="/training-control-center" /></Route>
+                  <Route path="/training-matrix-manage"><Redirect to="/training-control-center" /></Route>
                   <Route path="/import-certifications" component={ImportCertifications} />
                   <Route path="/certification-backlog" component={CertificationBacklog} />
-                  <Route path="/p2-certifications">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/skill-matrix" component={SkillMatrixPage} />
+                  <Route path="/p2-certifications"><Redirect to="/p2-control-center" /></Route>
                   <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
                   <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
                   <Route path="/training/programs" component={ProgramsPage} />
@@ -1051,7 +1168,7 @@ function App() {
                     path="/simplified-layup-scheduler"
                     component={SimplifiedLayupScheduler}
                   />
-                  <Route path="/p2-serialized-scheduler">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/p2-serialized-scheduler"><Redirect to="/p2-control-center" /></Route>
                   <Route
                     path="/production-queue"
                     component={ProductionQueueManager}
@@ -1081,6 +1198,8 @@ function App() {
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
                   <Route path="/metric-directory" component={MetricDirectory} />
+                  <Route path="/identity-matrix" component={IdentityMatrixPage} />
+                  <Route path="/admin/identity-diagnostic" component={IdentityDiagnosticPage} />
                   <Route path="/past-due-report" component={PastDueReport} />
                   <Route path="/what-if-forecast" component={WhatIfForecast} />
 
@@ -1152,6 +1271,38 @@ function App() {
                     component={SignOrderPage}
                   />
                   
+                  <Route path="/command-center" component={CommandCenter} />
+
+                  {/* EDRI — EPOCH DCAA Readiness Index */}
+                  <Route path="/admin/edri" component={EdriDashboard} />
+                  <Route path="/admin/edri/heatmap" component={EdriHeatmap} />
+                  <Route path="/admin/edri/red-flags" component={EdriRedFlags} />
+                  <Route path="/admin/edri/remediation" component={EdriRemediation} />
+                  <Route path="/admin/edri/missing-evidence" component={EdriMissingEvidence} />
+                  <Route path="/admin/edri/history" component={EdriHistory} />
+                  <Route path="/admin/edri/domain/:domainKey" component={EdriDomainDetail} />
+                  <Route path="/admin/edri/snapshot/:snapshotId/evidence/:domainKey" component={EdriEvidence} />
+                  <Route path="/admin/edri/snapshot/:snapshotId/evidence" component={EdriEvidence} />
+                  <Route path="/admin/edri/executive-matrix" component={EdriExecutiveMatrix} />
+                  <Route path="/admin/edri/snapshot/:snapshotId" component={EdriSnapshotDetail} />
+                  <Route path="/admin/dcaa-findings" component={DcaaFindings} />
+
+                  {/* CMMC 2.0 Level 2 Readiness Dashboard */}
+                  <Route path="/admin/cmmc" component={CmmcDashboard} />
+
+                  {/* Business Continuity Dashboard */}
+                  <Route path="/admin/continuity" component={BusinessContinuityDashboard} />
+
+                  {/* Proteus Labs — Prompt Library (ADMIN/OWNER only) */}
+                  <Route path="/proteus-labs" component={ProteusLabsDashboard} />
+                  <Route path="/proteus-labs/new" component={ProteusPromptBuilder} />
+                  <Route path="/proteus-labs/history" component={ProteusExecutionHistory} />
+                  <Route path="/proteus-labs/:id/edit" component={ProteusPromptBuilder} />
+                  <Route path="/proteus-labs/:id" component={ProteusPromptDetail} />
+
+                  {/* Vendor PO Confirmation — public route for external vendors */}
+                  <Route path="/vendor-confirm" component={VendorConfirmPage} />
+
                   {/* Fill and Sign Routes - Public routes for customers */}
                   <Route
                     path="/fill-and-sign/:publicSignatureId"
@@ -1167,7 +1318,8 @@ function App() {
             <Toaster />
             <HotToaster />
             <WebSocketNotifications />
-            <MessageNotificationPopup />
+            <SessionAwareMessageNotificationPopup />
+            <SessionExpiryListener />
           </Router>
         </DeploymentAuthWrapper>
       </QueryClientProvider>

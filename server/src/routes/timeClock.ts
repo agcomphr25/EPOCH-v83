@@ -1,18 +1,31 @@
 import { Express, Request, Response } from 'express';
 import { db } from '../../db';
-import { apiIntegrationKeys, epochExternalEvents, epochLaborFacts } from '../../schema';
+import { apiIntegrationKeys, epochExternalEvents, epochLaborFacts, employees } from '../../schema';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
-import { authenticateToken, requireRole } from '../../middleware/auth';
+import { authenticateToken, requireRole, optionalAuth } from '../../middleware/auth';
+import { DEFAULT_LABOR_FACTS_LIMIT, DEFAULT_LABOR_FACTS_BY_RANGE_LIMIT, MAX_LABOR_FACTS_LIMIT } from '../constants/laborFacts';
+import { DEFAULT_CONNECTOR_HEALTH_HISTORY_LIMIT, MAX_CONNECTOR_HEALTH_HISTORY_LIMIT } from '../constants/connectorHealth';
 import { 
   getConnectorHealth, 
   listConnectorHealthByTenant, 
   getConnectorHealthHistory,
   startConnectorHealthEvaluator 
 } from '../services/connectorHealthService';
-import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
+import { resolveTravelerBarcode, type ChargeContext } from '../helpers/travelerBarcodeResolver';
 import { storage } from '../../storage';
 import { evaluateWorkOrderLaborStatus, type WorkOrderLaborStatusResult } from '../helpers/laborBudgetHelper';
+import { evaluateWadReleaseGate, evaluateMaterialReadinessGate, buildGateErrorBody, buildTrainingGateErrorBody, AnyGateErrorBody } from '../lib/travelerGates';
+import { evaluateTravelerTrainingGate } from '../lib/trainingEnforcement';
+import { laborEntryAuditTable } from '../schema/timekeeping';
+import { chargeCodes } from '../../schema';
+import { eq as eqDrizzle, and as andDrizzle } from 'drizzle-orm';
+import * as ledger from '../lib/punchLedger';
+import type { PunchLedgerEntry } from '../lib/punchLedger';
+import { resolveChargeCode, deriveProjectId, resolveBudgetOverrunState, resolveCertificationStatus } from '../lib/resolveChargeCode';
+import { checkActivePTOForEmployee } from '../services/timekeeping/timeoff.service';
+import { laborAllocationsEnabled } from '../lib/featureFlags';
+import * as allocationService from '../services/laborAllocationService';
 
 function laborBudgetConsumptionLabel(laborStatus: WorkOrderLaborStatusResult): string {
   const deptPct = laborStatus.departmentPercentUsed;
@@ -24,6 +37,329 @@ function laborBudgetConsumptionLabel(laborStatus: WorkOrderLaborStatusResult): s
     return `${totalPct}% of total budget consumed`;
   }
   return 'over budget';
+}
+
+/**
+ * Resolves a raw employee identifier (numeric DB id or employee code) to the
+ * canonical numeric employees.id string used in labor_budget_overrides.
+ * Returns null if no matching employee is found.
+ */
+async function resolveCanonicalEmployeeId(rawId: string): Promise<string | null> {
+  const trimmed = rawId.trim();
+  const isNumeric = /^\d+$/.test(trimmed);
+  const [row] = await (isNumeric
+    ? db.select({ id: employees.id }).from(employees).where(eq(employees.id, parseInt(trimmed, 10))).limit(1)
+    : db.select({ id: employees.id }).from(employees).where(eq(employees.employeeCode, trimmed)).limit(1));
+  return row ? String(row.id) : null;
+}
+
+/**
+ * Validates that a charge code exists and is active in the native public.charge_codes registry.
+ * Returns null when no code is provided (uncodified labor is permitted).
+ * Returns an error object when the code is present but inactive or unknown.
+ */
+async function validateActiveChargeCode(
+  chargeCode: string | null | undefined
+): Promise<{ valid: true } | { valid: false; error: string; errorCode: string }> {
+  if (!chargeCode || !chargeCode.trim()) return { valid: true };
+  const normalized = chargeCode.trim();
+  const [row] = await db
+    .select({ id: chargeCodes.id })
+    .from(chargeCodes)
+    .where(andDrizzle(eqDrizzle(chargeCodes.code, normalized), eqDrizzle(chargeCodes.active, true)))
+    .limit(1);
+  if (!row) {
+    return {
+      valid: false,
+      error: `Charge code '${normalized}' is not active in the charge code registry. A supervisor must activate it before labor can be recorded against it.`,
+      errorCode: 'CHARGE_CODE_INACTIVE',
+    };
+  }
+  return { valid: true };
+}
+
+interface JobSwitchResult {
+  entry: PunchLedgerEntry;
+  chargeContext: ChargeContext;
+  warning?: string;
+  laborStatus?: WorkOrderLaborStatusResult;
+}
+
+/**
+ * Shared job-switch execution helper used by both the clock-in/traveler auto-switch
+ * branch and the explicit switch-job/traveler route.
+ *
+ * Steps:
+ *   1. Validate that the resolved charge code is active in the registry.
+ *   2. Resolve string employeeId to public.employees.id (integer).
+ *   3. Get open punch_ledger session (must exist for a switch).
+ *   4. Run budget enforcement (BLOCKED / WARNING / override / approval).
+ *   5. switchPunchLedgerAssignment — UPDATE the existing session IN PLACE (no close+reopen).
+ *   6. Consume any approved budget override.
+ *   7. Write JOB_SWITCH audit event.
+ */
+async function executeJobSwitch(params: {
+  employeeId: string;
+  context: ChargeContext;
+  parsedApprovalId: number | null;
+}): Promise<{ ok: true; result: JobSwitchResult } | { ok: false; status: number; body: Record<string, unknown> }> {
+  const { employeeId, context, parsedApprovalId } = params;
+
+  // 1. Reject inactive charge codes before touching any session
+  const chargeValidation = await validateActiveChargeCode(context.chargeCode);
+  if (!chargeValidation.valid) {
+    return {
+      ok: false,
+      status: 422,
+      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
+    };
+  }
+
+  // 2. Resolve string employeeId to public.employees.id (integer) for punch_ledger FK
+  const canonicalStr = await resolveCanonicalEmployeeId(employeeId);
+  const numericEmployeeId = canonicalStr != null ? parseInt(canonicalStr, 10) : null;
+  if (numericEmployeeId == null || isNaN(numericEmployeeId)) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: 'EMPLOYEE_NOT_FOUND', message: `Employee '${employeeId}' not found in public.employees` },
+    };
+  }
+
+  // 3. Require an open punch_ledger session for the switch
+  const currentOpenEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
+
+  // Duplicate-session guard: reject a switch to the same traveler/charge code already active
+  if (
+    currentOpenEntry &&
+    currentOpenEntry.travelerId != null &&
+    currentOpenEntry.travelerId === context.travelerId &&
+    currentOpenEntry.chargeCode === context.chargeCode
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: 'DUPLICATE_SESSION',
+        message: `Employee is already clocked in against this traveler and charge code (entry #${currentOpenEntry.id}). No switch needed.`,
+        currentEntryId: currentOpenEntry.id,
+      },
+    };
+  }
+
+  if (!currentOpenEntry) {
+    return {
+      ok: false,
+      status: 409,
+      body: { error: 'NOT_CLOCKED_IN', message: 'Employee is not currently clocked in. A job switch requires an active session.' },
+    };
+  }
+
+  // 4. Budget enforcement
+  let switchApprovalId: number | null = null;
+  let switchOverrideId: number | null = null;
+  let warningMessage: string | null = null;
+  let laborStatusForResponse: WorkOrderLaborStatusResult | null = null;
+
+  if (context.wadId) {
+    const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
+
+    if (laborStatus.status === 'BLOCKED') {
+      const activeOverride = await storage.getApprovedActiveLaborBudgetOverride(context.wadId, canonicalStr!);
+      if (activeOverride) {
+        switchOverrideId = activeOverride.id;
+        laborStatusForResponse = laborStatus;
+      } else if (parsedApprovalId != null) {
+        const approval = await storage.getLaborApprovalById(parsedApprovalId);
+        if (
+          !approval ||
+          approval.productionWorkOrderId !== context.wadId ||
+          approval.employeeId !== canonicalStr
+        ) {
+          return {
+            ok: false,
+            status: 403,
+            body: {
+              error: 'INVALID_LABOR_APPROVAL',
+              message: 'The provided laborApprovalId is not valid for this employee and work order.',
+            },
+          };
+        }
+        switchApprovalId = approval.id;
+        laborStatusForResponse = laborStatus;
+      } else {
+        // Phase 1 WARN: no override/approval → allow job switch through, stamp isOverrun=true
+        laborStatusForResponse = laborStatus;
+        // warningMessage will carry overrun context to response
+        warningMessage = `Labor budget exhausted (${laborBudgetConsumptionLabel(laborStatus)}). Switch recorded under WARN policy — supervisor approval required.`;
+      }
+    }
+
+    if (laborStatus.status === 'WARNING') {
+      warningMessage = `Work order is approaching its labor budget limit (${laborBudgetConsumptionLabel(laborStatus)}).`;
+      laborStatusForResponse = laborStatus;
+    }
+  }
+
+  // 5. Resolve active traveler step first so travelerStepId can be passed into the
+  //    charge code resolver for operation-scoped department fallback (Task #1235).
+  const travelerStepsForSwitch = context.travelerId
+    ? (await storage.getTravelerSteps(context.travelerId)).sort(
+        (a, b) => ((a as any).stepNumber ?? 0) - ((b as any).stepNumber ?? 0)
+      )
+    : [];
+  const activeStepForSwitch =
+    travelerStepsForSwitch.find((s) => s.status === 'IN_PROGRESS') ||
+    travelerStepsForSwitch.find((s) => s.status === 'NOT_STARTED') ||
+    null;
+
+  // 5b. Resolve chargeCodeId deterministically from WAD (Task #1235).
+  // Fail-closed: if WAD is linked and resolution fails, abort the switch — never proceed
+  // with a null charge code for traveler-driven sessions against a known WAD.
+  let resolvedChargeCodeId: number | null = null;
+  const jobSwitchCcResult = await resolveChargeCode({
+    productionWorkOrderId: context.wadId ?? null,
+    travelerId: context.travelerId ?? null,
+    travelerStepId: activeStepForSwitch?.id ?? null,
+    department: context.department ?? null,
+  });
+  if (!('error' in jobSwitchCcResult)) {
+    resolvedChargeCodeId = jobSwitchCcResult.chargeCodeId;
+  } else if (context.wadId) {
+    // WAD is linked but no charge code could be resolved — block the switch
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        error: 'CHARGE_CODE_UNRESOLVED',
+        message: jobSwitchCcResult.error,
+        hint: 'Set a default charge code on the production work order or the traveler, or create an active charge code for this department.',
+      },
+    };
+  }
+  // If no wadId at all, proceed with null chargeCodeId
+
+  const [jobSwitchProjectId, jobSwitchBudget, jobSwitchCertResult] = await Promise.all([
+    deriveProjectId(context.wadId ?? null),
+    resolveBudgetOverrunState({ productionWorkOrderId: context.wadId ?? null, department: context.department ?? null }),
+    context.travelerId && activeStepForSwitch && numericEmployeeId != null
+      ? resolveCertificationStatus({
+          travelerId: context.travelerId,
+          stepId: activeStepForSwitch.id,
+          employeeId: numericEmployeeId,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  // 6. Update punch_ledger IN PLACE — no close+reopen
+  const updatedEntry = await storage.switchPunchLedgerAssignment({
+    entryId: currentOpenEntry.id,
+    travelerId: context.travelerId ?? null,
+    productionWorkOrderId: context.wadId ?? null,
+    chargeCodeId: resolvedChargeCodeId,
+    department: context.department ?? null,
+    operation: context.operation ?? null,
+    approvalStatus: switchApprovalId != null || switchOverrideId != null ? 'APPROVED_OVERRUN' : 'AUTO',
+    laborApprovalId: switchApprovalId,
+    laborBudgetOverrideId: switchOverrideId,
+    updatedBy: numericEmployeeId,
+  });
+
+  // 6b. Stamp WAD traceability fields on the switched entry (Task #1235)
+  // Includes travelerStepId + certificationStatus for full per-session traceability.
+  if (updatedEntry) {
+    try {
+      await storage.updatePunchLedgerEntry(updatedEntry.id, {
+        projectId: jobSwitchProjectId,
+        travelerStepId: activeStepForSwitch?.id ?? null,
+        certificationStatus: jobSwitchCertResult?.status ?? null,
+        isOverrun: jobSwitchBudget.isOverrun,
+        overrunReason: jobSwitchBudget.overrunReason,
+      });
+    } catch (traceErr: any) {
+      console.warn('[JobSwitch] Non-fatal error stamping WAD traceability on switched entry:', traceErr?.message);
+    }
+  }
+
+  // 6c. Phase D: close current allocation segment and open a new one for the new assignment.
+  if (updatedEntry && laborAllocationsEnabled) {
+    allocationService.switchAllocation(updatedEntry, {
+      chargeCodeId: resolvedChargeCodeId,
+      travelerId: context.travelerId ?? null,
+      travelerStepId: activeStepForSwitch?.id ?? null,
+      productionWorkOrderId: context.wadId ?? null,
+      projectId: jobSwitchProjectId ?? null,
+      department: context.department ?? null,
+      operation: context.operation ?? null,
+    }).catch((allocErr: unknown) =>
+      console.warn('[timeClock/executeJobSwitch] switchAllocation failed (non-fatal):', (allocErr as Error)?.message)
+    );
+  }
+
+  if (!updatedEntry) {
+    return { ok: false, status: 500, body: { error: 'SWITCH_FAILED', message: 'Failed to switch labor assignment' } };
+  }
+
+  // 6. Consume the override only after a successful switch
+  if (switchOverrideId != null) {
+    await storage.consumeLaborBudgetOverride(switchOverrideId);
+  }
+
+  // 7. Audit event — single JOB_SWITCH event (no separate close+open since session persists)
+  if (context.travelerId) {
+    try {
+      await storage.createTravelerEvent({
+        travelerId: context.travelerId,
+        actor: String(numericEmployeeId),
+        actorName: null,
+        action: 'JOB_SWITCH',
+        details: {
+          entryId: updatedEntry.id,
+          previousTravelerId: currentOpenEntry.travelerId ?? null,
+          previousChargeCode: currentOpenEntry.chargeCode ?? null,
+          newTravelerId: context.travelerId,
+          newChargeCode: context.chargeCode,
+          timestamp: new Date().toISOString(),
+          source: 'punch_ledger',
+        },
+      });
+    } catch (auditErr) {
+      console.error('[TimeClock] Failed to write JOB_SWITCH audit event:', auditErr);
+    }
+  }
+
+  // 8. DCAA audit entry for the job switch
+  try {
+    await db.insert(laborEntryAuditTable).values({
+      tableName: 'punch_ledger',
+      recordId: updatedEntry.id,
+      action: 'JOB_SWITCH',
+      oldValues: {
+        travelerId: currentOpenEntry.travelerId ?? null,
+        chargeCode: currentOpenEntry.chargeCode ?? null,
+        productionWorkOrderId: currentOpenEntry.productionWorkOrderId ?? null,
+      },
+      newValues: {
+        travelerId: context.travelerId ?? null,
+        chargeCode: context.chargeCode ?? null,
+        productionWorkOrderId: context.wadId ?? null,
+        editReason: 'job switch via traveler scan',
+        timestamp: new Date().toISOString(),
+      },
+      actorId: numericEmployeeId,
+      actorEmail: null,
+      actorRole: null,
+      ipAddress: null,
+    });
+  } catch (dcaaAuditErr) {
+    console.error('[TimeClock] Failed to write JOB_SWITCH DCAA audit entry:', dcaaAuditErr);
+  }
+
+  const result: JobSwitchResult = { entry: updatedEntry, chargeContext: context };
+  if (warningMessage) result.warning = warningMessage;
+  if (laborStatusForResponse) result.laborStatus = laborStatusForResponse;
+
+  return { ok: true, result };
 }
 
 const VALID_EVENT_TYPES = [
@@ -146,6 +482,130 @@ async function validateApiKey(
     .where(eq(apiIntegrationKeys.id, integration.id));
 
   return { valid: true, keyId: integration.id };
+}
+
+/**
+ * Resolve a string employee identifier (employeeCode or badgeScanCode) to the
+ * employees table integer PK and display name.  Used for training gate enforcement
+ * on barcode-driven clock-in flows where the caller only provides a code string.
+ * Returns null when no matching employee can be found (gates degrade gracefully).
+ */
+async function resolveEmployeeByCode(
+  code: string
+): Promise<{ id: number; name: string } | null> {
+  const trimmed = code.trim();
+  const byCode = await db
+    .select({ id: employees.id, name: employees.name })
+    .from(employees)
+    .where(eq(employees.employeeCode, trimmed))
+    .limit(1);
+  if (byCode.length > 0) return byCode[0];
+
+  // Normalize: strip dashes so UUID badges resolve with or without hyphens
+  const normalizedBadge = trimmed.replace(/-/g, '');
+  const byBadge = await db
+    .select({ id: employees.id, name: employees.name })
+    .from(employees)
+    .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedBadge}`)
+    .limit(1);
+  if (byBadge.length > 0) return byBadge[0];
+
+  return null;
+}
+
+/**
+ * Run the traveler entry gates (WAD release, material readiness, training) that apply
+ * to barcode-driven clock-in and job-switch flows.  Returns a non-null error body when
+ * any gate fails, or null when all gates pass.
+ *
+ * These are the same gates enforced on the step-start route; applying them here ensures
+ * clock-in via traveler barcode cannot bypass them.
+ */
+interface ClockInGateResult {
+  gateError: AnyGateErrorBody | null;
+  /** ID of the active (IN_PROGRESS or next NOT_STARTED) traveler step, if resolved. */
+  activeStepId: string | null;
+  /** True when a cert failure was detected but allowed through under Phase 1 WARN policy. */
+  isCertWarn: boolean;
+}
+
+async function evaluateTravelerClockInGates(
+  travelerId: string,
+  wadId: string | null,
+  employeeCode: string
+): Promise<ClockInGateResult> {
+  // Gate 1: WAD must be RELEASED or IN_PROGRESS (hard block)
+  if (wadId) {
+    const wadGate = await evaluateWadReleaseGate(wadId);
+    if (!wadGate.allowed) {
+      return {
+        gateError: buildGateErrorBody(
+          'wad_release',
+          'Work order not released to floor',
+          wadGate.reason ?? 'The linked work order is not in a state that permits labor charges.'
+        ),
+        activeStepId: null,
+        isCertWarn: false,
+      };
+    }
+  }
+
+  // Gate 2: Traveler must have material allocated (hard block)
+  const materialGate = await evaluateMaterialReadinessGate(travelerId);
+  if (!materialGate.allowed) {
+    return {
+      gateError: buildGateErrorBody(
+        'material_readiness',
+        'Material not allocated to traveler',
+        materialGate.reason ?? 'A lot number or ICN must be assigned to this traveler before work can begin.'
+      ),
+      activeStepId: null,
+      isCertWarn: false,
+    };
+  }
+
+  // Gate 3: Training / certification — best-effort employee resolution
+  // Phase 1 WARN policy: operation-cert failures (training_module type) are allowed through
+  // and flagged; part-training failures remain hard blocks.
+  const emp = await resolveEmployeeByCode(employeeCode);
+  const travelerSteps = (await storage.getTravelerSteps(travelerId)).sort(
+    (a, b) => ((a as any).stepNumber ?? 0) - ((b as any).stepNumber ?? 0)
+  );
+  const activeStep =
+    travelerSteps.find((s) => s.status === 'IN_PROGRESS') ||
+    travelerSteps.find((s) => s.status === 'NOT_STARTED');
+
+  let isCertWarn = false;
+  if (activeStep) {
+    const trainingGate = await evaluateTravelerTrainingGate(
+      travelerId,
+      activeStep.id,
+      emp?.id,
+      emp?.name
+    );
+    if (!trainingGate.allowed) {
+      const isCertFailure =
+        trainingGate.requirementType === 'training_module' &&
+        (trainingGate.reason ?? '').toLowerCase().includes('cert');
+      if (isCertFailure) {
+        // Phase 1 WARN: cert failure is flagged, not blocked
+        isCertWarn = true;
+      } else {
+        return {
+          gateError: buildTrainingGateErrorBody(
+            'Training requirement not met',
+            trainingGate.reason ?? 'A training or certification requirement must be satisfied before clocking in to this traveler.',
+            trainingGate.missingRequirement,
+            trainingGate.requirementType,
+          ),
+          activeStepId: activeStep.id,
+          isCertWarn: false,
+        };
+      }
+    }
+  }
+
+  return { gateError: null, activeStepId: activeStep?.id ?? null, isCertWarn };
 }
 
 export function registerTimeClockRoutes(app: Express) {
@@ -365,14 +825,19 @@ export function registerTimeClockRoutes(app: Express) {
   app.get('/api/labor-facts/by-employee/:employeeId', async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
-      const { startDate, endDate, limit = '100' } = req.query;
+      const { startDate, endDate, limit = String(DEFAULT_LABOR_FACTS_LIMIT) } = req.query;
+
+      const parsedLimit = parseInt(String(limit), 10);
+      const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, MAX_LABOR_FACTS_LIMIT)
+        : DEFAULT_LABOR_FACTS_LIMIT;
 
       let query = db
         .select()
         .from(epochLaborFacts)
         .where(eq(epochLaborFacts.employeeId, employeeId))
         .orderBy(desc(epochLaborFacts.occurredAt))
-        .limit(parseInt(String(limit), 10));
+        .limit(effectiveLimit);
 
       const facts = await query;
 
@@ -401,7 +866,7 @@ export function registerTimeClockRoutes(app: Express) {
   // Query labor facts by date range
   app.get('/api/labor-facts/by-date', async (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, limit = '500' } = req.query;
+      const { startDate, endDate, limit = String(DEFAULT_LABOR_FACTS_BY_RANGE_LIMIT) } = req.query;
 
       if (!startDate || !endDate) {
         return res.status(400).json({ error: 'startDate and endDate are required' });
@@ -414,6 +879,11 @@ export function registerTimeClockRoutes(app: Express) {
         return res.status(400).json({ error: 'Invalid date format' });
       }
 
+      const parsedLimit = parseInt(String(limit), 10);
+      const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, MAX_LABOR_FACTS_LIMIT)
+        : DEFAULT_LABOR_FACTS_BY_RANGE_LIMIT;
+
       const facts = await db
         .select()
         .from(epochLaborFacts)
@@ -422,7 +892,7 @@ export function registerTimeClockRoutes(app: Express) {
           lte(epochLaborFacts.occurredAt, end)
         ))
         .orderBy(desc(epochLaborFacts.occurredAt))
-        .limit(parseInt(String(limit), 10));
+        .limit(effectiveLimit);
 
       return res.json({
         startDate: start.toISOString(),
@@ -440,14 +910,19 @@ export function registerTimeClockRoutes(app: Express) {
   app.get('/api/labor-facts/by-job/:jobId', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
-      const { limit = '100' } = req.query;
+      const { limit = String(DEFAULT_LABOR_FACTS_LIMIT) } = req.query;
+
+      const parsedLimit = parseInt(String(limit), 10);
+      const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, MAX_LABOR_FACTS_LIMIT)
+        : DEFAULT_LABOR_FACTS_LIMIT;
 
       const facts = await db
         .select()
         .from(epochLaborFacts)
         .where(eq(epochLaborFacts.jobId, jobId))
         .orderBy(desc(epochLaborFacts.occurredAt))
-        .limit(parseInt(String(limit), 10));
+        .limit(effectiveLimit);
 
       return res.json({
         jobId,
@@ -464,14 +939,19 @@ export function registerTimeClockRoutes(app: Express) {
   app.get('/api/labor-facts/by-site/:siteId', async (req: Request, res: Response) => {
     try {
       const { siteId } = req.params;
-      const { startDate, endDate, limit = '500' } = req.query;
+      const { startDate, endDate, limit = String(DEFAULT_LABOR_FACTS_BY_RANGE_LIMIT) } = req.query;
+
+      const parsedLimit = parseInt(String(limit), 10);
+      const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, MAX_LABOR_FACTS_LIMIT)
+        : DEFAULT_LABOR_FACTS_BY_RANGE_LIMIT;
 
       let facts = await db
         .select()
         .from(epochLaborFacts)
         .where(eq(epochLaborFacts.siteId, siteId))
         .orderBy(desc(epochLaborFacts.occurredAt))
-        .limit(parseInt(String(limit), 10));
+        .limit(effectiveLimit);
 
       // Filter by date range in application if provided
       if (startDate) {
@@ -607,12 +1087,17 @@ export function registerTimeClockRoutes(app: Express) {
   app.get('/api/connector-health/:tenantId/:sourceSystem/history', async (req: Request, res: Response) => {
     try {
       const { tenantId, sourceSystem } = req.params;
-      const { limit = '50' } = req.query;
+      const { limit = String(DEFAULT_CONNECTOR_HEALTH_HISTORY_LIMIT) } = req.query;
+
+      const parsedLimit = parseInt(String(limit), 10);
+      const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, MAX_CONNECTOR_HEALTH_HISTORY_LIMIT)
+        : DEFAULT_CONNECTOR_HEALTH_HISTORY_LIMIT;
       
       const history = await getConnectorHealthHistory(
         tenantId, 
         sourceSystem, 
-        parseInt(String(limit), 10)
+        effectiveLimit
       );
       
       return res.json({
@@ -666,7 +1151,7 @@ export function registerTimeClockRoutes(app: Express) {
     }
   });
 
-  app.post('/api/time-clock/clock-in/traveler', async (req: Request, res: Response) => {
+  app.post('/api/time-clock/clock-in/traveler', optionalAuth, async (req: Request, res: Response) => {
     try {
       const { scanValue, employeeId, laborApprovalId } = req.body;
 
@@ -701,35 +1186,183 @@ export function registerTimeClockRoutes(app: Express) {
 
       const { context } = result;
 
-      const openEntry = await storage.getOpenTimeClockEntry(employeeId.trim());
-      if (openEntry) {
-        return res.status(409).json({
-          error: 'ALREADY_CLOCKED_IN',
-          message: `Employee ${employeeId.trim()} is already clocked in (entry #${openEntry.id}, clocked in at ${openEntry.clockIn?.toISOString()}). Use the switch-job endpoint to move to a different job.`,
-          openEntryId: openEntry.id,
-          switchJobEndpoint: '/api/time-clock/switch-job/traveler',
-        });
+      // Traveler entry gates — enforce WAD release, material readiness, and training before clock-in.
+      // Phase 1 WARN: cert failures (isCertWarn=true) are allowed through and flagged.
+      const clockInGate = await evaluateTravelerClockInGates(context.travelerId, context.wadId, employeeId.trim());
+      if (clockInGate.gateError) {
+        return res.status(403).json(clockInGate.gateError);
       }
 
+      // Resolve employee string id to public.employees.id integer for punch_ledger
+      const canonicalEmployeeIdStr = await resolveCanonicalEmployeeId(employeeId.trim());
+      const numericEmployeeId = canonicalEmployeeIdStr != null ? parseInt(canonicalEmployeeIdStr, 10) : null;
+      if (numericEmployeeId == null || isNaN(numericEmployeeId)) {
+        return res.status(404).json({ error: 'EMPLOYEE_NOT_FOUND', message: `Employee '${employeeId.trim()}' not found` });
+      }
+
+      // Resolve certificationStatus at clock-in time (Task #1235 traceability — stamp on session).
+      let clockInCertStatus: string | null = null;
+      if (clockInGate.activeStepId && numericEmployeeId != null) {
+        const certRes = await resolveCertificationStatus({
+          travelerId: context.travelerId,
+          stepId: clockInGate.activeStepId,
+          employeeId: numericEmployeeId,
+        });
+        clockInCertStatus = certRes.status;
+      }
+
+      const openEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
+      if (openEntry) {
+        // Auto-switch: employee is already clocked in — switchAssignment IN PLACE
+        const switchResult = await executeJobSwitch({
+          employeeId: employeeId.trim(),
+          context,
+          parsedApprovalId,
+        });
+        if (!switchResult.ok) {
+          return res.status(switchResult.status).json(switchResult.body);
+        }
+        return res.status(201).json({ switched: true, ...switchResult.result });
+      }
+
+      // PTO block: refuse new clock-in sessions on approved PTO days (barcode path).
+      // Admin override is possible when an ADMIN/OWNER user supplies their JWT in the
+      // Authorization header along with adminPtoOverride=true and adminOverrideReason.
+      // optionalAuth middleware (applied to this route) populates req.user when a valid
+      // token is present; unauthenticated barcode scanner sessions leave req.user undefined.
+      const tcToday = new Date().toISOString().slice(0, 10);
+      const tcPtoBlock = await checkActivePTOForEmployee(numericEmployeeId, tcToday);
+      if (tcPtoBlock) {
+        const tcAdminOverride = req.body?.adminPtoOverride === true;
+        const tcOverrideReason = typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null;
+        const tcUser = req.user;
+        const tcIsAdmin = tcUser?.role === 'ADMIN' || tcUser?.role === 'OWNER';
+        if (tcAdminOverride && tcIsAdmin && tcOverrideReason) {
+          const { logAction: tcLogAction, actorFromUser: tcActorFromUser } = await import('../services/timekeeping/audit.service');
+          await tcLogAction({
+            tableName: 'leave_entries',
+            recordId: tcPtoBlock.leaveEntryId,
+            action: 'UPDATE',
+            oldValues: null,
+            newValues: {
+              ptoClockInOverride: true,
+              overrideActorId: tcUser?.id ?? null,
+              overrideReason: tcOverrideReason,
+              overrideTimestamp: new Date().toISOString(),
+              source: 'BARCODE',
+            },
+            actor: tcActorFromUser(tcUser ?? null, req.ip ?? null),
+          });
+        } else {
+          return res.status(422).json({
+            error: 'PTO_DAY_BLOCK',
+            message: 'This employee has approved PTO for today. Clock-in is not permitted.',
+            leaveEntryId: tcPtoBlock.leaveEntryId,
+          });
+        }
+      }
+
+      // No open session — clock the employee in via punch_ledger
       let validatedApprovalId: number | null = null;
+      let validatedBudgetOverrideId: number | null = null;
+
+      // Resolve chargeCodeId deterministically from WAD (Task #1235).
+      // Fail-closed: if WAD is linked and resolution fails, return 400 — never proceed
+      // with a null charge code for traveler-driven sessions against a known WAD.
+      let chargeCodeId: number | null = null;
+      let wadResolvedChargeCode: string | null = null;
+      const wadCcResult = await resolveChargeCode({
+        productionWorkOrderId: context.wadId ?? null,
+        travelerId: context.travelerId ?? null,
+        travelerStepId: clockInGate.activeStepId ?? null,
+        department: context.department ?? null,
+      });
+      if (!('error' in wadCcResult)) {
+        chargeCodeId = wadCcResult.chargeCodeId;
+        wadResolvedChargeCode = wadCcResult.chargeCode;
+      } else if (context.wadId) {
+        // WAD is linked but no charge code could be resolved — block session creation
+        return res.status(400).json({
+          error: 'CHARGE_CODE_UNRESOLVED',
+          message: wadCcResult.error,
+          hint: 'Set a default charge code on the production work order or the traveler, or create an active charge code for this department.',
+        });
+      }
+      // If no wadId at all, proceed with null chargeCodeId (non-WAD session)
+
+      // Derive projectId server-side from WAD (never accepted from client)
+      const resolvedProjectId = await deriveProjectId(context.wadId ?? null);
 
       if (context.wadId) {
         const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
 
+        // Compute overrun state for punch_ledger stamping
+        const overrunLabel = laborBudgetConsumptionLabel(laborStatus);
+        const isOverrun = laborStatus.status === 'BLOCKED';
+        const overrunReason = isOverrun
+          ? `Labor budget exhausted (${overrunLabel}). Session recorded under WARN policy — supervisor approval required.`
+          : null;
+
         if (laborStatus.status === 'BLOCKED') {
+          const activeOverride = await storage.getApprovedActiveLaborBudgetOverride(
+            context.wadId,
+            canonicalEmployeeIdStr!
+          );
+
+          if (activeOverride) {
+            validatedBudgetOverrideId = activeOverride.id;
+            const entry = await ledger.openSession({
+              employeeId: numericEmployeeId,
+              source: 'TRAVELER',
+              laborClass: 'REGULAR',
+              travelerId: context.travelerId ?? null,
+              productionWorkOrderId: context.wadId ?? null,
+              chargeCodeId,
+              department: context.department ?? null,
+              operation: context.operation ?? null,
+              projectId: resolvedProjectId,
+              travelerStepId: clockInGate.activeStepId,
+              certificationStatus: clockInCertStatus,
+              isOverrun,
+              overrunReason,
+              approvalStatus: 'APPROVED_OVERRUN',
+              laborBudgetOverrideId: validatedBudgetOverrideId,
+            });
+            await storage.consumeLaborBudgetOverride(activeOverride.id);
+            return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode }, laborStatus, budgetOverrideId: validatedBudgetOverrideId });
+          }
+
+            // Phase 1 WARN: no pre-approved override/approval → allow through, flag for supervisor review
           if (parsedApprovalId == null) {
-            return res.status(403).json({
-              error: 'LABOR_BUDGET_BLOCKED',
-              message: `Work order has exhausted its labor budget (${laborBudgetConsumptionLabel(laborStatus)}). A supervisor approval is required to proceed.`,
+            const warnEntry = await ledger.openSession({
+              employeeId: numericEmployeeId,
+              source: 'TRAVELER',
+              laborClass: 'REGULAR',
+              travelerId: context.travelerId ?? null,
+              productionWorkOrderId: context.wadId ?? null,
+              chargeCodeId,
+              department: context.department ?? null,
+              operation: context.operation ?? null,
+              projectId: resolvedProjectId,
+              travelerStepId: clockInGate.activeStepId,
+              certificationStatus: clockInCertStatus,
+              isOverrun,
+              overrunReason,
+              approvalStatus: 'FLAGGED',
+            });
+            return res.status(201).json({
+              entry: warnEntry,
+              chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
               laborStatus,
-              approvalEndpoint: `/api/work-orders/${context.wadId}/approve-overrun`,
+              warnedOnOverrun: true,
+              overrunReason,
             });
           }
           const approval = await storage.getLaborApprovalById(parsedApprovalId);
           if (
             !approval ||
             approval.productionWorkOrderId !== context.wadId ||
-            approval.employeeId !== employeeId.trim()
+            approval.employeeId !== canonicalEmployeeIdStr
           ) {
             return res.status(403).json({
               error: 'INVALID_LABOR_APPROVAL',
@@ -737,64 +1370,76 @@ export function registerTimeClockRoutes(app: Express) {
             });
           }
           validatedApprovalId = approval.id;
-
-          const today = new Date().toISOString().split('T')[0];
-          const entry = await storage.createTimeClockEntryWithChargeContext({
-            employeeId: employeeId.trim(),
-            date: new Date(today),
-            clockIn: new Date(),
-            clockOut: null,
-            productionWorkOrderId: context.wadId,
-            travelerId: context.travelerId,
-            chargeCode: context.chargeCode,
-            department: context.department,
-            operation: context.operation,
+          const entry = await ledger.openSession({
+            employeeId: numericEmployeeId,
+            source: 'TRAVELER',
+            laborClass: 'REGULAR',
+            travelerId: context.travelerId ?? null,
+            productionWorkOrderId: context.wadId ?? null,
+            chargeCodeId,
+            department: context.department ?? null,
+            operation: context.operation ?? null,
+            projectId: resolvedProjectId,
+            travelerStepId: clockInGate.activeStepId,
+            certificationStatus: clockInCertStatus,
+            isOverrun,
+            overrunReason,
             approvalStatus: 'APPROVED_OVERRUN',
             laborApprovalId: validatedApprovalId,
           });
-          return res.status(201).json({ entry, chargeContext: context, laborStatus });
+          return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode }, laborStatus });
         }
 
         if (laborStatus.status === 'WARNING') {
-          const today = new Date().toISOString().split('T')[0];
-          const entry = await storage.createTimeClockEntryWithChargeContext({
-            employeeId: employeeId.trim(),
-            date: new Date(today),
-            clockIn: new Date(),
-            clockOut: null,
-            productionWorkOrderId: context.wadId,
-            travelerId: context.travelerId,
-            chargeCode: context.chargeCode,
-            department: context.department,
-            operation: context.operation,
+          const entry = await ledger.openSession({
+            employeeId: numericEmployeeId,
+            source: 'TRAVELER',
+            laborClass: 'REGULAR',
+            travelerId: context.travelerId ?? null,
+            productionWorkOrderId: context.wadId ?? null,
+            chargeCodeId,
+            department: context.department ?? null,
+            operation: context.operation ?? null,
+            projectId: resolvedProjectId,
+            travelerStepId: clockInGate.activeStepId,
+            certificationStatus: clockInCertStatus,
+            isOverrun: false,
+            overrunReason: null,
             approvalStatus: 'AUTO',
-            laborApprovalId: null,
           });
           return res.status(201).json({
             entry,
-            chargeContext: context,
-            warning: `Work order is approaching its labor budget limit (${laborBudgetConsumptionLabel(laborStatus)}).`,
+            chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
+            warning: `Work order is approaching its labor budget limit (${overrunLabel}).`,
             laborStatus,
           });
         }
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      const entry = await storage.createTimeClockEntryWithChargeContext({
-        employeeId: employeeId.trim(),
-        date: new Date(today),
-        clockIn: new Date(),
-        clockOut: null,
-        productionWorkOrderId: context.wadId,
-        travelerId: context.travelerId,
-        chargeCode: context.chargeCode,
-        department: context.department,
-        operation: context.operation,
-        approvalStatus: 'AUTO',
-        laborApprovalId: null,
+      // If no WAD is linked, flag the session so it is not silently untraced.
+      // Phase 1 WARN: traveler-driven sessions without a WAD are allowed through but
+      // stamped as FLAGGED + overrunReason so supervisors can audit and resolve.
+      const noWadLinked = !context.wadId && !!context.travelerId;
+      const entry = await ledger.openSession({
+        employeeId: numericEmployeeId,
+        source: 'TRAVELER',
+        laborClass: 'REGULAR',
+        travelerId: context.travelerId ?? null,
+        productionWorkOrderId: context.wadId ?? null,
+        chargeCodeId,
+        department: context.department ?? null,
+        operation: context.operation ?? null,
+        projectId: resolvedProjectId,
+        travelerStepId: clockInGate.activeStepId,
+        certificationStatus: clockInCertStatus,
+        isOverrun: noWadLinked,
+        overrunReason: noWadLinked
+          ? 'NO_WAD_LINKED — traveler has no production work order; charge code and project traceability are incomplete. Supervisor review required.'
+          : null,
+        approvalStatus: noWadLinked ? 'FLAGGED' : 'AUTO',
       });
 
-      return res.status(201).json({ entry, chargeContext: context });
+      return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode } });
     } catch (error) {
       console.error('[TimeClock] Error clocking in via traveler barcode:', error);
       return res.status(500).json({ error: 'Internal server error', details: 'Failed to clock in via traveler barcode' });
@@ -836,69 +1481,24 @@ export function registerTimeClockRoutes(app: Express) {
 
       const { context } = result;
 
-      let validatedApprovalId: number | null = null;
-      let warningMessage: string | null = null;
-      let laborStatusForResponse: WorkOrderLaborStatusResult | null = null;
-
-      if (context.wadId) {
-        const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
-
-        if (laborStatus.status === 'BLOCKED') {
-          if (parsedApprovalId == null) {
-            return res.status(403).json({
-              error: 'LABOR_BUDGET_BLOCKED',
-              message: `Work order has exhausted its labor budget (${laborBudgetConsumptionLabel(laborStatus)}). A supervisor approval is required to proceed.`,
-              laborStatus,
-              approvalEndpoint: `/api/work-orders/${context.wadId}/approve-overrun`,
-            });
-          }
-          const approval = await storage.getLaborApprovalById(parsedApprovalId);
-          if (
-            !approval ||
-            approval.productionWorkOrderId !== context.wadId ||
-            approval.employeeId !== employeeId.trim()
-          ) {
-            return res.status(403).json({
-              error: 'INVALID_LABOR_APPROVAL',
-              message: 'The provided laborApprovalId is not valid for this employee and work order.',
-            });
-          }
-          validatedApprovalId = approval.id;
-          laborStatusForResponse = laborStatus;
-        }
-
-        if (laborStatus.status === 'WARNING') {
-          warningMessage = `Work order is approaching its labor budget limit (${laborBudgetConsumptionLabel(laborStatus)}).`;
-          laborStatusForResponse = laborStatus;
-        }
+      // Traveler entry gates — enforce WAD release, material readiness, and training before job-switch.
+      // Phase 1 WARN: cert failures allowed through (isCertWarn); only hard gates block.
+      const { gateError: switchGateError } = await evaluateTravelerClockInGates(context.travelerId, context.wadId, employeeId.trim());
+      if (switchGateError) {
+        return res.status(403).json(switchGateError);
       }
 
-      const { closed, created } = await storage.switchActiveTimeEntryToTraveler({
+      // Delegate to shared executeJobSwitch — validates charge code, enforces budget, writes audit events
+      const switchResult = await executeJobSwitch({
         employeeId: employeeId.trim(),
-        productionWorkOrderId: context.wadId,
-        travelerId: context.travelerId,
-        chargeCode: context.chargeCode,
-        department: context.department,
-        operation: context.operation,
-        laborApprovalId: validatedApprovalId,
+        context,
+        parsedApprovalId,
       });
-
-      const response: {
-        closed: typeof closed;
-        created: typeof created;
-        chargeContext: typeof context;
-        warning?: string;
-        laborStatus?: WorkOrderLaborStatusResult;
-      } = { closed, created, chargeContext: context };
-
-      if (warningMessage) {
-        response.warning = warningMessage;
-      }
-      if (laborStatusForResponse) {
-        response.laborStatus = laborStatusForResponse;
+      if (!switchResult.ok) {
+        return res.status(switchResult.status).json(switchResult.body);
       }
 
-      return res.status(201).json(response);
+      return res.status(201).json(switchResult.result);
     } catch (error) {
       console.error('[TimeClock] Error switching job via traveler barcode:', error);
       return res.status(500).json({ error: 'Internal server error', details: 'Failed to switch job via traveler barcode' });

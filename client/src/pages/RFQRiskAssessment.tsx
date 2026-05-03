@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearch, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Save, Printer, Download, List, Plus, Eye, Search, Upload, Trash2, FileText } from 'lucide-react';
+import { Save, Printer, Download, List, Plus, Eye, Search, Upload, Trash2, FileText, ArrowRight, AlertTriangle } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import type { P2Customer } from '@shared/schema';
 import { COMPANY_INFO } from '@shared/company-config';
@@ -90,9 +91,16 @@ const RiskRadioGroup = ({
 );
 
 export default function RFQRiskAssessment() {
+  const [, setLocation] = useLocation();
+  // Read customerId from URL query param (set when navigating from a project)
+  const search = useSearch();
+  const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
-  const [userSwitchedTab, setUserSwitchedTab] = useState(false);
+  // If a customerId was passed via URL, keep the create tab active rather than
+  // auto-switching to the view list (the operator is starting a new RFQ for that customer).
+  const [userSwitchedTab, setUserSwitchedTab] = useState(!!urlCustomerId);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
   const [isViewingSubmitted, setIsViewingSubmitted] = useState(false);
@@ -209,6 +217,17 @@ export default function RFQRiskAssessment() {
       console.error('Failed to generate RFQ number:', error);
     }
   };
+
+  // Auto-populate customer when a customerId is passed via URL (e.g. from a project workflow step).
+  // We wait until customers have loaded before calling handleCustomerChange so the lookup succeeds.
+  const autoPopulatedRef = useRef(false);
+  useEffect(() => {
+    if (urlCustomerId && customers.length > 0 && !autoPopulatedRef.current) {
+      autoPopulatedRef.current = true;
+      handleCustomerChange(urlCustomerId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, urlCustomerId]);
 
   // Effect to handle canvas resizing
   useEffect(() => {
@@ -1856,16 +1875,36 @@ export default function RFQRiskAssessment() {
                               {format(new Date(assessment.createdAt), 'MM/dd/yyyy')}
                             </TableCell>
                             <TableCell className="text-center">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="flex items-center gap-1"
-                                data-testid={`button-view-${assessment.id}`}
-                                onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
-                              >
-                                <Eye className="h-3 w-3" />
-                                {isSubmitted ? 'View' : 'Edit'}
-                              </Button>
+                              <div className="flex flex-col items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex items-center gap-1 w-full"
+                                  data-testid={`button-view-${assessment.id}`}
+                                  onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  {isSubmitted ? 'View' : 'Edit'}
+                                </Button>
+                                {isSubmitted && assessment.bidDecision === 'Bid' && (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="flex items-center gap-1 w-full bg-green-600 hover:bg-green-700 text-white"
+                                    data-testid={`button-generate-quote-${assessment.id}`}
+                                    onClick={() => setLocation(`/p2-quote-form?rfqNumber=${encodeURIComponent(assessment.rfqNumber)}&customerId=${encodeURIComponent(assessment.customerId || '')}`)}
+                                  >
+                                    <ArrowRight className="h-3 w-3" />
+                                    Generate Quote
+                                  </Button>
+                                )}
+                                {isSubmitted && assessment.bidDecision !== 'Bid' && (
+                                  <div className="flex items-center gap-1 text-xs text-amber-600">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    No Bid
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         );

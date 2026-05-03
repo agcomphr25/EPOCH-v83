@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { db } from '../../db';
 import {
   arPayments,
@@ -8,12 +9,22 @@ import {
 } from '../../schema';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
-import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { requirePermission } from '../../middleware/requirePermission';
+
+const editPaymentSchema = z.object({
+  paymentDate: z.string().min(1, 'paymentDate is required'),
+  paymentMethod: z.string().min(1, 'paymentMethod is required'),
+  referenceNumber: z.string().nullable().optional(),
+  amount: z.coerce
+    .number({ invalid_type_error: 'amount must be a number' })
+    .positive('amount must be a positive number'),
+  notes: z.string().nullable().optional(),
+});
 
 const router = Router();
 
 router.use(authenticateToken);
-router.use(requireAdminAccess);
+router.use(requirePermission('finance.view'));
 
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -99,7 +110,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { customerId, paymentDate, paymentMethod, referenceNumber, amount, notes } = req.body;
 
@@ -132,7 +143,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/allocate', async (req: Request, res: Response) => {
+router.post('/:id/allocate', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const allocations = req.body;
@@ -240,7 +251,59 @@ router.post('/:id/allocate', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const parsed = editPaymentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map((e) => e.message).join('; ');
+      return res.status(400).json({ error: message });
+    }
+
+    const { paymentDate, paymentMethod, referenceNumber, amount, notes } = parsed.data;
+
+    const [payment] = await db
+      .select()
+      .from(arPayments)
+      .where(eq(arPayments.id, id));
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const [allocResult] = await db
+      .select({ total: sql<string>`COALESCE(SUM(amount_applied), 0)` })
+      .from(arPaymentAllocations)
+      .where(eq(arPaymentAllocations.paymentId, id));
+
+    const allocatedAmount = parseFloat(allocResult?.total || '0');
+    if (amount < allocatedAmount - 0.005) {
+      return res.status(400).json({
+        error: `New amount ($${amount.toFixed(2)}) cannot be less than already allocated amount ($${allocatedAmount.toFixed(2)}). Remove allocations first or increase the payment amount.`,
+      });
+    }
+
+    const [updated] = await db
+      .update(arPayments)
+      .set({
+        paymentDate,
+        paymentMethod,
+        referenceNumber: referenceNumber || null,
+        amount: amount.toFixed(2),
+        notes: notes || null,
+      })
+      .where(eq(arPayments.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to update AR payment:', error);
+    res.status(500).json({ error: 'Failed to update AR payment' });
+  }
+});
+
+router.delete('/:id', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

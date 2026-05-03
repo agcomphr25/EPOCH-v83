@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ArrowLeft, Calendar, Clock, ExternalLink, FileText, LayoutDashboard, MoreVertical, Package } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, ExternalLink, FileText, LayoutDashboard, Lock, MoreVertical, Package } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -33,15 +33,41 @@ interface PipelineProject {
   projectCode: string;
   projectName: string;
   customerName: string;
-  currentStage: string;
+  currentStage: PipelineStageKey;
   status: string;
   targetShipDate: string | null;
   stageUpdatedAt: string | null;
   poId: number | null;
   completedSerials: number;
   totalSerials: number;
-  closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
+  closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE' | 'APPROVED';
+  maxAllowedStageKey?: PipelineStageKey;
+  linkedRfqNumber?: string | null;
 }
+
+const PIPELINE_STAGE_ORDER = [
+  'rfq_received',
+  'quote_preparing',
+  'quote_submitted',
+  'purchase_review',
+  'po_received',
+  'p2_release',
+  'production',
+  'completed',
+] as const;
+
+type PipelineStageKey = typeof PIPELINE_STAGE_ORDER[number];
+
+const PIPELINE_STAGE_ORDER_MUT: readonly string[] = PIPELINE_STAGE_ORDER;
+
+const STAGE_GATE_LABELS: Record<string, string> = {
+  quote_submitted: 'RFQ Risk Assessment',
+  purchase_review: 'Quote',
+  po_received: 'Purchase Review Checklist',
+  p2_release: 'Pre-production Checklist',
+  production: 'P2 Release Gate (PO Review + WAD + Preproduction)',
+  completed: 'P2 Order (and closing record)',
+};
 
 const PIPELINE_STAGES = [
   { key: 'rfq_received', label: 'RFQ Received' },
@@ -49,6 +75,7 @@ const PIPELINE_STAGES = [
   { key: 'quote_submitted', label: 'Quote Submitted' },
   { key: 'purchase_review', label: 'Purchase Review' },
   { key: 'po_received', label: 'PO Received' },
+  { key: 'p2_release', label: 'P2 Release' },
   { key: 'production', label: 'Production' },
   { key: 'completed', label: 'Completed' },
 ];
@@ -59,6 +86,7 @@ const STAGE_COLORS: Record<string, string> = {
   quote_submitted: 'bg-yellow-50 border-yellow-200',
   purchase_review: 'bg-orange-50 border-orange-200',
   po_received: 'bg-blue-50 border-blue-200',
+  p2_release: 'bg-teal-50 border-teal-200',
   production: 'bg-indigo-50 border-indigo-200',
   completed: 'bg-green-50 border-green-200',
 };
@@ -69,6 +97,7 @@ const HEADER_COLORS: Record<string, string> = {
   quote_submitted: 'bg-yellow-200 text-yellow-800',
   purchase_review: 'bg-orange-200 text-orange-800',
   po_received: 'bg-blue-200 text-blue-800',
+  p2_release: 'bg-teal-200 text-teal-800',
   production: 'bg-indigo-200 text-indigo-800',
   completed: 'bg-green-200 text-green-800',
 };
@@ -91,6 +120,9 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
   };
 
   const daysInStage = getDaysInStage(project.stageUpdatedAt);
+  const currentIdx = PIPELINE_STAGE_ORDER_MUT.indexOf(project.currentStage);
+  const maxAllowedIdx = PIPELINE_STAGE_ORDER_MUT.indexOf(project.maxAllowedStageKey ?? 'quote_preparing');
+  const isAtMaxAllowed = currentIdx >= maxAllowedIdx;
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -108,7 +140,15 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
         <CardContent className="p-3 space-y-2">
           <div className="flex items-start justify-between">
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate">{project.projectCode}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-sm truncate">{project.projectCode}</p>
+                {isAtMaxAllowed && project.currentStage !== 'completed' && (
+                  <Lock
+                    className="h-3 w-3 text-amber-500 flex-shrink-0"
+                    title={`Advance blocked — complete ${STAGE_GATE_LABELS[PIPELINE_STAGE_ORDER[maxAllowedIdx + 1] ?? ''] || 'required steps'} to unlock`}
+                  />
+                )}
+              </div>
               <p className="text-xs text-muted-foreground truncate">{project.projectName}</p>
             </div>
             <DropdownMenu>
@@ -152,20 +192,30 @@ function DraggableCard({ project, onNavigate }: { project: PipelineProject; onNa
           </div>
           <div className="flex items-center justify-between gap-1.5">
             <span className="text-xs text-muted-foreground truncate">{project.customerName}</span>
-            <Badge
-              className={[
-                'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
-                project.closingStatus === 'COMPLETE'
-                  ? 'bg-green-100 text-green-800'
-                  : project.closingStatus === 'INCOMPLETE'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800',
-              ].join(' ')}
-              title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
-            >
-              {project.closingStatus ?? 'MISSING'}
-            </Badge>
+            {project.currentStage === 'completed' && (
+              <Badge
+                className={[
+                  'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
+                  project.closingStatus === 'APPROVED'
+                    ? 'bg-blue-100 text-blue-800'
+                    : project.closingStatus === 'COMPLETE'
+                    ? 'bg-green-100 text-green-800'
+                    : project.closingStatus === 'INCOMPLETE'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-red-100 text-red-800',
+                ].join(' ')}
+                title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
+              >
+                {project.closingStatus ?? 'MISSING'}
+              </Badge>
+            )}
           </div>
+          {project.linkedRfqNumber && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <FileText className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">RFQ: {project.linkedRfqNumber}</span>
+            </div>
+          )}
           {project.totalSerials > 0 && (
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -239,18 +289,22 @@ function OverlayCard({ project }: { project: PipelineProject }) {
         </div>
         <div className="flex items-center justify-between gap-1.5">
           <span className="text-xs text-muted-foreground truncate">{project.customerName}</span>
-          <Badge
-            className={[
-              'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
-              project.closingStatus === 'COMPLETE'
-                ? 'bg-green-100 text-green-800'
-                : project.closingStatus === 'INCOMPLETE'
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-red-100 text-red-800',
-            ].join(' ')}
-          >
-            {project.closingStatus ?? 'MISSING'}
-          </Badge>
+          {project.currentStage === 'completed' && (
+            <Badge
+              className={[
+                'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
+                project.closingStatus === 'APPROVED'
+                  ? 'bg-blue-100 text-blue-800'
+                  : project.closingStatus === 'COMPLETE'
+                  ? 'bg-green-100 text-green-800'
+                  : project.closingStatus === 'INCOMPLETE'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : 'bg-red-100 text-red-800',
+              ].join(' ')}
+            >
+              {project.closingStatus ?? 'MISSING'}
+            </Badge>
+          )}
         </div>
         <div className="flex items-center justify-between text-xs">
           {project.targetShipDate && (
@@ -297,8 +351,15 @@ export default function P2PipelineBoardPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects/pipeline'] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
     },
-    onError: () => {
-      toast({ title: 'Failed to update stage', variant: 'destructive' });
+    onError: (error: Error) => {
+      let description = 'Failed to update stage.';
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed?.message) description = parsed.message;
+      } catch {
+        description = error.message || description;
+      }
+      toast({ title: 'Stage update rejected', description, variant: 'destructive' });
     },
   });
 
@@ -321,6 +382,22 @@ export default function P2PipelineBoardPage() {
     const newStage = over.id as string;
     const project = projects.find((p) => p.projectId === projectId);
     if (!project || project.currentStage === newStage) return;
+
+    const currentIdx = PIPELINE_STAGE_ORDER_MUT.indexOf(project.currentStage);
+    const newIdx = PIPELINE_STAGE_ORDER_MUT.indexOf(newStage);
+    const maxAllowedIdx = PIPELINE_STAGE_ORDER_MUT.indexOf(project.maxAllowedStageKey ?? 'quote_preparing');
+
+    if (newIdx > currentIdx && newIdx > maxAllowedIdx) {
+      const prerequisite = STAGE_GATE_LABELS[newStage];
+      toast({
+        title: 'Stage advance blocked',
+        description: prerequisite
+          ? `Complete "${prerequisite}" before moving to this stage.`
+          : 'Required project steps must be completed before advancing to this stage.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     updateStageMutation.mutate({ projectId, currentStage: newStage });
   };
@@ -359,26 +436,75 @@ export default function P2PipelineBoardPage() {
         </Button>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {groupedProjects.map(({ stage, projects: stageProjects }) => (
-            <DroppableColumn
-              key={stage.key}
-              stage={stage}
-              projects={stageProjects}
-              onNavigate={setLocation}
-            />
-          ))}
+      <div className="flex gap-3 overflow-x-auto pb-4">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-3">
+            {groupedProjects.map(({ stage, projects: stageProjects }) => (
+              <DroppableColumn
+                key={stage.key}
+                stage={stage}
+                projects={stageProjects}
+                onNavigate={setLocation}
+              />
+            ))}
+          </div>
+          <DragOverlay>
+            {activeProject ? <OverlayCard project={activeProject} /> : null}
+          </DragOverlay>
+        </DndContext>
+
+        {/* Project Closing — final visible step (non-droppable, read-only) */}
+        <div className="flex flex-col min-w-[220px] w-[220px] rounded-lg border bg-purple-50 border-purple-300">
+          <div className="px-3 py-2 rounded-t-lg font-medium text-sm flex items-center justify-between bg-purple-200 text-purple-900">
+            <span className="truncate">Project Closing</span>
+            <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] text-xs font-bold px-1.5">
+              {projects.filter(p => p.currentStage === 'completed').length}
+            </Badge>
+          </div>
+          <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-220px)]">
+            {projects.filter(p => p.currentStage === 'completed').length === 0 ? (
+              <div className="text-xs text-muted-foreground text-center py-8 italic">No projects</div>
+            ) : (
+              projects.filter(p => p.currentStage === 'completed').map((project) => (
+                <Card
+                  key={project.projectId}
+                  className="cursor-pointer shadow-sm border border-purple-200 hover:shadow-md hover:border-purple-400 transition-all duration-150"
+                  onClick={() => setLocation(`/projects/${project.projectId}/closing`)}
+                >
+                  <CardContent className="p-3 space-y-2">
+                    <p className="font-semibold text-sm truncate">{project.projectCode}</p>
+                    <p className="text-xs text-muted-foreground truncate">{project.projectName}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground truncate">{project.customerName}</span>
+                      {project.currentStage === 'completed' && (
+                        <Badge
+                          className={[
+                            'shrink-0 text-[10px] px-1.5 py-0 h-4 leading-none',
+                            project.closingStatus === 'APPROVED'
+                              ? 'bg-blue-100 text-blue-800'
+                              : project.closingStatus === 'COMPLETE'
+                              ? 'bg-green-100 text-green-800'
+                              : project.closingStatus === 'INCOMPLETE'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800',
+                          ].join(' ')}
+                        >
+                          {project.closingStatus ?? 'MISSING'}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
         </div>
-        <DragOverlay>
-          {activeProject ? <OverlayCard project={activeProject} /> : null}
-        </DragOverlay>
-      </DndContext>
+      </div>
     </div>
   );
 }

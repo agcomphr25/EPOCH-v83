@@ -1,0 +1,614 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Loader2, CheckCircle, XCircle, ShieldAlert, Delete, Lock, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+type KioskStep = 'idle' | 'pin-entry' | 'loading' | 'confirm' | 'punching' | 'success' | 'error' | 'locked-out';
+
+interface DcaaPolicyViolation {
+  ruleId: string;
+  reason: string;
+  remediation: string;
+}
+
+interface EmployeeInfo {
+  id: number;
+  firstName: string;
+  lastName: string;
+  jobTitle: string | null;
+}
+
+interface PunchStatus {
+  employeeId: number;
+  status: string;
+  clockedInAt: string | null;
+  hoursToday: number;
+}
+
+interface ChargeCode {
+  id: number;
+  code: string;
+  description: string | null;
+  type: string;
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  DIRECT: 'Direct Labor',
+  OVERHEAD: 'Overhead',
+  G_AND_A: 'G&A',
+  IR_AND_D: 'IR&D',
+  B_AND_P: 'B&P',
+  INDIRECT: 'Indirect',
+};
+
+function labelForType(type: string): string {
+  return TYPE_LABELS[type] ?? type;
+}
+
+interface ChargeCodePickerProps {
+  chargeCodes: ChargeCode[];
+  value: string;
+  onChange: (code: string) => void;
+  onInteraction: () => void;
+}
+
+function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: ChargeCodePickerProps) {
+  const [search, setSearch] = useState('');
+
+  const filtered = chargeCodes.filter(cc => {
+    const q = search.toLowerCase();
+    return (
+      cc.code.toLowerCase().includes(q) ||
+      (cc.description ?? '').toLowerCase().includes(q)
+    );
+  });
+
+  const groups = filtered.reduce<Record<string, ChargeCode[]>>((acc, cc) => {
+    if (!acc[cc.type]) acc[cc.type] = [];
+    acc[cc.type].push(cc);
+    return acc;
+  }, {});
+
+  const groupKeys = Object.keys(groups).sort();
+  const showHeaders = groupKeys.length > 1;
+
+  return (
+    <div className="space-y-2 text-left">
+      <label className="text-xs uppercase tracking-widest text-gray-400 block">
+        Charge Code <span className="text-gray-300 normal-case">(optional)</span>
+      </label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Search by code or description…"
+          value={search}
+          onChange={e => { setSearch(e.target.value); onInteraction(); }}
+          className="w-full bg-white border border-gray-200 text-gray-900 rounded-xl pl-9 pr-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(''); onInteraction(); }}
+            className="w-full text-left px-4 py-3 text-sm text-gray-400 border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100"
+          >
+            — No charge code —
+          </button>
+        )}
+        {filtered.length === 0 && (
+          <p className="px-4 py-3 text-sm text-gray-400">No matching codes</p>
+        )}
+        {groupKeys.map(type => (
+          <div key={type}>
+            {showHeaders && (
+              <div className="sticky top-0 bg-gray-50 px-4 py-1.5 border-b border-gray-100">
+                <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                  {labelForType(type)}
+                </span>
+              </div>
+            )}
+            {groups[type].map(cc => {
+              const isSelected = cc.code === value;
+              return (
+                <button
+                  key={cc.id}
+                  type="button"
+                  onClick={() => { onChange(cc.code); onInteraction(); }}
+                  className={`w-full text-left px-4 py-3 flex flex-col gap-0.5 border-b border-gray-100 last:border-b-0 active:bg-blue-50 transition-colors ${
+                    isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
+                    {cc.code}
+                  </span>
+                  {cc.description && (
+                    <span className={`text-xs ${isSelected ? 'text-blue-500' : 'text-gray-400'}`}>
+                      {cc.description}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface ActionMeta {
+  currentLabel: string;
+  verb: string;
+  action: 'clock_in' | 'clock_out';
+}
+
+function getActionMeta(status: string): ActionMeta {
+  if (status === 'clocked_in' || status === 'on_break') {
+    return { currentLabel: status === 'on_break' ? 'ON BREAK' : 'CLOCKED IN', verb: 'Clock Out', action: 'clock_out' };
+  }
+  return { currentLabel: 'CLOCKED OUT', verb: 'Clock In', action: 'clock_in' };
+}
+
+const IDLE_TIMEOUT_MS = 45_000;
+const RESULT_DISPLAY_SEC = 5;
+const PIN_LENGTH = 4;
+
+const PIN_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', 'submit'];
+
+export default function KioskPage() {
+  const [step, setStep] = useState<KioskStep>('idle');
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [employee, setEmployee] = useState<EmployeeInfo | null>(null);
+  const [punchStatus, setPunchStatus] = useState<PunchStatus | null>(null);
+  const [chargeCodes, setChargeCodes] = useState<ChargeCode[]>([]);
+  const [selectedChargeCode, setSelectedChargeCode] = useState('');
+  const [resultMsg, setResultMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
+  const [countdown, setCountdown] = useState(RESULT_DISPLAY_SEC);
+  const [lockoutSecondsRemaining, setLockoutSecondsRemaining] = useState(0);
+
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lockoutRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const resetToIdle = useCallback(() => {
+    setStep('idle');
+    setPin('');
+    setPinError('');
+    setEmployee(null);
+    setPunchStatus(null);
+    setChargeCodes([]);
+    setSelectedChargeCode('');
+    setResultMsg('');
+    setErrorMsg('');
+    setDcaaViolation(null);
+    setCountdown(RESULT_DISPLAY_SEC);
+    setLockoutSecondsRemaining(0);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (lockoutRef.current) clearInterval(lockoutRef.current);
+  }, []);
+
+  const restartIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(resetToIdle, IDLE_TIMEOUT_MS);
+  }, [resetToIdle]);
+
+  useEffect(() => {
+    if (step !== 'idle' && step !== 'success' && step !== 'error' && step !== 'locked-out') {
+      restartIdleTimer();
+      return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+    }
+  }, [step, restartIdleTimer]);
+
+  useEffect(() => {
+    if (step === 'success' || step === 'error') {
+      setCountdown(RESULT_DISPLAY_SEC);
+      const iv = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) { clearInterval(iv); resetToIdle(); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+      countdownRef.current = iv;
+      return () => clearInterval(iv);
+    }
+  }, [step, resetToIdle]);
+
+  useEffect(() => {
+    if (step === 'locked-out') {
+      const iv = setInterval(() => {
+        setLockoutSecondsRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(iv);
+            setStep('pin-entry');
+            setPin('');
+            setPinError('');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      lockoutRef.current = iv;
+      return () => clearInterval(iv);
+    }
+  }, [step]);
+
+  const handleIdleTap = useCallback(() => {
+    setStep('pin-entry');
+    setPin('');
+    setPinError('');
+    restartIdleTimer();
+  }, [restartIdleTimer]);
+
+  const handlePinKey = useCallback((key: string) => {
+    restartIdleTimer();
+    setPinError('');
+    if (key === 'backspace') {
+      setPin(prev => prev.slice(0, -1));
+    } else if (key !== 'submit') {
+      setPin(prev => prev.length < PIN_LENGTH ? prev + key : prev);
+    }
+  }, [restartIdleTimer]);
+
+  const handlePinSubmit = useCallback(async () => {
+    if (pin.length !== PIN_LENGTH) return;
+    setStep('loading');
+
+    try {
+      const identifyRes = await fetch('/api/timekeeping/kiosk/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      const identifyData = await identifyRes.json();
+
+      if (!identifyRes.ok) {
+        if (identifyRes.status === 429) {
+          const raw = identifyData.retryAfterSeconds;
+          const retryAfter = Number.isFinite(raw) && raw > 0 ? Math.ceil(raw) : 60;
+          setLockoutSecondsRemaining(retryAfter);
+          setPin('');
+          setPinError('');
+          setStep('locked-out');
+          return;
+        }
+        // Authentication failure — stay on PIN entry screen with inline error
+        setPin('');
+        setPinError(identifyData.error ?? 'PIN not recognised. Please try again.');
+        setStep('pin-entry');
+        return;
+      }
+
+      const emp: EmployeeInfo = {
+        id: identifyData.id,
+        firstName: identifyData.firstName,
+        lastName: identifyData.lastName,
+        jobTitle: identifyData.jobTitle,
+      };
+      setEmployee(emp);
+
+      // Use punch status from identify response, falling back to separate fetch if absent
+      let status: PunchStatus = identifyData.punchStatus;
+      if (!status) {
+        const statusRes = await fetch(`/api/timekeeping/kiosk/punches/employee/${emp.id}/current`);
+        status = await statusRes.json();
+      }
+      setPunchStatus(status);
+
+      // Load charge codes
+      const codesRes = await fetch('/api/timekeeping/kiosk/charge-codes');
+      if (codesRes.ok) {
+        const codes: ChargeCode[] = await codesRes.json();
+        setChargeCodes(codes);
+      }
+
+      setStep('confirm');
+    } catch {
+      setErrorMsg('Network error. Please try again or see an administrator.');
+      setStep('error');
+    }
+  }, [pin]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!employee || !punchStatus) return;
+    setStep('punching');
+
+    const meta = getActionMeta(punchStatus.status);
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    try {
+      const res = await fetch('/api/timekeeping/kiosk/punch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          requestedAction: meta.action,
+          timezone: tz,
+          ...(selectedChargeCode ? { costCode: selectedChargeCode } : {}),
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.dcaaViolation) {
+          setDcaaViolation(data.dcaaViolation);
+          setErrorMsg('');
+        } else {
+          setErrorMsg(data.error ?? 'Punch failed. Please see an administrator.');
+        }
+        setStep('error');
+        return;
+      }
+
+      setResultMsg(data.message ?? 'Punch recorded successfully!');
+      setStep('success');
+    } catch {
+      setErrorMsg('Network error. Punch was not recorded.');
+      setStep('error');
+    }
+  }, [employee, punchStatus, selectedChargeCode]);
+
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  // ── IDLE ──────────────────────────────────────────────────────────────────
+  if (step === 'idle') {
+    return (
+      <div
+        className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center cursor-pointer select-none"
+        onClick={handleIdleTap}
+      >
+        <div className="text-center space-y-4">
+          <p className="text-base font-semibold tracking-[0.3em] text-gray-400 uppercase">AG Composites</p>
+          <div className="text-9xl font-bold tabular-nums tracking-tight text-gray-900">{timeStr}</div>
+          <div className="text-xl text-gray-500">{dateStr}</div>
+          <div className="mt-16 flex flex-col items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+            <p className="text-gray-400 text-sm">Tap anywhere to clock in or out</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LOADING / PUNCHING ───────────────────────────────────────────────────
+  if (step === 'loading' || step === 'punching') {
+    return (
+      <div className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center gap-6">
+        <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
+        <p className="text-lg text-gray-500">
+          {step === 'punching' ? 'Recording your punch…' : 'Verifying PIN…'}
+        </p>
+      </div>
+    );
+  }
+
+  // ── SUCCESS ──────────────────────────────────────────────────────────────
+  if (step === 'success') {
+    return (
+      <div
+        className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center text-center px-8 cursor-pointer"
+        onClick={resetToIdle}
+      >
+        <CheckCircle className="h-24 w-24 text-green-500 mb-6" />
+        <p className="text-3xl font-bold text-green-700 mb-3 max-w-sm">{resultMsg}</p>
+        <p className="text-gray-400">Tap to dismiss · resets in {countdown}s</p>
+      </div>
+    );
+  }
+
+  // ── ERROR ────────────────────────────────────────────────────────────────
+  if (step === 'error') {
+    if (dcaaViolation) {
+      return (
+        <div
+          className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center text-center px-8 cursor-pointer"
+          onClick={resetToIdle}
+        >
+          <ShieldAlert className="h-20 w-20 text-amber-500 mb-5" />
+          <div className="inline-block bg-amber-50 border border-amber-300 rounded-lg px-3 py-1 mb-4">
+            <span className="text-amber-600 text-xs font-mono font-bold tracking-widest">DCAA {dcaaViolation.ruleId}</span>
+          </div>
+          <p className="text-xl font-bold text-amber-800 mb-4 max-w-sm leading-snug">
+            {dcaaViolation.reason}
+          </p>
+          <p className="text-gray-500 text-sm max-w-sm mb-8 leading-relaxed">
+            {dcaaViolation.remediation}
+          </p>
+          <p className="text-gray-400 text-xs mb-6">Tap to dismiss · resets in {countdown}s</p>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={(e) => { e.stopPropagation(); resetToIdle(); }}
+            className="border-gray-300 text-gray-700 hover:bg-gray-100"
+          >
+            Back
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <div
+        className="min-h-screen bg-white text-gray-900 flex flex-col items-center justify-center text-center px-8 cursor-pointer"
+        onClick={resetToIdle}
+      >
+        <XCircle className="h-24 w-24 text-red-500 mb-6" />
+        <p className="text-2xl font-bold text-red-700 mb-3 max-w-sm">{errorMsg}</p>
+        <p className="text-gray-400 mb-8">Tap to try again · resets in {countdown}s</p>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={(e) => { e.stopPropagation(); resetToIdle(); }}
+          className="border-gray-300 text-gray-700 hover:bg-gray-100"
+        >
+          Try Again
+        </Button>
+      </div>
+    );
+  }
+
+  // ── LOCKED OUT ───────────────────────────────────────────────────────────
+  if (step === 'locked-out') {
+    const mins = Math.floor(lockoutSecondsRemaining / 60);
+    const secs = lockoutSecondsRemaining % 60;
+    const timeLabel = mins > 0
+      ? `${mins}m ${secs.toString().padStart(2, '0')}s`
+      : `${secs}s`;
+    return (
+      <div className="min-h-screen bg-amber-50 text-gray-900 flex flex-col items-center justify-center text-center px-8">
+        <Lock className="h-20 w-20 text-amber-500 mb-6" />
+        <p className="text-3xl font-bold text-amber-800 mb-3">Too many attempts</p>
+        <p className="text-gray-600 text-lg mb-8 max-w-sm leading-snug">
+          This kiosk is temporarily locked. Please wait before trying again.
+        </p>
+        <div className="bg-white border border-amber-200 rounded-2xl px-10 py-6 shadow-sm">
+          <p className="text-xs uppercase tracking-widest text-amber-400 mb-1">Try again in</p>
+          <p className="text-5xl font-bold tabular-nums text-amber-700">{timeLabel}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── PIN ENTRY ────────────────────────────────────────────────────────────
+  if (step === 'pin-entry') {
+    return (
+      <div
+        className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-6"
+        onMouseMove={restartIdleTimer}
+      >
+        <div className="w-full max-w-xs space-y-6">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900 mb-1">Enter Your PIN</p>
+            <p className="text-sm text-gray-400">Type your 4-digit kiosk PIN</p>
+          </div>
+
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-4 h-12">
+              {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-4 h-4 rounded-full border-2 transition-all ${
+                    i < pin.length
+                      ? pinError ? 'bg-red-500 border-red-500' : 'bg-blue-500 border-blue-500'
+                      : pinError ? 'bg-transparent border-red-300' : 'bg-transparent border-gray-300'
+                  }`}
+                />
+              ))}
+            </div>
+            {pinError && (
+              <p className="text-red-600 text-sm font-medium mt-2">{pinError}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {PIN_KEYS.map(key => {
+              if (key === 'backspace') {
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handlePinKey('backspace')}
+                    className="h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-95 transition-all shadow-sm"
+                  >
+                    <Delete className="h-5 w-5" />
+                  </button>
+                );
+              }
+              if (key === 'submit') {
+                return (
+                  <button
+                    key={key}
+                    onClick={handlePinSubmit}
+                    disabled={pin.length !== PIN_LENGTH}
+                    className="h-16 rounded-2xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-30 shadow-sm"
+                  >
+                    OK
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={key}
+                  onClick={() => handlePinKey(key)}
+                  className="h-16 rounded-2xl bg-white border border-gray-200 text-gray-900 text-2xl font-semibold hover:bg-gray-100 active:scale-95 transition-all shadow-sm"
+                >
+                  {key}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={resetToIdle}
+            className="w-full text-center text-gray-400 hover:text-gray-600 text-sm"
+          >
+            ← Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CONFIRM ──────────────────────────────────────────────────────────────
+  if (step === 'confirm' && employee && punchStatus) {
+    const meta = getActionMeta(punchStatus.status);
+    const isClockIn = meta.action === 'clock_in';
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div>
+            <p className="text-3xl font-bold text-gray-900">{employee.firstName} {employee.lastName}</p>
+            {employee.jobTitle && (
+              <p className="text-gray-400 mt-1">{employee.jobTitle}</p>
+            )}
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-2 shadow-sm">
+            <p className="text-xs uppercase tracking-widest text-gray-400">Current Status</p>
+            <p className="text-2xl font-semibold text-blue-600">{meta.currentLabel}</p>
+            {punchStatus.hoursToday > 0 && (
+              <p className="text-gray-400 text-sm">
+                {punchStatus.hoursToday.toFixed(2)} hours worked today
+              </p>
+            )}
+          </div>
+
+          {isClockIn && chargeCodes.length > 0 && (
+            <ChargeCodePicker
+              chargeCodes={chargeCodes}
+              value={selectedChargeCode}
+              onChange={setSelectedChargeCode}
+              onInteraction={restartIdleTimer}
+            />
+          )}
+
+          <Button
+            size="lg"
+            onClick={handleConfirm}
+            className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
+          >
+            {meta.verb}
+          </Button>
+
+          <button
+            onClick={resetToIdle}
+            className="text-gray-400 hover:text-gray-600 text-sm"
+          >
+            ← Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}

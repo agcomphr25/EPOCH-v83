@@ -1,0 +1,61 @@
+I’ll turn Step 6 into a practical WAD wizard screen: AI recommends the controls, the user approves/edits, then EPOCH creates the right P2 artifacts from the WAD.Thought for a couple of secondsYes — Step 6 should be an AI-assisted “Production Control Decision” wizard inside the WAD.
+Step 6 — AI Routing / Traveler Requirements Wizard
+Purpose
+This step decides what P2 must create before production can start.
+The AI should generate a recommendation, but the user must approve it.
+
+Step 6 Wizard Flow
+1. User selects or confirms part/process type
+Fields:
+Part Type:- Composite- CNC Machined- Assembly- Sub-Assembly- Paint / Finish- Special Process- Shipping / Final Inspection OnlyProduction Type:- New Part- Repeat Part- Revision Change- First Article- Rework- Prototype
+
+2. AI reviews WAD/project inputs
+AI uses:
+Part numberPart nameCustomerQuantityRevisionRisk assessment resultDepartments requiredMaterial typeSpecial process requirementsPrior routing exists? yes/noPrior traveler exists? yes/noCustomer/spec requirementsInspection requirements
+
+3. AI generates production-control requirements
+Recommended output:
+{  routingRequired: true,  travelerRequired: true,  workInstructionRequired: true,  specSheetRequired: true,  finalQcOnlyAllowed: false,  inProcessInspectionRequired: true,  spotCheckPlanRequired: true,  certRequired: false,  reason: "Composite production requires controlled routing, traceability, traveler signoffs, in-process inspection, and final QC."}
+
+Simple User Screen
+AI Recommendation Card
+AI Recommendation: Controlled Production RequiredRouting Required: YESTraveler Required: YESWork Instruction Required: YESSpec Sheet Required: YESFinal QC Only Allowed: NOIn-Process Inspection Required: YESSpot Check Plan Required: YESReason:This is a composite part requiring material traceability, department signoffs, cure/process control, and inspection records.
+Buttons:
+[Accept AI Recommendation][Edit Requirements][Create P2 Controls]
+
+Rule Examples
+Composite Part
+Routing required: YESTraveler required: YESWork instruction required: YESSpec sheet required: YESFinal QC only allowed: NOIn-process inspection required: YESSpot check plan required: YES
+Creates:
+P2 ProjectRoutingTravelerInspection planMaterial traceability tasksDepartment signoffsFinal QC
+
+Simple CNC Repeat Part
+Routing required: MAYBETraveler required: NO or LIMITEDWork instruction required: YESSpec sheet required: YESFinal QC only allowed: YESIn-process inspection required: NOSpot check plan required: OPTIONAL
+Creates:
+Work orderSpec sheetWork instructionFinal QC checklistOptional CNC routing reference
+
+Assembly / Sub-Assembly
+Routing required: YESTraveler required: YESWork instruction required: YESSpec sheet required: YESFinal QC only allowed: NOIn-process inspection required: YESSpot check plan required: YES
+Creates:
+Assembly routingSub-assembly requirementsChild component readiness checksTravelerQC checkpointsFinal inspection
+
+Paint / Finish
+Routing required: YESTraveler required: YESWork instruction required: YESSpec sheet required: YESFinal QC only allowed: NOIn-process inspection required: YESSpot check plan required: YES
+Creates:
+Finish routing stepPaint/color requirementsSurface prep checklistInspection criteriaFinal cosmetic QC
+
+Special Process
+Routing required: YESTraveler required: YESWork instruction required: YESSpec sheet required: YESFinal QC only allowed: NOIn-process inspection required: YESSpot check plan required: YESCert required: YES
+Creates:
+Traveler special process stepVendor/process cert requirementReceiving inspection requirementFinal cert attachment gate
+
+One-Click Create From WAD
+After approval, button:
+[Create P2 Controls]
+Should generate only what is required:
+if (routingRequired) createRoutingFromWad()if (travelerRequired) createTravelerPlanFromWad()if (workInstructionRequired) createWorkInstructionRequirement()if (specSheetRequired) createSpecSheetRequirement()if (inProcessInspectionRequired) createInspectionCheckpoints()if (spotCheckPlanRequired) createSpotCheckPlan()if (certRequired) createCertificationRequirement()
+
+Recommended WAD Step 6 Name
+Use:
+Step 6 — Production Control Requirements
+Better than “Routing / Traveler Requirements” because this step decides all required production controls, not only routing and travelers.

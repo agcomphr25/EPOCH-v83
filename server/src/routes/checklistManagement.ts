@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { DEFAULT_CHECKLISTS_LIMIT, MAX_CHECKLISTS_LIMIT } from '../constants/checklists';
 
 const router = Router();
 
@@ -486,7 +487,11 @@ router.get('/enforcement-status', ...authRequired, async (req: Request, res: Res
 
 router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
   try {
-    const { employeeId, from, to, templateId, limit = '50', offset = '0' } = req.query;
+    const { employeeId, from, to, templateId, limit = String(DEFAULT_CHECKLISTS_LIMIT), offset = '0' } = req.query;
+    const parsedLimit = parseInt(String(limit), 10);
+    const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, MAX_CHECKLISTS_LIMIT)
+      : DEFAULT_CHECKLISTS_LIMIT;
     
     let query = `
       SELECT cr.*, ct.name as template_name, e.name as employee_name,
@@ -528,7 +533,7 @@ router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
 
     paramCount++;
     query += ` ORDER BY cr.period_date DESC, cr.created_at DESC LIMIT $${paramCount}`;
-    params.push(Number(limit));
+    params.push(effectiveLimit);
 
     paramCount++;
     query += ` OFFSET $${paramCount}`;

@@ -69,7 +69,7 @@ const COLOR = {
   ACCENT_RFQ: rgb(0.9, 0.49, 0.13),
 } as const;
 
-const TABLE_COL_WIDTHS = {
+const TABLE_COL_WIDTHS_BASE = {
   LINE: 30,
   PART_NUM: 90,
   UNIT: 50,
@@ -77,13 +77,36 @@ const TABLE_COL_WIDTHS = {
   UNIT_PRICE: 70,
   TOTAL: 70,
 } as const;
-const TABLE_DESC_WIDTH = PRINTABLE_WIDTH
-  - TABLE_COL_WIDTHS.LINE
-  - TABLE_COL_WIDTHS.PART_NUM
-  - TABLE_COL_WIDTHS.UNIT
-  - TABLE_COL_WIDTHS.QTY
-  - TABLE_COL_WIDTHS.UNIT_PRICE
-  - TABLE_COL_WIDTHS.TOTAL;
+
+const TABLE_COL_WIDTHS_WITH_NOTES = {
+  LINE: 25,
+  PART_NUM: 75,
+  UNIT: 40,
+  QTY: 45,
+  UNIT_PRICE: 65,
+  TOTAL: 65,
+  NOTES: 97,
+} as const;
+
+function computeDescWidth(withNotes: boolean): number {
+  if (withNotes) {
+    return PRINTABLE_WIDTH
+      - TABLE_COL_WIDTHS_WITH_NOTES.LINE
+      - TABLE_COL_WIDTHS_WITH_NOTES.PART_NUM
+      - TABLE_COL_WIDTHS_WITH_NOTES.NOTES
+      - TABLE_COL_WIDTHS_WITH_NOTES.UNIT
+      - TABLE_COL_WIDTHS_WITH_NOTES.QTY
+      - TABLE_COL_WIDTHS_WITH_NOTES.UNIT_PRICE
+      - TABLE_COL_WIDTHS_WITH_NOTES.TOTAL;
+  }
+  return PRINTABLE_WIDTH
+    - TABLE_COL_WIDTHS_BASE.LINE
+    - TABLE_COL_WIDTHS_BASE.PART_NUM
+    - TABLE_COL_WIDTHS_BASE.UNIT
+    - TABLE_COL_WIDTHS_BASE.QTY
+    - TABLE_COL_WIDTHS_BASE.UNIT_PRICE
+    - TABLE_COL_WIDTHS_BASE.TOTAL;
+}
 
 const HEADER_ROW_HEIGHT = SPACING.TOTAL_BAR_HEIGHT;
 
@@ -162,15 +185,18 @@ async function embedLogo(pdfDoc: PDFDocument) {
   return null;
 }
 
-function buildTableColumnPositions(margin: number) {
+function buildTableColumnPositions(margin: number, withNotes: boolean) {
+  const colW = withNotes ? TABLE_COL_WIDTHS_WITH_NOTES : TABLE_COL_WIDTHS_BASE;
+  const descWidth = computeDescWidth(withNotes);
   const line = margin;
-  const partNum = line + TABLE_COL_WIDTHS.LINE;
-  const description = partNum + TABLE_COL_WIDTHS.PART_NUM;
-  const unit = description + TABLE_DESC_WIDTH;
-  const qty = unit + TABLE_COL_WIDTHS.UNIT;
-  const unitPrice = qty + TABLE_COL_WIDTHS.QTY;
-  const total = unitPrice + TABLE_COL_WIDTHS.UNIT_PRICE;
-  return { line, partNum, description, unit, qty, unitPrice, total };
+  const partNum = line + colW.LINE;
+  const description = partNum + colW.PART_NUM;
+  const notes = description + descWidth;
+  const unit = withNotes ? notes + TABLE_COL_WIDTHS_WITH_NOTES.NOTES : notes;
+  const qty = unit + colW.UNIT;
+  const unitPrice = qty + colW.QTY;
+  const total = unitPrice + colW.UNIT_PRICE;
+  return { line, partNum, description, notes: withNotes ? notes : null, unit, qty, unitPrice, total };
 }
 
 export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
@@ -273,15 +299,20 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: width - PAGE.MARGIN, y }, thickness: 1, color: COLOR.DIVIDER });
   y -= SPACING.TEXT_INSET;
 
-  const cols = buildTableColumnPositions(PAGE.MARGIN);
+  const hasAnyNotes = items.some(item => item.notes?.trim());
+  const cols = buildTableColumnPositions(PAGE.MARGIN, hasAnyNotes);
+  const activeDescWidth = computeDescWidth(hasAnyNotes);
+  const activePartNumWidth = hasAnyNotes ? TABLE_COL_WIDTHS_WITH_NOTES.PART_NUM : TABLE_COL_WIDTHS_BASE.PART_NUM;
+  const activeNotesWidth = hasAnyNotes ? TABLE_COL_WIDTHS_WITH_NOTES.NOTES : 0;
 
   page.drawRectangle({ x: PAGE.MARGIN, y: y - HEADER_ROW_HEIGHT, width: PRINTABLE_WIDTH, height: HEADER_ROW_HEIGHT, color: accentColor });
   y -= HEADER_ROW_HEIGHT - SPACING.CELL_PAD;
 
-  const headers = [
+  const headers: { text: string; x: number }[] = [
     { text: '#', x: cols.line + SPACING.CELL_PAD },
     { text: 'Part Number', x: cols.partNum + SPACING.CELL_PAD },
     { text: 'Description', x: cols.description + SPACING.CELL_PAD },
+    ...(hasAnyNotes && cols.notes !== null ? [{ text: 'Notes', x: cols.notes + SPACING.CELL_PAD }] : []),
     { text: 'Unit', x: cols.unit + SPACING.CELL_PAD },
     { text: 'Qty', x: cols.qty + SPACING.CELL_PAD },
     { text: 'Unit Price', x: cols.unitPrice + SPACING.CELL_PAD },
@@ -303,8 +334,15 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
     lineTotal += itemTotal;
 
     const descText = item.description || item.itemDescription || '';
-    const descLines = wrapText(descText, TABLE_DESC_WIDTH - FONT_SIZE.TABLE_CELL, font, FONT_SIZE.TABLE_CELL);
-    const rowHeight = Math.max(SPACING.MIN_ROW_HEIGHT, descLines.length * LINE_HEIGHT.SMALL + SPACING.ROW_HEIGHT_PAD);
+    const descLines = wrapText(descText, activeDescWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL);
+
+    const noteText = hasAnyNotes ? (item.notes?.trim() || '') : '';
+    const noteLines = noteText
+      ? wrapText(noteText, activeNotesWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL)
+      : [];
+
+    const contentLineCount = Math.max(descLines.length, noteLines.length, 1);
+    const rowHeight = Math.max(SPACING.MIN_ROW_HEIGHT, contentLineCount * LINE_HEIGHT.SMALL + SPACING.ROW_HEIGHT_PAD);
 
     if (y - rowHeight < PAGE.MARGIN + PAGE_BREAK.TABLE_ROW) {
       page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
@@ -317,10 +355,16 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
 
     const textY = y - SPACING.ROW_TEXT_OFFSET;
     page.drawText(String(item.lineNumber ?? i + 1), { x: cols.line + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
-    page.drawText(truncateText(item.supplierPartNumber || item.agPartNumber || '', TABLE_COL_WIDTHS.PART_NUM - FONT_SIZE.TABLE_CELL, font, FONT_SIZE.TABLE_CELL), { x: cols.partNum + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
+    page.drawText(truncateText(item.supplierPartNumber || item.agPartNumber || '', activePartNumWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL), { x: cols.partNum + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
 
     for (let dl = 0; dl < descLines.length; dl++) {
       page.drawText(descLines[dl], { x: cols.description + SPACING.CELL_PAD, y: textY - (dl * LINE_HEIGHT.SMALL), size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
+    }
+
+    if (hasAnyNotes && cols.notes !== null) {
+      for (let nl = 0; nl < noteLines.length; nl++) {
+        page.drawText(noteLines[nl], { x: cols.notes + SPACING.CELL_PAD, y: textY - (nl * LINE_HEIGHT.SMALL), size: FONT_SIZE.TABLE_CELL, font, color: COLOR.MUTED_TEXT });
+      }
     }
 
     page.drawText(item.unit || 'EA', { x: cols.unit + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });

@@ -64,8 +64,10 @@ describe('isProductionOrderFulfilled', () => {
     expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'Completed', current_department: null }))).toBe(true);
   });
 
-  it('returns true when current_department is Shipping QC', () => {
-    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }))).toBe(true);
+  // RC-5 FIX: Shipping QC must NOT count as fulfilled — if QC rejects a unit
+  // it goes back for rework and must remain releasable in the P1 queue.
+  it('returns false when current_department is Shipping QC (RC-5)', () => {
+    expect(isProductionOrderFulfilled(makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }))).toBe(false);
   });
 
   it('returns false when order is still in a production department', () => {
@@ -96,13 +98,27 @@ describe('buildFulfillmentMap', () => {
     expect(stats.fulfilled).toBe(1);
   });
 
-  it('treats orders in Shipping QC department as fulfilled', () => {
+  // RC-5 FIX: Shipping QC is NOT a terminal state — units may be rejected and
+  // sent back for rework. They must not be counted as fulfilled.
+  it('does NOT count orders in Shipping QC department as fulfilled (RC-5)', () => {
     const rows: ProductionOrderRow[] = [
-      makeProdRow({ current_department: 'Shipping QC' }),
-      makeProdRow({ current_department: 'Shipping QC' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }),
     ];
     const stats = buildFulfillmentMap(rows).get(1)!.get(10)!;
     expect(stats.total).toBe(2);
+    expect(stats.fulfilled).toBe(0);
+  });
+
+  it('only counts Shipped and Completed orders as fulfilled', () => {
+    const rows: ProductionOrderRow[] = [
+      makeProdRow({ production_status: 'Shipped', current_department: null }),
+      makeProdRow({ production_status: 'Completed', current_department: null }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Assembly' }),
+    ];
+    const stats = buildFulfillmentMap(rows).get(1)!.get(10)!;
+    expect(stats.total).toBe(4);
     expect(stats.fulfilled).toBe(2);
   });
 });
@@ -126,31 +142,35 @@ describe('isPoItemFullyFulfilled', () => {
 });
 
 // ---------------------------------------------------------------------------
-// computeP1Queue — Shipping QC fulfillment rule (queue inclusion / exclusion)
+// computeP1Queue — Shipping QC fulfillment rule (RC-5)
 // ---------------------------------------------------------------------------
 
-describe('computeP1Queue — Shipping QC fulfillment rule', () => {
-  it('excludes a PO from the queue when all its production orders are in Shipping QC', () => {
+describe('computeP1Queue — Shipping QC fulfillment rule (RC-5)', () => {
+  // RC-5 FIX: Items in Shipping QC are NOT fulfilled — they must remain in the
+  // release queue so operators can re-release if QC rejects the unit.
+  it('keeps a PO in the queue when all production orders are in Shipping QC (RC-5)', () => {
     const po = makePO();
     const item = makeItem();
     const itemsByPoId = new Map([[po.id, [item]]]);
     const prodRows: ProductionOrderRow[] = [
-      makeProdRow({ current_department: 'Shipping QC' }),
-      makeProdRow({ current_department: 'Shipping QC' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }),
     ];
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].customerName).toBe('Acme Corp');
+    expect(result[0].purchaseOrders[0].poNumber).toBe('PO-001');
   });
 
-  it('still includes a PO in the queue when only some production orders are in Shipping QC', () => {
+  it('keeps a PO in the queue when only some production orders are in Shipping QC', () => {
     const po = makePO();
     const item = makeItem();
     const itemsByPoId = new Map([[po.id, [item]]]);
     const prodRows: ProductionOrderRow[] = [
-      makeProdRow({ current_department: 'Shipping QC' }),
-      makeProdRow({ current_department: 'Assembly' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Shipping QC' }),
+      makeProdRow({ production_status: 'In Progress', current_department: 'Assembly' }),
     ];
 
     const result = computeP1Queue([po], itemsByPoId, prodRows);
@@ -196,7 +216,8 @@ describe('computeP1Queue — Shipping QC fulfillment rule', () => {
       [2, [itemB]],
     ]);
     const prodRows: ProductionOrderRow[] = [
-      { po_id: 1, po_item_id: 10, production_status: 'In Progress', current_department: 'Shipping QC' },
+      { po_id: 1, po_item_id: 10, production_status: 'Shipped', current_department: null },
+      { po_id: 1, po_item_id: 10, production_status: 'Completed', current_department: null },
       { po_id: 2, po_item_id: 20, production_status: 'In Progress', current_department: 'Assembly' },
     ];
 
@@ -205,6 +226,28 @@ describe('computeP1Queue — Shipping QC fulfillment rule', () => {
     expect(result).toHaveLength(1);
     expect(result[0].customerName).toBe('Beta');
     expect(result[0].purchaseOrders[0].poNumber).toBe('PO-002');
+  });
+
+  // RC-5 regression guard: items in Shipping QC must keep Alpha's PO in the queue
+  it('keeps both POs in queue when Shipping QC orders exist (RC-5 regression guard)', () => {
+    const poA = makePO({ id: 1, poNumber: 'PO-001', customerName: 'Alpha' });
+    const poB = makePO({ id: 2, poNumber: 'PO-002', customerName: 'Beta', customerId: 200 });
+    const itemA = makeItem({ id: 10 });
+    const itemB = makeItem({ id: 20 });
+    const itemsByPoId = new Map([
+      [1, [itemA]],
+      [2, [itemB]],
+    ]);
+    const prodRows: ProductionOrderRow[] = [
+      { po_id: 1, po_item_id: 10, production_status: 'In Progress', current_department: 'Shipping QC' },
+      { po_id: 2, po_item_id: 20, production_status: 'In Progress', current_department: 'Assembly' },
+    ];
+
+    const result = computeP1Queue([poA, poB], itemsByPoId, prodRows);
+
+    expect(result).toHaveLength(2);
+    const customerNames = result.map((c) => c.customerName).sort();
+    expect(customerNames).toEqual(['Alpha', 'Beta']);
   });
 
   it('filters out items that are not stock_model type', () => {

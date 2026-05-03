@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -193,6 +194,7 @@ function ReservationBreakdownPopover({ lotId, reservedQty, unitOfMeasure }: { lo
 }
 
 export default function MaterialInventoryPage() {
+  const [, setLocation] = useLocation();
   const initialPartNumber = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('partNumber') ?? ''
     : '';
@@ -676,7 +678,7 @@ export default function MaterialInventoryPage() {
             View and manage material lots with full traceability
           </p>
         </div>
-        <Button onClick={() => window.location.href = '/material-receiving'} data-testid="button-receive-new">
+        <Button onClick={() => setLocation('/material-receiving')} data-testid="button-receive-new">
           Receive New Material
         </Button>
       </div>

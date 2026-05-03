@@ -114,6 +114,7 @@ type NewItemState = {
   unitPrice: number;
   customerPoId?: number | null;
   otherIdentifier: string;
+  notes: string;
 };
 
 function QuantityDisplay({ item }: { item: VendorPOItem }) {
@@ -209,6 +210,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     unitPrice: 0,
     customerPoId: undefined,
     otherIdentifier: '',
+    notes: '',
   });
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editedItem, setEditedItem] = useState<Partial<VendorPOItem> & { customerPoId?: number | null }>({});
@@ -299,6 +301,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             unitPrice: 0,
             customerPoId: prev.customerPoId,
             otherIdentifier: prev.otherIdentifier,
+            notes: prev.notes,
           }));
           console.log('Purchase unit mode activated:', { vendorUnit: inventoryItem.vendorUnit, purchaseUnit: inventoryItem.purchaseUnit, conversionFactor: inventoryItem.purchaseQuantity });
         } else {
@@ -315,6 +318,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             unitPrice: selectedPart.unitPrice || 0,
             customerPoId: prev.customerPoId,
             otherIdentifier: prev.otherIdentifier,
+            notes: prev.notes,
           }));
           console.log('Simple vendor unit mode - no conversion data available');
         }
@@ -333,6 +337,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
           unitPrice: selectedPart.unitPrice || 0,
           customerPoId: prev.customerPoId,
           otherIdentifier: prev.otherIdentifier,
+          notes: prev.notes,
         }));
         console.log('Failed to fetch inventory item, using simple mode');
       }
@@ -417,6 +422,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       unitPrice: 0,
       customerPoId: undefined,
       otherIdentifier: '',
+      notes: '',
     });
     setSelectedPartId('');
     setSelectedInventoryItem(null);
@@ -449,6 +455,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         lineTotal: lineTotal,
         customerPoId: newItem.customerPoId || null,
         otherIdentifier: newItem.otherIdentifier || null,
+        notes: newItem.notes || null,
       };
     } else {
       if (newItem.quantity <= 0 || newItem.unitPrice < 0) {
@@ -465,6 +472,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         lineTotal: newItem.quantity * newItem.unitPrice,
         customerPoId: newItem.customerPoId || null,
         otherIdentifier: newItem.otherIdentifier || null,
+        notes: newItem.notes || null,
       };
     }
     
@@ -718,6 +726,17 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             </div>
           </div>
           
+          <div className="col-span-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Input
+              id="notes"
+              value={newItem.notes}
+              onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
+              data-testid="input-notes"
+              placeholder="Optional notes for this line item..."
+            />
+          </div>
+
           <div className="flex items-center gap-4">
             <Button onClick={handleAddItem} disabled={createItemMutation.isPending} data-testid="button-add-item">
               <Plus className="w-4 h-4 mr-2" />
@@ -743,6 +762,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
               <TableHead>Line Total</TableHead>
               <TableHead className="text-purple-600">Customer PO</TableHead>
               <TableHead className="text-purple-600">Other ID</TableHead>
+              <TableHead>Notes</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -848,6 +868,19 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                       />
                     ) : (
                       item.otherIdentifier || '-'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Input
+                        value={editedItem.notes || ''}
+                        onChange={(e) => setEditedItem({ ...editedItem, notes: e.target.value })}
+                        className="w-40"
+                        placeholder="Notes..."
+                        data-testid={`input-edit-notes-${item.id}`}
+                      />
+                    ) : (
+                      item.notes || '-'
                     )}
                   </TableCell>
                   <TableCell>

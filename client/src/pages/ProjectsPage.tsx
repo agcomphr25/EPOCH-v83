@@ -11,9 +11,10 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid, Hash, ExternalLink, X, BarChart2 } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, Building2, ChevronRight, FolderOpen, Paperclip, LayoutGrid, Hash, ExternalLink, X, BarChart2, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeCreateProjectPayload, handleCreateProjectError } from '@/lib/createProjectHelper';
 
 interface ProjectStep {
   id: string;
@@ -44,6 +45,7 @@ interface Project {
   stageUpdatedAt?: string;
   poId?: number;
   closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
+  linkedRfqNumber?: string | null;
 }
 
 interface P2Customer {
@@ -190,10 +192,7 @@ export default function ProjectsPage() {
     mutationFn: async (data: typeof newProject) => {
       return apiRequest('/api/projects', {
         method: 'POST',
-        body: {
-          ...data,
-          projectManagerId: data.projectManagerId ? parseInt(data.projectManagerId) : null,
-        },
+        body: normalizeCreateProjectPayload(data),
       });
     },
     onSuccess: () => {
@@ -207,6 +206,9 @@ export default function ProjectsPage() {
         projectManagerId: '',
         reminderDays: 3,
       });
+    },
+    onError: (error: Error) => {
+      handleCreateProjectError(error, toast);
     },
   });
 
@@ -238,7 +240,7 @@ export default function ProjectsPage() {
       || (statusFilter === 'active_only' && project.status !== 'cancelled')
       || project.status === statusFilter
       || project.currentStage === statusFilter;
-    const matchesClosing = closingFilter === 'all' || (project.closingStatus ?? 'MISSING') === closingFilter;
+    const matchesClosing = closingFilter === 'all' || (project.currentStage === 'completed' && (project.closingStatus ?? 'MISSING') === closingFilter);
     
     return matchesSearch && matchesCustomer && matchesStatus && matchesClosing;
   });
@@ -460,18 +462,20 @@ export default function ProjectsPage() {
                         {STAGE_LABELS[project.currentStage] || project.currentStage}
                       </Badge>
                     )}
-                    <Badge
-                      className={
-                        project.closingStatus === 'COMPLETE'
-                          ? 'bg-green-100 text-green-800 text-xs'
-                          : project.closingStatus === 'INCOMPLETE'
-                          ? 'bg-yellow-100 text-yellow-800 text-xs'
-                          : 'bg-red-100 text-red-800 text-xs'
-                      }
-                      title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
-                    >
-                      Closing: {project.closingStatus ?? 'MISSING'}
-                    </Badge>
+                    {project.currentStage === 'completed' && (
+                      <Badge
+                        className={
+                          project.closingStatus === 'COMPLETE'
+                            ? 'bg-green-100 text-green-800 text-xs'
+                            : project.closingStatus === 'INCOMPLETE'
+                            ? 'bg-yellow-100 text-yellow-800 text-xs'
+                            : 'bg-red-100 text-red-800 text-xs'
+                        }
+                        title={`Closing: ${project.closingStatus ?? 'MISSING'}`}
+                      >
+                        Closing: {project.closingStatus ?? 'MISSING'}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -481,6 +485,13 @@ export default function ProjectsPage() {
                   <span>{project.customer?.name || 'Unknown Customer'}</span>
                 </div>
                 
+                {project.linkedRfqNumber && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <FileText className="h-4 w-4" />
+                    <span>RFQ: {project.linkedRfqNumber}</span>
+                  </div>
+                )}
+
                 {project.projectManager && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <User className="h-4 w-4" />
@@ -552,7 +563,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => { setIsCreateDialogOpen(open); if (!open) createProjectMutation.reset(); }}>
         <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
@@ -641,7 +652,7 @@ export default function ProjectsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+            <Button variant="outline" onClick={() => { setIsCreateDialogOpen(false); createProjectMutation.reset(); }}>
               Cancel
             </Button>
             <Button 

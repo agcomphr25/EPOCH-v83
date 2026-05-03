@@ -1,24 +1,259 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
-import {
-  insertCalendarEventSchema,
-  insertCalendarEventAttendeeSchema,
-} from '../../schema';
+import { z } from 'zod';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { getGoogleCalendarClient } from '../lib/googleCalendar';
 import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();
 
-// GET /api/calendar/events - Get all events or events within date range
-router.get('/events', async (req: Request, res: Response) => {
+// ── Local calendar events ─────────────────────────────────────────────────────
+
+// GET /api/calendar/events - Get events visible to current user
+router.get('/events', authenticateToken, async (req: Request, res: Response) => {
   try {
-    // Return empty array for now - local calendar storage not implemented
-    // Google Calendar integration provides the main calendar functionality
-    res.json([]);
+    const userId = req.user!.id;
+    const events = await storage.getLocalCalendarEventsForUser(userId);
+    res.json(events);
   } catch (error) {
     console.error('Get calendar events error:', error);
     res.status(500).json({ error: 'Failed to fetch calendar events' });
+  }
+});
+
+// POST /api/calendar/events - Create new event
+const createEventSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  location: z.string().optional(),
+  allDay: z.boolean().default(false),
+  isPublic: z.boolean().default(true),
+  eventType: z.string().default('meeting'),
+  calendarId: z.number().int().optional().nullable(),
+});
+
+async function userCanAccessCalendar(userId: number, calendarId: number | null | undefined): Promise<boolean> {
+  if (calendarId == null) return true;
+  const cal = await storage.getCalendar(calendarId);
+  if (!cal) return false;
+  if (cal.ownerUserId === userId) return true;
+  if (cal.isPrivate) return false;
+  const shares = await storage.getCalendarShares(calendarId);
+  return shares.some((s) => s.sharedWithUserId === userId);
+}
+
+router.post('/events', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const parsed = createEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid event data', details: parsed.error.flatten() });
+    }
+    if (!(await userCanAccessCalendar(userId, parsed.data.calendarId))) {
+      return res.status(403).json({ error: 'You do not have access to that calendar' });
+    }
+    const event = await storage.createLocalCalendarEvent({
+      ...parsed.data,
+      createdByUserId: userId,
+    });
+    res.status(201).json(event);
+  } catch (error) {
+    console.error('Create calendar event error:', error);
+    res.status(500).json({ error: 'Failed to create calendar event' });
+  }
+});
+
+// PUT /api/calendar/events/:id - Update event
+router.put('/events/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const eventId = parseInt(req.params.id);
+    const existing = await storage.getLocalCalendarEvent(eventId);
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+    if (existing.createdByUserId !== userId) return res.status(403).json({ error: 'Not your event' });
+    const parsed = createEventSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid event data', details: parsed.error.flatten() });
+    }
+    if ('calendarId' in parsed.data && !(await userCanAccessCalendar(userId, parsed.data.calendarId))) {
+      return res.status(403).json({ error: 'You do not have access to that calendar' });
+    }
+    const updated = await storage.updateLocalCalendarEvent(eventId, parsed.data);
+    res.json(updated);
+  } catch (error) {
+    console.error('Update calendar event error:', error);
+    res.status(500).json({ error: 'Failed to update calendar event' });
+  }
+});
+
+// DELETE /api/calendar/events/:id - Delete event
+router.delete('/events/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const eventId = parseInt(req.params.id);
+    const existing = await storage.getLocalCalendarEvent(eventId);
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+    if (existing.createdByUserId !== userId) return res.status(403).json({ error: 'Not your event' });
+    await storage.deleteLocalCalendarEvent(eventId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete calendar event error:', error);
+    res.status(500).json({ error: 'Failed to delete calendar event' });
+  }
+});
+
+// ── User calendars ────────────────────────────────────────────────────────────
+
+// GET /api/calendar/calendars - Get calendars accessible by current user
+router.get('/calendars', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const calendars = await storage.getCalendarsForUser(userId);
+    // For each calendar, attach share info
+    const result = await Promise.all(
+      calendars.map(async (cal) => {
+        const shares = await storage.getCalendarShares(cal.id);
+        return { ...cal, shares };
+      })
+    );
+    res.json(result);
+  } catch (error) {
+    console.error('Get calendars error:', error);
+    res.status(500).json({ error: 'Failed to fetch calendars' });
+  }
+});
+
+// POST /api/calendar/calendars - Create a new calendar
+const createCalendarSchema = z.object({
+  name: z.string().min(1),
+  color: z.string().default('#3174ad'),
+  isPrivate: z.boolean().default(false),
+  shareWithUserIds: z.array(z.number().int()).default([]),
+});
+
+router.post('/calendars', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const parsed = createCalendarSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid calendar data', details: parsed.error.flatten() });
+    }
+    const { shareWithUserIds, ...calData } = parsed.data;
+    const calendar = await storage.createCalendar({ ...calData, ownerUserId: userId });
+    // Add shares
+    if (!calData.isPrivate && shareWithUserIds.length > 0) {
+      for (const uid of shareWithUserIds) {
+        if (uid !== userId) {
+          await storage.addCalendarShare({ calendarId: calendar.id, sharedWithUserId: uid });
+        }
+      }
+    }
+    const shares = await storage.getCalendarShares(calendar.id);
+    res.status(201).json({ ...calendar, shares });
+  } catch (error) {
+    console.error('Create calendar error:', error);
+    res.status(500).json({ error: 'Failed to create calendar' });
+  }
+});
+
+// PUT /api/calendar/calendars/:id - Update calendar
+const updateCalendarSchema = z.object({
+  name: z.string().min(1).optional(),
+  color: z.string().optional(),
+  isPrivate: z.boolean().optional(),
+  shareWithUserIds: z.array(z.number().int()).optional(),
+});
+
+router.put('/calendars/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const calId = parseInt(req.params.id);
+    const existing = await storage.getCalendar(calId);
+    if (!existing) return res.status(404).json({ error: 'Calendar not found' });
+    if (existing.ownerUserId !== userId) return res.status(403).json({ error: 'Not your calendar' });
+    const parsed = updateCalendarSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid calendar data', details: parsed.error.flatten() });
+    }
+    const { shareWithUserIds, ...calData } = parsed.data;
+    const updated = await storage.updateCalendar(calId, calData);
+    // Update shares if provided
+    if (shareWithUserIds !== undefined) {
+      const currentShares = await storage.getCalendarShares(calId);
+      const currentUserIds = new Set(currentShares.map((s) => s.sharedWithUserId));
+      const newUserIds = new Set(shareWithUserIds.filter((uid) => uid !== userId));
+      // Remove shares no longer in list
+      for (const uid of currentUserIds) {
+        if (!newUserIds.has(uid)) {
+          await storage.removeCalendarShare(calId, uid);
+        }
+      }
+      // Add new shares
+      for (const uid of newUserIds) {
+        if (!currentUserIds.has(uid)) {
+          await storage.addCalendarShare({ calendarId: calId, sharedWithUserId: uid });
+        }
+      }
+    }
+    const shares = await storage.getCalendarShares(calId);
+    res.json({ ...updated, shares });
+  } catch (error) {
+    console.error('Update calendar error:', error);
+    res.status(500).json({ error: 'Failed to update calendar' });
+  }
+});
+
+// DELETE /api/calendar/calendars/:id - Delete calendar (and its events)
+router.delete('/calendars/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const calId = parseInt(req.params.id);
+    const existing = await storage.getCalendar(calId);
+    if (!existing) return res.status(404).json({ error: 'Calendar not found' });
+    if (existing.ownerUserId !== userId) return res.status(403).json({ error: 'Not your calendar' });
+    await storage.deleteCalendar(calId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete calendar error:', error);
+    res.status(500).json({ error: 'Failed to delete calendar' });
+  }
+});
+
+// POST /api/calendar/calendars/:id/shares - Add a user to calendar shares
+router.post('/calendars/:id/shares', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const calId = parseInt(req.params.id);
+    const cal = await storage.getCalendar(calId);
+    if (!cal) return res.status(404).json({ error: 'Calendar not found' });
+    if (cal.ownerUserId !== userId) return res.status(403).json({ error: 'Not your calendar' });
+    const parsed = z.object({ sharedWithUserId: z.number().int() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    if (parsed.data.sharedWithUserId === userId) return res.status(400).json({ error: 'Cannot share calendar with yourself' });
+    const share = await storage.addCalendarShare({ calendarId: calId, sharedWithUserId: parsed.data.sharedWithUserId });
+    res.status(201).json(share);
+  } catch (error) {
+    console.error('Add calendar share error:', error);
+    res.status(500).json({ error: 'Failed to add calendar share' });
+  }
+});
+
+// DELETE /api/calendar/calendars/:id/shares/:userId - Remove a user from calendar shares
+router.delete('/calendars/:id/shares/:shareUserId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const calId = parseInt(req.params.id);
+    const shareUserId = parseInt(req.params.shareUserId);
+    const cal = await storage.getCalendar(calId);
+    if (!cal) return res.status(404).json({ error: 'Calendar not found' });
+    if (cal.ownerUserId !== userId) return res.status(403).json({ error: 'Not your calendar' });
+    await storage.removeCalendarShare(calId, shareUserId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove calendar share error:', error);
+    res.status(500).json({ error: 'Failed to remove calendar share' });
   }
 });
 
@@ -113,54 +348,23 @@ router.get('/google-events', authenticateToken, async (req: Request, res: Respon
       let startDate = event.start?.dateTime || event.start?.date;
       let endDate = event.end?.dateTime || event.end?.date;
 
-      // Log sample all-day events to debug date issues
-      if (isAllDay && events.indexOf(event) < 3) {
-        console.log('📅 Sample all-day event:', {
-          title: event.summary,
-          originalStart: event.start?.date,
-          originalEnd: event.end?.date,
-        });
-      }
-
-      // Fix all-day events: Google Calendar uses exclusive end dates
-      // A birthday on Nov 15 shows as start: Nov 15, end: Nov 16
-      // We subtract one day from the end date string directly to avoid timezone issues
       if (isAllDay && endDate && typeof endDate === 'string') {
         const [year, month, day] = endDate.split('-').map(Number);
-        const endDateObj = new Date(year, month - 1, day - 1); // Month is 0-indexed, subtract 1 day
+        const endDateObj = new Date(year, month - 1, day - 1);
         const adjustedYear = endDateObj.getFullYear();
-        const adjustedMonth = String(endDateObj.getMonth() + 1).padStart(
-          2,
-          '0'
-        );
+        const adjustedMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
         const adjustedDay = String(endDateObj.getDate()).padStart(2, '0');
         endDate = `${adjustedYear}-${adjustedMonth}-${adjustedDay}`;
-
-        if (events.indexOf(event) < 3) {
-          console.log('  → Adjusted end date:', endDate);
-        }
       }
 
-      // Determine event color
-      let eventColor = '#3b82f6'; // Default blue
-
-      // Priority 1: Check if it's from the Holidays calendar
+      let eventColor = '#3b82f6';
       if (event.calendarName === 'Holidays in United States') {
-        eventColor = '#dc2127'; // Tomato red for holidays
-      }
-      // Priority 2: Check if it's a birthday (by title pattern)
-      else if (event.summary && /birthday/i.test(event.summary)) {
-        eventColor = '#dbadff'; // Grape purple for birthdays
-      }
-      // Priority 3: Check if it's an evaluation or certification event
-      else if (
-        event.summary &&
-        (/evaluation/i.test(event.summary) || /cert/i.test(event.summary))
-      ) {
-        eventColor = '#ff887c'; // Flamingo for evaluations and certs
-      }
-      // Priority 4: Use Google Calendar's assigned color if available
-      else if (event.colorId && colorMap[event.colorId]) {
+        eventColor = '#dc2127';
+      } else if (event.summary && /birthday/i.test(event.summary)) {
+        eventColor = '#dbadff';
+      } else if (event.summary && (/evaluation/i.test(event.summary) || /cert/i.test(event.summary))) {
+        eventColor = '#ff887c';
+      } else if (event.colorId && colorMap[event.colorId]) {
         eventColor = colorMap[event.colorId];
       }
 
@@ -174,8 +378,7 @@ router.get('/google-events', authenticateToken, async (req: Request, res: Respon
         allDay: isAllDay,
         isPublic: event.visibility === 'public',
         eventType: 'meeting',
-        createdBy:
-          event.creator?.email || event.organizer?.email || 'Google Calendar',
+        createdBy: event.creator?.email || event.organizer?.email || 'Google Calendar',
         source: 'google',
         color: eventColor,
         colorId: event.colorId || null,
@@ -187,198 +390,19 @@ router.get('/google-events', authenticateToken, async (req: Request, res: Respon
       };
     });
 
-    console.log(
-      `📅 Fetched ${formattedEvents.length} total Google Calendar events from ${calendars.length} calendars`
-    );
-
-    // Log events by calendar
-    const calendarSummary = formattedEvents.reduce((acc: any, event: any) => {
-      const cal = event.calendarName || 'Unknown';
-      acc[cal] = (acc[cal] || 0) + 1;
-      return acc;
-    }, {});
-    console.log(
-      '📅 Events by calendar:',
-      Object.keys(calendarSummary)
-        .map((cal) => `"${cal}": ${calendarSummary[cal]} events`)
-        .join(', ')
-    );
-
-    // Log color distribution
-    const colorSummary = formattedEvents.reduce((acc: any, event: any) => {
-      const color = event.colorId
-        ? `Color ${event.colorId} (${event.color})`
-        : `Default Blue (${event.color})`;
-      acc[color] = (acc[color] || 0) + 1;
-      return acc;
-    }, {});
-    console.log('📅 Color distribution:', colorSummary);
-
-    // Log sample events with colors
-    const sampleWithColors = formattedEvents.slice(0, 5).map((e: any) => ({
-      title: e.title,
-      colorId: e.colorId,
-      color: e.color,
-      calendar: e.calendarName,
-    }));
-    console.log('📅 Sample events with colors:', sampleWithColors);
-
+    console.log(`📅 Fetched ${formattedEvents.length} total Google Calendar events from ${calendars.length} calendars`);
     res.json(formattedEvents);
   } catch (error: any) {
     console.error('Get Google Calendar events error:', error);
-    
     if (error.needsReauth) {
-      return res.status(409).json({ 
-        error: error.message,
-        needsReauth: true
-      });
+      return res.status(409).json({ error: error.message, needsReauth: true });
     }
-    
     res.status(500).json({ error: 'Failed to fetch Google Calendar events' });
   }
 });
 
-/* 
-  NOTE: Local calendar event storage endpoints disabled - not implemented in storage layer
-  The calendar feature uses Google Calendar integration exclusively (see /google-events endpoint above)
-  Keeping code commented for potential future implementation
-
-// GET /api/calendar/events/:id - Get specific event
-router.get('/events/:id', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    const event = await storage.getCalendarEvent(eventId);
-    
-    if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-    
-    res.json(event);
-  } catch (error) {
-    console.error('Get calendar event error:', error);
-    res.status(500).json({ error: 'Failed to fetch calendar event' });
-  }
-});
-
-// POST /api/calendar/events - Create new event
-router.post('/events', async (req: Request, res: Response) => {
-  try {
-    const validatedData = insertCalendarEventSchema.parse(req.body);
-    const newEvent = await storage.createCalendarEvent(validatedData);
-    res.status(201).json(newEvent);
-  } catch (error) {
-    console.error('Create calendar event error:', error);
-    if (error instanceof Error && error.message.includes('validation')) {
-      res.status(400).json({ error: 'Invalid event data', details: error.message });
-    } else {
-      res.status(500).json({ error: 'Failed to create calendar event' });
-    }
-  }
-});
-
-// PUT /api/calendar/events/:id - Update event
-router.put('/events/:id', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    
-    // Validate the data against insert schema but allow partial updates
-    const validatedData = insertCalendarEventSchema.partial().parse(req.body);
-    
-    const updatedEvent = await storage.updateCalendarEvent(eventId, validatedData);
-    res.json(updatedEvent);
-  } catch (error) {
-    console.error('Update calendar event error:', error);
-    if (error instanceof Error && error.message.includes('validation')) {
-      res.status(400).json({ error: 'Invalid event data', details: error.message });
-    } else {
-      res.status(500).json({ error: 'Failed to update calendar event' });
-    }
-  }
-});
-
-// DELETE /api/calendar/events/:id - Delete event
-router.delete('/events/:id', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    await storage.deleteCalendarEvent(eventId);
-    res.status(204).send();
-  } catch (error) {
-    console.error('Delete calendar event error:', error);
-    res.status(500).json({ error: 'Failed to delete calendar event' });
-  }
-});
-
-// GET /api/calendar/events/:id/attendees - Get event attendees
-router.get('/events/:id/attendees', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    const attendees = await storage.getEventAttendees(eventId);
-    res.json(attendees);
-  } catch (error) {
-    console.error('Get event attendees error:', error);
-    res.status(500).json({ error: 'Failed to fetch event attendees' });
-  }
-});
-
-// POST /api/calendar/events/:id/attendees - Add attendee to event
-router.post('/events/:id/attendees', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    const attendeeData = {
-      ...req.body,
-      eventId
-    };
-    
-    const validatedData = insertCalendarEventAttendeeSchema.parse(attendeeData);
-    const newAttendee = await storage.addEventAttendee(validatedData);
-    res.status(201).json(newAttendee);
-  } catch (error) {
-    console.error('Add event attendee error:', error);
-    if (error instanceof Error && error.message.includes('validation')) {
-      res.status(400).json({ error: 'Invalid attendee data', details: error.message });
-    } else {
-      res.status(500).json({ error: 'Failed to add event attendee' });
-    }
-  }
-});
-
-// PUT /api/calendar/events/:id/attendees/:userId - Update attendee status
-router.put('/events/:id/attendees/:userId', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    const userId = req.params.userId;
-    const { status } = req.body;
-    
-    if (!['invited', 'accepted', 'declined', 'tentative'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status value' });
-    }
-    
-    const updatedAttendee = await storage.updateAttendeeStatus(eventId, userId, status);
-    res.json(updatedAttendee);
-  } catch (error) {
-    console.error('Update attendee status error:', error);
-    res.status(500).json({ error: 'Failed to update attendee status' });
-  }
-});
-
-// DELETE /api/calendar/events/:id/attendees/:userId - Remove attendee from event
-router.delete('/events/:id/attendees/:userId', async (req: Request, res: Response) => {
-  try {
-    const eventId = parseInt(req.params.id);
-    const userId = req.params.userId;
-    
-    await storage.removeEventAttendee(eventId, userId);
-    res.status(204).send();
-  } catch (error) {
-    console.error('Remove event attendee error:', error);
-    res.status(500).json({ error: 'Failed to remove event attendee' });
-  }
-});
-*/
-
 // Generate blank calendar PDF (shared function)
 const generateBlankPDF = async (req: Request, res: Response) => {
-  // Support both GET (query params) and POST (body) parameters
   const params = req.method === 'GET' ? req.query : req.body;
   console.log('🔍 PDF Route called with:', {
     method: req.method,
@@ -388,41 +412,26 @@ const generateBlankPDF = async (req: Request, res: Response) => {
   try {
     const { month, view } = params;
 
-    // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // Standard letter size
+    const page = pdfDoc.addPage([612, 792]);
     const { width, height } = page.getSize();
 
-    // Load a font
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Define colors
     const black = rgb(0, 0, 0);
     const gray = rgb(0.7, 0.7, 0.7);
     const lightGray = rgb(0.9, 0.9, 0.9);
 
-    // Parse month and year from the input (format: YYYY-MM)
     const [year, monthNum] = month
       ? month.split('-').map(Number)
       : [new Date().getFullYear(), new Date().getMonth() + 1];
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     const monthName = monthNames[monthNum - 1];
 
-    // Add header with company logo space and title
     const headerY = height - 50;
     page.drawText('AG Composites LLC', {
       x: 50,
@@ -440,29 +449,17 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       color: black,
     });
 
-    // Add calendar grid based on view type
     const startY = headerY - 60;
 
     if (view === 'month' || !view) {
-      // Generate monthly calendar grid
       const cellWidth = (width - 100) / 7;
       const cellHeight = (startY - 100) / 6;
 
-      // Days of week header
-      const dayNames = [
-        'Sunday',
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-      ];
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       dayNames.forEach((day, index) => {
         const x = 50 + index * cellWidth;
         const y = startY;
 
-        // Header background
         page.drawRectangle({
           x,
           y: y - cellHeight / 4,
@@ -480,18 +477,15 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         });
       });
 
-      // Get first day of month and number of days
       const firstDay = new Date(year, monthNum - 1, 1).getDay();
       const daysInMonth = new Date(year, monthNum, 0).getDate();
 
-      // Draw calendar grid and numbers
       let dayCounter = 1;
       for (let week = 0; week < 6; week++) {
         for (let day = 0; day < 7; day++) {
           const x = 50 + day * cellWidth;
           const y = startY - cellHeight / 4 - (week + 1) * cellHeight;
 
-          // Draw cell border
           page.drawRectangle({
             x,
             y,
@@ -501,13 +495,12 @@ const generateBlankPDF = async (req: Request, res: Response) => {
             borderWidth: 1,
           });
 
-          // Add day number
           if (
             (week === 0 && day >= firstDay) ||
             (week > 0 && dayCounter <= daysInMonth)
           ) {
             if (week === 0 && day < firstDay) {
-              // Skip days before month starts
+              // Skip
             } else if (dayCounter <= daysInMonth) {
               page.drawText(dayCounter.toString(), {
                 x: x + 5,
@@ -522,12 +515,9 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         }
       }
     } else if (view === 'week') {
-      // Generate weekly calendar grid
       const cellWidth = (width - 150) / 7;
       const cellHeight = 30;
-      const hoursPerDay = 12; // 8 AM to 8 PM
 
-      // Time column header
       page.drawText('Time', {
         x: 50,
         y: startY,
@@ -536,16 +526,7 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         color: black,
       });
 
-      // Days of week header
-      const dayNames = [
-        'Sunday',
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-      ];
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       dayNames.forEach((day, index) => {
         const x = 150 + index * cellWidth;
         page.drawText(day, {
@@ -557,12 +538,10 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         });
       });
 
-      // Draw time slots and grid
       for (let hour = 8; hour <= 20; hour++) {
         const y = startY - (hour - 7) * cellHeight;
         const timeText = hour <= 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
 
-        // Time label
         page.drawText(timeText, {
           x: 50,
           y: y - 10,
@@ -571,7 +550,6 @@ const generateBlankPDF = async (req: Request, res: Response) => {
           color: black,
         });
 
-        // Draw day cells
         for (let day = 0; day < 7; day++) {
           const x = 150 + day * cellWidth;
           page.drawRectangle({
@@ -585,7 +563,6 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         }
       }
     } else if (view === 'day') {
-      // Generate daily calendar view
       const cellWidth = width - 200;
       const cellHeight = 30;
 
@@ -597,7 +574,6 @@ const generateBlankPDF = async (req: Request, res: Response) => {
         color: black,
       });
 
-      // Draw time slots
       for (let hour = 6; hour <= 22; hour++) {
         const y = startY - (hour - 5) * cellHeight;
         const timeText = hour <= 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`;
@@ -621,7 +597,6 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       }
     }
 
-    // Add footer
     page.drawText('Generated by EPOCH v8 Manufacturing ERP System', {
       x: 50,
       y: 30,
@@ -630,41 +605,20 @@ const generateBlankPDF = async (req: Request, res: Response) => {
       color: gray,
     });
 
-    // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
-    console.log(
-      `📄 Generated PDF: ${pdfBytes.length} bytes for ${monthName} ${year}`
-    );
+    console.log(`📄 Generated PDF: ${pdfBytes.length} bytes for ${monthName} ${year}`);
 
-    // Set response headers for inline display
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="calendar-${monthName}-${year}.pdf"`
-    );
+    res.setHeader('Content-Disposition', `inline; filename="calendar-${monthName}-${year}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
-
-    console.log('📤 Sending PDF response with headers:', {
-      contentType: 'application/pdf',
-      contentLength: pdfBytes.length,
-    });
-
-    // Send PDF
     res.send(Buffer.from(pdfBytes));
   } catch (error) {
     console.error('❌ Generate blank calendar PDF error:', error);
-    console.error(
-      '❌ Full error stack:',
-      error instanceof Error ? error.stack : 'No stack trace'
-    );
     res.status(500).json({ error: 'Failed to generate calendar PDF' });
   }
 };
 
-// GET /api/calendar/blank-pdf - Direct URL access for PDF (Chrome-safe)
 router.get('/blank-pdf', generateBlankPDF);
-
-// POST /api/calendar/blank-pdf - Generate blank calendar PDF (original method)
 router.post('/blank-pdf', generateBlankPDF);
 
 export default router;

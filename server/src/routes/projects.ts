@@ -6,6 +6,7 @@ import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogS
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
+import { resolveCustomersIntegerId } from '../lib/customerResolver';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -50,11 +51,13 @@ const createProjectRequestSchema = z.object({
   projectManagerId: z.number().optional().nullable(),
   reminderDays: z.number().min(1).default(3),
   createdBy: z.number().optional(),
+  quoteId: z.string().uuid().optional().nullable(),
+  customerNameSnapshot: z.string().optional().nullable(),
 });
 
 const VALID_PIPELINE_STAGES = [
   'rfq_received', 'quote_preparing', 'quote_submitted', 'purchase_review',
-  'po_received', 'production', 'completed',
+  'po_received', 'p2_release', 'production', 'completed',
 ] as const;
 
 const updateProjectRequestSchema = z.object({
@@ -75,7 +78,8 @@ const STEP_TO_STAGE_MAP: Record<string, string> = {
   quote: 'quote_submitted',
   purchase_review_checklist: 'purchase_review',
   preproduction_checklist: 'po_received',
-  p2_order: 'production',
+  // p2_order intentionally omitted — advancing to production requires
+  // the explicit three-way P2 Release Gate (POST /release-to-p2)
 };
 
 const updateStepRequestSchema = z.object({
@@ -104,23 +108,45 @@ router.get('/', async (req, res) => {
     const projectsWithSteps = await Promise.all(
       projectsList.map(async (project) => {
         try {
-          const [steps, customer, projectManager, attachments, closing] = await Promise.all([
+          const [steps, p2Customer, projectManager, attachments, closing] = await Promise.all([
             storage.getProjectSteps(project.id),
             project.customerId ? storage.getP2CustomerByCustomerId(project.customerId) : Promise.resolve(null),
             project.projectManagerId ? storage.getEmployee(project.projectManagerId) : Promise.resolve(null),
             storage.getProjectStepAttachmentsByProject(project.id),
             storage.getProjectClosingByProjectId(project.id),
           ]);
+
+          // Resolve customer with bridge FK fallback
+          let customer: { id: number | string; customerId: string; name: string } | null = null;
+          if (p2Customer) {
+            customer = { id: p2Customer.id, customerId: p2Customer.customerId, name: p2Customer.customerName };
+          } else if (project.customersIntegerId) {
+            const masterCustomer = await storage.getCustomer(project.customersIntegerId);
+            if (masterCustomer) {
+              customer = {
+                id: masterCustomer.id,
+                customerId: String(masterCustomer.id),
+                name: masterCustomer.company || masterCustomer.name,
+              };
+            }
+          }
+
+          // Resolve linkedRfqNumber from the rfq_risk_assessment step
+          let linkedRfqNumber: string | null = null;
+          const rfqStep = steps.find(s => s.stepType === 'rfq_risk_assessment');
+          if (rfqStep?.linkedRfqId) {
+            const rfq = await storage.getRFQRiskAssessmentById(rfqStep.linkedRfqId);
+            if (rfq) linkedRfqNumber = rfq.rfqNumber;
+          }
           
           return {
             ...project,
             steps,
-            customer: customer
-              ? { id: customer.id, customerId: customer.customerId, name: customer.customerName }
-              : null,
+            customer,
             projectManager,
             attachmentCount: attachments.length,
             closingStatus: deriveClosingStatus(closing),
+            linkedRfqNumber,
           };
         } catch (enrichErr) {
           console.error(`Error enriching project ${project.id}:`, enrichErr);
@@ -157,12 +183,67 @@ router.get('/step-types', async (req, res) => {
   res.json(PROJECT_STEP_TYPES);
 });
 
+// GET /api/projects/closings/similar — find similar approved closings by customer or keyword
+router.get('/closings/similar', async (req, res) => {
+  try {
+    const customerId = req.query.customerId ? String(req.query.customerId) : undefined;
+    const partFamily = req.query.partFamily ? String(req.query.partFamily) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(String(req.query.limit), 10) || 5, 20) : 5;
+
+    if (!customerId && !partFamily) {
+      return res.status(400).json({ message: 'At least one of customerId or partFamily is required' });
+    }
+
+    const results = await storage.getSimilarProjectClosings({ customerId, partFamily, limit });
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching similar project closings:', error);
+    res.status(500).json({ message: 'Failed to fetch similar project closings' });
+  }
+});
+
+// Pipeline stage ordering used for drag-gate enforcement
+const PIPELINE_STAGE_ORDER = [
+  'rfq_received',
+  'quote_preparing',
+  'quote_submitted',
+  'purchase_review',
+  'po_received',
+  'p2_release',
+  'production',
+  'completed',
+] as const;
+
+// Maps max completed step_order → max allowed stage index in PIPELINE_STAGE_ORDER
+// Step orders: 1=rfq_risk_assessment, 2=quote, 3=purchase_review_checklist,
+//              4=preproduction_checklist, 5=p2_order
+function computeMaxAllowedStageKey(maxCompletedOrder: number): string {
+  if (maxCompletedOrder >= 5) return 'completed';
+  if (maxCompletedOrder >= 4) return 'p2_release';
+  if (maxCompletedOrder >= 3) return 'po_received';
+  if (maxCompletedOrder >= 2) return 'purchase_review';
+  if (maxCompletedOrder >= 1) return 'quote_submitted';
+  return 'quote_preparing';
+}
+
+// For each gated stage, which step label must be completed to unlock it
+const STAGE_GATE_LABELS: Record<string, string> = {
+  quote_submitted: 'RFQ Risk Assessment',
+  purchase_review: 'Quote',
+  po_received: 'Purchase Review Checklist',
+  p2_release: 'Pre-production Checklist',
+  production: 'P2 Release Gate (PO Review + WAD + Preproduction)',
+  completed: 'P2 Order',
+};
+
 router.get('/pipeline', async (req, res) => {
   try {
     const allProjects = await storage.getAllProjects();
     const pipelineProjects = allProjects.filter(
       p => p.status === 'active' || p.status === 'won'
     );
+
+    const projectIds = pipelineProjects.map(p => p.id);
 
     // Batch aggregate serial counts for all relevant PO ids in one query
     const poIds = pipelineProjects.map(p => p.poId).filter((id): id is number => id != null);
@@ -185,20 +266,80 @@ router.get('/pipeline', async (req, res) => {
       }
     }
 
+    // Batch query max completed/skipped step_order per project
+    const maxStepOrderByProjectId: Record<string, number> = {};
+    if (projectIds.length > 0) {
+      const stepRows = await pool.query<{ project_id: string; max_order: string | null }>(
+        `SELECT project_id::text,
+                MAX(step_order) FILTER (WHERE status IN ('completed', 'skipped', 'not_applicable'))::text AS max_order
+         FROM project_steps
+         WHERE project_id = ANY($1::uuid[])
+         GROUP BY project_id`,
+        [projectIds]
+      );
+      for (const row of stepRows) {
+        maxStepOrderByProjectId[row.project_id] = row.max_order ? parseInt(row.max_order, 10) : 0;
+      }
+    }
+
+    // Batch fetch linked RFQ numbers for all pipeline projects
+    const rfqStepRows = projectIds.length > 0
+      ? await pool.query<{ project_id: string; linked_rfq_id: string | null }>(
+          `SELECT project_id::text, linked_rfq_id::text
+           FROM project_steps
+           WHERE project_id = ANY($1::uuid[]) AND step_type = 'rfq_risk_assessment' AND linked_rfq_id IS NOT NULL`,
+          [projectIds]
+        )
+      : [];
+    const linkedRfqIdByProjectId: Record<string, number> = {};
+    for (const row of rfqStepRows) {
+      if (row.linked_rfq_id) linkedRfqIdByProjectId[row.project_id] = parseInt(row.linked_rfq_id, 10);
+    }
+
+    // Fetch RFQ numbers for all unique linked RFQ IDs
+    const uniqueRfqIds = [...new Set(Object.values(linkedRfqIdByProjectId))];
+    const rfqNumberById: Record<number, string> = {};
+    if (uniqueRfqIds.length > 0) {
+      const rfqRows = await pool.query<{ id: string; rfq_number: string }>(
+        `SELECT id::text, rfq_number FROM rfq_risk_assessments WHERE id = ANY($1::int[])`,
+        [uniqueRfqIds]
+      );
+      for (const row of rfqRows) {
+        rfqNumberById[parseInt(row.id, 10)] = row.rfq_number;
+      }
+    }
+
     const results = await Promise.all(
       pipelineProjects.map(async (project) => {
-        const [customer, closing] = await Promise.all([
+        const [p2Customer, closing] = await Promise.all([
           project.customerId ? storage.getP2CustomerByCustomerId(project.customerId) : Promise.resolve(null),
           storage.getProjectClosingByProjectId(project.id),
         ]);
 
+        // Resolve customer name: p2 lookup first, then bridge FK fallback
+        let customerName = 'Unknown';
+        if (p2Customer) {
+          customerName = p2Customer.customerName;
+        } else if (project.customersIntegerId) {
+          const masterCustomer = await storage.getCustomer(project.customersIntegerId);
+          if (masterCustomer) {
+            customerName = masterCustomer.company || masterCustomer.name;
+          }
+        }
+
         const serialCounts = project.poId ? (serialCountsByPoId[project.poId] ?? { total: 0, completed: 0 }) : { total: 0, completed: 0 };
+        const maxCompletedOrder = maxStepOrderByProjectId[project.id] ?? 0;
+        const maxAllowedStageKey = computeMaxAllowedStageKey(maxCompletedOrder);
+        const closingStatus = deriveClosingStatus(closing);
+
+        const rfqId = linkedRfqIdByProjectId[project.id];
+        const linkedRfqNumber = rfqId ? (rfqNumberById[rfqId] ?? null) : null;
 
         return {
           projectId: project.id,
           projectCode: project.projectCode,
           projectName: project.projectName,
-          customerName: customer?.customerName || 'Unknown',
+          customerName,
           currentStage: project.currentStage || 'rfq_received',
           status: project.status,
           targetShipDate: project.targetShipDate,
@@ -206,7 +347,9 @@ router.get('/pipeline', async (req, res) => {
           poId: project.poId,
           completedSerials: serialCounts.completed,
           totalSerials: serialCounts.total,
-          closingStatus: deriveClosingStatus(closing),
+          closingStatus,
+          maxAllowedStageKey,
+          linkedRfqNumber,
         };
       })
     );
@@ -217,6 +360,7 @@ router.get('/pipeline', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch project pipeline' });
   }
 });
+
 
 router.get('/unlinked-submissions/:stepType', async (req, res) => {
   try {
@@ -409,19 +553,33 @@ router.get('/:id', async (req, res) => {
     }
     
     const steps = await storage.getProjectSteps(project.id);
-    const customer = await storage.getP2CustomerByCustomerId(project.customerId);
+    const p2Customer = await storage.getP2CustomerByCustomerId(project.customerId);
     const projectManager = project.projectManagerId 
       ? await storage.getEmployee(project.projectManagerId)
       : null;
     const activityLog = await storage.getProjectActivityLog(project.id);
     const closing = await storage.getProjectClosingByProjectId(project.id);
+
+    // Resolve customer: prefer p2 customer lookup, then fall back to the master
+    // customers table via the bridge FK so the name is never "Unknown".
+    let customer: { id: number | string; customerId: string; name: string } | null = null;
+    if (p2Customer) {
+      customer = { id: p2Customer.id, customerId: p2Customer.customerId, name: p2Customer.customerName };
+    } else if (project.customersIntegerId) {
+      const masterCustomer = await storage.getCustomer(project.customersIntegerId);
+      if (masterCustomer) {
+        customer = {
+          id: masterCustomer.id,
+          customerId: String(masterCustomer.id),
+          name: masterCustomer.company || masterCustomer.name,
+        };
+      }
+    }
     
     res.json({
       ...project,
       steps,
-      customer: customer
-        ? { id: customer.id, customerId: customer.customerId, name: customer.customerName }
-        : null,
+      customer,
       projectManager,
       activityLog,
       closingStatus: deriveClosingStatus(closing),
@@ -443,21 +601,30 @@ router.post('/', async (req, res) => {
     }
     
     const validatedData = validationResult.data;
+    const { quoteId, customerNameSnapshot, ...projectFields } = validatedData;
     const nextCode = await storage.getNextProjectCode();
+
+    // Resolve the integer FK to the master customers table from the text customerId.
+    const customersIntegerId = await resolveCustomersIntegerId(validatedData.customerId);
+
     const projectData = {
-      ...validatedData,
+      ...projectFields,
       projectCode: nextCode,
+      customersIntegerId,
+      ...(customerNameSnapshot ? { customerNameSnapshot } : {}),
     };
     
     const project = await storage.createProject(projectData);
     
     for (const stepType of PROJECT_STEP_TYPES) {
+      const isQuoteStep = stepType.type === 'quote';
       await storage.createProjectStep({
         projectId: project.id,
         stepType: stepType.type as any,
         stepOrder: stepType.order,
         status: stepType.order === 1 ? 'in_progress' : 'pending',
         startedAt: stepType.order === 1 ? new Date() : null,
+        ...(isQuoteStep && quoteId ? { linkedQuoteId: quoteId, status: 'completed', completedAt: new Date() } : {}),
       });
     }
 
@@ -531,6 +698,42 @@ router.patch('/:id', async (req, res) => {
           if (!closing.approvedBy) {
             return res.status(403).json({
               message: 'Cannot mark project as completed: closing record has not been approved by a manager.',
+            });
+          }
+        }
+      }
+    }
+
+    // Stage-gate enforcement: forward stage moves must be permitted by project_steps
+    if (validatedData.currentStage) {
+      // p2_release and production can ONLY be set via POST /release-to-p2 (the three-way gate)
+      // Reject any attempt to set these stages via generic PATCH
+      if (validatedData.currentStage === 'p2_release' || validatedData.currentStage === 'production') {
+        return res.status(422).json({
+          message: `Cannot set stage to "${validatedData.currentStage}" directly. Use the P2 Release Gate endpoint (POST /api/projects/:id/release-to-p2).`,
+        });
+      }
+
+      const existing = await storage.getProject(id);
+      if (existing && existing.currentStage) {
+        const existingIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(existing.currentStage);
+        const newIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(validatedData.currentStage);
+        if (newIdx > existingIdx) {
+          // Forward move — validate against project_steps completion
+          const steps = await storage.getProjectSteps(id);
+          const maxCompletedOrder = steps.reduce((max, s) => {
+            if (s.status === 'completed' || s.status === 'skipped' || s.status === 'not_applicable') {
+              return Math.max(max, s.stepOrder);
+            }
+            return max;
+          }, 0);
+          const maxAllowedKey = computeMaxAllowedStageKey(maxCompletedOrder);
+          const maxAllowedIdx = (PIPELINE_STAGE_ORDER as readonly string[]).indexOf(maxAllowedKey);
+          if (newIdx > maxAllowedIdx) {
+            const prerequisite = STAGE_GATE_LABELS[validatedData.currentStage] || 'required steps';
+            return res.status(422).json({
+              message: `Cannot advance to "${validatedData.currentStage}": complete "${prerequisite}" first.`,
+              maxAllowedStageKey: maxAllowedKey,
             });
           }
         }
@@ -720,25 +923,34 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
         });
       } else {
         const isFinalP2Order = step.stepType === 'p2_order';
-        const finalUpdate: any = {
-          currentStage: isFinalP2Order ? 'production' : 'completed',
-          stageUpdatedAt: new Date(),
-          status: isFinalP2Order ? 'won' : 'completed',
-        };
-        if (!isFinalP2Order) {
-          finalUpdate.actualShipDate = new Date().toISOString().split('T')[0];
+        if (isFinalP2Order) {
+          // p2_order links the PO and marks project won, but does NOT advance the stage.
+          // Advancing to production requires the explicit P2 Release Gate (POST /release-to-p2).
+          const poLinkUpdate: any = { status: 'won' };
+          if (updateData.linkedP2OrderId) {
+            poLinkUpdate.poId = updateData.linkedP2OrderId;
+          }
+          await storage.updateProject(projectId, poLinkUpdate);
+          await storage.createProjectActivityLog({
+            projectId,
+            activityType: 'step_completed',
+            stepType: 'p2_order',
+            description: 'P2 Order linked — use the Release Gate to advance to Production',
+          });
+        } else {
+          const finalUpdate: any = {
+            currentStage: 'completed',
+            stageUpdatedAt: new Date(),
+            status: 'completed',
+            actualShipDate: new Date().toISOString().split('T')[0],
+          };
+          await storage.updateProject(projectId, finalUpdate);
+          await storage.createProjectActivityLog({
+            projectId,
+            activityType: 'project_completed',
+            description: 'Project completed',
+          });
         }
-        if (isFinalP2Order && updateData.linkedP2OrderId) {
-          finalUpdate.poId = updateData.linkedP2OrderId;
-        }
-        await storage.updateProject(projectId, finalUpdate);
-        
-        await storage.createProjectActivityLog({
-          projectId,
-          activityType: isFinalP2Order ? 'step_completed' : 'project_completed',
-          stepType: isFinalP2Order ? 'p2_order' : undefined,
-          description: isFinalP2Order ? 'P2 Order completed — project won' : 'Project completed',
-        });
       }
     }
     
@@ -846,6 +1058,184 @@ router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
   } catch (error) {
     console.error('Error reopening project step:', error);
     res.status(500).json({ message: 'Failed to reopen project step' });
+  }
+});
+
+// POST /api/projects/:id/release-to-p2 — P2 Release Gate endpoint
+// Three-way gate: PO Review + WAD + Preproduction must all pass
+// First call (pre-gate) → sets stage to p2_release and PO to ready_for_p2_release
+// Second call (staged) → sets stage to production and PO to in_production
+// Repeated calls once in production → 409 (idempotent-safe)
+router.post('/:id/release-to-p2', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const currentStage = project.currentStage || 'rfq_received';
+
+    // Require a linked P2 Purchase Order — PO status is the authoritative state source
+    if (!project.poId) {
+      return res.status(422).json({
+        message: 'A P2 Purchase Order must be linked to this project before it can be released to P2.',
+        code: 'PO_REQUIRED',
+      });
+    }
+
+    // Resolve current PO status (authoritative source for transition routing)
+    const poRows = await pool.query<{ status: string }>(
+      `SELECT status FROM p2_purchase_orders WHERE id = $1`,
+      [project.poId]
+    );
+    const poStatus: string | null = poRows[0]?.status ?? null;
+
+    // Guard: already fully released → reject to prevent backward regression (idempotent-safe)
+    const alreadyInProduction = poStatus === 'in_production'
+      || currentStage === 'production'
+      || currentStage === 'completed';
+    if (alreadyInProduction) {
+      return res.status(409).json({
+        message: 'Project is already in production. No further release action is required.',
+        stage: currentStage,
+        poStatus,
+      });
+    }
+
+    const steps = await storage.getProjectSteps(id);
+
+    // Check the three gate conditions
+    const poReviewStep = steps.find(s => s.stepType === 'purchase_review_checklist');
+    const preproStep = steps.find(s => s.stepType === 'preproduction_checklist');
+
+    // PO Review = APPROVED: step must be explicitly completed (skipped/N/A do not satisfy this gate)
+    const poReviewPassed = poReviewStep?.status === 'completed';
+
+    // Preproduction = COMPLETE: step must be explicitly completed (skipped/N/A do not satisfy this gate)
+    const preproductionPassed = preproStep?.status === 'completed';
+
+    // WAD = APPROVED: at least one production work order must be in an authorized state
+    // RELEASED means the WAD has been formally authorized for labor charges (DCAA requirement)
+    const WAD_APPROVED_STATUSES = ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'];
+    const workOrders = await storage.getWorkOrdersByProject(id);
+    const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
+
+    const gates = [
+      { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
+      { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
+      { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
+    ];
+
+    const failedGates = gates.filter(g => !g.passed);
+
+    if (failedGates.length > 0) {
+      return res.status(422).json({
+        message: 'P2 Release Gate not cleared',
+        gates,
+        failedGates: failedGates.map(g => g.label),
+      });
+    }
+
+    // Transition routing is exclusively driven by PO status
+    const isAlreadyStaged = poStatus === 'ready_for_p2_release';
+
+    if (isAlreadyStaged) {
+      // Second transition: PO already staged → release to production
+      await storage.updateProject(id, {
+        currentStage: 'production',
+        stageUpdatedAt: new Date(),
+        status: 'won',
+      });
+
+      await pool.query(
+        `UPDATE p2_purchase_orders SET status = 'in_production', updated_at = NOW() WHERE id = $1`,
+        [project.poId]
+      );
+
+      await storage.createProjectActivityLog({
+        projectId: id,
+        activityType: 'stage_changed',
+        description: 'Released to Production — P2 Release Gate passed (all three conditions met)',
+      });
+
+      return res.json({
+        success: true,
+        stage: 'production',
+        poStatus: 'in_production',
+        gates,
+      });
+    }
+
+    // First transition: all gates pass, PO not yet staged → set ready_for_p2_release
+    await storage.updateProject(id, {
+      currentStage: 'p2_release',
+      stageUpdatedAt: new Date(),
+    });
+
+    await pool.query(
+      `UPDATE p2_purchase_orders SET status = 'ready_for_p2_release', updated_at = NOW() WHERE id = $1`,
+      [project.poId]
+    );
+
+    await storage.createProjectActivityLog({
+      projectId: id,
+      activityType: 'stage_changed',
+      description: 'P2 Release Gate passed — project staged for P2 (PO Review ✓, WAD ✓, Preproduction ✓)',
+    });
+
+    return res.json({
+      success: true,
+      stage: 'p2_release',
+      poStatus: 'ready_for_p2_release',
+      gates,
+    });
+  } catch (error) {
+    console.error('Error in release-to-p2 gate:', error);
+    res.status(500).json({ message: 'Failed to process P2 release gate' });
+  }
+});
+
+// GET /api/projects/:id/p2-gate-status — return the current gate status for a project
+router.get('/:id/p2-gate-status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const steps = await storage.getProjectSteps(id);
+
+    const poReviewStep = steps.find(s => s.stepType === 'purchase_review_checklist');
+    const preproStep = steps.find(s => s.stepType === 'preproduction_checklist');
+
+    // PO Review = APPROVED: must be explicitly completed
+    const poReviewPassed = poReviewStep?.status === 'completed';
+
+    // Preproduction = COMPLETE: must be explicitly completed
+    const preproductionPassed = preproStep?.status === 'completed';
+
+    // WAD = APPROVED: at least one WAD must be in an authorized state (RELEASED or beyond)
+    const WAD_APPROVED_STATUSES = ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'CLOSED'];
+    const workOrders = await storage.getWorkOrdersByProject(id);
+    const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
+
+    const gates = [
+      { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
+      { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
+      { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
+    ];
+
+    const currentStage = project.currentStage || 'rfq_received';
+    const alreadyReleased = currentStage === 'p2_release' || currentStage === 'production' || currentStage === 'completed';
+
+    return res.json({
+      gates,
+      allPassed: gates.every(g => g.passed),
+      currentStage,
+      alreadyReleased,
+      poId: project.poId ?? null,
+    });
+  } catch (error) {
+    console.error('Error fetching P2 gate status:', error);
+    res.status(500).json({ message: 'Failed to fetch P2 gate status' });
   }
 });
 

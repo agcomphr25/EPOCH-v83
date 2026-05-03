@@ -12,7 +12,8 @@ import {
 export default function ShippingTrackerWidget() {
   const { data: orders, isLoading } = useQuery<AllOrder[]>({
     queryKey: ['/api/orders/with-payment-status'],
-    staleTime: 30000, // Refresh every 30 seconds
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   // Get current operational week's start and end dates (Wednesday-Tuesday)

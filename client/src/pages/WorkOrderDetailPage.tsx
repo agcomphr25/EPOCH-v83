@@ -164,7 +164,7 @@ function LaborBudgetSection({ woId }: { woId: string }) {
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders', woId, 'labor-status'] });
       toast({ title: 'Overrun approved', description: approvalId ? `Approval ID: ${approvalId}` : undefined });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: 'Approval failed', description: err.message, variant: 'destructive' });
     },
   });
@@ -356,7 +356,7 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders'] });
       toast({ title: 'Status updated' });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
@@ -371,7 +371,7 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
       setShowEditDesc(false);
       toast({ title: 'Updated' });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
@@ -387,7 +387,7 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
       setPartForm({ partName: '', quantity: '1', costSnapshot: '' });
       toast({ title: 'Part added' });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });
@@ -403,7 +403,7 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
       setAttachForm({ fileUrl: '', fileName: '' });
       toast({ title: 'Attachment added' });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     },
   });

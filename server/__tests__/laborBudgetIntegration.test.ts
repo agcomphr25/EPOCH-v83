@@ -58,6 +58,7 @@ vi.mock('../storage', () => ({
     createLaborApproval: vi.fn<(data: unknown) => Promise<LaborApproval>>(),
     getLaborHoursByWorkOrder: vi.fn<(id: string) => Promise<number>>(),
     getLaborHoursByWorkOrderAndDepartment: vi.fn<(id: string, dept: string) => Promise<number>>(),
+    getLatestLaborApprovalByWorkOrder: vi.fn<(workOrderId: string) => Promise<LaborApproval | null>>().mockResolvedValue(null),
     switchActiveTimeEntryToTraveler: vi.fn(),
   },
 }));
@@ -86,10 +87,12 @@ vi.mock('../schema', () => ({
   inventoryItems: {},
   users: {},
   maintenanceSchedules: {},
+  employees: {},
   insertWorkOrderSchema: { parse: vi.fn() },
   insertWorkOrderPartSchema: { parse: vi.fn() },
   insertWorkOrderAttachmentSchema: { parse: vi.fn() },
   insertProductionWorkOrderSchema: { parse: vi.fn() },
+  insertLaborThresholdSettingsSchema: { safeParse: vi.fn() },
 }));
 
 import { evaluateWorkOrderLaborStatus } from '../src/helpers/laborBudgetHelper';
@@ -110,6 +113,34 @@ const MOCK_WORK_ORDER: Record<string, unknown> = {
   totalBudgetHours: '100',
   departmentBudgets: null,
 };
+
+const MOCK_SUPERVISOR: Record<string, unknown> = {
+  id: 1,
+  name: 'Admin User',
+  employeeCode: 'ADM001',
+  userRole: 'ADMIN',
+};
+const SUPERVISOR_EMPLOYEE_ID = 'ADM001';
+const SUPERVISOR_APPROVED_BY = 'Admin User (ADM001)';
+
+function buildApproveOverrunDbMock(
+  supervisor: Record<string, unknown> | null,
+  workOrder: Record<string, unknown> | null,
+): void {
+  const supRows = supervisor ? [supervisor] : [];
+  const supLimitFn = vi.fn().mockResolvedValue(supRows);
+  const supWhereFn = vi.fn().mockReturnValue({ limit: supLimitFn });
+  const supFromFn = vi.fn().mockReturnValue({ where: supWhereFn });
+
+  const woRows = workOrder ? [workOrder] : [];
+  const woLimitFn = vi.fn().mockResolvedValue(woRows);
+  const woWhereFn = vi.fn().mockReturnValue({ limit: woLimitFn });
+  const woFromFn = vi.fn().mockReturnValue({ where: woWhereFn });
+
+  vi.mocked(db.select)
+    .mockReturnValueOnce({ from: supFromFn })
+    .mockReturnValueOnce({ from: woFromFn });
+}
 
 function makeLaborApproval(overrides: Partial<LaborApproval> = {}): LaborApproval {
   return {
@@ -272,15 +303,15 @@ describe('POST /api/work-orders/:id/approve-overrun', () => {
   });
 
   it('returns 404 when the work order does not exist', async () => {
-    buildDbQueryMock(null);
+    buildApproveOverrunDbMock(MOCK_SUPERVISOR, null);
     const res = await request(app)
       .post(`/api/work-orders/${WORK_ORDER_ID}/approve-overrun`)
-      .send({ employeeId: EMPLOYEE_ID, reason: 'Critical deadline' });
+      .send({ employeeId: EMPLOYEE_ID, supervisorEmployeeId: SUPERVISOR_EMPLOYEE_ID, reason: 'Critical deadline' });
     expect(res.status).toBe(404);
   });
 
   it('creates a labor approval and returns 201', async () => {
-    buildDbQueryMock(MOCK_WORK_ORDER);
+    buildApproveOverrunDbMock(MOCK_SUPERVISOR, MOCK_WORK_ORDER);
     vi.mocked(evaluateWorkOrderLaborStatus).mockResolvedValue({
       ...mockLaborStatus,
       status: 'BLOCKED',
@@ -290,7 +321,7 @@ describe('POST /api/work-orders/:id/approve-overrun', () => {
 
     const res = await request(app)
       .post(`/api/work-orders/${WORK_ORDER_ID}/approve-overrun`)
-      .send({ employeeId: EMPLOYEE_ID, reason: 'Critical deadline' });
+      .send({ employeeId: EMPLOYEE_ID, supervisorEmployeeId: SUPERVISOR_EMPLOYEE_ID, reason: 'Critical deadline' });
 
     expect(res.status).toBe(201);
     expect(res.body.approval.id).toBe(APPROVAL_ID);
@@ -299,16 +330,16 @@ describe('POST /api/work-orders/:id/approve-overrun', () => {
   });
 
   it('records the approver username from the authenticated user', async () => {
-    buildDbQueryMock(MOCK_WORK_ORDER);
+    buildApproveOverrunDbMock(MOCK_SUPERVISOR, MOCK_WORK_ORDER);
     vi.mocked(evaluateWorkOrderLaborStatus).mockResolvedValue({ ...mockLaborStatus });
     vi.mocked(storage.createLaborApproval).mockResolvedValue(makeLaborApproval());
 
     await request(app)
       .post(`/api/work-orders/${WORK_ORDER_ID}/approve-overrun`)
-      .send({ employeeId: EMPLOYEE_ID, reason: 'Reason' });
+      .send({ employeeId: EMPLOYEE_ID, supervisorEmployeeId: SUPERVISOR_EMPLOYEE_ID, reason: 'Reason' });
 
     expect(storage.createLaborApproval).toHaveBeenCalledWith(
-      expect.objectContaining({ approvedBy: 'supervisor1' })
+      expect.objectContaining({ approvedBy: SUPERVISOR_APPROVED_BY })
     );
   });
 });

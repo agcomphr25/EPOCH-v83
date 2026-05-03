@@ -33,6 +33,12 @@ import {
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useLocation } from 'wouter';
+import {
+  getUserName as resolveUserName,
+  filterAssignableEmployees,
+  isAssigneeSelected,
+  toggleAssignee,
+} from '@/lib/ticketAssigneeHelpers';
 
 interface Ticket {
   id: string;
@@ -83,6 +89,7 @@ interface Employee {
   name: string;
   email?: string;
   department?: string;
+  userId?: number | null;
 }
 
 const TICKET_STATUSES = [
@@ -180,7 +187,7 @@ export default function TicketsPage() {
     queryKey: ['/api/employees'],
   });
 
-  const { data: currentUserData } = useQuery<{ valid: boolean; user: { id: number; username: string; role: string } }>({
+  const { data: currentUserData } = useQuery<{ valid: boolean; user: { id: number; username: string; role: string; employeeId: number | null } }>({
     queryKey: ['/api/auth/validate'],
   });
   const currentUserId = currentUserData?.user?.id;
@@ -217,7 +224,7 @@ export default function TicketsPage() {
   }, [filterOrderId, tickets, urlTicketId, hasAutoSelected, searchQuery]);
 
   const createTicketMutation = useMutation({
-    mutationFn: async (data: typeof newTicket) => {
+    mutationFn: async (data: typeof newTicket & { ownerUserId?: number | null }) => {
       const response = await apiRequest('/api/tickets', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -263,8 +270,10 @@ export default function TicketsPage() {
         body: JSON.stringify(data),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tickets', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tickets', variables.id, 'activity'] });
       toast({ title: 'Ticket updated' });
     },
     onError: () => {
@@ -348,11 +357,7 @@ export default function TicketsPage() {
     return p ? <Badge className={cn(p.color, 'text-xs')}>{p.label}</Badge> : null;
   };
 
-  const getUserName = (userId: number) => {
-    const employee = employees.find(e => e.id === userId);
-    if (!employee) return `Employee ${userId}`;
-    return employee.name;
-  };
+  const getUserName = (userId: number) => resolveUserName(userId, employees);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -368,10 +373,11 @@ export default function TicketsPage() {
               New Ticket
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col overflow-hidden">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Create New Ticket</DialogTitle>
             </DialogHeader>
+            <div className="overflow-y-auto flex-1 pr-1">
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="title">Title</Label>
@@ -448,7 +454,16 @@ export default function TicketsPage() {
                 <Label>Owner (Created By)</Label>
                 <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-muted text-sm">
                   <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="font-medium">{currentUserId ? getUserName(currentUserId) : 'You'}</span>
+                  <span className="font-medium">
+                    {(() => {
+                      const empId = currentUserData?.user?.employeeId;
+                      if (empId) {
+                        const emp = employees.find(e => e.id === empId);
+                        if (emp) return emp.name;
+                      }
+                      return currentUserId ? getUserName(currentUserId) : 'You';
+                    })()}
+                  </span>
                   <span className="ml-auto text-xs text-muted-foreground">Auto-assigned</span>
                 </div>
               </div>
@@ -470,8 +485,8 @@ export default function TicketsPage() {
                   <PopoverContent className="w-64 p-0" align="start">
                     <ScrollArea className="h-64">
                       <div className="p-2 space-y-1">
-                        {employees.map(emp => {
-                          const isSelected = newTicket.assignedUserIds.includes(emp.id);
+                        {filterAssignableEmployees(employees).map(emp => {
+                          const isSelected = isAssigneeSelected(emp, newTicket.assignedUserIds);
                           return (
                             <div 
                               key={emp.id} 
@@ -480,17 +495,10 @@ export default function TicketsPage() {
                                 isSelected && "bg-blue-50 dark:bg-blue-900/20"
                               )}
                               onClick={() => {
-                                if (isSelected) {
-                                  setNewTicket({
-                                    ...newTicket,
-                                    assignedUserIds: newTicket.assignedUserIds.filter(id => id !== emp.id)
-                                  });
-                                } else {
-                                  setNewTicket({
-                                    ...newTicket,
-                                    assignedUserIds: [...newTicket.assignedUserIds, emp.id]
-                                  });
-                                }
+                                setNewTicket({
+                                  ...newTicket,
+                                  assignedUserIds: toggleAssignee(emp, newTicket.assignedUserIds),
+                                });
                               }}
                             >
                               <Checkbox checked={isSelected} />
@@ -505,10 +513,9 @@ export default function TicketsPage() {
                 {newTicket.assignedUserIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {newTicket.assignedUserIds.map(userId => {
-                      const emp = employees.find(e => e.id === userId);
                       return (
                         <Badge key={userId} variant="secondary" className="text-xs flex items-center gap-1">
-                          {emp?.name || 'Unknown'}
+                          {getUserName(userId)}
                           <button
                             type="button"
                             onClick={() => setNewTicket({
@@ -581,9 +588,10 @@ export default function TicketsPage() {
                 </div>
               </div>
             </div>
-            <DialogFooter>
+            </div>
+            <DialogFooter className="shrink-0 pt-2">
               <Button
-                onClick={() => createTicketMutation.mutate(newTicket)}
+                onClick={() => createTicketMutation.mutate({ ...newTicket, ownerUserId: currentUserId })}
                 disabled={!newTicket.title || createTicketMutation.isPending}
                 data-testid="button-submit-ticket"
               >
@@ -898,11 +906,11 @@ export default function TicketsPage() {
                       onValueChange={(v) => updateTicketMutation.mutate({ id: selectedTicket.id, data: { ownerUserId: parseInt(v) } })}
                     >
                       <SelectTrigger className="mt-1" data-testid="select-update-owner">
-                        <SelectValue />
+                        <SelectValue>{getUserName(selectedTicket.ownerUserId)}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {employees.map(emp => (
-                          <SelectItem key={emp.id} value={String(emp.id)}>
+                        {filterAssignableEmployees(employees).map(emp => (
+                          <SelectItem key={emp.id} value={String(emp.userId)}>
                             {emp.name}
                           </SelectItem>
                         ))}
@@ -927,9 +935,9 @@ export default function TicketsPage() {
                       <PopoverContent className="w-64 p-0" align="start">
                         <ScrollArea className="h-64">
                           <div className="p-2 space-y-1">
-                            {employees.map(emp => {
+                            {filterAssignableEmployees(employees).map(emp => {
                               const currentIds = selectedTicket.assignedUserIds || [];
-                              const isSelected = currentIds.includes(emp.id);
+                              const isSelected = isAssigneeSelected(emp, currentIds);
                               return (
                                 <div 
                                   key={emp.id} 
@@ -938,12 +946,9 @@ export default function TicketsPage() {
                                     isSelected && "bg-blue-50 dark:bg-blue-900/20"
                                   )}
                                   onClick={() => {
-                                    const newIds = isSelected 
-                                      ? currentIds.filter(id => id !== emp.id)
-                                      : [...currentIds, emp.id];
                                     updateTicketMutation.mutate({ 
                                       id: selectedTicket.id, 
-                                      data: { assignedUserIds: newIds } 
+                                      data: { assignedUserIds: toggleAssignee(emp, currentIds) } 
                                     });
                                   }}
                                 >
@@ -959,10 +964,9 @@ export default function TicketsPage() {
                     {(selectedTicket.assignedUserIds?.length || 0) > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {selectedTicket.assignedUserIds?.map(userId => {
-                          const emp = employees.find(e => e.id === userId);
                           return (
                             <Badge key={userId} variant="secondary" className="text-xs flex items-center gap-1">
-                              {emp?.name || 'Unknown'}
+                              {getUserName(userId)}
                               <button
                                 type="button"
                                 onClick={() => {

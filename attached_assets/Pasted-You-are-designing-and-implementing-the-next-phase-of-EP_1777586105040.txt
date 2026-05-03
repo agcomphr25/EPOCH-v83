@@ -1,0 +1,381 @@
+You are designing and implementing the next phase of EPOCH labor capture.
+
+This phase extends the existing Labor Allocation Engine to support:
+
+1) Salaried labor entry
+2) Indirect labor entry
+3) Conversational time entry
+4) Synthetic punch sessions
+5) Allocation-based costing compatibility
+
+CRITICAL RULES:
+- Do NOT break hourly kiosk / traveler / punch_ledger behavior
+- Do NOT change payroll export behavior
+- Do NOT remove legacy salaried timesheet logic yet
+- Do NOT bypass approval / audit requirements
+- All new behavior must be additive
+- All new records must be traceable and distinguishable from real kiosk punches
+
+---
+
+## OBJECTIVE
+
+Create a safe design and implementation plan for salaried and indirect labor so that salaried employees can enter time without clocking in/out, while still feeding the same allocation-based costing model used by hourly labor.
+
+Target model:
+
+punch_ledger = labor session shell  
+labor_allocations = labor attribution segments  
+salaried / indirect entry = synthetic session + allocation rows
+
+---
+
+# PHASE 1 — CURRENT CODE AUDIT
+
+First, perform a READ-ONLY audit.
+
+Find and document:
+
+1. Existing salaried timesheet code
+   - routes
+   - services
+   - schemas
+   - tables
+   - approval states
+
+2. Existing indirect labor / overhead charge code behavior
+   - charge code types
+   - allowed labor classes
+   - overhead / G&A / admin / training / meeting / quoting / maintenance charge codes
+
+3. Existing conversational or AI labor capture code
+   - narrative parsing
+   - laborCaptureAI service
+   - any prompt parsing logic
+   - any existing “conversational time entry” UI
+
+4. Existing allocation engine
+   - labor_allocations schema
+   - laborAllocationService
+   - costing read switch
+   - reconciliation scripts
+
+Return exact file paths and function names.
+
+Do not modify files during this phase.
+
+---
+
+# PHASE 2 — TARGET ARCHITECTURE
+
+Design salaried / indirect labor as synthetic sessions.
+
+A salaried labor entry should create:
+
+1. One punch_ledger row:
+   - source = 'SALARIED_ENTRY' or 'CONVERSATIONAL_ENTRY'
+   - clock_in = derived start time
+   - clock_out = derived end time
+   - labor_class = REGULAR / INDIRECT / OVERHEAD / G&A as applicable
+   - employee_id
+   - notes
+   - created_by
+   - audit metadata
+
+2. One or more labor_allocations rows:
+   - punch_ledger_id
+   - employee_id
+   - allocation_start
+   - allocation_end
+   - charge_code_id
+   - traveler_id nullable
+   - production_work_order_id nullable
+   - project_id nullable
+   - source = 'SALARIED_ENTRY' or 'CONVERSATIONAL_ENTRY'
+   - status = CLOSED initially
+   - sequence_order
+   - notes
+   - created_by
+   - audit metadata
+
+The system must allow salaried time to be entered as:
+- direct project labor
+- indirect labor
+- admin
+- meetings
+- training
+- quoting
+- vendor management
+- customer service
+- quality review
+- maintenance
+- PTO reference, if already approved elsewhere
+
+---
+
+# PHASE 3 — CONVERSATIONAL TIME ENTRY DESIGN
+
+Design the conversational time entry workflow.
+
+The employee should be able to type natural language such as:
+
+“Yesterday I spent 2 hours on quoting, 1.5 hours in a production meeting, and 4.5 hours on the aerospace traveler.”
+
+or:
+
+“Today from 8 to 10 I worked on admin, 10 to noon on vendor management, and 1 to 5 on project X.”
+
+The system should parse this into a draft structure:
+
+[
+  {
+    date,
+    start_time,
+    end_time,
+    duration_hours,
+    labor_category,
+    charge_code_id,
+    confidence,
+    needs_review,
+    explanation
+  }
+]
+
+IMPORTANT:
+- Conversational parsing must create DRAFT entries first
+- Do NOT immediately post final labor records from AI parsing
+- User must review and confirm
+- Low-confidence items must be flagged
+- Missing charge codes must require selection
+- Ambiguous time ranges must require clarification
+
+---
+
+# PHASE 4 — DRAFT ENTRY MODEL
+
+Before creating punch_ledger / labor_allocations, introduce a draft layer.
+
+Design or implement a table such as:
+
+labor_entry_drafts
+
+Suggested fields:
+
+- id
+- employee_id
+- entry_date
+- raw_input_text
+- parsed_segments_json
+- status: DRAFT / NEEDS_REVIEW / CONFIRMED / POSTED / VOIDED
+- source: MANUAL / CONVERSATIONAL / AI
+- total_hours
+- confidence_score
+- validation_errors_json
+- created_by
+- reviewed_by
+- reviewed_at
+- posted_at
+- created_at
+- updated_at
+
+Purpose:
+- conversational text lands here first
+- user edits draft
+- user confirms
+- only then does system create synthetic punch_ledger + labor_allocations
+
+---
+
+# PHASE 5 — VALIDATION RULES
+
+Implement validation before posting:
+
+1. No overlapping segments for same employee/date
+2. Total daily hours must be visible
+3. Charge code required unless mapped to approved default indirect code
+4. Segment duration must be positive
+5. Salaried entries cannot overlap existing approved locked entries
+6. Locked / payroll-approved periods cannot be modified
+7. PTO must not be manually duplicated if already approved/imported
+8. All AI-derived entries must preserve the original text and parse explanation
+
+If validation fails:
+- keep draft in NEEDS_REVIEW
+- do not post synthetic sessions
+
+---
+
+# PHASE 6 — POSTING LOGIC
+
+When a draft is confirmed:
+
+Create synthetic punch_ledger records and labor_allocations.
+
+Preferred approach:
+
+Option A:
+- One punch_ledger row per day
+- Multiple labor_allocations beneath it
+
+Example:
+8:00–5:00 salaried day
+  allocation 1: 8–10 admin
+  allocation 2: 10–12 quoting
+  allocation 3: 1–5 project work
+
+Option B:
+- One punch_ledger row per segment
+
+Choose the safer option based on current schema and costing logic.
+
+My preference unless code indicates otherwise:
+- one synthetic session per employee per day
+- multiple allocations per session
+
+Return your recommendation and reasoning before implementing.
+
+---
+
+# PHASE 7 — APPROVAL / AUDIT DESIGN
+
+Salaried / indirect time must be auditable.
+
+Include:
+- who entered it
+- who reviewed it
+- who approved it
+- original conversational text
+- parsed result
+- edits made after parse
+- final posted allocations
+
+If existing salaried timesheet approval workflow exists:
+- preserve it
+- integrate synthetic sessions without replacing approval UI yet
+
+Do not allow silent edits after approval.
+
+---
+
+# PHASE 8 — UI / UX DESIGN
+
+Design the UI flow:
+
+1. Salaried employee opens Time Entry
+2. Chooses:
+   - Manual entry
+   - Conversational entry
+
+3. Conversational box:
+   “Tell EPOCH what you worked on today…”
+
+4. System returns parsed draft:
+   - row per segment
+   - suggested charge code
+   - confidence badge
+   - editable fields
+   - warning flags
+
+5. Employee confirms
+
+6. Supervisor/admin approval follows existing approval path
+
+Include UI states:
+- Draft
+- Needs Review
+- Ready to Submit
+- Submitted
+- Approved
+- Locked
+
+---
+
+# PHASE 9 — IMPLEMENTATION PLAN
+
+Return a phased plan:
+
+## Phase 1 — Audit only
+No code changes.
+
+## Phase 2 — Draft table + schema
+Create labor_entry_drafts only.
+
+## Phase 3 — Manual draft UI
+Allow salaried manual entry into drafts.
+
+## Phase 4 — Posting service
+Confirmed draft creates synthetic punch_ledger + labor_allocations.
+
+## Phase 5 — Conversational parser
+Parse natural language into draft segments.
+
+## Phase 6 — Approval integration
+Wire into salaried approval workflow.
+
+## Phase 7 — Costing validation
+Run allocation costing reconciliation including salaried / indirect entries.
+
+---
+
+# PHASE 10 — TEST PLAN
+
+Add tests for:
+
+1. Manual salaried entry creates draft
+2. Conversational entry creates draft only
+3. Draft validation catches missing charge code
+4. Confirmed draft creates synthetic punch_ledger
+5. Confirmed draft creates labor_allocations
+6. Allocation duration equals synthetic session duration
+7. Costing includes salaried synthetic allocation
+8. Locked period rejects edits
+9. AI parse explanation is preserved
+10. PTO duplication is blocked
+
+---
+
+# RETURN FORMAT
+
+Return:
+
+# Salaried / Indirect Labor Entry Design Report
+
+## 1. Current Code Audit
+file paths, functions, tables
+
+## 2. Existing Salaried Timekeeping Behavior
+summary
+
+## 3. Target Architecture
+synthetic sessions + allocations
+
+## 4. Conversational Time Entry Design
+draft-first workflow
+
+## 5. Proposed Data Model
+draft table and any schema additions
+
+## 6. Posting Logic
+how drafts become sessions and allocations
+
+## 7. Approval and Audit Flow
+how compliance is preserved
+
+## 8. UX Flow
+manual and conversational entry
+
+## 9. Risk Analysis
+high / medium / low
+
+## 10. Recommended Implementation Phases
+step-by-step
+
+## 11. Tests Required
+unit, integration, reconciliation
+
+## 12. Open Questions
+decisions needed before coding
+
+FINAL INSTRUCTION:
+Do not implement full behavior immediately unless explicitly asked.
+Start with the audit and design report.

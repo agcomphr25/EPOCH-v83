@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { RequirementDrawer } from '@/components/RequirementDrawer';
 import {
@@ -53,6 +54,7 @@ import {
   Info,
   Unlock,
 } from 'lucide-react';
+import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 
 type SubAssemblyQueueItem = {
   id: number;
@@ -76,6 +78,10 @@ type SubAssemblyQueueItem = {
   readinessStatus: string | null;
   percentReady: string | null;
   blockedReason: string | null;
+  projectId: string | null;
+  projectCode: string | null;
+  workOrderId: string | null;
+  workOrderNumber: string | null;
   inventoryItem: {
     id: number;
     agPartNumber: string | null;
@@ -275,6 +281,8 @@ export default function SubAssemblyQueue() {
           </p>
         </div>
 
+        <ReturnsRepairsSection repairDepartment="Sub-Assembly" />
+
         <Card className="dark:bg-gray-900 dark:border-gray-800">
           <CardHeader>
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -330,6 +338,8 @@ export default function SubAssemblyQueue() {
                   <TableHeader>
                     <TableRow className="dark:border-gray-800">
                       <TableHead className="dark:text-gray-300">Priority</TableHead>
+                      <TableHead className="dark:text-gray-300">Project</TableHead>
+                      <TableHead className="dark:text-gray-300">Work Order</TableHead>
                       <TableHead className="dark:text-gray-300">Part Number</TableHead>
                       <TableHead className="dark:text-gray-300">Item Name</TableHead>
                       <TableHead className="dark:text-gray-300">Department</TableHead>
@@ -350,6 +360,20 @@ export default function SubAssemblyQueue() {
                       >
                         <TableCell className={getPriorityColor(item.priority ?? 50)}>
                           {item.priority ?? 50}
+                        </TableCell>
+                        <TableCell className="dark:text-gray-300" onClick={(e) => e.stopPropagation()}>
+                          {item.projectId && item.projectCode ? (
+                            <Link to={`/projects/${item.projectId}`} className="font-mono text-sm text-blue-600 hover:underline">
+                              {item.projectCode}
+                            </Link>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="dark:text-gray-300" onClick={(e) => e.stopPropagation()}>
+                          {item.workOrderId && item.workOrderNumber ? (
+                            <Link to={`/production-work-orders/${item.workOrderId}`} className="font-mono text-sm text-blue-600 hover:underline">
+                              {item.workOrderNumber}
+                            </Link>
+                          ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="font-mono text-sm dark:text-gray-300">
                           {item.inventoryItem?.agPartNumber ?? '-'}

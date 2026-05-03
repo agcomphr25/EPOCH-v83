@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { generateInstancesForEmployee, createSingleInstance } from '../services/checklistInstanceService';
+import { DEFAULT_CHECKLISTS_LIMIT, MAX_CHECKLISTS_LIMIT } from '../constants/checklists';
 
 const router = Router();
 
@@ -38,7 +39,11 @@ router.get('/active', ...authRequired, async (req: Request, res: Response) => {
 
 router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
   try {
-    const { employeeId, templateId, from, to, status, limit = '50', offset = '0' } = req.query;
+    const { employeeId, templateId, from, to, status, limit = String(DEFAULT_CHECKLISTS_LIMIT), offset = '0' } = req.query;
+    const parsedLimit = parseInt(String(limit), 10);
+    const effectiveLimit = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, MAX_CHECKLISTS_LIMIT)
+      : DEFAULT_CHECKLISTS_LIMIT;
 
     let query = `
       SELECT ci.*,
@@ -81,7 +86,7 @@ router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
 
     paramCount++;
     query += ` ORDER BY ci.context_date DESC, ci.created_at DESC LIMIT $${paramCount}`;
-    params.push(Number(limit));
+    params.push(effectiveLimit);
 
     paramCount++;
     query += ` OFFSET $${paramCount}`;
@@ -126,7 +131,7 @@ router.get('/history', ...adminOnly, async (req: Request, res: Response) => {
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult[0]?.total || '0', 10);
 
-    res.json({ data: results || [], total, limit: Number(limit), offset: Number(offset) });
+    res.json({ data: results || [], total, limit: effectiveLimit, offset: Number(offset) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

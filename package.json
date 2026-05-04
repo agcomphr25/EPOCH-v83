@@ -1,5 +1,5 @@
 {
-  "name": "rest-express",
+  "name": "epoch",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
@@ -13,6 +13,7 @@
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "lint:dates": "node scripts/check-format-dates.js",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "backfill:p2-packets": "tsx server/scripts/backfillP2UsedPackets.ts",
     "predb:push": "npx tsx server/pre-deploy-migrate.ts",
     "db:push": "drizzle-kit push",
     "prepare": "husky || true",

@@ -43,6 +43,7 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   faleeshah: {
     routes: [
+      '/all-orders',
       '/department-queue/finish-qc',
       '/department-queue/paint',
       '/department-queue/qc-shipping',

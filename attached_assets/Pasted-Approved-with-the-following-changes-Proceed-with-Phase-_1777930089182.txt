@@ -1,0 +1,45 @@
+Approved with the following changes.
+
+Proceed with Phase 1 implementation, but adjust the plan as follows:
+
+1. Use SERIALIZABLE transaction semantics for createRegularFullPeriodBatch, with retry handling for serialization failure code 40001 and unique violation code 23505 where appropriate.
+
+2. Create endpoint should return JSON metadata plus a separate downloadUrl. Keep BATCH_CREATED and BATCH_DOWNLOADED as separate audit events.
+
+3. Do not leave GET /api/timekeeping/admin/export/gusto as a live recompute export path.
+   For DCAA auditability, there should be no fresh recalculated CSV export after Phase 1.
+   Either:
+   - make the legacy route delegate to the new stored-batch service and return the stored CSV, or
+   - return a clear deprecation/410 response pointing users to the new batch endpoint.
+
+   Preferred: delegate the legacy route to the new stored-batch service for compatibility, with an X-Deprecated header. It should create/supersede a batch using the new service, then return the stored csv_content.
+
+4. Add an explicit export_type column and use regular_full_period for Phase 1 exports.
+
+5. Include the partial unique index:
+   (period_start, period_end, export_type) WHERE status = 'active'
+
+6. Use explicit snapshot field names:
+   employee_first_name_snapshot
+   employee_last_name_snapshot
+   employee_number_snapshot
+   employee_email_snapshot
+
+7. Do not implement payroll_adjustments or off-cycle adjustment export behavior yet.
+   Nullable forward-compat fields are acceptable only if they do not require fake references to missing tables.
+
+8. Preserve exact CSV content and SHA-256 checksum.
+   Re-download must serve stored csv_content and verify checksum before returning.
+
+9. Processed batches are immutable.
+   No supersede, void, recalculation, or deletion of processed batches in Phase 1.
+
+10. Keep frontend/PTO/unrelated code out of scope.
+
+After implementation, return:
+- changed files
+- migration summary
+- route summary
+- service behavior summary
+- tests run and results
+- any validation failures and whether pre-existing

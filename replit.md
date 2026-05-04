@@ -111,6 +111,56 @@ When a technician starts a traveler step or clocks in via a traveler barcode, th
 
 **Key files**: `server/src/lib/resolveChargeCode.ts`, `server/src/lib/punchLedger.ts`, `server/src/routes/timeClock.ts`, `server/src/routes/travelers.ts`, `client/src/pages/TravelerExecution.tsx`, `migrations/0064_punch_ledger_wad_traceability.sql`
 
+## Payroll Hour Computation — Double-Count Fix & TZ Boundaries (Task #38)
+
+**Problem fixed**: Hour computations were reading from BOTH `timekeeping.punches` AND `public.punch_ledger`, causing double-counted hours. Period boundaries used naive UTC midnight instead of timezone-aware midnight, clipping late-evening punches.
+
+**Cutover-date feature flag** (`PUNCH_LEDGER_CUTOVER_DATE`, default `2024-01-01`):
+- For pay periods starting ON or AFTER the cutover date, hours are computed exclusively from `punch_ledger`.
+- For periods BEFORE cutover, hours come exclusively from `timekeeping.punches`.
+- Never both — eliminates double-counting entirely.
+- Configured in `server/src/lib/featureFlags.ts` as `punchLedgerCutoverDate`.
+
+**TZ-correct boundaries**: All period boundary construction now uses `midnightInTZ()` from `server/src/lib/timekeeping.ts` instead of naive `new Date('YYYY-MM-DD')`. This ensures a punch at 11pm CST on the last day of a period is correctly included.
+
+**Files changed**:
+- `server/src/services/timekeeping/timesheets.service.ts` — `computeHoursForPeriod`, `attestTimesheet` snapshot, `useLedgerForPeriod` (exported), `auditLegacyPunchEventsInsideLedgerSessions` utility (event-inside-session detection only — see JSDoc for the interval-overlap limitation)
+
+## Payroll Export — Phase 1 (revised design)
+
+Source of truth: `docs/payroll-export-design.md`. Migration: `migrations/0098_payroll_export_batches.sql`.
+
+The legacy `GET /api/timekeeping/admin/export/gusto` route no longer recomputes a fresh CSV on each call. It now delegates to the new stored-batch service: it creates (or auto-supersedes) a `payroll_export_batches` row via `createRegularFullPeriodBatch`, then returns the stored `csv_content` byte-for-byte. Every CSV ever served to Gusto is preserved with an SHA-256 checksum as immutable DCAA audit evidence. The route emits `X-Deprecated`, `X-Batch-Id`, `X-Batch-Revision`, `X-Batch-Checksum` headers on responses.
+
+**New tables (`timekeeping` schema):** `payroll_export_batches`, `payroll_export_rows`, `payroll_export_events`. `payroll_adjustments` is intentionally NOT created in Phase 1 — Phase 3 work. Forward-compat columns (`includes_adjustments`, `adjustment_ids`, `payroll_export_events.adjustment_id`) are nullable now and will be populated in Phase 3.
+
+**Snapshot identity columns:** `employee_first_name_snapshot`, `employee_last_name_snapshot`, `employee_number_snapshot`, `employee_email_snapshot` (frozen at export time; safe under the migration-safety retired-column-name guard).
+
+**Database-level invariants:**
+- Partial unique index `idx_export_batches_active_unique` on `(period_start, period_end, export_type) WHERE status='active'` — at most one active batch per period+type at any time.
+- Revision uniqueness index `(period_start, period_end, export_type, revision_number)`.
+- CHECK constraints enforce `period_start`/`period_end` regex (`^\d{4}-\d{2}-\d{2}$`), `export_type IN ('regular_full_period','off_cycle_adjustment')`, and `status IN ('active','superseded','voided','processed')`.
+
+**Service:** `server/src/services/timekeeping/payrollExport.service.ts`
+- `createRegularFullPeriodBatch` — runs the supersede + insert pair inside a SERIALIZABLE transaction with bounded retry on Postgres `40001`. A unique-violation `23505` from the partial index is mapped to `40001` so the same retry loop covers both. Throws `ProcessedBatchImmutableError` (HTTP 409) if a processed batch already exists for the period.
+- `downloadBatchCsv` — verifies SHA-256 of `csv_content` against the stored `csv_checksum` and throws `ChecksumMismatchError` (HTTP 500) on mismatch. Never recalculates.
+- `markBatchProcessed` — terminal transition; refuses any subsequent supersede / process attempt with `ProcessedBatchImmutableError`. Confirmation note required.
+- All operations log a `payroll_export_events` row (`BATCH_CREATED`, `BATCH_SUPERSEDED`, `BATCH_DOWNLOADED`, `BATCH_PROCESSED`) with actor id, email, role, and IP.
+
+**Routes:** `server/src/routes/timekeeping/payrollExport.ts`, gated by `requireRole('ADMIN','OWNER')`:
+- `POST /api/timekeeping/admin/payroll/batches` → `{ batchId, revisionNumber, csvChecksum, rowCount, employeeCount, supersededBatchId, downloadUrl }`
+- `GET  /api/timekeeping/admin/payroll/batches?periodStart=&periodEnd=`
+- `GET  /api/timekeeping/admin/payroll/batches/:id`
+- `GET  /api/timekeeping/admin/payroll/batches/:id/download` (stored CSV with checksum verification)
+- `POST /api/timekeeping/admin/payroll/batches/:id/process` (terminal; requires `confirmationNote`)
+
+**Out of scope for Phase 1:** off-cycle adjustment exports, `payroll_adjustments` CRUD, correction-blocking workflow, frontend UI, PTO refactors.
+- `server/src/services/timekeeping/dashboard.service.ts` — `getDashboardSummary`, `getWeeklyHours`, `getEmployeeHoursForPeriod` all use cutover logic + TZ boundaries
+- `server/src/services/payPeriod.ts` — `getPayPeriod`/`getPayPeriodDates` accept `timezone` param (default `'America/Chicago'`), use `midnightInTZ`
+- `server/src/services/timekeeping/punches.service.ts` — dead `kioskPunch()` function removed
+- `server/src/lib/featureFlags.ts` — `punchLedgerCutoverDate` added
+- `server/__tests__/timesheetHours.test.ts` — 23 tests covering cutover logic, TZ boundaries, overtime, cross-midnight sessions
+
 ## MANDATORY READ — Architecture Constitution
 
 **Before implementing anything that touches labor, WAD, GL, burden, payroll, traveler, PM dashboard, DCAA, or compliance, you must read:**

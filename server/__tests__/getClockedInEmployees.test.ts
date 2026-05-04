@@ -20,7 +20,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // --------------------------------------------------------------------------
 
 vi.mock('../db', () => ({
-  db: { select: vi.fn(), execute: vi.fn() },
+  db: { select: vi.fn(), execute: vi.fn(), selectDistinctOn: vi.fn() },
   pool: {},
 }));
 
@@ -93,6 +93,8 @@ vi.mock('../src/services/payPeriod', () => ({
 // --------------------------------------------------------------------------
 
 import { db } from '../db';
+import { getOrCreateSettings } from '../src/services/timekeeping/settings.service';
+import { getPayPeriodDates } from '../src/services/payPeriod';
 import { listResolvedEmployees } from '../src/lib/timekeepingEmployeeResolver';
 import { toApiEmployee } from '../src/services/timekeeping/employees.service';
 import { getClockedInEmployees } from '../src/services/timekeeping/dashboard.service';
@@ -102,6 +104,25 @@ import { getClockedInEmployees } from '../src/services/timekeeping/dashboard.ser
 // --------------------------------------------------------------------------
 
 const FIXED_NOW = new Date('2026-04-22T12:00:00Z');
+
+const DEFAULT_SETTINGS = {
+  id: 1,
+  companyName: 'Test Co',
+  timezone: 'UTC',
+  workweekStartDay: 1,
+  overtimeThresholdDaily: 8,
+  overtimeThresholdWeekly: 40,
+  roundingRuleMinutes: 0,
+  breakDurationMinutes: 30,
+  requireBreakAfterHours: 6,
+  kioskRequirePin: false,
+  kioskTimeoutSeconds: 60,
+  standardWorkWeekHours: 40,
+  kioskMessage: null,
+  dcaaChargeCodeEnforcement: false,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  updatedAt: new Date('2026-01-01T00:00:00Z'),
+};
 
 function makePunch(overrides: {
   id?: number;
@@ -125,6 +146,9 @@ function makePunch(overrides: {
   };
 }
 
+// NOTE: callers still use snake_case keys (legacy from when this seeded
+// db.execute().rows directly), but the production code now reads ORM-typed
+// rows from db.selectDistinctOn(...), so we translate to camelCase here.
 function makeLatestPunchRow(overrides: {
   id?: number;
   employee_id?: number;
@@ -133,17 +157,17 @@ function makeLatestPunchRow(overrides: {
 }) {
   return {
     id: overrides.id ?? 1,
-    employee_id: overrides.employee_id ?? 5,
+    employeeId: overrides.employee_id ?? 5,
     type: overrides.type,
-    punched_at: overrides.punched_at,
+    punchedAt: new Date(overrides.punched_at),
     timezone: 'UTC',
     source: null,
-    cost_code: null,
+    costCode: null,
     note: null,
-    edit_note: null,
-    is_edited: false,
-    created_at: overrides.punched_at,
-    updated_at: overrides.punched_at,
+    editNote: null,
+    isEdited: false,
+    createdAt: new Date(overrides.punched_at),
+    updatedAt: new Date(overrides.punched_at),
   };
 }
 
@@ -250,18 +274,33 @@ function makeSelectChain(rows: unknown[]) {
 /**
  * Wire up db mocks for a single getClockedInEmployees() call.
  *
- * db.select() call order (determined by the function's execution path):
- *   1st → todayPunches  (Query B: punchesTable, date-bounded, only if hasLegacyEmployees)
- *   2nd → openSessions  (punchLedger WHERE clockOut IS NULL)
- *   3rd → todayLedger   (punchLedger WHERE employeeId IN (...) AND clockIn >= 2 days ago)
+ * Production code (since commit 80b3df2d, PR #564) issues 4 parallel queries
+ * inside Promise.all when activeEmployees has at least one timekeeping anchor:
+ *   1. db.selectDistinctOn(...).from().where().orderBy()  → latest legacy punch per employee
+ *   2. db.select(...).from().where().orderBy()            → todayPunches (last 2 days)
+ *   3. db.select(...).from().where().orderBy()            → openSessions (clockOut IS NULL)
+ *   4. db.select(...).from().where()                      → todayLedger (last 2 days)
  *
- * db.execute() is called once (DISTINCT ON query) only when hasLegacyEmployees is true.
+ * When there are no timekeeping-anchored employees (`hasLegacyEmployees: false`),
+ * queries 1, 2, and 4 are short-circuited to Promise.resolve([]) and only
+ * the openSessions select fires.
+ *
+ * NOTE: `db.execute` is no longer used by getClockedInEmployees — the legacy
+ * raw-SQL DISTINCT ON path was replaced with `db.selectDistinctOn(...)` (ORM)
+ * to avoid raw-SQL array-binding issues.
  */
 function setupMocks(opts: {
   latestPunchRows?: unknown[];
   todayPunches?: unknown[];
   openSessions?: unknown[];
   todayLedger?: unknown[];
+  /**
+   * When true (default), wires the 4-query topology used when at least one
+   * employee has a timekeeping anchor (epochIds.length > 0).
+   * When false, only the always-on `openSessions` select is wired —
+   * use this for the rare scenario where every employee is filtered out
+   * (no timekeeping anchor at all).
+   */
   hasLegacyEmployees?: boolean;
 }) {
   const {
@@ -273,17 +312,18 @@ function setupMocks(opts: {
   } = opts;
 
   if (hasLegacyEmployees) {
-    vi.mocked(db.execute).mockResolvedValueOnce(
-      { rows: latestPunchRows } as ReturnType<typeof db.execute>,
+    vi.mocked(db.selectDistinctOn).mockReturnValueOnce(
+      makeSelectChain(latestPunchRows) as ReturnType<typeof db.selectDistinctOn>,
     );
     vi.mocked(db.select)
       .mockReturnValueOnce(makeSelectChain(todayPunches) as ReturnType<typeof db.select>)
       .mockReturnValueOnce(makeSelectChain(openSessions) as ReturnType<typeof db.select>)
       .mockReturnValueOnce(makeSelectChain(todayLedger) as ReturnType<typeof db.select>);
   } else {
+    // epochIds is empty → only openSessions fires; the other three branches
+    // resolve to [] without touching the db mocks.
     vi.mocked(db.select)
-      .mockReturnValueOnce(makeSelectChain(openSessions) as ReturnType<typeof db.select>)
-      .mockReturnValueOnce(makeSelectChain(todayLedger) as ReturnType<typeof db.select>);
+      .mockReturnValueOnce(makeSelectChain(openSessions) as ReturnType<typeof db.select>);
   }
 }
 
@@ -298,6 +338,15 @@ describe('getClockedInEmployees', () => {
     vi.resetAllMocks();
     vi.mocked(toApiEmployee).mockImplementation((e: unknown) => e as ReturnType<typeof toApiEmployee>);
     vi.mocked(listResolvedEmployees).mockResolvedValue([]);
+    vi.mocked(getOrCreateSettings).mockResolvedValue(
+      DEFAULT_SETTINGS as Awaited<ReturnType<typeof getOrCreateSettings>>,
+    );
+    // vi.resetAllMocks() above wipes the mockReturnValue declared in the
+    // vi.mock factory for getPayPeriodDates, so re-establish it here.
+    vi.mocked(getPayPeriodDates).mockReturnValue({
+      start: new Date('2026-04-01T00:00:00Z'),
+      end: new Date('2026-04-30T23:59:59Z'),
+    });
   });
 
   afterEach(() => {
@@ -321,8 +370,8 @@ describe('getClockedInEmployees', () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
-    const punchOut = makePunch({ id: 2, employeeId: 5, type: 'clock_out', punchedAt: '2026-04-22T09:00:00Z' });
-    const latestRow = makeLatestPunchRow({ id: 2, employee_id: 5, type: 'clock_out', punched_at: '2026-04-22T09:00:00Z' });
+    const punchOut = makePunch({ id: 2, employeeId: 20, type: 'clock_out', punchedAt: '2026-04-22T09:00:00Z' });
+    const latestRow = makeLatestPunchRow({ id: 2, employee_id: 20, type: 'clock_out', punched_at: '2026-04-22T09:00:00Z' });
 
     setupMocks({
       latestPunchRows: [latestRow],
@@ -342,8 +391,8 @@ describe('getClockedInEmployees', () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
-    const punch = makePunch({ id: 1, employeeId: 5, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' });
-    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 5, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' });
+    const punch = makePunch({ id: 1, employeeId: 20, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' });
+    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 20, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' });
 
     setupMocks({ latestPunchRows: [latestRow], todayPunches: [punch] });
 
@@ -358,9 +407,9 @@ describe('getClockedInEmployees', () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
-    const punchIn    = makePunch({ id: 1, employeeId: 5, type: 'clock_in',    punchedAt: '2026-04-22T08:00:00Z' });
-    const punchBreak = makePunch({ id: 2, employeeId: 5, type: 'break_start', punchedAt: '2026-04-22T10:00:00Z' });
-    const latestRow  = makeLatestPunchRow({ id: 2, employee_id: 5, type: 'break_start', punched_at: '2026-04-22T10:00:00Z' });
+    const punchIn    = makePunch({ id: 1, employeeId: 20, type: 'clock_in',    punchedAt: '2026-04-22T08:00:00Z' });
+    const punchBreak = makePunch({ id: 2, employeeId: 20, type: 'break_start', punchedAt: '2026-04-22T10:00:00Z' });
+    const latestRow  = makeLatestPunchRow({ id: 2, employee_id: 20, type: 'break_start', punched_at: '2026-04-22T10:00:00Z' });
 
     setupMocks({
       latestPunchRows: [latestRow],
@@ -378,7 +427,7 @@ describe('getClockedInEmployees', () => {
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const OLD_DATE = '2026-03-31T08:00:00Z';
-    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 5, type: 'clock_in', punched_at: OLD_DATE });
+    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 20, type: 'clock_in', punched_at: OLD_DATE });
 
     setupMocks({ latestPunchRows: [latestRow], todayPunches: [] });
 
@@ -392,9 +441,9 @@ describe('getClockedInEmployees', () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
-    const punchIn  = makePunch({ id: 1, employeeId: 5, type: 'clock_in',  punchedAt: '2026-04-22T08:00:00Z' });
-    const punchOut = makePunch({ id: 2, employeeId: 5, type: 'clock_out', punchedAt: '2026-04-22T16:00:00Z' });
-    const latestRow = makeLatestPunchRow({ id: 2, employee_id: 5, type: 'clock_out', punched_at: '2026-04-22T16:00:00Z' });
+    const punchIn  = makePunch({ id: 1, employeeId: 20, type: 'clock_in',  punchedAt: '2026-04-22T08:00:00Z' });
+    const punchOut = makePunch({ id: 2, employeeId: 20, type: 'clock_out', punchedAt: '2026-04-22T16:00:00Z' });
+    const latestRow = makeLatestPunchRow({ id: 2, employee_id: 20, type: 'clock_out', punched_at: '2026-04-22T16:00:00Z' });
 
     setupMocks({
       latestPunchRows: [latestRow],
@@ -411,7 +460,12 @@ describe('getClockedInEmployees', () => {
   // -------------------------------------------------------------------------
 
   it('includes an employee with an open REGULAR ledger session', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    // NOTE: production filters out employees without a timekeeping anchor
+    // (commit 80b3df2d) — "Public-only employees cannot be mapped to the
+    // Employee API shape via toApiEmployee()". Use a real timekeepingId
+    // so the employee qualifies; this test still exercises the
+    // ledger-only path (no legacy punches supplied).
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const session = makeLedgerSession({
@@ -422,7 +476,6 @@ describe('getClockedInEmployees', () => {
     });
 
     setupMocks({
-      hasLegacyEmployees: false,
       openSessions: [session],
       todayLedger: [session],
     });
@@ -435,7 +488,8 @@ describe('getClockedInEmployees', () => {
   });
 
   it('includes an employee with an open BREAK ledger session with status on_break', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    // See note on the prior ledger test — needs a real timekeepingId.
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const session = makeLedgerSession({
@@ -446,7 +500,6 @@ describe('getClockedInEmployees', () => {
     });
 
     setupMocks({
-      hasLegacyEmployees: false,
       openSessions: [session],
       todayLedger: [session],
     });
@@ -458,7 +511,8 @@ describe('getClockedInEmployees', () => {
   });
 
   it('computes hoursToday from closed ledger sessions earlier in the day', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    // See note on the prior ledger test — needs a real timekeepingId.
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const closedSession = makeLedgerSession({
@@ -473,7 +527,6 @@ describe('getClockedInEmployees', () => {
     });
 
     setupMocks({
-      hasLegacyEmployees: false,
       openSessions: [openSession],
       todayLedger: [closedSession, openSession],
     });
@@ -530,8 +583,8 @@ describe('getClockedInEmployees', () => {
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // Legacy path: clocked in
-    const punch    = makePunch({ id: 1, employeeId: 5, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' });
-    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 5, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' });
+    const punch    = makePunch({ id: 1, employeeId: 20, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' });
+    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 20, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' });
 
     // Punch_ledger: same employee (epochEmployeeId=20) also has an open REGULAR session
     const ledgerSession = makeLedgerSession({
@@ -560,8 +613,8 @@ describe('getClockedInEmployees', () => {
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // Legacy: clocked in (not on break)
-    const punch    = makePunch({ id: 1, employeeId: 5, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' });
-    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 5, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' });
+    const punch    = makePunch({ id: 1, employeeId: 20, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' });
+    const latestRow = makeLatestPunchRow({ id: 1, employee_id: 20, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' });
 
     // Punch_ledger: same employee has an open BREAK session (conflicting status)
     const breakSession = makeLedgerSession({
@@ -590,33 +643,41 @@ describe('getClockedInEmployees', () => {
   // Query-count guard — O(1) queries regardless of employee count
   // -------------------------------------------------------------------------
 
-  it('issues exactly 3 db.select calls and 1 db.execute call for N legacy employees', async () => {
+  it('issues exactly 3 db.select calls and 1 db.selectDistinctOn call for N legacy employees', async () => {
     const employees = Array.from({ length: 5 }, (_, i) =>
       makeEmployee({ id: i + 1, timekeepingId: i + 10, epochEmployeeId: i + 100 }),
     );
     vi.mocked(listResolvedEmployees).mockResolvedValue(employees);
 
     const latestPunchRows = employees.map((emp, i) =>
-      makeLatestPunchRow({ id: i + 1, employee_id: emp.timekeepingId as number, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' }),
+      makeLatestPunchRow({ id: i + 1, employee_id: emp.epochEmployeeId, type: 'clock_in', punched_at: '2026-04-22T08:00:00Z' }),
     );
     const todayPunches = employees.map((emp, i) =>
-      makePunch({ id: i + 1, employeeId: emp.timekeepingId as number, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ id: i + 1, employeeId: emp.epochEmployeeId, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
     );
 
     setupMocks({ latestPunchRows, todayPunches });
 
     await getClockedInEmployees();
 
-    // Must issue exactly 1 batch execute (DISTINCT ON) + 3 batch selects:
-    //   select 1 → today's punches (Query B)
+    // Must issue exactly 1 batch DISTINCT ON + 3 batch selects:
+    //   selectDistinctOn → latest punch per employee
+    //   select 1 → today's punches
     //   select 2 → open ledger sessions
     //   select 3 → today's ledger sessions
     // A naive N+1 implementation would issue N+1 calls per employee.
-    expect(vi.mocked(db.execute)).toHaveBeenCalledTimes(1);
+    // db.execute is no longer used by getClockedInEmployees (raw SQL was
+    // replaced by ORM selectDistinctOn in commit 80b3df2d / PR #564).
+    expect(vi.mocked(db.execute)).not.toHaveBeenCalled();
+    expect(vi.mocked(db.selectDistinctOn)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(db.select)).toHaveBeenCalledTimes(3);
   });
 
-  it('issues exactly 2 db.select calls and 0 db.execute calls for N ledger-only employees', async () => {
+  it('issues exactly 1 db.select call and 0 DISTINCT ON / execute calls when no employees have a timekeeping anchor', async () => {
+    // Production filters out employees with timekeepingId == null
+    // (they cannot be mapped via toApiEmployee), so epochIds is empty
+    // and only the always-on `openSessions` select fires; the other three
+    // queries are short-circuited to Promise.resolve([]).
     const employees = Array.from({ length: 4 }, (_, i) =>
       makeEmployee({ id: i + 1, timekeepingId: null, epochEmployeeId: i + 100 }),
     );
@@ -626,10 +687,8 @@ describe('getClockedInEmployees', () => {
 
     await getClockedInEmployees();
 
-    // No legacy employees → execute skipped entirely; only 2 selects needed:
-    //   select 1 → open ledger sessions
-    //   select 2 → today's ledger sessions
     expect(vi.mocked(db.execute)).not.toHaveBeenCalled();
-    expect(vi.mocked(db.select)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(db.selectDistinctOn)).not.toHaveBeenCalled();
+    expect(vi.mocked(db.select)).toHaveBeenCalledTimes(1);
   });
 });

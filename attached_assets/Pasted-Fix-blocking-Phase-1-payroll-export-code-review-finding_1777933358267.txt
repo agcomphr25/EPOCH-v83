@@ -1,0 +1,55 @@
+Fix blocking Phase 1 payroll export code review findings only.
+
+Do not add Phase 2 adjustment features.
+Do not build frontend UI.
+Do not touch PTO files.
+Do not refactor unrelated timekeeping code.
+
+Blocking findings to fix:
+
+1. Real transaction usage
+createRegularFullPeriodBatch currently calls db.transaction but uses global db inside the callback. Fix withSerializableRetry so it passes the tx client into the callback, and update every query inside createRegularFullPeriodBatch to use tx. The supersede, batch insert, row inserts, and audit events must be atomic.
+
+2. Move snapshot into transaction
+Move buildFullPeriodSnapshotRows, CSV rendering, checksum calculation, source_timesheet_ids/source_leave_entry_ids capture, and batch/row/event inserts into the same SERIALIZABLE transaction. Any source reads used to create the batch must use the transaction client.
+
+3. Concurrency behavior
+If the insert hits the active-batch unique constraint after the prior-active read found no active batch, do not silently retry and supersede another request's newly-created batch. Return a 409 Conflict / ConcurrentExportError instead. Do not silently supersede a sibling concurrent export.
+
+4. Identity resolution
+Stop resolving payroll export rows by first_name + last_name. Modify the export snapshot builder so every row is tied to stable employee IDs from the source query. Do not allow employeeId: 0 fallback. If a row cannot be resolved to a real employee/timesheet source, throw and refuse to create the batch.
+
+5. Supersede reason
+Require supersedeReason when an active unprocessed batch exists and a new revision is being created. Persist it to payroll_export_batches.superseded_reason and payroll_export_events.reason. Route body should validate supersedeReason when needed.
+
+6. CSV numeric validation
+Before rendering/storing CSV, validate all hour fields and totals are finite and non-negative. Reject NaN, Infinity, and negative values.
+
+7. Legacy GET route
+Change GET /api/timekeeping/admin/export/gusto so it does not create a new revision on every hit. It should:
+- download the current active batch for the period if one exists, or
+- return a clear 409/404 instructing the caller to create a batch via POST.
+Do not mutate DB state from the legacy GET route except logging an explicit download event.
+
+8. Download guard for superseded/voided
+Do not allow superseded or voided batches to download like current exports. Either block with 409 or require an explicit evidenceOnly=true parameter and use an evidence-only filename/header.
+
+Tests to add/update:
+- transaction callback passes and uses tx, not global db
+- rollback if row insert or event insert fails: prior active batch remains active and no new batch remains
+- concurrent create conflict does not silently supersede winner
+- snapshot read happens inside transaction
+- unresolved employee identity throws, no employeeId 0
+- duplicate/compound names do not corrupt source linkage
+- supersede requires human reason
+- NaN/Infinity/negative hours rejected
+- legacy GET does not create/supersede a batch
+- superseded/voided download blocked or evidence-only
+- source_timesheet_ids/source_leave_entry_ids correctness
+
+After fixing, return:
+- files changed
+- exact behavior changes
+- tests added/updated
+- validation results
+- any remaining review findings intentionally deferred

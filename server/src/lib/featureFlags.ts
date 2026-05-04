@@ -34,3 +34,17 @@ export const useAllocationCostingRead: boolean = envBool('USE_ALLOCATION_COSTING
  * Set SALARIED_DRAFT_ENTRY_ENABLED=true to enable.
  */
 export const salariedDraftEntryEnabled: boolean = envBool('SALARIED_DRAFT_ENTRY_ENABLED', false);
+
+/**
+ * Cutover date for the punch_ledger migration.
+ * For pay periods starting ON or AFTER this date, hour computations read
+ * exclusively from public.punch_ledger.  For periods ending BEFORE this date,
+ * computations read exclusively from timekeeping.punches.
+ * Format: "YYYY-MM-DD".  Defaults to "2024-01-01" (all periods use punch_ledger).
+ * Set PUNCH_LEDGER_CUTOVER_DATE=YYYY-MM-DD to adjust.
+ */
+export const punchLedgerCutoverDate: string = (() => {
+  const raw = process.env.PUNCH_LEDGER_CUTOVER_DATE?.trim();
+  if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return '2024-01-01';
+})();

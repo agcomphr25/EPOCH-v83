@@ -11,11 +11,13 @@ import {
   computeTimesheetHours,
   toTZDateStr,
   startOfWeekInTZ,
+  midnightInTZ,
   derivePunchStatus,
 } from "../../lib/timekeeping";
 import { getOrCreateSettings } from "./settings.service";
 import * as ledger from "../../lib/punchLedger";
 import { getPayPeriodDates } from "../payPeriod";
+import { punchLedgerCutoverDate } from "../../lib/featureFlags";
 
 /**
  * Open punch_ledger sessions older than this threshold are considered stale
@@ -248,7 +250,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   // Limit legacy-punch fetch to current pay period plus a 60-day lookback window.
   // This prevents an unbounded full-table scan as the punches table grows over time.
-  const { start: currentPayPeriodStart } = getPayPeriodDates();
+  const { start: currentPayPeriodStart } = getPayPeriodDates(undefined, tz);
   const punchLookbackCutoff = new Date(currentPayPeriodStart);
   punchLookbackCutoff.setDate(punchLookbackCutoff.getDate() - 60);
 
@@ -302,7 +304,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     }
   }
 
-  const { start: payPeriodStart } = getPayPeriodDates();
+  const { start: payPeriodStart } = getPayPeriodDates(undefined, tz);
 
   // Build pay-period punch map for full pair-sequence validation.
   // allPunches is ordered desc by punchedAt; we reverse per-employee so the
@@ -331,60 +333,87 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     (t) => t.status === "submitted"
   ).length;
 
-  const weekPunches = allPunches.filter(
-    (p) => new Date(p.punchedAt) >= weekStart
-  );
-
-  const weekPunchesByEmp = new Map<number, Punch[]>();
-  for (const p of weekPunches) {
-    if (!weekPunchesByEmp.has(p.employeeId))
-      weekPunchesByEmp.set(p.employeeId, []);
-    weekPunchesByEmp.get(p.employeeId)!.push(p);
-  }
-
   let hoursThisWeek = 0;
   let overtimeHoursThisWeek = 0;
 
-  // Legacy hours from timekeeping.punches
-  for (const empPunches of Array.from(weekPunchesByEmp.values())) {
-    const { totalHours, overtimeHours } = computeTimesheetHours(empPunches, {
-      timezone: tz,
-      overtimeThresholdDaily: settings.overtimeThresholdDaily,
-      overtimeThresholdWeekly: settings.overtimeThresholdWeekly,
-      roundingMinutes: settings.roundingRuleMinutes,
-    });
-    hoursThisWeek += totalHours;
-    overtimeHoursThisWeek += overtimeHours;
-  }
-
-  // Additional hours from punch_ledger this week.
-  // Included for ALL active employees — portal/kiosk writes exclusively to punch_ledger
-  // so there is no overlap with timekeeping.punches for the same punch event.
-  // BREAK sessions are excluded (not productive work hours).
-  // Sessions that began before weekStart are clipped to weekStart to avoid counting
-  // time from prior weeks.
+  // Split-at-cutover logic — same shape as getWeeklyHours / getEmployeeHoursForPeriod.
+  // For weeks that span PUNCH_LEDGER_CUTOVER_DATE, the legacy half covers
+  // [weekStart, cutoverBoundary) and the ledger half covers [cutoverBoundary, weekEnd).
+  // This keeps the source-of-truth rule consistent across all hour aggregators.
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const weekStartDateStr = toTZDateStr(weekStart, tz);
+  const weekEndDateStr = toTZDateStr(new Date(weekEnd.getTime() - 1), tz);
+  const useLedgerStart = weekStartDateStr >= punchLedgerCutoverDate;
+  const useLedgerEnd = weekEndDateStr >= punchLedgerCutoverDate;
+  const cutoverBoundary = midnightInTZ(punchLedgerCutoverDate, tz);
   const summaryNow = new Date();
-  const weekStartMs = weekStart.getTime();
-  const activeEpochIdsForHours = new Set(allEmployees.filter((e) => e.isActive).map((e) => e.epochEmployeeId));
+
+  const needsLegacy = !useLedgerStart;
+  const needsLedger = useLedgerEnd;
+  const legacyEnd = needsLegacy && needsLedger ? cutoverBoundary : weekEnd;
+  const ledgerStart = needsLegacy && needsLedger ? cutoverBoundary : weekStart;
 
   const ledgerHoursByEmp = new Map<number, number>();
-  for (const session of weekLedgerSessions) {
-    if (session.laborClass === "BREAK") continue;
-    const epochId = session.employeeId;
-    if (!activeEpochIdsForHours.has(epochId)) continue;
+  const legacyHoursByEmp = new Map<number, number>();
 
-    // Clip session start to week boundary to handle cross-week open sessions
-    const start = Math.max(new Date(session.clockIn).getTime(), weekStartMs);
-    const end = session.clockOut ? new Date(session.clockOut).getTime() : summaryNow.getTime();
-    const hrs = Math.max(0, (end - start) / 3_600_000);
+  if (needsLedger) {
+    const activeEpochIdsForHours = new Set(allEmployees.filter((e) => e.isActive).map((e) => e.epochEmployeeId));
+    const ledgerStartMs = ledgerStart.getTime();
+    // Defensive end clip — for the in-progress current week, summaryNow is the
+    // natural upper bound; weekEnd guards the case where the function is ever
+    // invoked outside the current week.
+    const weekUpperMs = Math.min(weekEnd.getTime(), summaryNow.getTime());
 
-    ledgerHoursByEmp.set(epochId, (ledgerHoursByEmp.get(epochId) ?? 0) + hrs);
+    for (const session of weekLedgerSessions) {
+      if (session.laborClass === "BREAK") continue;
+      const epochId = session.employeeId;
+      if (!activeEpochIdsForHours.has(epochId)) continue;
+
+      const start = Math.max(new Date(session.clockIn).getTime(), ledgerStartMs);
+      const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : summaryNow.getTime();
+      const end = Math.min(rawEnd, weekUpperMs);
+      if (end <= start) continue; // session entirely outside the active half
+
+      const hrs = (end - start) / 3_600_000;
+      ledgerHoursByEmp.set(epochId, (ledgerHoursByEmp.get(epochId) ?? 0) + hrs);
+    }
   }
 
-  for (const empHours of ledgerHoursByEmp.values()) {
-    hoursThisWeek += empHours;
-    if (empHours > settings.overtimeThresholdWeekly) {
-      overtimeHoursThisWeek += empHours - settings.overtimeThresholdWeekly;
+  if (needsLegacy) {
+    const weekStartMs = weekStart.getTime();
+    const legacyEndMs = legacyEnd.getTime();
+    const weekPunches = allPunches.filter((p) => {
+      const ts = new Date(p.punchedAt).getTime();
+      return ts >= weekStartMs && ts < legacyEndMs;
+    });
+    const weekPunchesByEmp = new Map<number, Punch[]>();
+    for (const p of weekPunches) {
+      if (!weekPunchesByEmp.has(p.employeeId))
+        weekPunchesByEmp.set(p.employeeId, []);
+      weekPunchesByEmp.get(p.employeeId)!.push(p);
+    }
+    for (const [epochId, empPunches] of Array.from(weekPunchesByEmp.entries())) {
+      const { totalHours } = computeTimesheetHours(empPunches, {
+        timezone: tz,
+        overtimeThresholdDaily: settings.overtimeThresholdDaily,
+        overtimeThresholdWeekly: settings.overtimeThresholdWeekly,
+        roundingMinutes: settings.roundingRuleMinutes,
+      });
+      legacyHoursByEmp.set(epochId, totalHours);
+    }
+  }
+
+  // Combine per-employee totals from both sources before applying weekly OT,
+  // so a spanning week is treated as one continuous week of work.
+  const allHourEpochIds = new Set<number>([
+    ...ledgerHoursByEmp.keys(),
+    ...legacyHoursByEmp.keys(),
+  ]);
+  for (const epochId of allHourEpochIds) {
+    const total = (ledgerHoursByEmp.get(epochId) ?? 0) + (legacyHoursByEmp.get(epochId) ?? 0);
+    hoursThisWeek += total;
+    if (total > settings.overtimeThresholdWeekly) {
+      overtimeHoursThisWeek += total - settings.overtimeThresholdWeekly;
     }
   }
 
@@ -491,7 +520,8 @@ export async function getEmployeeStatus(): Promise<EmployeeStatusEntry[]> {
 
   // Use the shared helper for status/count computation — guarantees In/Out Board
   // and summary card counts are always derived from the same logic.
-  const { start: payPeriodStart } = getPayPeriodDates();
+  const statusSettings = await getOrCreateSettings();
+  const { start: payPeriodStart } = getPayPeriodDates(undefined, statusSettings.timezone);
   const { statusMap } = computeAttendanceState(
     allEmployees,
     latestLegacyPunch,
@@ -627,30 +657,13 @@ export async function getWeeklyHours(filters?: {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
-  // Resolve the epochEmployeeId filter once for both data paths.
-  // Callers pass timekeepingId (timekeeping.employees.id) in filters.employeeId.
-  // Both punchesTable.employeeId and punchLedger.employeeId reference
-  // public.employees.id (epochEmployeeId) — never timekeeping.employees.id.
-  // -1 means "no matching employee found" → skip both paths entirely.
-  let epochIdFilter: number | null = null; // null = all employees, number = specific, -1 = no match
+  let epochIdFilter: number | null = null;
   if (filters?.employeeId != null) {
     const allEmployees = await listResolvedEmployees();
     const match = allEmployees.find((e) => e.timekeepingId === filters.employeeId);
     epochIdFilter = match?.epochEmployeeId ?? -1;
   }
 
-  // --- Legacy timekeeping.punches ---
-  const baseCondition = gte(punchesTable.punchedAt, weekStart);
-  const whereClause =
-    epochIdFilter != null && epochIdFilter !== -1
-      ? and(baseCondition, eq(punchesTable.employeeId, epochIdFilter))
-      : baseCondition;
-
-  const punches: (typeof punchesTable.$inferSelect)[] = epochIdFilter === -1
-    ? [] // no matching employee → no legacy punches
-    : await db.select().from(punchesTable).where(whereClause);
-
-  // Build day map keyed by TZ-local date string
   const dayMap = new Map<string, Punch[]>();
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
@@ -659,87 +672,106 @@ export async function getWeeklyHours(filters?: {
     dayMap.set(key, []);
   }
 
-  for (const p of punches) {
-    const key = toTZDateStr(new Date(p.punchedAt), tz);
-    if (dayMap.has(key)) {
-      dayMap.get(key)!.push(p);
-    }
-  }
+  const weekStartDateStr = toTZDateStr(weekStart, tz);
+  const weekEndDateStr = toTZDateStr(new Date(weekEnd.getTime() - 1), tz);
+  const useLedgerStart = weekStartDateStr >= punchLedgerCutoverDate;
+  const useLedgerEnd = weekEndDateStr >= punchLedgerCutoverDate;
+  const cutoverBoundary = midnightInTZ(punchLedgerCutoverDate, tz);
 
-  // --- punch_ledger (portal / kiosk) ---
-  // epochIdFilter is already resolved above (same namespace for both tables).
-  const ledgerEpochIdFilter = epochIdFilter;
-
-  // Fetch sessions that overlap the current week from punch_ledger.
-  // Include sessions that started this week (clockIn in [weekStart, weekEnd)) OR
-  // closed sessions that started before the week but closed within it OR
-  // still-open sessions that started before the week (cross-week carryover).
-  const weekOverlapCondition = or(
-    and(gte(punchLedger.clockIn, weekStart), lt(punchLedger.clockIn, weekEnd)),
-    and(isNull(punchLedger.clockOut), lt(punchLedger.clockIn, weekStart)),
-    and(gte(punchLedger.clockOut, weekStart), lt(punchLedger.clockIn, weekStart))
-  );
-  const ledgerWhereClause =
-    ledgerEpochIdFilter === -1
-      ? undefined // no match; we'll skip iteration below
-      : ledgerEpochIdFilter != null
-      ? and(eq(punchLedger.employeeId, ledgerEpochIdFilter), weekOverlapCondition)
-      : weekOverlapCondition;
-
-  const now = new Date();
-  const weekStartMs = weekStart.getTime();
-  const weekEndMs = weekEnd.getTime();
-
-  // Accumulate ledger hours per day-key (TZ-local date string).
-  // Each session is attributed to the day of its effective start within the week.
-  const ledgerHoursByDay = new Map<string, number>();
+  const hoursByDay = new Map<string, number>();
   for (const key of dayMap.keys()) {
-    ledgerHoursByDay.set(key, 0);
+    hoursByDay.set(key, 0);
   }
 
-  if (ledgerEpochIdFilter !== -1) {
-    const ledgerSessions = await db
-      .select()
-      .from(punchLedger)
-      .where(ledgerWhereClause);
+  const needsLegacy = !useLedgerStart;
+  const needsLedger = useLedgerEnd;
+  const legacyEnd = needsLegacy && needsLedger ? cutoverBoundary : weekEnd;
+  const ledgerStart = needsLegacy && needsLedger ? cutoverBoundary : weekStart;
 
-    for (const session of ledgerSessions) {
-      if (session.laborClass === "BREAK") continue;
+  if (needsLedger) {
+    const ledgerEpochIdFilter = epochIdFilter;
+    const effectiveLedgerStart = ledgerStart;
+    const weekOverlapCondition = or(
+      and(gte(punchLedger.clockIn, effectiveLedgerStart), lt(punchLedger.clockIn, weekEnd)),
+      and(isNull(punchLedger.clockOut), lt(punchLedger.clockIn, effectiveLedgerStart)),
+      and(gte(punchLedger.clockOut, effectiveLedgerStart), lt(punchLedger.clockIn, effectiveLedgerStart))
+    );
+    const ledgerWhereClause =
+      ledgerEpochIdFilter === -1
+        ? undefined
+        : ledgerEpochIdFilter != null
+        ? and(eq(punchLedger.employeeId, ledgerEpochIdFilter), weekOverlapCondition)
+        : weekOverlapCondition;
 
-      // Clip session to the week boundaries (past: weekStart, future: weekEnd or now)
-      const sessionStart = Math.max(new Date(session.clockIn).getTime(), weekStartMs);
-      const rawEnd = session.clockOut
-        ? new Date(session.clockOut).getTime()
-        : now.getTime();
-      const sessionEnd = Math.min(rawEnd, weekEndMs);
+    const now = new Date();
+    const ledgerStartMs = effectiveLedgerStart.getTime();
+    const weekEndMs = weekEnd.getTime();
 
-      if (sessionEnd <= sessionStart) continue;
+    if (ledgerEpochIdFilter !== -1) {
+      const ledgerSessions = await db
+        .select()
+        .from(punchLedger)
+        .where(ledgerWhereClause);
 
-      // Attribute hours day-by-day in case the session spans midnight
-      // Iterate over each day in the week and accumulate the overlap
-      for (let i = 0; i < 7; i++) {
-        const dayStart = new Date(weekStart);
-        dayStart.setDate(dayStart.getDate() + i);
-        const dayEnd = new Date(dayStart);
-        dayEnd.setDate(dayEnd.getDate() + 1);
+      for (const session of ledgerSessions) {
+        if (session.laborClass === "BREAK") continue;
 
-        const overlapStart = Math.max(sessionStart, dayStart.getTime());
-        const overlapEnd = Math.min(sessionEnd, dayEnd.getTime());
-        if (overlapEnd <= overlapStart) continue;
+        const sessionStart = Math.max(new Date(session.clockIn).getTime(), ledgerStartMs);
+        const rawEnd = session.clockOut
+          ? new Date(session.clockOut).getTime()
+          : now.getTime();
+        const sessionEnd = Math.min(rawEnd, weekEndMs);
 
-        const dayKey = toTZDateStr(dayStart, tz);
-        const hrs = (overlapEnd - overlapStart) / 3_600_000;
-        ledgerHoursByDay.set(dayKey, (ledgerHoursByDay.get(dayKey) ?? 0) + hrs);
+        if (sessionEnd <= sessionStart) continue;
+
+        let cursor = sessionStart;
+        while (cursor < sessionEnd) {
+          const dayKey = toTZDateStr(new Date(cursor), tz);
+          const [y, m, d] = dayKey.split("-").map(Number);
+          const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+          const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
+
+          const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
+          const hrs = (sliceEnd - cursor) / 3_600_000;
+          hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
+          cursor = sliceEnd;
+        }
       }
     }
   }
 
-  // --- Merge and return ---
+  if (needsLegacy) {
+    const effectiveLegacyEnd = legacyEnd;
+    const baseCondition = and(
+      gte(punchesTable.punchedAt, weekStart),
+      lt(punchesTable.punchedAt, effectiveLegacyEnd)
+    );
+    const whereClause =
+      epochIdFilter != null && epochIdFilter !== -1
+        ? and(baseCondition, eq(punchesTable.employeeId, epochIdFilter))
+        : baseCondition;
+
+    const punches: (typeof punchesTable.$inferSelect)[] = epochIdFilter === -1
+      ? []
+      : await db.select().from(punchesTable).where(whereClause);
+
+    for (const p of punches) {
+      const key = toTZDateStr(new Date(p.punchedAt), tz);
+      if (dayMap.has(key)) {
+        dayMap.get(key)!.push(p);
+      }
+    }
+
+    for (const [day, dayPunches] of dayMap) {
+      if (dayPunches.length > 0) {
+        hoursByDay.set(day, (hoursByDay.get(day) ?? 0) + computeHoursFromPunches(dayPunches, settings.roundingRuleMinutes));
+      }
+    }
+  }
+
   const result: DailyHours[] = [];
-  for (const [date, dayPunches] of Array.from(dayMap)) {
-    const legacyHours = computeHoursFromPunches(dayPunches, settings.roundingRuleMinutes);
-    const ledgerHours = ledgerHoursByDay.get(date) ?? 0;
-    const hours = legacyHours + ledgerHours;
+  for (const [date] of Array.from(dayMap)) {
+    const hours = hoursByDay.get(date) ?? 0;
     const regularHours = Math.min(hours, settings.overtimeThresholdDaily);
     const overtimeHours = Math.max(0, hours - settings.overtimeThresholdDaily);
     result.push({ date, hours, regularHours, overtimeHours });
@@ -765,99 +797,97 @@ export async function getEmployeeHoursForPeriod(
   to?: Date
 ): Promise<EmployeePeriodHours[]> {
   const settings = await getOrCreateSettings();
-  const { start: defaultStart, end: defaultEnd } = getPayPeriodDates();
+  const tz = settings.timezone;
+  const { start: defaultStart, end: defaultEnd } = getPayPeriodDates(undefined, tz);
   const rangeStart = from ?? defaultStart;
-  // to end of day for the "to" date
   const rangeEnd = to ?? defaultEnd;
 
   const allEmployees = await listResolvedEmployees();
   const activeEmployees = allEmployees.filter((e) => e.isActive);
   const now = new Date();
 
-  // Map to accumulate hours by epochEmployeeId
   const hoursByEpochId = new Map<number, number>();
   for (const emp of activeEmployees) {
     hoursByEpochId.set(emp.epochEmployeeId, 0);
   }
 
-  // --- Legacy path: timekeeping.punches ---
-  // punchesTable.employeeId references public.employees.id (epochEmployeeId),
-  // so we use epochEmployeeId directly — no timekeepingId lookup needed.
-  if (activeEmployees.length > 0) {
-    const legacyPunches = await db
+  const rangeStartDateStr = toTZDateStr(rangeStart, tz);
+  const rangeEndDateStr = toTZDateStr(rangeEnd, tz);
+  const useLedgerStart = rangeStartDateStr >= punchLedgerCutoverDate;
+  const useLedgerEnd = rangeEndDateStr >= punchLedgerCutoverDate;
+  const cutoverBoundary = midnightInTZ(punchLedgerCutoverDate, tz);
+
+  const needsLegacy = !useLedgerStart;
+  const needsLedger = useLedgerEnd;
+  const legacyEnd = needsLegacy && needsLedger ? cutoverBoundary : rangeEnd;
+  const effectiveLedgerStart = needsLegacy && needsLedger ? cutoverBoundary : rangeStart;
+
+  if (needsLedger) {
+    const ledgerSessions = await db
       .select()
-      .from(punchesTable)
+      .from(punchLedger)
       .where(
-        and(
-          gte(punchesTable.punchedAt, rangeStart),
-          lte(punchesTable.punchedAt, rangeEnd)
+        or(
+          and(gte(punchLedger.clockIn, effectiveLedgerStart), lte(punchLedger.clockIn, rangeEnd)),
+          and(isNull(punchLedger.clockOut), lt(punchLedger.clockIn, effectiveLedgerStart)),
+          and(
+            gte(punchLedger.clockOut, effectiveLedgerStart),
+            lt(punchLedger.clockIn, effectiveLedgerStart)
+          )
         )
       );
 
-    // Group by epochEmployeeId and sum hours
-    const punchesByEpochId = new Map<number, Punch[]>();
-    for (const p of legacyPunches) {
-      if (!punchesByEpochId.has(p.employeeId)) punchesByEpochId.set(p.employeeId, []);
-      punchesByEpochId.get(p.employeeId)!.push(p);
-    }
+    const ledgerStartMs = effectiveLedgerStart.getTime();
+    const rangeEndMs = rangeEnd.getTime();
 
-    for (const [epochId, punches] of punchesByEpochId) {
-      if (!hoursByEpochId.has(epochId)) continue; // skip inactive/unknown employees
-      const { totalHours } = computeTimesheetHours(punches, {
-        timezone: settings.timezone,
-        overtimeThresholdDaily: settings.overtimeThresholdDaily,
-        overtimeThresholdWeekly: settings.overtimeThresholdWeekly,
-        roundingMinutes: settings.roundingRuleMinutes,
-      });
-      hoursByEpochId.set(epochId, (hoursByEpochId.get(epochId) ?? 0) + totalHours);
+    for (const session of ledgerSessions) {
+      if (session.laborClass === "BREAK") continue;
+      const epochId = session.employeeId;
+      if (!hoursByEpochId.has(epochId)) continue;
+
+      const start = Math.max(new Date(session.clockIn).getTime(), ledgerStartMs);
+      const rawEnd = session.clockOut
+        ? new Date(session.clockOut).getTime()
+        : now.getTime();
+      const end = Math.min(rawEnd, rangeEndMs);
+
+      if (end <= start) continue;
+      const hrs = (end - start) / 3_600_000;
+      hoursByEpochId.set(epochId, (hoursByEpochId.get(epochId) ?? 0) + hrs);
     }
   }
 
-  // --- punch_ledger path ---
-  // Include sessions overlapping [rangeStart, rangeEnd]:
-  //   - sessions that started in the range
-  //   - open sessions that started before the range (cross-boundary)
-  //   - sessions that started before but ended within the range
-  const ledgerSessions = await db
-    .select()
-    .from(punchLedger)
-    .where(
-      or(
-        and(gte(punchLedger.clockIn, rangeStart), lte(punchLedger.clockIn, rangeEnd)),
-        and(isNull(punchLedger.clockOut), lt(punchLedger.clockIn, rangeStart)),
-        and(
-          gte(punchLedger.clockOut, rangeStart),
-          lt(punchLedger.clockIn, rangeStart)
-        )
-      )
-    );
+  if (needsLegacy) {
+    if (activeEmployees.length > 0) {
+      const legacyPunches = await db
+        .select()
+        .from(punchesTable)
+        .where(
+          and(
+            gte(punchesTable.punchedAt, rangeStart),
+            lt(punchesTable.punchedAt, legacyEnd)
+          )
+        );
 
-  const rangeStartMs = rangeStart.getTime();
-  const rangeEndMs = rangeEnd.getTime();
+      const punchesByEpochId = new Map<number, Punch[]>();
+      for (const p of legacyPunches) {
+        if (!punchesByEpochId.has(p.employeeId)) punchesByEpochId.set(p.employeeId, []);
+        punchesByEpochId.get(p.employeeId)!.push(p);
+      }
 
-  for (const session of ledgerSessions) {
-    if (session.laborClass === "BREAK") continue;
-    const epochId = session.employeeId;
-    if (!hoursByEpochId.has(epochId)) continue;
-
-    // Clip to range boundaries
-    const start = Math.max(new Date(session.clockIn).getTime(), rangeStartMs);
-    const rawEnd = session.clockOut
-      ? new Date(session.clockOut).getTime()
-      : now.getTime();
-    const end = Math.min(rawEnd, rangeEndMs);
-
-    if (end <= start) continue;
-    const hrs = (end - start) / 3_600_000;
-    hoursByEpochId.set(epochId, (hoursByEpochId.get(epochId) ?? 0) + hrs);
+      for (const [epochId, punches] of punchesByEpochId) {
+        if (!hoursByEpochId.has(epochId)) continue;
+        const { totalHours } = computeTimesheetHours(punches, {
+          timezone: tz,
+          overtimeThresholdDaily: settings.overtimeThresholdDaily,
+          overtimeThresholdWeekly: settings.overtimeThresholdWeekly,
+          roundingMinutes: settings.roundingRuleMinutes,
+        });
+        hoursByEpochId.set(epochId, (hoursByEpochId.get(epochId) ?? 0) + totalHours);
+      }
+    }
   }
 
-  // Build result list for all active employees.
-  // regularHours uses a period-scaled threshold:
-  //   numWeeks = ceil(range length in days / 7)  — at least 1
-  //   regularCap = weeklyOtThreshold * numWeeks
-  // This correctly handles biweekly (cap = 80h) and custom ranges without
-  // doing per-day OT splitting (out of scope per task).
   const weeklyOtThreshold = settings.overtimeThresholdWeekly;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const rangeDays = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / DAY_MS) + 1);
@@ -878,7 +908,6 @@ export async function getEmployeeHoursForPeriod(
     });
   }
 
-  // Sort by name
   result.sort((a, b) => a.name.localeCompare(b.name));
   return result;
 }

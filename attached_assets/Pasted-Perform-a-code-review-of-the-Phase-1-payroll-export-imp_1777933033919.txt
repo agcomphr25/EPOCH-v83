@@ -1,0 +1,39 @@
+Perform a code review of the Phase 1 payroll export implementation.
+
+Do not modify files.
+
+Review the cumulative Phase 1 diff from base commit 7b70040e to HEAD, focusing on:
+- migrations/0098_payroll_export_batches.sql
+- server/src/schema/timekeeping.ts
+- server/src/services/timekeeping/payrollExport.service.ts
+- server/src/routes/timekeeping/payrollExport.ts
+- server/src/routes/timekeeping/timesheets.ts
+- server/src/routes/index.ts
+- server/__tests__/payrollExportPhase1.test.ts
+
+Review stance:
+Prioritize bugs, data integrity risks, DCAA auditability gaps, security/permission mistakes, race conditions, incorrect transaction behavior, CSV evidence problems, and missing tests. Do not summarize first. Findings first.
+
+Specific areas to inspect:
+1. Does createRegularFullPeriodBatch actually run in a real transaction using the project’s DB/Neon/Drizzle setup?
+2. Does SERIALIZABLE/retry handling really work with the chosen DB driver?
+3. Can two concurrent exports create two active batches despite the partial unique index?
+4. Does the supersede flow preserve a reason, actor, timestamp, and link from old batch to new batch?
+5. Can a processed batch be superseded, voided, recalculated, deleted, or overwritten by any route/service path?
+6. Does the legacy GET /admin/export/gusto route now create/store a batch and return stored csv_content, not live recalculation?
+7. Are BATCH_CREATED, BATCH_SUPERSEDED, BATCH_DOWNLOADED, and BATCH_PROCESSED events written with actor/role/IP/reason as appropriate?
+8. Does re-download verify checksum before returning CSV?
+9. Is csv_content generated once and then reused exactly?
+10. Are employee snapshot fields populated from the correct employee identity source?
+11. Are source_timesheet_ids and source_leave_entry_ids captured correctly?
+12. Does export_type participate in revision numbering and active uniqueness?
+13. Are period_start/period_end validated as YYYY-MM-DD consistently in route, service, and DB?
+14. Are OWNER/ADMIN permissions enforced on every route?
+15. Are tests meaningful, or are mocks too shallow to catch transaction/DB bugs?
+16. Any issue with attached_assets files being committed?
+
+Output format:
+- Findings first, ordered by severity.
+- For each finding include severity, file, line/function, evidence, why it matters, and recommended fix.
+- Then list missing tests.
+- Then short summary.

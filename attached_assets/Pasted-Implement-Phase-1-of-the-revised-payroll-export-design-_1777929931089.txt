@@ -1,0 +1,37 @@
+Implement Phase 1 of the revised payroll export design only.
+
+Use docs/payroll-export-design.md as the source of truth.
+
+Scope:
+- Add database migration and Drizzle schema for payroll export batches and rows only.
+- Include export_type with regular_full_period and off_cycle_adjustment if required by the design, but Phase 1 only needs regular_full_period behavior.
+- Add partial unique index preventing more than one active batch per period/export_type.
+- Add exact CSV evidence fields: csv_content, csv_checksum, row_count, total hours, created_by, timestamps.
+- Add row-level snapshot fields with explicit names like employee_first_name_snapshot and employee_last_name_snapshot.
+- Add backend service logic to create a full-period Gusto CSV export batch from certified/locked timesheets.
+- If an active unprocessed full-period batch already exists for the same period, supersede it with a reason and create the next revision.
+- Add route to re-download exact stored CSV by export batch ID.
+- Add route for OWNER/ADMIN to mark an active batch processed with confirmation note.
+- Processed batches must be immutable.
+- Add audit/event records for created, superseded, downloaded, and processed.
+
+Out of scope:
+- Do not implement payroll_adjustments yet.
+- Do not implement off-cycle adjustment exports yet.
+- Do not build frontend UI yet.
+- Do not change correction workflow yet, except if a small guard is required to prevent editing processed export evidence.
+- Do not touch PTO features.
+- Do not refactor unrelated payroll/timekeeping code.
+
+Tests:
+Add focused server tests for:
+- first export creates active revision 1
+- second export before processing supersedes revision 1 and creates active revision 2
+- active uniqueness is enforced
+- re-download returns stored CSV content, not recalculated output
+- processed batch cannot be superseded/modified
+- only OWNER/ADMIN can create/process exports
+- audit events are written
+
+Before coding:
+Return a short implementation plan with exact files to change and wait for approval.

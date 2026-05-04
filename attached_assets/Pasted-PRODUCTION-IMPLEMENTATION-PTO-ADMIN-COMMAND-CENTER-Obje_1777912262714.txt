@@ -1,0 +1,181 @@
+PRODUCTION IMPLEMENTATION — PTO ADMIN COMMAND CENTER
+
+Objective:
+Build a PTO Admin Command Center in EPOCH based on the prior audit.
+
+This is a visibility, governance, and control dashboard.
+
+Do not rebuild the PTO system.
+Do not redesign payroll.
+Do not add accrual/balance tracking.
+Do not scope-creep.
+
+Core Purpose:
+Give leadership, HR, supervisors, payroll, and admins one trusted place to monitor and manage PTO workflow health.
+
+Required Sections:
+
+1. PTO Workflow Overview
+Show summary cards:
+- pending supervisor approvals
+- pending HR approvals
+- pending VP approvals
+- approved PTO this pay period
+- upcoming PTO next 14 days
+- rejected requests
+- cancelled/reversed requests
+- requests needing attention
+
+2. Approval Queue
+Table of active PTO requests with:
+- employee
+- department if available
+- supervisor
+- request dates
+- request unit
+- requested hours
+- current stage
+- age of request
+- next approver
+- employee note
+- stage notes
+- action buttons based on user permission
+
+Filters:
+- stage
+- employee
+- supervisor
+- date range
+- request status
+- department if available
+
+3. Stuck / At-Risk Requests
+Highlight:
+- pending supervisor > 2 business days
+- pending HR > 1 business day
+- pending VP > 1 business day
+- no supervisor assigned
+- request overlaps payroll freeze window
+- request approved after payroll preview if detectable
+
+4. Payroll Readiness Panel
+Show:
+- approved PTO in current pay period
+- hourly PTO hours included in payroll export
+- salaried PTO injection status
+- reversed PTO excluded from payroll
+- warnings for unresolved payroll risks
+
+This panel is read-only unless existing safe correction routes already exist.
+
+5. Calendar / Staffing Visibility
+Show upcoming PTO:
+- today
+- next 7 days
+- next 14 days
+- by employee
+- by department/group if available
+
+If production scheduler integration exists, show staffing warning indicators.
+Do not alter scheduling algorithms.
+
+6. Reversal / Cancellation Log
+Show:
+- cancelled requests
+- reversed approved PTO
+- reason
+- actor
+- date
+- affected leave entries
+- affected timesheets if available
+
+7. Override / Exception Log
+Show:
+- admin clock-in overrides on PTO days
+- payroll override events
+- emergency exceptions
+- owner/admin interventions
+
+Use existing audit logs where available.
+
+8. Missing Setup / Configuration Panel
+Show:
+- employees with no supervisor assigned
+- approvers without needed PTO permissions
+- unresolved VP capability assignments
+- PTO requests with incomplete routing
+
+9. Audit Trail Drawer
+For each PTO request, allow admin to open a detail drawer showing:
+- submission
+- each approval stage
+- denial reason if rejected
+- cancellation/reversal
+- leave entry creation
+- timesheet injection
+- calendar sync
+- payroll export relevance if available
+
+Implementation Requirements:
+
+Backend:
+- Add only necessary read-focused endpoints.
+- Reuse existing PTO services where possible.
+- Add aggregate endpoint if efficient:
+  GET /api/timekeeping/pto-command-center
+- Add detail endpoint if needed:
+  GET /api/timekeeping/pto-command-center/:requestId
+- Avoid heavy frontend joins.
+- Do not expose data to unauthorized users.
+
+Permissions:
+Use capability-based gates:
+- timekeeping.pto.view_all
+- timekeeping.pto.approve_supervisor
+- timekeeping.pto.approve_hr
+- timekeeping.pto.approve_vp
+- timekeeping.pto.submit_on_behalf
+- timekeeping.pto.cancel_request
+
+UI:
+Create a dedicated page:
+PTO Admin Command Center
+
+Suggested route:
+/admin/pto-command-center
+or existing timekeeping admin route if project conventions prefer it.
+
+Design:
+- clean ERP-style admin dashboard
+- summary cards at top
+- tabs or sections below
+- warning badges
+- plain-language status labels
+- no flashy visuals
+- fast to scan during payroll week
+
+Do not hide risk.
+Surface risk clearly.
+
+Required Validation:
+- typecheck
+- server starts cleanly
+- permission behavior verified
+- admin user can view all
+- unauthorized user cannot view all
+- supervisor sees relevant approval actions only
+- HR sees HR actions only
+- VP sees VP actions only
+- payroll panel does not mutate data
+- audit drawer loads correctly
+
+Deliverable:
+Return:
+1. Summary of what changed
+2. Files changed
+3. New routes
+4. New components/pages
+5. Permission behavior
+6. Validation performed
+7. Remaining risks
+8. Suggested follow-up improvements

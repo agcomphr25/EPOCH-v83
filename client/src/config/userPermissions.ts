@@ -13,6 +13,7 @@ export interface UserPermissions {
 
 export const CAPABILITY_GATED_ROUTES: Record<string, string> = {
   '/pto-command-center': 'timekeeping.pto.view_all',
+  '/orders-list': 'orders.view_list',
 };
 
 export function getRequiredCapability(route: string): string | undefined {

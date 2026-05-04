@@ -103,7 +103,7 @@ export default function FALEESHAHTestDashboard() {
           </Card>
         </Link>
 
-        <Link href="/all-orders">
+        <Link href="/orders-list">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
             <CardContent className="p-4 text-center">
               <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />

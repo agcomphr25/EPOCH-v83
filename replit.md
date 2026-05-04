@@ -19,6 +19,29 @@ EPOCH Overview: User preference to maintain EPOCH-Overview.md as a living docume
 Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY show Tikka options for action inlet, barrel inlet, and bottom metal (with a green "Tikka only" badge). Non-Tikka stock models hide all Tikka options from these dropdowns. When switching between Tikka and non-Tikka models, incompatible selections are automatically cleared with a toast notification.
 Navbar-permissions alignment: The userPermissions.ts file is the source of truth for user route access. Navigation.tsx filters navbar items based on these permissions. Users not in the permissions list default to only seeing the Employee Portal. Each user sees only their own dashboard in the User Dashboards dropdown (admins see all). Any new navbar items must be added to both Navigation.tsx AND the appropriate user permission lists in userPermissions.ts to stay in sync.
 
+## PTO Command Center (Task #11)
+
+A dedicated PTO Admin Command Center page at `/pto-command-center` providing unified PTO governance visibility.
+
+**Backend** (`server/src/routes/timekeeping/ptoCommandCenter.ts`):
+- `GET /api/timekeeping/pto-command-center/summary` — counts by status, on-PTO-today, upcoming 7 days
+- `GET /api/timekeeping/pto-command-center/pipeline` — requests grouped by approval stage with age/stuck indicators
+- `GET /api/timekeeping/pto-command-center/payroll-exposure` — approved PTO hours by current and next pay period
+- `GET /api/timekeeping/pto-command-center/staffing-impact` — 14-day forward calendar of PTO by department
+- `GET /api/timekeeping/pto-command-center/alerts` — missing supervisor, stuck requests (>48h), orphaned cancelled requests
+- `GET /api/timekeeping/pto-command-center/audit-trail` — PTO-related audit log entries with filtering
+
+All endpoints gated behind `timekeeping.pto.view_all` capability (ADMIN/OWNER bypass).
+
+**Frontend** (`client/src/pages/PTOCommandCenter.tsx`):
+- Overview tab: 8 summary cards + alert banners
+- Pipeline tab: 3-column approval stage view with stuck request highlighting
+- All Requests tab: filterable/sortable table of all PTO requests
+- Payroll & Staffing tab: payroll exposure by period + 14-day staffing calendar
+- Audit Trail tab: chronological PTO action feed with filtering
+
+**Access**: ADMIN and OWNER roles via `userPermissions.ts` ROLE_ROUTE_ACCESS.
+
 ## DCAA-Compliant Employee Time Certification (Task #1855)
 
 Both hourly and salaried timesheets now require explicit employee certification before submission:

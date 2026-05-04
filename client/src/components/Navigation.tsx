@@ -107,7 +107,7 @@ import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
-import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser } from '@/config/userPermissions';
+import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
   NavigationMenu,
@@ -336,6 +336,12 @@ export default function Navigation() {
       label: 'Timekeeper',
       icon: Clock,
       description: 'Open the standalone Timekeeper app',
+    },
+    {
+      path: '/pto-command-center',
+      label: 'PTO Command Center',
+      icon: CalendarDays,
+      description: 'PTO governance, approval pipeline, and staffing impact',
     },
     {
       path: '/customers',
@@ -923,6 +929,12 @@ export default function Navigation() {
       label: 'Timekeeper',
       icon: Settings,
       description: 'Open the standalone Timekeeper app',
+    },
+    {
+      path: '/pto-command-center',
+      label: 'PTO Command Center',
+      icon: CalendarDays,
+      description: 'PTO governance, approval pipeline, and staffing impact',
     },
     {
       path: '/badge-configuration',
@@ -1514,6 +1526,16 @@ export default function Navigation() {
     },
   ];
 
+  const { data: navPermissionsData } = useQuery<{ permissions: string[] }>({
+    queryKey: ['/api/permissions/me'],
+    staleTime: 5 * 60 * 1000,
+    enabled: !!(currentUser as any)?.username,
+  });
+  const navCapSet = useMemo(
+    () => new Set(navPermissionsData?.permissions ?? []),
+    [navPermissionsData],
+  );
+
   // Helper function to filter navigation items based on user permissions
   const filterByPermissions = <T extends { path: string }>(
     items: T[],
@@ -1528,14 +1550,20 @@ export default function Navigation() {
       return items; // Admin users see everything
     }
 
-    // For users not in the permissions list, only show default routes
+    // For users not in the permissions list, only show default routes + capability-gated
     if (!isUserInPermissionsList(username)) {
-      return items.filter((item) => 
-        DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'))
-      );
+      return items.filter((item) => {
+        const cap = getRequiredCapability(item.path);
+        if (cap && navCapSet.has(cap)) return true;
+        return DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'));
+      });
     }
 
-    return items.filter((item) => hasRouteAccess(username, item.path, userRole));
+    return items.filter((item) => {
+      const cap = getRequiredCapability(item.path);
+      if (cap && navCapSet.has(cap)) return true;
+      return hasRouteAccess(username, item.path, userRole);
+    });
   };
 
   // Get current user's role for permission checks
@@ -1544,43 +1572,43 @@ export default function Navigation() {
   // Apply permission filtering to all navigation arrays
   const filteredNavItems = useMemo(
     () => filterByPermissions(navItems, currentUser?.username, userRole),
-    [navItems, currentUser?.username, userRole]
+    [navItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredOrderManagementItems = useMemo(
     () => filterByPermissions(orderManagementItems, currentUser?.username, userRole),
-    [orderManagementItems, currentUser?.username, userRole]
+    [orderManagementItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredInventoryItems = useMemo(
     () => filterByPermissions(inventoryItems, currentUser?.username, userRole),
-    [inventoryItems, currentUser?.username, userRole]
+    [inventoryItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredFormsReportsItems = useMemo(
     () => filterByPermissions(formsReportsItems, currentUser?.username, userRole),
-    [formsReportsItems, currentUser?.username, userRole]
+    [formsReportsItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredTravelerItems = useMemo(
     () => filterByPermissions(travelerItems, currentUser?.username, userRole),
-    [travelerItems, currentUser?.username, userRole]
+    [travelerItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredCommunicationsItems = useMemo(
     () => filterByPermissions(communicationsItems, currentUser?.username, userRole),
-    [communicationsItems, currentUser?.username, userRole]
+    [communicationsItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredQcMaintenanceItems = useMemo(
     () => filterByPermissions(qcMaintenanceItems, currentUser?.username, userRole),
-    [qcMaintenanceItems, currentUser?.username, userRole]
+    [qcMaintenanceItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredTrainingItems = useMemo(
     () => filterByPermissions(trainingItems, currentUser?.username, userRole),
-    [trainingItems, currentUser?.username, userRole]
+    [trainingItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredEmployeesItems = useMemo(
     () => filterByPermissions(employeesItems, currentUser?.username, userRole),
-    [employeesItems, currentUser?.username, userRole]
+    [employeesItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredFinanceItems = useMemo(
     () => filterByPermissions(financeItems, currentUser?.username, userRole),
-    [financeItems, currentUser?.username, userRole]
+    [financeItems, currentUser?.username, userRole, navCapSet]
   );
   // For User Dashboards: admins see all, regular users see only their own dashboard
   const filteredUserDashboardsItems = useMemo(() => {
@@ -1614,31 +1642,31 @@ export default function Navigation() {
   }, [userDashboardsItems, currentUser?.username]);
   const filteredPurchaseOrdersItems = useMemo(
     () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),
-    [purchaseOrdersItems, currentUser?.username, userRole]
+    [purchaseOrdersItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredVerifiedModulesItems = useMemo(
     () => filterByPermissions(verifiedModulesItems, currentUser?.username, userRole),
-    [verifiedModulesItems, currentUser?.username, userRole]
+    [verifiedModulesItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredProductionSchedulingItems = useMemo(
     () => filterByPermissions(productionSchedulingItems, currentUser?.username, userRole),
-    [productionSchedulingItems, currentUser?.username, userRole]
+    [productionSchedulingItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredCentralStorageItems = useMemo(
     () => filterByPermissions(centralStorageItems, currentUser?.username, userRole),
-    [centralStorageItems, currentUser?.username, userRole]
+    [centralStorageItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredDepartmentQueueItems = useMemo(
     () => filterByPermissions(departmentQueueItems, currentUser?.username, userRole),
-    [departmentQueueItems, currentUser?.username, userRole]
+    [departmentQueueItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredSystemHealthItems = useMemo(
     () => filterByPermissions(systemHealthItems, currentUser?.username, userRole),
-    [systemHealthItems, currentUser?.username, userRole]
+    [systemHealthItems, currentUser?.username, userRole, navCapSet]
   );
   const filteredEstimatingItems = useMemo(
     () => filterByPermissions(estimatingItems, currentUser?.username, userRole),
-    [estimatingItems, currentUser?.username, userRole]
+    [estimatingItems, currentUser?.username, userRole, navCapSet]
   );
 
   const isSystemHealthActive = systemHealthItems.some(

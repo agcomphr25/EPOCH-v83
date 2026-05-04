@@ -11,6 +11,19 @@ export interface UserPermissions {
   deniedRoutes?: string[]; // Routes to explicitly block (used with fullAccess: true)
 }
 
+export const CAPABILITY_GATED_ROUTES: Record<string, string> = {
+  '/pto-command-center': 'timekeeping.pto.view_all',
+};
+
+export function getRequiredCapability(route: string): string | undefined {
+  for (const [pattern, cap] of Object.entries(CAPABILITY_GATED_ROUTES)) {
+    if (route === pattern || route.startsWith(pattern + '/')) {
+      return cap;
+    }
+  }
+  return undefined;
+}
+
 // Default routes for users not explicitly listed - only employee portal
 export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
@@ -137,6 +150,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/weekly-shipments',
   '/stock-models',
   '/time-clock-admin',
+  '/pto-command-center',
   '/training-control-center',
   '/training/programs',
   '/training/work-instructions',
@@ -616,6 +630,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
   '/time-clock-admin': ['ADMIN', 'OWNER'],
+  '/pto-command-center': ['ADMIN', 'OWNER'],
   '/business-review': ['ADMIN', 'OWNER', 'FINANCE'],
   '/business-review/sessions': ['ADMIN', 'OWNER', 'FINANCE'],
   '/finance/dashboard': ['ADMIN', 'OWNER'],

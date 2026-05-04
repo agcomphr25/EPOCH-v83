@@ -463,3 +463,146 @@ export const updateLaborEntryDraftSchema = createInsertSchema(laborEntryDraftsTa
 export type LaborEntryDraftUpdate = z.infer<typeof updateLaborEntryDraftSchema>;
 
 export type LaborEntryDraft = typeof laborEntryDraftsTable.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// PAYROLL EXPORT REVISION & ADJUSTMENT MODEL
+// Immutable, versioned snapshots of every payroll export with full audit trail.
+// See docs/payroll-export-design.md for the complete design document.
+// ---------------------------------------------------------------------------
+
+export const PAYROLL_BATCH_STATUSES = ["active", "superseded", "voided", "processed"] as const;
+export type PayrollBatchStatus = typeof PAYROLL_BATCH_STATUSES[number];
+
+export const PAYROLL_ADJUSTMENT_STATUSES = ["pending", "approved", "included", "voided"] as const;
+export type PayrollAdjustmentStatus = typeof PAYROLL_ADJUSTMENT_STATUSES[number];
+
+export const PAYROLL_ADJUSTMENT_TYPES = ["regular_hours", "overtime_hours", "sick_hours", "vacation_hours"] as const;
+export type PayrollAdjustmentType = typeof PAYROLL_ADJUSTMENT_TYPES[number];
+
+export const PAYROLL_DELIVERY_PREFERENCES = ["next_regular", "off_cycle"] as const;
+export type PayrollDeliveryPreference = typeof PAYROLL_DELIVERY_PREFERENCES[number];
+
+export const PAYROLL_EVENT_TYPES = [
+  "BATCH_CREATED",
+  "BATCH_SUPERSEDED",
+  "BATCH_VOIDED",
+  "BATCH_PROCESSED",
+  "BATCH_DOWNLOADED",
+  "ADJUSTMENT_CREATED",
+  "ADJUSTMENT_APPROVED",
+  "ADJUSTMENT_INCLUDED",
+  "ADJUSTMENT_VOIDED",
+  "CORRECTION_BLOCKED_BY_ACTIVE_EXPORT",
+] as const;
+export type PayrollEventType = typeof PAYROLL_EVENT_TYPES[number];
+
+export const payrollExportBatchesTable = timekeepingSchema.table("payroll_export_batches", {
+  id: serial("id").primaryKey(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  revisionNumber: integer("revision_number").notNull().default(1),
+  status: text("status").$type<PayrollBatchStatus>().notNull().default("active"),
+  exportFormat: text("export_format").notNull().default("gusto_csv"),
+  csvContent: text("csv_content").notNull(),
+  csvChecksum: text("csv_checksum").notNull(),
+  rowCount: integer("row_count").notNull(),
+  employeeCount: integer("employee_count").notNull(),
+  totalRegularHours: doublePrecision("total_regular_hours").notNull(),
+  totalOvertimeHours: doublePrecision("total_overtime_hours").notNull(),
+  totalSickHours: doublePrecision("total_sick_hours").notNull(),
+  totalVacationHours: doublePrecision("total_vacation_hours").notNull(),
+  includesAdjustments: boolean("includes_adjustments").notNull().default(false),
+  adjustmentIds: jsonb("adjustment_ids"),
+  supersedesBatchId: integer("supersedes_batch_id"),
+  supersededReason: text("superseded_reason"),
+  voidedReason: text("voided_reason"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: integer("voided_by"),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  processedBy: integer("processed_by"),
+  processedConfirmationNote: text("processed_confirmation_note"),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPayrollExportBatchSchema = createInsertSchema(payrollExportBatchesTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPayrollExportBatch = z.infer<typeof insertPayrollExportBatchSchema>;
+export type PayrollExportBatch = typeof payrollExportBatchesTable.$inferSelect;
+
+export const payrollExportRowsTable = timekeepingSchema.table("payroll_export_rows", {
+  id: serial("id").primaryKey(),
+  batchId: integer("batch_id").notNull().references(() => payrollExportBatchesTable.id, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").notNull(),
+  epochEmployeeId: integer("epoch_employee_id"),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  regularHours: doublePrecision("regular_hours").notNull(),
+  overtimeHours: doublePrecision("overtime_hours").notNull(),
+  doubleOvertimeHours: doublePrecision("double_overtime_hours").notNull().default(0),
+  sickHours: doublePrecision("sick_hours").notNull(),
+  vacationHours: doublePrecision("vacation_hours").notNull(),
+  sourceTimesheetIds: jsonb("source_timesheet_ids").notNull(),
+  sourceLeaveEntryIds: jsonb("source_leave_entry_ids"),
+  adjustmentIds: jsonb("adjustment_ids"),
+});
+
+export const insertPayrollExportRowSchema = createInsertSchema(payrollExportRowsTable).omit({
+  id: true,
+});
+export type InsertPayrollExportRow = z.infer<typeof insertPayrollExportRowSchema>;
+export type PayrollExportRow = typeof payrollExportRowsTable.$inferSelect;
+
+export const payrollAdjustmentsTable = timekeepingSchema.table("payroll_adjustments", {
+  id: serial("id").primaryKey(),
+  originalBatchId: integer("original_batch_id").notNull().references(() => payrollExportBatchesTable.id),
+  employeeId: integer("employee_id").notNull(),
+  correctionId: integer("correction_id").references(() => timesheetCorrectionsTable.id),
+  adjustmentType: text("adjustment_type").$type<PayrollAdjustmentType>().notNull(),
+  originalValue: doublePrecision("original_value").notNull(),
+  correctedValue: doublePrecision("corrected_value").notNull(),
+  delta: doublePrecision("delta").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").$type<PayrollAdjustmentStatus>().notNull().default("pending"),
+  approvedBy: integer("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  includedInBatchId: integer("included_in_batch_id").references(() => payrollExportBatchesTable.id),
+  deliveryPreference: text("delivery_preference").$type<PayrollDeliveryPreference>().notNull().default("next_regular"),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const insertPayrollAdjustmentSchema = createInsertSchema(payrollAdjustmentsTable).omit({
+  id: true,
+  approvedBy: true,
+  approvedAt: true,
+  includedInBatchId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertPayrollAdjustment = z.infer<typeof insertPayrollAdjustmentSchema>;
+export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
+
+export const payrollExportEventsTable = timekeepingSchema.table("payroll_export_events", {
+  id: serial("id").primaryKey(),
+  batchId: integer("batch_id").references(() => payrollExportBatchesTable.id),
+  adjustmentId: integer("adjustment_id").references(() => payrollAdjustmentsTable.id),
+  eventType: text("event_type").$type<PayrollEventType>().notNull(),
+  actorId: integer("actor_id").notNull(),
+  actorEmail: text("actor_email"),
+  actorRole: text("actor_role"),
+  reason: text("reason"),
+  metadata: jsonb("metadata"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPayrollExportEventSchema = createInsertSchema(payrollExportEventsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPayrollExportEvent = z.infer<typeof insertPayrollExportEventSchema>;
+export type PayrollExportEvent = typeof payrollExportEventsTable.$inferSelect;

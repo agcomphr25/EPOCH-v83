@@ -606,6 +606,11 @@ const EXEMPT_FROM_RETIRED_COLUMN_CHECK: Record<string, string> = {
     'All CREATE TYPE statements use IF NOT EXISTS guards. No column renames or ' +
     'drops. Net-new tables only: proteus_prompts, proteus_prompt_variables, ' +
     'proteus_prompt_executions, proteus_prompt_results, proteus_prompt_tags. Safe.',
+  '0098_payroll_export_batches.sql':
+    'All first_name/last_name references are columns on the net-new ' +
+    'timekeeping.payroll_export_rows table, not timekeeping.employees. ' +
+    'These store the employee name as it appeared at export time for ' +
+    'immutable audit evidence. All CREATE TABLE use IF NOT EXISTS guards.',
 };
 
 /**

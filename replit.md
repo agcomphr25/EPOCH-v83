@@ -42,6 +42,20 @@ All endpoints gated behind `timekeeping.pto.view_all` capability (ADMIN/OWNER by
 
 **Access**: ADMIN and OWNER roles via `userPermissions.ts` ROLE_ROUTE_ACCESS.
 
+## Payroll Export Revision & Adjustment Model (Design Document)
+
+The ephemeral Gusto CSV export is being replaced with immutable, versioned **payroll export batches** for full DCAA auditability. See `docs/payroll-export-design.md` for the complete design document.
+
+**Schema** (migration `0098_payroll_export_batches.sql`, Drizzle in `server/src/schema/timekeeping.ts`):
+- `timekeeping.payroll_export_batches` — one row per export action with exact CSV content, SHA-256 checksum, revision number, and lifecycle status (`active` → `superseded`/`voided`/`processed`, all terminal).
+- `timekeeping.payroll_export_rows` — per-employee row-level data with source timesheet/leave entry IDs for traceability.
+- `timekeeping.payroll_adjustments` — delta records for post-processed corrections, with `next_regular` or `off_cycle` delivery preference.
+- `timekeeping.payroll_export_events` — dedicated audit trail for every lifecycle transition (10 event types).
+
+**Key business rules**: Only one active batch per period. Corrections blocked while active export exists (409). Processed batches are immutable. Post-processed corrections create adjustment records. Re-downloads serve stored CSV, never recalculated.
+
+**Implementation phases**: Phase 1 (schema + core service), Phase 2 (correction blocking), Phase 3 (adjustments), Phase 4 (admin UI), Phase 5 (tests).
+
 ## DCAA-Compliant Employee Time Certification (Task #1855)
 
 Both hourly and salaried timesheets now require explicit employee certification before submission:

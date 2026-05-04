@@ -217,10 +217,72 @@ router.get('/by-icn/:icn', async (req: Request, res: Response) => {
     const { icn } = req.params;
     const lot = await storage.getMaterialLotByICN(icn);
 
-    if (!lot) {
-      return res.status(404).json({ error: 'Material lot not found' });
+    if (lot) {
+      return res.json(lot);
     }
-    res.json(lot);
+
+    const [packet] = await db
+      .select()
+      .from(cuttingBuiltPackets)
+      .where(eq(cuttingBuiltPackets.barcode, icn))
+      .limit(1);
+
+    if (packet) {
+      const sources = await db
+        .select({
+          sourceId: cuttingBuiltPacketFabricSources.id,
+          fabricInventoryId: cuttingBuiltPacketFabricSources.fabricInventoryId,
+          fabricType: cuttingBuiltPacketFabricSources.fabricType,
+          lotNumber: cuttingBuiltPacketFabricSources.lotNumber,
+          batchNumber: cuttingBuiltPacketFabricSources.batchNumber,
+          rollNumber: cuttingBuiltPacketFabricSources.rollNumber,
+          supplierPartNumber: cuttingBuiltPacketFabricSources.supplierPartNumber,
+          internalControlNumber: cuttingBuiltPacketFabricSources.internalControlNumber,
+          expirationDate: cuttingBuiltPacketFabricSources.expirationDate,
+          quantityUsed: cuttingBuiltPacketFabricSources.quantityUsed,
+          isPrimary: cuttingBuiltPacketFabricSources.isPrimary,
+          invFabric: cuttingFabricInventory.fabric,
+          invFabricPartNumber: cuttingFabricInventory.fabricPartNumber,
+          invSupplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+          invInternalControlNumber: cuttingFabricInventory.internalControlNumber,
+          invLotNumber: cuttingFabricInventory.lotNumber,
+          invBatchNumber: cuttingFabricInventory.batchNumber,
+          invRollNumber: cuttingFabricInventory.rollNumber,
+          invExpirationDate: cuttingFabricInventory.expirationDate,
+        })
+        .from(cuttingBuiltPacketFabricSources)
+        .leftJoin(
+          cuttingFabricInventory,
+          eq(cuttingBuiltPacketFabricSources.fabricInventoryId, cuttingFabricInventory.id)
+        )
+        .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id));
+
+      const fabricRolls = sources.map(s => ({
+        fabricType: s.fabricType || s.invFabric,
+        lotNumber: s.lotNumber || s.invLotNumber,
+        batchNumber: s.batchNumber || s.invBatchNumber,
+        rollNumber: s.rollNumber || s.invRollNumber,
+        supplierPartNumber: s.supplierPartNumber || s.invSupplierPartNumber || s.invFabricPartNumber,
+        internalControlNumber: s.internalControlNumber || s.invInternalControlNumber,
+        expirationDate: s.expirationDate || s.invExpirationDate,
+        isPrimary: s.isPrimary,
+      }));
+
+      return res.json({
+        icnSource: 'built_packet',
+        packet: {
+          id: packet.id,
+          barcode: packet.barcode,
+          packetNumber: packet.packetNumber,
+          buildDate: packet.buildDate,
+          status: packet.status,
+          isMixedFabric: packet.isMixedFabric,
+        },
+        fabricRolls,
+      });
+    }
+
+    return res.status(404).json({ error: 'No material lot or cutting packet found for this barcode' });
   } catch (error: any) {
     console.error('Error fetching material lot by ICN:', error);
     res.status(500).json({ error: 'Failed to fetch material lot', message: error.message });

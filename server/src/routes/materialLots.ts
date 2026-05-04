@@ -171,7 +171,7 @@ router.get('/by-icn/:icn', async (req: Request, res: Response) => {
 // Validate material lot for consumption
 router.get('/validate/:icn', async (req: Request, res: Response) => {
   try {
-    const { icn } = req.params;
+    const icn = req.params.icn.trim();
     const { qtyNeeded, partNumber } = req.query;
 
     const lot = await storage.getMaterialLotByICN(icn);
@@ -255,10 +255,13 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         });
       }
 
-      // Fallback 2: parse MFG-{queue_id}-{partNumber}-{seq} barcode format
-      const mfgMatch = icn.match(/^MFG-(\d+)-([^-]+)(?:-(\d+))?$/);
-      if (mfgMatch) {
-        const queueId = parseInt(mfgMatch[1], 10);
+      // Fallback 2: parse displayed packet barcode formats:
+      // - MFG-{queue_id}-{partNumber}-{seq}
+      // - {partNumber}-Q{queue_id}-{seq} (legacy generated labels)
+      const mfgMatch = icn.match(/^MFG-(\d+)-(.+?)(?:-(\d+))?$/i);
+      const legacyQueueMatch = icn.match(/^(.+)-Q(\d+)-(\d+)$/i);
+      if (mfgMatch || legacyQueueMatch) {
+        const queueId = parseInt(mfgMatch ? mfgMatch[1] : legacyQueueMatch![2], 10);
         const [queueItem] = await db
           .select()
           .from(manufacturingQueue)
@@ -272,7 +275,9 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           //   where the first exact lookup at line 121 may have missed due to format); (2) match by
           //   queue-ID prefix + packet-number when the scanned barcode includes a sequence component;
           //   (3) broadest queue-ID-prefix-only match ordered by most recent build.
-          const parsedPacketNumber = mfgMatch[3] ? parseInt(mfgMatch[3], 10) : null;
+          const parsedPacketNumber = (mfgMatch?.[3] || legacyQueueMatch?.[3])
+            ? parseInt(mfgMatch?.[3] || legacyQueueMatch![3], 10)
+            : null;
 
           let builtPacketForQueue: typeof cuttingBuiltPackets.$inferSelect | undefined;
 
@@ -284,14 +289,15 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
             .limit(1);
           builtPacketForQueue = exactPacket;
 
-          // Attempt 2: queue-ID prefix + packet-number for deterministic match when seq is present
+          // Attempt 2: stored packet barcodes are PKT-{partNumber}-{queueId}-{packetNumber}-{timestamp}.
+          // The scanned MFG/legacy label is only a display barcode, so resolve it back to the PKT row.
           if (!builtPacketForQueue && parsedPacketNumber !== null) {
             const [seqPacket] = await db
               .select()
               .from(cuttingBuiltPackets)
               .where(
                 and(
-                  like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`),
+                  like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-${parsedPacketNumber}-%`),
                   eq(cuttingBuiltPackets.packetNumber, parsedPacketNumber)
                 )
               )
@@ -300,11 +306,20 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           }
 
           // Attempt 3: broadest queue-ID prefix fallback — most recently built packet wins
+          if (!builtPacketForQueue && parsedPacketNumber !== null) {
+            const packetsForQueue = await db
+              .select()
+              .from(cuttingBuiltPackets)
+              .where(like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-%-%`))
+              .orderBy(asc(cuttingBuiltPackets.id));
+            builtPacketForQueue = packetsForQueue[parsedPacketNumber - 1];
+          }
+
           if (!builtPacketForQueue) {
             const [latestPacket] = await db
               .select()
               .from(cuttingBuiltPackets)
-              .where(like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`))
+              .where(like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-%-%`))
               .orderBy(desc(cuttingBuiltPackets.id))
               .limit(1);
             builtPacketForQueue = latestPacket;
@@ -418,7 +433,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
             }];
           }
 
-          const packetNumber = parseInt(mfgMatch[3] || '1', 10);
+          const packetNumber = parsedPacketNumber || 1;
 
           // Attempt to backfill a real packet record so subsequent scans resolve directly
           let icnSource: 'planned_materials' | 'backfilled_from_queue' = 'planned_materials';

@@ -12,6 +12,9 @@ import {
   travelers,
   travelerSteps,
   travelerTasks,
+  cuttingBuiltPackets,
+  cuttingBuiltPacketFabricSources,
+  cuttingFabricInventory,
   insertP2WorkTaskSchema,
   insertP2SerializedItemEventSchema,
   insertP2SerializedItemTraceabilitySchema,
@@ -23,6 +26,153 @@ import { storage } from '../../storage';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 
 const router = Router();
+
+function getTraceValue(item: any): string {
+  return typeof item?.value === 'string' ? item.value.trim() : '';
+}
+
+function isPacketTraceItem(item: any): boolean {
+  const type = String(item?.type || '').toLowerCase();
+  return Boolean(item?.builtPacketId || item?.packetBarcode || type.includes('packet'));
+}
+
+async function expandAndConsumePacketTraceability(params: {
+  traceabilityData: any[];
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  department: string;
+  recordedBy: string;
+  workTaskId: string;
+}) {
+  const { traceabilityData, serializedItem, department, recordedBy, workTaskId } = params;
+  const expandedTraceability = [...traceabilityData];
+  const packetTraceRecords: Array<typeof p2SerializedItemTraceability.$inferInsert> = [];
+  const consumedPackets: Array<{ id: number; barcode: string; status: string }> = [];
+  const seenPacketIds = new Set<number>();
+
+  for (const item of traceabilityData) {
+    const scanValue = getTraceValue(item);
+    if (!scanValue && !item?.builtPacketId) continue;
+    if (!isPacketTraceItem(item) && item?.type !== 'material_lot') continue;
+
+    let packet = item?.builtPacketId
+      ? await db.query.cuttingBuiltPackets.findFirst({
+          where: eq(cuttingBuiltPackets.id, Number(item.builtPacketId)),
+        })
+      : null;
+
+    if (!packet && scanValue) {
+      packet = await db.query.cuttingBuiltPackets.findFirst({
+        where: eq(cuttingBuiltPackets.barcode, scanValue),
+      });
+    }
+
+    if (!packet || seenPacketIds.has(packet.id)) continue;
+    seenPacketIds.add(packet.id);
+
+    const allocatedToThisItem = [serializedItem.id, serializedItem.barcode, serializedItem.serialNumber]
+      .filter(Boolean)
+      .includes(packet.allocatedToOrder || '');
+
+    const usablePacketStatuses = new Set(['AVAILABLE', 'ALLOCATED']);
+    if (packet.status && !usablePacketStatuses.has(packet.status) && !allocatedToThisItem) {
+      throw new Error(`Packet ${packet.barcode} is already ${packet.status.toLowerCase()}${packet.allocatedToOrder ? ` for ${packet.allocatedToOrder}` : ''}`);
+    }
+
+    const fabricSources = await db
+      .select({
+        sourceId: cuttingBuiltPacketFabricSources.id,
+        fabricInventoryId: cuttingBuiltPacketFabricSources.fabricInventoryId,
+        fabricType: cuttingBuiltPacketFabricSources.fabricType,
+        lotNumber: cuttingBuiltPacketFabricSources.lotNumber,
+        batchNumber: cuttingBuiltPacketFabricSources.batchNumber,
+        rollNumber: cuttingBuiltPacketFabricSources.rollNumber,
+        supplierPartNumber: cuttingBuiltPacketFabricSources.supplierPartNumber,
+        internalControlNumber: cuttingBuiltPacketFabricSources.internalControlNumber,
+        expirationDate: cuttingBuiltPacketFabricSources.expirationDate,
+        quantityUsed: cuttingBuiltPacketFabricSources.quantityUsed,
+        invFabric: cuttingFabricInventory.fabric,
+        invLotNumber: cuttingFabricInventory.lotNumber,
+        invBatchNumber: cuttingFabricInventory.batchNumber,
+        invRollNumber: cuttingFabricInventory.rollNumber,
+        invInternalControlNumber: cuttingFabricInventory.internalControlNumber,
+        invExpirationDate: cuttingFabricInventory.expirationDate,
+        invSupplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+        invFabricPartNumber: cuttingFabricInventory.fabricPartNumber,
+      })
+      .from(cuttingBuiltPacketFabricSources)
+      .leftJoin(
+        cuttingFabricInventory,
+        eq(cuttingBuiltPacketFabricSources.fabricInventoryId, cuttingFabricInventory.id)
+      )
+      .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id));
+
+    await db
+      .update(cuttingBuiltPackets)
+      .set({
+        status: 'CONSUMED',
+        allocatedToOrder: serializedItem.id,
+        consumedAt: new Date(),
+        consumedBy: recordedBy,
+        updatedAt: new Date(),
+        notes: packet.notes
+          ? `${packet.notes}\nConsumed by P2 traveler ${serializedItem.barcode} (${department}) task ${workTaskId}`
+          : `Consumed by P2 traveler ${serializedItem.barcode} (${department}) task ${workTaskId}`,
+      })
+      .where(eq(cuttingBuiltPackets.id, packet.id));
+
+    packetTraceRecords.push({
+      serializedItemId: serializedItem.id,
+      department,
+      inventoryPartId: String(packet.id),
+      inventoryPartNumber: packet.barcode,
+      traceabilityType: 'packet_barcode',
+      traceabilityLabel: 'Packet Barcode',
+      traceabilityValue: packet.barcode,
+      recordedBy,
+    });
+
+    for (const [index, source] of fabricSources.entries()) {
+      const sourceLabel = `Packet ${packet.packetNumber} Source ${index + 1}`;
+      const sourcePartNumber = source.supplierPartNumber || source.invSupplierPartNumber || source.invFabricPartNumber || null;
+      const sourceFields = [
+        ['fabric_type', 'Fabric Type', source.fabricType || source.invFabric],
+        ['fabric_lot_number', 'Fabric Lot Number', source.lotNumber || source.invLotNumber],
+        ['fabric_batch_number', 'Fabric Batch Number', source.batchNumber || source.invBatchNumber],
+        ['fabric_roll_number', 'Fabric Roll Number', source.rollNumber || source.invRollNumber],
+        ['fabric_internal_control_number', 'Fabric Internal Control Number', source.internalControlNumber || source.invInternalControlNumber],
+        ['fabric_supplier_part_number', 'Fabric Supplier Part Number', sourcePartNumber],
+        ['fabric_expiration_date', 'Fabric Expiration Date', source.expirationDate || source.invExpirationDate],
+      ] as const;
+
+      for (const [type, label, rawValue] of sourceFields) {
+        if (rawValue == null || rawValue === '') continue;
+        const value = rawValue instanceof Date ? rawValue.toISOString().slice(0, 10) : String(rawValue);
+        packetTraceRecords.push({
+          serializedItemId: serializedItem.id,
+          department,
+          inventoryPartId: source.fabricInventoryId || null,
+          inventoryPartNumber: sourcePartNumber,
+          traceabilityType: type,
+          traceabilityLabel: `${sourceLabel} - ${label}`,
+          traceabilityValue: value,
+          recordedBy,
+        });
+      }
+    }
+
+    expandedTraceability.push({
+      type: 'packet_consumption',
+      label: 'Packet Consumption',
+      value: packet.barcode,
+      builtPacketId: packet.id,
+      packetBarcode: packet.barcode,
+      fabricSourceCount: fabricSources.length,
+    });
+    consumedPackets.push({ id: packet.id, barcode: packet.barcode, status: 'CONSUMED' });
+  }
+
+  return { expandedTraceability, packetTraceRecords, consumedPackets };
+}
 
 // Department name aliases for matching certifications with routing names
 const DEPARTMENT_ALIASES: Record<string, string[]> = {
@@ -636,6 +786,10 @@ router.post('/start-task', async (req: Request, res: Response) => {
       }
     }
 
+    const incomingTraceabilityData = Array.isArray(traceabilityData)
+      ? traceabilityData.filter((item: any) => getTraceValue(item))
+      : [];
+
     // Validate input - pull denormalized fields from serialized item (use DB values as source of truth)
     const resolvedPartName = partName || serializedItem.partName || serializedItem.partNumber || 'Unknown';
     const resolvedPartNumber = partNumber || serializedItem.partNumber;
@@ -654,7 +808,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       certificationId: certification.id,
       status: 'IN_PROGRESS',
       startedAt: new Date(),
-      traceabilityData,
+      traceabilityData: incomingTraceabilityData,
       customData,
       notes,
     });
@@ -662,12 +816,32 @@ router.post('/start-task', async (req: Request, res: Response) => {
     // Create work task
     const [workTask] = await db.insert(p2WorkTasks).values(validatedData).returning();
 
+    const {
+      expandedTraceability,
+      packetTraceRecords,
+      consumedPackets,
+    } = await expandAndConsumePacketTraceability({
+      traceabilityData: incomingTraceabilityData,
+      serializedItem,
+      department,
+      recordedBy: displayName,
+      workTaskId: workTask.id,
+    });
+
+    if (expandedTraceability.length !== incomingTraceabilityData.length) {
+      await db
+        .update(p2WorkTasks)
+        .set({ traceabilityData: expandedTraceability, updatedAt: new Date() })
+        .where(eq(p2WorkTasks.id, workTask.id));
+      (workTask as any).traceabilityData = expandedTraceability;
+    }
+
     // Save traceability data
-    if (traceabilityData && Array.isArray(traceabilityData) && traceabilityData.length > 0) {
-      const traceabilityRecords = traceabilityData.map((item: any) => ({
+    if (incomingTraceabilityData.length > 0 || packetTraceRecords.length > 0) {
+      const traceabilityRecords = incomingTraceabilityData.map((item: any) => ({
         serializedItemId,
         department,
-        inventoryPartId: item.inventoryPartId || null,
+        inventoryPartId: item.builtPacketId ? String(item.builtPacketId) : (item.inventoryPartId || null),
         inventoryPartNumber: item.inventoryPartNumber || null,
         traceabilityType: item.type,
         traceabilityLabel: item.label,
@@ -675,7 +849,10 @@ router.post('/start-task', async (req: Request, res: Response) => {
         recordedBy: displayName,
       }));
 
-      await db.insert(p2SerializedItemTraceability).values(traceabilityRecords);
+      await db.insert(p2SerializedItemTraceability).values([
+        ...traceabilityRecords,
+        ...packetTraceRecords,
+      ]);
     }
 
     if (customData && Object.keys(customData).length > 0) {
@@ -731,7 +908,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       eventType: 'NOTE',
       performedBy: displayName,
       notes: `Task started in ${department}`,
-      metadata: { taskId: workTask.id, action: 'start_task' },
+      metadata: { taskId: workTask.id, action: 'start_task', consumedPackets },
     });
 
     return res.json({

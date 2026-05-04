@@ -284,6 +284,9 @@ export default function P2TravelerPage() {
     inventoryPartNumber?: string;
     materialIndex?: number;
     materialLabel?: string;
+    builtPacketId?: number;
+    packetBarcode?: string;
+    fabricSourceCount?: number;
     type: string;
     label: string;
     value: string;
@@ -818,18 +821,70 @@ export default function P2TravelerPage() {
     const item = updated[index];
     if (item.type === 'material_lot' && value.trim()) {
       const icn = value.trim();
-      fetch(`/api/material-lots/by-icn/${encodeURIComponent(icn)}`)
-        .then(res => {
-          if (!res.ok) {
-            throw new Error(res.status === 404
-              ? 'No material lot or cutting packet found for this barcode'
-              : 'Failed to look up barcode');
+      fetch(`/api/material-lots/validate/${encodeURIComponent(icn)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(result => {
+          if (!result) return;
+
+          if (result.status === 'PACKET' && result.packet) {
+            setTraceabilityData(prev => {
+              const sourceEntries = (result.fabricRolls || []).flatMap((roll: any, rollIdx: number) => {
+                const prefix = `Packet ${result.packet.packetNumber || result.packet.barcode} Source ${rollIdx + 1}`;
+                const sourcePartNumber = roll.supplierPartNumber || roll.fabricPartNumber || '';
+                return [
+                  { type: 'fabric_lot_number', label: `${prefix} - Lot Number`, value: roll.lotNumber || '' },
+                  { type: 'fabric_batch_number', label: `${prefix} - Batch Number`, value: roll.batchNumber || '' },
+                  { type: 'fabric_roll_number', label: `${prefix} - Roll Number`, value: roll.rollNumber || '' },
+                  { type: 'fabric_internal_control_number', label: `${prefix} - Internal Control Number`, value: roll.internalControlNumber || '' },
+                  { type: 'fabric_supplier_part_number', label: `${prefix} - Supplier Part Number`, value: sourcePartNumber },
+                  { type: 'fabric_expiration_date', label: `${prefix} - Expiration Date`, value: roll.expirationDate ? new Date(roll.expirationDate).toLocaleDateString() : '' },
+                ].filter(entry => entry.value);
+              });
+
+              const withoutExistingPacketDetails = prev
+                .map((field, originalIndex) => ({ field, originalIndex }))
+                .filter(({ field }) => field.materialIndex !== item.materialIndex || ![
+                  'packet_barcode',
+                  'fabric_lot_number',
+                  'fabric_batch_number',
+                  'fabric_roll_number',
+                  'fabric_internal_control_number',
+                  'fabric_supplier_part_number',
+                  'fabric_expiration_date',
+                ].includes(field.type));
+
+              const next = withoutExistingPacketDetails.map(({ field, originalIndex }) => {
+                if (originalIndex !== index) return field;
+                return {
+                  ...field,
+                  type: 'packet_barcode',
+                  label: `${field.materialLabel || 'Material'} - Packet Barcode`,
+                  value: result.packet.barcode,
+                  builtPacketId: result.packet.id,
+                  packetBarcode: result.packet.barcode,
+                  fabricSourceCount: result.fabricRolls?.length || 0,
+                };
+              });
+
+              const materialEntries = sourceEntries.map((entry: any) => ({
+                ...entry,
+                materialIndex: item.materialIndex,
+                materialLabel: item.materialLabel || `Material ${(item.materialIndex ?? 0) + 1}`,
+                builtPacketId: result.packet.id,
+                packetBarcode: result.packet.barcode,
+              }));
+
+              return [...next, ...materialEntries];
+            });
+            toast({
+              title: 'Packet Captured',
+              description: `Linked ${result.packet.barcode} with ${result.fabricRolls?.length || 0} fabric source(s).`,
+            });
+            return;
           }
-          return res.json();
-        })
-        .then(data => {
-          if (data.icnSource === 'built_packet') {
-            const primaryRoll = data.fabricRolls?.find((r: any) => r.isPrimary) || data.fabricRolls?.[0];
+
+          const lot = result.lot || result;
+          if (lot) {
             setTraceabilityData(prev => {
               const next = [...prev];
               const lotField = next.find(

@@ -1,0 +1,128 @@
+Design, but do not implement, a payroll export revision and adjustment model for our DCAA-oriented timekeeping system.
+
+Context:
+- Payroll export is Gusto CSV only.
+- Payroll processing confirmation is manual/human-entered.
+- Only OWNER/ADMIN can create exports, supersede exports, void exports, or mark payroll as processed.
+- Exports are full-period only, not department-specific or partial employee exports.
+- Multiple full exports for the same pay period are allowed before payroll is processed.
+- Every subsequent full export for the same period should create a new revision batch.
+- The previous active unprocessed export should be marked superseded.
+- Exact CSV contents and checksums must be preserved for every export.
+- Re-downloading a historical export must return the exact stored file/rows, not freshly recalculated data.
+- Once a batch is marked processed, it becomes immutable historical evidence.
+- Corrections after processing should not alter the processed batch.
+- Corrections after processing should create payroll adjustments for a future payroll run, with admin choice between:
+  1. include adjustment in next regular payroll export
+  2. create a separate off-cycle correction export
+
+Important policy:
+- If a correction or time edit is attempted after a pay period has an active unprocessed export, the edit should be blocked until an OWNER/ADMIN explicitly supersedes or voids the active export batch with a reason.
+- Do not silently mark active exports stale.
+- Superseding/voiding must be auditable.
+- After superseding, the correction can proceed.
+- The next export for that period should be a full-period revision with revision_number incremented.
+
+Inspect the existing timekeeping schema, Drizzle migrations, timesheets service, Gusto export code, correction workflow, role/permission middleware, and audit logging.
+
+Return:
+
+# Executive Summary
+Explain the recommended model in plain English.
+
+# Proposed Schema
+Include proposed tables/columns for:
+- payroll_export_runs
+- payroll_export_rows
+- payroll_adjustments, if needed
+- changes to timekeeping.timesheets
+- any audit/event tables needed
+
+For each table/column, explain purpose, type, constraints, indexes, and relationships.
+
+# Export Batch Statuses
+Define statuses and permitted transitions.
+
+Include at minimum:
+- active
+- superseded
+- voided
+- processed
+
+Explain whether draft is needed or not.
+
+# Business Rules
+Define exact rules for:
+- creating first export for a pay period
+- creating a subsequent full export before payroll is processed
+- superseding prior active exports
+- voiding an export
+- marking an export as processed
+- re-downloading exports
+- editing/correcting time after active unprocessed export
+- correcting time after processed export
+- creating next-run adjustments
+- creating off-cycle adjustment exports
+
+# Backend Route Plan
+Identify exact existing routes/services that should change and propose new routes.
+
+Include route method/path, required role, input body, output, and side effects.
+
+# Service Logic Plan
+Identify exact services/functions that should change.
+
+Explain:
+- how export rows are generated and stored
+- how CSV checksum is calculated
+- how revision_number is assigned
+- how previous active batches are superseded
+- how exact historical CSV re-download works
+- how processed batches become immutable
+- how correction workflow checks for active/processed exports
+- how adjustments are created and later included in export
+
+# DCAA Audit Trail Considerations
+Explain how this model supports:
+- immutable export evidence
+- employee attestation
+- supervisor/admin approval
+- correction reason tracking
+- before/after snapshots
+- segregation of duties
+- labor distribution reconciliation
+- proof of what was exported and when
+- proof of what was superseded, voided, or processed and why
+
+# UI/UX Requirements
+Propose admin UI behavior for:
+- export list by pay period
+- current active revision
+- superseded/voided historical revisions
+- processed batch marker
+- re-download exact CSV
+- supersede with reason
+- void with reason
+- mark processed with confirmation
+- correction blocked by active export
+- post-processed correction adjustment choice: next regular payroll or off-cycle
+
+# Tests Needed
+List unit/integration tests for:
+- first export creates active revision 1
+- second export before processing supersedes revision 1 and creates active revision 2
+- exact CSV re-download uses stored rows/file
+- correction blocked while active unprocessed export exists
+- correction allowed after explicit supersede
+- processed export cannot be changed
+- correction after processed export creates adjustment
+- next regular export includes approved adjustments
+- off-cycle export includes selected adjustments only
+- only OWNER/ADMIN can export/supersede/void/process
+- audit logs are written for every lifecycle transition
+
+# Implementation Phases
+Give a practical phased implementation plan with file references and migration order.
+
+Do not modify files.
+Do not implement code.

@@ -2618,6 +2618,171 @@ router.post('/schedule-to-cutting', async (req, res) => {
   }
 });
 
+router.post('/bulk-schedule-to-cutting', async (req, res) => {
+  try {
+    const { items, packetType, materialType } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required and must not be empty' });
+    }
+
+    const totalQuantity = items.reduce((sum: number, item: { quantity?: number }) => sum + (item.quantity || 0), 0);
+    if (totalQuantity <= 0) {
+      return res.status(400).json({ error: 'Total quantity must be greater than 0' });
+    }
+
+    const { manufacturingQueue, inventoryItems } = await import('../../schema');
+    const { pool } = await import('../../db');
+
+    const packetName = packetType || 'Stock Packet';
+
+    let validBomId: string | null = null;
+    if (materialType) {
+      const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
+                             materialType === 'fiberglass' ? 'Fiberglass Packet' :
+                             materialType === 'mesa' ? 'Mesa Packet' :
+                             materialType === 'p2_disruptor' ? 'Disruptor' :
+                             materialType === 'p2_disruptor_packet' ? 'Disruptor' :
+                             materialType === 'p2_antenna' ? 'Antenna Cover' : null;
+
+      if (packetTypeName) {
+        const [matchingBom] = await db.select()
+          .from(cuttingPacketBOMs)
+          .where(and(
+            ilike(cuttingPacketBOMs.packetType, `%${packetTypeName}%`),
+            eq(cuttingPacketBOMs.isActive, true)
+          ))
+          .limit(1);
+
+        if (matchingBom) {
+          validBomId = matchingBom.id;
+        }
+      }
+    }
+
+    let inventoryItemId: number | null = null;
+    try {
+      const exactResult = await pool.query(
+        `SELECT id FROM inventory_items WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+        [packetName]
+      );
+      const exactRows = Array.isArray(exactResult) ? exactResult : (exactResult as { rows?: { id: number }[] }).rows || [];
+      if (exactRows.length > 0) {
+        inventoryItemId = exactRows[0].id;
+      }
+
+      if (!inventoryItemId) {
+        const result = await pool.query(
+          `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
+          [`%${packetName}%`]
+        );
+        const rows = Array.isArray(result) ? result : (result as { rows?: { id: number }[] }).rows || [];
+        if (rows.length > 0) {
+          inventoryItemId = rows[0].id;
+        }
+      }
+    } catch (e) {
+      console.log('Could not find inventory item:', e);
+    }
+
+    if (!inventoryItemId) {
+      try {
+        const result = await pool.query(
+          `SELECT id FROM inventory_items WHERE name ILIKE '%packet%' LIMIT 1`
+        );
+        const rows = Array.isArray(result) ? result : (result as { rows?: { id: number }[] }).rows || [];
+        if (rows.length > 0) {
+          inventoryItemId = rows[0].id;
+        }
+      } catch (e) {
+        console.log('Could not find any packet inventory item:', e);
+      }
+    }
+
+    if (!inventoryItemId) {
+      const [newItem] = await db.insert(inventoryItems).values({
+        name: packetName,
+        agPartNumber: `PKT-${materialType?.toUpperCase() || 'STK'}`,
+        category: 'packet',
+        quantityInStock: 0,
+      }).returning();
+      inventoryItemId = newItem.id;
+    }
+
+    const p1MaterialTypes = ['carbon_fiber', 'fiberglass', 'mesa'];
+    if (!p1MaterialTypes.includes(materialType || '')) {
+      try {
+        const cancelResult = await pool.query(
+          `UPDATE manufacturing_queue
+           SET status = 'CANCELLED', updated_at = NOW()
+           WHERE department = 'Cutting Table'
+             AND status = 'PENDING'
+             AND notes IS NOT NULL
+             AND notes ~ '^\\s*\\{'
+             AND notes::jsonb->>'packetName' = $1`,
+          [packetName]
+        );
+        const cancelledCount = (cancelResult as { rowCount?: number }).rowCount || 0;
+        if (cancelledCount > 0) {
+          console.log(`🔄 Cancelled ${cancelledCount} prior PENDING "${packetName}" entr${cancelledCount === 1 ? 'y' : 'ies'} before bulk rescheduling`);
+        }
+      } catch (cancelErr: unknown) {
+        const msg = cancelErr instanceof Error ? cancelErr.message : String(cancelErr);
+        console.warn('⚠️ Could not cancel prior queue entries:', msg);
+      }
+    }
+
+    interface BulkItem { poNumber: string; quantity: number }
+    const poDetails: BulkItem[] = items.map((item: BulkItem) => ({
+      poNumber: item.poNumber,
+      quantity: item.quantity,
+    }));
+
+    const orderId = `BULK-${packetName.replace(/\s+/g, '_').toUpperCase()}-${Date.now()}`;
+
+    const queueNotes = JSON.stringify({
+      orderId,
+      source: 'MANUAL',
+      materialType,
+      bomId: validBomId,
+      userNotes: `Bulk scheduled ${totalQuantity} ${packetName} packets from ${items.length} POs`,
+      isP2Packet: true,
+      packetName,
+      poNumbers: poDetails,
+      p2BackfillApplied: true,
+    });
+
+    const [queueItem] = await db.insert(manufacturingQueue).values({
+      inventoryItemId,
+      department: 'Cutting Table',
+      quantityRequested: totalQuantity,
+      quantityCompleted: 0,
+      priority: 50,
+      status: 'PENDING',
+      dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+      notes: queueNotes,
+      requestedBy: 'system',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+
+    console.log(`✅ Bulk scheduled ${totalQuantity} "${packetName}" packets from ${items.length} POs into queue entry ${queueItem.id}`);
+
+    res.status(201).json({
+      ...queueItem,
+      bomId: validBomId,
+      orderId,
+      source: 'MANUAL',
+      materialType,
+      totalQuantity,
+      poCount: items.length,
+    });
+  } catch (error) {
+    console.error('Error bulk scheduling to cutting queue:', error);
+    res.status(500).json({ error: 'Failed to bulk schedule to cutting queue' });
+  }
+});
+
 // Backfill endpoint: reconcile historical manufacturing_queue P2 entries to their source production orders
 router.post('/backfill-p2-scheduled-status', async (req, res) => {
   try {

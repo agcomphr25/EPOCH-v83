@@ -321,6 +321,29 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
+  const bulkSchedulePacketsMutation = useMutation({
+    mutationFn: async (data: { packetType: string; materialType: string; dueDate: string; items: Array<{ poNumber: string; quantity: number }> }) => {
+      return apiRequest('/api/cutting-table/bulk-schedule-to-cutting', {
+        method: 'POST',
+        body: JSON.stringify({
+          packetType: data.packetType,
+          materialType: data.materialType,
+          dueDate: data.dueDate,
+          items: data.items,
+        }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table', 'ALL'] });
+      setScheduleQuantities({});
+      const totalQty = variables.items.reduce((sum, item) => sum + item.quantity, 0);
+      toast({ title: "Scheduled", description: `${totalQty} ${variables.packetType} packets from ${variables.items.length} POs added to cutting queue as one work order.` });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to bulk schedule packets.", variant: "destructive" });
+    },
+  });
+
   const unscheduleMutation = useMutation({
     mutationFn: async (id: number) => {
       return apiRequest(`/api/cutting-table-mfg-queue/${id}`, {
@@ -741,21 +764,23 @@ export default function CuttingWeeklySchedule() {
                         variant="secondary"
                         onClick={() => {
                           const scheduleKey = `p2_${name.replace(/\s+/g, '_').toLowerCase()}`;
-                          relevantPOs.forEach((po, idx) => {
+                          const bulkItems: Array<{ poNumber: string; quantity: number }> = [];
+                          relevantPOs.forEach((po) => {
                             const item = po.items.find(i => i.name === name);
                             if (item && item.qty > 0) {
-                              const isLast = idx === relevantPOs.length - 1;
-                              schedulePacketsMutation.mutate({
-                                packetType: name,
-                                quantity: item.qty,
-                                materialType: scheduleKey,
-                                poNumber: po.poId,
-                                suppressToast: !isLast,
-                              });
+                              bulkItems.push({ poNumber: po.poId, quantity: item.qty });
                             }
                           });
+                          if (bulkItems.length > 0) {
+                            bulkSchedulePacketsMutation.mutate({
+                              packetType: name,
+                              materialType: scheduleKey,
+                              dueDate: new Date(currentWeek).toISOString(),
+                              items: bulkItems,
+                            });
+                          }
                         }}
-                        disabled={schedulePacketsMutation.isPending || remainingForName === 0}
+                        disabled={bulkSchedulePacketsMutation.isPending || schedulePacketsMutation.isPending || remainingForName === 0}
                         data-testid={`button-schedule-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
                       >
                         <Send className="h-3 w-3 mr-1" />

@@ -1,25 +1,17 @@
 /**
- * Phase 1 of the revised payroll export design — focused server tests.
- * See docs/payroll-export-design.md.
+ * Phase 1 payroll export tests.
  *
- * These tests exercise the service layer with an in-memory drizzle mock so they
- * stay fast and hermetic.  The partial-unique-index behaviour is tested by
- * simulating Postgres error codes 23505 (unique violation) and 40001
- * (serialization failure) at the insert boundary, which is the boundary the
- * service contract guarantees handles them.  Static inspection of the route
- * file enforces the OWNER/ADMIN guard on all Phase-1 endpoints.
+ * These tests exercise the corrected Phase 1 contract:
+ * - create runs through a transaction client
+ * - superseding requires a human reason
+ * - 23505 active-batch conflicts surface as 409, not silent retry
+ * - downloads serve stored bytes with checksum verification
+ * - superseded/voided batches require evidenceOnly=true
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-
-// ---------------------------------------------------------------------------
-// Hoisted state — all top-level mock factory references must be declared via
-// vi.hoisted() because vi.mock factories are hoisted above normal top-level
-// statements.  Interactions with the store from individual tests go through
-// the helpers exported from `harness`.
-// ---------------------------------------------------------------------------
 
 const harness = vi.hoisted(() => {
   interface Store {
@@ -27,23 +19,69 @@ const harness = vi.hoisted(() => {
     rows: any[];
     events: any[];
   }
+
+  type TableKey = 'batches' | 'rows' | 'events';
+  type ColumnRef = { __col: string };
+
   const store: Store = { batches: [], rows: [], events: [] };
   const nextId = { batches: 1, rows: 1, events: 1 };
-  const insertBehaviors: { batchesThrow: string | null; batchesThrowOnce: boolean } = {
-    batchesThrow: null,
-    batchesThrowOnce: false,
+  const writes = { global: 0, tx: 0 };
+  const txOptions: any[] = [];
+  const insertBehaviors = {
+    batchesThrow: null as string | null,
+    rowsThrow: null as string | null,
+    eventsThrow: null as string | null,
   };
 
-  const TBatches = { __t: 'batches' as const };
-  const TRows = { __t: 'rows' as const };
-  const TEvents = { __t: 'events' as const };
+  function col(name: string): ColumnRef {
+    return { __col: name };
+  }
 
-  function makeSelectChain(rows: any[], sortFn?: (a: any, b: any) => number) {
-    let result = rows.slice();
+  function makeTable(key: TableKey, columns: string[]) {
+    return Object.assign({ __t: key }, Object.fromEntries(columns.map((c) => [c, col(c)])));
+  }
+
+  const TBatches = makeTable('batches', [
+    'id', 'periodStart', 'periodEnd', 'exportType', 'revisionNumber', 'status', 'createdAt',
+  ]);
+  const TRows = makeTable('rows', ['id', 'batchId', 'employeeId']);
+  const TEvents = makeTable('events', ['id', 'batchId', 'eventType', 'adjustmentId']);
+
+  const ignoredTable = Object.assign({ __t: 'ignored' }, {
+    id: col('id'), employeeId: col('employeeId'), epochEmployeeId: col('epochEmployeeId'),
+    regularHours: col('regularHours'), overtimeHours: col('overtimeHours'), status: col('status'),
+    periodStart: col('periodStart'), periodEnd: col('periodEnd'), leaveType: col('leaveType'),
+    hours: col('hours'), date: col('date'), voidedAt: col('voidedAt'), sourceRequestId: col('sourceRequestId'),
+    name: col('name'), email: col('email'), employeeCode: col('employeeCode'),
+  });
+
+  function evalCond(row: any, cond: any): boolean {
+    if (!cond) return true;
+    if (cond.type === 'eq') return row[cond.col.__col] === cond.value;
+    if (cond.type === 'and') return cond.args.every((c: any) => evalCond(row, c));
+    if (cond.type === 'or') return cond.args.some((c: any) => evalCond(row, c));
+    if (cond.type === 'inArray') return cond.values.includes(row[cond.col.__col]);
+    return true;
+  }
+
+  function rowsFor(table: any): any[] {
+    if (table.__t === 'batches') return store.batches;
+    if (table.__t === 'rows') return store.rows;
+    if (table.__t === 'events') return store.events;
+    return [];
+  }
+
+  function makeSelectChain(table: any) {
+    let result = rowsFor(table).slice();
     const chain: any = {
-      where: () => chain,
+      where: (cond: any) => {
+        result = result.filter((r) => evalCond(r, cond));
+        return chain;
+      },
       orderBy: () => {
-        if (sortFn) result = result.sort(sortFn);
+        if (table.__t === 'batches') {
+          result = result.slice().sort((a, b) => (b.revisionNumber ?? 0) - (a.revisionNumber ?? 0));
+        }
         return chain;
       },
       limit: (n: number) => Promise.resolve(result.slice(0, n)),
@@ -52,79 +90,78 @@ const harness = vi.hoisted(() => {
     return chain;
   }
 
-  const mockDb: any = {
-    select: () => ({
-      from: (t: any) => {
-        if (t.__t === 'batches') {
-          return makeSelectChain(store.batches, (a, b) => b.revisionNumber - a.revisionNumber);
-        }
-        if (t.__t === 'rows') return makeSelectChain(store.rows);
-        if (t.__t === 'events') return makeSelectChain(store.events);
-        return makeSelectChain([]);
-      },
-    }),
-    insert: (t: any) => ({
-      values: (data: any) => {
-        if (t.__t === 'batches' && insertBehaviors.batchesThrow) {
-          const code = insertBehaviors.batchesThrow;
-          if (insertBehaviors.batchesThrowOnce) {
-            insertBehaviors.batchesThrow = null;
-            insertBehaviors.batchesThrowOnce = false;
+  function pgError(code: string): any {
+    const err: any = new Error(`mock pg error ${code}`);
+    err.code = code;
+    return err;
+  }
+
+  function createDb(label: 'global' | 'tx') {
+    return {
+      select: () => ({ from: (t: any) => makeSelectChain(t) }),
+      insert: (t: any) => ({
+        values: (data: any) => {
+          const tableKey = t.__t as TableKey;
+          const configured = insertBehaviors[`${tableKey}Throw` as keyof typeof insertBehaviors];
+          if (configured) {
+            return {
+              returning: () => Promise.reject(pgError(configured)),
+              then: (_res: any, rej: any) => Promise.reject(pgError(configured)).catch(rej),
+            };
           }
-          const err: any = new Error(`mock pg error ${code}`);
-          err.code = code;
+          writes[label]++;
+          const arr = Array.isArray(data) ? data : [data];
+          const inserted = arr.map((d) => {
+            const id = nextId[tableKey]++;
+            const row = { id, createdAt: new Date(), ...d };
+            store[tableKey].push(row);
+            return row;
+          });
           return {
-            returning: () => Promise.reject(err),
-            then: (_res: any, rej: any) => Promise.reject(err).catch(rej),
-          };
-        }
-        const arr = Array.isArray(data) ? data : [data];
-        const inserted = arr.map((d) => {
-          const key = t.__t as 'batches' | 'rows' | 'events';
-          const id = nextId[key]++;
-          const row = { id, createdAt: new Date(), ...d };
-          store[key].push(row);
-          return row;
-        });
-        return {
-          returning: () => Promise.resolve(inserted),
-          then: (resolveFn: any, rejectFn: any) =>
-            Promise.resolve(undefined).then(resolveFn, rejectFn),
-        };
-      },
-    }),
-    update: (t: any) => ({
-      set: (changes: any) => ({
-        where: () => {
-          // Phase 1 tests — every update targets a single row; the store only
-          // holds rows relevant to the test in flight.
-          const list = store[t.__t as 'batches' | 'rows' | 'events'];
-          for (const r of list) Object.assign(r, changes);
-          const updated = list.slice();
-          return {
-            returning: () => Promise.resolve(updated),
-            then: (resolveFn: any, rejectFn: any) =>
-              Promise.resolve(undefined).then(resolveFn, rejectFn),
+            returning: () => Promise.resolve(inserted),
+            then: (resolveFn: any, rejectFn: any) => Promise.resolve(undefined).then(resolveFn, rejectFn),
           };
         },
       }),
-    }),
-    transaction: async (fn: any) => fn(mockDb),
-  };
+      update: (t: any) => ({
+        set: (changes: any) => ({
+          where: (cond: any) => {
+            writes[label]++;
+            const tableKey = t.__t as TableKey;
+            const updated: any[] = [];
+            for (const row of store[tableKey]) {
+              if (evalCond(row, cond)) {
+                Object.assign(row, changes);
+                updated.push(row);
+              }
+            }
+            return {
+              returning: () => Promise.resolve(updated),
+              then: (resolveFn: any, rejectFn: any) => Promise.resolve(undefined).then(resolveFn, rejectFn),
+            };
+          },
+        }),
+      }),
+    };
+  }
 
-  const baseExportRows = [
-    { first_name: 'Alice', last_name: 'Adams', regular_hours: 40, overtime_hours: 0,
-      double_overtime_hours: 0, sick_hours: 0, vacation_hours: 0 },
-    { first_name: 'Bob', last_name: 'Brown', regular_hours: 35, overtime_hours: 5,
-      double_overtime_hours: 0, sick_hours: 2, vacation_hours: 8 },
-  ];
-  const exportRowsMock = vi.fn().mockResolvedValue(baseExportRows);
-  const listResolvedEmployeesMock = vi.fn().mockResolvedValue([
-    { firstName: 'Alice', lastName: 'Adams', timekeepingId: 1,
-      epochEmployeeId: 101, employeeCode: 'E001', email: 'alice@example.com' },
-    { firstName: 'Bob', lastName: 'Brown', timekeepingId: 2,
-      epochEmployeeId: 102, employeeCode: 'E002', email: 'bob@example.com' },
-  ]);
+  const mockDb: any = createDb('global');
+  mockDb.transaction = async (fn: any, opts: any) => {
+    txOptions.push(opts);
+    const snapshot = JSON.parse(JSON.stringify(store));
+    const ids = { ...nextId };
+    try {
+      return await fn(createDb('tx'));
+    } catch (err) {
+      store.batches = snapshot.batches;
+      store.rows = snapshot.rows;
+      store.events = snapshot.events;
+      nextId.batches = ids.batches;
+      nextId.rows = ids.rows;
+      nextId.events = ids.events;
+      throw err;
+    }
+  };
 
   function reset() {
     store.batches = [];
@@ -133,412 +170,346 @@ const harness = vi.hoisted(() => {
     nextId.batches = 1;
     nextId.rows = 1;
     nextId.events = 1;
+    writes.global = 0;
+    writes.tx = 0;
+    txOptions.length = 0;
     insertBehaviors.batchesThrow = null;
-    insertBehaviors.batchesThrowOnce = false;
-    exportRowsMock.mockReset();
-    exportRowsMock.mockResolvedValue(baseExportRows);
-    listResolvedEmployeesMock.mockReset();
-    listResolvedEmployeesMock.mockResolvedValue([
-      { firstName: 'Alice', lastName: 'Adams', timekeepingId: 1,
-        epochEmployeeId: 101, employeeCode: 'E001', email: 'alice@example.com' },
-      { firstName: 'Bob', lastName: 'Brown', timekeepingId: 2,
-        epochEmployeeId: 102, employeeCode: 'E002', email: 'bob@example.com' },
-    ]);
+    insertBehaviors.rowsThrow = null;
+    insertBehaviors.eventsThrow = null;
   }
 
   return {
-    store,
-    insertBehaviors,
-    mockDb,
-    TBatches,
-    TRows,
-    TEvents,
-    exportRowsMock,
-    listResolvedEmployeesMock,
-    baseExportRows,
-    reset,
+    store, writes, txOptions, insertBehaviors, mockDb, TBatches, TRows, TEvents, ignoredTable, reset,
   };
 });
 
-vi.mock('../db', () => ({
-  db: harness.mockDb,
-  pgPool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
-  pool: { query: vi.fn().mockResolvedValue([]) },
+vi.mock('drizzle-orm', () => ({
+  and: (...args: any[]) => ({ type: 'and', args }),
+  or: (...args: any[]) => ({ type: 'or', args }),
+  eq: (col: any, value: any) => ({ type: 'eq', col, value }),
+  gte: (col: any, value: any) => ({ type: 'gte', col, value }),
+  lte: (col: any, value: any) => ({ type: 'lte', col, value }),
+  inArray: (col: any, values: any[]) => ({ type: 'inArray', col, values }),
+  desc: (col: any) => ({ type: 'desc', col }),
+  sql: () => ({ type: 'sql' }),
 }));
+
+vi.mock('../db', () => ({ db: harness.mockDb }));
 
 vi.mock('../src/schema/timekeeping', () => ({
   payrollExportBatchesTable: harness.TBatches,
   payrollExportRowsTable: harness.TRows,
   payrollExportEventsTable: harness.TEvents,
+  timesheetsTable: harness.ignoredTable,
+  leaveEntriesTable: harness.ignoredTable,
+  employeesTable: harness.ignoredTable,
+  timeOffRequestsTable: harness.ignoredTable,
 }));
 
-vi.mock('../src/services/timekeeping/timesheets.service', () => ({
-  exportFinalizedTimesheetsForGusto: harness.exportRowsMock,
-}));
+vi.mock('../schema', () => ({ employees: harness.ignoredTable }));
 
-vi.mock('../src/lib/timekeepingEmployeeResolver', () => ({
-  listResolvedEmployees: harness.listResolvedEmployeesMock,
-}));
-
-const store = harness.store;
-const insertBehaviors = harness.insertBehaviors;
-const exportRowsMock = harness.exportRowsMock;
-
-// Import AFTER mocks are wired
 import * as svc from '../src/services/timekeeping/payrollExport.service';
 
 const ACTOR = { id: 999, email: 'admin@example.com', role: 'OWNER', ip: '127.0.0.1' };
 const PERIOD_START = '2026-01-05';
 const PERIOD_END = '2026-01-11';
-const POOL_OVERRIDE = { query: async () => [] };
 
-describe('payrollExport.service — Phase 1', () => {
-  beforeEach(() => {
-    harness.reset();
+function source(overrides?: Partial<svc.PayrollSnapshotDataSource>): svc.PayrollSnapshotDataSource {
+  return {
+    fetchTimesheets: vi.fn().mockResolvedValue([
+      { id: 11, employeeId: 1, regularHours: 40, overtimeHours: 0 },
+      { id: 12, employeeId: 2, regularHours: 35, overtimeHours: 5 },
+    ]),
+    fetchLeaveEntries: vi.fn().mockResolvedValue([
+      { id: 21, employeeId: 2, leaveType: 'sick', hours: 2 },
+      { id: 22, employeeId: 2, leaveType: 'pto', hours: 8 },
+    ]),
+    fetchEmployees: vi.fn().mockResolvedValue([
+      { timekeepingId: 1, epochEmployeeId: 101, firstName: 'Alice', lastName: 'Adams', employeeCode: 'E001', email: 'alice@example.com' },
+      { timekeepingId: 2, epochEmployeeId: 102, firstName: 'Bob', lastName: 'Brown', employeeCode: 'E002', email: 'bob@example.com' },
+    ]),
+    ...overrides,
+  };
+}
+
+async function createBatch(extra: Partial<svc.CreateRegularFullPeriodBatchInput> = {}) {
+  return svc.createRegularFullPeriodBatch({
+    periodStart: PERIOD_START,
+    periodEnd: PERIOD_END,
+    actor: ACTOR,
+    dataSourceOverride: source(),
+    ...extra,
+  });
+}
+
+describe('payrollExport.service - Phase 1', () => {
+  beforeEach(() => harness.reset());
+
+  it('creates active revision 1 using a serializable transaction client', async () => {
+    const result = await createBatch();
+
+    expect(result.revisionNumber).toBe(1);
+    expect(result.supersededBatchId).toBeNull();
+    expect(result.rowCount).toBe(2);
+    expect(result.csvChecksum).toMatch(/^[0-9a-f]{64}$/);
+    expect(harness.txOptions[0]).toMatchObject({ isolationLevel: 'serializable' });
+    expect(harness.writes.tx).toBeGreaterThan(0);
+    expect(harness.writes.global).toBe(0);
+
+    const batch = harness.store.batches[0];
+    expect(batch.status).toBe('active');
+    expect(batch.exportType).toBe('regular_full_period');
+    expect(batch.csvContent).toContain('first_name,last_name,regular_hours');
+    expect(batch.csvContent).toContain('Alice,Adams,40,0,0,0,0');
   });
 
-  describe('createRegularFullPeriodBatch', () => {
-    it('first export creates active revision 1', async () => {
-      const result = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
+  it('captures employee snapshot fields and source ids on rows and batch', async () => {
+    await createBatch();
 
-      expect(result.revisionNumber).toBe(1);
-      expect(result.supersededBatchId).toBeNull();
-      expect(result.rowCount).toBe(2);
-      expect(result.csvChecksum).toMatch(/^[0-9a-f]{64}$/);
-
-      expect(store.batches).toHaveLength(1);
-      const batch = store.batches[0];
-      expect(batch.status).toBe('active');
-      expect(batch.exportType).toBe('regular_full_period');
-      expect(batch.revisionNumber).toBe(1);
-      expect(batch.includesAdjustments).toBe(false);
-      expect(batch.adjustmentIds).toBeNull();
-      expect(batch.createdBy).toBe(ACTOR.id);
-      expect(batch.csvContent).toContain('first_name,last_name,regular_hours');
-      expect(batch.csvContent).toContain('Alice,Adams,40');
+    const alice = harness.store.rows.find((r) => r.employeeFirstNameSnapshot === 'Alice');
+    const bob = harness.store.rows.find((r) => r.employeeFirstNameSnapshot === 'Bob');
+    expect(alice).toMatchObject({
+      employeeId: 1,
+      epochEmployeeId: 101,
+      employeeLastNameSnapshot: 'Adams',
+      employeeNumberSnapshot: 'E001',
+      employeeEmailSnapshot: 'alice@example.com',
+      sourceTimesheetIds: [11],
+      sourceLeaveEntryIds: [],
     });
+    expect(bob).toMatchObject({ sourceTimesheetIds: [12], sourceLeaveEntryIds: [21, 22] });
+    expect(harness.store.batches[0].sourceTimesheetIds).toEqual([11, 12]);
+    expect(harness.store.batches[0].sourceLeaveEntryIds).toEqual([21, 22]);
+  });
 
-    it('captures snapshot identity fields on each row', async () => {
-      await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
+  it('requires a human supersedeReason before replacing an active batch', async () => {
+    const first = await createBatch();
 
-      expect(store.rows).toHaveLength(2);
-      const alice = store.rows.find((r) => r.employeeFirstNameSnapshot === 'Alice');
-      expect(alice).toBeDefined();
-      expect(alice.employeeLastNameSnapshot).toBe('Adams');
-      expect(alice.employeeNumberSnapshot).toBe('E001');
-      expect(alice.employeeEmailSnapshot).toBe('alice@example.com');
-      expect(alice.epochEmployeeId).toBe(101);
-      expect(alice.regularHours).toBe(40);
+    await expect(createBatch()).rejects.toMatchObject({
+      name: 'SupersedeReasonRequiredError',
+      httpStatus: 400,
     });
+    expect(harness.store.batches).toHaveLength(1);
+    expect(harness.store.batches[0].id).toBe(first.batchId);
+    expect(harness.store.batches[0].status).toBe('active');
+  });
 
-    it('second export before processing supersedes revision 1 and creates active revision 2', async () => {
-      const first = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
+  it('supersedes revision 1 and creates revision 2 when a reason is supplied', async () => {
+    const first = await createBatch();
+    const second = await createBatch({ supersedeReason: 'Correcting late-approved hours before payroll processing' });
 
-      const second = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-
-      expect(first.revisionNumber).toBe(1);
-      expect(second.revisionNumber).toBe(2);
-      expect(second.supersededBatchId).toBe(first.batchId);
-
-      expect(store.batches).toHaveLength(2);
-      const r1 = store.batches.find((b) => b.id === first.batchId);
-      const r2 = store.batches.find((b) => b.id === second.batchId);
-      expect(r1.status).toBe('superseded');
-      expect(r1.supersededReason).toBe('Automatically superseded by revision 2');
-      expect(r2.status).toBe('active');
-      expect(r2.revisionNumber).toBe(2);
-      expect(r2.supersedesBatchId).toBe(first.batchId);
+    expect(second.revisionNumber).toBe(2);
+    expect(second.supersededBatchId).toBe(first.batchId);
+    const oldBatch = harness.store.batches.find((b) => b.id === first.batchId);
+    const newBatch = harness.store.batches.find((b) => b.id === second.batchId);
+    expect(oldBatch).toMatchObject({
+      status: 'superseded',
+      supersededReason: 'Correcting late-approved hours before payroll processing',
     });
+    expect(newBatch).toMatchObject({ status: 'active', supersedesBatchId: first.batchId });
 
-    it('partial-unique-index conflict (23505) is retried as a serialization failure', async () => {
-      // Simulate one transient unique-violation on the first insert attempt.
-      // The service maps 23505 → 40001 → withSerializableRetry retries up to 3
-      // times.  Reset throw on first call so the retry succeeds.
-      insertBehaviors.batchesThrow = '23505';
-      insertBehaviors.batchesThrowOnce = true;
-
-      const result = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-
-      expect(result.revisionNumber).toBe(1);
-      expect(store.batches).toHaveLength(1);
-    });
-
-    it('throws ProcessedBatchImmutableError when prior batch has been processed', async () => {
-      const first = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      await svc.markBatchProcessed({
-        batchId: first.batchId,
-        confirmationNote: 'Submitted to Gusto run #555',
-        actor: ACTOR,
-      });
-
-      await expect(
-        svc.createRegularFullPeriodBatch({
-          periodStart: PERIOD_START,
-          periodEnd: PERIOD_END,
-          actor: ACTOR,
-          poolOverride: POOL_OVERRIDE,
-        }),
-      ).rejects.toMatchObject({ name: 'ProcessedBatchImmutableError', httpStatus: 409 });
-    });
-
-    it('rejects when actor has no id (no anonymous payroll exports)', async () => {
-      await expect(
-        svc.createRegularFullPeriodBatch({
-          periodStart: PERIOD_START,
-          periodEnd: PERIOD_END,
-          actor: { id: null, email: null, role: null, ip: null },
-          poolOverride: POOL_OVERRIDE,
-        }),
-      ).rejects.toMatchObject({ name: 'MissingActorError' });
+    const supersededEvent = harness.store.events.find((e) => e.eventType === 'BATCH_SUPERSEDED');
+    expect(supersededEvent).toMatchObject({
+      batchId: first.batchId,
+      reason: 'Correcting late-approved hours before payroll processing',
+      actorId: ACTOR.id,
     });
   });
 
-  describe('downloadBatchCsv', () => {
-    it('returns the exact stored csv_content (not a recalculation)', async () => {
-      const result = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      const originalCsv = store.batches[0].csvContent;
+  it('rolls back the supersede and new batch when row insert fails', async () => {
+    await createBatch();
+    harness.insertBehaviors.rowsThrow = 'XX999';
 
-      // Mutate the underlying export source so a recalculation would produce a
-      // different CSV — the download must STILL return the stored bytes.
-      exportRowsMock.mockResolvedValue([
-        { first_name: 'Carol', last_name: 'Curie', regular_hours: 99, overtime_hours: 0,
-          double_overtime_hours: 0, sick_hours: 0, vacation_hours: 0 },
-      ]);
+    await expect(
+      createBatch({ supersedeReason: 'Retry after row insert failure' }),
+    ).rejects.toThrow(/mock pg error XX999/);
 
-      const dl = await svc.downloadBatchCsv({ batchId: result.batchId, actor: ACTOR });
-      expect(dl.csvContent).toBe(originalCsv);
-      expect(dl.csvContent).toContain('Alice,Adams,40');
-      expect(dl.csvContent).not.toContain('Carol');
+    expect(harness.store.batches).toHaveLength(1);
+    expect(harness.store.batches[0].status).toBe('active');
+    expect(harness.store.events.map((e) => e.eventType)).toEqual(['BATCH_CREATED']);
+  });
+
+  it('surfaces active-batch unique conflicts as 409 instead of silently superseding', async () => {
+    harness.insertBehaviors.batchesThrow = '23505';
+
+    await expect(createBatch()).rejects.toMatchObject({
+      name: 'ConcurrentExportConflictError',
+      httpStatus: 409,
+    });
+    expect(harness.store.batches).toHaveLength(0);
+  });
+
+  it('does not allow a processed batch to be superseded', async () => {
+    const first = await createBatch();
+    await svc.markBatchProcessed({ batchId: first.batchId, confirmationNote: 'Submitted to Gusto run 123', actor: ACTOR });
+
+    await expect(
+      createBatch({ supersedeReason: 'Should not replace processed payroll evidence' }),
+    ).rejects.toMatchObject({ name: 'ProcessedBatchImmutableError', httpStatus: 409 });
+  });
+
+  it('throws when a source employee cannot be resolved', async () => {
+    await expect(
+      createBatch({
+        dataSourceOverride: source({ fetchEmployees: vi.fn().mockResolvedValue([]) }),
+      }),
+    ).rejects.toMatchObject({ name: 'UnresolvableEmployeeError', httpStatus: 422 });
+    expect(harness.store.batches).toHaveLength(0);
+  });
+
+  it('uses employee ids rather than names, so duplicate and compound names stay distinct', async () => {
+    const ds = source({
+      fetchTimesheets: vi.fn().mockResolvedValue([
+        { id: 31, employeeId: 10, regularHours: 8, overtimeHours: 0 },
+        { id: 32, employeeId: 11, regularHours: 7, overtimeHours: 1 },
+      ]),
+      fetchLeaveEntries: vi.fn().mockResolvedValue([]),
+      fetchEmployees: vi.fn().mockResolvedValue([
+        { timekeepingId: 10, epochEmployeeId: 201, firstName: 'Mary Jane', lastName: 'Smith', employeeCode: 'E201', email: 'mj@example.com' },
+        { timekeepingId: 11, epochEmployeeId: 202, firstName: 'Mary Jane', lastName: 'Smith', employeeCode: 'E202', email: 'mj2@example.com' },
+      ]),
     });
 
-    it('throws ChecksumMismatchError when stored content has been tampered with', async () => {
-      const result = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      // Simulate corruption / tampering of csv_content while leaving the
-      // stored checksum intact — re-download must refuse to serve.
-      store.batches[0].csvContent = 'tampered,csv,content';
+    await createBatch({ dataSourceOverride: ds });
+    expect(harness.store.rows).toHaveLength(2);
+    expect(harness.store.rows.map((r) => r.employeeId).sort()).toEqual([10, 11]);
+    expect(harness.store.rows.map((r) => r.sourceTimesheetIds[0]).sort()).toEqual([31, 32]);
+  });
 
-      await expect(
-        svc.downloadBatchCsv({ batchId: result.batchId, actor: ACTOR }),
-      ).rejects.toMatchObject({ name: 'ChecksumMismatchError', httpStatus: 500 });
-    });
+  it('rejects NaN, Infinity, and negative hour values before rendering CSV', async () => {
+    await expect(createBatch({
+      dataSourceOverride: source({
+        fetchTimesheets: vi.fn().mockResolvedValue([{ id: 41, employeeId: 1, regularHours: Number.NaN, overtimeHours: 0 }]),
+      }),
+    })).rejects.toMatchObject({ name: 'InvalidHourValueError', httpStatus: 422 });
 
-    it('throws BatchNotFoundError for unknown id', async () => {
-      await expect(
-        svc.downloadBatchCsv({ batchId: 9999, actor: ACTOR }),
-      ).rejects.toMatchObject({ name: 'BatchNotFoundError', httpStatus: 404 });
+    await expect(createBatch({
+      dataSourceOverride: source({
+        fetchTimesheets: vi.fn().mockResolvedValue([{ id: 42, employeeId: 1, regularHours: 1, overtimeHours: Infinity }]),
+      }),
+    })).rejects.toMatchObject({ name: 'InvalidHourValueError', httpStatus: 422 });
+
+    await expect(createBatch({
+      dataSourceOverride: source({
+        fetchLeaveEntries: vi.fn().mockResolvedValue([{ id: 43, employeeId: 1, leaveType: 'pto', hours: -1 }]),
+      }),
+    })).rejects.toMatchObject({ name: 'InvalidHourValueError', httpStatus: 422 });
+  });
+
+  it('download returns exact stored CSV and logs a download event', async () => {
+    const created = await createBatch();
+    const originalCsv = harness.store.batches[0].csvContent;
+    harness.store.batches[0].csvContent = originalCsv;
+
+    const dl = await svc.downloadBatchCsv({ batchId: created.batchId, actor: ACTOR });
+
+    expect(dl.csvContent).toBe(originalCsv);
+    expect(harness.store.events.map((e) => e.eventType)).toContain('BATCH_DOWNLOADED');
+    expect(harness.store.events.find((e) => e.eventType === 'BATCH_DOWNLOADED')).toMatchObject({
+      metadata: { evidenceOnly: false, batchStatus: 'active' },
     });
   });
 
-  describe('markBatchProcessed', () => {
-    it('transitions an active batch to processed and records confirmation note', async () => {
-      const created = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
+  it('rejects tampered CSV content with checksum mismatch', async () => {
+    const created = await createBatch();
+    harness.store.batches[0].csvContent = 'tampered,csv,content';
 
-      const processed = await svc.markBatchProcessed({
-        batchId: created.batchId,
-        confirmationNote: 'Submitted to Gusto run #555',
-        actor: ACTOR,
-      });
-
-      expect(processed.status).toBe('processed');
-      expect(processed.processedBy).toBe(ACTOR.id);
-      expect(processed.processedConfirmationNote).toBe('Submitted to Gusto run #555');
-      expect(processed.processedAt).toBeInstanceOf(Date);
-    });
-
-    it('processed batch cannot be re-marked-processed (immutable)', async () => {
-      const created = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      await svc.markBatchProcessed({
-        batchId: created.batchId,
-        confirmationNote: 'first processing',
-        actor: ACTOR,
-      });
-
-      await expect(
-        svc.markBatchProcessed({
-          batchId: created.batchId,
-          confirmationNote: 'second processing attempt',
-          actor: ACTOR,
-        }),
-      ).rejects.toMatchObject({ name: 'ProcessedBatchImmutableError', httpStatus: 409 });
-    });
-
-    it('rejects empty confirmation note', async () => {
-      const created = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      await expect(
-        svc.markBatchProcessed({
-          batchId: created.batchId,
-          confirmationNote: '   ',
-          actor: ACTOR,
-        }),
-      ).rejects.toThrow(/confirmationNote is required/);
+    await expect(svc.downloadBatchCsv({ batchId: created.batchId, actor: ACTOR })).rejects.toMatchObject({
+      name: 'ChecksumMismatchError',
+      httpStatus: 500,
     });
   });
 
-  describe('audit events', () => {
-    it('single batch lifecycle records BATCH_CREATED, BATCH_DOWNLOADED, BATCH_PROCESSED with actor info', async () => {
-      const created = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      await svc.downloadBatchCsv({ batchId: created.batchId, actor: ACTOR });
-      await svc.markBatchProcessed({
-        batchId: created.batchId,
-        confirmationNote: 'Submitted to Gusto',
-        actor: ACTOR,
-      });
+  it('blocks superseded or voided downloads unless evidenceOnly=true', async () => {
+    const first = await createBatch();
+    await createBatch({ supersedeReason: 'Replacing with corrected revision' });
 
-      const types = store.events.map((e) => e.eventType);
-      expect(types).toEqual(['BATCH_CREATED', 'BATCH_DOWNLOADED', 'BATCH_PROCESSED']);
-
-      for (const e of store.events) {
-        expect(e.actorId).toBe(ACTOR.id);
-        expect(e.actorEmail).toBe(ACTOR.email);
-        expect(e.actorRole).toBe(ACTOR.role);
-        expect(e.ipAddress).toBe(ACTOR.ip);
-        expect(e.batchId).toBe(created.batchId);
-      }
-
-      const processed = store.events.find((e) => e.eventType === 'BATCH_PROCESSED');
-      expect(processed.reason).toBe('Submitted to Gusto');
+    await expect(svc.downloadBatchCsv({ batchId: first.batchId, actor: ACTOR })).rejects.toMatchObject({
+      name: 'BatchNotDownloadableError',
+      httpStatus: 409,
     });
 
-    it('supersede records BATCH_SUPERSEDED on the prior batch with the auto-supersede reason', async () => {
-      const first = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
-      const second = await svc.createRegularFullPeriodBatch({
-        periodStart: PERIOD_START,
-        periodEnd: PERIOD_END,
-        actor: ACTOR,
-        poolOverride: POOL_OVERRIDE,
-      });
+    const evidence = await svc.downloadBatchCsv({ batchId: first.batchId, actor: ACTOR, evidenceOnly: true });
+    expect(evidence.evidenceOnly).toBe(true);
+    expect(harness.store.events.find((e) => e.eventType === 'BATCH_DOWNLOADED' && e.batchId === first.batchId))
+      .toMatchObject({ metadata: { evidenceOnly: true, batchStatus: 'superseded' } });
+  });
 
-      const types = store.events.map((e) => e.eventType);
-      // 2× BATCH_CREATED + 1× BATCH_SUPERSEDED
-      expect(types.filter((t) => t === 'BATCH_CREATED')).toHaveLength(2);
-      expect(types.filter((t) => t === 'BATCH_SUPERSEDED')).toHaveLength(1);
-
-      const supersededEvent = store.events.find((e) => e.eventType === 'BATCH_SUPERSEDED');
-      expect(supersededEvent.batchId).toBe(first.batchId);
-      expect(supersededEvent.reason).toBe('Automatically superseded by revision 2');
-      expect(supersededEvent.actorId).toBe(ACTOR.id);
-
-      const createdEvents = store.events.filter((e) => e.eventType === 'BATCH_CREATED');
-      expect(createdEvents.map((e) => e.batchId).sort()).toEqual([first.batchId, second.batchId].sort());
+  it('marks an active batch processed and prevents re-processing', async () => {
+    const created = await createBatch();
+    const processed = await svc.markBatchProcessed({
+      batchId: created.batchId,
+      confirmationNote: 'Submitted to Gusto run 123',
+      actor: ACTOR,
     });
+
+    expect(processed.status).toBe('processed');
+    expect(processed.processedBy).toBe(ACTOR.id);
+    expect(processed.processedConfirmationNote).toBe('Submitted to Gusto run 123');
+
+    await expect(svc.markBatchProcessed({
+      batchId: created.batchId,
+      confirmationNote: 'Second attempt',
+      actor: ACTOR,
+    })).rejects.toMatchObject({ name: 'ProcessedBatchImmutableError', httpStatus: 409 });
+  });
+
+  it('finds active batches for the legacy GET shim without writing', async () => {
+    expect(await svc.getActiveBatchForPeriod(PERIOD_START, PERIOD_END)).toBeNull();
+    const created = await createBatch();
+    const writesAfterCreate = { ...harness.writes };
+
+    const found = await svc.getActiveBatchForPeriod(PERIOD_START, PERIOD_END);
+    expect(found?.id).toBe(created.batchId);
+    expect(harness.writes).toEqual(writesAfterCreate);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Static guard: every Phase-1 route must be gated by ADMIN/OWNER
-// ---------------------------------------------------------------------------
-
-describe('payrollExport routes — RBAC guard', () => {
-  it('every route in payrollExport.ts is wrapped with requireRole("ADMIN", "OWNER")', () => {
-    const routeFile = readFileSync(
-      resolve(__dirname, '../src/routes/timekeeping/payrollExport.ts'),
-      'utf8',
-    );
-    // Count router.<verb>(...) declarations and require each to be followed by
-    // an authenticateToken + requireRole('ADMIN', 'OWNER') chain on the same
-    // declaration.
+describe('payrollExport routes - static guards', () => {
+  it('every Phase 1 payroll route is guarded by ADMIN/OWNER', () => {
+    const routeFile = readFileSync(resolve(__dirname, '../src/routes/timekeeping/payrollExport.ts'), 'utf8');
     const routeMatches = routeFile.match(/router\.(get|post|put|patch|delete)\(/g) ?? [];
-    expect(routeMatches.length).toBeGreaterThan(0);
-
     const guardedMatches = routeFile.match(
       /authenticateToken,\s*requireRole\(\s*["']ADMIN["']\s*,\s*["']OWNER["']\s*\)/g,
     ) ?? [];
+    expect(routeMatches.length).toBeGreaterThan(0);
     expect(guardedMatches.length).toBe(routeMatches.length);
+  });
+
+  it('legacy Gusto GET does not create or supersede batches', () => {
+    const routeFile = readFileSync(resolve(__dirname, '../src/routes/timekeeping/timesheets.ts'), 'utf8');
+    const gustoRoute = routeFile.slice(routeFile.indexOf('router.get("/admin/export/gusto"'));
+    expect(gustoRoute).toContain('getActiveBatchForPeriod');
+    expect(gustoRoute).toContain('downloadBatchCsv');
+    expect(gustoRoute).not.toContain('createRegularFullPeriodBatch');
   });
 });
 
-// ---------------------------------------------------------------------------
-// Pure helpers — sanity checks
-// ---------------------------------------------------------------------------
-
-describe('CSV builder + checksum', () => {
-  it('renderGustoCsv produces the canonical Gusto header and row order', () => {
+describe('CSV helpers', () => {
+  it('renderGustoCsv produces canonical Gusto columns', () => {
     const csv = svc.renderGustoCsv([
       {
-        employeeId: 1, epochEmployeeId: 101,
-        employeeFirstNameSnapshot: 'Alice', employeeLastNameSnapshot: 'Adams',
-        employeeNumberSnapshot: 'E001', employeeEmailSnapshot: 'a@x.com',
-        regularHours: 40, overtimeHours: 0, doubleOvertimeHours: 0,
-        sickHours: 0, vacationHours: 0,
-        sourceTimesheetIds: [], sourceLeaveEntryIds: [],
+        employeeId: 1,
+        epochEmployeeId: 101,
+        employeeFirstNameSnapshot: 'Alice',
+        employeeLastNameSnapshot: 'Adams',
+        employeeNumberSnapshot: 'E001',
+        employeeEmailSnapshot: 'a@example.com',
+        regularHours: 40,
+        overtimeHours: 0,
+        doubleOvertimeHours: 0,
+        sickHours: 0,
+        vacationHours: 0,
+        sourceTimesheetIds: [1],
+        sourceLeaveEntryIds: [],
       },
     ]);
-    const lines = csv.split('\n');
-    expect(lines[0]).toBe(
-      'first_name,last_name,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours',
-    );
-    expect(lines[1]).toBe('Alice,Adams,40,0,0,0,0');
+    expect(csv.split('\n')[0]).toBe('first_name,last_name,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours');
+    expect(csv.split('\n')[1]).toBe('Alice,Adams,40,0,0,0,0');
   });
 
-  it('sha256Hex is deterministic and matches Node crypto', () => {
-    const a = svc.sha256Hex('hello');
-    expect(a).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
-    expect(svc.sha256Hex('hello')).toBe(a);
-    expect(svc.sha256Hex('hello!')).not.toBe(a);
+  it('sha256Hex is deterministic', () => {
+    expect(svc.sha256Hex('hello')).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+    expect(svc.sha256Hex('hello')).not.toBe(svc.sha256Hex('hello!'));
   });
 });

@@ -2,7 +2,11 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 
-if (!process.env.DATABASE_URL) {
+const connectionString =
+  process.env.FORCE_DATABASE_URL ||
+  process.env.DATABASE_URL;
+
+if (!connectionString) {
   throw new Error(
     'DATABASE_URL must be set. Did you forget to provision a database?'
   );
@@ -11,7 +15,7 @@ if (!process.env.DATABASE_URL) {
 console.log('Initializing database connection...');
 
 export const pgPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
 });
 
 export const db = drizzle({ client: pgPool, schema });

@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { hasRouteAccess, hasFullAccess } from '@/config/userPermissions';
+import { hasRouteAccess, hasFullAccess, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import AccessDenied from '@/pages/AccessDenied';
 
@@ -81,7 +81,7 @@ function isOwnPersonalDashboard(username: string, route: string): boolean {
   return lowerRoute === `/${lowerUsername}-dashboard`;
 }
 
-function computeAccess(currentUser: UserData | null | undefined, location: string): boolean {
+function computeAccess(currentUser: UserData | null | undefined, location: string, capabilitySet?: Set<string>): boolean {
   if (isPublicRoute(location)) return true;
 
   if (!currentUser) return false;
@@ -91,6 +91,14 @@ function computeAccess(currentUser: UserData | null | undefined, location: strin
 
   if (isOwnPersonalDashboard(username, location)) return true;
   if (hasFullAccess(username)) return true;
+
+  const requiredCap = getRequiredCapability(location);
+  if (requiredCap) {
+    const roleUpper = userRole.toUpperCase();
+    if (roleUpper === 'ADMIN' || roleUpper === 'OWNER') return true;
+    if (capabilitySet && capabilitySet.has(requiredCap)) return true;
+    return hasRouteAccess(username, location, userRole);
+  }
 
   return hasRouteAccess(username, location, userRole);
 }
@@ -156,6 +164,16 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     retry: false,
   });
 
+  const { data: permissionsData } = useQuery<{ permissions: string[] }>({
+    queryKey: ['/api/permissions/me'],
+    staleTime: 5 * 60 * 1000,
+    enabled: !!currentUser,
+  });
+  const capabilitySet = useMemo(
+    () => new Set(permissionsData?.permissions ?? []),
+    [permissionsData],
+  );
+
   // Redirect unauthenticated users to /login after auth query settles.
   // Using useEffect to keep the redirect as a side effect rather than
   // performing navigation during render, which avoids React strict-mode warnings.
@@ -181,8 +199,8 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     return null;
   }
 
-  // Authenticated — check route-level permissions
-  const access = computeAccess(currentUser, location);
+  // Authenticated — check route-level permissions (including capability-gated routes)
+  const access = computeAccess(currentUser, location, capabilitySet);
 
   if (!access) {
     return <AccessDenied />;

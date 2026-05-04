@@ -11,9 +11,12 @@ import { db } from '../../db';
 type DrizzleClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Direct pg Pool for raw SQL queries (bypasses Neon serverless driver issues)
+const connectionString =
+  process.env.FORCE_DATABASE_URL ||
+  process.env.DATABASE_URL;
 const pgPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined
+  connectionString,
+  ssl: connectionString?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined
 });
 import {
   trainingModules,

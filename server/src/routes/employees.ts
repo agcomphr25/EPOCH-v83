@@ -1180,7 +1180,12 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    let employeeData = insertEmployeeSchema.parse(req.body);
+    const rawBody = { ...req.body };
+    if (typeof rawBody.email === 'string' && rawBody.email.trim() === '') {
+      rawBody.email = undefined;
+    }
+
+    let employeeData = insertEmployeeSchema.parse(rawBody);
 
     // Normalize employeeCode — trim whitespace, treat blank as absent
     if (typeof employeeData.employeeCode === 'string') {

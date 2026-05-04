@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, CheckCircle2, XCircle, CheckCircle, AlertTriangle, Tag } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Search, CheckCircle2, XCircle, CheckCircle, AlertTriangle, Tag, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 const FIELD_LABELS: Record<string, string> = {
   stock_model:   'Stock Model',
@@ -20,6 +23,72 @@ const FIELD_LABELS: Record<string, string> = {
   action_length: 'Action Length',
   qds:           'QDS',
 };
+
+function isCancelled(status: string | undefined | null): boolean {
+  return status?.toUpperCase() === 'CANCELLED';
+}
+
+function CancelOrderButton({ orderId, productionStatus, onSuccess }: { orderId: string; productionStatus: string; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const cancelled = isCancelled(productionStatus);
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest(`/api/orders/cancel/${encodeURIComponent(orderId)}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Cancelled via Order Lookup' }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Order cancelled', description: `${orderId} has been cancelled.` });
+      onSuccess();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Cancel failed', description: err?.message || 'Could not cancel this order.', variant: 'destructive' });
+    },
+  });
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={cancelled || cancelMutation.isPending}
+          className={cancelled ? 'opacity-30 cursor-not-allowed' : 'text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30'}
+          data-testid={`button-cancel-order-${orderId}`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to cancel order <strong className="font-mono">{orderId}</strong>? This will mark the order as cancelled.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>No, keep it</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => cancelMutation.mutate()}
+            className="bg-red-600 hover:bg-red-700"
+            data-testid="button-confirm-cancel"
+          >
+            Yes, cancel order
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (isCancelled(status)) {
+    return <Badge variant="destructive">Cancelled</Badge>;
+  }
+  return <Badge variant="outline">{status}</Badge>;
+}
 
 // ─── Tab 1: Order → Item Code ──────────────────────────────────────────────
 
@@ -38,6 +107,10 @@ function OrderToItemCodeTab() {
   });
 
   const handleSearch = () => setOrderId(input.trim());
+
+  const invalidateQuery = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/order-lookup', orderId] });
+  };
 
   const candidates: any[] = data?.candidates ?? [];
   const matches: any[] = data?.matches ?? [];
@@ -60,6 +133,8 @@ function OrderToItemCodeTab() {
     return candidate.trim();
   })();
 
+  const orderIsCancelled = data?.order && isCancelled(data.order.production_status);
+
   return (
     <div className="space-y-6">
       <p className="text-muted-foreground text-sm">
@@ -73,8 +148,9 @@ function OrderToItemCodeTab() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           autoFocus
+          data-testid="input-order-id"
         />
-        <Button onClick={handleSearch} disabled={!input.trim() || isFetching}>
+        <Button onClick={handleSearch} disabled={!input.trim() || isFetching} data-testid="button-search-order">
           <Search className="h-4 w-4 mr-2" />
           {isFetching ? 'Searching...' : 'Search'}
         </Button>
@@ -103,21 +179,29 @@ function OrderToItemCodeTab() {
                   <TableHead>PO Number</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {candidates.map((c: any) => (
-                  <TableRow
-                    key={c.order_id}
-                    className="cursor-pointer hover:bg-muted/60"
-                    onClick={() => selectCandidate(c.order_id)}
-                  >
-                    <TableCell className="font-mono font-medium">{c.order_id}</TableCell>
-                    <TableCell>{c.po_number || '—'}</TableCell>
-                    <TableCell>{c.current_department || '—'}</TableCell>
-                    <TableCell><Badge variant="outline">{c.production_status}</Badge></TableCell>
-                  </TableRow>
-                ))}
+                {candidates.map((c: any) => {
+                  const cancelled = isCancelled(c.production_status);
+                  return (
+                    <TableRow
+                      key={c.order_id}
+                      className={`cursor-pointer hover:bg-muted/60 ${cancelled ? 'opacity-60' : ''}`}
+                      onClick={() => selectCandidate(c.order_id)}
+                      data-testid={`row-candidate-${c.order_id}`}
+                    >
+                      <TableCell className={`font-mono font-medium ${cancelled ? 'line-through' : ''}`}>{c.order_id}</TableCell>
+                      <TableCell className={cancelled ? 'line-through' : ''}>{c.po_number || '—'}</TableCell>
+                      <TableCell>{c.current_department || '—'}</TableCell>
+                      <TableCell><StatusBadge status={c.production_status} /></TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <CancelOrderButton orderId={c.order_id} productionStatus={c.production_status} onSuccess={invalidateQuery} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -126,16 +210,22 @@ function OrderToItemCodeTab() {
 
       {data?.order && (
         <div className="space-y-4">
-          <Card>
+          <Card className={orderIsCancelled ? 'border-red-200 dark:border-red-800 opacity-75' : ''}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Order Details</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Order Details
+                  {orderIsCancelled && <Badge variant="destructive">Cancelled</Badge>}
+                </CardTitle>
+                <CancelOrderButton orderId={data.order.order_id} productionStatus={data.order.production_status} onSuccess={invalidateQuery} />
+              </div>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+              <dl className={`grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-sm ${orderIsCancelled ? 'line-through decoration-red-400' : ''}`}>
                 <div><dt className="text-muted-foreground">Order ID</dt><dd className="font-mono font-medium">{data.order.order_id}</dd></div>
                 <div><dt className="text-muted-foreground">PO Number</dt><dd className="font-medium">{data.order.po_number}</dd></div>
                 <div><dt className="text-muted-foreground">Current Dept</dt><dd className="font-medium">{data.order.current_department || '—'}</dd></div>
-                <div><dt className="text-muted-foreground">Status</dt><dd><Badge variant="outline">{data.order.production_status}</Badge></dd></div>
+                <div className="no-underline" style={{ textDecoration: 'none' }}><dt className="text-muted-foreground">Status</dt><dd><StatusBadge status={data.order.production_status} /></dd></div>
               </dl>
               {data.specs && Object.keys(data.specs).length > 0 && (
                 <div className="mt-3 pt-3 border-t">
@@ -226,6 +316,8 @@ function OrderToItemCodeTab() {
                     <TableRow>
                       <TableHead>Item Code</TableHead>
                       <TableHead>Customer</TableHead>
+                      <TableHead>Current Dept</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Matched Fields</TableHead>
                       {!isPerfect && <TableHead>Mismatches</TableHead>}
                     </TableRow>
@@ -235,6 +327,8 @@ function OrderToItemCodeTab() {
                       <TableRow key={m.id} className={isPerfect ? 'bg-green-50 dark:bg-green-950/20' : ''}>
                         <TableCell className="font-mono font-semibold text-sm">{m.product_name}</TableCell>
                         <TableCell className="text-sm">{m.customer_name || '—'}</TableCell>
+                        <TableCell className="text-sm">{data.order?.current_department || '—'}</TableCell>
+                        <TableCell><StatusBadge status={data.order?.production_status} /></TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {m.matchedFields.map((f: string) => (
@@ -300,8 +394,9 @@ function ItemCodeToOrdersTab() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          data-testid="input-item-code"
         />
-        <Button onClick={handleSearch} disabled={!input.trim() || isFetching}>
+        <Button onClick={handleSearch} disabled={!input.trim() || isFetching} data-testid="button-search-item-code">
           <Search className="h-4 w-4 mr-2" />
           {isFetching ? 'Searching...' : 'Search'}
         </Button>
@@ -363,7 +458,7 @@ export default function OrderLookupPage() {
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Order Lookup</h1>
+        <h1 className="text-2xl font-bold" data-testid="text-page-title">Order Lookup</h1>
         <p className="text-muted-foreground text-sm mt-1">
           Look up production orders by order ID or item code.
         </p>
@@ -371,8 +466,8 @@ export default function OrderLookupPage() {
 
       <Tabs defaultValue="order-to-item">
         <TabsList>
-          <TabsTrigger value="order-to-item">Order → Item Code</TabsTrigger>
-          <TabsTrigger value="item-to-orders">Item Code → Orders</TabsTrigger>
+          <TabsTrigger value="order-to-item" data-testid="tab-order-to-item">Order → Item Code</TabsTrigger>
+          <TabsTrigger value="item-to-orders" data-testid="tab-item-to-orders">Item Code → Orders</TabsTrigger>
         </TabsList>
 
         <TabsContent value="order-to-item" className="mt-6">

@@ -59,7 +59,23 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
         },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create employee');
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        let detail = 'Something went wrong. Please check the form and try again.';
+        if (body?.error) {
+          try {
+            const parsed = JSON.parse(body.error);
+            if (Array.isArray(parsed)) {
+              detail = parsed.map((e: any) => `${e.path?.join(' → ') || 'Field'}: ${e.message}`).join('. ');
+            } else {
+              detail = body.error;
+            }
+          } catch {
+            detail = body.error;
+          }
+        }
+        throw new Error(detail);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -70,10 +86,10 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
       });
       onClose();
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
-        title: 'Error',
-        description: 'Failed to add employee. Please try again.',
+        title: 'Could not create employee',
+        description: error.message,
         variant: 'destructive',
       });
     },
@@ -111,6 +127,7 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
 
     const payload = {
       ...formData,
+      isActive: true,
       ...(formData.timekeeperPin ? {} : { timekeeperPin: undefined }),
     };
     createEmployeeMutation.mutate(payload);

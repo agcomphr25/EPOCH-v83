@@ -761,24 +761,29 @@ export async function isInFinalizedTimesheetPeriod(
 ): Promise<boolean> {
   const dateStr = punchedAt.toISOString().slice(0, 10);
 
-  const rows = await db
-    .select()
-    .from(timesheetsTable)
-    .where(
-      and(
-        eq(timesheetsTable.employeeId, employeeId),
-        or(
-          eq(timesheetsTable.status, "certified"),
-          eq(timesheetsTable.status, "locked"),
-          eq(timesheetsTable.status, "correction_requested"),
-          eq(timesheetsTable.status, "correction_approved")
-        ),
-        lte(timesheetsTable.periodStart, dateStr),
-        gte(timesheetsTable.periodEnd, dateStr)
-      )
-    );
+  try {
+    const rows = await db
+      .select()
+      .from(timesheetsTable)
+      .where(
+        and(
+          eq(timesheetsTable.employeeId, employeeId),
+          or(
+            eq(timesheetsTable.status, "certified"),
+            eq(timesheetsTable.status, "locked"),
+            eq(timesheetsTable.status, "correction_requested"),
+            eq(timesheetsTable.status, "correction_approved")
+          ),
+          lte(timesheetsTable.periodStart, dateStr),
+          gte(timesheetsTable.periodEnd, dateStr)
+        )
+      );
 
-  return rows.length > 0;
+    return rows.length > 0;
+  } catch (err: any) {
+    if (err?.code === '42P01') return false;
+    throw err;
+  }
 }
 
 export async function findFinalizedTimesheetForPunch(
@@ -787,25 +792,30 @@ export async function findFinalizedTimesheetForPunch(
 ): Promise<Timesheet | null> {
   const dateStr = punchedAt.toISOString().slice(0, 10);
 
-  const [row] = await db
-    .select()
-    .from(timesheetsTable)
-    .where(
-      and(
-        eq(timesheetsTable.employeeId, employeeId),
-        or(
-          eq(timesheetsTable.status, "certified"),
-          eq(timesheetsTable.status, "locked"),
-          eq(timesheetsTable.status, "correction_requested"),
-          eq(timesheetsTable.status, "correction_approved")
-        ),
-        lte(timesheetsTable.periodStart, dateStr),
-        gte(timesheetsTable.periodEnd, dateStr)
+  try {
+    const [row] = await db
+      .select()
+      .from(timesheetsTable)
+      .where(
+        and(
+          eq(timesheetsTable.employeeId, employeeId),
+          or(
+            eq(timesheetsTable.status, "certified"),
+            eq(timesheetsTable.status, "locked"),
+            eq(timesheetsTable.status, "correction_requested"),
+            eq(timesheetsTable.status, "correction_approved")
+          ),
+          lte(timesheetsTable.periodStart, dateStr),
+          gte(timesheetsTable.periodEnd, dateStr)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  return row ?? null;
+    return row ?? null;
+  } catch (err: any) {
+    if (err?.code === '42P01') return null;
+    throw err;
+  }
 }
 
 /**
@@ -828,20 +838,25 @@ export async function findPayrollApprovedSalariedTimesheetForPunch(
       ? entryDate.toISOString().slice(0, 10)
       : String(entryDate).slice(0, 10);
 
-  const [row] = await db
-    .select()
-    .from(salariedTimesheetsTable)
-    .where(
-      and(
-        eq(salariedTimesheetsTable.employeeId, publicEmployeeId),
-        isNotNull(salariedTimesheetsTable.payrollApprovedAt),
-        lte(salariedTimesheetsTable.periodStart, dateStr),
-        gte(salariedTimesheetsTable.periodEnd, dateStr),
-      ),
-    )
-    .limit(1);
+  try {
+    const [row] = await db
+      .select()
+      .from(salariedTimesheetsTable)
+      .where(
+        and(
+          eq(salariedTimesheetsTable.employeeId, publicEmployeeId),
+          isNotNull(salariedTimesheetsTable.payrollApprovedAt),
+          lte(salariedTimesheetsTable.periodStart, dateStr),
+          gte(salariedTimesheetsTable.periodEnd, dateStr),
+        ),
+      )
+      .limit(1);
 
-  return row ?? null;
+    return row ?? null;
+  } catch (err: any) {
+    if (err?.code === '42P01') return null;
+    throw err;
+  }
 }
 
 export interface GustoExportRow {

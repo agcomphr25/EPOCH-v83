@@ -166,6 +166,7 @@ import tkLaborApprovalsRoutes from './timekeeping/laborApprovals';
 import tkLaborCaptureRoutes from './timekeeping/laborCapture';
 import tkCorrectionsRoutes from './timekeeping/corrections';
 import tkPolicySettingsRoutes from './timekeeping/policySettings';
+import tkPtoCommandCenterRoutes from './timekeeping/ptoCommandCenter';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import pdfFormsRoutes from './pdfForms';
@@ -205,6 +206,7 @@ import cmmcRoutes from './cmmc';
 import chargeCodesRoutes from './chargeCodes';
 import continuityRoutes from './continuity';
 import proteusLabsRoutes from './proteusLabs';
+import devSeedPunchesRoutes from './timekeeping/devSeedPunches';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Debug routes — not mounted in production
@@ -287,6 +289,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         res.status(500).json({ error: error.message });
       }
     });
+
+    app.use('/api/dev/timekeeping/seed-punches', devSeedPunchesRoutes);
   }
 
   // Authentication routes
@@ -357,6 +361,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/timekeeping', tkCorrectionsRoutes);
   // Tier 7 — Timekeeping Policy Settings (runtime-configurable compliance rules)
   app.use('/api/timekeeping', tkPolicySettingsRoutes);
+  // Tier 8 — PTO Command Center (admin aggregation dashboard)
+  app.use('/api/timekeeping', tkPtoCommandCenterRoutes);
 
   // Historical Data routes - for tracking legacy system data
   app.use('/api/historical-data', historicalDataRoutes);

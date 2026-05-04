@@ -1,3 +1,10 @@
+console.log("=== ENV DEBUG START ===");
+console.log("DATABASE_URL:", process.env.DATABASE_URL);
+console.log("PGHOST:", process.env.PGHOST);
+console.log("PGUSER:", process.env.PGUSER);
+console.log("PGDATABASE:", process.env.PGDATABASE);
+console.log("=== ENV DEBUG END ===");
+
 import express, { type Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -313,7 +320,7 @@ async function initializeBackgroundServices() {
         const { Pool: MigrPool } = await import('pg');
         const { readFileSync, existsSync } = await import('fs');
         const { join } = await import('path');
-        const migrPool = new MigrPool({ connectionString: process.env.DATABASE_URL! });
+        const migrPool = new MigrPool({ connectionString: (process.env.FORCE_DATABASE_URL || process.env.DATABASE_URL)! });
         const migrationsDir = join(process.cwd(), 'migrations');
         const safeFiles = [
           '0000_shiny_amazoness.sql',

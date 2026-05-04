@@ -1,0 +1,592 @@
+index-TXnl4eDJ.js:5448 React initialized: Object
+index-TXnl4eDJ.js:5448 React hooks: Object
+index-TXnl4eDJ.js:5448 [EPOCH SYNC] Sync engine starting
+index-TXnl4eDJ.js:5448 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-TXnl4eDJ.js:5445 App component is rendering...
+index-TXnl4eDJ.js:5445 Environment: production
+index-TXnl4eDJ.js:5445 Base URL: /
+index-TXnl4eDJ.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:1715 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-TXnl4eDJ.js:1715 [EPOCH] Install prompt captured and ready
+/admin-dashboard:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-TXnl4eDJ.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+index-TXnl4eDJ.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-TXnl4eDJ.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-TXnl4eDJ.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+/api/cutting-table/packet-items:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/weekly-cutting-queue?showAll=true:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/inventory-audit/settings:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/packet-boms:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/fabric-items:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table-mfg-queue/available-packets:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/packet-part-items:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/stock-levels:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table-mfg-queue/cutting-table?status=ALL:1  Failed to load resource: the server responded with a status of 404 ()
+/api/cutting-table/inventory-audit/settings:1  Failed to load resource: the server responded with a status of 404 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+index-TXnl4eDJ.js:1724 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=09ece6d95eef9ed031597c6a14421341d3167580f1e984e4820a8650187f5c22' failed: 
+(anonymous) @ index-TXnl4eDJ.js:1724
+index-TXnl4eDJ.js:1724 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=09ece6d95eef9ed031597c6a14421341d3167580f1e984e4820a8650187f5c22' failed: 
+(anonymous) @ index-TXnl4eDJ.js:1724
+index-TXnl4eDJ.js:2161 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-TXnl4eDJ.js:2161 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+/api/cutting-table/schedule-to-cutting:1  Failed to load resource: the server responded with a status of 429 ()
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 429
+index-TXnl4eDJ.js:5448 API error raw body: Too many requests
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 💥 API Request failed for /api/cutting-table/schedule-to-cutting: Error: Too many requests
+    at Ce (index-TXnl4eDJ.js:235:8031)
+console.error @ index-TXnl4eDJ.js:5448
+/api/cutting-table/schedule-to-cutting:1  Failed to load resource: the server responded with a status of 429 ()
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 429
+/api/cutting-table/schedule-to-cutting:1  Failed to load resource: the server responded with a status of 429 ()
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 429
+/api/cutting-table/schedule-to-cutting:1  Failed to load resource: the server responded with a status of 429 ()
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 429
+/api/cutting-table/schedule-to-cutting:1  Failed to load resource: the server responded with a status of 429 ()
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 429
+index-TXnl4eDJ.js:5448 API error raw body: Too many requests
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 💥 API Request failed for /api/cutting-table/schedule-to-cutting: Error: Too many requests
+    at Ce (index-TXnl4eDJ.js:235:8031)
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 API error raw body: Too many requests
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 💥 API Request failed for /api/cutting-table/schedule-to-cutting: Error: Too many requests
+    at Ce (index-TXnl4eDJ.js:235:8031)
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 API error raw body: Too many requests
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 💥 API Request failed for /api/cutting-table/schedule-to-cutting: Error: Too many requests
+    at Ce (index-TXnl4eDJ.js:235:8031)
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 API error raw body: Too many requests
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 💥 API Request failed for /api/cutting-table/schedule-to-cutting: Error: Too many requests
+    at Ce (index-TXnl4eDJ.js:235:8031)
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table/schedule-to-cutting (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table/schedule-to-cutting: 201
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table-mfg-queue/10 (timeout: 15000ms, deployment: true)
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table-mfg-queue/10: 200
+index-TXnl4eDJ.js:2161 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-TXnl4eDJ.js:2161 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+index-TXnl4eDJ.js:235 🌐 API Request to /api/cutting-table-mfg-queue/bulk-print-barcodes (timeout: 15000ms, deployment: true)
+/api/cutting-table-mfg-queue/bulk-print-barcodes:1  Failed to load resource: the server responded with a status of 404 ()
+index-TXnl4eDJ.js:235 ✅ API Response from /api/cutting-table-mfg-queue/bulk-print-barcodes: 404
+index-TXnl4eDJ.js:5448 API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/cutting-table-mfg-queue/bulk-print-barcodes</pre>
+</body>
+</html>
+
+console.error @ index-TXnl4eDJ.js:5448
+index-TXnl4eDJ.js:5448 💥 API Request failed for /api/cutting-table-mfg-queue/bulk-print-barcodes: Error: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/cutting-table-mfg-queue/bulk-print-barcodes</pre>
+</body>
+</html>
+
+    at Ce (index-TXnl4eDJ.js:235:8031)
+console.error @ index-TXnl4eDJ.js:5448
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()

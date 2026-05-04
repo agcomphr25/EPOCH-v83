@@ -87,6 +87,8 @@ PAUSE_ORDER_REMINDERS = "true"
 UPS_ENV = "production"
 PAUSE_ORDER_CONFIRMATION_EMAILS = "true"
 ADDRESS_VALIDATION_ENABLED = "false"
+OPENAI_API_KEY = "sk-placeholder"
+AI_INTEGRATIONS_OPENAI_API_KEY = "sk-placeholder"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"
@@ -99,6 +101,7 @@ PROTEUS_KEY_TIMECLOCK = "test-timeclock-key"
 [agent]
 expertMode = true
 integrations = ["javascript_object_storage:2.0.0", "javascript_openai_ai_integrations:2.0.0"]
+stack = "FULLSTACK_JS"
 
 [postMerge]
 path = "scripts/post-merge.sh"

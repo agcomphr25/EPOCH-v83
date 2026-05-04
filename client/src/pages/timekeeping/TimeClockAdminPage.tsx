@@ -486,6 +486,120 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
   );
 }
 
+function DevSeedPunchesPanel() {
+  const { toast } = useToast();
+  const [daysBack, setDaysBack] = useState(14);
+  const [maxSessions, setMaxSessions] = useState(2);
+  const [seeding, setSeeding] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [lastResult, setLastResult] = useState<string | null>(null);
+
+  const handleSeed = async () => {
+    setSeeding(true);
+    setLastResult(null);
+    try {
+      const res = await fetch(`/api/dev/timekeeping/seed-punches?daysBack=${daysBack}&maxSessions=${maxSessions}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Seed failed', description: data.error ?? 'Unknown error', variant: 'destructive' });
+        return;
+      }
+      setLastResult(data.message);
+      toast({ title: 'Seed complete', description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping'] });
+    } catch {
+      toast({ title: 'Seed failed', description: 'Network error', variant: 'destructive' });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleCleanup = async () => {
+    setCleaning(true);
+    setLastResult(null);
+    try {
+      const res = await fetch('/api/dev/timekeeping/seed-punches', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: 'Cleanup failed', description: data.error ?? 'Unknown error', variant: 'destructive' });
+        return;
+      }
+      setLastResult(data.message);
+      toast({ title: 'Cleanup complete', description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping'] });
+    } catch {
+      toast({ title: 'Cleanup failed', description: 'Network error', variant: 'destructive' });
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  return (
+    <Card className="mt-6 border-dashed border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          Stress Test Data Seeder
+          <Badge variant="outline" className="text-xs font-normal text-amber-600 border-amber-300">DEV ONLY</Badge>
+        </CardTitle>
+        <CardDescription>
+          Generate realistic punch history for all employees with a kiosk PIN. Seeded records use source "SEED" and can be cleaned up without affecting real data.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Days back</Label>
+            <Input
+              data-testid="input-seed-days-back"
+              type="number"
+              min={1}
+              max={90}
+              value={daysBack}
+              onChange={(e) => setDaysBack(Math.max(1, Math.min(90, parseInt(e.target.value) || 14)))}
+              className="w-24 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Max sessions/day</Label>
+            <Input
+              data-testid="input-seed-max-sessions"
+              type="number"
+              min={1}
+              max={4}
+              value={maxSessions}
+              onChange={(e) => setMaxSessions(Math.max(1, Math.min(4, parseInt(e.target.value) || 2)))}
+              className="w-24 text-sm"
+            />
+          </div>
+          <Button
+            data-testid="button-seed-punches"
+            onClick={handleSeed}
+            disabled={seeding || cleaning}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {seeding ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Seeding…</> : 'Seed Punch Data'}
+          </Button>
+          <Button
+            data-testid="button-cleanup-seed"
+            onClick={handleCleanup}
+            disabled={seeding || cleaning}
+            variant="outline"
+            className="border-red-300 text-red-700 hover:bg-red-50"
+          >
+            {cleaning ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cleaning…</> : <><Trash2 className="h-4 w-4 mr-2" />Clean Up Seeded Data</>}
+          </Button>
+        </div>
+        {lastResult && (
+          <div className="text-sm text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 rounded-md px-3 py-2">
+            {lastResult}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function TimeClockAdminPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('compliance');
@@ -2584,6 +2698,10 @@ export default function TimeClockAdminPage() {
                 );
               })()}
             </>
+          )}
+
+          {import.meta.env.DEV && (
+            <DevSeedPunchesPanel />
           )}
         </TabsContent>
       </Tabs>

@@ -1,0 +1,146 @@
+Revise the payroll export revision/adjustment design and proposed schema. Do not implement code yet unless explicitly instructed after this review.
+
+Important:
+- Do not create or edit migrations.
+- Do not edit Drizzle schema.
+- Do not edit tests.
+- Do not apply database changes.
+- Produce a revised design/proposal only.
+
+Context:
+We are designing a DCAA-oriented Gusto CSV payroll export model.
+
+Policy decisions:
+- Payroll export is Gusto CSV only.
+- Payroll processing confirmation is manual/human-entered.
+- Only OWNER/ADMIN can create exports, supersede exports, void exports, or mark payroll as processed.
+- Exports are full-period only for regular payroll.
+- Multiple full exports for the same pay period are allowed before payroll is processed.
+- Each subsequent full export for the same pay period creates a new revision batch.
+- The previous active unprocessed full-period export is marked superseded.
+- Exact CSV contents and checksums must be preserved for every export.
+- Re-download must return the exact stored CSV/rows, not freshly recalculated data.
+- Once a batch is marked processed, it is immutable historical evidence.
+- Corrections after processing should create payroll adjustments for a future payroll run, not alter the processed batch.
+- Admin can choose whether approved adjustments are included in the next regular payroll export or in a separate off-cycle correction export.
+- If a correction/time edit is attempted after a pay period has an active unprocessed export, the edit should be blocked until OWNER/ADMIN explicitly supersedes or voids the active export with a reason.
+
+Revise the design with these required changes:
+
+1. Add export_type
+Add an explicit export_type column to payroll_export_batches:
+- regular_full_period
+- off_cycle_adjustment
+
+Explain how export_type affects:
+- revision numbering
+- active batch uniqueness
+- processed batch behavior
+- adjustment inclusion
+- UI display
+- CSV generation
+
+2. Add database-level active batch uniqueness
+Do not rely only on service-level enforcement.
+
+Propose a partial unique index that prevents multiple active batches for the same period and export type.
+
+For example:
+CREATE UNIQUE INDEX ...
+ON timekeeping.payroll_export_batches(period_start, period_end, export_type)
+WHERE status = 'active';
+
+Also explain whether processed batches need a uniqueness constraint, and why or why not.
+
+3. Reconsider period_start and period_end types
+Existing timesheets use text dates, but this is a new payroll export model.
+
+Compare:
+- keeping text dates for consistency
+- using native DATE columns for correctness
+
+Recommend one. If recommending text, propose a CHECK constraint or validation guaranteeing YYYY-MM-DD format. If recommending DATE, explain migration/service implications.
+
+4. Rename employee snapshot fields
+Avoid generic first_name and last_name in payroll_export_rows.
+
+Use explicit snapshot names, such as:
+- employee_first_name_snapshot
+- employee_last_name_snapshot
+- employee_number_snapshot
+- employee_email_snapshot, if needed
+
+Explain why snapshot naming matters for audit evidence and avoids migration safety false positives.
+
+5. Clarify adjustment relationships
+The design may keep adjustment_ids JSONB as a snapshot/display field, but canonical relationships should be relational.
+
+Explain whether payroll_adjustments.included_in_batch_id is sufficient, or whether a join table is needed:
+- payroll_export_batch_adjustments
+  - batch_id
+  - adjustment_id
+
+Recommend one approach and justify it.
+
+6. Reason requirements
+Define which lifecycle events require a reason/note.
+
+At minimum, require reasons for:
+- supersede
+- void
+- mark processed
+- post-processed correction adjustment creation
+- off-cycle adjustment export
+- correction blocked due to active export, if logged
+
+Explain whether initial export and re-download require reasons.
+
+7. Preserve exact CSV evidence
+Confirm the design stores:
+- csv_content or equivalent durable file reference
+- csv_checksum
+- row_count
+- total hours
+- source timesheet IDs
+- source leave entry IDs
+- source adjustment IDs, if applicable
+- actor and timestamp
+
+Explain how re-download verifies checksum and avoids recalculation.
+
+8. Processed batch immutability
+Make explicit that processed batches cannot be:
+- edited
+- superseded
+- voided silently
+- recalculated
+- deleted
+
+If a processed batch needs reversal or correction, describe the adjustment/off-cycle path.
+
+9. Correction workflow interaction
+Describe exact behavior when:
+- no export exists
+- active unprocessed export exists
+- superseded export exists
+- processed export exists
+- voided export exists
+
+For each case, say whether correction is allowed, blocked, or converted into an adjustment.
+
+10. Output format
+Return:
+# Revised Executive Summary
+# Revised Schema Proposal
+# Revised Indexes And Constraints
+# Revised State Machine
+# Revised Business Rules
+# Correction Workflow Interaction
+# Adjustment Handling
+# Exact CSV Evidence And Re-Download
+# DCAA Audit Trail Considerations
+# Updated Implementation Phases
+# Open Questions
+
+Do not modify files.
+Do not implement code.

@@ -857,6 +857,26 @@ router.get("/punches", authenticateToken, h(async (req, res): Promise<void> => {
     const outType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
     const missingOut = s.clockOut == null;
 
+    const rawNote = s.editNote ?? null;
+    let inNote: string | null = null;
+    let outNote: string | null = null;
+    let inEdited = false;
+    let outEdited = false;
+
+    if (rawNote && s.isEdited) {
+      const inMatch = rawNote.match(/\[clockIn\]\s([^|]+?)(?:\s*\|\||$)/);
+      const outMatch = rawNote.match(/\[clockOut\]\s([^|]+?)(?:\s*\|\||$)/);
+      if (inMatch || outMatch) {
+        if (inMatch) { inEdited = true; inNote = inMatch[1].trim(); }
+        if (outMatch) { outEdited = true; outNote = outMatch[1].trim(); }
+      } else {
+        inEdited = true;
+        outEdited = true;
+        inNote = rawNote;
+        outNote = rawNote;
+      }
+    }
+
     events.push({
       id: s.id,
       sessionId: s.id,
@@ -864,8 +884,8 @@ router.get("/punches", authenticateToken, h(async (req, res): Promise<void> => {
       type: inType,
       punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
       source: s.source,
-      isEdited: s.isEdited ?? false,
-      editNote: s.editNote ?? null,
+      isEdited: inEdited,
+      editNote: inNote,
       costCode: s.chargeCode ?? null,
       note: null,
       hasMissingClockOut: missingOut,
@@ -879,8 +899,8 @@ router.get("/punches", authenticateToken, h(async (req, res): Promise<void> => {
         type: outType,
         punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
         source: s.source,
-        isEdited: s.isEdited ?? false,
-        editNote: s.editNote ?? null,
+        isEdited: outEdited,
+        editNote: outNote,
         costCode: s.chargeCode ?? null,
         note: null,
         hasMissingClockOut: false,
@@ -1063,12 +1083,21 @@ const handleAdminPunchUpdate = h(async (req: Request, res: Response): Promise<vo
     ? { clockIn: ts }
     : { clockOut: ts };
 
+  const otherField = body.data.which === 'clockIn' ? 'clockOut' : 'clockIn';
+  const existingNote = existing.editNote ?? '';
+  const otherMatch = existingNote.match(new RegExp(`\\[${otherField}\\]\\s([^|]+?)(?:\\s*\\|\\||$)`));
+  const otherPart = otherMatch ? `[${otherField}] ${otherMatch[1].trim()}` : null;
+  const thisPart = `[${body.data.which}] ${body.data.editNote}`;
+  const mergedEditNote = otherPart
+    ? (body.data.which === 'clockIn' ? `${thisPart} || ${otherPart}` : `${otherPart} || ${thisPart}`)
+    : thisPart;
+
   const updated = await storage.updatePunchLedgerEntry(p.data.id, {
     ...timestampPatch,
     ...(resolvedChargeCodeId !== undefined ? { chargeCodeId: resolvedChargeCodeId } : {}),
     ...(body.data.travelerId !== undefined ? { travelerId: body.data.travelerId ?? null } : {}),
     isEdited: true,
-    editNote: body.data.editNote,
+    editNote: mergedEditNote,
     updatedBy: (req.user as { employeeId?: number | null } | undefined)?.employeeId ?? null,
     updatedByDisplayName: actor.email ?? null,
   });

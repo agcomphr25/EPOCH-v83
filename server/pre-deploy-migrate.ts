@@ -25,13 +25,15 @@ import { runMigrationSafetyCheck } from './utils/migrationSafetyCheck';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
+const connectionString =
+  process.env.FORCE_DATABASE_URL ||
+  process.env.DATABASE_URL;
+if (!connectionString) {
   console.error('❌ DATABASE_URL is not set — cannot run pre-deploy migrations');
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+const pool = new Pool({ connectionString });
 
 /**
  * Execute a SQL statement and return whether it actually succeeded.

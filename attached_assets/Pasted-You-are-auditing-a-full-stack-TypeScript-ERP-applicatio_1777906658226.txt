@@ -1,0 +1,195 @@
+You are auditing a full-stack TypeScript ERP application. Do not modify files, generate patches, run migrations, or change data. This is a read-only code, schema, and architecture audit.
+
+Context:
+- Backend: Node.js, TypeScript via tsx, Express.js
+- Database: PostgreSQL using Neon serverless driver
+- ORM: Drizzle ORM with Drizzle Kit migrations
+- Auth: Passport.js local strategy, JWT, express-session
+- Validation: Zod and drizzle-zod
+- Frontend: React 18, Vite, Wouter, Tailwind, shadcn/ui, TanStack Query v5
+- App includes ERP workflows, employee portal, time keeping kiosk, electronic travelers, payroll/job costing concepts, barcode/QR scanning, offline/PWA support, WebSockets, and scheduled jobs.
+
+Audit target:
+Analyze the integration between:
+1. Time keeping kiosk punches
+2. Employee portal time entry or employee-submitted edits
+3. Electronic traveler punches/scans tied to jobs, work orders, operations, or production activity
+
+Primary concerns:
+- Missed punches
+- Duplicate or conflicting punches
+- Audit trail gaps
+- Permissions and role enforcement
+- Approval workflow for employee edits/submissions
+- Traveler/job costing accuracy
+- Payroll export accuracy
+- Whether traveler punches affect labor costing, payroll, production status, or all of these
+- Whether employees can submit time edits for approval without directly overwriting authoritative records
+- Whether source-of-truth rules are explicit and enforced
+
+Scope:
+Inspect code plus database/schema/migrations. Include backend routes/controllers/services, Drizzle schema, migrations, validation schemas, frontend employee/kiosk/traveler screens, payroll export logic, job costing/labor allocation logic, authentication/authorization middleware, audit log/event tables, offline sync/PWA/IndexedDB behavior if relevant, WebSocket or cron behavior if relevant, and any tests touching these areas.
+
+Important:
+Do not implement changes.
+Do not refactor.
+Do not alter migrations or data.
+Only inspect and report.
+If behavior is unclear, say so and cite the files/functions that made it unclear.
+
+Please search the repository for likely terms including, but not limited to:
+- time, timesheet, timecard, clock, punch, punchIn, punchOut, kiosk
+- employee portal, employee time, manual time, time entry, correction, adjustment
+- traveler, electronic traveler, scan, barcode, QR, operation, work order, job, labor, labor cost, routing
+- payroll, export, pay period, overtime, approval, approve, submitted, rejected
+- audit, audit log, event log, history, revision, source, createdBy, updatedBy
+- role, permission, authorize, requireRole, middleware
+- offline, sync, Dexie, IndexedDB, PWA, conflict
+
+Produce the report in this exact format:
+
+# Executive Summary
+Briefly summarize the current state of the timekeeping integration. Call out whether the system appears to have one unified time/labor model or multiple loosely connected sources.
+
+# Data-Flow Map
+Map the flow for each source:
+1. Time keeping kiosk
+2. Employee portal entry/edit
+3. Electronic traveler punches/scans
+
+For each source include:
+- UI entry point/component/page
+- API route or backend handler
+- validation schema
+- service/business logic
+- database tables written
+- downstream consumers such as payroll export, job costing, production status, reports
+- whether the write is authoritative, pending approval, derived, or unclear
+
+# Source-By-Source Findings
+For each of the three sources, explain:
+- How records are created
+- How records are edited or corrected
+- How records are approved or rejected
+- How records are tied to employee, job/work order, operation, department, shift, and pay period
+- What prevents duplicates or overlapping punches
+- What happens when records conflict
+- What audit trail exists
+- What permissions are enforced
+- What tests exist
+
+# Risk-Ranked Bugs And Gaps
+List findings by severity.
+
+Use this format for each finding:
+- Severity: Critical / High / Medium / Low
+- Area: kiosk / employee portal / traveler / payroll / job costing / permissions / audit trail / schema / frontend / offline sync / tests
+- Finding:
+- Evidence: exact file paths and function/table/route names
+- Why it matters:
+- Recommended fix:
+- Confidence: High / Medium / Low
+
+Pay special attention to:
+- Any path where employee-entered or traveler-entered time can bypass approval
+- Any path where a punch can be overwritten without immutable history
+- Any path where traveler labor affects job costing but not payroll, or payroll but not job costing
+- Any path where timezone conversion may alter pay period, shift, or overtime calculations
+- Any path where kiosk, portal, and traveler create separate records that are never reconciled
+- Any payroll export that does not clearly filter approved/finalized records
+- Any job costing calculation that ignores corrections, approvals, rejected entries, or deleted punches
+- Any missing unique constraints, foreign keys, indexes, or validation around punch intervals
+- Any offline sync logic that can replay duplicate punches or lose edits
+- Any role/permission checks that are frontend-only
+
+# Database And Schema Review
+Identify relevant Drizzle tables and migrations. For each relevant table, include:
+- Table name
+- Purpose
+- Important columns
+- Foreign keys
+- Unique constraints/indexes
+- Audit fields
+- Approval/status fields
+- Source fields, if any
+- Gaps or ambiguity
+
+Specifically determine whether the schema can represent:
+- Raw punch event
+- Corrected/approved time entry
+- Source system: kiosk, portal, traveler, import, admin
+- Immutable audit history
+- Approval state
+- Link to job/work order/operation
+- Link to payroll export batch
+- Link to job costing/labor allocation
+- Deleted/voided/superseded entries
+
+# Payroll Export Review
+Find any payroll export logic. Explain:
+- Which records are exported
+- Whether only approved/finalized time is exported
+- Whether traveler punches are included, excluded, or unclear
+- Whether manual employee edits are included only after approval
+- How pay periods, overtime, rounding, timezone, and corrections are handled
+- Whether exported records are locked, marked exported, or can be changed after export
+- Risks and recommended fixes
+
+# Job Costing And Traveler Review
+Find any labor costing or traveler production logic. Explain:
+- Whether traveler punches/scans create labor records
+- Whether they update job/work order/operation status
+- Whether they feed job costing
+- Whether they feed payroll
+- Whether labor cost source-of-truth is explicit
+- Whether corrections to time update job costing
+- Whether rejected/deleted time is excluded
+- Risks and recommended fixes
+
+# Permissions And Approval Workflow Review
+Explain:
+- Role model used for kiosk, employee portal, supervisor/admin, payroll, and production/traveler users
+- Which backend routes enforce permissions
+- Whether any sensitive actions rely only on frontend hiding/disabling
+- Whether employees can edit submitted/approved/exported time
+- Whether edits create pending correction requests or directly mutate time records
+- Whether supervisors approve/reject changes
+- Risks and recommended fixes
+
+# Audit Trail Review
+Explain:
+- What audit/event/history tables or mechanisms exist
+- What actions are logged
+- Whether before/after values are retained
+- Whether actor, timestamp, source, reason, and affected record are retained
+- Whether deletes are soft-deletes, voids, or hard deletes
+- Whether payroll/job costing changes are traceable
+- Risks and recommended fixes
+
+# Tests Review
+List relevant tests found. Identify missing tests for:
+- Kiosk punch in/out
+- Employee time edit submission and approval
+- Traveler punch tied to job/work order/operation
+- Payroll export includes only approved/finalized time
+- Job costing includes correct approved labor
+- Duplicate punch prevention
+- Overlapping interval prevention
+- Timezone/pay period boundaries
+- Permission enforcement
+- Audit history creation
+- Offline sync duplicate/replay behavior, if applicable
+
+# Open Questions
+List questions that require product/business clarification. Include questions about source of truth, payroll versus job costing, approval policy, correction policy, traveler behavior, and export locking.
+
+# Recommended Remediation Plan
+Give a practical phased plan:
+1. Immediate safety fixes
+2. Schema/model improvements
+3. Approval and audit trail hardening
+4. Payroll/job costing reconciliation
+5. Test coverage
+6. Longer-term architectural cleanup
+
+Do not provide vague recommendations. Tie every recommendation to specific files, routes, tables, or workflows where possible.

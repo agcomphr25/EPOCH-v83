@@ -90,3 +90,9 @@ id = "xWmoU1t1D-rZC8NXHpwgG"
 uri = "file://attached_assets/CHARGE_CODE_MANAGER_VALIDATION_AUDIT.md"
 type = "text"
 title = "Charge Code Manager Validation Audit"
+
+[[outputs]]
+id = "S3uJop7m-CKN2Ky4tFGRk"
+uri = "file://.local/tasks/timekeeping-integration-audit.md"
+type = "text"
+title = "EPOCH Timekeeping Integration Audit Report"

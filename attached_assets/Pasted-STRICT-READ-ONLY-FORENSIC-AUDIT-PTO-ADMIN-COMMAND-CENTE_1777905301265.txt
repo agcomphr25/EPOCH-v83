@@ -1,0 +1,98 @@
+STRICT READ-ONLY FORENSIC AUDIT — PTO ADMIN COMMAND CENTER
+
+Objective:
+Audit the current EPOCH codebase to determine the safest way to add a PTO Admin Command Center.
+
+READ ONLY.
+NO CHANGES.
+NO IMPLEMENTATION.
+
+Context:
+PTO workflow now includes:
+- employee PTO submission
+- manager/admin on-behalf submission
+- Supervisor → HR → VP approval chain
+- payroll-safe hourly PTO handling
+- clock-in PTO blocking
+- cancellation/reversal protection
+- PTO Operational Constitution
+
+We now need an Admin Command Center for visibility, control, and governance.
+
+Audit the existing codebase for:
+
+1. Existing PTO Admin Views
+Find all current PTO screens, tabs, dashboards, cards, tables, and approval UIs.
+
+2. Existing PTO APIs
+Find all current routes for:
+- PTO requests
+- pending approvals
+- cancellations
+- reversals
+- payroll export
+- clock-in block checks
+- calendar PTO visibility
+
+3. Existing Permission Model
+Find current PTO capabilities and determine which users can view/administer:
+- all PTO
+- supervisor approvals
+- HR approvals
+- VP approvals
+- cancellations
+- overrides
+- payroll-facing PTO
+
+4. Existing Data Model
+Audit current PTO-related tables/columns:
+- time_off_requests
+- leave_entries
+- timesheet links
+- audit logs
+- calendar events
+- employee supervisor assignment
+
+5. Current Reporting Gaps
+Determine whether the system can currently report:
+- pending approvals by stage
+- stuck approvals
+- requests near payroll freeze
+- missing supervisor assignments
+- approved PTO by upcoming pay period
+- hourly PTO payroll exposure
+- PTO reversals
+- admin overrides
+- denial reasons
+- orphaned requests
+- employees currently on PTO
+- future staffing impact
+
+6. Existing Dashboard Patterns
+Find existing admin dashboards or command centers that should be reused for design/wiring.
+
+7. Recommended Architecture
+Recommend the safest structure for:
+- backend routes
+- service layer
+- UI page/component
+- permission gates
+- filters
+- audit trail display
+- payroll freeze alerts
+
+Required Deliverable:
+
+1. Executive Summary
+2. Existing PTO Admin Capability
+3. Missing Visibility
+4. Recommended Command Center Sections
+5. Recommended API Additions
+6. Recommended UI Location
+7. Permission Requirements
+8. Files Reviewed
+9. Data Model Reuse Points
+10. Risks / Gotchas
+11. Final Implementation Plan
+
+Do not implement anything yet.

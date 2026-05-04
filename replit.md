@@ -19,6 +19,41 @@ EPOCH Overview: User preference to maintain EPOCH-Overview.md as a living docume
 Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY show Tikka options for action inlet, barrel inlet, and bottom metal (with a green "Tikka only" badge). Non-Tikka stock models hide all Tikka options from these dropdowns. When switching between Tikka and non-Tikka models, incompatible selections are automatically cleared with a toast notification.
 Navbar-permissions alignment: The userPermissions.ts file is the source of truth for user route access. Navigation.tsx filters navbar items based on these permissions. Users not in the permissions list default to only seeing the Employee Portal. Each user sees only their own dashboard in the User Dashboards dropdown (admins see all). Any new navbar items must be added to both Navigation.tsx AND the appropriate user permission lists in userPermissions.ts to stay in sync.
 
+## PTO Command Center V2 (Tasks #11, #31)
+
+A dedicated PTO Admin Command Center page at `/pto-command-center` providing unified PTO governance visibility with enhanced approval tracking, payroll readiness, and audit capabilities.
+
+**Backend** (`server/src/routes/timekeeping/ptoCommandCenter.ts`):
+- `GET /api/timekeeping/pto-command-center/summary` — counts by status, on-PTO-today, upcoming 7 days
+- `GET /api/timekeeping/pto-command-center/pipeline` — requests grouped by approval stage with per-stage stuck thresholds, nextApprover, supervisorName
+- `GET /api/timekeeping/pto-command-center/payroll-exposure` — approved PTO hours by current and next pay period
+- `GET /api/timekeeping/pto-command-center/staffing-impact` — 14-day forward calendar of PTO by department
+- `GET /api/timekeeping/pto-command-center/alerts` — missing supervisor, per-stage stuck thresholds (supervisor >16h/2bd, HR >8h/1bd, VP >8h/1bd), orphaned cancelled requests
+- `GET /api/timekeeping/pto-command-center/audit-trail` — PTO-related audit log entries with filtering
+- `GET /api/timekeeping/pto-command-center/payroll-readiness` — hourly vs salaried PTO split, salaried injections, reversed entries, missing leave entries, pending-in-period warnings
+- `GET /api/timekeeping/pto-command-center/reversal-log` — cancelled requests + voided leave entries with audit actions
+- `GET /api/timekeeping/pto-command-center/override-log` — admin/owner audit log entries categorized by type (clock_override, pto_reversal, cancellation, timesheet_override, payroll_override)
+- `GET /api/timekeeping/pto-command-center/missing-setup` — employees without supervisor, missing PTO capabilities, VP issues, incomplete routing
+- `GET /api/timekeeping/pto-command-center/:requestId` — full lifecycle detail: request, leave entries, salaried lines, audit trail, timeline
+
+All endpoints gated behind `timekeeping.pto.view_all` capability (ADMIN/OWNER bypass).
+
+**Frontend** (`client/src/pages/PTOCommandCenter.tsx`):
+- Overview tab: 8 summary cards + alert banners (per-stage stuck thresholds) + Missing Setup panel
+- Pipeline tab: 3-column approval stage view with per-stage stuck highlighting, nextApprover, supervisorName, detail drawer
+- All Requests tab: enhanced filters (department, date range, supervisor) + Next Approver, age, hours columns + sortable headers + detail drawer on row click
+- Payroll & Staffing tab: payroll readiness panel (hourly/salaried split, injection status, reversed entries, warnings) + payroll exposure + 14-day staffing calendar
+- Reversals tab: reversal/cancellation log with employee search and date filters
+- Overrides tab: admin override/exception log with category badges and date filters
+- Audit Trail tab: chronological PTO action feed with filtering + clickable audit entries open detail drawer
+- Audit Trail Drawer (Sheet): full request lifecycle view with timeline, leave entries, salaried timesheet lines, raw audit log
+
+**Access**: ADMIN and OWNER roles via `userPermissions.ts` ROLE_ROUTE_ACCESS.
+
+## Payroll Export Model (Planned — Design Only)
+
+The payroll export revision & adjustment model is designed but not yet implemented. See `docs/payroll-export-design.md` for the complete design document covering schema, business rules, state machine, and implementation phases.
+
 ## DCAA-Compliant Employee Time Certification (Task #1855)
 
 Both hourly and salaried timesheets now require explicit employee certification before submission:

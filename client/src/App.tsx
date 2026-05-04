@@ -71,6 +71,7 @@ import KioskPage from './pages/timekeeping/KioskPage';
 import TimeClockAdminPage from './pages/timekeeping/TimeClockAdminPage';
 import SalariedTimeEntryPage from './pages/timekeeping/SalariedTimeEntryPage';
 import SalariedDraftListPage from './pages/timekeeping/SalariedDraftListPage';
+import PTOCommandCenter from './pages/PTOCommandCenter';
 import Module8TestPage from './pages/Module8TestPage';
 import CommunicationInboxPage from './pages/CommunicationInboxPage';
 import MarketingCommunications from './pages/MarketingCommunications';
@@ -815,6 +816,10 @@ function App() {
                   <Route
                     path="/time-clock-admin"
                     component={TimeClockAdminPage}
+                  />
+                  <Route
+                    path="/pto-command-center"
+                    component={PTOCommandCenter}
                   />
 
                   {/* Auth Routes */}

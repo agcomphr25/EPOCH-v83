@@ -1,0 +1,50 @@
+#2024 - Full 12-Step WAD Wizard
+What & Why
+The current WAD is auto-created from a quote and only captures basic fields (part number, budget hours, department budgets as raw JSON). The spec calls for a structured 12-step wizard that collects the full work authorization record: scope, department work breakdown, DCAA-compliant charge codes per department, material authorization rules, routing/traveler requirements, quality requirements, schedule, risk controls, required documents, and multi-role approvals. This turns the WAD from a thin seed record into the authoritative authorization document that drives travelers, time-clock enforcement, and audit traceability.
+
+Done looks like
+A dedicated WAD creation/edit wizard with 12 clearly labeled steps and a progress indicator
+Step 1 auto-populates contract context from the linked project and PO (project number, customer, PO number, quote, part/rev, quantity, ship date, contract review status, risk assessment status); PO Review must be Approved before a WAD can be started
+Step 2 captures scope of work: what is authorized to build, quantity, build type (Prototype / Production / Repair / Engineering Sample), departments involved (multi-select from the updated department list), and deliverables
+Step 3 generates a work breakdown table by department — each row has department, operation, responsible lead, estimated hours, required certs, and flags for traveler step and QC signoff required
+Step 4 captures DCAA-critical charge codes per operation: charge code, labor category, direct/indirect/unallowable classification, budgeted hours, overtime allowed, operator override allowed, and overrun rule (warn / require approval / hard stop)
+Step 5 defines material/BOM authorization rules: BOM linked, material lots required, serialized material, ICN scan, expiration blocking, out-time tracking, customer-supplied material, certs required
+Step 6 defines routing and traveler requirements: routing required, traveler required, work instruction required, spec sheet required, in-process inspection required, final QC only, spot check plan
+Step 7 captures quality requirements: inspection level, FAI required, in-process QC, final QC, spot check details (sample size, frequency, acceptance criteria, escalation rule), customer source inspection, cert package, dimensional report, NCR process
+Step 8 defines schedule and capacity: authorized start date, required completion date, per-department due dates, priority, daily target qty, capacity risk, bottleneck department
+Step 9 carries over risks from the risk assessment: technical, schedule, material, quality, tooling, supplier risks; ITAR flag; customer flow-downs; special process controls — each with owner, mitigation, due date, approval status
+Step 10 is a document checklist: attach or confirm/waive customer PO, drawing, rev/spec, work instructions, BOM, routing, quote, risk assessment, purchase review checklist, material cert requirements, inspection plan, flow-downs; required docs must be attached or waived before WAD approval
+Step 11 collects approvals: project manager, production manager, quality, finance/accounting (optional: engineering, compliance/export control); each records user, role, timestamp, decision, comments
+Step 12 is a final review screen showing all gate items as ✅/❌ before setting WAD status to APPROVED. Final WAD approval does not release the project to P2 by itself — it only satisfies the WAD gate. P2 release still requires PO Review Approved + WAD Approved + Preproduction Complete (handled by Task #2023).
+The department enum is updated to: CUTTING_KITTING, LAYUP, CURE, CNC, SUB_ASSEMBLY, ASSEMBLY, FINISH, PAINT, QC, SHIPPING
+Each department entry supports an isSpecialProcess and requiresCertification flag for future cert enforcement and vendor/OSP routing
+Out of scope
+OSP/vendor routing (future work)
+GL posting wiring (Task #305)
+Traveler generation from WAD routing requirements (separate task)
+Automated test coverage
+Steps
+Update department enum and schema — Replace the current ad-hoc department strings with the canonical 10-department enum (CUTTING_KITTING through SHIPPING). Add isSpecialProcess and requiresCertification flags to the department budget structure in the WAD schema. Update any existing department references in storage and shared schema to use the new values.
+
+Extend the WAD database schema — Add the fields needed to support the full wizard: scope fields (buildType, deliverables), work breakdown rows (per-department operation details), per-operation charge code assignments with overrun rules, material authorization flags, routing/traveler requirement flags, quality requirement flags, schedule fields (authorizedStartDate, deptDueDates, priority, capacityRisk), risk entries (carried from risk assessment), document checklist entries with attach/waive status, and multi-role approval records.
+
+Build the WAD wizard frontend (Steps 1–4) — Implement a step wizard shell with a progress indicator. Build steps 1 (auto-fill from project/PO with PO Review gate check), 2 (scope of work with multi-select departments), 3 (work breakdown table generated from selected departments), and 4 (charge codes per department operation with DCAA classification fields).
+
+Build the WAD wizard frontend (Steps 5–8) — Implement steps 5 (material/BOM authorization flags), 6 (routing and traveler requirement flags), 7 (quality requirements including spot-check detail fields), and 8 (schedule and capacity fields including per-department due dates).
+
+Build the WAD wizard frontend (Steps 9–12) — Implement step 9 (risk entries with owner/mitigation/due date pulled from risk assessment), step 10 (document checklist with attach/waive controls and gate enforcement), step 11 (multi-role approval capture with timestamps and comments), and step 12 (final review summary screen with all gate statuses before setting WAD to APPROVED).
+
+Wire backend routes for WAD wizard save and approval — Add or update API endpoints to persist each wizard step incrementally (draft save), validate gate conditions on step transitions (e.g. PO Review gate on step 1, document completeness on step 10), and handle the final approval action that sets WAD status to APPROVED.
+
+Update WAD detail page — Refresh the WAD detail/summary page to display the full wizard data: work breakdown by department, charge codes, material rules, quality requirements, document checklist status, and approval history.
+
+Relevant files
+client/src/components/p2/P2POCreationWizard.tsx
+client/src/pages/ProductionWorkOrderDetailPage.tsx
+server/src/lib/wadHelper.ts
+server/src/services/laborCostingService.ts
+server/schema.ts
+Dependencies
+
+Enforce the three-way P2 Release Gate (PO Review + WAD + Preproduction) with release UI and lifecycle bar update
+Open task

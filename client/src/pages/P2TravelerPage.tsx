@@ -887,17 +887,44 @@ export default function P2TravelerPage() {
           if (lot) {
             setTraceabilityData(prev => {
               const next = [...prev];
+              const lotField = next.find(
+                f => f.materialIndex === item.materialIndex && f.type === 'material_lot'
+              );
+              if (lotField && primaryRoll) {
+                lotField.value = primaryRoll.internalControlNumber || primaryRoll.lotNumber || data.packet.barcode;
+              }
               const expirationField = next.find(
                 f => f.materialIndex === item.materialIndex && f.type === 'material_expiration_date'
               );
-              if (expirationField && lot.expirationDate) {
-                expirationField.value = new Date(lot.expirationDate).toLocaleDateString();
+              if (expirationField && primaryRoll?.expirationDate) {
+                expirationField.value = new Date(primaryRoll.expirationDate).toLocaleDateString();
+              }
+              return next;
+            });
+            toast({
+              title: 'Packet found',
+              description: `Packet ${data.packet.barcode} matched with ${data.fabricRolls?.length || 0} fabric roll(s)`,
+            });
+          } else {
+            setTraceabilityData(prev => {
+              const next = [...prev];
+              const expirationField = next.find(
+                f => f.materialIndex === item.materialIndex && f.type === 'material_expiration_date'
+              );
+              if (expirationField && data.expirationDate) {
+                expirationField.value = new Date(data.expirationDate).toLocaleDateString();
               }
               return next;
             });
           }
         })
-        .catch(() => {});
+        .catch((err: Error) => {
+          toast({
+            title: 'Barcode not found',
+            description: err.message,
+            variant: 'destructive',
+          });
+        });
     }
   };
 

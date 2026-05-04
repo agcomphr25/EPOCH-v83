@@ -9,6 +9,7 @@ import { storage } from '../../storage';
 import { evaluateTravelerStartGates, evaluateTravelerFinishGates, evaluateStartGatesDetailed, evaluateWadReleaseGate, buildGateErrorBody, buildTrainingGateErrorBody } from '../lib/travelerGates';
 import { evaluateTravelerTrainingGate, evaluateQcTrainingGate } from '../lib/trainingEnforcement';
 import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolveBudgetOverrunState } from '../lib/resolveChargeCode';
+import { resolvePacketBarcode } from '../lib/packetResolution';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
 import * as allocationService from '../services/laborAllocationService';
 import { db } from '../../db';
@@ -2159,19 +2160,18 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
     }
 
     // Pre-flight: for TRACE/TRACEABILITY tasks that include a packet barcode, validate the
-    // barcode exists in cutting_built_packets and write the allocatedToOrder link NOW — before
+    // barcode exists in cutting_built_packets (or can be resolved via the manufacturing queue
+    // fallback for MFG-format barcodes) and write the allocatedToOrder link NOW — before
     // any traveler_task_fields rows are written.  Returning 422 here ensures no field data is
     // persisted when the barcode is unresolvable (AS9100 traceability defect guard).
     if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
       const preFlightFV = fieldValues || {};
       const preFlightBarcode = preFlightFV['packetBarcode'] || preFlightFV['packet_barcode'] || '';
       if (preFlightBarcode) {
-        const packetRecord = await db.query.cuttingBuiltPackets.findFirst({
-          where: eq(cuttingBuiltPackets.barcode, preFlightBarcode),
-        });
+        const resolution = await resolvePacketBarcode(preFlightBarcode);
 
-        if (!packetRecord) {
-          console.warn(`[Packet Allocation] Packet barcode "${preFlightBarcode}" not found in cutting_built_packets — rejecting task ${taskId} completion (traveler ${travelerId})`);
+        if (!resolution) {
+          console.warn(`[Packet Allocation] Packet barcode "${preFlightBarcode}" not found in cutting_built_packets or manufacturing queue — rejecting task ${taskId} completion (traveler ${travelerId})`);
           return res.status(422).json({
             error: `Packet barcode "${preFlightBarcode}" was not found in the cutting packet inventory. Verify the barcode is correct and that the packet has been built at the cutting table.`,
             code: 'PACKET_BARCODE_NOT_FOUND',
@@ -2179,10 +2179,11 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
           });
         }
 
-        // Write allocatedToOrder if the packet exists and is not yet allocated.
-        if (traveler.serialNumber) {
-          // Primary: match by serialNumber.  Fallback: match by travelerBarcode for cases
-          // where the physical traveler barcode is stored as the serial number on the P2 item.
+        if (resolution.source === 'manufacturing_queue') {
+          console.warn(`[Packet Allocation] Packet barcode "${preFlightBarcode}" resolved via manufacturing queue fallback (queue item #${resolution.queueItem?.id}) — skipping allocatedToOrder write (no cutting_built_packets row). Backfill result: ${resolution.backfillResult ?? 'not attempted'}`);
+        }
+
+        if (resolution.packetRecord && traveler.serialNumber) {
           const p2Item = await db.query.p2SerializedItems.findFirst({
             where: or(
               ilike(p2SerializedItems.serialNumber, traveler.serialNumber),
@@ -2191,18 +2192,20 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
           });
 
           if (p2Item) {
-            if (!packetRecord.allocatedToOrder) {
+            if (!resolution.packetRecord.allocatedToOrder) {
               const allocationTarget = p2Item.barcode || p2Item.serialNumber;
               await db.update(cuttingBuiltPackets)
                 .set({ allocatedToOrder: allocationTarget, updatedAt: new Date() })
-                .where(eq(cuttingBuiltPackets.id, packetRecord.id));
+                .where(eq(cuttingBuiltPackets.id, resolution.packetRecord.id));
               console.log(`[Packet Allocation] Allocated cutting packet "${preFlightBarcode}" → "${allocationTarget}" (traveler ${travelerId})`);
             } else {
-              console.log(`[Packet Allocation] Packet "${preFlightBarcode}" already allocated to "${packetRecord.allocatedToOrder}" — skipping overwrite`);
+              console.log(`[Packet Allocation] Packet "${preFlightBarcode}" already allocated to "${resolution.packetRecord.allocatedToOrder}" — skipping overwrite`);
             }
           } else {
             console.warn(`[Packet Allocation] No P2 serialized item found for serial number "${traveler.serialNumber}" (traveler ${travelerId}) — allocatedToOrder not set`);
           }
+        } else if (!resolution.packetRecord) {
+          console.warn(`[Packet Allocation] Traveler ${travelerId}: packet "${preFlightBarcode}" resolved from manufacturing queue — no cutting_built_packets row for allocation`);
         } else {
           console.warn(`[Packet Allocation] Traveler ${travelerId} has no serialNumber — cannot resolve P2 item for packet allocation`);
         }

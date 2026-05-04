@@ -27,6 +27,33 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
 
+async function safeFetch<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      if (body.error) message = body.error;
+      else if (body.message) message = body.message;
+    } catch {}
+    throw new Error(`${res.status}: ${message}`);
+  }
+  return res.json();
+}
+
+function QueryErrorBanner({ message }: { message?: string }) {
+  return (
+    <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20">
+      <CardContent className="p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-red-500 mb-2" />
+        <p className="text-sm font-medium text-red-700 dark:text-red-400">
+          {message ?? 'Failed to load data. Please try again later.'}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface ProjectOption {
@@ -320,20 +347,24 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('all');
   const [qtySort, setQtySort] = useState<QtySort>(null);
 
-  const { data: rows = [], isLoading } = useQuery<WorkOrderRow[]>({
+  const { data: rows = [], isLoading, isError } = useQuery<WorkOrderRow[]>({
     queryKey: ['/api/pm-dashboard', projectId, 'production'],
-    queryFn: () => fetch(`/api/pm-dashboard/${projectId}/production`).then(r => r.json()),
+    queryFn: () => safeFetch<WorkOrderRow[]>(`/api/pm-dashboard/${projectId}/production`),
     enabled: !!projectId,
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
-    queryFn: () => fetch(`/api/pm-dashboard/${projectId}/production/${selectedWO!.productionWorkOrderId}`).then(r => r.json()),
+    queryFn: () => safeFetch<WorkOrderDetail>(`/api/pm-dashboard/${projectId}/production/${selectedWO!.productionWorkOrderId}`),
     enabled: !!selectedWO,
   });
 
   if (isLoading) {
     return <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+  }
+
+  if (isError) {
+    return <QueryErrorBanner message="Failed to load production data." />;
   }
 
   if (!rows.length) {
@@ -644,15 +675,19 @@ function ProductionTab({ projectId }: { projectId: string }) {
 // ── Direct Labor Tab ──────────────────────────────────────────────────────────
 
 function DirectLaborTab({ projectId }: { projectId: string }) {
-  const { data, isLoading } = useQuery<LaborData>({
+  const { data, isLoading, isError } = useQuery<LaborData>({
     queryKey: ['/api/pm-dashboard', projectId, 'labor'],
-    queryFn: () => fetch(`/api/pm-dashboard/${projectId}/labor`).then(r => r.json()),
+    queryFn: () => safeFetch<LaborData>(`/api/pm-dashboard/${projectId}/labor`),
     enabled: !!projectId,
     refetchInterval: 30000,
   });
 
   if (isLoading) {
     return <div className="space-y-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>;
+  }
+
+  if (isError) {
+    return <QueryErrorBanner message="Failed to load labor data." />;
   }
 
   if (!data) return null;
@@ -827,14 +862,18 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-  const { data, isLoading } = useQuery<MaterialData>({
+  const { data, isLoading, isError } = useQuery<MaterialData>({
     queryKey: ['/api/pm-dashboard', projectId, 'materials'],
-    queryFn: () => fetch(`/api/pm-dashboard/${projectId}/materials`).then(r => r.json()),
+    queryFn: () => safeFetch<MaterialData>(`/api/pm-dashboard/${projectId}/materials`),
     enabled: !!projectId,
   });
 
   if (isLoading) {
     return <div className="space-y-4">{[1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>;
+  }
+
+  if (isError) {
+    return <QueryErrorBanner message="Failed to load material budget data." />;
   }
 
   if (!data) return null;
@@ -1006,12 +1045,12 @@ export default function PMControlCenterPage() {
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/pm-dashboard/projects'],
-    queryFn: () => fetch('/api/pm-dashboard/projects').then(r => r.json()),
+    queryFn: () => safeFetch<ProjectOption[]>('/api/pm-dashboard/projects'),
   });
 
   const { data: managers = [] } = useQuery<PmOption[]>({
     queryKey: ['/api/pm-dashboard/managers'],
-    queryFn: () => fetch('/api/pm-dashboard/managers').then(r => r.json()),
+    queryFn: () => safeFetch<PmOption[]>('/api/pm-dashboard/managers'),
   });
 
   function buildSearch(projectId: string, pm: string) {
@@ -1036,24 +1075,24 @@ export default function PMControlCenterPage() {
     window.history.replaceState(null, '', `/pm-control-center${buildSearch(selectedProjectId, newPm)}`);
   };
 
-  const { data: summary, isLoading: summaryLoading } = useQuery<Summary>({
+  const { data: summary, isLoading: summaryLoading, isError: summaryError } = useQuery<Summary>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'summary'],
-    queryFn: () => fetch(`/api/pm-dashboard/${selectedProjectId}/summary`).then(r => r.json()),
+    queryFn: () => safeFetch<Summary>(`/api/pm-dashboard/${selectedProjectId}/summary`),
     enabled: !!selectedProjectId,
     refetchInterval: 60000,
   });
 
   // Page-level production query — shares cache with ProductionTab, only used for blockers sheet + throughput
-  const { data: productionRows = [] } = useQuery<WorkOrderRow[]>({
+  const { data: productionRows = [], isError: productionError } = useQuery<WorkOrderRow[]>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'production'],
-    queryFn: () => fetch(`/api/pm-dashboard/${selectedProjectId}/production`).then(r => r.json()),
+    queryFn: () => safeFetch<WorkOrderRow[]>(`/api/pm-dashboard/${selectedProjectId}/production`),
     enabled: !!selectedProjectId,
   });
 
   // Project detail query — used for lifecycle stage derivation
   const { data: projectDetail } = useQuery<{ currentStage: string | null; status: string; poId: number | null; steps: { stepType: string; status: string }[] }>({
     queryKey: ['/api/projects', selectedProjectId],
-    queryFn: () => fetch(`/api/projects/${selectedProjectId}`).then(r => r.json()),
+    queryFn: () => safeFetch<{ currentStage: string | null; status: string; poId: number | null; steps: { stepType: string; status: string }[] }>(`/api/projects/${selectedProjectId}`),
     enabled: !!selectedProjectId,
   });
 
@@ -1102,7 +1141,7 @@ export default function PMControlCenterPage() {
   // Detect current user for "Only My Projects" toggle
   const { data: currentUser } = useQuery<{ id: number; name: string; username: string }>({
     queryKey: ['/api/auth/me'],
-    queryFn: () => fetch('/api/auth/me').then(r => r.json()),
+    queryFn: () => safeFetch<{ id: number; name: string; username: string }>('/api/auth/me'),
     retry: false,
   });
 
@@ -1263,6 +1302,8 @@ export default function PMControlCenterPage() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-24" />)}
             </div>
+          ) : summaryError ? (
+            <QueryErrorBanner message="Failed to load project summary. The tabs below may still work." />
           ) : summary ? (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <KpiCard
@@ -1311,8 +1352,12 @@ export default function PMControlCenterPage() {
             </div>
           ) : null}
 
+          {productionError && !summaryError && (
+            <QueryErrorBanner message="Failed to load production data. Blocker count and throughput may be unavailable." />
+          )}
+
           {/* Stage + Throughput Row */}
-          {summary && (lifecycleStageLabel || dailyThroughput) && (
+          {summary && !productionError && (lifecycleStageLabel || dailyThroughput) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lifecycleStageLabel && (
                 <KpiCard

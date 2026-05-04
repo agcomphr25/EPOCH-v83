@@ -206,6 +206,7 @@ import cmmcRoutes from './cmmc';
 import chargeCodesRoutes from './chargeCodes';
 import continuityRoutes from './continuity';
 import proteusLabsRoutes from './proteusLabs';
+import devSeedPunchesRoutes from './timekeeping/devSeedPunches';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Debug routes — not mounted in production
@@ -288,6 +289,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         res.status(500).json({ error: error.message });
       }
     });
+
+    app.use('/api/dev/timekeeping/seed-punches', devSeedPunchesRoutes);
   }
 
   // Authentication routes

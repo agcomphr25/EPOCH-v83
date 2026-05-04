@@ -1,4 +1,4 @@
-import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date } from "drizzle-orm/pg-core";
+import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { employees, users } from "../../schema";
@@ -492,7 +492,8 @@ export const payrollExportBatchesTable = timekeepingSchema.table("payroll_export
   adjustmentIds: jsonb("adjustment_ids"),
   sourceTimesheetIds: jsonb("source_timesheet_ids").notNull(),
   sourceLeaveEntryIds: jsonb("source_leave_entry_ids"),
-  supersedesBatchId: integer("supersedes_batch_id"),
+  supersedesBatchId: integer("supersedes_batch_id")
+    .references((): AnyPgColumn => payrollExportBatchesTable.id),
   supersededReason: text("superseded_reason"),
   voidedReason: text("voided_reason"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
@@ -542,7 +543,8 @@ export type PayrollExportRow = typeof payrollExportRowsTable.$inferSelect;
 // payroll_adjustments table.  See docs/payroll-export-design.md §Phase 3.
 export const payrollExportEventsTable = timekeepingSchema.table("payroll_export_events", {
   id: serial("id").primaryKey(),
-  batchId: integer("batch_id"),
+  batchId: integer("batch_id")
+    .references(() => payrollExportBatchesTable.id, { onDelete: "set null" }),
   adjustmentId: integer("adjustment_id"),
   eventType: text("event_type").notNull(),
   actorId: integer("actor_id").notNull(),

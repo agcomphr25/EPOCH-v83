@@ -3343,6 +3343,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updatedAt: new Date(),
       };
 
+      if (status === 'COMPLETED') {
+        updateFields.completedAt = new Date();
+      }
+
       if (status === 'SCRAPPED') {
         updateFields.scrapReason = reason;
         updateFields.scrapBy = performedBy || 'System';

@@ -392,10 +392,29 @@ async function signObjectURL({
     }
   );
   if (!response.ok) {
-    throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
+    let body = "";
+    try {
+      body = await response.text();
+    } catch {
+      // ignore body read failure
+    }
+    const truncated = body.length > 500 ? `${body.slice(0, 500)}...` : body;
+    console.error(
+      `[ObjectStorage] signObjectURL failed: status=${response.status} ` +
+        `method=${method} bucket=${bucketName} body=${truncated || "<empty>"}`
     );
+    const reason =
+      response.status === 401 || response.status === 403
+        ? "storage signing unauthorized"
+        : response.status >= 500
+          ? "storage signing service error"
+          : "storage signing error";
+    const err = new Error(
+      `Failed to sign object URL: ${reason} (status ${response.status})`
+    );
+    (err as any).status = response.status;
+    (err as any).reason = reason;
+    throw err;
   }
 
   const data = await response.json() as { signed_url: string };

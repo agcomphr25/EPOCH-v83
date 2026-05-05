@@ -36,8 +36,25 @@ export function registerObjectStorageRoutes(app: Express): void {
         metadata: { name, size, contentType },
       });
     } catch (error) {
-      console.error("Error generating upload URL:", error);
-      res.status(500).json({ error: "Failed to generate upload URL" });
+      const err = error as { status?: number; reason?: string; message?: string };
+      console.error(
+        "[uploads/request-url] Error generating upload URL:",
+        err?.message ?? error,
+        err?.status ? `(sidecar status ${err.status})` : ""
+      );
+      const reason = err?.reason ?? "unknown";
+      const message = err?.message ?? "Failed to generate upload URL";
+      const httpStatus =
+        err?.status === 401 || err?.status === 403
+          ? 503
+          : isStorageUnavailableError(error)
+            ? 503
+            : 500;
+      res.status(httpStatus).json({
+        error: "Failed to generate upload URL",
+        reason,
+        details: message,
+      });
     }
   });
 

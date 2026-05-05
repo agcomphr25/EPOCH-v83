@@ -196,6 +196,102 @@ describe('POST /api/cutting-documents', () => {
   });
 });
 
+describe('POST /api/uploads/request-url — surfaces sidecar failure details', () => {
+  let app: express.Express;
+  let getObjectEntityUploadURL: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+
+    getObjectEntityUploadURL = vi.fn();
+    vi.doMock('../replit_integrations/object_storage/objectStorage', () => ({
+      ObjectStorageService: vi.fn().mockImplementation(() => ({
+        getObjectEntityUploadURL,
+        normalizeObjectEntityPath: (u: string) => u,
+        trySetObjectEntityAclPolicy: vi.fn().mockResolvedValue(undefined),
+      })),
+      ObjectNotFoundError: class ObjectNotFoundError extends Error {},
+    }));
+
+    app = express();
+    app.use(express.json());
+    const { registerObjectStorageRoutes } = await import(
+      '../replit_integrations/object_storage/routes'
+    );
+    registerObjectStorageRoutes(app);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+    vi.doUnmock('../replit_integrations/object_storage/objectStorage');
+  });
+
+  it('returns 200 with uploadURL on success', async () => {
+    getObjectEntityUploadURL.mockResolvedValue('https://signed.example/put/abc');
+
+    const res = await request(app)
+      .post('/api/uploads/request-url')
+      .send({ name: 'plychart.pdf', size: 15234, contentType: 'application/pdf' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.uploadURL).toBe('https://signed.example/put/abc');
+    expect(res.body.objectPath).toBe('https://signed.example/put/abc');
+    expect(res.body.metadata).toEqual({
+      name: 'plychart.pdf',
+      size: 15234,
+      contentType: 'application/pdf',
+    });
+  });
+
+  it('returns 400 when name is missing', async () => {
+    const res = await request(app)
+      .post('/api/uploads/request-url')
+      .send({ size: 100, contentType: 'application/pdf' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/name/i);
+    expect(getObjectEntityUploadURL).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 with reason when sidecar signing is unauthorized (401)', async () => {
+    const sidecarErr: Error & { status?: number; reason?: string } = new Error(
+      'Failed to sign object URL: storage signing unauthorized (status 401)',
+    );
+    sidecarErr.status = 401;
+    sidecarErr.reason = 'storage signing unauthorized';
+    getObjectEntityUploadURL.mockRejectedValue(sidecarErr);
+
+    const res = await request(app)
+      .post('/api/uploads/request-url')
+      .send({ name: 'plychart.pdf', size: 15234, contentType: 'application/pdf' });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({
+      error: 'Failed to generate upload URL',
+      reason: 'storage signing unauthorized',
+    });
+    expect(res.body.details).toMatch(/status 401/);
+  });
+
+  it('returns 500 with reason for non-auth signing errors', async () => {
+    const sidecarErr: Error & { status?: number; reason?: string } = new Error(
+      'Failed to sign object URL: storage signing error (status 400)',
+    );
+    sidecarErr.status = 400;
+    sidecarErr.reason = 'storage signing error';
+    getObjectEntityUploadURL.mockRejectedValue(sidecarErr);
+
+    const res = await request(app)
+      .post('/api/uploads/request-url')
+      .send({ name: 'plychart.pdf', size: 15234, contentType: 'application/pdf' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.reason).toBe('storage signing error');
+    expect(res.body.details).toMatch(/status 400/);
+  });
+});
+
 describe('GET /api/cutting-documents — includes newly posted document', () => {
   let app: express.Express;
 

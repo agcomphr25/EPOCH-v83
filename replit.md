@@ -43,6 +43,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Offline Mutation Queue (IndexedDB):** `client/src/offline/`
 *   **Control Tower Service:** `server/src/services/controlTowerService.ts`
 *   **CMMC Control Taxonomy & Evidence Mapping:** `server/src/services/cmmcControlTaxonomy.ts`, `server/src/services/cmmcEvidenceMapping.ts`
+*   `Navigation.tsx`: Frontend navigation menu
 
 ## Architecture decisions
 
@@ -53,6 +54,8 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Atomic Order ID Reservation:** Order IDs are reserved atomically to prevent race conditions and ensure unique identifiers for each order.
 *   **No Dual-Pool Patterns:** Explicitly deprecated standalone modules and dual-pool database connection patterns (e.g., `modules/timekeeping/`). All system components must use the single `db` instance from the main server.
 *   **"Delete-First" Agent Implementation:** When re-architecting, the approach is to delete deprecated patterns and redesign, rather than creating compatibility layers, to maintain architectural purity and prevent technical debt.
+*   **Immutable Audit Trail:** Critical financial exports (e.g., Payroll Export) generate and store immutable CSVs with SHA-256 checksums for DCAA audit evidence.
+*   **Context-Aware Forecasting:** Production forecast engine uses a 3-tier cycle time priority (model-specific, department-level historical, hardcoded fallbacks) and weighted queues based on model complexity for more accurate predictions.
 
 ## Product
 
@@ -68,6 +71,8 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Compliance & Security:** Document Vault with CUI/ITAR classification, CMMC 2.0 Level 2 readiness system, comprehensive audit systems.
 *   **AI Integration:** AI-powered prompt library, AI + Template-driven Production Control Wizard for routing/traveler/QC template recommendations.
 *   **User Interface:** Modern, responsive UI with ShadCN UI, Tailwind CSS, and Framer Motion for animations.
+*   **Advanced control centers:** PM, P2 PO, Production, Cutting Table.
+*   **MRP Material Planning Engine:** For demand, shortage, and capacity calculation.
 
 ## User preferences
 
@@ -95,6 +100,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **BOM PKs:** All BOM primary keys are UUIDs; never use `parseInt()` when referencing them.
 *   **P2 Employee Data:** Portal employees require both a `timekeeping.employees` record (linked via `epochEmployeeId`) and a `users` record (linked via `users.employeeId`) for `createdBy` FKs; missing either results in a 403.
 *   **WAD Labor Charging Phase 1 (WARN):** Budget overrun or certification issues are currently only warnings and do not block sessions, but are recorded for supervisor review.
+*   **Timekeeping Dual-Pool Deprecation:** The standalone `modules/timekeeping` architecture and its dual-pool pattern (`tkDb` vs. `db`) are superseded. Do NOT introduce new imports from `modules/timekeeping/` or `tkDb`.
 
 ## Pointers
 
@@ -108,5 +114,5 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **TanStack Query Documentation:** [https://tanstack.com/query/latest](https://tanstack.com/query/latest)
 *   **Express.js Documentation:** [https://expressjs.com/](https://expressjs.com/)
 *   **Dexie.js (IndexedDB wrapper) Documentation:** [https://dexie.org/](https://dexie.org/)
-*   **SmartyStreets API Documentation:** _Populate as you build_
 *   **NIST SP 800-171 Rev 2:** [https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final](https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final)
+*   **Wouter Documentation:** [https://www.npmjs.com/package/wouter](https://www.npmjs.com/package/wouter)

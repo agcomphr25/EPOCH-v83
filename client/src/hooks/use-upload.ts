@@ -76,7 +76,21 @@ export function useUpload(options: UseUploadOptions = {}) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to get upload URL");
+        const parts = [
+          errorData.error || `Failed to get upload URL (HTTP ${response.status})`,
+        ];
+        if (errorData.reason && errorData.reason !== "unknown") {
+          parts.push(errorData.reason);
+        }
+        if (errorData.details) {
+          parts.push(errorData.details);
+        }
+        const message = parts.join(" — ");
+        console.error("[useUpload] request-url failed:", {
+          status: response.status,
+          ...errorData,
+        });
+        throw new Error(message);
       }
 
       return response.json();
@@ -98,7 +112,21 @@ export function useUpload(options: UseUploadOptions = {}) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to upload file to storage");
+        let body = "";
+        try {
+          body = await response.text();
+        } catch {
+          // ignore
+        }
+        const truncated = body.length > 200 ? `${body.slice(0, 200)}...` : body;
+        console.error("[useUpload] PUT to storage failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: truncated,
+        });
+        throw new Error(
+          `Failed to upload file to storage (HTTP ${response.status} ${response.statusText})`
+        );
       }
     },
     []

@@ -344,7 +344,7 @@ export default function GLENNTestDashboard() {
               <div className="depth-card-icon bg-cyan-500/20">
                 <Factory className="w-5 h-5 text-cyan-400" />
               </div>
-              <span className="depth-card-title">Manufacturing Operations</span>
+              <span className="depth-card-title" style={{ color: '#60A5FA' }}>Manufacturing Operations</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               <Link href="/customers" className="depth-card-link">
@@ -704,7 +704,7 @@ function LightModeDashboard({
             <div className="p-2 rounded-lg bg-gray-100">
               <Factory className="w-5 h-5 text-gray-600" />
             </div>
-            <span>Manufacturing Operations</span>
+            <span className="text-blue-600">Manufacturing Operations</span>
           </div>
         </div>
         <div className="p-4">

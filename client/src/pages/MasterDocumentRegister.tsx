@@ -35,6 +35,7 @@ import {
   Search,
   Filter,
   Download,
+  Eye,
   Edit,
   CheckCircle,
   AlertCircle,
@@ -158,6 +159,14 @@ export default function MasterDocumentRegister() {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const isPdfDocument = (doc: ControlledDocument) =>
+    Boolean(doc.filePath?.toLowerCase().endsWith('.pdf'));
+
+  const openDocumentFile = (doc: ControlledDocument, mode: 'view' | 'download') => {
+    const path = `/api/controlled-documents/${doc.id}/${mode}`;
+    window.open(path, '_blank', 'noopener,noreferrer');
   };
 
   // Create document mutation
@@ -518,15 +527,38 @@ export default function MasterDocumentRegister() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             {doc.filePath && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0"
-                                title="Download"
-                                data-testid={`button-download-${doc.id}`}
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
+                              <>
+                                {isPdfDocument(doc) && (
+                                  <Badge
+                                    variant="outline"
+                                    role="button"
+                                    tabIndex={0}
+                                    className="h-8 cursor-pointer gap-1 border-blue-300 px-2 text-blue-700 hover:bg-blue-50"
+                                    title="View PDF"
+                                    data-testid={`badge-view-pdf-${doc.id}`}
+                                    onClick={() => openDocumentFile(doc, 'view')}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        openDocumentFile(doc, 'view');
+                                      }
+                                    }}
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    View
+                                  </Badge>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  title="Download"
+                                  onClick={() => openDocumentFile(doc, 'download')}
+                                  data-testid={`button-download-${doc.id}`}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </>
                             )}
                             <Button
                               size="sm"

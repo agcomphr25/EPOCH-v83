@@ -1,0 +1,56 @@
+index-BiYhizva.js:5448 React initialized: Object
+index-BiYhizva.js:5448 React hooks: Object
+index-BiYhizva.js:5448 [EPOCH SYNC] Sync engine starting
+index-BiYhizva.js:5448 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-BiYhizva.js:5445 App component is rendering...
+index-BiYhizva.js:5445 Environment: production
+index-BiYhizva.js:5445 Base URL: /
+index-BiYhizva.js:1715 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-BiYhizva.js:1715 [EPOCH] Install prompt captured and ready
+/login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BiYhizva.js:2161 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 403 ()
+index-BiYhizva.js:235 [AUTH] Query returned 403 for /api/employees/recertification-count
+(anonymous) @ index-BiYhizva.js:235
+index-BiYhizva.js:235 [AUTH] 403 on /api/employees/recertification-count — checking session state
+Bjt @ index-BiYhizva.js:235
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BiYhizva.js:235 [AUTH] Session check returned 401 — session is gone
+Mis @ index-BiYhizva.js:235
+index-BiYhizva.js:235 [AUTH] Session unauthorized on kiosk page — tokens cleared, no redirect
+Bis @ index-BiYhizva.js:235
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 403 ()
+index-BiYhizva.js:235 [AUTH] Query returned 403 for /api/vendor-pos/compliance-backfill
+(anonymous) @ index-BiYhizva.js:235
+index-BiYhizva.js:235 [AUTH] 403 on /api/vendor-pos/compliance-backfill — checking session state
+Bjt @ index-BiYhizva.js:235
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BiYhizva.js:235 [AUTH] Session check returned 401 — session is gone
+Mis @ index-BiYhizva.js:235
+index-BiYhizva.js:235 [AUTH] Session unauthorized on kiosk page — tokens cleared, no redirect
+Bis @ index-BiYhizva.js:235
+index-BiYhizva.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-BiYhizva.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-BiYhizva.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600028 (timeout: 15000ms, deployment: true)
+index-BiYhizva.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600028: 200
+index-BiYhizva.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-BiYhizva.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BiYhizva.js:235 🌐 API Request to /api/travelers/7f0ceae4-3a33-40cb-8b7a-62f82d654135/tasks/bfc64515-2255-40ed-8b8c-61714992885d/complete (timeout: 15000ms, deployment: true)
+index-BiYhizva.js:235 ✅ API Response from /api/travelers/7f0ceae4-3a33-40cb-8b7a-62f82d654135/tasks/bfc64515-2255-40ed-8b8c-61714992885d/complete: 200
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) null
+index-BiYhizva.js:235 🌐 API Request to /api/travelers/7f0ceae4-3a33-40cb-8b7a-62f82d654135/steps/408c63d1-5430-4b9a-97bc-cf5535226d5f/sign (timeout: 15000ms, deployment: true)
+index-BiYhizva.js:235 ✅ API Response from /api/travelers/7f0ceae4-3a33-40cb-8b7a-62f82d654135/steps/408c63d1-5430-4b9a-97bc-cf5535226d5f/sign: 200
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) null
+index-BiYhizva.js:235 🌐 API Request to /api/travelers/7f0ceae4-3a33-40cb-8b7a-62f82d654135/steps/b28dc20c-1fdd-4513-8517-a7ed791996bf/start (timeout: 15000ms, deployment: true)
+index-BiYhizva.js:235 ✅ API Response from /api/travelers/7f0ceae4-3a33-40cb-8b7a-62f82d654135/steps/b28dc20c-1fdd-4513-8517-a7ed791996bf/start: 200
+index-BiYhizva.js:235 🌐 API Request to /api/material-lots/validate/MFG-7-712-32 (timeout: 15000ms, deployment: true)
+/api/material-lots/validate/MFG-7-712-32:1  Failed to load resource: the server responded with a status of 500 ()
+index-BiYhizva.js:235 ✅ API Response from /api/material-lots/validate/MFG-7-712-32: 500
+index-BiYhizva.js:5448 API error raw body: {"error":"Failed to validate material lot","message":"asc is not defined"}
+console.error @ index-BiYhizva.js:5448
+index-BiYhizva.js:5448 💥 API Request failed for /api/material-lots/validate/MFG-7-712-32: Error: asc is not defined
+    at Ce (index-BiYhizva.js:235:8142)
+console.error @ index-BiYhizva.js:5448

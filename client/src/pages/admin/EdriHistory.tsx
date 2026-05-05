@@ -61,7 +61,7 @@ export default function EdriHistory() {
       <EdriSubNav />
 
       <div>
-        <h1 className="text-3xl font-bold">Score History</h1>
+        <h1 className="text-3xl font-bold">My Score History</h1>
         <p className="text-muted-foreground">Historical trend of EDRI composite and domain scores</p>
       </div>
 

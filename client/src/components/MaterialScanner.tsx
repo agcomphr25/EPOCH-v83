@@ -171,7 +171,7 @@ export default function MaterialScanner({
       // Packet barcode: auto-associate all fabric rolls to the traveler
       if (result.status === 'PACKET' && result.packet && result.fabricRolls) {
         const { packet, fabricRolls } = result;
-        if (result.icnSource === 'planned_materials') {
+        if (result.icnSource && result.icnSource !== 'built_packet') {
           toast(
             'No built packet found — materials shown are from the planned order, not a scanned packet. Verify before submitting.',
             { icon: '⚠️' }
@@ -212,7 +212,7 @@ export default function MaterialScanner({
             },
           });
         });
-        if (result.icnSource !== 'planned_materials') {
+        if (!result.icnSource || result.icnSource === 'built_packet') {
           toast.success(
             `Packet ${packet.barcode} linked — ${fabricRolls.length} roll${fabricRolls.length !== 1 ? 's' : ''} recorded`
           );

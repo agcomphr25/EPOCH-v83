@@ -2631,8 +2631,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/edri') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm',
-                  location.startsWith('/admin/edri') && 'bg-primary text-white'
+                  'flex items-center gap-2 text-sm text-sky-500 hover:bg-sky-50 hover:text-sky-600',
+                  location.startsWith('/admin/edri') && 'bg-sky-400 text-white hover:bg-sky-500 hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/edri'); }}
               >

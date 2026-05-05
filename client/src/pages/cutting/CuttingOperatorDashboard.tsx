@@ -30,6 +30,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -122,6 +123,13 @@ type FabricInventoryItem = {
   isFifoNext: boolean;
 };
 
+type GroupedPO = {
+  poNumber: string;
+  quantity: number;
+  p2PoItemId?: number | null;
+  p2PoId?: number | null;
+};
+
 type ManufacturingQueueItem = {
   id: number;
   partNumber: string | null;
@@ -140,6 +148,7 @@ type ManufacturingQueueItem = {
   dueDate: string | null;
   estimatedCuts: number;
   packetBomId: string | null;
+  poNumbers?: GroupedPO[] | null;
 };
 
 type PacketBOM = {
@@ -404,6 +413,7 @@ export default function CuttingOperatorDashboard() {
       let userNotes: string | null = null;
       let orderId: string | null = null;
       let materialType: string | null = item.materialType || null;
+      let poNumbers: GroupedPO[] = Array.isArray(item.poNumbers) ? item.poNumbers : [];
       if (item.notes) {
         try {
           const parsedNotes = JSON.parse(item.notes);
@@ -412,6 +422,9 @@ export default function CuttingOperatorDashboard() {
           userNotes = parsedNotes.userNotes || null;
           orderId = parsedNotes.orderId || null;
           if (!materialType) materialType = parsedNotes.materialType || null;
+          if (poNumbers.length === 0 && Array.isArray(parsedNotes.poNumbers)) {
+            poNumbers = parsedNotes.poNumbers as GroupedPO[];
+          }
         } catch {}
       }
 
@@ -460,6 +473,7 @@ export default function CuttingOperatorDashboard() {
         estimatedCuts,
         displayName,
         packetBomId: bomId || matchingBOM?.id,
+        poNumbers,
       };
     });
   }, [mfgQueueItemsRaw, packetBOMs]);
@@ -2196,7 +2210,15 @@ export default function CuttingOperatorDashboard() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{item.displayName || item.partName || '-'}</TableCell>
+                      <TableCell className="max-w-[240px]">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{item.displayName || item.partName || '-'}</span>
+                          <GroupedPOsBadge
+                            poNumbers={item.poNumbers}
+                            testIdPrefix={`pos-${item.id}`}
+                          />
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <span className={cn(

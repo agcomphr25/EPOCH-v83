@@ -19,6 +19,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { GroupedPOsBadge, type GroupedPOEntry } from "@/components/cutting/GroupedPOsBadge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -966,7 +967,11 @@ export default function CuttingWeeklySchedule() {
                   try { notes = JSON.parse(item.notes || '{}'); } catch {
                     // Not JSON - might be plain string notes
                   }
-                  
+
+                  const poEntries: GroupedPOEntry[] = Array.isArray(item.poNumbers)
+                    ? item.poNumbers
+                    : (Array.isArray(notes.poNumbers) ? notes.poNumbers : []);
+
                   const getDescription = () => {
                     if (item.displayName) return item.displayName;
                     if (notes.packetName) return notes.packetName;
@@ -1002,7 +1007,13 @@ export default function CuttingWeeklySchedule() {
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">
-                        {getDescription()}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{getDescription()}</span>
+                          <GroupedPOsBadge
+                            poNumbers={poEntries}
+                            testIdPrefix={`weekly-pos-${item.id}`}
+                          />
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">{item.quantityRequested}</TableCell>
                       <TableCell className="text-center">{item.quantityCompleted || 0}</TableCell>

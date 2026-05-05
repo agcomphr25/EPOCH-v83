@@ -65,7 +65,8 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       let orderId = null;
       let packetName = null;
       let userNotes = null;
-      
+      let poNumbers: Array<{ poNumber: string; quantity: number; p2PoItemId?: number | null; p2PoId?: number | null }> = [];
+
       try {
         if (row.queue.notes) {
           const parsedNotes = JSON.parse(row.queue.notes);
@@ -75,6 +76,16 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
           orderId = parsedNotes.orderId || null;
           packetName = parsedNotes.packetName || null;
           userNotes = parsedNotes.userNotes || null;
+          if (Array.isArray(parsedNotes.poNumbers)) {
+            poNumbers = parsedNotes.poNumbers
+              .filter((p: any) => p && (p.poNumber || p.p2PoItemId || p.p2PoId))
+              .map((p: any) => ({
+                poNumber: String(p.poNumber || ''),
+                quantity: Number(p.quantity) || 0,
+                p2PoItemId: p.p2PoItemId ?? null,
+                p2PoId: p.p2PoId ?? null,
+              }));
+          }
         }
       } catch (e) {
         // Notes might not be JSON, that's ok
@@ -102,6 +113,7 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         source,
         orderId,
         packetName,
+        poNumbers,
       };
     });
     

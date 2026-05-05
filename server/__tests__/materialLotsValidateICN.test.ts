@@ -9,6 +9,7 @@ import request from 'supertest';
 vi.mock('../db', () => ({
   db: {
     select: vi.fn(),
+    transaction: vi.fn(),
   },
   pool: {},
 }));
@@ -30,6 +31,29 @@ vi.mock('../replit_integrations/openai_ai_integrations/openaiClient', () => ({
 
 import { storage } from '../storage';
 import { db } from '../db';
+
+// ---------------------------------------------------------------------------
+// Helper: stub `db.transaction` so backfillPacketFromQueue can run end-to-end
+// without throwing (it normally calls `await db.transaction(cb)`).  By default
+// the stub short-circuits to 'skipped' (mimicking a missing productCategoryId).
+// Tests that want to exercise the "backfill succeeds" path can override this.
+// ---------------------------------------------------------------------------
+
+function stubTransactionSucceeds() {
+  vi.mocked(db.transaction).mockImplementation(async (cb: any) => {
+    const tx = {
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: 9999 }],
+          }),
+          returning: async () => [{ id: 9999 }],
+        }),
+      }),
+    };
+    return cb(tx);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helper: build a chainable db.select() mock that resolves with `rows`
@@ -221,10 +245,56 @@ describe('GET /api/material-lots/validate/:icn — MFG barcode ICN lookup', () =
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(true);
     expect(res.body.status).toBe('PACKET');
+    // Must explicitly carry 'planned_materials' so the frontend warning fires.
+    expect(res.body.icnSource).toBe('planned_materials');
 
     expect(res.body.fabricRolls).toHaveLength(1);
     expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-MATERIAL-DETAILS');
     expect(res.body.fabricRolls[0].lotNumber).toBe('LOT-PLANNED');
+  });
+
+  // -------------------------------------------------------------------------
+  // Scenario 2b: even when the on-the-fly backfill succeeds, the response
+  // must NOT be reclassified to 'built_packet' / 'backfilled_from_queue' —
+  // the data the operator is about to act on is still planned-order data,
+  // so the frontend warning must still fire.  See Task #43 review.
+  // -------------------------------------------------------------------------
+
+  it('keeps icnSource as planned_materials even when the backfill side-effect succeeds', async () => {
+    const plannedDetails = JSON.stringify([{
+      fabricInventoryId: 200,
+      fabricType: 'Planned',
+      lotNumber: 'LOT-PLANNED',
+      internalControlNumber: 'ICN-FROM-MATERIAL-DETAILS',
+      isPrimary: true,
+    }]);
+    const queueItem = {
+      ...QUEUE_ITEM,
+      id: 56,
+      inventoryItemId: 1234,
+      materialDetails: plannedDetails,
+    };
+
+    // Make backfillPacketFromQueue's productCategoryId lookup succeed and
+    // its insert transaction succeed too.
+    stubTransactionSucceeds();
+
+    sequenceDbSelects(
+      [],                            // 1. outer exact
+      [queueItem],                   // 2. queue item
+      [],                            // 3. inner exact (attempt 1)
+      [{ productCategoryId: 'cat-1' }], // 4. backfill BOM lookup → succeeds
+    );
+
+    const res = await request(app).get('/api/material-lots/validate/MFG-56-PART');
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(true);
+    // Backfill ran as a side-effect, but the response source must stay planned_materials.
+    expect(res.body.icnSource).toBe('planned_materials');
+    expect(res.body.icnSource).not.toBe('backfilled_from_queue');
+    expect(res.body.icnSource).not.toBe('built_packet');
+    expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-MATERIAL-DETAILS');
   });
 
   // -------------------------------------------------------------------------
@@ -288,62 +358,84 @@ describe('GET /api/material-lots/validate/:icn — MFG barcode ICN lookup', () =
   });
 
   // -------------------------------------------------------------------------
+  // Regression guard for Task #43: scanning a queue barcode whose packet number
+  // does not exist as a built packet must NOT return another packet's fabric
+  // rolls.  Historically the route fell back to "any packet for this queue ID"
+  // (attempt 3 / attempt 4), which silently autofilled material ICNs from a
+  // sibling packet — e.g. scanning MFG-7-712-46 would return packet #1's rolls.
+  // After the fix, the route must fall through to the planned-materials branch
+  // and surface only the queue item's own materialDetails (or nothing).
+  // -------------------------------------------------------------------------
+
+  it('does NOT fall back to another packet when the scanned packet number has no built record', async () => {
+    // Queue 7 has built packets for packet #1 only; the scanned packet number
+    // 46 does not exist.  The fabric source on packet #1 carries
+    // ICN-FROM-SOURCE — that ICN must NOT appear in the response.
+    const queueItem = { ...QUEUE_ITEM, id: 7, materialDetails: null };
+
+    // db.select() call sequence for MFG-7-712-46 (queueId=7, packetNumber=46):
+    // 1. outer exact → no packet
+    // 2. queue item → found
+    // 3. inner exact (attempt 1) → no packet
+    // 4. seq match (attempt 2, packetNumber=46) → no packet (only #1 exists)
+    // → falls through to materialDetails branch (no fabric data)
+    sequenceDbSelects(
+      [],          // 1. outer exact
+      [queueItem], // 2. queue item
+      [],          // 3. inner exact (attempt 1)
+      [],          // 4. seq match (attempt 2) — strictly no packet #46
+    );
+
+    const res = await request(app).get('/api/material-lots/validate/MFG-7-712-46');
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(true);
+    // Critical: must not be the built_packet path — that would mean a sibling
+    // packet's data was returned.  Must explicitly fall through to the planned-
+    // materials branch so the frontend warning fires.
+    expect(res.body.icnSource).toBe('planned_materials');
+    expect(res.body.fabricRolls).toEqual([]);
+    // Doubly explicit: the sibling packet's ICN must not be anywhere in the response.
+    expect(JSON.stringify(res.body)).not.toContain('ICN-FROM-SOURCE');
+  });
+
+  it('returns the queue planned-materials JSON (not a sibling packet) when packet number is unmatched', async () => {
+    // Queue 7 has materialDetails for the planned materials, plus built packets
+    // exist for packet numbers 1 and 2 (carrying ICN-FROM-SOURCE).  Scanning
+    // packet #46 must return ICN-FROM-MATERIAL-DETAILS, not ICN-FROM-SOURCE.
+    const plannedDetails = JSON.stringify([{
+      fabricInventoryId: 200,
+      fabricType: 'Planned',
+      lotNumber: 'LOT-PLANNED',
+      batchNumber: 'BATCH-PLANNED',
+      rollNumber: 'ROLL-PLANNED',
+      internalControlNumber: 'ICN-FROM-MATERIAL-DETAILS',
+      isPrimary: true,
+    }]);
+    const queueItem = { ...QUEUE_ITEM, id: 7, materialDetails: plannedDetails };
+
+    sequenceDbSelects(
+      [],          // 1. outer exact
+      [queueItem], // 2. queue item
+      [],          // 3. inner exact (attempt 1)
+      [],          // 4. seq match (attempt 2) — packet #46 doesn't exist
+    );
+
+    const res = await request(app).get('/api/material-lots/validate/MFG-7-712-46');
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(true);
+    expect(res.body.icnSource).toBe('planned_materials');
+    expect(res.body.fabricRolls).toHaveLength(1);
+    expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-MATERIAL-DETAILS');
+    expect(JSON.stringify(res.body)).not.toContain('ICN-FROM-SOURCE');
+  });
+
+  // -------------------------------------------------------------------------
   // Regression guard: the ICN preference order must be source > inventory
   // When internalControlNumber is set on the source row, it wins over the
   // inventory table's internalControlNumber.
   // -------------------------------------------------------------------------
-
-  // -------------------------------------------------------------------------
-  // Regression guard for missing `asc` import: the broadest queue-ID prefix
-  // fallback (attempt 3) calls asc(cuttingBuiltPackets.id). If `asc` is not
-  // imported in the route file, this branch throws "asc is not defined" and
-  // returns 500. Exercising the path here ensures the import stays in place.
-  // -------------------------------------------------------------------------
-
-  it('resolves a packet via the broadest queue-ID prefix fallback (asc-ordered)', async () => {
-    const queueItem = { ...QUEUE_ITEM, id: 7, materialDetails: null };
-    const packetForFallback = {
-      ...BUILT_PACKET,
-      id: 99,
-      barcode: 'PKT-712-7-1-1700000000000',
-      packetNumber: 1,
-    };
-
-    // Barcode MFG-7-712-32 → queueId=7, partNumber=712, parsedPacketNumber=32
-    // db.select() call sequence:
-    // 1. outer exact → no packet
-    // 2. queue item → found
-    // 3. inner exact (attempt 1) → no packet
-    // 4. seq match (attempt 2) → no packet
-    // 5. broadest prefix (attempt 3, uses asc) → returns 32 packets, picks idx 31
-    // 6. fabric sources join
-    const packetsForQueue = Array.from({ length: 32 }, (_, i) => ({
-      ...packetForFallback,
-      id: 100 + i,
-      packetNumber: i + 1,
-      barcode: `PKT-712-7-${i + 1}-${1700000000000 + i}`,
-    }));
-
-    sequenceDbSelects(
-      [],              // 1. outer exact
-      [queueItem],     // 2. queue item
-      [],              // 3. inner exact (attempt 1)
-      [],              // 4. seq match (attempt 2)
-      packetsForQueue, // 5. broadest prefix (attempt 3) — exercises asc()
-      [FABRIC_SOURCE], // 6. fabric sources
-    );
-
-    const res = await request(app).get('/api/material-lots/validate/MFG-7-712-32');
-
-    expect(res.status).toBe(200);
-    expect(res.body.valid).toBe(true);
-    expect(res.body.status).toBe('PACKET');
-    // parsedPacketNumber - 1 = 31 → packets[31] has id 131, packetNumber 32
-    expect(res.body.packet.id).toBe(131);
-    expect(res.body.packet.packetNumber).toBe(32);
-    expect(res.body.fabricRolls).toHaveLength(1);
-    expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-SOURCE');
-  });
 
   it('prefers the fabric-source row ICN over the joined inventory-table ICN', async () => {
     const queueItem = { ...QUEUE_ITEM, materialDetails: null };

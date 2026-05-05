@@ -20,7 +20,7 @@ import {
   inventoryBalances,
 } from '../../schema';
 import { db } from '../../db';
-import { eq, sql, and, like, desc, asc } from 'drizzle-orm';
+import { eq, sql, and, like } from 'drizzle-orm';
 import { backfillPacketFromQueue } from '../lib/packetResolution';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 
@@ -272,9 +272,16 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           // First: check if a built packet exists for this queue ID.
           // Built packets have the authoritative ICNs from cutting_built_packet_fabric_sources.
           // Strategy: (1) exact barcode match within this branch (handles normalisation differences
-          //   where the first exact lookup at line 121 may have missed due to format); (2) match by
-          //   queue-ID prefix + packet-number when the scanned barcode includes a sequence component;
-          //   (3) broadest queue-ID-prefix-only match ordered by most recent build.
+          //   where the first exact lookup at line 121 may have missed due to format); (2) strict
+          //   match by stored PKT- barcode prefix + packetNumber column when the scanned barcode
+          //   includes a sequence component.
+          //
+          // We deliberately do NOT fall back to "any packet for this queue" or "the most recently
+          // built packet for this queue".  Those fallbacks previously returned a sibling packet's
+          // fabric rolls when the scanned packet number had not yet been built, which silently
+          // autofilled the wrong material ICNs into the P2 Traveler — see Task #43.  When no
+          // specific built packet matches we fall through to the queue item's planned-materials
+          // branch instead, which the frontend surfaces with a verification warning.
           const parsedPacketNumber = (mfgMatch?.[3] || legacyQueueMatch?.[3])
             ? parseInt(mfgMatch?.[3] || legacyQueueMatch![3], 10)
             : null;
@@ -290,7 +297,9 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
           builtPacketForQueue = exactPacket;
 
           // Attempt 2: stored packet barcodes are PKT-{partNumber}-{queueId}-{packetNumber}-{timestamp}.
-          // The scanned MFG/legacy label is only a display barcode, so resolve it back to the PKT row.
+          // The scanned MFG/legacy label is only a display barcode, so resolve it back to the PKT row
+          // using a strict (queueId, packetNumber) match.  No match means no fall-through to a sibling
+          // packet's data.
           if (!builtPacketForQueue && parsedPacketNumber !== null) {
             const [seqPacket] = await db
               .select()
@@ -303,26 +312,6 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
               )
               .limit(1);
             builtPacketForQueue = seqPacket;
-          }
-
-          // Attempt 3: broadest queue-ID prefix fallback — most recently built packet wins
-          if (!builtPacketForQueue && parsedPacketNumber !== null) {
-            const packetsForQueue = await db
-              .select()
-              .from(cuttingBuiltPackets)
-              .where(like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-%-%`))
-              .orderBy(asc(cuttingBuiltPackets.id));
-            builtPacketForQueue = packetsForQueue[parsedPacketNumber - 1];
-          }
-
-          if (!builtPacketForQueue) {
-            const [latestPacket] = await db
-              .select()
-              .from(cuttingBuiltPackets)
-              .where(like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-%-%`))
-              .orderBy(desc(cuttingBuiltPackets.id))
-              .limit(1);
-            builtPacketForQueue = latestPacket;
           }
 
           if (builtPacketForQueue) {
@@ -435,14 +424,16 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
 
           const packetNumber = parsedPacketNumber || 1;
 
-          // Attempt to backfill a real packet record so subsequent scans resolve directly
-          let icnSource: 'planned_materials' | 'backfilled_from_queue' = 'planned_materials';
+          // Attempt to backfill a real packet record so subsequent scans resolve directly.
+          // The backfill is a persistence side-effect only — it must NOT reclassify the
+          // immediate response, because the data the caller is about to receive is still
+          // planned-order data (not authoritative cutting-table data).  Always returning
+          // `planned_materials` here ensures the frontend's verification warning fires so
+          // the operator double-checks the materials before submitting.  See Task #43.
           if (fabricRolls.length > 0) {
-            const backfillResult = await backfillPacketFromQueue(queueItem, icn, packetNumber, fabricRolls);
-            if (backfillResult === 'created' || backfillResult === 'existed') {
-              icnSource = 'backfilled_from_queue';
-            }
+            await backfillPacketFromQueue(queueItem, icn, packetNumber, fabricRolls);
           }
+          const icnSource: 'planned_materials' = 'planned_materials';
 
           return res.json({
             valid: true,

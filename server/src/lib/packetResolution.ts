@@ -1,4 +1,4 @@
-import { eq, like, desc, and } from 'drizzle-orm';
+import { eq, like, and } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   cuttingBuiltPackets,
@@ -164,28 +164,24 @@ export async function resolvePacketBarcode(barcode: string): Promise<PacketResol
     .limit(1);
   builtPacketForQueue = exactPacket;
 
+  // Stored packet barcodes follow the format `PKT-{partNumber}-{queueId}-{packetNumber}-{timestamp}`.
+  // The scanned MFG- label is only a display barcode, so resolve it back to the PKT row using a
+  // strict (queueId, packetNumber) match.  We deliberately do NOT fall back to "the most recently
+  // built packet for this queue" — historically that path returned a sibling packet's fabric rolls
+  // when the scanned packet number had not yet been built, which silently autofilled the wrong
+  // material ICNs into the P2 Traveler.  See Task #43.
   if (!builtPacketForQueue && parsedPacketNumber !== null) {
     const [seqPacket] = await db
       .select()
       .from(cuttingBuiltPackets)
       .where(
         and(
-          like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`),
+          like(cuttingBuiltPackets.barcode, `PKT-%-${queueId}-${parsedPacketNumber}-%`),
           eq(cuttingBuiltPackets.packetNumber, parsedPacketNumber)
         )
       )
       .limit(1);
     builtPacketForQueue = seqPacket;
-  }
-
-  if (!builtPacketForQueue) {
-    const [latestPacket] = await db
-      .select()
-      .from(cuttingBuiltPackets)
-      .where(like(cuttingBuiltPackets.barcode, `MFG-${queueId}-%`))
-      .orderBy(desc(cuttingBuiltPackets.id))
-      .limit(1);
-    builtPacketForQueue = latestPacket;
   }
 
   if (builtPacketForQueue) {
@@ -236,29 +232,15 @@ export async function resolvePacketBarcode(barcode: string): Promise<PacketResol
     }];
   }
 
+  // Backfill is a persistence side-effect only.  We deliberately do NOT re-query for the
+  // freshly-backfilled packet and reclassify the response as `built_packet`, because the
+  // data the caller is about to act on is still planned-order data (not authoritative
+  // cutting-table data).  Keeping `source: 'manufacturing_queue'` ensures downstream
+  // callers — especially the traveler completion pre-flight — treat this resolution as
+  // queue-derived and surface the same warning path as before any backfill ran.  See Task #43.
   let backfillResult: 'created' | 'existed' | 'skipped' | null = null;
   if (fabricRolls.length > 0) {
     backfillResult = await backfillPacketFromQueue(queueItem, barcode, packetNumber, fabricRolls);
-  }
-
-  if (backfillResult === 'created' || backfillResult === 'existed') {
-    const [freshPacket] = await db
-      .select()
-      .from(cuttingBuiltPackets)
-      .where(eq(cuttingBuiltPackets.barcode, barcode))
-      .limit(1);
-
-    if (freshPacket) {
-      return {
-        source: 'built_packet',
-        packetRecord: freshPacket,
-        queueItem,
-        barcode,
-        packetNumber,
-        backfillAttempted: true,
-        backfillResult,
-      };
-    }
   }
 
   return {

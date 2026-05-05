@@ -103,6 +103,7 @@ function SummaryCards({ data }: { data: any }) {
     { label: "Denied/Cancelled", value: data.deniedCancelled, icon: XCircle, color: "text-red-600" },
     { label: "On PTO Today", value: data.onPtoToday, icon: CalendarDays, color: "text-orange-600" },
     { label: "Upcoming 7 Days", value: data.upcoming7Days, icon: ArrowRight, color: "text-cyan-600" },
+    { label: "Upcoming 14 Days", value: data.upcoming14Days, icon: CalendarDays, color: "text-teal-600" },
   ];
 
   return (

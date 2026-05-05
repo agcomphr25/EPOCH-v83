@@ -261,7 +261,7 @@ export default function MyTasksControlCenter({
                           data-testid={`checkbox-task-compact-${task.id}`}
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="truncate">{task.description}</p>
+                          <p className="truncate rainbow-task-text font-semibold">{task.description}</p>
                           <p className="text-xs text-muted-foreground truncate">
                             {task.projectName}
                           </p>
@@ -484,7 +484,7 @@ export default function MyTasksControlCenter({
                   >
                     <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm line-through text-muted-foreground">
+                      <p className="text-sm line-through rainbow-task-text opacity-70">
                         {task.description}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -592,9 +592,9 @@ function ProjectTaskGroup({
             />
             <div className="flex-1 min-w-0">
               <p
-                className={
-                  task.isCompleted ? 'line-through text-muted-foreground' : ''
-                }
+                className={`rainbow-task-text font-semibold ${
+                  task.isCompleted ? 'line-through opacity-70' : ''
+                }`}
               >
                 {task.description}
               </p>

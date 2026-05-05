@@ -664,7 +664,7 @@ router.post('/:id/generate-packet-labels', async (req: Request, res: Response) =
 router.post('/sync-p2-demands', async (req: Request, res: Response) => {
   try {
     const { p2PoId } = req.body;
-    
+
     // Build query for P2 production orders needing cutting
     let whereConditions: any[];
     if (p2PoId) {
@@ -679,123 +679,131 @@ router.post('/sync-p2-demands', async (req: Request, res: Response) => {
         eq(p2ProductionOrders.status, 'PENDING'),
       ];
     }
-    
+
     // Get all P2 production orders for cutting table
     const p2Orders = await db
       .select()
       .from(p2ProductionOrders)
       .where(and(...whereConditions));
-    
+
     if (p2Orders.length === 0) {
-      return res.json({ message: 'No pending P2 cutting table demands found', created: 0 });
+      return res.json({ message: 'No pending P2 cutting table demands found', created: 0, merged: 0 });
     }
-    
-    // Group by PO + SKU to create consolidated queue entries
-    const demandMap: Record<string, { sku: string; partName: string; p2PoId: number; p2PoItemId: number | null; quantity: number; dueDate: Date | null }> = {};
-    
+
+    // Cache PO numbers
+    const poNumberCache: Record<number, string> = {};
+    const fetchPoNumber = async (id: number): Promise<string> => {
+      if (poNumberCache[id]) return poNumberCache[id];
+      const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id)).limit(1);
+      poNumberCache[id] = po?.poNumber || `PO-${id}`;
+      return poNumberCache[id];
+    };
+
+    // Group all P2 orders by SKU + due-date day. Each SKU = one packet type.
+    type Bucket = {
+      sku: string;
+      partName: string;
+      dueDate: Date | null;
+      items: { poNumber: string; quantity: number; p2PoItemId: number | null; p2PoId: number }[];
+    };
+    const buckets = new Map<string, Bucket>();
+
     for (const order of p2Orders) {
-      const key = `${order.p2PoId}-${order.sku}`;
-      if (!demandMap[key]) {
-        demandMap[key] = {
+      const dueDate = order.dueDate ? new Date(order.dueDate) : null;
+      const dayKey = dueDate ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).toISOString().slice(0, 10) : 'null';
+      const bucketKey = `${order.sku}|${dayKey}`;
+
+      if (!buckets.has(bucketKey)) {
+        buckets.set(bucketKey, {
           sku: order.sku,
           partName: order.partName,
-          p2PoId: order.p2PoId,
-          p2PoItemId: order.p2PoItemId,
-          quantity: 0,
-          dueDate: order.dueDate,
-        };
+          dueDate,
+          items: [],
+        });
       }
-      demandMap[key].quantity += (order.quantity || 1);
+
+      const poNumber = await fetchPoNumber(order.p2PoId);
+      buckets.get(bucketKey)!.items.push({
+        poNumber,
+        quantity: order.quantity || 1,
+        p2PoItemId: order.p2PoItemId,
+        p2PoId: order.p2PoId,
+      });
     }
-    
-    // Get P2 PO details for notes
-    const poIds = [...new Set(Object.values(demandMap).map(d => d.p2PoId))];
-    const poDetails: Record<number, any> = {};
-    for (const poId of poIds) {
-      const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, poId)).limit(1);
-      if (po) poDetails[poId] = po;
-    }
-    
-    // Check existing manufacturing_queue entries to avoid duplicates
-    const existingEntries = await db
-      .select()
-      .from(manufacturingQueue)
-      .where(eq(manufacturingQueue.department, 'Cutting Table'));
-    
+
+    const { upsertGroupedCuttingQueueEntry } = await import('../utils/cuttingQueueGroupingHelper');
+
     let created = 0;
+    let merged = 0;
     let skipped = 0;
     const results: any[] = [];
-    
-    for (const [key, demand] of Object.entries(demandMap)) {
-      // Find inventory item by part number
-      const [inventoryItem] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, demand.sku)).limit(1);
-      
+
+    for (const bucket of buckets.values()) {
+      // Find inventory item by part number (SKU)
+      const [inventoryItem] = await db.select().from(inventoryItems).where(eq(inventoryItems.agPartNumber, bucket.sku)).limit(1);
+
       if (!inventoryItem) {
-        results.push({ sku: demand.sku, status: 'skipped', reason: 'No matching inventory item' });
+        results.push({ sku: bucket.sku, status: 'skipped', reason: 'No matching inventory item' });
         skipped++;
         continue;
       }
-      
-      // Check if a queue entry already exists for this PO + inventory item
-      const existing = existingEntries.find(e => 
-        e.p2PoId === demand.p2PoId && 
-        e.inventoryItemId === inventoryItem.id
-      );
-      
-      if (existing) {
-        results.push({ sku: demand.sku, status: 'exists', queueId: existing.id, qty: existing.quantityRequested });
-        skipped++;
-        continue;
-      }
-      
-      const poInfo = poDetails[demand.p2PoId];
-      const poNumber = poInfo?.poNumber || `PO-${demand.p2PoId}`;
-      
+
       // Find matching packet BOM
-      const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.sku)).limit(1);
-      
-      const notesObj = {
+      const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, bucket.sku)).limit(1);
+
+      const upsertResult = await upsertGroupedCuttingQueueEntry({
+        packetName: inventoryItem.name || bucket.partName || bucket.sku,
+        materialType: null,
+        dueDate: bucket.dueDate,
+        items: bucket.items,
         source: 'P2_SYNC',
-        p2PoNumber: poNumber,
-        p2PoId: demand.p2PoId,
-        p2PoItemId: demand.p2PoItemId,
+        inventoryItemId: inventoryItem.id,
         bomId: matchingBom?.id || null,
-        materialType: 'carbon_fiber',
-      };
-      
-      const [newEntry] = await db
-        .insert(manufacturingQueue)
-        .values({
-          inventoryItemId: inventoryItem.id,
-          department: 'Cutting Table',
-          quantityRequested: demand.quantity,
-          quantityCompleted: 0,
-          priority: 50,
-          status: 'PENDING',
-          dueDate: demand.dueDate,
-          notes: JSON.stringify(notesObj),
-          requestedBy: 'system',
-          p2PoId: demand.p2PoId,
-          p2PoItemId: demand.p2PoItemId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
-      
-      results.push({ 
-        sku: demand.sku, 
-        partName: demand.partName,
-        status: 'created', 
-        queueId: newEntry.id, 
-        qty: demand.quantity,
-        bomLinked: !!matchingBom,
       });
-      created++;
+
+      if (!upsertResult) {
+        results.push({ sku: bucket.sku, status: 'skipped', reason: 'Upsert returned null' });
+        skipped++;
+        continue;
+      }
+
+      if (upsertResult.created) {
+        created++;
+        results.push({
+          sku: bucket.sku,
+          partName: bucket.partName,
+          status: 'created',
+          queueId: upsertResult.queueItem.id,
+          qty: upsertResult.addedQuantity,
+          bomLinked: !!matchingBom,
+          contributors: upsertResult.totalContributors,
+        });
+      } else if (upsertResult.addedQuantity > 0) {
+        merged++;
+        results.push({
+          sku: bucket.sku,
+          partName: bucket.partName,
+          status: 'merged',
+          queueId: upsertResult.queueItem.id,
+          addedQty: upsertResult.addedQuantity,
+          duplicates: upsertResult.duplicateCount,
+          contributors: upsertResult.totalContributors,
+        });
+      } else {
+        skipped++;
+        results.push({
+          sku: bucket.sku,
+          status: 'idempotent',
+          queueId: upsertResult.queueItem.id,
+          duplicates: upsertResult.duplicateCount,
+        });
+      }
     }
-    
+
     res.json({
-      message: `Synced P2 demands: ${created} created, ${skipped} skipped`,
+      message: `Synced P2 demands: ${created} created, ${merged} merged, ${skipped} skipped`,
       created,
+      merged,
       skipped,
       results,
     });

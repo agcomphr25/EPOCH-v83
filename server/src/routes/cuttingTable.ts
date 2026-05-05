@@ -2401,7 +2401,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 router.post('/schedule-to-cutting', async (req, res) => {
   try {
     const { orderId, bomId, quantity, priority, dueDate, source, materialType, packetName: requestedPacketName, notes } = req.body;
-    
+
     if (!quantity) {
       return res.status(400).json({ error: 'Quantity is required' });
     }
@@ -2421,7 +2421,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
     } else if (bomId === 'generic-p2-packet') {
       validBomId = null; // P2 generic packet
     }
-    
+
     // If no BOM ID provided or not found, try to find one by material type/packet type
     if (!validBomId && materialType) {
       const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
@@ -2429,8 +2429,12 @@ router.post('/schedule-to-cutting', async (req, res) => {
                              materialType === 'mesa' ? 'Mesa Packet' :
                              materialType === 'p2_disruptor' ? 'Disruptor' :
                              materialType === 'p2_disruptor_packet' ? 'Disruptor' :
-                             materialType === 'p2_antenna' ? 'Antenna Cover' : null;
-      
+                             materialType === 'p2_antenna' ? 'Antenna Cover' :
+                             materialType === 'p2_antenna_cover' ? 'Antenna Cover' :
+                             materialType === 'p2_carbon_fiber_packet' ? 'Carbon Fiber Packet' :
+                             materialType === 'p2_fiberglass_packet' ? 'Fiberglass Packet' :
+                             materialType === 'p2_mesa_packet' ? 'Mesa Packet' : null;
+
       if (packetTypeName) {
         const [matchingBom] = await db.select()
           .from(cuttingPacketBOMs)
@@ -2439,7 +2443,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
             eq(cuttingPacketBOMs.isActive, true)
           ))
           .limit(1);
-        
+
         if (matchingBom) {
           validBomId = matchingBom.id;
           console.log(`Auto-matched BOM ${validBomId} for material type ${materialType}`);
@@ -2447,10 +2451,6 @@ router.post('/schedule-to-cutting', async (req, res) => {
       }
     }
 
-    // Find or create an inventory item for this packet type
-    const { manufacturingQueue, inventoryItems } = await import('../../schema');
-    const { pool } = await import('../../db');
-    
     const packetName = requestedPacketName || (
                        materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
@@ -2459,7 +2459,110 @@ router.post('/schedule-to-cutting', async (req, res) => {
                        materialType === 'p2_disruptor_packet' ? 'Disruptor Packet' :
                        materialType === 'p2_antenna' ? 'Antenna Cover Packet' :
                        materialType === 'p2_antenna_cover' ? 'Antenna Cover Packet' : 'Stock Packet');
-    
+
+    const poNumber = req.body.poNumber;
+
+    // Detect P2 packet scheduling (per-PO Schedule button or source=P2). These paths
+    // route through the shared upsert helper so all contributing POs collapse into a
+    // single grouped manufacturing_queue row per packet type per due-date bucket.
+    const isP2PacketSchedule = source === 'P2'
+      || (typeof materialType === 'string' && materialType.startsWith('p2_'));
+
+    if (isP2PacketSchedule) {
+      const { upsertGroupedCuttingQueueEntry } = await import('../utils/cuttingQueueGroupingHelper');
+
+      // Try to extract a p2PoItemId from orderId so re-runs of the same PO line
+      // dedupe cleanly inside notes.poNumbers. orderId format is either
+      // "PO-{poNumber}-{id}" or "P2-{id}" — the trailing segment is the
+      // p2_production_orders.id, NOT the p2_po_items.id, so we leave
+      // p2PoItemId null and dedupe by poNumber.
+      const items = [{
+        poNumber: poNumber ? String(poNumber) : (orderId ? String(orderId) : `MANUAL-${Date.now()}`),
+        quantity,
+        p2PoItemId: null as number | null,
+        p2PoId: null as number | null,
+      }];
+
+      const result = await upsertGroupedCuttingQueueEntry({
+        packetName,
+        materialType: materialType || null,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        items,
+        source: source === 'P2' ? 'P2' : 'MANUAL',
+        userNotes: notes || null,
+        bomId: validBomId,
+        priority: priority || 50,
+      });
+
+      if (!result) {
+        return res.status(500).json({ error: 'Failed to schedule to cutting queue' });
+      }
+
+      // For P2 source, update the source production order status so it no longer appears as open demand.
+      // Guarded by `result.addedQuantity > 0` so an idempotent re-run (helper detected a
+      // duplicate poNumber and added zero quantity) does NOT subtract again from the
+      // source order — that would otherwise drift the open-demand count below zero.
+      if (source === 'P2' && orderId && result.addedQuantity > 0) {
+        try {
+          const { pool } = await import('../../db');
+          const idParts = String(orderId).split('-');
+          const p2OrderId = parseInt(idParts[idParts.length - 1], 10);
+          if (!isNaN(p2OrderId)) {
+            const orderRows = await pool.query(
+              `SELECT id, quantity FROM p2_production_orders WHERE id = $1`,
+              [p2OrderId]
+            );
+            const orderRow = (orderRows as any).rows?.[0] || (orderRows as any[])[0];
+            if (orderRow) {
+              const remaining = (orderRow.quantity || 0) - quantity;
+              if (remaining <= 0) {
+                await pool.query(
+                  `UPDATE p2_production_orders SET status = 'scheduled', updated_at = NOW() WHERE id = $1`,
+                  [p2OrderId]
+                );
+                console.log(`✅ P2 production order ${p2OrderId} fully scheduled — status → scheduled`);
+              } else {
+                await pool.query(
+                  `UPDATE p2_production_orders SET quantity = $1, updated_at = NOW() WHERE id = $2`,
+                  [remaining, p2OrderId]
+                );
+                console.log(`✅ P2 production order ${p2OrderId} partially scheduled — remaining quantity: ${remaining}`);
+              }
+            }
+          }
+        } catch (p2UpdateErr: any) {
+          console.warn('⚠️ Could not update P2 production order status after scheduling:', p2UpdateErr.message);
+        }
+      }
+
+      if (result.created) {
+        console.log(`✅ Per-PO scheduled ${quantity} "${packetName}" packets — created new grouped queue entry ${result.queueItem.id}`);
+      } else {
+        console.log(`✅ Per-PO scheduled ${result.addedQuantity} "${packetName}" packets (${result.duplicateCount} dup skipped) — merged into existing grouped queue entry ${result.queueItem.id}`);
+      }
+
+      let parsedNotes: Record<string, unknown> = {};
+      try { parsedNotes = result.queueItem.notes ? JSON.parse(result.queueItem.notes) : {}; } catch {}
+
+      return res.status(201).json({
+        ...result.queueItem,
+        bomId: validBomId,
+        orderId: (parsedNotes.orderId as string | undefined) ?? orderId,
+        source,
+        materialType,
+        grouped: true,
+        mergedIntoExisting: !result.created,
+        addedQuantity: result.addedQuantity,
+        duplicateCount: result.duplicateCount,
+        totalContributors: result.totalContributors,
+      });
+    }
+
+    // ---- Legacy P1 / non-P2 path (carbon_fiber / fiberglass / mesa stock, custom demand) ----
+    // Find or create an inventory item for this packet type
+    const { manufacturingQueue, inventoryItems } = await import('../../schema');
+    const { pool } = await import('../../db');
+
     // Try to find existing packet inventory item - use exact match first
     let inventoryItemId: number | null = null;
     try {
@@ -2472,7 +2575,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
       if (exactRows.length > 0) {
         inventoryItemId = exactRows[0].id;
       }
-      
+
       // If no exact match, try pattern match
       if (!inventoryItemId) {
         const result = await pool.query(
@@ -2487,7 +2590,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
     } catch (e) {
       console.log('Could not find inventory item:', e);
     }
-    
+
     // If no inventory item found, use a default packet item
     if (!inventoryItemId) {
       try {
@@ -2502,7 +2605,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
         console.log('Could not find any packet inventory item:', e);
       }
     }
-    
+
     // If still no item found, create one
     if (!inventoryItemId) {
       const [newItem] = await db.insert(inventoryItems).values({
@@ -2514,48 +2617,18 @@ router.post('/schedule-to-cutting', async (req, res) => {
       inventoryItemId = newItem.id;
     }
 
-    // For P2 packet scheduling with a PO reference, cancel any prior PENDING Cutting Table
-    // queue entries for the same PO + packet type combination before inserting the new one.
-    // This ensures rescheduling replaces the previous demand rather than stacking on top.
-    // Only non-P1 material types are affected; P1 (carbon_fiber, fiberglass, mesa) is untouched.
-    const p1MaterialTypes = ['carbon_fiber', 'fiberglass', 'mesa'];
-    const poNumber = req.body.poNumber;
-    if (packetName && poNumber && !p1MaterialTypes.includes(materialType || '')) {
-      try {
-        const { pool: cancelPool } = await import('../../db');
-        const cancelResult = await cancelPool.query(
-          `UPDATE manufacturing_queue
-           SET status = 'CANCELLED', updated_at = NOW()
-           WHERE department = 'Cutting Table'
-             AND status = 'PENDING'
-             AND notes IS NOT NULL
-             AND notes ~ '^\s*\{'
-             AND notes::jsonb->>'packetName' = $1
-             AND notes::jsonb->>'poNumber' = $2`,
-          [packetName, poNumber]
-        );
-        const cancelledCount = (cancelResult as any).rowCount || 0;
-        if (cancelledCount > 0) {
-          console.log(`🔄 Cancelled ${cancelledCount} prior PENDING "${packetName}" entr${cancelledCount === 1 ? 'y' : 'ies'} for PO ${poNumber} before rescheduling`);
-        }
-      } catch (cancelErr: any) {
-        console.warn('⚠️ Could not cancel prior queue entries:', cancelErr.message);
-      }
-    }
-
-    // Create manufacturing queue entry
-    // For P2 packets, stamp p2BackfillApplied:true so the boot backfill skips this row
-    // (the order status is updated inline below, so no historical reconciliation is needed)
+    // P1 / non-P2 path keeps its historical behavior — insert a fresh row per call.
+    // (P1 stock packet scheduling is intentionally NOT routed through the grouping
+    // helper; that path is unchanged per task scope.)
     const queueNotes = JSON.stringify({
       orderId,
       source,
       materialType,
       bomId: validBomId,
       userNotes: notes,
-      isP2Packet: source === 'P2',
+      isP2Packet: false,
       packetName,
       poNumber: poNumber || null,
-      ...(source === 'P2' ? { p2BackfillApplied: true } : {}),
     });
     const [queueItem] = await db.insert(manufacturingQueue).values({
       inventoryItemId,
@@ -2570,40 +2643,6 @@ router.post('/schedule-to-cutting', async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
-
-    // For P2 items, update the source production order status so it no longer appears as open demand
-    if (source === 'P2' && orderId) {
-      try {
-        // orderId format is either "PO-{poNumber}-{id}" or "P2-{id}" — the last segment is always the DB id
-        const idParts = String(orderId).split('-');
-        const p2OrderId = parseInt(idParts[idParts.length - 1], 10);
-        if (!isNaN(p2OrderId)) {
-          const orderRows = await pool.query(
-            `SELECT id, quantity FROM p2_production_orders WHERE id = $1`,
-            [p2OrderId]
-          );
-          const orderRow = (orderRows as any).rows?.[0] || (orderRows as any[])[0];
-          if (orderRow) {
-            const remaining = (orderRow.quantity || 0) - quantity;
-            if (remaining <= 0) {
-              await pool.query(
-                `UPDATE p2_production_orders SET status = 'scheduled', updated_at = NOW() WHERE id = $1`,
-                [p2OrderId]
-              );
-              console.log(`✅ P2 production order ${p2OrderId} fully scheduled — status → scheduled`);
-            } else {
-              await pool.query(
-                `UPDATE p2_production_orders SET quantity = $1, updated_at = NOW() WHERE id = $2`,
-                [remaining, p2OrderId]
-              );
-              console.log(`✅ P2 production order ${p2OrderId} partially scheduled — remaining quantity: ${remaining}`);
-            }
-          }
-        }
-      } catch (p2UpdateErr: any) {
-        console.warn('⚠️ Could not update P2 production order status after scheduling:', p2UpdateErr.message);
-      }
-    }
 
     res.status(201).json({
       ...queueItem,
@@ -2631,151 +2670,55 @@ router.post('/bulk-schedule-to-cutting', async (req, res) => {
       return res.status(400).json({ error: 'Total quantity must be greater than 0' });
     }
 
-    const { manufacturingQueue, inventoryItems } = await import('../../schema');
-    const { pool } = await import('../../db');
-
     const packetName = packetType || 'Stock Packet';
+    const dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
 
-    let validBomId: string | null = null;
-    if (materialType) {
-      const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
-                             materialType === 'fiberglass' ? 'Fiberglass Packet' :
-                             materialType === 'mesa' ? 'Mesa Packet' :
-                             materialType === 'p2_disruptor' ? 'Disruptor' :
-                             materialType === 'p2_disruptor_packet' ? 'Disruptor' :
-                             materialType === 'p2_antenna' ? 'Antenna Cover' : null;
-
-      if (packetTypeName) {
-        const [matchingBom] = await db.select()
-          .from(cuttingPacketBOMs)
-          .where(and(
-            ilike(cuttingPacketBOMs.packetType, `%${packetTypeName}%`),
-            eq(cuttingPacketBOMs.isActive, true)
-          ))
-          .limit(1);
-
-        if (matchingBom) {
-          validBomId = matchingBom.id;
-        }
-      }
-    }
-
-    let inventoryItemId: number | null = null;
-    try {
-      const exactResult = await pool.query(
-        `SELECT id FROM inventory_items WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-        [packetName]
-      );
-      const exactRows = Array.isArray(exactResult) ? exactResult : (exactResult as { rows?: { id: number }[] }).rows || [];
-      if (exactRows.length > 0) {
-        inventoryItemId = exactRows[0].id;
-      }
-
-      if (!inventoryItemId) {
-        const result = await pool.query(
-          `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
-          [`%${packetName}%`]
-        );
-        const rows = Array.isArray(result) ? result : (result as { rows?: { id: number }[] }).rows || [];
-        if (rows.length > 0) {
-          inventoryItemId = rows[0].id;
-        }
-      }
-    } catch (e) {
-      console.log('Could not find inventory item:', e);
-    }
-
-    if (!inventoryItemId) {
-      try {
-        const result = await pool.query(
-          `SELECT id FROM inventory_items WHERE name ILIKE '%packet%' LIMIT 1`
-        );
-        const rows = Array.isArray(result) ? result : (result as { rows?: { id: number }[] }).rows || [];
-        if (rows.length > 0) {
-          inventoryItemId = rows[0].id;
-        }
-      } catch (e) {
-        console.log('Could not find any packet inventory item:', e);
-      }
-    }
-
-    if (!inventoryItemId) {
-      const [newItem] = await db.insert(inventoryItems).values({
-        name: packetName,
-        agPartNumber: `PKT-${materialType?.toUpperCase() || 'STK'}`,
-        category: 'packet',
-        quantityInStock: 0,
-      }).returning();
-      inventoryItemId = newItem.id;
-    }
-
-    const p1MaterialTypes = ['carbon_fiber', 'fiberglass', 'mesa'];
-    if (!p1MaterialTypes.includes(materialType || '')) {
-      try {
-        const cancelResult = await pool.query(
-          `UPDATE manufacturing_queue
-           SET status = 'CANCELLED', updated_at = NOW()
-           WHERE department = 'Cutting Table'
-             AND status = 'PENDING'
-             AND notes IS NOT NULL
-             AND notes ~ '^\\s*\\{'
-             AND notes::jsonb->>'packetName' = $1`,
-          [packetName]
-        );
-        const cancelledCount = (cancelResult as { rowCount?: number }).rowCount || 0;
-        if (cancelledCount > 0) {
-          console.log(`🔄 Cancelled ${cancelledCount} prior PENDING "${packetName}" entr${cancelledCount === 1 ? 'y' : 'ies'} before bulk rescheduling`);
-        }
-      } catch (cancelErr: unknown) {
-        const msg = cancelErr instanceof Error ? cancelErr.message : String(cancelErr);
-        console.warn('⚠️ Could not cancel prior queue entries:', msg);
-      }
-    }
-
-    interface BulkItem { poNumber: string; quantity: number }
-    const poDetails: BulkItem[] = items.map((item: BulkItem) => ({
+    interface BulkItem { poNumber: string; quantity: number; p2PoItemId?: number | null; p2PoId?: number | null }
+    const groupedItems = (items as BulkItem[]).map(item => ({
       poNumber: item.poNumber,
       quantity: item.quantity,
+      p2PoItemId: item.p2PoItemId ?? null,
+      p2PoId: item.p2PoId ?? null,
     }));
 
-    const orderId = `BULK-${packetName.replace(/\s+/g, '_').toUpperCase()}-${Date.now()}`;
-
-    const queueNotes = JSON.stringify({
-      orderId,
-      source: 'MANUAL',
-      materialType,
-      bomId: validBomId,
-      userNotes: `Bulk scheduled ${totalQuantity} ${packetName} packets from ${items.length} POs`,
-      isP2Packet: true,
+    const { upsertGroupedCuttingQueueEntry } = await import('../utils/cuttingQueueGroupingHelper');
+    const result = await upsertGroupedCuttingQueueEntry({
       packetName,
-      poNumbers: poDetails,
-      p2BackfillApplied: true,
+      materialType: materialType || null,
+      dueDate,
+      items: groupedItems,
+      source: 'MANUAL',
+      userNotes: `Bulk scheduled ${totalQuantity} ${packetName} packets from ${items.length} POs`,
     });
 
-    const [queueItem] = await db.insert(manufacturingQueue).values({
-      inventoryItemId,
-      department: 'Cutting Table',
-      quantityRequested: totalQuantity,
-      quantityCompleted: 0,
-      priority: 50,
-      status: 'PENDING',
-      dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
-      notes: queueNotes,
-      requestedBy: 'system',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
+    if (!result) {
+      return res.status(500).json({ error: 'Failed to bulk schedule to cutting queue' });
+    }
 
-    console.log(`✅ Bulk scheduled ${totalQuantity} "${packetName}" packets from ${items.length} POs into queue entry ${queueItem.id}`);
+    let parsedNotes: Record<string, unknown> = {};
+    try { parsedNotes = result.queueItem.notes ? JSON.parse(result.queueItem.notes) : {}; } catch {}
+    const orderId = (parsedNotes.orderId as string | undefined) || `BULK-${packetName.replace(/\s+/g, '_').toUpperCase()}-${Date.now()}`;
+    const validBomId = (parsedNotes.bomId as string | null | undefined) ?? null;
+
+    if (result.created) {
+      console.log(`✅ Bulk scheduled ${totalQuantity} "${packetName}" packets from ${items.length} POs into new queue entry ${result.queueItem.id}`);
+    } else {
+      console.log(`✅ Bulk scheduled ${result.addedQuantity} additional "${packetName}" packets (${result.duplicateCount} dup skipped) — merged into existing queue entry ${result.queueItem.id} (now ${result.totalContributors} contributing PO entries)`);
+    }
 
     res.status(201).json({
-      ...queueItem,
+      ...result.queueItem,
       bomId: validBomId,
       orderId,
       source: 'MANUAL',
       materialType,
       totalQuantity,
       poCount: items.length,
+      grouped: true,
+      mergedIntoExisting: !result.created,
+      addedQuantity: result.addedQuantity,
+      duplicateCount: result.duplicateCount,
+      totalContributors: result.totalContributors,
     });
   } catch (error) {
     console.error('Error bulk scheduling to cutting queue:', error);

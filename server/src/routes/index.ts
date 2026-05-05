@@ -4012,14 +4012,21 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       console.log(`Scheduled ${result.length} items for production`);
       
-      // Auto-sync P2 cutting table demands for the affected POs
-      // Looks for PENDING production orders (any dept) where the part requires cutting (CF/FG parts)
+      // Auto-sync P2 cutting table demands for the affected POs.
+      // All cutting orders for the affected POs are resolved to their actual packet
+      // inventory item (looked up by SKU → inventory_items.agPartNumber, with name-
+      // based CF/FG fallback for non-packet-classified rows), bucketed by
+      // (inventoryItemId, due-date day), and upserted into a single grouped
+      // manufacturing_queue row per bucket via the shared helper.
+      // Re-runs are idempotent because the helper dedupes contributing PO entries
+      // by p2PoItemId.
       let cuttingTableSynced = 0;
       try {
-        const { ilike, or, sql: sqlFn } = await import('drizzle-orm');
+        const { ilike, or } = await import('drizzle-orm');
+        const { upsertGroupedCuttingQueueEntry } = await import('../utils/cuttingQueueGroupingHelper');
         const affectedPoIds = [...new Set(result.map(r => r.poId))];
 
-        // Pre-load packet inventory items keyed by material type
+        // CF/FG packet items used as fallback when SKU lookup misses
         const cfPacketItem = await db.select().from(inventoryItems)
           .where(and(eq(inventoryItems.isPacket, true), ilike(inventoryItems.name, '%carbon fiber%')))
           .limit(1).then(r => r[0] || null);
@@ -4027,14 +4034,54 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           .where(and(eq(inventoryItems.isPacket, true), or(ilike(inventoryItems.name, '%fiberglass%'), ilike(inventoryItems.name, '%fiber glass%'))))
           .limit(1).then(r => r[0] || null);
 
-        const isCfPart = (name: string) => {
-          const n = name.toLowerCase();
-          return n.includes('carbon fiber') || n.includes('carbon fibre') || n.includes(' cf ') || n.startsWith('cf ');
-        };
         const isFgPart = (name: string) => {
           const n = name.toLowerCase();
           return n.includes('fiberglass') || n.includes('fibreglass') || n.includes('fiber glass');
         };
+
+        type PacketInventoryItem = NonNullable<typeof cfPacketItem>;
+
+        // SKU → packet inventory item cache (lookup by agPartNumber)
+        const skuPacketCache: Record<string, PacketInventoryItem | null> = {};
+        const resolvePacketBySku = async (sku: string | null): Promise<PacketInventoryItem | null> => {
+          if (!sku) return null;
+          if (sku in skuPacketCache) return skuPacketCache[sku];
+          const [item] = await db.select().from(inventoryItems)
+            .where(and(eq(inventoryItems.agPartNumber, sku), eq(inventoryItems.isPacket, true)))
+            .limit(1);
+          skuPacketCache[sku] = item || null;
+          return skuPacketCache[sku];
+        };
+
+        // Derive a materialType label for BOM matching / display, given the resolved packet item name
+        const materialTypeFromName = (name: string | null | undefined): string => {
+          const n = (name || '').toLowerCase();
+          if (n.includes('fiberglass') || n.includes('fibreglass') || n.includes('fiber glass')) return 'fiberglass';
+          if (n.includes('carbon')) return 'carbon_fiber';
+          if (n.includes('mesa')) return 'mesa';
+          if (n.includes('disruptor')) return 'p2_disruptor_packet';
+          if (n.includes('antenna')) return 'p2_antenna_cover';
+          return 'p2_packet';
+        };
+
+        // Cache PO numbers so we don't re-query for each order
+        const poNumberCache: Record<number, string> = {};
+        const fetchPoNumber = async (id: number): Promise<string> => {
+          if (poNumberCache[id]) return poNumberCache[id];
+          const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id)).limit(1);
+          poNumberCache[id] = po?.poNumber || `PO-${id}`;
+          return poNumberCache[id];
+        };
+
+        // Bucket all cutting orders across all affected POs by (packet inventory item, due-date day)
+        type Bucket = {
+          materialType: string;
+          packetItem: PacketInventoryItem;
+          packetName: string;
+          dueDate: Date | null;
+          items: { poNumber: string; quantity: number; p2PoItemId: number; p2PoId: number }[];
+        };
+        const buckets = new Map<string, Bucket>();
 
         for (const poId of affectedPoIds) {
           // Fetch all PENDING orders for this PO
@@ -4057,69 +4104,70 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
           if (cuttingOrders.length === 0) continue;
 
-          // Aggregate demand by PO item + material type
-          const demandMap: Record<string, { materialType: 'carbon_fiber' | 'fiberglass'; packetItem: typeof cfPacketItem; p2PoId: number; p2PoItemId: number; quantity: number; dueDate: Date | null; partName: string }> = {};
+          const poNumber = await fetchPoNumber(poId);
 
           for (const order of cuttingOrders) {
-            const materialType = isFgPart(order.partName || '') ? 'fiberglass' : 'carbon_fiber';
-            const packetItem = materialType === 'fiberglass' ? fgPacketItem : cfPacketItem;
-            if (!packetItem) continue; // No packet inventory item configured for this material type
+            // 1. Try to resolve the actual packet inventory item by SKU
+            //    (this handles Disruptor, Antenna Cover, Mesa, and any other
+            //    packet families beyond CF/FG)
+            let packetItem = await resolvePacketBySku(order.sku);
 
-            const key = `${order.p2PoId}-${order.p2PoItemId}-${materialType}`;
-            if (!demandMap[key]) {
-              demandMap[key] = { materialType, packetItem, p2PoId: order.p2PoId, p2PoItemId: order.p2PoItemId, quantity: 0, dueDate: order.dueDate, partName: order.partName || '' };
+            // 2. Fall back to CF/FG name-based classification when SKU lookup misses
+            if (!packetItem) {
+              packetItem = isFgPart(order.partName || '') ? fgPacketItem : cfPacketItem;
             }
-            demandMap[key].quantity += (order.quantity || 1);
+            if (!packetItem) continue; // No packet inventory item configured at all
+
+            const materialType = materialTypeFromName(packetItem.name);
+            const dueDate = order.dueDate ? new Date(order.dueDate) : null;
+            const dayKey = dueDate ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).toISOString().slice(0, 10) : 'null';
+            const bucketKey = `${packetItem.id}|${dayKey}`;
+
+            if (!buckets.has(bucketKey)) {
+              buckets.set(bucketKey, {
+                materialType,
+                packetItem,
+                packetName: packetItem.name || materialType,
+                dueDate,
+                items: [],
+              });
+            }
+            buckets.get(bucketKey)!.items.push({
+              poNumber,
+              quantity: order.quantity || 1,
+              p2PoItemId: order.p2PoItemId,
+              p2PoId: order.p2PoId,
+            });
+          }
+        }
+
+        type CuttingPacketBom = typeof cuttingPacketBOMs.$inferSelect;
+        for (const bucket of buckets.values()) {
+          let matchingBom: CuttingPacketBom | null = null;
+          if (bucket.packetItem.agPartNumber) {
+            const [bom] = await db.select().from(cuttingPacketBOMs)
+              .where(eq(cuttingPacketBOMs.partNumber, bucket.packetItem.agPartNumber))
+              .limit(1);
+            matchingBom = bom || null;
           }
 
-          const existingEntries = await db.select().from(manufacturingQueue)
-            .where(and(eq(manufacturingQueue.department, 'Cutting Table'), eq(manufacturingQueue.p2PoId, poId)));
+          const upsertResult = await upsertGroupedCuttingQueueEntry({
+            packetName: bucket.packetName,
+            materialType: bucket.materialType,
+            dueDate: bucket.dueDate,
+            items: bucket.items,
+            source: 'P2_SYNC',
+            inventoryItemId: bucket.packetItem.id,
+            bomId: matchingBom?.id || null,
+          });
 
-          for (const [, demand] of Object.entries(demandMap)) {
-            const existing = existingEntries.find(e =>
-              e.p2PoId === demand.p2PoId &&
-              e.inventoryItemId === demand.packetItem!.id &&
-              e.p2PoItemId === demand.p2PoItemId
-            );
-            if (existing) continue;
-
-            const [po] = await db.select().from(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, demand.p2PoId)).limit(1);
-            const poNumber = po?.poNumber || `PO-${demand.p2PoId}`;
-
-            const [matchingBom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.partNumber, demand.packetItem!.agPartNumber)).limit(1);
-
-            const notesObj = {
-              source: 'P2_SYNC',
-              p2PoNumber: poNumber,
-              p2PoId: demand.p2PoId,
-              p2PoItemId: demand.p2PoItemId,
-              bomId: matchingBom?.id || null,
-              materialType: demand.materialType,
-              partName: demand.partName,
-            };
-
-            await db.insert(manufacturingQueue).values({
-              inventoryItemId: demand.packetItem!.id,
-              department: 'Cutting Table',
-              quantityRequested: demand.quantity,
-              quantityCompleted: 0,
-              priority: 50,
-              status: 'PENDING',
-              dueDate: demand.dueDate,
-              notes: JSON.stringify(notesObj),
-              requestedBy: 'system',
-              p2PoId: demand.p2PoId,
-              p2PoItemId: demand.p2PoItemId,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-
+          if (upsertResult && (upsertResult.created || upsertResult.addedQuantity > 0)) {
             cuttingTableSynced++;
           }
         }
 
         if (cuttingTableSynced > 0) {
-          console.log(`Auto-synced ${cuttingTableSynced} cutting table packet demands from P2 control center`);
+          console.log(`Auto-synced ${cuttingTableSynced} grouped cutting table packet work order(s) from P2 control center`);
         }
       } catch (syncError) {
         console.error('Non-fatal: Failed to auto-sync cutting table demands:', syncError);

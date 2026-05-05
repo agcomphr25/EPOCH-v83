@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRoute, Link } from 'wouter';
+import { useRoute, Link, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +60,7 @@ export default function P2PackingSlipViewer() {
   const packingSlipId = params?.id;
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const [editMode, setEditMode] = useState(false);
   const [editSlipNumber, setEditSlipNumber] = useState('');
@@ -147,6 +148,14 @@ export default function P2PackingSlipViewer() {
     });
   };
 
+  const handleBack = () => {
+    if (packingSlip?.lotNumberId) {
+      setLocation(`/p2/shipments/${packingSlip.lotNumberId}`);
+    } else {
+      setLocation('/p2-traveler-viewer');
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -157,24 +166,34 @@ export default function P2PackingSlipViewer() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-12 text-center">
-        <Clock className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-        <p className="text-gray-500 mt-4">Loading packing slip...</p>
+      <div className="container mx-auto px-4 py-12 max-w-4xl">
+        <div className="print:hidden mb-6">
+          <Button variant="ghost" onClick={handleBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        </div>
+        <div className="text-center">
+          <Clock className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+          <p className="text-gray-500 mt-4">Loading packing slip...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !packingSlip) {
     return (
-      <div className="container mx-auto px-4 py-12 text-center">
-        <Package className="h-8 w-8 mx-auto text-red-400" />
-        <p className="text-red-500 mt-4">Failed to load packing slip</p>
-        <Link href="/p2-traveler-viewer">
-          <Button variant="outline" className="mt-4">
+      <div className="container mx-auto px-4 py-12 max-w-4xl">
+        <div className="print:hidden mb-6">
+          <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Traveler Viewer
+            Back
           </Button>
-        </Link>
+        </div>
+        <div className="text-center">
+          <Package className="h-8 w-8 mx-auto text-red-400" />
+          <p className="text-red-500 mt-4">Failed to load packing slip</p>
+        </div>
       </div>
     );
   }
@@ -188,7 +207,7 @@ export default function P2PackingSlipViewer() {
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       <div className="print:hidden flex items-center justify-between mb-6">
-        <Button variant="ghost" onClick={() => window.history.back()}>
+        <Button variant="ghost" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>

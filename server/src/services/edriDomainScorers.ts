@@ -67,7 +67,16 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
   const redFlags: RedFlagInput[] = [];
   const remediationItems: RemediationInput[] = [];
   const evidenceItems: EvidenceRef[] = [];
-  const timekeepingEffectiveDate = process.env.TIMEKEEPING_DCAA_EFFECTIVE_DATE ?? '2026-06-01';
+  const DEFAULT_TIMEKEEPING_EFFECTIVE_DATE = '2026-06-01';
+  const rawEffectiveDate = (process.env.TIMEKEEPING_DCAA_EFFECTIVE_DATE ?? '').trim();
+  const isValidIsoDate = /^\d{4}-\d{2}-\d{2}$/.test(rawEffectiveDate)
+    && !Number.isNaN(Date.parse(`${rawEffectiveDate}T00:00:00Z`));
+  if (rawEffectiveDate && !isValidIsoDate) {
+    console.warn(
+      `[edriDomainScorers] TIMEKEEPING_DCAA_EFFECTIVE_DATE="${rawEffectiveDate}" is not a valid YYYY-MM-DD date — falling back to default ${DEFAULT_TIMEKEEPING_EFFECTIVE_DATE}.`
+    );
+  }
+  const timekeepingEffectiveDate = isValidIsoDate ? rawEffectiveDate : DEFAULT_TIMEKEEPING_EFFECTIVE_DATE;
   evidenceItems.push({ label: 'Timekeeping DCAA effective date', value: timekeepingEffectiveDate });
 
   // Check 1: PIN enforcement mandatory. Kiosk PIN enforcement is an access control,
@@ -146,17 +155,19 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
   }
 
   // Check 4: Employee certification - post-effective-date employee attestation on timekeeping.timesheets.
+  // NOTE: timekeeping.timesheets.period_end is TEXT (see migration 0069); explicitly cast to date so
+  // the comparison is chronological, not lexicographic — robust to non-ISO values that may exist.
   const totalAttestableTimesheets = await safeCount(`
     SELECT COUNT(*) as count
     FROM timekeeping.timesheets
     WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
-      AND period_end >= $1
+      AND period_end::date >= $1::date
   `, [timekeepingEffectiveDate]);
   const fullyAttestedTimesheets = await safeCount(`
     SELECT COUNT(*) as count
     FROM timekeeping.timesheets
     WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
-      AND period_end >= $1
+      AND period_end::date >= $1::date
       AND employee_attested = TRUE
       AND attested_at IS NOT NULL
       AND certification_statement IS NOT NULL
@@ -167,7 +178,7 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
     SELECT COUNT(*) as count
     FROM timekeeping.timesheets
     WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
-      AND period_end < $1
+      AND period_end::date < $1::date
   `, [timekeepingEffectiveDate]);
   evidenceItems.push({ label: 'Legacy pre-effective-date attestable timesheets', value: legacyAttestableTimesheets ?? 'SCORER_UNAVAILABLE' });
 
@@ -264,13 +275,13 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
     FROM timekeeping.timesheet_corrections tc
     JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
     WHERE tc.requested_at::date >= $1::date
-       OR ts.period_end >= $1
+       OR ts.period_end::date >= $1::date
   `, [timekeepingEffectiveDate]);
   const fullyReviewedCorrections = await safeCount(`
     SELECT COUNT(*) as count
     FROM timekeeping.timesheet_corrections tc
     JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
-    WHERE (tc.requested_at::date >= $1::date OR ts.period_end >= $1)
+    WHERE (tc.requested_at::date >= $1::date OR ts.period_end::date >= $1::date)
       AND tc.status IN ('approved', 'rejected')
       AND tc.requested_by_employee_id IS NOT NULL
       AND tc.reason IS NOT NULL
@@ -288,7 +299,7 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
     FROM timekeeping.timesheet_corrections tc
     JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
     WHERE tc.requested_at::date < $1::date
-      AND ts.period_end < $1
+      AND ts.period_end::date < $1::date
   `, [timekeepingEffectiveDate]);
   evidenceItems.push({ label: 'Legacy pre-effective-date correction records', value: legacyCorrections ?? 'SCORER_UNAVAILABLE' });
 

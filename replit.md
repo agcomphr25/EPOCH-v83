@@ -323,23 +323,25 @@ Complete CMMC 2.0 Level 2 (NIST SP 800-171 Rev 2) control mapping and System Sec
 - Database table: `cmmc_control_status` (created and seeded by boot runner in server/index.ts)
 - Route: `/admin/cmmc` (client), `/api/cmmc/*` (server, ADMIN/OWNER only)
 
-## Proteus Labs — AI Prompt Library (Migration 0081)
+## Prompt Library — AI Prompt Library (formerly "Proteus Labs", Migration 0081)
 
 Admin/Owner-only internal tool for storing, organizing, and executing AI prompts.
+The user-facing label is now "Prompt Library"; the internal Proteus naming is retained
+for tables, enums, components, and API URLs to keep the data model stable.
 
 **Tables:** `proteus_prompts`, `proteus_prompt_variables`, `proteus_prompt_executions`, `proteus_prompt_results`, `proteus_prompt_tags`
 
 **Enums:** `proteus_prompt_category` (small, feature, large_architecture, audit, emergency, deployment, skill_builder), `proteus_execution_status` (pending, success, failure, noted)
 
-**Backend routes** (`/api/proteus-labs/*`): Full CRUD for prompts, executions, results. Protected by `authenticateToken + requireExecutiveAccess`. Usage count auto-increments on execution.
+**Backend routes** (`/api/proteus-labs/*`): Full CRUD for prompts, executions, results. Protected by `authenticateToken + requireExecutiveAccess`. Usage count auto-increments on execution. (URL kept under `/api/proteus-labs/*` even after the label change.)
 
-**Frontend pages** (`/proteus-labs/*`):
-- Dashboard: Search/filter library, recent prompts, most used, execution highlights
-- Prompt Builder (`/proteus-labs/new`, `/proteus-labs/:id/edit`): Create/edit with auto-detected `{{token}}` variable support
-- Prompt Detail (`/proteus-labs/:id`): Fill variables, generate resolved output, copy to clipboard, paste result back, track execution history
-- Execution History (`/proteus-labs/history`): Global execution log with status filters and pagination
+**Frontend pages** (`/prompt-library/*` — the legacy `/proteus-labs/*` URLs auto-redirect):
+- Dashboard (`/prompt-library`): Search/filter library, recent prompts, most used, execution highlights
+- Prompt Builder (`/prompt-library/new`, `/prompt-library/:id/edit`): Create/edit with auto-detected `{{token}}` variable support
+- Prompt Detail (`/prompt-library/:id`): Fill variables, generate resolved output, copy to clipboard, paste result back, track execution history
+- Execution History (`/prompt-library/history`): Global execution log with status filters and pagination
 
-**Permissions:** ADMIN/OWNER only. Registered in `ROLE_ROUTE_ACCESS` in `userPermissions.ts`. Nav button in `Navigation.tsx` gated by role.
+**Permissions:** ADMIN/OWNER only. Both `/prompt-library` and `/proteus-labs` are registered in `VALID_NAVBAR_ROUTES` and `ROLE_ROUTE_ACCESS` in `userPermissions.ts` so the redirect routes don't trip the route guard. Nav button in `Navigation.tsx` gated by username `glennj`.
 
 ## Environment Variables
 
@@ -347,6 +349,7 @@ Admin/Owner-only internal tool for storing, organizing, and executing AI prompts
 |---|---|---|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `PORTAL_TOKEN_SECRET` | Yes | HMAC-SHA256 signing key for payload-based employee portal tokens. Must be set before any salaried portal links are generated. A cryptographically random 48-byte hex value is recommended. Set as a shared env var. |
+| `TIMEKEEPING_DCAA_EFFECTIVE_DATE` | No | ISO date (YYYY-MM-DD) marking when the timekeeping system became DCAA-compliant. The EDRI Timekeeping scorer (`server/src/services/edriDomainScorers.ts → scoreTimekeeping`) only counts approvals, attestations, corrections, and violations on or after this date toward the live readiness score; pre-cutover sessions are reported as legacy evidence and do not impact the score. Defaults to `2026-06-01` if unset. |
 
 ## Phase E — Labor Cost Reconciliation Script
 

@@ -98,7 +98,7 @@ function formatCategory(cat: string) {
 
 export default function ProteusPromptDetail() {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute('/proteus-labs/:id');
+  const [, params] = useRoute('/prompt-library/:id');
   const { toast } = useToast();
   const promptId = params?.id;
 
@@ -202,7 +202,7 @@ export default function ProteusPromptDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/proteus-labs/prompts'] });
       toast({ title: 'Prompt deleted' });
-      setLocation('/proteus-labs');
+      setLocation('/prompt-library');
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -305,7 +305,7 @@ export default function ProteusPromptDetail() {
     return (
       <div className="max-w-4xl mx-auto py-6 px-4 text-center">
         <p className="text-gray-500">Prompt not found.</p>
-        <Button className="mt-4" onClick={() => setLocation('/proteus-labs')}>
+        <Button className="mt-4" onClick={() => setLocation('/prompt-library')}>
           Back to Library
         </Button>
       </div>
@@ -316,7 +316,7 @@ export default function ProteusPromptDetail() {
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setLocation('/proteus-labs')} className="mt-0.5">
+          <Button variant="ghost" size="sm" onClick={() => setLocation('/prompt-library')} className="mt-0.5">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -347,7 +347,7 @@ export default function ProteusPromptDetail() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setLocation(`/proteus-labs/${promptId}/edit`)}
+            onClick={() => setLocation(`/prompt-library/${promptId}/edit`)}
             className="gap-1"
           >
             <Edit className="h-3 w-3" />

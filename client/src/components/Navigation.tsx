@@ -2671,18 +2671,18 @@ export default function Navigation() {
               </Button>
             )}
 
-            {/* Proteus Labs — Prompt Library (glennj only) */}
+            {/* Prompt Library (glennj only) */}
             {currentUser?.username === 'glennj' && (
               <Button
-                variant={location.startsWith('/proteus-labs') ? 'default' : 'ghost'}
+                variant={(location.startsWith('/prompt-library') || location.startsWith('/proteus-labs')) ? 'default' : 'ghost'}
                 className={cn(
                   'flex items-center gap-2 text-sm',
-                  location.startsWith('/proteus-labs') && 'bg-primary text-white'
+                  (location.startsWith('/prompt-library') || location.startsWith('/proteus-labs')) && 'bg-primary text-white'
                 )}
-                onClick={() => { closeAllDropdowns(); setLocation('/proteus-labs'); }}
+                onClick={() => { closeAllDropdowns(); setLocation('/prompt-library'); }}
               >
                 <FlaskConical className="h-4 w-4" />
-                Proteus Labs
+                Prompt Library
               </Button>
             )}
 

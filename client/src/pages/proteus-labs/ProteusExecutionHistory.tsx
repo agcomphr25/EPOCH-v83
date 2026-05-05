@@ -94,7 +94,7 @@ export default function ProteusExecutionHistory() {
     <div className="max-w-6xl mx-auto py-6 px-4 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setLocation('/proteus-labs')}>
+          <Button variant="ghost" size="sm" onClick={() => setLocation('/prompt-library')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex items-center gap-2">
@@ -144,7 +144,7 @@ export default function ProteusExecutionHistory() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           className="text-sm font-semibold text-indigo-700 hover:underline truncate"
-                          onClick={() => setLocation(`/proteus-labs/${ex.promptId}`)}
+                          onClick={() => setLocation(`/prompt-library/${ex.promptId}`)}
                         >
                           {ex.promptTitle}
                         </button>
@@ -185,7 +185,7 @@ export default function ProteusExecutionHistory() {
                         size="sm"
                         variant="ghost"
                         className="h-7 w-7 p-0"
-                        onClick={() => setLocation(`/proteus-labs/${ex.promptId}`)}
+                        onClick={() => setLocation(`/prompt-library/${ex.promptId}`)}
                       >
                         <ExternalLink className="h-3 w-3" />
                       </Button>

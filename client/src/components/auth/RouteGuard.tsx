@@ -47,13 +47,19 @@ function isDeploymentEnvironment(): boolean {
   return !isLocalhost && !isReplitEditor;
 }
 
+function normalizeRoute(path: string): string {
+  return path.split('?')[0].split('#')[0];
+}
+
 function isPublicRoute(path: string): boolean {
-  if (PUBLIC_ROUTES.includes(path)) {
+  const routePath = normalizeRoute(path);
+
+  if (PUBLIC_ROUTES.includes(routePath)) {
     return true;
   }
   
   for (const prefix of PUBLIC_ROUTE_PREFIXES) {
-    if (path.startsWith(prefix)) {
+    if (routePath.startsWith(prefix)) {
       return true;
     }
   }

@@ -64,6 +64,11 @@ function isKioskRoute(): boolean {
   return KIOSK_ROUTES.some(r => path === r || path.startsWith(r + '/'));
 }
 
+function isLocalDevelopmentHost(): boolean {
+  const hostname = window.location.hostname;
+  return hostname.includes('localhost') || hostname.includes('127.0.0.1');
+}
+
 function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   if (sessionExpiryNotified) return;
   sessionExpiryNotified = true;
@@ -133,6 +138,10 @@ async function checkSessionAlive(): Promise<boolean> {
 // Returns true if the caller should retry the original request, false otherwise.
 async function handleAuthError(status: number, url: string): Promise<boolean> {
   console.warn(`[AUTH] ${status} on ${url} — checking session state`);
+
+  // Local development uses a synthetic admin user in RouteGuard. Do not
+  // convert arbitrary API 401/403s into a browser-level login redirect.
+  if (isLocalDevelopmentHost()) return false;
 
   // Skip interception for auth endpoints themselves to avoid infinite loops
   if (url.includes('/api/auth/')) return false;

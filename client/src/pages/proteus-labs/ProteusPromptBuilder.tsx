@@ -76,8 +76,8 @@ function extractTokens(body: string): string[] {
 
 export default function ProteusPromptBuilder() {
   const [, setLocation] = useLocation();
-  const [matchNew] = useRoute('/proteus-labs/new');
-  const [matchEdit, editParams] = useRoute('/proteus-labs/:id/edit');
+  const [matchNew] = useRoute('/prompt-library/new');
+  const [matchEdit, editParams] = useRoute('/prompt-library/:id/edit');
   const { toast } = useToast();
 
   const isEdit = !!matchEdit && !matchNew;
@@ -155,7 +155,7 @@ export default function ProteusPromptBuilder() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/proteus-labs/prompts'] });
       toast({ title: 'Prompt created', description: data.title });
-      setLocation(`/proteus-labs/${data.id}`);
+      setLocation(`/prompt-library/${data.id}`);
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -180,7 +180,7 @@ export default function ProteusPromptBuilder() {
       queryClient.invalidateQueries({ queryKey: ['/api/proteus-labs/prompts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/proteus-labs/prompts', promptId] });
       toast({ title: 'Prompt updated', description: data.title });
-      setLocation(`/proteus-labs/${promptId}`);
+      setLocation(`/prompt-library/${promptId}`);
     },
     onError: (err: Error) => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -243,7 +243,7 @@ export default function ProteusPromptBuilder() {
           variant="ghost"
           size="sm"
           onClick={() =>
-            isEdit ? setLocation(`/proteus-labs/${promptId}`) : setLocation('/proteus-labs')
+            isEdit ? setLocation(`/prompt-library/${promptId}`) : setLocation('/prompt-library')
           }
           className="gap-2"
         >
@@ -403,7 +403,7 @@ export default function ProteusPromptBuilder() {
             variant="outline"
             className="w-full"
             onClick={() =>
-              isEdit ? setLocation(`/proteus-labs/${promptId}`) : setLocation('/proteus-labs')
+              isEdit ? setLocation(`/prompt-library/${promptId}`) : setLocation('/prompt-library')
             }
           >
             Cancel

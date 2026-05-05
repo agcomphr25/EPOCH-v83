@@ -50,6 +50,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/qr-codes',
   '/admin/checklist-management',
   '/admin/continuity',
+  '/prompt-library',
   '/proteus-labs',
   '/analytics',
   '/badge-configuration',
@@ -694,6 +695,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/edri': ['ADMIN', 'OWNER'],
   '/admin/dcaa-findings': ['ADMIN', 'OWNER'],
   '/admin/continuity': ['ADMIN', 'OWNER'],
+  '/prompt-library': ['ADMIN', 'OWNER'],
   '/proteus-labs': ['ADMIN', 'OWNER'],
 };
 

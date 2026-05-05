@@ -2738,6 +2738,20 @@ router.post('/backfill-p2-scheduled-status', async (req, res) => {
   }
 });
 
+// Backfill endpoint: consolidate historical pre-task duplicate PENDING P2 cutting rows
+// (one per PO / one per re-sync click) into the new grouped shape (one row per
+// packet type per due-date bucket, with contributing POs merged into notes.poNumbers).
+router.post('/backfill-p2-duplicate-grouping', async (req, res) => {
+  try {
+    const { pool: bfPool } = await import('../../db');
+    const summary = await runP2DuplicateCuttingBackfill(bfPool);
+    res.json({ success: true, ...summary });
+  } catch (err: any) {
+    console.error('❌ P2 duplicate-grouping backfill endpoint error:', err.message);
+    res.status(500).json({ error: 'Backfill failed', detail: err.message });
+  }
+});
+
 // Shared backfill logic — also called at boot
 // Idempotent: once a queue row is processed its notes are stamped with p2BackfillApplied:true
 // so re-running on the next restart never double-subtracts quantity.
@@ -2813,6 +2827,292 @@ export async function runP2ScheduledBackfill(pool: any): Promise<{ updated: numb
 
   console.log(`✅ P2 backfill complete — fully scheduled: ${updated}, partial qty reduced: ${partial}, skipped: ${skipped}`);
   return { updated, partial, skipped };
+}
+
+// ---- Helpers for the duplicate-grouping backfill ----
+
+interface LegacyGroupedItem {
+  poNumber: string;
+  quantity: number;
+  p2PoItemId: number | null;
+  p2PoId: number | null;
+}
+
+function bfDueDateBucketKey(d: any): string {
+  if (d === null || d === undefined) return 'null';
+  const date = d instanceof Date ? d : new Date(d);
+  if (isNaN(date.getTime())) return 'null';
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    .toISOString()
+    .slice(0, 10);
+}
+
+function bfItemKey(item: LegacyGroupedItem): string {
+  if (item.p2PoItemId != null) return `item:${item.p2PoItemId}`;
+  return `po:${item.poNumber}`;
+}
+
+// Extract a normalized list of contributing PO entries from a parsed legacy notes blob.
+// - If notes already has poNumbers[] (new grouped shape), normalize and return it.
+// - Otherwise build a single entry from singular poNumber / orderId / sourceId.
+function bfExtractPoNumbers(parsed: any, fallbackQuantity: number, row: any): LegacyGroupedItem[] {
+  if (Array.isArray(parsed?.poNumbers) && parsed.poNumbers.length > 0) {
+    return parsed.poNumbers
+      .filter((p: any) => p && (p.poNumber !== undefined || p.p2PoItemId != null))
+      .map((p: any) => ({
+        poNumber: p.poNumber != null ? String(p.poNumber) : '',
+        quantity: typeof p.quantity === 'number' ? p.quantity : 0,
+        p2PoItemId: p.p2PoItemId ?? null,
+        p2PoId: p.p2PoId ?? null,
+      }));
+  }
+
+  const poNumber =
+    (parsed && typeof parsed.poNumber === 'string' && parsed.poNumber) ||
+    (parsed && typeof parsed.orderId === 'string' && parsed.orderId) ||
+    (row && row.source_id ? String(row.source_id) : null) ||
+    `LEGACY-${row?.id ?? Date.now()}`;
+
+  return [{
+    poNumber,
+    quantity: fallbackQuantity || 0,
+    p2PoItemId: row?.p2_po_item_id ?? null,
+    p2PoId: row?.p2_po_id ?? null,
+  }];
+}
+
+/**
+ * Consolidate historical PENDING P2 cutting rows into the new grouped shape.
+ *
+ * Behavior:
+ *   - Selects PENDING manufacturing_queue rows in 'Cutting Table' whose notes
+ *     mark them as P2 packets (notes.isP2Packet === true OR notes.materialType
+ *     starts with 'p2_').
+ *   - Groups them by (inventoryItemId, due-date bucket day, packetName).
+ *   - For each group:
+ *       * Picks one canonical row (earliest createdAt, lowest id).
+ *       * Merges all contributing PO entries into notes.poNumbers, dedup by
+ *         p2PoItemId / poNumber. Sums their quantities into quantityRequested
+ *         on the canonical row.
+ *       * Stamps canonical notes with isP2Packet:true, p2BackfillApplied:true,
+ *         drops the singular `poNumber` field.
+ *       * Deletes sibling rows.
+ *
+ * Idempotent:
+ *   - A group containing exactly one row that is already in canonical shape
+ *     (poNumbers[] present, p2BackfillApplied:true, isP2Packet:true, no
+ *     singular poNumber) is skipped.
+ *
+ * Used by:
+ *   - POST /api/cutting-table/backfill-p2-duplicate-grouping (admin endpoint)
+ *   - server/index.ts boot-time guarded execution
+ */
+export async function runP2DuplicateCuttingBackfill(pool: any): Promise<{
+  candidatesScanned: number;
+  groupsConsolidated: number;
+  rowsKept: number;
+  rowsMerged: number;
+  rowsReshaped: number;
+  groupsSkipped: number;
+  errors: number;
+}> {
+  const queueResult = await pool.query(`
+    SELECT id, inventory_item_id, due_date, quantity_requested, quantity_completed,
+           priority, notes, requested_by, p2_po_id, p2_po_item_id, source_id,
+           created_at
+    FROM manufacturing_queue
+    WHERE department = 'Cutting Table'
+      AND status = 'PENDING'
+      AND inventory_item_id IS NOT NULL
+      AND notes IS NOT NULL
+      AND (
+        notes::text LIKE '%"isP2Packet":true%'
+        OR notes::text LIKE '%"materialType":"p2_%'
+      )
+    ORDER BY created_at ASC NULLS LAST, id ASC
+  `);
+  const rows = (queueResult as any).rows || (queueResult as any[]) || [];
+
+  interface Candidate {
+    row: any;
+    parsed: any;
+    packetName: string;
+    bucket: string;
+  }
+
+  const groups = new Map<string, Candidate[]>();
+  let candidatesScanned = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    let parsed: any = {};
+    try {
+      parsed = row.notes ? JSON.parse(row.notes) : {};
+    } catch {
+      errors++;
+      continue;
+    }
+
+    const isP2 = parsed?.isP2Packet === true
+      || (typeof parsed?.materialType === 'string' && parsed.materialType.startsWith('p2_'));
+    if (!isP2) continue;
+
+    const packetName = typeof parsed?.packetName === 'string' && parsed.packetName.trim()
+      ? parsed.packetName.trim()
+      : null;
+    if (!packetName) continue;
+
+    candidatesScanned++;
+    const bucket = bfDueDateBucketKey(row.due_date);
+    const key = `${row.inventory_item_id}|${bucket}|${packetName.toLowerCase()}`;
+    const list = groups.get(key);
+    if (list) list.push({ row, parsed, packetName, bucket });
+    else groups.set(key, [{ row, parsed, packetName, bucket }]);
+  }
+
+  let groupsConsolidated = 0;
+  let rowsKept = 0;
+  let rowsMerged = 0;
+  let rowsReshaped = 0;
+  let groupsSkipped = 0;
+
+  for (const items of Array.from(groups.values())) {
+    if (items.length === 0) continue;
+
+    if (items.length === 1) {
+      const { row, parsed, packetName } = items[0];
+      const alreadyCanonical = Array.isArray(parsed.poNumbers)
+        && parsed.poNumbers.length > 0
+        && parsed.p2BackfillApplied === true
+        && parsed.isP2Packet === true
+        && parsed.poNumber === undefined;
+      if (alreadyCanonical) {
+        groupsSkipped++;
+        continue;
+      }
+
+      try {
+        const merged = bfExtractPoNumbers(parsed, row.quantity_requested || 0, row);
+        const totalQty = merged.reduce((s, p) => s + (p.quantity || 0), 0)
+          || (row.quantity_requested || 0);
+
+        const updatedNotes: any = {
+          ...parsed,
+          isP2Packet: true,
+          p2BackfillApplied: true,
+          packetName,
+          poNumbers: merged,
+        };
+        delete updatedNotes.poNumber;
+        if (!updatedNotes.userNotes) {
+          updatedNotes.userNotes = `Grouped ${merged.length} PO entr${merged.length === 1 ? 'y' : 'ies'} for ${packetName}`;
+        }
+
+        await pool.query(
+          `UPDATE manufacturing_queue
+              SET quantity_requested = $1,
+                  notes = $2,
+                  updated_at = NOW()
+            WHERE id = $3`,
+          [totalQty, JSON.stringify(updatedNotes), row.id]
+        );
+        rowsReshaped++;
+        rowsKept++;
+      } catch (rowErr: any) {
+        console.warn(`⚠️ P2 duplicate-grouping backfill: reshape failed for row ${row.id}:`, rowErr.message);
+        errors++;
+      }
+      continue;
+    }
+
+    // Multi-row group — consolidate into the earliest row, delete the rest
+    try {
+      const sorted = items.slice().sort((a, b) => {
+        const at = a.row.created_at ? new Date(a.row.created_at).getTime() : 0;
+        const bt = b.row.created_at ? new Date(b.row.created_at).getTime() : 0;
+        if (at !== bt) return at - bt;
+        return (a.row.id || 0) - (b.row.id || 0);
+      });
+
+      const canonical = sorted[0];
+      const others = sorted.slice(1);
+
+      const seen = new Set<string>();
+      const mergedPos: LegacyGroupedItem[] = [];
+      let totalQty = 0;
+
+      for (const { row, parsed } of sorted) {
+        const pos = bfExtractPoNumbers(parsed, row.quantity_requested || 0, row);
+        const rowQty = row.quantity_requested || 0;
+        const sumOfEntries = pos.reduce((s, p) => s + (p.quantity || 0), 0);
+        const scale = (sumOfEntries === 0 && rowQty > 0 && pos.length > 0)
+          ? rowQty / pos.length
+          : 0;
+        for (const po of pos) {
+          const k = bfItemKey(po);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          const qty = po.quantity || scale || 0;
+          const normalized: LegacyGroupedItem = { ...po, quantity: qty };
+          mergedPos.push(normalized);
+          totalQty += qty;
+        }
+      }
+
+      if (totalQty <= 0) {
+        // Fall back to the sum of quantity_requested across rows
+        totalQty = sorted.reduce((s, c) => s + (c.row.quantity_requested || 0), 0);
+      }
+
+      const updatedNotes: any = {
+        ...canonical.parsed,
+        isP2Packet: true,
+        p2BackfillApplied: true,
+        packetName: canonical.packetName,
+        poNumbers: mergedPos,
+        userNotes: canonical.parsed.userNotes
+          || `Grouped ${mergedPos.length} PO entr${mergedPos.length === 1 ? 'y' : 'ies'} for ${canonical.packetName}`,
+      };
+      delete updatedNotes.poNumber;
+
+      await pool.query(
+        `UPDATE manufacturing_queue
+            SET quantity_requested = $1,
+                notes = $2,
+                updated_at = NOW()
+          WHERE id = $3`,
+        [totalQty, JSON.stringify(updatedNotes), canonical.row.id]
+      );
+
+      for (const { row } of others) {
+        await pool.query(`DELETE FROM manufacturing_queue WHERE id = $1`, [row.id]);
+        rowsMerged++;
+      }
+
+      rowsKept++;
+      groupsConsolidated++;
+    } catch (groupErr: any) {
+      console.warn(`⚠️ P2 duplicate-grouping backfill: consolidation failed for group:`, groupErr.message);
+      errors++;
+    }
+  }
+
+  console.log(
+    `✅ P2 duplicate-grouping backfill complete — scanned: ${candidatesScanned}, ` +
+    `groups consolidated: ${groupsConsolidated}, rows kept: ${rowsKept}, ` +
+    `rows merged-and-deleted: ${rowsMerged}, single rows reshaped: ${rowsReshaped}, ` +
+    `groups already canonical: ${groupsSkipped}, errors: ${errors}`
+  );
+
+  return {
+    candidatesScanned,
+    groupsConsolidated,
+    rowsKept,
+    rowsMerged,
+    rowsReshaped,
+    groupsSkipped,
+    errors,
+  };
 }
 
 // ========== Packet BOM Endpoints ==========

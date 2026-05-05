@@ -648,6 +648,44 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ P2 boot backfill skipped:', p2BfErr.message);
       }
 
+      // Historical backfill: consolidate pre-task duplicate PENDING P2 cutting rows into the new
+      // grouped shape (one row per packet type per due-date bucket, with contributing POs merged
+      // into notes.poNumbers). Guard: only run when there is at least one PENDING P2 cutting row
+      // in the legacy un-grouped shape (singular poNumber, OR missing poNumbers[], OR missing the
+      // p2BackfillApplied:true stamp). Once consolidated, the guard finds no candidates and the
+      // backfill becomes a no-op on subsequent restarts.
+      try {
+        const dupGuardResult = await pool.query(`
+          SELECT COUNT(*) AS legacy_count
+          FROM manufacturing_queue
+          WHERE department = 'Cutting Table'
+            AND status = 'PENDING'
+            AND inventory_item_id IS NOT NULL
+            AND notes IS NOT NULL
+            AND (
+              notes::text LIKE '%"isP2Packet":true%'
+              OR notes::text LIKE '%"materialType":"p2_%'
+            )
+            AND (
+              notes::text LIKE '%"poNumber":%'
+              OR notes::text NOT LIKE '%"poNumbers":%'
+              OR notes::text NOT LIKE '%"p2BackfillApplied":true%'
+            )
+        `);
+        const dupGuardRow = (dupGuardResult as any).rows?.[0] || (dupGuardResult as any[])[0] || {};
+        const legacyCount = parseInt(dupGuardRow.legacy_count ?? '0', 10);
+        if (legacyCount > 0) {
+          console.log(`🔄 P2 duplicate-grouping backfill: ${legacyCount} legacy PENDING P2 cutting rows found — running consolidation`);
+          const { runP2DuplicateCuttingBackfill } = await import('./src/routes/cuttingTable');
+          const dupSummary = await runP2DuplicateCuttingBackfill(pool);
+          console.log(`✅ P2 duplicate-grouping boot backfill complete: ${JSON.stringify(dupSummary)}`);
+        } else {
+          console.log('✅ P2 duplicate-grouping boot backfill: no legacy PENDING P2 cutting rows — skipping');
+        }
+      } catch (dupBfErr: any) {
+        console.warn('⚠️ P2 duplicate-grouping boot backfill skipped:', dupBfErr.message);
+      }
+
       // Data correction: PO 037517 item 225 (Grace Engineering) — fix cf_privateer → cf_beartooth
       // The specifications snapshot was frozen with the wrong stock model at creation time.
       // This correction updates stockModelId, stockModelName, and specifications.stockModel atomically.

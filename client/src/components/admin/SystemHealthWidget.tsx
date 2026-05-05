@@ -22,14 +22,29 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function normalizeIntegrityStatus(data?: Partial<IntegrityStatus>): IntegrityStatus | undefined {
+  if (!data) return undefined;
+
+  return {
+    healthy: data.healthy ?? true,
+    criticalCount: data.criticalCount ?? 0,
+    warningCount: data.warningCount ?? 0,
+    infoCount: data.infoCount ?? 0,
+    affectedDepartments: Array.isArray(data.affectedDepartments) ? data.affectedDepartments : [],
+    lastCheckTime: data.lastCheckTime ?? null,
+    history: Array.isArray(data.history) ? data.history : [],
+  };
+}
+
 export default function SystemHealthWidget({ variant = 'default' }: Props) {
-  const { data, isLoading } = useQuery<IntegrityStatus>({
+  const { data: integrityStatus, isLoading } = useQuery<Partial<IntegrityStatus>>({
     queryKey: ['/api/admin/queue-integrity/status'],
     queryFn: () => apiRequest('/api/admin/queue-integrity/status'),
     refetchInterval: 5 * 60 * 1000,
     retry: false,
   });
 
+  const data = normalizeIntegrityStatus(integrityStatus);
   const isPremium = variant === 'premium';
 
   if (isPremium) {

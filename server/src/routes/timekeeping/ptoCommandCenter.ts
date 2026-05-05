@@ -101,6 +101,9 @@ router.get(
     const in7Days = new Date();
     in7Days.setDate(in7Days.getDate() + 7);
     const in7DaysStr = in7Days.toISOString().slice(0, 10);
+    const in14Days = new Date();
+    in14Days.setDate(in14Days.getDate() + 14);
+    const in14DaysStr = in14Days.toISOString().slice(0, 10);
 
     const { rows } = await pool.query(`
       WITH status_counts AS (
@@ -112,11 +115,12 @@ router.get(
           COUNT(*) FILTER (WHERE status = 'approved' AND updated_at >= NOW() - INTERVAL '14 days') AS approved_this_period,
           COUNT(*) FILTER (WHERE status IN ('rejected','denied','cancelled')) AS denied_cancelled,
           COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $1 AND end_date >= $1) AS on_pto_today,
-          COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $2 AND end_date >= $1 AND start_date > $1) AS upcoming_7_days
+          COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $2 AND end_date >= $1 AND start_date > $1) AS upcoming_7_days,
+          COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $3 AND end_date >= $1 AND start_date > $1) AS upcoming_14_days
         FROM timekeeping.time_off_requests
       )
       SELECT * FROM status_counts
-    `, [today, in7DaysStr]);
+    `, [today, in7DaysStr, in14DaysStr]);
 
     const summary = rows[0] || {};
     res.json({
@@ -128,6 +132,7 @@ router.get(
       deniedCancelled: Number(summary.denied_cancelled || 0),
       onPtoToday: Number(summary.on_pto_today || 0),
       upcoming7Days: Number(summary.upcoming_7_days || 0),
+      upcoming14Days: Number(summary.upcoming_14_days || 0),
       callerCapabilities: callerCaps,
       isAdmin,
     });

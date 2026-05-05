@@ -40,7 +40,13 @@ import { db } from '../db';
 function makeSelectChain(rows: unknown[]) {
   const resolvedPromise = Promise.resolve(rows);
   const limitFn = vi.fn().mockReturnValue(resolvedPromise);
-  const orderByFn = vi.fn().mockReturnValue({ limit: limitFn });
+  // orderBy can be either terminated by .limit() or awaited directly, so make
+  // the returned object thenable while also exposing .limit().
+  const orderByFn = vi.fn().mockReturnValue({
+    limit: limitFn,
+    then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+      resolvedPromise.then(onFulfilled, onRejected),
+  });
   const whereFn = vi.fn().mockReturnValue({ limit: limitFn, orderBy: orderByFn });
   const whereAfterJoinFn = vi.fn().mockReturnValue(resolvedPromise);
   const leftJoinFn = vi.fn().mockReturnValue({ where: whereAfterJoinFn });
@@ -286,6 +292,58 @@ describe('GET /api/material-lots/validate/:icn — MFG barcode ICN lookup', () =
   // When internalControlNumber is set on the source row, it wins over the
   // inventory table's internalControlNumber.
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // Regression guard for missing `asc` import: the broadest queue-ID prefix
+  // fallback (attempt 3) calls asc(cuttingBuiltPackets.id). If `asc` is not
+  // imported in the route file, this branch throws "asc is not defined" and
+  // returns 500. Exercising the path here ensures the import stays in place.
+  // -------------------------------------------------------------------------
+
+  it('resolves a packet via the broadest queue-ID prefix fallback (asc-ordered)', async () => {
+    const queueItem = { ...QUEUE_ITEM, id: 7, materialDetails: null };
+    const packetForFallback = {
+      ...BUILT_PACKET,
+      id: 99,
+      barcode: 'PKT-712-7-1-1700000000000',
+      packetNumber: 1,
+    };
+
+    // Barcode MFG-7-712-32 → queueId=7, partNumber=712, parsedPacketNumber=32
+    // db.select() call sequence:
+    // 1. outer exact → no packet
+    // 2. queue item → found
+    // 3. inner exact (attempt 1) → no packet
+    // 4. seq match (attempt 2) → no packet
+    // 5. broadest prefix (attempt 3, uses asc) → returns 32 packets, picks idx 31
+    // 6. fabric sources join
+    const packetsForQueue = Array.from({ length: 32 }, (_, i) => ({
+      ...packetForFallback,
+      id: 100 + i,
+      packetNumber: i + 1,
+      barcode: `PKT-712-7-${i + 1}-${1700000000000 + i}`,
+    }));
+
+    sequenceDbSelects(
+      [],              // 1. outer exact
+      [queueItem],     // 2. queue item
+      [],              // 3. inner exact (attempt 1)
+      [],              // 4. seq match (attempt 2)
+      packetsForQueue, // 5. broadest prefix (attempt 3) — exercises asc()
+      [FABRIC_SOURCE], // 6. fabric sources
+    );
+
+    const res = await request(app).get('/api/material-lots/validate/MFG-7-712-32');
+
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(true);
+    expect(res.body.status).toBe('PACKET');
+    // parsedPacketNumber - 1 = 31 → packets[31] has id 131, packetNumber 32
+    expect(res.body.packet.id).toBe(131);
+    expect(res.body.packet.packetNumber).toBe(32);
+    expect(res.body.fabricRolls).toHaveLength(1);
+    expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-SOURCE');
+  });
 
   it('prefers the fabric-source row ICN over the joined inventory-table ICN', async () => {
     const queueItem = { ...QUEUE_ITEM, materialDetails: null };

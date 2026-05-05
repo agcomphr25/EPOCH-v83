@@ -20,7 +20,7 @@ import {
   inventoryBalances,
 } from '../../schema';
 import { db } from '../../db';
-import { eq, sql, and, like, desc } from 'drizzle-orm';
+import { eq, sql, and, like, desc, asc } from 'drizzle-orm';
 import { backfillPacketFromQueue } from '../lib/packetResolution';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 

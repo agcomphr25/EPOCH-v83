@@ -1,4 +1,4 @@
-import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date } from "drizzle-orm/pg-core";
+import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { employees, users } from "../../schema";
@@ -463,3 +463,102 @@ export const updateLaborEntryDraftSchema = createInsertSchema(laborEntryDraftsTa
 export type LaborEntryDraftUpdate = z.infer<typeof updateLaborEntryDraftSchema>;
 
 export type LaborEntryDraft = typeof laborEntryDraftsTable.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Payroll Export — Phase 1
+// See docs/payroll-export-design.md and migrations/0098_payroll_export_batches.sql
+// ---------------------------------------------------------------------------
+
+export const PAYROLL_EXPORT_TYPES = ["regular_full_period", "off_cycle_adjustment"] as const;
+export const PAYROLL_EXPORT_STATUSES = ["active", "superseded", "voided", "processed"] as const;
+
+export const payrollExportBatchesTable = timekeepingSchema.table("payroll_export_batches", {
+  id: serial("id").primaryKey(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  exportType: text("export_type").notNull().default("regular_full_period"),
+  revisionNumber: integer("revision_number").notNull().default(1),
+  status: text("status").notNull().default("active"),
+  exportFormat: text("export_format").notNull().default("gusto_csv"),
+  csvContent: text("csv_content").notNull(),
+  csvChecksum: text("csv_checksum").notNull(),
+  rowCount: integer("row_count").notNull(),
+  employeeCount: integer("employee_count").notNull(),
+  totalRegularHours: doublePrecision("total_regular_hours").notNull(),
+  totalOvertimeHours: doublePrecision("total_overtime_hours").notNull(),
+  totalSickHours: doublePrecision("total_sick_hours").notNull(),
+  totalVacationHours: doublePrecision("total_vacation_hours").notNull(),
+  includesAdjustments: boolean("includes_adjustments").notNull().default(false),
+  adjustmentIds: jsonb("adjustment_ids"),
+  sourceTimesheetIds: jsonb("source_timesheet_ids").notNull(),
+  sourceLeaveEntryIds: jsonb("source_leave_entry_ids"),
+  supersedesBatchId: integer("supersedes_batch_id")
+    .references((): AnyPgColumn => payrollExportBatchesTable.id),
+  supersededReason: text("superseded_reason"),
+  voidedReason: text("voided_reason"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: integer("voided_by"),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  processedBy: integer("processed_by"),
+  processedConfirmationNote: text("processed_confirmation_note"),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPayrollExportBatchSchema = createInsertSchema(payrollExportBatchesTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPayrollExportBatch = z.infer<typeof insertPayrollExportBatchSchema>;
+export type PayrollExportBatch = typeof payrollExportBatchesTable.$inferSelect;
+
+export const payrollExportRowsTable = timekeepingSchema.table("payroll_export_rows", {
+  id: serial("id").primaryKey(),
+  batchId: integer("batch_id")
+    .notNull()
+    .references(() => payrollExportBatchesTable.id, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").notNull(),
+  epochEmployeeId: integer("epoch_employee_id"),
+  employeeFirstNameSnapshot: text("employee_first_name_snapshot").notNull(),
+  employeeLastNameSnapshot: text("employee_last_name_snapshot").notNull(),
+  employeeNumberSnapshot: text("employee_number_snapshot"),
+  employeeEmailSnapshot: text("employee_email_snapshot"),
+  regularHours: doublePrecision("regular_hours").notNull(),
+  overtimeHours: doublePrecision("overtime_hours").notNull(),
+  doubleOvertimeHours: doublePrecision("double_overtime_hours").notNull().default(0),
+  sickHours: doublePrecision("sick_hours").notNull(),
+  vacationHours: doublePrecision("vacation_hours").notNull(),
+  sourceTimesheetIds: jsonb("source_timesheet_ids").notNull(),
+  sourceLeaveEntryIds: jsonb("source_leave_entry_ids"),
+  adjustmentIds: jsonb("adjustment_ids"),
+});
+
+export const insertPayrollExportRowSchema = createInsertSchema(payrollExportRowsTable).omit({
+  id: true,
+});
+export type InsertPayrollExportRow = z.infer<typeof insertPayrollExportRowSchema>;
+export type PayrollExportRow = typeof payrollExportRowsTable.$inferSelect;
+
+// adjustment_id remains a nullable INTEGER (no FK) until Phase 3 adds the
+// payroll_adjustments table.  See docs/payroll-export-design.md §Phase 3.
+export const payrollExportEventsTable = timekeepingSchema.table("payroll_export_events", {
+  id: serial("id").primaryKey(),
+  batchId: integer("batch_id")
+    .references(() => payrollExportBatchesTable.id, { onDelete: "set null" }),
+  adjustmentId: integer("adjustment_id"),
+  eventType: text("event_type").notNull(),
+  actorId: integer("actor_id").notNull(),
+  actorEmail: text("actor_email"),
+  actorRole: text("actor_role"),
+  reason: text("reason"),
+  metadata: jsonb("metadata"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertPayrollExportEventSchema = createInsertSchema(payrollExportEventsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPayrollExportEvent = z.infer<typeof insertPayrollExportEventSchema>;
+export type PayrollExportEvent = typeof payrollExportEventsTable.$inferSelect;

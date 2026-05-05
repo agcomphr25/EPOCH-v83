@@ -11,6 +11,7 @@ import {
   ListTimesheetsQueryParams,
 } from "../../lib/timekeeping-zod";
 import * as svc from "../../services/timekeeping/timesheets.service";
+import * as payrollExportSvc from "../../services/timekeeping/payrollExport.service";
 import type { BulkGenerateResult } from "../../services/timekeeping/timesheets.service";
 import { getTimesheetAuditTrail } from "../../services/timekeeping/audit.service";
 import * as punchSvc from "../../services/timekeeping/punches.service";
@@ -98,8 +99,22 @@ router.get("/timesheets", authenticateToken, h(async (req, res): Promise<void> =
   res.json(await svc.listTimesheets(q.data));
 }));
 
-// Gusto export — path stripped of /timekeeping prefix (was self-included in standalone)
-// Mounts as GET /api/timekeeping/admin/export/gusto under EPOCH's /api/timekeeping prefix
+// Gusto export — DEPRECATED read-only delegate.
+// Phase 1 of the revised payroll export design (docs/payroll-export-design.md)
+// requires that every CSV exported to Gusto be a stored, immutable, checksummed
+// payroll_export_batch.  This GET MUST NOT mutate DB state aside from logging
+// an explicit BATCH_DOWNLOADED event for the existing batch — it never creates
+// or supersedes batches (which would violate HTTP GET safety semantics and
+// pollute the audit trail with no-op revisions on every page reload).
+//
+// Behavior:
+//   - If an active (or processed) batch exists for the period → serve its
+//     stored csv_content with checksum verification.
+//   - Otherwise → 404 with a hint pointing at the new POST endpoint.
+//
+// Clients should migrate to:
+//   POST /api/timekeeping/admin/payroll/batches              (create batch)
+//   GET  /api/timekeeping/admin/payroll/batches/:id/download (re-download)
 router.get("/admin/export/gusto", authenticateToken, requireRole('ADMIN', 'OWNER'), h(async (req, res): Promise<void> => {
   const q = GustoExportQuery.safeParse(req.query);
   if (!q.success) {
@@ -110,18 +125,34 @@ router.get("/admin/export/gusto", authenticateToken, requireRole('ADMIN', 'OWNER
     res.status(400).json({ error: "periodStart must not be after periodEnd" });
     return;
   }
-  const rows = await svc.exportFinalizedTimesheetsForGusto(q.data.periodStart, q.data.periodEnd);
-  const header = "first_name,last_name,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours";
-  const csvRows = rows.map((r) =>
-    [r.first_name, r.last_name, r.regular_hours, r.overtime_hours, r.double_overtime_hours, r.sick_hours, r.vacation_hours]
-      .map(csvField)
-      .join(",")
+
+  const existing = await payrollExportSvc.getActiveBatchForPeriod(
+    q.data.periodStart,
+    q.data.periodEnd,
   );
-  const csv = [header, ...csvRows].join("\n");
-  const filename = `gusto-export-${q.data.periodStart}-to-${q.data.periodEnd}.csv`;
+  if (!existing) {
+    res.status(404).json({
+      error: `No payroll export batch exists for period ${q.data.periodStart}..${q.data.periodEnd}.`,
+      errorCode: "NoActiveBatchError",
+      hint: "Create one via POST /api/timekeeping/admin/payroll/batches with {periodStart, periodEnd}, then re-download via GET /api/timekeeping/admin/payroll/batches/:id/download.",
+    });
+    return;
+  }
+
+  const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+  const downloaded = await payrollExportSvc.downloadBatchCsv({
+    batchId: existing.id,
+    actor,
+  });
+  const filename = `gusto-export-${q.data.periodStart}-to-${q.data.periodEnd}-rev${downloaded.batch.revisionNumber}.csv`;
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(csv);
+  res.setHeader("X-Deprecated", "Use POST /api/timekeeping/admin/payroll/batches and GET /admin/payroll/batches/:id/download");
+  res.setHeader("X-Batch-Id", String(downloaded.batch.id));
+  res.setHeader("X-Batch-Revision", String(downloaded.batch.revisionNumber));
+  res.setHeader("X-Batch-Status", downloaded.batch.status);
+  res.setHeader("X-Batch-Checksum", downloaded.batch.csvChecksum);
+  res.send(downloaded.csvContent);
 }));
 
 /**

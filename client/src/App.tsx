@@ -1297,13 +1297,21 @@ function App() {
 
                   {/* Business Continuity Dashboard */}
                   <Route path="/admin/continuity" component={BusinessContinuityDashboard} />
-
-                  {/* Proteus Labs — Prompt Library (ADMIN/OWNER only) */}
-                  <Route path="/proteus-labs" component={ProteusLabsDashboard} />
-                  <Route path="/proteus-labs/new" component={ProteusPromptBuilder} />
-                  <Route path="/proteus-labs/history" component={ProteusExecutionHistory} />
-                  <Route path="/proteus-labs/:id/edit" component={ProteusPromptBuilder} />
-                  <Route path="/proteus-labs/:id" component={ProteusPromptDetail} />
+                  {/* Prompt Library (ADMIN/OWNER only) */}
+                  <Route path="/prompt-library" component={ProteusLabsDashboard} />
+                  <Route path="/prompt-library/new" component={ProteusPromptBuilder} />
+                  <Route path="/prompt-library/history" component={ProteusExecutionHistory} />
+                  <Route path="/prompt-library/:id/edit" component={ProteusPromptBuilder} />
+                  <Route path="/prompt-library/:id" component={ProteusPromptDetail} />
+                  <Route path="/proteus-labs"><Redirect to="/prompt-library" /></Route>
+                  <Route path="/proteus-labs/new"><Redirect to="/prompt-library/new" /></Route>
+                  <Route path="/proteus-labs/history"><Redirect to="/prompt-library/history" /></Route>
+                  <Route path="/proteus-labs/:id/edit">
+                    {(params) => <Redirect to={`/prompt-library/${params.id}/edit`} />}
+                  </Route>
+                  <Route path="/proteus-labs/:id">
+                    {(params) => <Redirect to={`/prompt-library/${params.id}`} />}
+                  </Route>
 
                   {/* Vendor PO Confirmation — public route for external vendors */}
                   <Route path="/vendor-confirm" component={VendorConfirmPage} />

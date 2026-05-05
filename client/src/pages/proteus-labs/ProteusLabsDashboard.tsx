@@ -157,11 +157,11 @@ export default function ProteusLabsDashboard() {
         <div className="flex items-center gap-3">
           <FlaskConical className="h-7 w-7 text-indigo-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Proteus Labs</h1>
-            <p className="text-sm text-gray-500">AI Governance Center — Prompt Library</p>
+            <h1 className="text-2xl font-bold text-gray-900">Prompt Library</h1>
+            <p className="text-sm text-gray-500">AI Governance Center</p>
           </div>
         </div>
-        <Button onClick={() => setLocation('/proteus-labs/new')} className="gap-2">
+        <Button onClick={() => setLocation('/prompt-library/new')} className="gap-2">
           <Plus className="h-4 w-4" />
           New Prompt
         </Button>
@@ -210,7 +210,7 @@ export default function ProteusLabsDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {prompts.map((p) => (
-                <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/proteus-labs/${p.id}`)} />
+                <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/prompt-library/${p.id}`)} />
               ))}
             </div>
           )}
@@ -231,7 +231,7 @@ export default function ProteusLabsDashboard() {
                 <p className="text-sm text-gray-400">No prompts yet.</p>
               ) : (
                 recentPrompts.map((p) => (
-                  <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/proteus-labs/${p.id}`)} />
+                  <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/prompt-library/${p.id}`)} />
                 ))
               )}
             </CardContent>
@@ -249,7 +249,7 @@ export default function ProteusLabsDashboard() {
                 <p className="text-sm text-gray-400">No usage data yet.</p>
               ) : (
                 mostUsed.map((p) => (
-                  <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/proteus-labs/${p.id}`)} />
+                  <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/prompt-library/${p.id}`)} />
                 ))
               )}
             </CardContent>
@@ -271,7 +271,7 @@ export default function ProteusLabsDashboard() {
                     <div
                       key={e.id}
                       className="flex items-center justify-between p-2 rounded-md hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setLocation(`/proteus-labs/${e.promptId}`)}
+                      onClick={() => setLocation(`/prompt-library/${e.promptId}`)}
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{e.promptTitle}</p>
@@ -285,7 +285,7 @@ export default function ProteusLabsDashboard() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-xs text-gray-500 mt-1"
-                  onClick={() => setLocation('/proteus-labs/history')}
+                  onClick={() => setLocation('/prompt-library/history')}
                 >
                   View All History
                 </Button>
@@ -307,7 +307,7 @@ export default function ProteusLabsDashboard() {
                     <div
                       key={e.id}
                       className="flex items-center justify-between p-2 rounded-md hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setLocation(`/proteus-labs/${e.promptId}`)}
+                      onClick={() => setLocation(`/prompt-library/${e.promptId}`)}
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{e.promptTitle}</p>
@@ -336,7 +336,7 @@ export default function ProteusLabsDashboard() {
             <div className="text-center py-12 text-gray-400">
               <FlaskConical className="h-12 w-12 mx-auto mb-3 opacity-40" />
               <p className="text-sm">No prompts yet. Create your first one.</p>
-              <Button className="mt-4" onClick={() => setLocation('/proteus-labs/new')}>
+              <Button className="mt-4" onClick={() => setLocation('/prompt-library/new')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Prompt
               </Button>
@@ -344,7 +344,7 @@ export default function ProteusLabsDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {prompts.map((p) => (
-                <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/proteus-labs/${p.id}`)} />
+                <PromptCard key={p.id} prompt={p} onClick={() => setLocation(`/prompt-library/${p.id}`)} />
               ))}
             </div>
           )}

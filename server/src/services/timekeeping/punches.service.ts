@@ -4,19 +4,15 @@ import type { Punch, InsertPunch } from "../../schema/timekeeping";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import {
   resolveByTimekeepingId,
-  listResolvedEmployees,
-  type ResolvedEmployee,
 } from "../../lib/timekeepingEmployeeResolver";
 import { chargeCodes } from "../../../schema";
-import { toApiEmployee, type Employee } from "./employees.service";
+import { type Employee } from "./employees.service";
 import {
   derivePunchStatus,
-  resolveNextPunchType,
   type PunchStatus,
 } from "../../lib/timekeeping";
 import { logAction, type AuditActor } from "./audit.service";
-import { isInFinalizedTimesheetPeriod, findFinalizedTimesheetForPunch } from "./timesheets.service";
-import { comparePinToHash } from "./employees.service";
+import { findFinalizedTimesheetForPunch } from "./timesheets.service";
 import { resolveTravelerBarcode, type ChargeContext } from "../../helpers/travelerBarcodeResolver";
 
 export type { PunchStatus };
@@ -316,136 +312,3 @@ export async function deletePunch(
   return row;
 }
 
-export interface KioskPunchResult {
-  punch: Punch;
-  action: string;
-  /** Legacy Employee API shape — no PIN hash exposed */
-  employee: Employee;
-  message: string;
-}
-
-export async function kioskPunch(params: {
-  employeeId?: number | null;
-  pin?: string | null;
-  timezone?: string;
-  requestedAction?: "clock_in" | "clock_out" | "break_start" | "break_end";
-  costCode?: string | null;
-  travelerId?: string | null;
-}): Promise<KioskPunchResult | { error: string; statusCode: number }> {
-  let employee: ResolvedEmployee | null = null;
-
-  if (params.employeeId != null) {
-    // Resolve identity from public.employees via timekeepingId
-    employee = await resolveByTimekeepingId(params.employeeId);
-  } else if (params.pin) {
-    // PIN lookup: scan all active employees and compare timekeeperPin from public.employees
-    const allResolved = await listResolvedEmployees();
-    for (const resolved of allResolved) {
-      if (!resolved.timekeeperPin) continue;
-      if (await comparePinToHash(params.pin, resolved.timekeeperPin)) {
-        employee = resolved;
-        break;
-      }
-    }
-  }
-
-  if (!employee) return { error: "Employee not found", statusCode: 404 };
-
-  // Status check via public.employees.isActive (canonical source)
-  if (!employee.isActive) {
-    return { error: "Employee is not active", statusCode: 403 };
-  }
-
-  // timekeepingId is required for punch inserts — punches.employeeId FK points to timekeeping.employees.
-  if (employee.timekeepingId === null) {
-    return { error: "Employee is not enrolled in timekeeping", statusCode: 403 };
-  }
-
-  const punchTime = new Date();
-  const periodLocked = await isInFinalizedTimesheetPeriod(employee.timekeepingId, punchTime);
-  if (periodLocked) {
-    return {
-      error: "This date falls within a finalized (certified, locked, or under active correction) timesheet period. Punch cannot be recorded via kiosk.",
-      statusCode: 409,
-    };
-  }
-
-  // Timezone resolved from public.employees (canonical source)
-  const employeeTZ = employee.timezone ?? "UTC";
-  // Single-employee lookup — O(1) accepted cost. This is NOT a loop; kioskPunch is called once
-  // per incoming punch request for the one employee performing the action.  The batched
-  // alternatives (DISTINCT ON + date-bounded query) used by getClockedInEmployees /
-  // getEmployeeStatus are not appropriate here because we only need status for one employee.
-  const { status } = await getEmployeePunchStatus(employee.timekeepingId, employeeTZ);
-  const action = params.requestedAction ?? resolveNextPunchType(status);
-
-  let resolvedKioskCode = normalizeChargeCode(params.costCode);
-
-  if (params.travelerId) {
-    const chargeCtx = await resolveChargeContextFromTraveler(params.travelerId);
-    if (!chargeCtx.ok) {
-      return { error: chargeCtx.error, statusCode: 422 };
-    }
-    resolvedKioskCode = normalizeChargeCode(chargeCtx.context.chargeCode) ?? resolvedKioskCode;
-  }
-
-  const chargeValidation = await validateChargeCode(resolvedKioskCode);
-  if (!chargeValidation.valid) {
-    return { error: chargeValidation.error, statusCode: 400 };
-  }
-
-  const kioskActor: AuditActor = {
-    id: null,
-    email: `kiosk:employee:${employee.timekeepingId}`,
-    role: "kiosk",
-    ip: null,
-  };
-
-  // TK-005: kiosk punch write and audit entries are atomic — all succeed or all roll back
-  const punch = await db.transaction(async (tx) => {
-    const [inserted] = await tx
-      .insert(punchesTable)
-      .values({
-        employeeId: employee!.timekeepingId!,
-        type: action,
-        punchedAt: new Date(),
-        timezone: params.timezone ?? employeeTZ,
-        source: "kiosk",
-        costCode: resolvedKioskCode,
-      })
-      .returning();
-    await logAction({
-      tableName: "punches",
-      recordId: inserted!.id,
-      action: "INSERT",
-      newValues: inserted as Record<string, unknown>,
-      actor: kioskActor,
-    }, tx);
-    await tx.insert(laborEntryAuditTable).values({
-      tableName: "punches",
-      recordId: inserted!.id,
-      action: "PUNCH_CREATED",
-      newValues: inserted as Record<string, unknown>,
-      actorId: kioskActor.id,
-      actorEmail: kioskActor.email,
-      actorRole: kioskActor.role,
-      ipAddress: kioskActor.ip,
-    });
-    return inserted!;
-  });
-
-  const messages: Record<string, string> = {
-    clock_in: `Welcome, ${employee.firstName}! You are now clocked in.`,
-    clock_out: `Goodbye, ${employee.firstName}! You have clocked out.`,
-    break_start: `Enjoy your break, ${employee.firstName}!`,
-    break_end: `Welcome back, ${employee.firstName}! Break ended.`,
-  };
-
-  // Map to legacy API shape — strips PIN hash and normalizes field names
-  return {
-    punch: punch!,
-    action,
-    employee: toApiEmployee(employee),
-    message: messages[action] ?? "Punch recorded.",
-  };
-}

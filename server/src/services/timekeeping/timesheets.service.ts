@@ -15,6 +15,7 @@ import { getOrCreateSettings } from "./settings.service";
 import { getOrCreatePolicySettings } from "./policySettings.service";
 import { logAction, type AuditActor } from "./audit.service";
 import { assertTransition, isEditable, InvalidTransitionError } from "./timesheetStateMachine";
+import { punchLedgerCutoverDate } from "../../lib/featureFlags";
 
 export type { Timesheet };
 
@@ -45,6 +46,100 @@ export async function getTimesheet(id: number): Promise<Timesheet | null> {
   return row ?? null;
 }
 
+export function useLedgerForPeriod(periodStart: string): boolean {
+  return periodStart >= punchLedgerCutoverDate;
+}
+
+interface LegacyEventInsideLedgerRow {
+  epoch_employee_id: string;
+  legacy_count: string;
+  ledger_count: string;
+  overlap_start: string;
+  overlap_end: string;
+}
+
+interface LegacyEventInsideLedgerDetail {
+  epochEmployeeId: number;
+  name: string;
+  legacyCount: number;
+  ledgerCount: number;
+  overlapStart: string;
+  overlapEnd: string;
+}
+
+/**
+ * Detects employees whose individual `timekeeping.punches` events fall INSIDE
+ * a `public.punch_ledger` session window.
+ *
+ * --- LIMITATION (read before relying on this for cutover go/no-go) ---
+ * timekeeping.punches is an EVENT table (one row per clock_in / clock_out /
+ * break_start / break_end). public.punch_ledger is a SESSION table (one row
+ * per [clockIn, clockOut] interval).
+ *
+ * This function does NOT pair legacy events into intervals before comparing.
+ * It only matches a single legacy event timestamp against ledger session
+ * windows. As a consequence, it MISSES the case where a long legacy interval
+ * fully contains a ledger session:
+ *
+ *   Legacy: clock_in @ 09:00, clock_out @ 17:00     (interval [09:00, 17:00])
+ *   Ledger: session  10:00 → 16:00                  (interval [10:00, 16:00])
+ *
+ *   Neither 09:00 nor 17:00 falls between 10:00 and 16:00, so the join
+ *   produces zero rows even though the intervals fully overlap.
+ *
+ * Use this function for a fast "are there any legacy event punches that
+ * landed inside a ledger session?" sanity check (a strong overlap signal).
+ * Do NOT treat a zero result as proof of zero interval overlap.
+ *
+ * For full interval-overlap auditing, a future implementation would need to
+ * (a) pair legacy events into intervals via window functions, then (b) join
+ * those intervals to punch_ledger with a real interval-overlap predicate
+ * (`tstzrange(p_in, p_out, '[]') && tstzrange(pl.clock_in, pl.clock_out, '[]')`).
+ * Tracked as a follow-up (see #40).
+ */
+export async function auditLegacyPunchEventsInsideLedgerSessions(): Promise<{
+  overlapCount: number;
+  details: LegacyEventInsideLedgerDetail[];
+}> {
+  const result = await pool.query<LegacyEventInsideLedgerRow>(`
+    SELECT
+      p.employee_id AS epoch_employee_id,
+      COUNT(DISTINCT p.id) AS legacy_count,
+      COUNT(DISTINCT pl.id) AS ledger_count,
+      MIN(GREATEST(p.punched_at, pl.clock_in))::text AS overlap_start,
+      MAX(LEAST(p.punched_at, COALESCE(pl.clock_out, NOW())))::text AS overlap_end
+    FROM timekeeping.punches p
+    JOIN public.punch_ledger pl
+      ON pl.employee_id = p.employee_id
+      AND p.punched_at BETWEEN pl.clock_in AND COALESCE(pl.clock_out, NOW())
+    GROUP BY p.employee_id
+    ORDER BY legacy_count DESC
+  `);
+
+  const allResolved = await listResolvedEmployees();
+  const nameMap = new Map(allResolved.map(e => [e.epochEmployeeId, e.name]));
+
+  const details: LegacyEventInsideLedgerDetail[] = result.rows.map(r => ({
+    epochEmployeeId: Number(r.epoch_employee_id),
+    name: nameMap.get(Number(r.epoch_employee_id)) ?? 'Unknown',
+    legacyCount: Number(r.legacy_count),
+    ledgerCount: Number(r.ledger_count),
+    overlapStart: r.overlap_start,
+    overlapEnd: r.overlap_end,
+  }));
+
+  console.log(
+    `[auditLegacyPunchEventsInsideLedgerSessions] Found ${details.length} employee(s) ` +
+    `with legacy events inside ledger sessions ` +
+    `(NOTE: does not detect interval-spanning overlaps — see JSDoc)`
+  );
+  for (const d of details) {
+    console.log(`  Employee ${d.epochEmployeeId} (${d.name}): ${d.legacyCount} legacy events inside ${d.ledgerCount} ledger sessions, span ${d.overlapStart} - ${d.overlapEnd}`);
+  }
+
+  return { overlapCount: details.length, details };
+}
+
 export async function computeHoursForPeriod(
   employeeId: number,
   periodStart: string,
@@ -53,86 +148,94 @@ export async function computeHoursForPeriod(
   const settings = await getOrCreateSettings();
   const tz = settings.timezone;
 
-  const periodStartDate = new Date(periodStart);
-  const periodEndDate = new Date(`${periodEnd}T23:59:59Z`);
+  const periodStartDate = midnightInTZ(periodStart, tz);
+  const nextDayAfterEnd = new Date(new Date(`${periodEnd}T12:00:00Z`).getTime() + 86_400_000)
+    .toISOString().slice(0, 10);
+  const periodEndDate = new Date(midnightInTZ(nextDayAfterEnd, tz).getTime() - 1);
 
-  // --- Legacy: timekeeping.punches ---
-  const punches = await db
-    .select()
-    .from(punchesTable)
-    .where(
-      and(
-        eq(punchesTable.employeeId, employeeId),
-        gte(punchesTable.punchedAt, periodStartDate),
-        lte(punchesTable.punchedAt, periodEndDate)
-      )
-    );
-
-  // Build per-day hours map from legacy punches
   const hoursByDay = new Map<string, number>();
-  const punchesByDay = new Map<string, typeof punches>();
-  for (const p of punches) {
-    const day = toTZDateStr(new Date(p.punchedAt), tz);
-    if (!punchesByDay.has(day)) punchesByDay.set(day, []);
-    punchesByDay.get(day)!.push(p);
-  }
-  for (const [day, dayPunches] of punchesByDay) {
-    hoursByDay.set(day, computeHoursFromPunches(dayPunches, settings.roundingRuleMinutes));
-  }
 
-  // --- Portal / kiosk: punch_ledger ---
-  // punchLedger.employeeId is public.employees.id (epochEmployeeId), not timekeeping.employees.id.
-  // Resolve the mapping so we can query the right rows.
-  const resolved = await resolveByTimekeepingId(employeeId);
-  if (resolved != null) {
-    // Fetch all sessions that overlap the period (started before period end AND
-    // either ended after period start or are still open).
-    const ledgerSessions = await db
-      .select()
-      .from(punchLedger)
-      .where(
-        and(
-          eq(punchLedger.employeeId, resolved.epochEmployeeId),
-          lte(punchLedger.clockIn, periodEndDate),
-          or(
-            gte(punchLedger.clockOut, periodStartDate),
-            isNull(punchLedger.clockOut)
+  const useLedgerStart = useLedgerForPeriod(periodStart);
+  const useLedgerEnd = useLedgerForPeriod(periodEnd);
+  const cutoverBoundary = midnightInTZ(punchLedgerCutoverDate, tz);
+
+  const needsLegacy = !useLedgerStart;
+  const needsLedger = useLedgerEnd;
+  const legacyEndDate = needsLegacy && needsLedger
+    ? new Date(cutoverBoundary.getTime() - 1)
+    : periodEndDate;
+  const ledgerStartDate = needsLegacy && needsLedger
+    ? cutoverBoundary
+    : periodStartDate;
+
+  if (needsLedger) {
+    const resolved = await resolveByTimekeepingId(employeeId);
+    if (resolved != null) {
+      const ledgerSessions = await db
+        .select()
+        .from(punchLedger)
+        .where(
+          and(
+            eq(punchLedger.employeeId, resolved.epochEmployeeId),
+            lte(punchLedger.clockIn, periodEndDate),
+            or(
+              gte(punchLedger.clockOut, ledgerStartDate),
+              isNull(punchLedger.clockOut)
+            )
           )
-        )
-      );
+        );
 
-    const now = new Date();
-    for (const session of ledgerSessions) {
-      if (session.laborClass === "BREAK") continue;
+      const now = new Date();
+      for (const session of ledgerSessions) {
+        if (session.laborClass === "BREAK") continue;
 
-      // Clip to the period boundaries
-      const sessionStart = Math.max(new Date(session.clockIn).getTime(), periodStartDate.getTime());
-      const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
-      const sessionEnd = Math.min(rawEnd, periodEndDate.getTime());
-      if (sessionEnd <= sessionStart) continue;
+        const sessionStart = Math.max(new Date(session.clockIn).getTime(), ledgerStartDate.getTime());
+        const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
+        const sessionEnd = Math.min(rawEnd, periodEndDate.getTime());
+        if (sessionEnd <= sessionStart) continue;
 
-      // Walk day-by-day to attribute hours to the correct TZ-local date.
-      // This handles sessions that cross midnight correctly.
-      let cursor = sessionStart;
-      while (cursor < sessionEnd) {
-        const dayKey = toTZDateStr(new Date(cursor), tz);
+        let cursor = sessionStart;
+        while (cursor < sessionEnd) {
+          const dayKey = toTZDateStr(new Date(cursor), tz);
 
-        // Find the next TZ-local midnight after cursor
-        const [y, m, d] = dayKey.split("-").map(Number);
-        const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1))
-          .toISOString()
-          .slice(0, 10);
-        const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
+          const [y, m, d] = dayKey.split("-").map(Number);
+          const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1))
+            .toISOString()
+            .slice(0, 10);
+          const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
 
-        const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
-        const hrs = (sliceEnd - cursor) / 3_600_000;
-        hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
-        cursor = sliceEnd;
+          const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
+          const hrs = (sliceEnd - cursor) / 3_600_000;
+          hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
+          cursor = sliceEnd;
+        }
       }
     }
   }
 
-  // Apply overtime rules to the combined per-day totals
+  if (needsLegacy) {
+    const punches = await db
+      .select()
+      .from(punchesTable)
+      .where(
+        and(
+          eq(punchesTable.employeeId, employeeId),
+          gte(punchesTable.punchedAt, periodStartDate),
+          lte(punchesTable.punchedAt, legacyEndDate)
+        )
+      );
+
+    const punchesByDay = new Map<string, typeof punches>();
+    for (const p of punches) {
+      const day = toTZDateStr(new Date(p.punchedAt), tz);
+      if (!punchesByDay.has(day)) punchesByDay.set(day, []);
+      punchesByDay.get(day)!.push(p);
+    }
+    for (const [day, dayPunches] of punchesByDay) {
+      hoursByDay.set(day, (hoursByDay.get(day) ?? 0) + computeHoursFromPunches(dayPunches, settings.roundingRuleMinutes));
+    }
+  }
+
   let totalHours = 0;
   let overtimeHours = 0;
   for (const dayHours of hoursByDay.values()) {
@@ -347,37 +450,56 @@ export async function attestTimesheet(
     .where(eq(timesheetsTable.id, id))
     .returning();
 
-  // Build an immutable punch-level snapshot for the audit trail.
-  // Captures both legacy punches and portal/kiosk punch_ledger sessions
-  // at the exact moment of certification — satisfying DCAA audit evidence requirements.
-  const periodStartDate = new Date(`${existing.periodStart}T00:00:00Z`);
-  const periodEndDate = new Date(`${existing.periodEnd}T23:59:59Z`);
+  const settings = await getOrCreateSettings();
+  const snapshotTz = settings.timezone;
+  const periodStartDate = midnightInTZ(existing.periodStart, snapshotTz);
+  const nextDayAfterEnd = new Date(new Date(`${existing.periodEnd}T12:00:00Z`).getTime() + 86_400_000)
+    .toISOString().slice(0, 10);
+  const periodEndDate = new Date(midnightInTZ(nextDayAfterEnd, snapshotTz).getTime() - 1);
 
-  const legacyPunches = await db
-    .select()
-    .from(punchesTable)
-    .where(
-      and(
-        eq(punchesTable.employeeId, existing.employeeId),
-        gte(punchesTable.punchedAt, periodStartDate),
-        lte(punchesTable.punchedAt, periodEndDate)
-      )
-    );
-
+  let legacyPunches: (typeof punchesTable.$inferSelect)[] = [];
   let ledgerSessions: PunchLedgerEntry[] = [];
-  const resolved = await resolveByTimekeepingId(existing.employeeId);
-  if (resolved != null) {
-    ledgerSessions = await db
+
+  const snapUseLedgerStart = useLedgerForPeriod(existing.periodStart);
+  const snapUseLedgerEnd = useLedgerForPeriod(existing.periodEnd);
+  const snapCutover = midnightInTZ(punchLedgerCutoverDate, snapshotTz);
+  const snapNeedsLegacy = !snapUseLedgerStart;
+  const snapNeedsLedger = snapUseLedgerEnd;
+  const snapLegacyEnd = snapNeedsLegacy && snapNeedsLedger
+    ? new Date(snapCutover.getTime() - 1)
+    : periodEndDate;
+  const snapLedgerStart = snapNeedsLegacy && snapNeedsLedger
+    ? snapCutover
+    : periodStartDate;
+
+  if (snapNeedsLedger) {
+    const resolved = await resolveByTimekeepingId(existing.employeeId);
+    if (resolved != null) {
+      ledgerSessions = await db
+        .select()
+        .from(punchLedger)
+        .where(
+          and(
+            eq(punchLedger.employeeId, resolved.epochEmployeeId),
+            lte(punchLedger.clockIn, periodEndDate),
+            or(
+              gte(punchLedger.clockOut, snapLedgerStart),
+              isNull(punchLedger.clockOut)
+            )
+          )
+        );
+    }
+  }
+
+  if (snapNeedsLegacy) {
+    legacyPunches = await db
       .select()
-      .from(punchLedger)
+      .from(punchesTable)
       .where(
         and(
-          eq(punchLedger.employeeId, resolved.epochEmployeeId),
-          lte(punchLedger.clockIn, periodEndDate),
-          or(
-            gte(punchLedger.clockOut, periodStartDate),
-            isNull(punchLedger.clockOut)
-          )
+          eq(punchesTable.employeeId, existing.employeeId),
+          gte(punchesTable.punchedAt, periodStartDate),
+          lte(punchesTable.punchedAt, snapLegacyEnd)
         )
       );
   }

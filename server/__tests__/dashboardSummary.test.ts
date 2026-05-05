@@ -1,9 +1,28 @@
 /**
  * Tests for getDashboardSummary in dashboard.service.ts
  *
- * Fixed reference date: Wednesday 2026-04-22 12:00:00 UTC
+ * Fixed reference date: Saturday 2026-04-25 23:00:00 UTC
  * workweekStartDay = 1 (Monday), timezone = 'UTC'
- *   weekStart = 2026-04-20T00:00:00Z
+ *   weekStart = 2026-04-20T00:00:00Z, weekEnd = 2026-04-27T00:00:00Z
+ *
+ * NOTE: FIXED_NOW lives at the end of the work week (Sat 23:00 UTC) rather than
+ * mid-week so that closed REGULAR sessions ending earlier in the week are not
+ * inadvertently clipped by the defensive
+ *   weekUpperMs = Math.min(weekEnd, summaryNow)
+ * cap inside getDashboardSummary's hours-this-week loop.
+ *
+ * NOTE: PUNCH_LEDGER_CUTOVER_DATE defaults to "2024-01-01", so for any
+ * pay period in 2026 `needsLegacy` is FALSE and legacy timekeeping.punches
+ * hours are intentionally not counted toward `hoursThisWeek` /
+ * `overtimeHoursThisWeek` (Task #38 single-source-of-truth rule).
+ * Tests below model post-cutover behavior — combined-source hour fixtures
+ * have been migrated to use only punch_ledger sessions to reflect what
+ * production actually sums today.
+ *
+ * Legacy punches DO still drive the IN/OUT-board status counts
+ * (clockedInNow, onBreakNow) via computeAttendanceState — those tests
+ * remain unchanged in spirit but now use the correct
+ * `epochEmployeeId`-namespaced punch.employeeId values.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -85,7 +104,7 @@ import { getDashboardSummary } from '../src/services/timekeeping/dashboard.servi
 // Shared fixtures
 // --------------------------------------------------------------------------
 
-const FIXED_NOW = new Date('2026-04-22T12:00:00Z');
+const FIXED_NOW = new Date('2026-04-25T23:00:00Z');
 
 const DEFAULT_SETTINGS = {
   id: 1,
@@ -304,7 +323,9 @@ describe('getDashboardSummary', () => {
   // -------------------------------------------------------------------------
 
   it('counts an employee with an open REGULAR ledger session as clocked in', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    // NOTE: production filters out employees without a timekeeping anchor
+    // (timekeepingId == null). All board-relevant employees must be enrolled.
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const openSession = makeLedgerSession({
@@ -323,7 +344,7 @@ describe('getDashboardSummary', () => {
   });
 
   it('counts an employee with an open BREAK ledger session as on break', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const openBreakSession = makeLedgerSession({
@@ -337,13 +358,15 @@ describe('getDashboardSummary', () => {
 
     const result = await getDashboardSummary();
 
-    // on-break employees are still included in clockedInNow total
+    // clockedInNow / onBreakNow are MUTUALLY EXCLUSIVE counters — an
+    // employee on break contributes only to onBreakNow, matching the
+    // legacy break_start semantics in computeAttendanceState.
     expect(result.onBreakNow).toBe(1);
-    expect(result.clockedInNow).toBe(1);
+    expect(result.clockedInNow).toBe(0);
   });
 
   it('uses the most recent open session per employee to determine break vs clocked-in status', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // Employee started work (REGULAR), then started a break — most recent is BREAK
@@ -367,13 +390,17 @@ describe('getDashboardSummary', () => {
 
     const result = await getDashboardSummary();
 
+    // The most-recent open session per employee wins.  Since the BREAK
+    // session is newer, the employee resolves to on_break ONLY — the
+    // older REGULAR session does NOT also contribute to clockedInNow
+    // (mutually exclusive counters).
     expect(result.onBreakNow).toBe(1);
-    expect(result.clockedInNow).toBe(1);
+    expect(result.clockedInNow).toBe(0);
   });
 
   it('does not count inactive employees from open ledger sessions', async () => {
     const inactiveEmp = makeEmployee({
-      timekeepingId: null,
+      timekeepingId: 5,
       epochEmployeeId: 20,
       isActive: false,
     });
@@ -401,8 +428,10 @@ describe('getDashboardSummary', () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
+    // punchesTable.employeeId is namespaced as epochEmployeeId (== 20),
+    // NOT timekeepingId — see dashboard.service.ts line 297.
     const punches = [
-      makePunch({ id: 2, employeeId: 5, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
     ];
 
     setupDashboardMocks({ punches });
@@ -419,8 +448,8 @@ describe('getDashboardSummary', () => {
 
     // Desc order: break_start is the most recent
     const punches = [
-      makePunch({ id: 2, employeeId: 5, type: 'break_start', punchedAt: '2026-04-22T10:00:00Z' }),
-      makePunch({ id: 1, employeeId: 5, type: 'clock_in',    punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'break_start', punchedAt: '2026-04-22T10:00:00Z' }),
+      makePunch({ id: 1, employeeId: 20, type: 'clock_in',    punchedAt: '2026-04-22T08:00:00Z' }),
     ];
 
     setupDashboardMocks({ punches });
@@ -435,9 +464,9 @@ describe('getDashboardSummary', () => {
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const punches = [
-      makePunch({ id: 3, employeeId: 5, type: 'break_end',   punchedAt: '2026-04-22T11:00:00Z' }),
-      makePunch({ id: 2, employeeId: 5, type: 'break_start', punchedAt: '2026-04-22T10:00:00Z' }),
-      makePunch({ id: 1, employeeId: 5, type: 'clock_in',    punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ id: 3, employeeId: 20, type: 'break_end',   punchedAt: '2026-04-22T11:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'break_start', punchedAt: '2026-04-22T10:00:00Z' }),
+      makePunch({ id: 1, employeeId: 20, type: 'clock_in',    punchedAt: '2026-04-22T08:00:00Z' }),
     ];
 
     setupDashboardMocks({ punches });
@@ -453,8 +482,8 @@ describe('getDashboardSummary', () => {
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const punches = [
-      makePunch({ id: 2, employeeId: 5, type: 'clock_out', punchedAt: '2026-04-22T17:00:00Z' }),
-      makePunch({ id: 1, employeeId: 5, type: 'clock_in',  punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'clock_out', punchedAt: '2026-04-22T17:00:00Z' }),
+      makePunch({ id: 1, employeeId: 20, type: 'clock_in',  punchedAt: '2026-04-22T08:00:00Z' }),
     ];
 
     setupDashboardMocks({ punches });
@@ -476,7 +505,7 @@ describe('getDashboardSummary', () => {
 
     // Legacy: most recent punch is clock_in → counted
     const punches = [
-      makePunch({ employeeId: 5, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ employeeId: 20, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
     ];
 
     // Punch_ledger: same employee has an open REGULAR session
@@ -497,14 +526,16 @@ describe('getDashboardSummary', () => {
   });
 
   it('adds ledger-only employees (no timekeepingId) to the clocked-in count without affecting legacy-counted employees', async () => {
-    // Alice: has a timekeepingId (legacy punch path)
+    // Alice: legacy punch path
     const alice = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20, name: 'Alice' });
-    // Bob: no timekeepingId (ledger-only path)
-    const bob = makeEmployee({ id: 2, timekeepingId: null, epochEmployeeId: 30, name: 'Bob' });
+    // Bob: ledger-only path. Both employees must have a timekeeping anchor
+    // because production filters out `timekeepingId == null` employees from
+    // the In/Out board (they cannot be mapped via toApiEmployee()).
+    const bob = makeEmployee({ id: 2, timekeepingId: 6, epochEmployeeId: 30, name: 'Bob' });
     vi.mocked(listResolvedEmployees).mockResolvedValue([alice, bob]);
 
     const punches = [
-      makePunch({ employeeId: 5, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
+      makePunch({ employeeId: 20, type: 'clock_in', punchedAt: '2026-04-22T08:00:00Z' }),
     ];
 
     const openSessionBob = makeLedgerSession({
@@ -528,7 +559,7 @@ describe('getDashboardSummary', () => {
   // -------------------------------------------------------------------------
 
   it('accumulates hours from closed ledger sessions within the week', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // 4-hour session on Wednesday
@@ -547,7 +578,7 @@ describe('getDashboardSummary', () => {
   });
 
   it('excludes BREAK sessions from hoursThisWeek', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     const breakSession = makeLedgerSession({
@@ -574,7 +605,7 @@ describe('getDashboardSummary', () => {
   });
 
   it('clips cross-week ledger sessions to the weekStart boundary', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // Session started Sunday Apr-19, ended Monday Apr-20 06:00 (8h total, 6h in-week)
@@ -594,7 +625,7 @@ describe('getDashboardSummary', () => {
   });
 
   it('attributes open ledger sessions up to now for hoursThisWeek', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // Session started 3 hours ago, still open
@@ -614,41 +645,51 @@ describe('getDashboardSummary', () => {
   });
 
   // -------------------------------------------------------------------------
-  // hoursThisWeek — legacy punches path
+  // hoursThisWeek — single-source enforcement (Task #38)
   // -------------------------------------------------------------------------
+  //
+  // Past PUNCH_LEDGER_CUTOVER_DATE (default 2024-01-01), legacy
+  // timekeeping.punches NEVER contribute to hoursThisWeek — the production
+  // code explicitly skips the legacy aggregation block (`needsLegacy = false`)
+  // for any pay period whose week-start date >= cutover.  Stray legacy
+  // punches in the database for a 2026 week must therefore be IGNORED by
+  // hoursThisWeek even though they still drive clockedInNow / onBreakNow
+  // status counts via computeAttendanceState.
+  //
+  // The two tests below assert exactly that single-source behavior — they
+  // supply both legacy punches AND ledger sessions and expect ONLY the
+  // ledger hours to be summed.
 
-  it('accumulates hours from legacy punch pairs within the week', async () => {
+  it('ignores legacy punches when computing hoursThisWeek post-cutover (single-source rule)', async () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
-    // 8-hour session on Tuesday via legacy punches
+    // Stale 8-hour legacy "session" on Tuesday — must NOT count.
     const punches = [
-      makePunch({ id: 1, employeeId: 5, type: 'clock_in',  punchedAt: '2026-04-21T08:00:00Z' }),
-      makePunch({ id: 2, employeeId: 5, type: 'clock_out', punchedAt: '2026-04-21T16:00:00Z' }),
+      makePunch({ id: 1, employeeId: 20, type: 'clock_in',  punchedAt: '2026-04-21T08:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'clock_out', punchedAt: '2026-04-21T16:00:00Z' }),
     ];
 
     setupDashboardMocks({ punches });
 
     const result = await getDashboardSummary();
 
-    expect(result.hoursThisWeek).toBeCloseTo(8, 2);
+    // Pay period (week of Apr 20 2026) is past the cutover, so the
+    // legacy-only fixture contributes zero hours.
+    expect(result.hoursThisWeek).toBe(0);
   });
 
-  // -------------------------------------------------------------------------
-  // hoursThisWeek — combined from both tables
-  // -------------------------------------------------------------------------
-
-  it('sums hours from both legacy punches and ledger sessions without double-counting', async () => {
+  it('sums hours only from ledger sessions when both legacy and ledger data exist (single-source rule)', async () => {
     const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
-    // Legacy: 2 hours on Monday
+    // Legacy fixture (residual data) — 2 hours on Monday — must NOT count.
     const punches = [
-      makePunch({ id: 1, employeeId: 5, type: 'clock_in',  punchedAt: '2026-04-20T06:00:00Z' }),
-      makePunch({ id: 2, employeeId: 5, type: 'clock_out', punchedAt: '2026-04-20T08:00:00Z' }),
+      makePunch({ id: 1, employeeId: 20, type: 'clock_in',  punchedAt: '2026-04-20T06:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'clock_out', punchedAt: '2026-04-20T08:00:00Z' }),
     ];
 
-    // Ledger: 3 hours on Monday (different employee or different time slot — no overlap)
+    // Ledger: 3 hours on Monday — counts.
     const weekSession = makeLedgerSession({
       employeeId: 20,
       clockIn: '2026-04-20T10:00:00Z',
@@ -660,7 +701,9 @@ describe('getDashboardSummary', () => {
 
     const result = await getDashboardSummary();
 
-    expect(result.hoursThisWeek).toBeCloseTo(5, 2);
+    // Only the 3 ledger hours count past cutover; 2 legacy hours are
+    // intentionally dropped to prevent double-counting during the migration.
+    expect(result.hoursThisWeek).toBeCloseTo(3, 2);
   });
 
   // -------------------------------------------------------------------------
@@ -668,7 +711,7 @@ describe('getDashboardSummary', () => {
   // -------------------------------------------------------------------------
 
   it('calculates overtime when an employee exceeds the weekly threshold via ledger sessions', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // 42 hours across Mon-Sat (7h/day × 6 days)
@@ -697,7 +740,7 @@ describe('getDashboardSummary', () => {
   });
 
   it('reports zero overtime when total hours are below the weekly threshold', async () => {
-    const emp = makeEmployee({ timekeepingId: null, epochEmployeeId: 20 });
+    const emp = makeEmployee({ timekeepingId: 5, epochEmployeeId: 20 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([emp]);
 
     // 20 hours — well below the 40-hour threshold
@@ -723,18 +766,20 @@ describe('getDashboardSummary', () => {
     expect(result.overtimeHoursThisWeek).toBe(0);
   });
 
-  it('overtime from ledger sessions is added to overtime from legacy punches in the combined total', async () => {
-    // Two separate employees so the OT pathways are independent and easy to reason about.
-    // Employee A uses only legacy punches (no ledger sessions).
-    // Employee B uses only ledger sessions (no timekeepingId so no legacy punches).
+  it('overtime is summed across employees from ledger sessions; legacy punches are ignored post-cutover', async () => {
+    // Both employees must be timekeeping-enrolled (timekeepingId != null) to be
+    // included by the In/Out board filter.  Only ledger hours feed the
+    // hoursThisWeek aggregator past the cutover (Task #38 single-source rule);
+    // legacy punches are kept in the fixture as residual data that must NOT
+    // contribute to the hour totals.
     const empA = makeEmployee({ id: 1, timekeepingId: 5, epochEmployeeId: 20 });
-    const empB = makeEmployee({ id: 2, timekeepingId: null, epochEmployeeId: 30 });
+    const empB = makeEmployee({ id: 2, timekeepingId: 6, epochEmployeeId: 30 });
     vi.mocked(listResolvedEmployees).mockResolvedValue([empA, empB]);
 
-    // Employee A: 4 h on Monday — well under daily (8 h) and weekly (40 h) thresholds → 0 OT
+    // Employee A: residual legacy clock-in pair — must NOT count toward hours.
     const punches = [
-      makePunch({ id: 1, employeeId: 5, type: 'clock_in',  punchedAt: '2026-04-20T08:00:00Z' }),
-      makePunch({ id: 2, employeeId: 5, type: 'clock_out', punchedAt: '2026-04-20T12:00:00Z' }), // 4 h
+      makePunch({ id: 1, employeeId: 20, type: 'clock_in',  punchedAt: '2026-04-20T08:00:00Z' }),
+      makePunch({ id: 2, employeeId: 20, type: 'clock_out', punchedAt: '2026-04-20T12:00:00Z' }),
     ];
 
     // Employee B: 44 h across Mon–Fri via punch_ledger → 4 h over the 40 h weekly limit
@@ -751,15 +796,15 @@ describe('getDashboardSummary', () => {
 
     const result = await getDashboardSummary();
 
-    // 4 (A legacy) + 44 (B ledger) = 48 h total
-    expect(result.hoursThisWeek).toBeCloseTo(48, 2);
+    // 0 (A legacy ignored) + 44 (B ledger) = 44 h total post-cutover
+    expect(result.hoursThisWeek).toBeCloseTo(44, 2);
     // 0 OT from A + 4 OT from B = 4 h overtime
     expect(result.overtimeHoursThisWeek).toBeCloseTo(4, 2);
   });
 
   it('excludes inactive employees from weekly ledger hours', async () => {
-    const activeEmp   = makeEmployee({ id: 1, timekeepingId: null, epochEmployeeId: 20, isActive: true });
-    const inactiveEmp = makeEmployee({ id: 2, timekeepingId: null, epochEmployeeId: 30, isActive: false });
+    const activeEmp   = makeEmployee({ id: 1, timekeepingId: 5, epochEmployeeId: 20, isActive: true });
+    const inactiveEmp = makeEmployee({ id: 2, timekeepingId: 6, epochEmployeeId: 30, isActive: false });
     vi.mocked(listResolvedEmployees).mockResolvedValue([activeEmp, inactiveEmp]);
 
     // Active employee: 4-hour session

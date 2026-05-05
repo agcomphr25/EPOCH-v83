@@ -4099,6 +4099,7 @@ async function initializeBackgroundServices() {
           { key: 'orders.create', description: 'Create draft orders and finalize them into production', category: 'orders' },
           { key: 'orders.cancel', description: 'Cancel a finalized order', category: 'orders' },
           { key: 'orders.department_transfer', description: 'Manually reassign an order to a different production department (corrections and emergency moves only)', category: 'orders' },
+          { key: 'orders.view_list', description: 'View the Orders List page (/orders-list) showing all orders across departments', category: 'orders' },
 
           // Admin tools
           { key: 'admin.order_lookup', description: 'Look up a production order by ID to view its full status, department history, and item codes', category: 'admin' },
@@ -4391,7 +4392,7 @@ async function initializeBackgroundServices() {
           );
           if (faleeshahRows.length > 0) {
             const faleeshahId = faleeshahRows[0].id;
-            const faleeshahCaps = ['orders.department_transfer', 'admin.order_lookup'];
+            const faleeshahCaps = ['orders.department_transfer', 'admin.order_lookup', 'orders.view_list'];
             for (const capKey of faleeshahCaps) {
               await pool.query(
                 `INSERT INTO perm_user_overrides (user_id, capability_id, effect)
@@ -4402,7 +4403,7 @@ async function initializeBackgroundServices() {
                 [faleeshahId, capKey]
               );
             }
-            console.log('✅ Granted orders.department_transfer + admin.order_lookup user-level overrides to faleeshah');
+            console.log('✅ Granted orders.department_transfer + admin.order_lookup + orders.view_list user-level overrides to faleeshah');
           } else {
             console.warn('⚠️ faleeshah user not found — user-level overrides not seeded');
           }

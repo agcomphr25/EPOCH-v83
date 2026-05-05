@@ -7,6 +7,7 @@ import { requirePermission } from '../../../server/middleware/requirePermission'
 import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import { z } from 'zod';
 import Papa from 'papaparse';
 import { requireStepUp } from '../../../server/middleware/auth';
@@ -428,9 +429,9 @@ router.post('/:id/approve', requirePermission('documents.approve'), async (req: 
   }
 });
 
-// Download document file — requires authentication + step-up re-auth (credentials verified within 30 min)
+// View PDF document file inline - requires authentication + step-up re-auth (credentials verified within 30 min)
 // ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
-router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, res: Response) => {
+router.get('/:id/view', requireAuth, requireStepUp(), async (req: Request, res: Response) => {
   const actor = (req as any).user as { id: number; username: string; role: string };
   const ipAddress = (
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
@@ -477,6 +478,78 @@ router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, r
     const relativePath = doc.filePath.replace(/^\//, '');
     const filePath = path.join(process.cwd(), 'server/src', relativePath);
     
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'File not found on server' });
+    }
+
+    if (path.extname(filePath).toLowerCase() !== '.pdf') {
+      return res.status(415).json({ error: 'Only PDF documents can be viewed inline' });
+    }
+
+    // Write view access log entry before sending the file
+    await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'view', ipAddress });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    createReadStream(filePath).pipe(res);
+  } catch (error) {
+    console.error('Error viewing document:', error);
+    res.status(500).json({ error: 'Failed to view document' });
+  }
+});
+
+// Download document file - requires authentication + step-up re-auth (credentials verified within 30 min)
+// ACL enforcement: restricted/classified docs require an explicit vault access grant or admin/owner role
+router.get('/:id/download', requireAuth, requireStepUp(), async (req: Request, res: Response) => {
+  const actor = (req as any).user as { id: number; username: string; role: string };
+  const ipAddress = (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+
+  try {
+    const [doc] = await db
+      .select()
+      .from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // ACL enforcement for restricted/classified documents
+    const classification = (doc as any).classification ?? 'internal';
+    if (classification === 'restricted' || classification === 'classified') {
+      const isAdminOrOwner = actor.role === 'ADMIN' || actor.role === 'OWNER';
+      if (!isAdminOrOwner) {
+        // Check for explicit vault grant
+        const grantCheck = await pool.query<{ id: number }>(
+          `SELECT id FROM vault_access_grants WHERE document_id = $1 AND (
+             (grantee_type = 'user' AND grantee_name = $2)
+             OR (grantee_type = 'role' AND grantee_name = $3)
+           ) LIMIT 1`,
+          [doc.id, actor.username, actor.role]
+        );
+        if (!grantCheck || grantCheck.length === 0) {
+          // Write denied log entry - never silently discard
+          await writeAccessLog({ documentId: doc.id, userId: actor.username, action: 'denied', ipAddress });
+          return res.status(403).json({ error: 'Access denied: insufficient clearance for this document' });
+        }
+      }
+    }
+
+    if (!doc.filePath) {
+      return res.status(404).json({ error: 'No file attached to this document' });
+    }
+
+    // Strip leading slash from filePath before joining
+    const relativePath = doc.filePath.replace(/^\//, '');
+    const filePath = path.join(process.cwd(), 'server/src', relativePath);
+
     // Check if file exists
     try {
       await fs.access(filePath);

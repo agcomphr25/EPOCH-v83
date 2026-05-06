@@ -14,6 +14,7 @@ export interface UserPermissions {
 export const CAPABILITY_GATED_ROUTES: Record<string, string> = {
   '/pto-command-center': 'timekeeping.pto.view_all',
   '/orders-list': 'orders.view_list',
+  '/time-clock-admin': 'timekeeping.time_clock_admin.access',
 };
 
 export function getRequiredCapability(route: string): string | undefined {

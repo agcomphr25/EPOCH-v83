@@ -4188,6 +4188,7 @@ async function initializeBackgroundServices() {
           { key: 'timekeeping.pto.approve_vp', description: 'Approve or deny PTO requests at the VP stage', category: 'timekeeping' },
           { key: 'timekeeping.pto.view_all', description: 'View all PTO requests across the company', category: 'timekeeping' },
           { key: 'timekeeping.pto.cancel_request', description: 'Cancel a pending PTO request', category: 'timekeeping' },
+          { key: 'timekeeping.time_clock_admin.access', description: 'Access the Time Clock Admin page', category: 'timekeeping' },
         ];
 
         // Upsert each capability key (ignore conflicts on duplicate key)

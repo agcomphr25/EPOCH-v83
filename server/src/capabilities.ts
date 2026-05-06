@@ -100,6 +100,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'timekeeping.pto.approve_vp',
   'timekeeping.pto.view_all',
   'timekeeping.pto.cancel_request',
+  'timekeeping.time_clock_admin.access',
 ] as const;
 
 /**

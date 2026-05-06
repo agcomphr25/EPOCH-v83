@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import './auth';
+import { getUserPermissions } from '../src/services/permissionService';
 
 interface UserPermissions {
   routes: string[];
@@ -214,6 +215,8 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],
+  // /time-clock-admin: ADMIN/OWNER via role; non-admins via capability
+  // 'timekeeping.time_clock_admin.access' (see ROUTE_CAPABILITY_ACCESS below).
   '/time-clock-admin': ['ADMIN', 'OWNER'],
   '/financial-review': ['ADMIN', 'OWNER', 'FINANCE'],
   '/financial-review/sessions': ['ADMIN', 'OWNER', 'FINANCE'],
@@ -247,6 +250,20 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/qc': ['ADMIN', 'OWNER'],
   '/vendors': ['ADMIN', 'OWNER'],
   '/vendor-pos': ['ADMIN', 'OWNER'],
+};
+
+/**
+ * Capability-based route access — runs in addition to the role-based check
+ * above. A user is granted access to one of these routes if they have the
+ * mapped capability key in their resolved permission set (via role
+ * capabilities or a user-level allow override).
+ *
+ * This complements ROLE_ROUTE_ACCESS without replacing it: if either gate
+ * passes, access is granted. Keep entries in sync with the frontend's
+ * CAPABILITY_GATED_ROUTES in client/src/config/userPermissions.ts.
+ */
+const ROUTE_CAPABILITY_ACCESS: Record<string, string> = {
+  '/time-clock-admin': 'timekeeping.time_clock_admin.access',
 };
 
 const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
@@ -305,6 +322,41 @@ function routeMatches(currentRoute: string, allowedRoute: string): boolean {
   if (currentRoute.startsWith(allowedRoute + '/')) return true;
   
   return false;
+}
+
+/**
+ * Returns the capability key required to access the given route, or null if
+ * the route is not capability-gated.
+ */
+function getRequiredCapabilityForRoute(route: string): string | null {
+  const normalizedRoute = normalizeRoute(route);
+  for (const [routePattern, capKey] of Object.entries(ROUTE_CAPABILITY_ACCESS)) {
+    if (routeMatches(route, routePattern) || routeMatches(normalizedRoute, routePattern)) {
+      return capKey;
+    }
+  }
+  return null;
+}
+
+/**
+ * Async capability-based access check. Returns true if the user's resolved
+ * permission set contains the capability key required by the given route.
+ * Returns false if the route is not capability-gated or the user lacks the
+ * capability.
+ */
+async function hasCapabilityRouteAccess(
+  route: string,
+  userId: number,
+  userRole?: string,
+): Promise<boolean> {
+  const requiredCap = getRequiredCapabilityForRoute(route);
+  if (!requiredCap) return false;
+  try {
+    const { permissionSet } = await getUserPermissions(userId, userRole);
+    return permissionSet.has(requiredCap);
+  } catch {
+    return false;
+  }
 }
 
 function hasRoleBasedAccess(route: string, userRole?: string): boolean {
@@ -372,7 +424,7 @@ function getFrontendRoutesForApi(apiPath: string): string[] {
 }
 
 export function authorizeApiRoute(requiredFrontendRoutes?: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       console.log(`🔐 AUTH CHECK: No user on request for ${req.method} ${req.originalUrl}`);
       return res.status(401).json({ error: 'Authentication required' });
@@ -399,11 +451,25 @@ export function authorizeApiRoute(requiredFrontendRoutes?: string[]) {
       return next();
     }
 
-    const hasAccess = routesToCheck.some(route => {
+    let hasAccess = routesToCheck.some(route => {
       const access = hasRouteAccess(username, route, role);
       console.log(`🔐 AUTH CHECK: hasRouteAccess(${username}, ${route}, ${role}) = ${access}`);
       return access;
     });
+
+    if (!hasAccess) {
+      // Fallback: check capability-based access for any route in routesToCheck
+      // that's listed in ROUTE_CAPABILITY_ACCESS. This grants access to users
+      // who have been granted the capability via role or user-level override
+      // (in addition to the legacy ADMIN/OWNER role gate above).
+      for (const route of routesToCheck) {
+        if (await hasCapabilityRouteAccess(route, req.user.id, role)) {
+          console.log(`🔐 AUTH CHECK: hasCapabilityRouteAccess(${route}) = true for ${username}`);
+          hasAccess = true;
+          break;
+        }
+      }
+    }
 
     if (!hasAccess) {
       console.warn(`⚠️ ACCESS DENIED: User ${username} (role: ${role}) attempted to access ${req.method} ${req.originalUrl}`);

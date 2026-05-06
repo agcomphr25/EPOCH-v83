@@ -13,10 +13,10 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Run Phase E Cost Reconciliation Script:** `npx tsx server/scripts/phaseECostReconciliation.ts [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--output /path/to/file.json]`
 *   **Required Environment Variables:**
     *   `DATABASE_URL`: PostgreSQL connection string.
-    *   `PORTAL_TOKEN_SECRET`: HMAC-SHA256 signing key for employee portal tokens (random 48-byte hex recommended).
-    *   `SALARIED_DRAFT_ENTRY_ENABLED`: Feature flag for salaried manual time entry (`true`/`false`, defaults `false`).
-    *   `PUNCH_LEDGER_CUTOVER_DATE`: ISO date (YYYY-MM-DD) for payroll hour computation switch (default `2024-01-01`).
-    *   `TIMEKEEPING_DCAA_EFFECTIVE_DATE`: ISO date for DCAA compliance scoring (default `2026-06-01`).
+    *   `PORTAL_TOKEN_SECRET`: HMAC-SHA256 signing key for employee portal tokens.
+    *   `SALARIED_DRAFT_ENTRY_ENABLED`: Feature flag for salaried manual time entry (`true`/`false`).
+    *   `PUNCH_LEDGER_CUTOVER_DATE`: ISO date (YYYY-MM-DD) for payroll hour computation switch.
+    *   `TIMEKEEPING_DCAA_EFFECTIVE_DATE`: ISO date for DCAA compliance scoring.
 
 ## Stack
 
@@ -33,53 +33,40 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Backend Source:** `server/src/`
 *   **Database Schema:** `server/src/schema.ts`
 *   **Migrations:** `migrations/`
-*   **Shared Types/Schemas:** `server/src/lib/` (e.g., `timekeeping-zod.ts`)
+*   **Shared Types/Schemas:** `server/src/lib/`
 *   **User Permissions (Source of Truth):** `userPermissions.ts`
 *   **Architecture Constitution:** `docs/EPOCH_ARCHITECTURE_CONSTITUTION.md`
-*   **Payroll Export Design:** `docs/payroll-export-design.md`
-*   **Procurement Policy:** `docs/procurement-policy.md`
-*   **Financial Review Config:** `client/src/config/financialReviewConfig.json`
-*   **User Identity Layer:** `server/identity/userIdentity.ts`
+*   **Written Policies Library:** `docs/policies/`, `server/src/services/policiesService.ts`
+*   **Unified Audit Ledger:** `server/src/services/auditLedgerService.ts`, `docs/audit-evidence-policy.md`
+*   **Burden Rates Engine:** `server/src/services/burdenRatesService.ts`, `docs/burden-rates-methodology.md`
 *   **PWA Service Worker:** `client/public/sw.js`
-*   **Offline Mutation Queue (IndexedDB):** `client/src/offline/`
-*   **Control Tower Service:** `server/src/services/controlTowerService.ts`
-*   **CMMC Control Taxonomy & Evidence Mapping:** `server/src/services/cmmcControlTaxonomy.ts`, `server/src/services/cmmcEvidenceMapping.ts`
-*   **Written Policies Library:** drafts in `docs/policies/`, service `server/src/services/policiesService.ts`, routes `server/src/routes/policies.ts`, drift job `server/src/jobs/policiesDriftCheck.ts`, UI `client/src/pages/PolicyLibraryPage.tsx` & `client/src/pages/admin/PoliciesAdminPage.tsx`
-*   **Unified Audit Ledger:** `server/src/services/auditLedgerService.ts` (sole writer = `recordAuditEvent()`); reporting in `server/src/services/auditReportingService.ts`; routes at `server/src/routes/auditLedger.ts` (`/api/audit-ledger/*`); admin UI at `client/src/pages/AuditLedgerPage.tsx` (`/admin/audit-ledger`); policy doc `docs/audit-evidence-policy.md`.
-*   **Burden Rates Engine:** `server/src/services/burdenRatesService.ts`, routes `server/src/routes/burdenRates.ts`, UI `client/src/pages/BurdenRatesAdmin.tsx`, docs `docs/burden-rates-methodology.md`
-*   `Navigation.tsx`: Frontend navigation menu
+*   **Offline Mutation Queue:** `client/src/offline/`
 
 ## Architecture decisions
 
-*   **Unified Labor Pipeline:** The single authorized labor pipeline is `punch_ledger` → `charge_codes` → `labor_approvals` → GL → payroll → DCAA. All cost attribution must follow this FK chain.
-*   **UUID Primary Keys:** All new database tables use UUIDs for primary keys to ensure global uniqueness and prevent integer overflow issues.
-*   **PWA & Offline-First:** Implemented a robust PWA architecture with a service worker and IndexedDB-based offline mutation queue to ensure high availability and responsiveness, especially for manufacturing floor tablets.
-*   **Capability-Based Access Control:** A database-driven permission layer (`perm_capabilities`, `perm_roles`, `perm_role_capabilities`, `perm_user_overrides`) complements file-based permissions for fine-grained, dynamic access management.
-*   **Atomic Order ID Reservation:** Order IDs are reserved atomically to prevent race conditions and ensure unique identifiers for each order.
-*   **No Dual-Pool Patterns:** Explicitly deprecated standalone modules and dual-pool database connection patterns (e.g., `modules/timekeeping/`). All system components must use the single `db` instance from the main server.
-*   **"Delete-First" Agent Implementation:** When re-architecting, the approach is to delete deprecated patterns and redesign, rather than creating compatibility layers, to maintain architectural purity and prevent technical debt.
-*   **Immutable Audit Trail:** Critical financial exports (e.g., Payroll Export) generate and store immutable CSVs with SHA-256 checksums for DCAA audit evidence.
-*   **Unified Audit Ledger (Task #85):** Single hash-chained `audit_events` ledger is the source of truth for compliance evidence. Sole writer is `recordAuditEvent()`; UPDATE/DELETE blocked by DB trigger; chain anchored nightly; reporting/export/verify exposed via `/api/audit-ledger`. See constitution §9 and `docs/audit-evidence-policy.md`.
-*   **Indirect Burden Before GL:** Indirect cost pools (FRINGE / OVERHEAD / G&A) are applied to direct labor cost records via the Burden Rates Engine before `laborPostingService` posts to GL. Rates are insert-only and effective-dated; `INITIAL` runs are idempotent; rate corrections use `TRUE_UP` runs that reference the INITIAL via `supersedes_run_id` and store delta amounts. The pre-post gate (`verifyPeriodBurdenComplete`) makes it physically impossible to post unburdened labor.
-*   **Context-Aware Forecasting:** Production forecast engine uses a 3-tier cycle time priority (model-specific, department-level historical, hardcoded fallbacks) and weighted queues based on model complexity for more accurate predictions.
+*   **Unified Labor Pipeline:** `punch_ledger` → `charge_codes` → `labor_approvals` → GL → payroll → DCAA is the single authorized labor pipeline, ensuring all cost attribution follows this FK chain.
+*   **UUID Primary Keys:** All new database tables use UUIDs for primary keys for global uniqueness and to prevent integer overflow.
+*   **PWA & Offline-First:** Implemented with a service worker and IndexedDB-based offline mutation queue for high availability and responsiveness on manufacturing floor tablets.
+*   **Capability-Based Access Control:** A database-driven permission layer (`perm_capabilities`, `perm_roles`, `perm_role_capabilities`, `perm_user_overrides`) provides fine-grained, dynamic access management.
+*   **Atomic Order ID Reservation:** Order IDs are reserved atomically to prevent race conditions and ensure unique identifiers.
+*   **Immutable Audit Trail:** Critical financial exports generate and store immutable CSVs with SHA-256 checksums for DCAA audit evidence.
+*   **Indirect Burden Before GL:** Indirect cost pools are applied to direct labor cost records via the Burden Rates Engine before posting to GL, enforcing complete burdening of labor.
 
 ## Product
 
-*   **Order Management:** End-to-end order processing with atomic ID reservation, rush fees, priority system, path-based signature emails, and card-before-save flows.
-*   **Inventory & Production:** Parts list management, POs, inventory CSV import, FIFO packet building with AS9100 traceability, dynamic inventory thresholds, demand-filtered BOM assignment, and cutting table management with barcode scanning.
+*   **Order Management:** End-to-end processing with atomic ID reservation, rush fees, priority, signature emails, and card-before-save flows.
+*   **Inventory & Production:** Parts management, POs, inventory CSV import, FIFO packet building with AS9100 traceability, dynamic thresholds, BOM assignment, and cutting table management.
 *   **Quality Control:** Nonconformance Record System, Vendor Evaluation, Hard QC Stops with authorized deviation workflows.
-*   **Purchasing Controls:** Purchase Requisition → multi-stage approval → Vendor PO chain. Vendor PO issuance is gated on an approved requisition (or recorded direct-PO exception), competition method, FAR/DFARS flowdown checklist with reasoning, and a fresh passing vendor debarment check (SAM.gov / attestation).
+*   **Purchasing Controls:** Multi-stage approval, requisition-gated PO issuance, compliance checks (FAR/DFARS, debarment).
 *   **Employee Portal:** Employee-facing interface for timekeeping, PTO requests, and salaried time entry.
-*   **BOM System:** Supports both robust revision-controlled BOMs and a simpler P2 BOM Wizard, with a fallback mechanism for production order generation.
-*   **Timekeeping & Payroll:** DCAA-compliant employee time certification (hourly/salaried), salaried manual draft time entry, WAD-based labor charging enforcement, and a robust payroll export system with audit trails.
-*   **Project & Task Management:** Flexible project workflow steps (skip, reopen, status tracking), P2 Pipeline Board (Kanban), PM Control Center for project health visibility.
-*   **Financial & Reporting:** Cost Center Management, dynamic discounts, Credit Memo Management, Payment Analytics, Historical Data Module, Refund Request/Queue, AR Invoice and Payment Allocation systems, Monthly Financial Review module, AR Aging Dashboard.
-*   **Forecast & Simulation:** Discrete Event Simulation (DES) forecast engine, self-learning cycle time engine, and forecast accuracy tracking.
-*   **Compliance & Security:** Document Vault with CUI/ITAR classification, CMMC 2.0 Level 2 readiness system, comprehensive audit systems, Written Policies Library (DCAA policies with publish/upload, immutable versions, employee acknowledgments, nightly drift detection, coverage CSV export).
-*   **AI Integration:** AI-powered prompt library, AI + Template-driven Production Control Wizard for routing/traveler/QC template recommendations.
-*   **User Interface:** Modern, responsive UI with ShadCN UI, Tailwind CSS, and Framer Motion for animations.
-*   **Advanced control centers:** PM, P2 PO, Production, Cutting Table.
-*   **MRP Material Planning Engine:** For demand, shortage, and capacity calculation.
+*   **BOM System:** Supports both robust revision-controlled BOMs and a simpler P2 BOM Wizard.
+*   **Timekeeping & Payroll:** DCAA-compliant time certification, salaried manual draft entry, WAD-based labor charging, and auditable payroll export.
+*   **Project & Task Management:** Flexible project workflow, Kanban board, and PM Control Center.
+*   **Financial & Reporting:** Cost Center Management, dynamic discounts, Credit Memo Management, Payment Analytics, Historical Data Module, Refund Request/Queue, AR Invoice and Payment Allocation, Monthly Financial Review, AR Aging Dashboard.
+*   **Forecast & Simulation:** Discrete Event Simulation engine, self-learning cycle time engine, and forecast accuracy tracking.
+*   **Compliance & Security:** Document Vault (CUI/ITAR), CMMC 2.0 Level 2 readiness, audit systems, Written Policies Library with immutable versions and employee acknowledgments.
+*   **AI Integration:** AI-powered prompt library, AI + Template-driven Production Control Wizard for recommendations.
+*   **User Interface:** Modern, responsive UI with ShadCN UI, Tailwind CSS, and Framer Motion.
 
 ## User preferences
 
@@ -100,15 +87,14 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 
 ## Gotchas
 
-*   **DCAA Compliance:** Before implementing anything touching labor, WAD, GL, burden, payroll, traveler, PM dashboard, DCAA, or compliance, **you must read `docs/EPOCH_ARCHITECTURE_CONSTITUTION.md`**. Failure to do so is a constitution violation.
-*   **Timekeeping `punch_ledger` vs. `timekeeping.punches`:** Hour computations for payroll use `punch_ledger` for periods on or after `PUNCH_LEDGER_CUTOVER_DATE` and `timekeeping.punches` for periods before. Never both.
-*   **Legacy Payroll Export:** The `GET /api/timekeeping/admin/export/gusto` route now serves pre-generated, immutable CSV batches with checksum verification, not fresh computations.
-*   **P2 PO Locking:** Locked P2 Purchase Orders (via `locked_at`/`locked_by`) block all edit/delete actions except for attachment management.
-*   **BOM PKs:** All BOM primary keys are UUIDs; never use `parseInt()` when referencing them.
-*   **P2 Employee Data:** Portal employees require both a `timekeeping.employees` record (linked via `epochEmployeeId`) and a `users` record (linked via `users.employeeId`) for `createdBy` FKs; missing either results in a 422.
-*   **WAD Labor Charging Phase 1 (WARN):** Budget overrun or certification issues are currently only warnings and do not block sessions, but are recorded for supervisor review.
-*   **Timekeeping Dual-Pool Deprecation:** The standalone `modules/timekeeping` architecture and its dual-pool pattern (`tkDb` vs. `db`) are superseded. Do NOT introduce new imports from `modules/timekeeping/` or `tkDb`.
-*   **Purchasing Controls Gate:** `POST /api/vendor-pos/:id/issue` enforces requisition-linkage, FAR flowdown checklist, and vendor debarment check freshness *in addition to* the existing compliance review gate. Bypassing requires a direct-PO exception with `procurement_settings.allow_direct_po=true`. See `docs/procurement-policy.md`.
+*   **DCAA Compliance:** Before implementing anything touching labor, WAD, GL, burden, payroll, traveler, PM dashboard, DCAA, or compliance, **you must read `docs/EPOCH_ARCHITECTURE_CONSTITUTION.md`**.
+*   **Timekeeping `punch_ledger` vs. `timekeeping.punches`:** Use `punch_ledger` for periods on or after `PUNCH_LEDGER_CUTOVER_DATE` and `timekeeping.punches` for periods before.
+*   **Legacy Payroll Export:** `GET /api/timekeeping/admin/export/gusto` serves pre-generated, immutable CSV batches, not fresh computations.
+*   **P2 PO Locking:** Locked P2 Purchase Orders block all edit/delete actions except attachment management.
+*   **BOM PKs:** All BOM primary keys are UUIDs; never use `parseInt()`.
+*   **P2 Employee Data:** Portal employees require both `timekeeping.employees` and `users` records.
+*   **Timekeeping Dual-Pool Deprecation:** Do NOT introduce new imports from `modules/timekeeping/` or `tkDb`.
+*   **Purchasing Controls Gate:** `POST /api/vendor-pos/:id/issue` enforces requisition-linkage, FAR flowdown checklist, and vendor debarment check freshness.
 
 ## Pointers
 

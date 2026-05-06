@@ -1704,6 +1704,38 @@ router.patch(
   }
 );
 
+// GET /api/p2/packing-slips/:id/audit-log — retrieve audit log for a packing slip (admin/owner only)
+router.get(
+  '/packing-slips/:id/audit-log',
+  authenticateToken,
+  requireRole(...OVERRIDE_ALLOWED_ROLES),
+  async (req: Request, res: Response) => {
+    try {
+      const { id: slipId } = req.params;
+
+      // Verify slip exists and pull linked lot id so we can include lot-scoped entries
+      const slipCheck = await pool.query<{ id: string; lot_number_id: string | null }>(
+        `SELECT id, lot_number_id FROM p2_packing_slips WHERE id = $1`,
+        [slipId]
+      );
+      if (slipCheck.length === 0) return res.status(404).json({ error: 'Packing slip not found' });
+
+      const entityIds = [slipId];
+      if (slipCheck[0].lot_number_id) entityIds.push(slipCheck[0].lot_number_id);
+
+      const placeholders = entityIds.map((_, i) => `$${i + 1}`).join(', ');
+      const rows = await pool.query(
+        `SELECT * FROM p2_shipping_audit_log WHERE entity_id IN (${placeholders}) ORDER BY changed_at DESC`,
+        entityIds
+      );
+      return res.json(rows);
+    } catch (err: any) {
+      console.error('Packing slip audit log fetch error:', err);
+      return res.status(500).json({ error: 'Failed to fetch audit log' });
+    }
+  }
+);
+
 // GET /api/p2/lots/:id/audit-log — retrieve audit log for a lot (admin/owner only)
 router.get(
   '/lots/:id/audit-log',

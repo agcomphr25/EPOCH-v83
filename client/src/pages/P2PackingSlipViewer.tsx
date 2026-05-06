@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, Download, ArrowLeft, Package, Clock, Pencil, X, Check, Loader2, Receipt, ClipboardList, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Printer, Download, ArrowLeft, Package, Clock, Pencil, X, Check, Loader2, Receipt, ClipboardList, ExternalLink, AlertTriangle, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { COMPANY_INFO } from '@shared/company-config';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +50,18 @@ interface PackingSlipData {
   updatedAt: string;
 }
 
+interface AuditLogEntry {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: string;
+  reason: string | null;
+  changed_at: string;
+}
+
 interface CurrentUser {
   id: number;
   username: string;
@@ -67,6 +80,7 @@ export default function P2PackingSlipViewer() {
   const [editShipDate, setEditShipDate] = useState('');
   const [editLotNumber, setEditLotNumber] = useState('');
   const [editReason, setEditReason] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const { data: currentUser } = useQuery<CurrentUser | null>({
     queryKey: ['currentUser'],
@@ -87,6 +101,15 @@ export default function P2PackingSlipViewer() {
   const { data: packingSlip, isLoading, error } = useQuery<PackingSlipData>({
     queryKey: ['/api/p2/packing-slips', packingSlipId],
     enabled: !!packingSlipId,
+  });
+
+  const { data: auditLog = [], isLoading: auditLoading } = useQuery<AuditLogEntry[]>({
+    queryKey: ['/api/p2/packing-slips', packingSlipId, 'audit-log'],
+    queryFn: () =>
+      fetch(`/api/p2/packing-slips/${packingSlipId}/audit-log`, { credentials: 'include' }).then(r =>
+        r.ok ? r.json() : []
+      ),
+    enabled: !!packingSlipId && canEdit,
   });
 
   const { data: linkedInvoices = [] } = useQuery<any[]>({
@@ -110,6 +133,7 @@ export default function P2PackingSlipViewer() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId, 'audit-log'] });
       toast({ title: 'Packing slip updated', description: 'Changes have been saved and logged.' });
       setEditMode(false);
       setEditReason('');
@@ -425,6 +449,78 @@ export default function P2PackingSlipViewer() {
           )}
         </CardContent>
       </Card>
+
+      {/* Change History — not printed, admin/owner only */}
+      {canEdit && (
+        <div className="print:hidden mt-6">
+          <Card>
+            <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="pb-3 cursor-pointer hover:bg-muted/40" data-testid="button-toggle-history">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {historyOpen ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <History className="h-4 w-4 text-muted-foreground" />
+                    Change History
+                    {Array.isArray(auditLog) && auditLog.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">{auditLog.length}</Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  {auditLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading change history…
+                    </div>
+                  ) : !Array.isArray(auditLog) || auditLog.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2" data-testid="text-no-history">
+                      No edits recorded for this packing slip.
+                    </p>
+                  ) : (
+                    <Table data-testid="table-audit-log">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Field</TableHead>
+                          <TableHead>Old → New</TableHead>
+                          <TableHead>Actor</TableHead>
+                          <TableHead>Reason</TableHead>
+                          <TableHead>When</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {auditLog.map((entry) => (
+                          <TableRow key={entry.id} data-testid={`row-audit-${entry.id}`}>
+                            <TableCell className="font-mono text-xs">{entry.field_name}</TableCell>
+                            <TableCell className="text-xs">
+                              <span className="text-muted-foreground line-through">
+                                {entry.old_value ?? '∅'}
+                              </span>
+                              <span className="mx-1">→</span>
+                              <span className="font-medium">{entry.new_value ?? '∅'}</span>
+                            </TableCell>
+                            <TableCell className="text-sm">{entry.changed_by}</TableCell>
+                            <TableCell className="text-sm max-w-xs truncate" title={entry.reason ?? ''}>
+                              {entry.reason || '—'}
+                            </TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {format(new Date(entry.changed_at), 'MMM d, yyyy h:mm a')}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+        </div>
+      )}
 
       {/* Linked Records — not printed */}
       <div className="print:hidden mt-6 space-y-4">

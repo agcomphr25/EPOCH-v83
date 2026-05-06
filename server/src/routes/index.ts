@@ -3498,10 +3498,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           const [existingTraveler] = await db.select().from(travelers).where(eq(travelers.id, linkedTravelerId)).limit(1);
           if (existingTraveler) {
             linkedTravelerFound = true;
+            const offSystemSummary = notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production';
+            // Preserve a real (non-off-system) workOrderId if one was already
+            // recorded against the existing traveler — only stamp the legacy
+            // off-system summary when the field is empty or already off-system.
+            const shouldStampWorkOrderId =
+              !existingTraveler.workOrderId || existingTraveler.workOrderId.startsWith('Off-system');
             await db.update(travelers)
-              .set({ 
+              .set({
                 serialNumber: existingTraveler.serialNumber || item.barcode,
                 status: 'COMPLETED',
+                offSystemCompletionLink: notes || existingTraveler.offSystemCompletionLink || null,
+                ...(shouldStampWorkOrderId ? { workOrderId: offSystemSummary } : {}),
                 updatedAt: new Date(),
               })
               .where(eq(travelers.id, linkedTravelerId));
@@ -3517,6 +3525,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               status: 'COMPLETED',
               createdBy: performedBy || 'System',
               workOrderId: notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production',
+              offSystemCompletionLink: notes || null,
             });
             travelerCreated = true;
           }
@@ -3532,6 +3541,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             status: 'COMPLETED',
             createdBy: performedBy || 'System',
             workOrderId: notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production',
+            offSystemCompletionLink: notes || null,
           });
           travelerCreated = true;
         }

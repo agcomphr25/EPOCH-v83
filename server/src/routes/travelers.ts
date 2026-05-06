@@ -26,6 +26,7 @@ import {
   travelers,
   travelerSteps,
   travelerAuthorizedNotes,
+  auditEvents,
   partRoutings,
   inventoryItems,
   manufacturingQueue,
@@ -2762,6 +2763,74 @@ router.post('/:travelerId/authorized-notes', async (req: Request, res: Response)
     }
     console.error('Error creating authorized note:', error);
     res.status(500).json({ error: 'Failed to create authorized note', message: error.message });
+  }
+});
+
+// Edit the off-system completion link/notes for a traveler that was marked
+// completed off-system from the P2 Production Queue. Only travelers whose
+// `workOrderId` was stamped with the `Off-system: …` prefix (or that already
+// have an `offSystemCompletionLink`) are eligible — see Task #106.
+const offSystemLinkSchema = z.object({
+  offSystemCompletionLink: z.string().max(8192).nullable(),
+  updatedBy: z.string().optional(),
+});
+
+router.patch('/:id/off-system-link', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsed = offSystemLinkSchema.parse(req.body);
+    const newValue = parsed.offSystemCompletionLink?.trim() ? parsed.offSystemCompletionLink.trim() : null;
+
+    const [existing] = await db.select().from(travelers).where(eq(travelers.id, id)).limit(1);
+    if (!existing) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    const isOffSystem =
+      existing.offSystemCompletionLink !== null && existing.offSystemCompletionLink !== undefined
+        ? true
+        : (existing.workOrderId ?? '').startsWith('Off-system');
+
+    if (!isOffSystem) {
+      return res.status(400).json({
+        error: 'Traveler is not an off-system completion — link cannot be edited',
+      });
+    }
+
+    const previousValue = existing.offSystemCompletionLink ?? null;
+
+    const [updated] = await db.update(travelers)
+      .set({
+        offSystemCompletionLink: newValue,
+        updatedAt: new Date(),
+      })
+      .where(eq(travelers.id, id))
+      .returning();
+
+    const actorName = parsed.updatedBy || (req as any).user?.username || 'system';
+
+    await db.insert(auditEvents).values({
+      entityType: 'traveler',
+      entityId: id,
+      action: 'OFF_SYSTEM_LINK_EDITED',
+      actorName,
+      reason: 'Off-system completion link edited from Traveler Management',
+      fieldsChanged: {
+        offSystemCompletionLink: { before: previousValue, after: newValue },
+      },
+      meta: {
+        travelerId: id,
+        travelerNumber: existing.travelerNumber,
+      },
+    });
+
+    res.json(updated);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error editing off-system completion link:', error);
+    res.status(500).json({ error: 'Failed to update off-system link', message: error.message });
   }
 });
 

@@ -101,6 +101,7 @@ interface Traveler {
   status: string;
   partRoutingId: string | null;
   partRoutingRevision: number | null;
+  offSystemCompletionLink: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -139,6 +140,8 @@ export default function TravelerManagement() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showAuthorizedNotesDialog, setShowAuthorizedNotesDialog] = useState(false);
+  const [showOffSystemLinkDialog, setShowOffSystemLinkDialog] = useState(false);
+  const [offSystemLinkDraft, setOffSystemLinkDraft] = useState('');
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
   const [cancelReason, setCancelReason] = useState('');
@@ -393,6 +396,60 @@ export default function TravelerManagement() {
     setSelectedTraveler(traveler);
     resetNoteForm();
     setShowAuthorizedNotesDialog(true);
+  };
+
+  const isOffSystemTraveler = (traveler: Traveler): boolean => {
+    if (traveler.offSystemCompletionLink) return true;
+    return !!traveler.workOrderId && traveler.workOrderId.startsWith('Off-system');
+  };
+
+  const getDisplayedOffSystemLink = (traveler: Traveler): string => {
+    if (traveler.offSystemCompletionLink) return traveler.offSystemCompletionLink;
+    if (traveler.workOrderId && traveler.workOrderId.startsWith('Off-system: ')) {
+      return traveler.workOrderId.slice('Off-system: '.length);
+    }
+    return '';
+  };
+
+  const handleOpenOffSystemLink = (traveler: Traveler) => {
+    setSelectedTraveler(traveler);
+    setOffSystemLinkDraft(getDisplayedOffSystemLink(traveler));
+    setShowOffSystemLinkDialog(true);
+  };
+
+  const offSystemLinkMutation = useMutation({
+    mutationFn: (data: { travelerId: string; offSystemCompletionLink: string | null }) =>
+      apiRequest(`/api/travelers/${data.travelerId}/off-system-link`, {
+        method: 'PATCH',
+        body: JSON.stringify({ offSystemCompletionLink: data.offSystemCompletionLink }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Off-system link updated',
+        description: 'The completion link has been saved on this traveler.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setShowOffSystemLinkDialog(false);
+      setOffSystemLinkDraft('');
+      setSelectedTraveler(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update off-system link',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSaveOffSystemLink = () => {
+    if (!selectedTraveler) return;
+    const trimmed = offSystemLinkDraft.trim();
+    offSystemLinkMutation.mutate({
+      travelerId: selectedTraveler.id,
+      offSystemCompletionLink: trimmed.length === 0 ? null : trimmed,
+    });
   };
 
   const resetNoteForm = () => {
@@ -694,6 +751,19 @@ export default function TravelerManagement() {
                             <StickyNote className="h-3 w-3" />
                             Authorized Notes
                           </Badge>
+                          {isOffSystemTraveler(traveler) && (
+                            <Badge
+                              className="cursor-pointer bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors px-3 py-1 inline-flex items-center gap-1 max-w-[220px]"
+                              data-testid={`badge-off-system-link-${traveler.id}`}
+                              onClick={() => handleOpenOffSystemLink(traveler)}
+                              title={getDisplayedOffSystemLink(traveler) || 'Add off-system completion link'}
+                            >
+                              <Link2 className="h-3 w-3 shrink-0" />
+                              <span className="truncate">
+                                {getDisplayedOffSystemLink(traveler) || 'Add off-system link'}
+                              </span>
+                            </Badge>
+                          )}
                           {(traveler.serialNumber || traveler.lotNumber) && (
                             <Link href={`/p2-traveler-viewer?barcode=${encodeURIComponent(traveler.serialNumber || traveler.lotNumber || '')}`}>
                               <Badge
@@ -929,6 +999,63 @@ export default function TravelerManagement() {
         onSubmit={handleSubmitAuthorizedNote}
         isPending={addAuthorizedNoteMutation.isPending}
       />
+
+      {/* Off-System Completion Link Dialog */}
+      <Dialog open={showOffSystemLinkDialog} onOpenChange={(open) => {
+        setShowOffSystemLinkDialog(open);
+        if (!open) {
+          setOffSystemLinkDraft('');
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-700">
+              <Link2 className="h-5 w-5" />
+              Off-System Completion Link
+            </DialogTitle>
+            <DialogDescription>
+              {selectedTraveler ? (
+                <>Edit the link or notes recorded when traveler {selectedTraveler.travelerNumber} was completed off-system. The full text is preserved (no 100-character cap).</>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="off-system-link-textarea">Link / Notes</Label>
+            <Textarea
+              id="off-system-link-textarea"
+              value={offSystemLinkDraft}
+              onChange={(e) => setOffSystemLinkDraft(e.target.value)}
+              placeholder="https://… or descriptive notes about the off-system completion"
+              rows={5}
+              data-testid="textarea-off-system-link"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty to clear the link. Saving updates this traveler immediately.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowOffSystemLinkDialog(false)}
+              disabled={offSystemLinkMutation.isPending}
+              data-testid="button-cancel-off-system-link"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveOffSystemLink}
+              disabled={offSystemLinkMutation.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700"
+              data-testid="button-save-off-system-link"
+            >
+              {offSystemLinkMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>

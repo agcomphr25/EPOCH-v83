@@ -5436,6 +5436,11 @@ export const travelers = pgTable('travelers', {
   createdFromTemplateId: uuid('created_from_template_id'),
   createdFromTemplateVersion: integer('created_from_template_version'),
 
+  // Editable, non-truncated link/notes pasted when an item is completed
+  // off-system from the P2 Production Queue. Mirrors the `Off-system: …`
+  // summary that is also stamped into `workOrderId` for legacy display.
+  offSystemCompletionLink: text('off_system_completion_link'),
+
   createdBy: varchar('created_by', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
